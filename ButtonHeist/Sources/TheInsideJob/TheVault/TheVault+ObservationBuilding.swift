@@ -37,7 +37,8 @@ extension TheVault {
         )
         let projection = buildObservationProjection(
             identityContext: identityContext,
-            facts: facts
+            facts: facts,
+            offscreenScrollElements: result.offscreenScrollElements
         )
         logObservationBuildEvents(projection.logEvents)
         return try admitObservation(
@@ -55,7 +56,8 @@ extension TheVault {
         )
         let projection = buildObservationProjection(
             identityContext: identityContext,
-            facts: facts
+            facts: facts,
+            offscreenScrollElements: []
         )
         return requireObservation(
             from: projection,
@@ -65,7 +67,8 @@ extension TheVault {
 
     private static func buildObservationProjection(
         identityContext: IdentityContext,
-        facts: BuildFacts
+        facts: BuildFacts,
+        offscreenScrollElements: [OffscreenScrollElement]
     ) -> ObservationBuildProjection {
         let containerNamesByPath = buildContainerNamesByPath(
             identityContext: identityContext
@@ -73,10 +76,13 @@ extension TheVault {
 
         let entries = buildObservationEntries(
             indexedElements: identityContext.elements,
+            offscreenScrollElements: offscreenScrollElements,
             facts: facts
         )
         let heistIdsByPath = Dictionary(
-            uniqueKeysWithValues: entries.map { ($0.path, $0.heistId) }
+            uniqueKeysWithValues: entries.compactMap { entry in
+                entry.isInViewportCapture ? (entry.path, entry.heistId) : nil
+            }
         )
         let containersByPath = viewportContainers(
             identityContext: identityContext,
@@ -163,27 +169,30 @@ extension TheVault {
 
     private static func buildObservationEntries(
         indexedElements: [ElementIdentity],
+        offscreenScrollElements: [OffscreenScrollElement],
         facts: BuildFacts
     ) -> [ObservationBuildEntry] {
-        let heistIds = TheVault.IdAssignment.assign(indexedElements.map(\.element))
+        let candidates = indexedElements.map(ObservationElementCandidate.viewport)
+            + offscreenScrollElements.map(ObservationElementCandidate.offscreenScrollInventory)
+        let heistIds = TheVault.IdAssignment.assign(candidates.map(\.element))
         precondition(
-            heistIds.count == indexedElements.count,
+            heistIds.count == candidates.count,
             "IdAssignment must return one HeistId for each screen-build element"
         )
-        return indexedElements.indices.map { index in
-            let indexedElement = indexedElements[index]
+        return candidates.indices.map { index in
+            let candidate = candidates[index]
             let heistId = heistIds[index]
-            let scrollFacts = facts.scroll.element(at: indexedElement.path)
             return ObservationBuildEntry(
-                path: indexedElement.path,
+                path: candidate.path,
                 treeElement: InterfaceTree.Element(
                     heistId: heistId,
-                    path: indexedElement.path,
-                    scrollMembership: scrollFacts?.membership,
-                    observedScrollContentActivationPoint: scrollFacts?.observedScrollContentActivationPoint,
-                    element: indexedElement.element
+                    path: candidate.path,
+                    scrollMembership: candidate.scrollMembership(facts: facts),
+                    observedScrollContentActivationPoint: candidate.observedScrollContentActivationPoint(facts: facts),
+                    element: candidate.element
                 ),
-                isFirstResponder: facts.focus.isFirstResponder(at: indexedElement.path)
+                isFirstResponder: candidate.isFirstResponder(facts: facts),
+                isInViewportCapture: candidate.isInViewportCapture
             )
         }
     }
@@ -341,86 +350,152 @@ extension TheVault {
         let subtree: AccessibilityHierarchy
     }
 
-    private struct ObservationBuildEntry: Equatable {
-            let path: TreePath
-            let treeElement: InterfaceTree.Element
-            let isFirstResponder: Bool
+    private enum ObservationElementCandidate {
+        case viewport(ElementIdentity)
+        case offscreenScrollInventory(OffscreenScrollElement)
 
-            var heistId: HeistId {
-                treeElement.heistId
+        var path: TreePath {
+            switch self {
+            case .viewport(let identity):
+                identity.path
+            case .offscreenScrollInventory(let element):
+                element.path
             }
+        }
+
+        var element: AccessibilityElement {
+            switch self {
+            case .viewport(let identity):
+                identity.element
+            case .offscreenScrollInventory(let element):
+                element.element
+            }
+        }
+
+        var isInViewportCapture: Bool {
+            switch self {
+            case .viewport:
+                true
+            case .offscreenScrollInventory:
+                false
+            }
+        }
+
+        func scrollMembership(facts: BuildFacts) -> InterfaceTree.ScrollMembership? {
+            switch self {
+            case .viewport(let identity):
+                facts.scroll.element(at: identity.path)?.membership
+            case .offscreenScrollInventory(let element):
+                InterfaceTree.ScrollMembership(
+                    containerPath: element.scrollContainerPath,
+                    index: element.scrollIndex
+                )
+            }
+        }
+
+        func observedScrollContentActivationPoint(
+            facts: BuildFacts
+        ) -> InterfaceTree.ObservedScrollContentActivationPoint? {
+            switch self {
+            case .viewport(let identity):
+                facts.scroll.element(at: identity.path)?.observedScrollContentActivationPoint
+            case .offscreenScrollInventory(let element):
+                element.observedScrollContentActivationPoint
+            }
+        }
+
+        func isFirstResponder(facts: BuildFacts) -> Bool {
+            switch self {
+            case .viewport(let identity):
+                facts.focus.isFirstResponder(at: identity.path)
+            case .offscreenScrollInventory:
+                false
+            }
+        }
+    }
+
+    private struct ObservationBuildEntry: Equatable {
+        let path: TreePath
+        let treeElement: InterfaceTree.Element
+        let isFirstResponder: Bool
+        let isInViewportCapture: Bool
+
+        var heistId: HeistId {
+            treeElement.heistId
+        }
     }
 
     private struct ObservationLiveReferences {
-            private let objectsByPath: [TreePath: NSObject]
-            private let scrollViewsByPath: [TreePath: UIScrollView]
-            let containerRefsByPath: [TreePath: LiveCapture.ContainerRef]
-            let scrollableContainerViewsByPath: [TreePath: LiveCapture.ScrollableViewRef]
+        private let objectsByPath: [TreePath: NSObject]
+        private let scrollViewsByPath: [TreePath: UIScrollView]
+        let containerRefsByPath: [TreePath: LiveCapture.ContainerRef]
+        let scrollableContainerViewsByPath: [TreePath: LiveCapture.ScrollableViewRef]
 
-            init(
-                result: CaptureResult,
-                hierarchy: [AccessibilityHierarchy],
-                entries: [ObservationBuildEntry]
-            ) {
-                let elementPaths = Set(entries.map(\.path))
-                for path in result.objectsByPath.keys.sorted() where !elementPaths.contains(path) {
-                    preconditionFailure(
-                        "InterfaceObservation build received live element object for non-element entry path \(path.indices)"
-                    )
-                }
-                for path in result.containerObjectsByPath.keys.sorted() {
-                    guard case .container = hierarchy.node(at: path) else {
-                        preconditionFailure(
-                            "InterfaceObservation build received live container object for non-container path \(path.indices)"
-                        )
-                    }
-                }
-                for path in result.scrollViewsByPath.keys.sorted() {
-                    guard case .container(let container, _) = hierarchy.node(at: path),
-                          container.isScrollable else {
-                        preconditionFailure(
-                            "InterfaceObservation build received live scroll view for non-scrollable container path \(path.indices)"
-                        )
-                    }
-                }
-
-                objectsByPath = result.objectsByPath
-                scrollViewsByPath = result.scrollViewsByPath
-                containerRefsByPath = result.containerObjectsByPath.mapValues {
-                    LiveCapture.ContainerRef(object: $0)
-                }
-                scrollableContainerViewsByPath = result.scrollViewsByPath.mapValues {
-                    LiveCapture.ScrollableViewRef(view: $0)
-                }
-            }
-
-            func elementRef(for entry: ObservationBuildEntry) -> LiveCapture.ElementRef? {
-                let object = objectsByPath[entry.path]
-                let scrollView = entry.treeElement.scrollMembership.flatMap { membership in
-                    scrollViewsByPath[membership.containerPath]
-                }
-                guard object != nil || scrollView != nil else { return nil }
-                return LiveCapture.ElementRef(
-                    object: object,
-                    scrollView: scrollView
+        init(
+            result: CaptureResult,
+            hierarchy: [AccessibilityHierarchy],
+            entries: [ObservationBuildEntry]
+        ) {
+            let elementPaths = Set(entries.map(\.path))
+            for path in result.objectsByPath.keys.sorted() where !elementPaths.contains(path) {
+                preconditionFailure(
+                    "InterfaceObservation build received live element object for non-element entry path \(path.indices)"
                 )
             }
+            for path in result.containerObjectsByPath.keys.sorted() {
+                guard case .container = hierarchy.node(at: path) else {
+                    preconditionFailure(
+                        "InterfaceObservation build received live container object for non-container path \(path.indices)"
+                    )
+                }
+            }
+            for path in result.scrollViewsByPath.keys.sorted() {
+                guard case .container(let container, _) = hierarchy.node(at: path),
+                      container.isScrollable else {
+                    preconditionFailure(
+                        "InterfaceObservation build received live scroll view for non-scrollable container path \(path.indices)"
+                    )
+                }
+            }
+
+            objectsByPath = result.objectsByPath
+            scrollViewsByPath = result.scrollViewsByPath
+            containerRefsByPath = result.containerObjectsByPath.mapValues {
+                LiveCapture.ContainerRef(object: $0)
+            }
+            scrollableContainerViewsByPath = result.scrollViewsByPath.mapValues {
+                LiveCapture.ScrollableViewRef(view: $0)
+            }
+        }
+
+        func elementRef(for entry: ObservationBuildEntry) -> LiveCapture.ElementRef? {
+            guard entry.isInViewportCapture else { return nil }
+            let object = objectsByPath[entry.path]
+            let scrollView = entry.treeElement.scrollMembership.flatMap { membership in
+                scrollViewsByPath[membership.containerPath]
+            }
+            guard object != nil || scrollView != nil else { return nil }
+            return LiveCapture.ElementRef(
+                object: object,
+                scrollView: scrollView
+            )
+        }
     }
 
     private struct ObservationBuildProjection {
-            let tree: InterfaceTree
+        let tree: InterfaceTree
         let entries: [ObservationBuildEntry]
         let logEvents: [ObservationBuildLogEvent]
     }
 
     private enum ObservationBuildLogEvent: Equatable {
-            case capturedObservedScrollContentActivationPoint(
-                heistId: HeistId,
-                containerPath: TreePath,
-                index: Int?,
-                point: CGPoint
-            )
-            case multipleFirstResponders([HeistId])
+        case capturedObservedScrollContentActivationPoint(
+            heistId: HeistId,
+            containerPath: TreePath,
+            index: Int?,
+            point: CGPoint
+        )
+        case multipleFirstResponders([HeistId])
     }
 
 }

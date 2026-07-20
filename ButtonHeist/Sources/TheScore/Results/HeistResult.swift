@@ -155,6 +155,7 @@ public struct HeistResult: Codable, Sendable, Equatable {
             })
         }
         try admitRootIndices(roots)
+        try admitRootExecutionOrder(roots)
     }
 
     private static func admitRootIndices(_ roots: [HeistExecutionStepResult]) throws {
@@ -164,6 +165,13 @@ public struct HeistResult: Codable, Sendable, Equatable {
                 path: .body,
                 reason: "top-level body root indices must be contiguous and in result order"
             )
+        }
+    }
+
+    private static func admitRootExecutionOrder(_ roots: [HeistExecutionStepResult]) throws {
+        var admission = RootExecutionAdmission()
+        for root in roots {
+            try admission.admit(root)
         }
     }
 
@@ -253,19 +261,6 @@ public struct HeistResult: Codable, Sendable, Equatable {
                     + "does not match \(iterationCount) iteration child node(s)"
             )
         }
-        let elseCount = childEdges.count { $0.edge.branch == .repeatUntilElse }
-        switch evidence.outcome {
-        case .matched, .continued:
-            guard elseCount == 0 else {
-                throw incoherent(step, "repeat_until \(evidence.outcome) evidence cannot contain else_body children")
-            }
-        case .handledElse:
-            guard elseCount > 0 else {
-                throw incoherent(step, "repeat_until handled_else evidence requires else_body children")
-            }
-        case .failed:
-            break
-        }
     }
 
     private static func incoherent(
@@ -273,6 +268,59 @@ public struct HeistResult: Codable, Sendable, Equatable {
         _ reason: String
     ) -> HeistResultCodecError {
         .incoherentExecutionEvidence(path: step.path, reason: reason)
+    }
+
+    private struct RootExecutionAdmission {
+        private var abortedAtPath: HeistExecutionPath?
+        private var nextFailureActionIndex = 0
+        private var terminalEvidenceStarted = false
+
+        mutating func admit(_ root: HeistExecutionStepResult) throws {
+            if let ancestor = root.path.failureActionAncestor {
+                try admitAuxiliaryFailureAction(root, ancestor: ancestor)
+                return
+            }
+
+            guard !terminalEvidenceStarted else {
+                throw HeistResult.incoherent(
+                    root,
+                    "regular root appears after terminal failure-capture evidence"
+                )
+            }
+            guard let abortedAtPath else {
+                self.abortedAtPath = root.firstFailedStepInResultOrder?.path
+                return
+            }
+            guard root.status == .skipped else {
+                throw HeistResult.incoherent(
+                    root,
+                    "regular root cannot execute after abort at \(abortedAtPath)"
+                )
+            }
+        }
+
+        private mutating func admitAuxiliaryFailureAction(
+            _ root: HeistExecutionStepResult,
+            ancestor: HeistExecutionPath.FailureActionAncestor
+        ) throws {
+            guard let abortedAtPath else {
+                throw HeistResult.incoherent(root, "failure-capture root appears before any abort")
+            }
+            guard ancestor.path == abortedAtPath else {
+                throw HeistResult.incoherent(
+                    root,
+                    "failure-capture root belongs to \(ancestor.path), not abort at \(abortedAtPath)"
+                )
+            }
+            guard ancestor.actionIndex == nextFailureActionIndex else {
+                throw HeistResult.incoherent(
+                    root,
+                    "failure-capture root index \(ancestor.actionIndex) must be \(nextFailureActionIndex)"
+                )
+            }
+            nextFailureActionIndex += 1
+            terminalEvidenceStarted = true
+        }
     }
 
 }

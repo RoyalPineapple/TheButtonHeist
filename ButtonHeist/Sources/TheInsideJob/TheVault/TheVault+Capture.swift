@@ -7,6 +7,13 @@ import TheScore
 import AccessibilitySnapshotParser
 
 extension TheVault {
+    struct OffscreenScrollElement {
+        let path: TreePath
+        let scrollContainerPath: TreePath
+        let scrollIndex: Int
+        let element: AccessibilityElement
+        let observedScrollContentActivationPoint: InterfaceTree.ObservedScrollContentActivationPoint?
+    }
 
     /// Capture-local UIKit evidence before identity assignment and durable projection.
     struct CaptureResult {
@@ -15,21 +22,26 @@ extension TheVault {
         let containerObjectsByPath: [TreePath: NSObject]
         let scrollViewsByPath: [TreePath: UIScrollView]
         let screenCoordinateOffsetsByPath: [TreePath: CGPoint]
+        let offscreenScrollElements: [OffscreenScrollElement]
 
         init(
             hierarchy: [AccessibilityHierarchy],
             objectsByPath: [TreePath: NSObject] = [:],
             containerObjectsByPath: [TreePath: NSObject] = [:],
             scrollViewsByPath: [TreePath: UIScrollView] = [:],
-            screenCoordinateOffsetsByPath: [TreePath: CGPoint] = [:]
+            screenCoordinateOffsetsByPath: [TreePath: CGPoint] = [:],
+            offscreenScrollElements: [OffscreenScrollElement] = []
         ) {
             self.hierarchy = hierarchy
             self.objectsByPath = objectsByPath
             self.containerObjectsByPath = containerObjectsByPath
             self.scrollViewsByPath = scrollViewsByPath
             self.screenCoordinateOffsetsByPath = screenCoordinateOffsetsByPath
+            self.offscreenScrollElements = offscreenScrollElements
         }
     }
+
+    private static let offscreenScrollInventoryPathIndexBase = 1_000_000
 
     // MARK: - Parse (read-only)
 
@@ -124,15 +136,114 @@ extension TheVault {
             }
         }
 
+        let canonicalScrollViewsByPath = Self.canonicalScrollViewsByPath(
+            from: scrollViewsByPath,
+            containerObjectsByPath: containerObjectsByPath
+        )
+        let offscreenScrollElements = captureOffscreenScrollElements(
+            objectsByPath: objectsByPath,
+            scrollViewsByPath: canonicalScrollViewsByPath
+        )
+
         return CaptureResult(
             hierarchy: allHierarchy,
             objectsByPath: objectsByPath,
             containerObjectsByPath: containerObjectsByPath,
-            scrollViewsByPath: Self.canonicalScrollViewsByPath(
-                from: scrollViewsByPath,
-                containerObjectsByPath: containerObjectsByPath
-            ),
-            screenCoordinateOffsetsByPath: screenCoordinateOffsetsByPath
+            scrollViewsByPath: canonicalScrollViewsByPath,
+            screenCoordinateOffsetsByPath: screenCoordinateOffsetsByPath,
+            offscreenScrollElements: offscreenScrollElements
+        )
+    }
+
+    private func captureOffscreenScrollElements(
+        objectsByPath: [TreePath: NSObject],
+        scrollViewsByPath: [TreePath: UIScrollView],
+        budget: Int = ButtonHeistRuntimeKnobs.current.visibleElementBudget
+    ) -> [OffscreenScrollElement] {
+        guard budget > 0 else {
+            logDroppedOffscreenScrollElements(
+                candidateCount(in: scrollViewsByPath, representedObjects: Array(objectsByPath.values))
+            )
+            return []
+        }
+
+        var representedObjectIDs = Set(objectsByPath.values.map(ObjectIdentifier.init))
+        var elements: [OffscreenScrollElement] = []
+        var dropped = 0
+
+        for (containerPath, scrollView) in scrollViewsByPath.sorted(by: { $0.key < $1.key }) {
+            guard Self.admitsOffscreenInventory(from: scrollView) else { continue }
+            let count = scrollView.accessibilityElementCount()
+            guard count != NSNotFound, count > 0 else { continue }
+
+            for index in 0..<count {
+                guard let object = scrollView.accessibilityElement(at: index) as? NSObject,
+                      representedObjectIDs.insert(ObjectIdentifier(object)).inserted
+                else { continue }
+
+                guard elements.count < budget else {
+                    dropped += 1
+                    continue
+                }
+
+                guard let element = captureObject(object)?.withVisibility(.offscreen) else { continue }
+                elements.append(OffscreenScrollElement(
+                    path: containerPath.appending(Self.offscreenScrollInventoryPathIndexBase + index),
+                    scrollContainerPath: containerPath,
+                    scrollIndex: index,
+                    element: element,
+                    observedScrollContentActivationPoint: observedScrollContentActivationPoint(
+                        for: element,
+                        in: scrollView
+                    )
+                ))
+            }
+        }
+
+        logDroppedOffscreenScrollElements(dropped)
+        return elements
+    }
+
+    private static func admitsOffscreenInventory(from scrollView: UIScrollView) -> Bool {
+        !(scrollView is UITableView) && !(scrollView is UICollectionView)
+    }
+
+    private func candidateCount(
+        in scrollViewsByPath: [TreePath: UIScrollView],
+        representedObjects: [NSObject]
+    ) -> Int {
+        let representedObjectIDs = Set(representedObjects.map(ObjectIdentifier.init))
+        return scrollViewsByPath.values.reduce(into: 0) { count, scrollView in
+            guard Self.admitsOffscreenInventory(from: scrollView) else { return }
+            let elementCount = scrollView.accessibilityElementCount()
+            guard elementCount != NSNotFound, elementCount > 0 else { return }
+            for index in 0..<elementCount {
+                guard let object = scrollView.accessibilityElement(at: index) as? NSObject,
+                      !representedObjectIDs.contains(ObjectIdentifier(object))
+                else { continue }
+                count += 1
+            }
+        }
+    }
+
+    private func logDroppedOffscreenScrollElements(_ count: Int) {
+        guard count > 0 else { return }
+        insideJobLogger.warning(
+            """
+            Dropped \(count, privacy: .public) offscreen accessibility scroll element(s) \
+            because BH_SCROLL_SUBTREE_ELEMENT_BUDGET was exhausted.
+            """
+        )
+    }
+
+    private func observedScrollContentActivationPoint(
+        for element: AccessibilityElement,
+        in scrollView: UIScrollView
+    ) -> InterfaceTree.ObservedScrollContentActivationPoint? {
+        let activationPoint = element.bhResolvedActivationPoint
+        guard activationPoint.x.isFinite, activationPoint.y.isFinite else { return nil }
+        return InterfaceTree.ObservedScrollContentActivationPoint(
+            scrollView.convert(activationPoint, from: nil)
         )
     }
 
@@ -241,6 +352,29 @@ private final class SingleElementParsingRoot: UIView {
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         return nil
+    }
+}
+
+private extension AccessibilityElement {
+    func withVisibility(_ visibility: AccessibilityVisibility) -> AccessibilityElement {
+        AccessibilityElement(
+            description: description,
+            label: label,
+            value: value,
+            traits: traits,
+            identifier: identifier,
+            hint: hint,
+            userInputLabels: userInputLabels,
+            shape: shape,
+            activationPoint: activationPoint,
+            usesDefaultActivationPoint: usesDefaultActivationPoint,
+            customActions: customActions,
+            customContent: customContent,
+            customRotors: customRotors,
+            accessibilityLanguage: accessibilityLanguage,
+            respondsToUserInteraction: respondsToUserInteraction,
+            visibility: visibility
+        )
     }
 }
 

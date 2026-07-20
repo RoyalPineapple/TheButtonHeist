@@ -31,15 +31,30 @@ final class TheGetaway {
     struct TransportWiringAttempt: Equatable {
         let id: UUID
         let transport: ServerTransport
+        let deliveryGeneration: ClientDelivery.Generation
 
         init(transport: ServerTransport) {
             self.id = UUID()
             self.transport = transport
+            self.deliveryGeneration = ClientDelivery.Generation(id: id)
         }
 
         static func == (lhs: Self, rhs: Self) -> Bool {
             lhs.id == rhs.id
         }
+    }
+
+    struct WiredTransportAdmission {
+        let attempt: TransportWiringAttempt
+
+        var transport: ServerTransport {
+            attempt.transport
+        }
+    }
+
+    enum TransportWiringOutcome {
+        case admitted(WiredTransportAdmission)
+        case rejected
     }
 
     struct WiredTransport {
@@ -66,6 +81,17 @@ final class TheGetaway {
         var eventConsumer: Task<Void, Never>? {
             guard case .wired(let session) = self else { return nil }
             return session.eventConsumer
+        }
+
+        var deliveryGeneration: ClientDelivery.Generation? {
+            switch self {
+            case .unwired:
+                nil
+            case .wiring(let attempt):
+                attempt.deliveryGeneration
+            case .wired(let session):
+                session.attempt.deliveryGeneration
+            }
         }
 
         func admits(_ attempt: TransportWiringAttempt) -> Bool {

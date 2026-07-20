@@ -18,6 +18,32 @@ func `plan model rejects unknown top level fields`() {
 }
 
 @Test
+func `repeat until JSON rejects else body`() {
+    expectUnknownField("repeat_until", contains: #"Unknown repeat_until step field "else_body""#) {
+        _ = try JSONDecoder().decode(HeistPlan.self, from: Data("""
+        {
+          "version": 2,
+          "body": [
+            {
+              "type": "repeat_until",
+              "repeat_until": {
+                "predicate": { "type": "exists", "target": { "checks": [{ "kind": "label", "match": { "mode": "exact", "value": "Done" } }] } },
+                "timeout": 1,
+                "body": [
+                  { "type": "warn", "warn": { "message": "retry" } }
+                ],
+                "else_body": [
+                  { "type": "fail", "fail": { "message": "timed out" } }
+                ]
+              }
+            }
+          ]
+        }
+        """.utf8))
+    }
+}
+
+@Test
 func `target parameter kind uses accessibility target spelling`() throws {
     let parameter = HeistParameter.accessibilityTarget(name: "row")
     let argument = HeistArgument.accessibilityTarget(.ref("row"))

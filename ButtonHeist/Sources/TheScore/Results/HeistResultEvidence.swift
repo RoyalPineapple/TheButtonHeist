@@ -273,9 +273,9 @@ package enum HeistFailedForEachStringRule: HeistResultEvidenceRule {
 }
 
 package enum HeistPassedRepeatUntilRule: HeistResultEvidenceRule {
-    package static let rejection = "passed repeat_until evidence must be matched or handled_else"
+    package static let rejection = "passed repeat_until evidence must be matched"
     package static func admits(_ evidence: HeistRepeatUntilEvidence) -> Bool {
-        evidence.outcome == .matched || evidence.outcome == .handledElse
+        evidence.outcome == .matched
     }
 }
 

@@ -428,7 +428,7 @@ extension TheBrainsActionTests {
         XCTAssertEqual(failedRetry.actionEvidence?.dispatchResult?.outcome.failureKind, .actionFailed)
     }
 
-    func testHeistRepeatUntilMinimumTimeoutWithElseRunsBodyOnce() async throws {
+    func testHeistRepeatUntilMinimumTimeoutFailsAfterRunningBodyOnce() async throws {
         var incrementCount = 0
         let quantityZero = observedState(elements: [
             (makeElement(value: "0", identifier: "quantity"), "quantity"),
@@ -448,9 +448,6 @@ extension TheBrainsActionTests {
                 timeout: .milliseconds(1),
                 body: [
                     .action(ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
-                ],
-                elseBody: [
-                    .warn(WarnStep(message: "quantity did not reach 2")),
                 ]
             )),
         ])
@@ -459,15 +456,16 @@ extension TheBrainsActionTests {
         let heistResult = try XCTUnwrap(result.resultPayload)
         let step = try XCTUnwrap(heistResult.steps.first)
 
-        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "repeat_until else failed")
+        XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(incrementCount, 1)
         XCTAssertEqual(step.kind, .repeatUntil)
-        XCTAssertEqual(step.status, .passed)
+        XCTAssertEqual(step.status, .failed)
         XCTAssertEqual(step.repeatUntilEvidence?.iterationCount, 1)
         XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, false)
-        XCTAssertEqual(step.repeatUntilEvidence?.outcome, .handledElse)
-        XCTAssertNil(step.failure)
-        XCTAssertEqual(step.children.map(\.kind), [.repeatUntilIteration, .warn])
+        XCTAssertEqual(step.repeatUntilEvidence?.outcome, .failed)
+        XCTAssertTrue(step.repeatUntilEvidence?.failureReason?.contains("timed out") == true)
+        XCTAssertNotNil(step.failure)
+        XCTAssertEqual(step.children.map(\.kind), [.repeatUntilIteration])
     }
 
     func testHeistRepeatUntilPostBodyMatchedWaitWithoutObservedSequenceDoesNotReusePreviousSequence() async throws {
@@ -614,40 +612,6 @@ extension TheBrainsActionTests {
         XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, false)
         XCTAssertEqual(step.repeatUntilEvidence?.expectation.actual, "no observed accessibility trace")
         XCTAssertNil(step.repeatUntilEvidence?.lastObservedSummary)
-    }
-
-    func testHeistRepeatUntilTimeoutElseChildFailureReportsElsePath() async throws {
-        let quantityZero = observedState(elements: [
-            (makeElement(value: "0", identifier: "quantity"), "quantity"),
-        ])
-        let runtime = heistRuntime(observations: [quantityZero, quantityZero])
-        let plan = try HeistPlan(body: [
-            .repeatUntil(try RepeatUntilStep(
-                predicate: .exists(.element(.identifier("quantity"), .value("2"))),
-                timeout: .milliseconds(1),
-                body: [
-                    .action(ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
-                ],
-                elseBody: [
-                    .fail(FailStep(message: "quantity did not reach 2")),
-                ]
-            )),
-        ])
-
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heistResult = try XCTUnwrap(result.resultPayload)
-        let step = try XCTUnwrap(heistResult.steps.first)
-        let elseFailurePath: HeistExecutionPath = "$.body[0].repeat_until.else_body[0]"
-
-        XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(heistResult.abortedAtPath, elseFailurePath)
-        XCTAssertEqual(step.status, .failed)
-        XCTAssertEqual(step.abortedAtChildPath, elseFailurePath)
-        XCTAssertEqual(step.repeatUntilEvidence?.outcome, .failed)
-        XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, false)
-        XCTAssertTrue(step.repeatUntilEvidence?.failureReason?.contains("else body failed at \(elseFailurePath)") == true)
-        XCTAssertEqual(step.failure?.observed, "child failed at \(elseFailurePath)")
-        XCTAssertEqual(step.children.last?.path, elseFailurePath)
     }
 
     func testHeistIfSelectsMatchingCaseImmediately() async throws {

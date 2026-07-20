@@ -23,11 +23,12 @@ extension TheGetaway {
     func wireTransport(
         _ transport: ServerTransport,
         onBacklogOverflow: @escaping @MainActor @Sendable (Int) async -> Void
-    ) async {
+    ) async -> TransportWiringOutcome {
         let attempt = TransportWiringAttempt(transport: transport)
         let previousEventConsumer = transportWiring.eventConsumer
         previousEventConsumer?.cancel()
         transportWiring = .wiring(attempt)
+        await muscle.beginCallbackWiring(attempt.deliveryGeneration)
 
         // Install actor-isolated callbacks on TheMuscle. Each callback is
         // `@Sendable`. We capture the inner `SimpleSocketServer` actor (which
@@ -47,13 +48,19 @@ extension TheGetaway {
         if let pauseBeforeTransportCallbackInstallationForTesting {
             await pauseBeforeTransportCallbackInstallationForTesting()
         }
-        await muscle.installCallbacks(
+        let installOutcome = await muscle.installCallbacks(
             sendToClient: sendToClient,
             disconnectClient: disconnect,
-            onClientAuthenticated: onAuthenticated
+            onClientAuthenticated: onAuthenticated,
+            generation: attempt.deliveryGeneration
         )
 
-        guard transportWiring.admits(attempt) else { return }
+        guard installOutcome == .installed,
+              transportWiring.admits(attempt)
+        else {
+            await muscle.invalidateCallbacks(for: attempt.deliveryGeneration)
+            return .rejected
+        }
         let eventConsumer = Task { @MainActor [weak self, events = transport.events, onBacklogOverflow] in
             for await event in events {
                 guard let self else { return }
@@ -61,6 +68,7 @@ extension TheGetaway {
             }
         }
         transportWiring = .wired(WiredTransport(attempt: attempt, eventConsumer: eventConsumer))
+        return .admitted(WiredTransportAdmission(attempt: attempt))
     }
 
     /// Observes one transport event on the main actor. Client frames are handed
@@ -98,8 +106,12 @@ extension TheGetaway {
 
     func tearDown() async {
         let eventConsumer = transportWiring.eventConsumer
+        let deliveryGeneration = transportWiring.deliveryGeneration
         transportWiring = .unwired
         eventConsumer?.cancel()
+        if let deliveryGeneration {
+            await muscle.invalidateCallbacks(for: deliveryGeneration)
+        }
         let pipelineConsumers = clientRequestPipelines.values.compactMap { $0.stop() }
         clientRequestPipelines.removeAll()
         await brains.stopInteractionRequests()

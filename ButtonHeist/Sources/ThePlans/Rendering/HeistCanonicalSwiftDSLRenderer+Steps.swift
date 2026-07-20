@@ -182,25 +182,15 @@ extension HeistCanonicalSwiftDSLRenderer {
     func renderRepeatUntil(
         _ repeatUntil: RepeatUntilStep,
         renderedBody: String,
-        renderedElseBody: String?,
         indent: Int,
         environment: RenderEnvironment
     ) throws -> String {
         let predicate = try render(predicate: repeatUntil.predicate, environment: environment)
         let timeout = decimal(repeatUntil.timeout.seconds)
-        var source = """
+        return """
         \(line("RepeatUntil(\(predicate), timeout: \(timeout)) {", indent))
         \(renderedBody)
         \(line("}", indent))
         """
-        if let renderedElseBody {
-            source += "\n"
-            source += line(".else {", indent)
-            source += "\n"
-            source += renderedElseBody
-            source += "\n"
-            source += line("}", indent)
-        }
-        return source
     }
 }

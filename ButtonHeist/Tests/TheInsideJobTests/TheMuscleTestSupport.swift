@@ -57,6 +57,8 @@ class TheMuscleTestCase: XCTestCase {
 
     func installCallbacks() async {
         let sink = self.sink!
+        let generation = ClientDelivery.Generation()
+        await muscle.beginCallbackWiring(generation)
         await muscle.installCallbacks(
             sendToClient: { data, clientId in
                 sink.appendSent((data, clientId))
@@ -67,7 +69,8 @@ class TheMuscleTestCase: XCTestCase {
             },
             onClientAuthenticated: { clientId, respond in
                 sink.appendAuthenticatedCallback((clientId, respond))
-            }
+            },
+            generation: generation
         )
     }
 

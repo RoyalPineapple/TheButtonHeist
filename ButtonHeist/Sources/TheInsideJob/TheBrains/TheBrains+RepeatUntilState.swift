@@ -58,10 +58,7 @@ extension TheBrains.RepeatUntil {
                 return reduceIterationPassed(running: running, event: event)
             case (.running(let running), .iterationFailed(let event)):
                 return reduceIterationFailed(running: running, event: event)
-            case (.terminal(let terminal), .elseCompleted(let children)):
-                return reduceElseCompleted(state: state, terminal: terminal, children: children)
-            case (.running, .elseCompleted),
-                 (.terminal, .deadlineElapsed),
+            case (.terminal, .deadlineElapsed),
                  (.terminal, .iterationPassed),
                  (.terminal, .iterationFailed):
                 return state
@@ -117,38 +114,12 @@ extension TheBrains.RepeatUntil {
             ))
         }
 
-        private static func reduceElseCompleted(
-            state: LoopState,
-            terminal: Terminal,
-            children: HeistExecutedChildren
-        ) -> LoopState {
-            guard case .timedOut(let observation, let expectation, let iterationCount, let iterationNodes) = terminal else {
-                return state
-            }
-            switch children {
-            case .aborted(let elseChildren):
-                return .terminal(.timeoutElseFailed(
-                    observation: observation,
-                    expectation: expectation,
-                    iterationCount: iterationCount,
-                    children: iterationNodes.appending(elseChildren)
-                ))
-            case .passed(let elseChildren):
-                return .terminal(.timeoutHandledByElse(
-                    observation: observation,
-                    expectation: expectation,
-                    iterationCount: iterationCount,
-                    children: iterationNodes.appending(elseChildren)
-                ))
-            }
-        }
     }
 
     internal enum LoopEvent {
         case deadlineElapsed(ExpectationResult.Unmet)
         case iterationPassed(PassedIterationEvent)
         case iterationFailed(FailedIterationEvent)
-        case elseCompleted(HeistExecutedChildren)
     }
 
     internal enum Terminal {
@@ -165,19 +136,6 @@ extension TheBrains.RepeatUntil {
             iterationIndex: Int,
             children: HeistAbortedChildren
         )
-        case timeoutHandledByElse(
-            observation: Observation?,
-            expectation: ExpectationResult.Unmet,
-            iterationCount: Int,
-            children: HeistPassingChildren
-        )
-        case timeoutElseFailed(
-            observation: Observation?,
-            expectation: ExpectationResult.Unmet,
-            iterationCount: Int,
-            children: HeistAbortedChildren
-        )
-
     }
 
     internal struct IterationFrame {

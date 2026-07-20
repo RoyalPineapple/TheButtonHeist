@@ -39,6 +39,8 @@ let buttonHeistRules = RuleSet {
     callbackIsolationRule
     checkedConcurrencyRule
     heistContentOpacityRule
+    planElseOwnershipRule
+    exportedTupleReturnRule
     Rules.boundaryOnly(
         function: "commitObservation",
         allowed: .files([semanticObservationSettlementPath]),
@@ -188,6 +190,52 @@ private let heistContentOpacityRule = Rules.repository(
         }
 }
 
+private let planElseOwnershipRule = Rules.files(
+    "buttonheist.plan_else_ownership",
+    severity: .error,
+    summary: "Only wait and conditional DSL fragments expose an else branch."
+) { file in
+    functions()
+        .within(plansScope)
+        .filter { match in
+            functionName(match.node) == "else" && !isAllowedPlanElseOwner(match.node)
+        }
+        .matches(in: file)
+        .map { match in
+            match.failure(
+                message: "unsupported DSL else branch",
+                evidence: ViolationEvidence(
+                    observed: match.node.bumper.lexicalContext.enclosingNominalNames.first
+                        ?? match.node.trimmedDescription,
+                    expectation: "only WaitFor and IfContent expose func `else`"
+                )
+            )
+        }
+}
+
+private let exportedTupleReturnRule = Rules.files(
+    "buttonheist.exported_tuple_return",
+    severity: .error,
+    summary: "Exported functions return named contract types, not multi-value tuples."
+) { file in
+    functions()
+        .filter { match in
+            hasExportedAccess(match.node)
+                && (match.node.signature.returnClause?.type.as(TupleTypeSyntax.self)?.elements.count ?? 0) > 1
+        }
+        .matches(in: file)
+        .map { match in
+            match.failure(
+                message: "exported function returns a tuple contract",
+                evidence: ViolationEvidence(
+                    observed: match.node.signature.returnClause?.type.trimmedDescription
+                        ?? match.node.trimmedDescription,
+                    expectation: "return a named Swift type for public, open, or package API"
+                )
+            )
+        }
+}
+
 private func isAllowedAnyBoundary(_ node: IdentifierTypeSyntax) -> Bool {
     if node.ancestors.contains(where: { ancestor in
         ancestor.as(TypeAliasDeclSyntax.self)?.name.text == "FoundationFileAttributeDictionary"
@@ -230,4 +278,28 @@ private func callbackShape(
     }?.shape ?? aliases.first { alias in
         alias.name == name && alias.enclosingNominalNames.isEmpty
     }?.shape
+}
+
+private func functionName(_ node: FunctionDeclSyntax) -> String {
+    let name = node.name.text
+    if name.first == "`", name.last == "`" {
+        return String(name.dropFirst().dropLast())
+    }
+    return name
+}
+
+private func isAllowedPlanElseOwner(_ node: FunctionDeclSyntax) -> Bool {
+    let owner = node.bumper.lexicalContext.enclosingNominalNames.first
+    return owner == "WaitFor" || owner == "IfContent"
+}
+
+private func hasExportedAccess(_ node: FunctionDeclSyntax) -> Bool {
+    node.modifiers.contains { modifier in
+        switch modifier.name.text {
+        case "open", "public", "package":
+            true
+        default:
+            false
+        }
+    }
 }

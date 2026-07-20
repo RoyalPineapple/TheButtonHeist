@@ -381,10 +381,6 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
             expectation: ExpectationResult.Unmet,
             actionResult: ActionResult?
         )
-        case handledElse(
-            expectation: ExpectationResult.Unmet,
-            failureReason: String?
-        )
         case failed(
             iterationOrdinal: Int?,
             expectation: ExpectationResult.Unmet,
@@ -398,8 +394,6 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
             return .matched
         case .continued:
             return .continued
-        case .handledElse:
-            return .handledElse
         case .failed:
             return .failed
         }
@@ -412,8 +406,6 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
             return iterationOrdinal
         case .continued(let iterationOrdinal, _, _):
             return iterationOrdinal
-        case .handledElse:
-            return nil
         }
     }
 
@@ -422,7 +414,6 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         case .matched(_, let expectation, _):
             return expectation.result
         case .continued(_, let expectation, _),
-             .handledElse(let expectation, _),
              .failed(_, let expectation, _):
             return expectation.result
         }
@@ -433,15 +424,13 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         case .matched(_, _, let actionResult),
              .continued(_, _, let actionResult):
             return actionResult
-        case .handledElse, .failed:
+        case .failed:
             return nil
         }
     }
 
     public var failureReason: String? {
         switch storage {
-        case .handledElse(_, let failureReason):
-            return failureReason
         case .failed(_, _, let failureReason):
             return failureReason
         case .matched, .continued:
@@ -459,7 +448,6 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         switch storage {
         case .matched(let value, _, _), .failed(let value, _, _): ordinal = value
         case .continued(let value, _, _): ordinal = value
-        case .handledElse: ordinal = nil
         }
         guard ordinal.map({ $0 >= 0 && $0 < iterationCount }) ?? true else { return nil }
         self.iterationCount = iterationCount
@@ -477,7 +465,6 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         switch storage {
         case .matched(let value, _, _), .failed(let value, _, _): ordinal = value
         case .continued(let value, _, _): ordinal = value
-        case .handledElse: ordinal = nil
         }
         precondition(ordinal.map { $0 >= 0 && $0 < iterationCount } ?? true)
         self.iterationCount = iterationCount
@@ -518,19 +505,6 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
                 expectation: expectation,
                 actionResult: actionResult
             )
-        )
-    }
-
-    package static func executedHandledElse(
-        iterationCount: Int,
-        expectation: ExpectationResult.Unmet,
-        lastObservedSummary: String?,
-        failureReason: String? = nil
-    ) -> HeistRepeatUntilEvidence {
-        HeistRepeatUntilEvidence(
-            executedIterationCount: iterationCount,
-            lastObservedSummary: lastObservedSummary,
-            storage: .handledElse(expectation: expectation, failureReason: failureReason)
         )
     }
 
@@ -584,22 +558,6 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
                 iterationOrdinal: iterationOrdinal,
                 expectation: expectation,
                 actionResult: actionResult
-            )
-        )
-    }
-
-    public static func handledElse(
-        iterationCount: Int,
-        expectation: ExpectationResult.Unmet,
-        lastObservedSummary: String?,
-        failureReason: String? = nil
-    ) -> HeistRepeatUntilEvidence? {
-        HeistRepeatUntilEvidence(
-            iterationCount: iterationCount,
-            lastObservedSummary: lastObservedSummary,
-            storage: .handledElse(
-                expectation: expectation,
-                failureReason: failureReason
             )
         )
     }
@@ -702,8 +660,6 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
                 expectation: expectation,
                 actionResult: actionResult
             )
-        case (.handledElse, .unmet(let expectation)) where iterationOrdinal == nil && actionResult == nil:
-            return .handledElse(expectation: expectation, failureReason: failureReason)
         case (.failed, .unmet(let expectation)) where actionResult == nil:
             guard let failureReason else {
                 throw DecodingError.dataCorrupted(.init(

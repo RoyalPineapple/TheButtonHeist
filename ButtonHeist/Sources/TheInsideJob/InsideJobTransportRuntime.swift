@@ -43,22 +43,25 @@ extension TheInsideJob {
     func startRuntimeResources(
         for request: InsideJobTransportStartRequest
     ) async throws -> InsideJobRuntimeResources {
-        await getaway.wireTransport(request.transport) { [weak self] maxEvents in
+        let wiringOutcome = await getaway.wireTransport(request.transport) { [weak self] maxEvents in
             await self?.handleTransportEventBacklogOverflow(maxEvents: maxEvents)
+        }
+        guard case .admitted(let wiredTransport) = wiringOutcome else {
+            throw CancellationError()
         }
 
         let exposure = ServerExposure(
             allowedScopes: runtimeConfiguration.allowedScopes.value,
             addressFamily: runtimeConfiguration.addressFamily
         )
-        let actualPort = try await request.transport.start(
+        let actualPort = try await wiredTransport.transport.start(
             port: runtimeConfiguration.preferredPort.value,
             bindToLoopback: exposure.bindsToLoopbackOnly,
             addressFamily: exposure.addressFamily
         )
-        let serviceName = advertiseService(on: request.transport, port: actualPort)
+        let serviceName = advertiseService(on: wiredTransport.transport, port: actualPort)
         let resources = InsideJobRuntimeResources(
-            transport: request.transport,
+            transport: wiredTransport.transport,
             actualPort: actualPort,
             bonjourServiceName: serviceName,
             idleTimerBaseline: request.idleTimerBaseline
