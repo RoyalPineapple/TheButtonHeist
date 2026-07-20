@@ -230,6 +230,37 @@ import ThePlans
         )
     }
 
+    @Test func postTerminalNestedExecutionIsRejectedWithBothPaths() throws {
+        let selection = HeistCaseSelectionResult.selectingFirstMatch(
+            cases: [
+                HeistCaseMatchResult(predicate: .exists(.label("First")), met: true),
+            ],
+            ifNone: .noMatch,
+            elapsedMs: 1
+        )
+        let root = HeistResultFixture.conditional(
+            selection: selection,
+            children: [
+                HeistResultFixture.explicitFailure(
+                    path: "$.body[0].conditional.cases[0].body[0]",
+                    message: "stop"
+                ),
+                HeistResultFixture.warning(
+                    path: "$.body[0].conditional.cases[0].body[1]",
+                    message: "after"
+                ),
+            ]
+        )
+
+        try expectAggregateAdmissionError(
+            steps: [root],
+            containing: [
+                "$.body[0].conditional.cases[0].body[1]",
+                "$.body[0].conditional.cases[0].body[0]",
+            ]
+        )
+    }
+
     @Test func `aggregate admission rejects failure capture before owning root`() throws {
         try expectAggregateAdmissionError(
             steps: [
