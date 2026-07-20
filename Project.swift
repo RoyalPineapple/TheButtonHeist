@@ -20,7 +20,7 @@ func hostedTestTarget(
         destinations: [.iPhone, .iPad],
         product: .unitTests,
         bundleId: bundleId,
-        deploymentTargets: .iOS("17.0"),
+        deploymentTargets: .iOS("16.0"),
         infoPlist: .default,
         sources: sources,
         dependencies: [
@@ -147,7 +147,7 @@ let project = Project(
             destinations: [.iPhone, .iPad, .mac],
             product: .framework,
             bundleId: "com.buttonheist.support",
-            deploymentTargets: .multiplatform(iOS: "17.0", macOS: "14.0"),
+            deploymentTargets: .multiplatform(iOS: "16.0", macOS: "14.0"),
             infoPlist: .default,
             sources: ["ButtonHeist/Sources/ButtonHeistSupport/**"],
             dependencies: []
@@ -159,7 +159,7 @@ let project = Project(
             destinations: [.iPhone, .iPad, .mac],
             product: .framework,
             bundleId: "com.buttonheist.theplans",
-            deploymentTargets: .multiplatform(iOS: "17.0", macOS: "14.0"),
+            deploymentTargets: .multiplatform(iOS: "16.0", macOS: "14.0"),
             infoPlist: .default,
             sources: ["ButtonHeist/Sources/ThePlans/**"],
             dependencies: [],
@@ -175,7 +175,7 @@ let project = Project(
             destinations: [.iPhone, .iPad, .mac],
             product: .framework,
             bundleId: "com.buttonheist.thescore",
-            deploymentTargets: .multiplatform(iOS: "17.0", macOS: "14.0"),
+            deploymentTargets: .multiplatform(iOS: "16.0", macOS: "14.0"),
             infoPlist: .default,
             sources: ["ButtonHeist/Sources/TheScore/**"],
 
@@ -212,7 +212,7 @@ let project = Project(
             destinations: [.iPhone, .iPad],
             product: .framework,
             bundleId: "com.buttonheist.theinsidejob",
-            deploymentTargets: .iOS("17.0"),
+            deploymentTargets: .iOS("16.0"),
             infoPlist: .default,
             sources: [
                 "ButtonHeist/Sources/TheInsideJob/**",
@@ -239,7 +239,7 @@ let project = Project(
             destinations: [.iPhone, .iPad],
             product: .framework,
             bundleId: "com.buttonheist.testing",
-            deploymentTargets: .iOS("17.0"),
+            deploymentTargets: .iOS("16.0"),
             infoPlist: .default,
             sources: ["ButtonHeist/Sources/ButtonHeistTesting/**"],
 
@@ -276,7 +276,7 @@ let project = Project(
             destinations: [.iPhone, .iPad, .mac],
             product: .framework,
             bundleId: "com.buttonheist.testsupport",
-            deploymentTargets: .multiplatform(iOS: "17.0", macOS: "14.0"),
+            deploymentTargets: .multiplatform(iOS: "16.0", macOS: "14.0"),
             infoPlist: .default,
             sources: ["ButtonHeist/Tests/TestSupport/**"],
             dependencies: [
@@ -293,7 +293,7 @@ let project = Project(
             destinations: [.iPhone, .iPad],
             product: .framework,
             bundleId: "com.buttonheist.hostedtestsupport",
-            deploymentTargets: .iOS("17.0"),
+            deploymentTargets: .iOS("16.0"),
             infoPlist: .default,
             sources: ["ButtonHeist/Tests/HostedTestSupport/**"],
             dependencies: [

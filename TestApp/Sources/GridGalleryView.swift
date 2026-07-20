@@ -3,8 +3,8 @@ import SwiftUI
 /// A grid gallery backed by UICollectionView (via LazyVGrid in a ScrollView).
 /// Tests two-axis scrolling, grid layout, and mixed content types for
 /// accessibility element discovery and scroll-to-visible operations.
-/// Includes a looping carousel at the top to stress-test horizontal scroll
-/// detection and infinite-scroll boundary handling.
+/// Includes a horizontal carousel at the top to stress-test horizontal scroll
+/// detection.
 struct GridGalleryView: View {
     @State private var selectedItems: Set<Int> = []
     @State private var searchText = ""
@@ -122,59 +122,12 @@ private struct GridCell: View {
     }
 }
 
-// MARK: - Looping Carousel
+// MARK: - Featured Carousel
 
-/// A horizontal carousel showing 3 cards at a time that loops infinitely.
-/// The buffer array pads ghost copies of the cards at each end. When the
-/// scroll position reaches the ghost region, it silently jumps back to the
-/// corresponding real cards — creating the illusion of infinite scroll.
-///
-/// This stresses scroll detection harder than a single-page carousel because
-/// 3 visible cards means the agent sees multiple elements at once, and the
-/// ghost buffer is wider (3 cards on each side instead of 1).
+/// A horizontal carousel showing multiple cards at a time.
 private struct FeaturedCarousel: View {
-    private enum ScrollSource {
-        case user, programmatic
-    }
-
-    @State private var scrolledID: Int?
-    @State private var lastScrollSource: ScrollSource = .user
-
     private static let cards = FeaturedCard.sampleCards
     private var cards: [FeaturedCard] { Self.cards }
-
-    /// Number of ghost cards padded at each end — must be >= visible count
-    /// so the user never sees the buffer boundary.
-    private static let ghostCount = 3
-
-    /// Buffer: [last N ghosts] + all cards + [first N ghosts]. Computed once
-    /// at file scope since `cards` and `ghostCount` are static.
-    private static let buffer: [BufferEntry] = {
-        let leadingGhosts = cards.suffix(ghostCount).enumerated().map { index, card in
-            BufferEntry(bufferID: index, card: card, logicalIndex: cards.count - ghostCount + index, isGhost: true)
-        }
-        let realCards = cards.enumerated().map { index, card in
-            BufferEntry(bufferID: ghostCount + index, card: card, logicalIndex: index, isGhost: false)
-        }
-        let trailingGhosts = cards.prefix(ghostCount).enumerated().map { index, card in
-            BufferEntry(bufferID: ghostCount + cards.count + index, card: card, logicalIndex: index, isGhost: true)
-        }
-        return leadingGhosts + realCards + trailingGhosts
-    }()
-
-    private var buffer: [BufferEntry] { Self.buffer }
-
-    /// The buffer ID of the first real card.
-    private var firstRealID: Int { Self.ghostCount }
-
-    /// The buffer ID of the last real card.
-    private var lastRealID: Int { Self.ghostCount + cards.count - 1 }
-
-    private var currentLogicalIndex: Int {
-        guard let scrolledID else { return 0 }
-        let entry = buffer.first { $0.bufferID == scrolledID }
-        return entry?.logicalIndex ?? 0
-    }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -182,94 +135,25 @@ private struct FeaturedCarousel: View {
                 .font(.caption2)
                 .hidden()
                 .accessibilityLabel("Featured carousel")
-                .accessibilityValue(carouselAccessibilityValue)
+                .accessibilityValue("\(cards.count) featured cards")
                 .accessibilityAddTraits(.isHeader)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 8) {
-                    ForEach(buffer) { entry in
+                    ForEach(cards.indices, id: \.self) { index in
                         FeaturedCardView(
-                            card: entry.card,
-                            logicalIndex: entry.logicalIndex,
+                            card: cards[index],
+                            logicalIndex: index,
                             totalCards: cards.count
                         )
-                        .containerRelativeFrame(.horizontal, count: 3, spacing: 8)
-                        .id(entry.bufferID)
-                        .accessibilityHidden(entry.isGhost)
+                        .frame(width: 120)
                     }
                 }
-                .scrollTargetLayout()
+                .padding(.horizontal, 12)
             }
-            .scrollTargetBehavior(.viewAligned)
-            .scrollPosition(id: $scrolledID)
             .frame(height: 100)
-            .onAppear {
-                scrolledID = firstRealID
-            }
-            .onChange(of: scrolledID) { _, newValue in
-                handleScrollChange(newValue)
-            }
-
-            HStack(spacing: 6) {
-                ForEach(0..<cards.count, id: \.self) { index in
-                    Circle()
-                        .fill(index == currentLogicalIndex ? Color.primary : Color.secondary.opacity(0.3))
-                        .frame(width: 7, height: 7)
-                }
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Page indicator")
-            .accessibilityValue(carouselAccessibilityValue)
-            .accessibilityHint("Swipe up or down to change page")
-            .accessibilityAdjustableAction { direction in
-                switch direction {
-                case .increment:
-                    advancePage(by: 1)
-                case .decrement:
-                    advancePage(by: -1)
-                @unknown default:
-                    break
-                }
-            }
         }
     }
-
-    private var carouselAccessibilityValue: String {
-        "Page \(currentLogicalIndex + 1) of \(cards.count)"
-    }
-
-    private func handleScrollChange(_ newID: Int?) {
-        guard let newID else { return }
-        if lastScrollSource == .programmatic {
-            lastScrollSource = .user
-            return
-        }
-
-        if newID < firstRealID || newID > lastRealID {
-            let logicalIndex = buffer.first { $0.bufferID == newID }?.logicalIndex ?? 0
-            let targetID = Self.ghostCount + logicalIndex
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                lastScrollSource = .programmatic
-                scrolledID = targetID
-            }
-        }
-    }
-
-    private func advancePage(by offset: Int) {
-        let newLogical = (currentLogicalIndex + offset + cards.count) % cards.count
-        let targetBufferID = Self.ghostCount + newLogical
-        lastScrollSource = .programmatic
-        withAnimation { scrolledID = targetBufferID }
-    }
-}
-
-private struct BufferEntry: Identifiable {
-    let bufferID: Int
-    let card: FeaturedCard
-    let logicalIndex: Int
-    let isGhost: Bool
-
-    var id: Int { bufferID }
 }
 
 private struct FeaturedCardView: View {

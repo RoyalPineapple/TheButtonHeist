@@ -65,11 +65,11 @@ struct PlaylistView: View {
 
             Section(songs.isEmpty ? "Playlist" : "Playlist — \(songs.count) songs") {
                 if songs.isEmpty {
-                    ContentUnavailableView {
-                        Label("Nothing Queued", systemImage: "music.note.list")
-                    } description: {
-                        Text("Add some songs to get started.")
-                    }
+                    UnavailablePlaceholderView(
+                        title: "Nothing Queued",
+                        systemImage: "music.note.list",
+                        description: "Add some songs to get started."
+                    )
                 } else {
                     ForEach(songs) { song in
                         SongRow(song: song, isPlaying: song.id == nowPlayingID) {
@@ -303,7 +303,6 @@ private struct NowPlayingRow: View {
                 Image(systemName: "speaker.wave.2.fill")
                     .font(.title2)
                     .foregroundStyle(.white)
-                    .symbolEffect(.variableColor.iterative)
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -406,5 +405,5 @@ private let libraryBoardTiles: [LibraryBoardTile] = (0..<4).flatMap { shelf in
     NavigationStack {
         PlaylistView()
     }
-    .environment(AppSettings())
+    .environmentObject(AppSettings())
 }

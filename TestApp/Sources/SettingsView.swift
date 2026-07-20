@@ -1,11 +1,9 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @Environment(AppSettings.self) private var settings
+    @EnvironmentObject private var settings: AppSettings
 
     var body: some View {
-        @Bindable var settings = settings
-
         Form {
             Section("Appearance") {
                 Picker("Color Scheme", selection: $settings.colorScheme) {
@@ -82,5 +80,5 @@ struct SettingsView: View {
     NavigationStack {
         SettingsView()
     }
-    .environment(AppSettings())
+    .environmentObject(AppSettings())
 }

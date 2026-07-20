@@ -12,7 +12,7 @@ struct TogglePickerDemo: View {
         Form {
             Section("Toggles & Pickers") {
                 Toggle("Subscribe to newsletter", isOn: $isSubscribed)
-                    .onChange(of: isSubscribed) { _, newValue in
+                    .onChange(of: isSubscribed) { newValue in
                         lastAction = "Toggle: \(newValue ? "ON" : "OFF")"
                     }
 
@@ -30,7 +30,7 @@ struct TogglePickerDemo: View {
                 .pickerStyle(.segmented)
 
                 DatePicker("Date", selection: $selectedDate, displayedComponents: [.date])
-                    .onChange(of: selectedDate) { _, _ in
+                    .onChange(of: selectedDate) { _ in
                         lastAction = "Date changed"
                     }
 

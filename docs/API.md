@@ -120,7 +120,7 @@ or repaired by loops, validation, or rendering.
 
 **Import**: `import TheInsideJob`
 
-**Platform**: iOS 17.0+
+**Platform**: iOS 16.0+
 
 **Location**: `ButtonHeist/Sources/TheInsideJob/TheInsideJob.swift`
 

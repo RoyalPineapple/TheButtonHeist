@@ -30,11 +30,11 @@ struct PhotosView: View {
     var body: some View {
         Group {
             if photos.isEmpty {
-                ContentUnavailableView {
-                    Label("No Photos", systemImage: "photo.on.rectangle.angled")
-                } description: {
-                    Text("Your photo library is empty.")
-                }
+                UnavailablePlaceholderView(
+                    title: "No Photos",
+                    systemImage: "photo.on.rectangle.angled",
+                    description: "Your photo library is empty."
+                )
             } else {
                 ScrollView {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
@@ -191,5 +191,5 @@ private struct Photo: Identifiable {
     NavigationStack {
         PhotosView()
     }
-    .environment(AppSettings())
+    .environmentObject(AppSettings())
 }

@@ -1,13 +1,12 @@
 import SwiftUI
 
-@Observable
-class AppSettings {
-    var colorScheme: AppColorScheme = .system
-    var accentColor: AppAccentColor = .blue
-    var textSize: AppTextSize = .medium
-    var username: String = ""
-    var showCompletedTodos: Bool = true
-    var compactMode: Bool = false
+final class AppSettings: ObservableObject {
+    @Published var colorScheme: AppColorScheme = .system
+    @Published var accentColor: AppAccentColor = .blue
+    @Published var textSize: AppTextSize = .medium
+    @Published var username: String = ""
+    @Published var showCompletedTodos: Bool = true
+    @Published var compactMode: Bool = false
 }
 
 enum AppColorScheme: String, CaseIterable {

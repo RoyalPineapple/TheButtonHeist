@@ -16,7 +16,39 @@ protocol SocketListening: AnyObject, Sendable {
     func cancel()
 }
 
-extension NWListener: SocketListening {}
+final class NetworkSocketListener: SocketListening, @unchecked Sendable {
+    /// `@unchecked Sendable` justification: `NWListener` is the Network framework
+    /// boundary object. `SocketListenerRuntime` owns listener lifecycle through
+    /// one actor, and callback mutation is limited to the Network listener's
+    /// documented queue-driven handlers.
+    private let listener: NWListener
+
+    init(parameters: NWParameters) throws {
+        listener = try NWListener(using: parameters)
+    }
+
+    var stateUpdateHandler: (@Sendable (NWListener.State) -> Void)? {
+        get { listener.stateUpdateHandler }
+        set { listener.stateUpdateHandler = newValue }
+    }
+
+    var newConnectionHandler: (@Sendable (NWConnection) -> Void)? {
+        get { listener.newConnectionHandler }
+        set { listener.newConnectionHandler = newValue }
+    }
+
+    var port: NWEndpoint.Port? {
+        listener.port
+    }
+
+    func start(queue: DispatchQueue) {
+        listener.start(queue: queue)
+    }
+
+    func cancel() {
+        listener.cancel()
+    }
+}
 
 typealias SocketListenerFactory = @Sendable (NWParameters) throws -> any SocketListening
 
@@ -47,6 +79,12 @@ struct SocketListenerGeneration: Equatable, Sendable {
 }
 
 private final class PendingSocketConnections: Sendable {
+    /// `@unchecked Sendable` justification: the connection reference only crosses
+    /// out of the lock so cancellation can run after the state transition.
+    private struct OwnedConnection: @unchecked Sendable {
+        let connection: NWConnection
+    }
+
     private enum Phase {
         case accepting([ObjectIdentifier: NWConnection])
         case stopped
@@ -78,23 +116,23 @@ private final class PendingSocketConnections: Sendable {
 
     @discardableResult
     func cancelIfOwned(_ connection: NWConnection) -> Bool {
-        let ownedConnection = phase.withLock { phase -> NWConnection? in
+        let ownedConnection = phase.withLock { phase -> OwnedConnection? in
             guard case .accepting(var connections) = phase else { return nil }
             let owned = connections.removeValue(forKey: ObjectIdentifier(connection))
             phase = .accepting(connections)
-            return owned
+            return owned.map(OwnedConnection.init(connection:))
         }
-        ownedConnection?.cancel()
+        ownedConnection?.connection.cancel()
         return ownedConnection != nil
     }
 
     func cancelAll() {
-        let connections = phase.withLock { phase -> [NWConnection] in
+        let connections = phase.withLock { phase -> [OwnedConnection] in
             guard case .accepting(let connections) = phase else { return [] }
             phase = .stopped
-            return Array(connections.values)
+            return connections.values.map(OwnedConnection.init(connection:))
         }
-        connections.forEach { $0.cancel() }
+        connections.forEach { $0.connection.cancel() }
     }
 
 }

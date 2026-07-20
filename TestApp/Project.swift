@@ -24,7 +24,7 @@ let project = Project(
             product: .app,
             productName: "BHDemo",
             bundleId: "com.buttonheist.testapp",
-            deploymentTargets: .iOS("17.0"),
+            deploymentTargets: .iOS("16.0"),
             infoPlist: .extendingDefault(with: [
                 "UILaunchScreen": [:],
                 "CFBundleName": "BH Demo",

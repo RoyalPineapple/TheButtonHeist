@@ -28,7 +28,7 @@ struct TodoItem: Identifiable {
 // MARK: - View
 
 struct TodoListView: View {
-    @Environment(AppSettings.self) private var settings
+    @EnvironmentObject private var settings: AppSettings
     @State private var items: [TodoItem] = Self.sampleItems
     @State private var newItemText = ""
     @State private var newItemCategory: TaskCategory = .work
@@ -397,5 +397,5 @@ struct TodoEditSheet: View {
     NavigationStack {
         TodoListView()
     }
-    .environment(AppSettings())
+    .environmentObject(AppSettings())
 }

@@ -168,5 +168,5 @@ struct LoginView: View {
     NavigationStack {
         LoginView()
     }
-    .environment(AppSettings())
+    .environmentObject(AppSettings())
 }

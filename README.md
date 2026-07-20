@@ -459,7 +459,7 @@ buttonheist get_interface
 ### Prerequisites
 
 - Xcode with Swift 6 package support
-- iOS 17+ / macOS 14+
+- iOS 16+ / macOS 14+
 - [Tuist](https://tuist.io)
 
 ### Build locally

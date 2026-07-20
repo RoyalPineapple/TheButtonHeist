@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 struct RootView: View {
-    @Environment(AppSettings.self) private var settings
+    @EnvironmentObject private var settings: AppSettings
     @State private var adversarialRoute: AdversarialRoute?
 
     var body: some View {
@@ -131,13 +131,22 @@ struct RootView: View {
             }
             .navigationTitle("ButtonHeist Demo")
             .listRowInsets(settings.compactMode ? EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16) : nil)
-            .navigationDestination(item: $adversarialRoute) { route in
-                AdversarialScenarioView(scenario: route.scenario)
-                    .id(route.id)
-                    .task {
-                        await Task.yield()
-                        AdversarialLabRoute.markReady(route.id)
+            .navigationDestination(isPresented: Binding(
+                get: { adversarialRoute != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        adversarialRoute = nil
                     }
+                }
+            )) {
+                if let route = adversarialRoute {
+                    AdversarialScenarioView(scenario: route.scenario)
+                        .id(route.id)
+                        .task {
+                            await Task.yield()
+                            AdversarialLabRoute.markReady(route.id)
+                        }
+                }
             }
         }
         .onOpenURL(perform: openDemoRoute)
@@ -189,7 +198,7 @@ internal final class AdversarialLabRoute {
         }
 
         let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: .seconds(2))
+        let deadline = clock.now.advanced(by: .seconds(5))
         while readyRouteID != routeID {
             guard clock.now < deadline else {
                 throw AdversarialLabRouteError.timedOut(scenario)

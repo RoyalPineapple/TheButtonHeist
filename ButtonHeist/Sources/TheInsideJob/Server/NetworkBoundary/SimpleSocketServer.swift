@@ -26,7 +26,7 @@ actor SimpleSocketServer {
                 connection.send(content: content, completion: completion)
             },
             listenerFactory: @escaping SocketListenerFactory = { parameters in
-                try NWListener(using: parameters)
+                try NetworkSocketListener(parameters: parameters)
             }
         ) {
             self.sendContent = sendContent
