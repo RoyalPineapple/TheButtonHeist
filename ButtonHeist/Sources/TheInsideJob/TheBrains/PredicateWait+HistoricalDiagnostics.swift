@@ -3,6 +3,64 @@
 import ThePlans
 import TheScore
 
+internal enum HistoricalWaitDiagnostics: Sendable {}
+
+extension HistoricalWaitDiagnostics {
+    internal struct SemanticCandidate: Sendable, Equatable {
+        internal let label: String?
+        internal let value: String?
+        internal let hint: String?
+        internal let traits: [HeistTrait]
+
+        internal init?(
+            label: String?,
+            value: String?,
+            hint: String?,
+            traits: [HeistTrait]
+        ) {
+            guard label != nil || value != nil || hint != nil || !traits.isEmpty else { return nil }
+            self.label = label
+            self.value = value
+            self.hint = hint
+            self.traits = traits
+        }
+    }
+
+    internal struct CandidateProvenance: Sendable, Equatable {
+        internal let firstObservationSequence: UInt64
+        internal let lastObservationSequence: UInt64
+
+        internal init?(
+            firstObservationSequence: UInt64,
+            lastObservationSequence: UInt64
+        ) {
+            guard firstObservationSequence <= lastObservationSequence else { return nil }
+            self.firstObservationSequence = firstObservationSequence
+            self.lastObservationSequence = lastObservationSequence
+        }
+    }
+
+    internal struct PredicateMismatch: Sendable, Equatable {
+        internal let exactPredicate: AccessibilityPredicate
+        internal let candidate: SemanticCandidate
+        internal let provenance: CandidateProvenance
+    }
+
+    internal struct Evidence: Sendable, Equatable {
+        internal static let maximumCandidateCount = 8
+
+        internal let predicateMismatches: [PredicateMismatch]
+
+        internal init?(predicateMismatches: [PredicateMismatch]) {
+            guard !predicateMismatches.isEmpty,
+                  predicateMismatches.count <= Self.maximumCandidateCount else {
+                return nil
+            }
+            self.predicateMismatches = predicateMismatches
+        }
+    }
+}
+
 internal struct PredicateWaitHistoricalDiagnostics: Sendable, Equatable {
     private let target: ResolvedAccessibilityTarget?
     private let predicateMismatches: [HistoricalWaitDiagnostics.PredicateMismatch]
