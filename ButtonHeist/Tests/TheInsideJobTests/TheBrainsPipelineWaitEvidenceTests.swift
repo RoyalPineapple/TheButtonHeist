@@ -40,6 +40,57 @@ extension TheBrainsPipelineTests {
         XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Known"])
         XCTAssertTrue(result.outcome.actionResult.message?.contains("interface: 1 elements") == true)
         XCTAssertTrue(result.outcome.actionResult.message?.contains("last result:") == true)
+        XCTAssertNil(result.historicalWaitDiagnostics)
+    }
+
+    func testTimeoutRetainsBoundedAccessiblePredicateMismatches() async throws {
+        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            makeScreen(elements: [("Ticket saved., Dismiss", .staticText, "toast")])
+        )
+        let predicate = AccessibilityPredicate.exists(.label("Ticket saved."))
+
+        let result = await brains.interactionCoordinator.waitForPredicate(
+            try resolvedWait(WaitStep(predicate: predicate, timeout: .milliseconds(1))),
+            historicalWaitDiagnostics: .predicateMismatches
+        )
+        let evidence = try XCTUnwrap(result.historicalWaitDiagnostics)
+        let mismatch = try XCTUnwrap(evidence.predicateMismatches.first)
+
+        XCTAssertFalse(result.outcome.actionResult.outcome.isSuccess)
+        XCTAssertEqual(evidence.predicateMismatches.count, 1)
+        XCTAssertEqual(mismatch.exactPredicate, predicate)
+        XCTAssertEqual(mismatch.candidate.label, "Ticket saved., Dismiss")
+        XCTAssertEqual(mismatch.candidate.value, nil)
+        XCTAssertEqual(mismatch.candidate.hint, nil)
+        XCTAssertEqual(mismatch.candidate.traits, [.staticText])
+        XCTAssertEqual(
+            mismatch.provenance.firstObservationSequence,
+            mismatch.provenance.lastObservationSequence
+        )
+        XCTAssertNotEqual(mismatch.candidate.label, "Ticket saved.")
+    }
+
+    func testTimeoutDiagnosticEvictsOldestSemanticCandidatesDeterministically() async throws {
+        let elements = (0 ..< 10).map { index in
+            ("Candidate \(index)", UIAccessibilityTraits.staticText, HeistId(rawValue: "candidate_\(index)"))
+        }
+        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            makeScreen(elements: elements)
+        )
+
+        let result = await brains.interactionCoordinator.waitForPredicate(
+            try resolvedWait(WaitStep(
+                predicate: .exists(.label("Missing")),
+                timeout: .milliseconds(1)
+            )),
+            historicalWaitDiagnostics: .predicateMismatches
+        )
+        let evidence = try XCTUnwrap(result.historicalWaitDiagnostics)
+
+        XCTAssertEqual(
+            evidence.predicateMismatches.compactMap(\.candidate.label),
+            (2 ..< 10).map { "Candidate \($0)" }
+        )
     }
 
     func testAppearedWaitRequiresObservedTransitionWhenFinalStateIsAlreadyPresent() async throws {

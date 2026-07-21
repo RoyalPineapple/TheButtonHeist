@@ -23,10 +23,13 @@ extension PredicateWait {
         private let snapshot: Snapshot?
         private let continuitySnapshot: Snapshot?
         internal let continuity: EvidenceContinuity.WaitEvidence?
+        private let historicalDiagnostics: PredicateWaitHistoricalDiagnostics
 
         internal init(
             predicate: AccessibilityPredicate,
-            continuity: EvidenceContinuity.WaitEvidence? = nil
+            continuity: EvidenceContinuity.WaitEvidence? = nil,
+            historicalDiagnosticsRequest: HistoricalWaitDiagnostics.Request? = nil,
+            target: ResolvedAccessibilityTarget? = nil
         ) {
             stream = PredicateObservationStreamState()
             initialExpectation = ExpectationResult(
@@ -37,6 +40,10 @@ extension PredicateWait {
             snapshot = nil
             continuitySnapshot = nil
             self.continuity = continuity
+            historicalDiagnostics = PredicateWaitHistoricalDiagnostics(
+                request: historicalDiagnosticsRequest,
+                target: target
+            )
         }
 
         private init(
@@ -44,13 +51,15 @@ extension PredicateWait {
             initialExpectation: ExpectationResult,
             snapshot: Snapshot?,
             continuitySnapshot: Snapshot?,
-            continuity: EvidenceContinuity.WaitEvidence?
+            continuity: EvidenceContinuity.WaitEvidence?,
+            historicalDiagnostics: PredicateWaitHistoricalDiagnostics
         ) {
             self.stream = stream
             self.initialExpectation = initialExpectation
             self.snapshot = snapshot
             self.continuitySnapshot = continuitySnapshot
             self.continuity = continuity
+            self.historicalDiagnostics = historicalDiagnostics
         }
 
         internal var evaluation: ExpectationResult {
@@ -87,13 +96,18 @@ extension PredicateWait {
             return false
         }
 
+        internal var historicalWaitDiagnostics: HistoricalWaitDiagnostics.Evidence? {
+            historicalDiagnostics.evidence
+        }
+
         internal func recording(_ reduction: PredicateObservationStreamReduction) -> LifecycleEvidence {
             LifecycleEvidence(
                 stream: reduction.state,
                 initialExpectation: initialExpectation,
                 snapshot: Snapshot(reduction.reduction),
                 continuitySnapshot: nil,
-                continuity: continuity
+                continuity: continuity,
+                historicalDiagnostics: historicalDiagnostics.recording(reduction.reduction)
             )
         }
 
@@ -105,7 +119,8 @@ extension PredicateWait {
                 initialExpectation: initialExpectation,
                 snapshot: snapshot,
                 continuitySnapshot: nil,
-                continuity: continuity?.recordingCurrentMatch(observedThrough: observedThrough)
+                continuity: continuity?.recordingCurrentMatch(observedThrough: observedThrough),
+                historicalDiagnostics: historicalDiagnostics
             )
         }
 
@@ -128,7 +143,8 @@ extension PredicateWait {
                     continuity: continuity?.recordingApplied(
                         observedThrough: observedThrough,
                         match: match
-                    )
+                    ),
+                    historicalDiagnostics: historicalDiagnostics
                 )
             case .unmatched(let observedThrough):
                 return LifecycleEvidence(
@@ -136,7 +152,8 @@ extension PredicateWait {
                     initialExpectation: initialExpectation,
                     snapshot: snapshot,
                     continuitySnapshot: nil,
-                    continuity: continuity?.recordingApplied(observedThrough: observedThrough)
+                    continuity: continuity?.recordingApplied(observedThrough: observedThrough),
+                    historicalDiagnostics: historicalDiagnostics
                 )
             case .fallback:
                 return LifecycleEvidence(
@@ -146,7 +163,8 @@ extension PredicateWait {
                     continuitySnapshot: nil,
                     continuity: EvidenceContinuity.WaitEvidence(
                         status: .fallback(reason: fallbackReason)
-                    )
+                    ),
+                    historicalDiagnostics: historicalDiagnostics
                 )
             }
         }

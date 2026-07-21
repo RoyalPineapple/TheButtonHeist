@@ -228,7 +228,8 @@ extension PredicateWait {
         baseline: SettledCapture? = nil,
         window: ObservationWindow? = nil,
         observedSequence: SettledObservationSequence? = nil,
-        continuity: EvidenceContinuity.WaitEvidence? = nil
+        continuity: EvidenceContinuity.WaitEvidence? = nil,
+        historicalWaitDiagnostics: HistoricalWaitDiagnostics.Evidence? = nil
     ) -> HeistWaitResult {
         let elapsed = Self.elapsedSeconds(since: start)
         let presenceMessage = success || observationSummary == nil
@@ -255,7 +256,8 @@ extension PredicateWait {
             presenceTimeoutMessage: presenceMessage,
             settledDiagnostics: settledDiagnostics,
             observedSequence: observedSequence,
-            continuity: continuity
+            continuity: continuity,
+            historicalWaitDiagnostics: historicalWaitDiagnostics
         )
     }
 
@@ -276,7 +278,8 @@ extension PredicateWait {
         presenceTimeoutMessage: String? = nil,
         settledDiagnostics: SettledWaitDiagnostics? = nil,
         observedSequence: SettledObservationSequence? = nil,
-        continuity: EvidenceContinuity.WaitEvidence? = nil
+        continuity: EvidenceContinuity.WaitEvidence? = nil,
+        historicalWaitDiagnostics: HistoricalWaitDiagnostics.Evidence? = nil
     ) -> HeistWaitResult {
         let message = success
             ? waitSuccessMessage(for: step.predicate, elapsed: elapsed)
@@ -296,7 +299,8 @@ extension PredicateWait {
                 expectation: expectation,
                 observedSequence: observedSequence,
                 observationSummary: observationSummary,
-                continuity: continuity
+                continuity: continuity,
+                historicalWaitDiagnostics: historicalWaitDiagnostics
             )
         case (false, .unmet(let expectation)):
             return .timedOut(
@@ -305,7 +309,8 @@ extension PredicateWait {
                 expectation: expectation,
                 observedSequence: observedSequence,
                 observationSummary: observationSummary,
-                continuity: continuity
+                continuity: continuity,
+                historicalWaitDiagnostics: historicalWaitDiagnostics
             )
         case (true, .unmet):
             preconditionFailure("Successful predicate wait requires a met expectation")

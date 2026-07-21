@@ -144,17 +144,20 @@ struct HeistWaitResult {
     let observedSequence: SettledObservationSequence?
     let observationSummary: String?
     let continuity: EvidenceContinuity.WaitEvidence?
+    let historicalWaitDiagnostics: HistoricalWaitDiagnostics.Evidence?
 
     private init(
         outcome: Outcome,
         observedSequence: SettledObservationSequence?,
         observationSummary: String?,
-        continuity: EvidenceContinuity.WaitEvidence?
+        continuity: EvidenceContinuity.WaitEvidence?,
+        historicalWaitDiagnostics: HistoricalWaitDiagnostics.Evidence?
     ) {
         self.outcome = outcome
         self.observedSequence = observedSequence
         self.observationSummary = observationSummary
         self.continuity = continuity
+        self.historicalWaitDiagnostics = historicalWaitDiagnostics
     }
 
     static func matched(
@@ -164,7 +167,8 @@ struct HeistWaitResult {
         observedSequence: SettledObservationSequence? = nil,
         observationSummary: String? = nil,
         announcement: ActionAnnouncementText? = nil,
-        continuity: EvidenceContinuity.WaitEvidence? = nil
+        continuity: EvidenceContinuity.WaitEvidence? = nil,
+        historicalWaitDiagnostics: HistoricalWaitDiagnostics.Evidence? = nil
     ) -> HeistWaitResult {
         HeistWaitResult(
             outcome: .matched(
@@ -178,7 +182,8 @@ struct HeistWaitResult {
             ),
             observedSequence: observedSequence,
             observationSummary: observationSummary,
-            continuity: continuity
+            continuity: continuity,
+            historicalWaitDiagnostics: historicalWaitDiagnostics
         )
     }
 
@@ -188,7 +193,8 @@ struct HeistWaitResult {
         expectation: ExpectationResult.Unmet,
         observedSequence: SettledObservationSequence? = nil,
         observationSummary: String? = nil,
-        continuity: EvidenceContinuity.WaitEvidence? = nil
+        continuity: EvidenceContinuity.WaitEvidence? = nil,
+        historicalWaitDiagnostics: HistoricalWaitDiagnostics.Evidence? = nil
     ) -> HeistWaitResult {
         HeistWaitResult(
             outcome: .unmatched(
@@ -202,7 +208,8 @@ struct HeistWaitResult {
             ),
             observedSequence: observedSequence,
             observationSummary: observationSummary,
-            continuity: continuity
+            continuity: continuity,
+            historicalWaitDiagnostics: historicalWaitDiagnostics
         )
     }
 
@@ -212,7 +219,8 @@ struct HeistWaitResult {
         traceEvidence: AccessibilityTraceEvidence?,
         expectation: ExpectationResult.Unmet,
         announcement: ActionAnnouncementText? = nil,
-        continuity: EvidenceContinuity.WaitEvidence? = nil
+        continuity: EvidenceContinuity.WaitEvidence? = nil,
+        historicalWaitDiagnostics: HistoricalWaitDiagnostics.Evidence? = nil
     ) -> HeistWaitResult {
         HeistWaitResult(
             outcome: .unmatched(
@@ -226,7 +234,8 @@ struct HeistWaitResult {
             ),
             observedSequence: nil,
             observationSummary: nil,
-            continuity: continuity
+            continuity: continuity,
+            historicalWaitDiagnostics: historicalWaitDiagnostics
         )
     }
 

@@ -119,6 +119,7 @@ final class InteractionCoordinator {
         changeBaseline: PredicateChangeBaselineSource = .establishFromFirstObservation,
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
         continuity: PredicateWaitContinuity = .notProvided,
+        historicalWaitDiagnostics: HistoricalWaitDiagnostics.Request? = nil,
         onReadyToPoll: PredicateWait.ReadyToPoll? = nil,
         startedAt: RuntimeElapsed.Instant? = nil
     ) async -> HeistWaitResult {
@@ -138,6 +139,7 @@ final class InteractionCoordinator {
             changeBaseline: baselineSource,
             announcementCursorStrategy: announcementCursorStrategy,
             continuity: continuity,
+            historicalWaitDiagnostics: historicalWaitDiagnostics,
             onReadyToPoll: onReadyToPoll,
             startedAt: startedAt
         )

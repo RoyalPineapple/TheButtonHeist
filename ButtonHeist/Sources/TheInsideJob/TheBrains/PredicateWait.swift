@@ -80,6 +80,7 @@ where Evidence: Sendable & Equatable {
         changeBaseline: PredicateChangeBaselineSource = .establishFromFirstObservation,
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
         continuity: PredicateWaitContinuity = .notProvided,
+        historicalWaitDiagnostics: HistoricalWaitDiagnostics.Request? = nil,
         onReadyToPoll: ReadyToPoll? = nil,
         startedAt: RuntimeElapsed.Instant? = nil
     ) async -> HeistWaitResult {
@@ -134,6 +135,7 @@ where Evidence: Sendable & Equatable {
                 for: step,
                 changeBaseline: changeBaseline,
                 continuity: effectiveContinuity,
+                historicalWaitDiagnostics: historicalWaitDiagnostics,
                 waitStartCursor: waitStartCursor,
                 start: start
             ),
@@ -145,6 +147,7 @@ where Evidence: Sendable & Equatable {
         for step: ResolvedWaitRuntimeInput,
         changeBaseline: PredicateChangeBaselineSource,
         continuity: PredicateWaitContinuity,
+        historicalWaitDiagnostics: HistoricalWaitDiagnostics.Request?,
         waitStartCursor: ObservationCursor?,
         start: RuntimeElapsed.Instant
     ) -> ExecutionProjection<HeistWaitResult, LifecycleEvidence> {
@@ -153,7 +156,9 @@ where Evidence: Sendable & Equatable {
             continuesAfterInitialMiss: true,
             initialEvidence: LifecycleEvidence(
                 predicate: step.predicateExpression,
-                continuity: continuity.initialEvidence(for: .settledObservation)
+                continuity: continuity.initialEvidence(for: .settledObservation),
+                historicalDiagnosticsRequest: historicalWaitDiagnostics,
+                target: step.predicate.waitTarget
             ),
             evaluate: { observation, isInitialVisible, evidence in
                 let baselineSeed: PredicateObservationBaselineSeed
@@ -224,7 +229,10 @@ where Evidence: Sendable & Equatable {
                     baseline: evidence.changeBaseline,
                     window: evidence.observationWindow,
                     observedSequence: evidence.observedSequence,
-                    continuity: evidence.continuity
+                    continuity: evidence.continuity,
+                    historicalWaitDiagnostics: outcome == .matched
+                        ? nil
+                        : evidence.historicalWaitDiagnostics
                 )
             }
         )
