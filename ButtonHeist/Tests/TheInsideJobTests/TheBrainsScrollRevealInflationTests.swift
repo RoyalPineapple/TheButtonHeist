@@ -154,6 +154,191 @@ extension TheBrainsScrollTests {
         )
     }
 
+    func testSemanticRevealDispatchesPointOnlyToMatchingOwner() async throws {
+        let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let observedPoint = CGPoint(x: 160, y: 1_200)
+        installScreenWithOffViewport(
+            visible: .init(makeElement(label: "Visible"), heistId: "visible_element"),
+            offscreen: .init(
+                makeElement(label: "Settings", traits: .button),
+                heistId: "settings_button",
+                contentActivationPoint: observedPoint,
+                scrollView: scrollView
+            )
+        )
+        let matchingObservation = brains.vault.latestObservation
+        let matchingElement = try XCTUnwrap(
+            matchingObservation.tree.findElement(heistId: "settings_button")
+        )
+        let mismatchedElement = InterfaceTree.Element(
+            heistId: matchingElement.heistId,
+            path: matchingElement.path,
+            scrollMembership: matchingElement.scrollMembership,
+            observedScrollContentActivationPoint: observedContentActivationPoint(
+                observedPoint,
+                ownerPath: TreePath([1])
+            ),
+            element: matchingElement.element
+        )
+        var mismatchedElements = matchingObservation.tree.elements
+        mismatchedElements[mismatchedElement.heistId] = mismatchedElement
+        let mismatchedObservation = InterfaceObservation.makeForTests(
+            tree: InterfaceTree(
+                elements: mismatchedElements,
+                containers: matchingObservation.tree.containers
+            ),
+            liveCapture: matchingObservation.liveCapture
+        )
+        let sourceTarget = try resolvedTarget(.label("Settings").and(.traits([.button])))
+        var dispatchedPoints: [ScrollContentPoint] = []
+        var dispatchedOwnerPaths: [TreePath] = []
+        brains.navigation.elementInflation.exploration.moveViewport = { intent in
+            if case .revealContentPoint(let point, let target) = intent {
+                dispatchedPoints.append(point)
+                dispatchedOwnerPaths.append(target.containerTarget.path)
+            }
+            return .unavailable()
+        }
+        brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
+
+        installSyntheticObservation(mismatchedObservation)
+        guard case .admitted(let mismatchedTarget) = brains.navigation.elementInflation.admitSemanticTarget(
+            sourceTarget,
+            selectedElement: mismatchedElement
+        ) else {
+            return XCTFail("Expected mismatched fixture target to retain semantic admission")
+        }
+        _ = await brains.navigation.elementInflation.revealSemanticTarget(
+            mismatchedTarget,
+            initialElement: mismatchedElement,
+            deadline: semanticRevealDeadline()
+        )
+
+        XCTAssertTrue(dispatchedPoints.isEmpty)
+        XCTAssertTrue(dispatchedOwnerPaths.isEmpty)
+
+        installSyntheticObservation(matchingObservation)
+        guard case .admitted(let matchingTarget) = brains.navigation.elementInflation.admitSemanticTarget(
+            sourceTarget,
+            selectedElement: matchingElement
+        ) else {
+            return XCTFail("Expected matching fixture target to retain semantic admission")
+        }
+        _ = await brains.navigation.elementInflation.revealSemanticTarget(
+            matchingTarget,
+            initialElement: matchingElement,
+            deadline: semanticRevealDeadline()
+        )
+
+        XCTAssertEqual(dispatchedPoints, [try ScrollContentPoint(validating: observedPoint)])
+        XCTAssertEqual(dispatchedOwnerPaths, [TreePath([0])])
+    }
+
+    func testKnownTargetMissingOwnerContinuesAncestorPaging() async throws {
+        let rootView = UIView()
+        rootView.backgroundColor = .white
+        let scrollView = RecordingScrollView(
+            frame: CGRect(x: 0, y: 0, width: 320, height: 400)
+        )
+        scrollView.contentSize = CGSize(width: 320, height: 1_200)
+        rootView.addSubview(scrollView)
+
+        let window = try installModalWindow(rootView: rootView)
+        defer {
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
+        }
+        await brains.tripwire.yieldFrames(3)
+
+        let ancestorPath = TreePath([0])
+        let missingOwnerPath = ancestorPath.appending(0)
+        let container = makeScrollableContainer(
+            contentSize: scrollView.contentSize,
+            frame: scrollView.frame
+        )
+        let visibleElement = makeElement(label: "Visible")
+        let visibleEntry = InterfaceTree.Element(
+            heistId: "visible_element",
+            scrollMembership: .init(containerPath: ancestorPath, index: nil),
+            element: visibleElement
+        )
+        let knownElement = makeElement(label: "Paged Target", traits: .button)
+        let knownEntry = InterfaceTree.Element(
+            heistId: "known_paged_target",
+            scrollMembership: .init(containerPath: missingOwnerPath, index: nil),
+            observedScrollContentActivationPoint: observedContentActivationPoint(
+                CGPoint(x: 160, y: 1_000),
+                ownerPath: missingOwnerPath
+            ),
+            element: knownElement
+        )
+        let initialObservation = InterfaceObservation.makeForTests(
+            elements: [
+                visibleEntry.heistId: visibleEntry,
+                knownEntry.heistId: knownEntry,
+            ],
+            hierarchy: [
+                .container(container, children: [
+                    .element(visibleElement, traversalIndex: 0),
+                ]),
+            ],
+            heistIdsByPath: [ancestorPath.appending(0): visibleEntry.heistId],
+            containerRefsByPath: [ancestorPath: .init(object: scrollView)],
+            firstResponderHeistId: nil,
+            scrollableContainerViewsByPath: [ancestorPath: .init(view: scrollView)]
+        )
+        let revealedElement = makeElement(label: "Paged Target", traits: .button)
+        let revealedEntry = InterfaceTree.Element(
+            heistId: knownEntry.heistId,
+            scrollMembership: .init(containerPath: ancestorPath, index: nil),
+            element: revealedElement
+        )
+        let revealedObservation = InterfaceObservation.makeForTests(
+            elements: [revealedEntry.heistId: revealedEntry],
+            hierarchy: [
+                .container(container, children: [
+                    .element(revealedElement, traversalIndex: 0),
+                ]),
+            ],
+            heistIdsByPath: [ancestorPath.appending(0): revealedEntry.heistId],
+            elementRefs: [revealedEntry.heistId: .init(object: retainedLiveObject(), scrollView: scrollView)],
+            containerRefsByPath: [ancestorPath: .init(object: scrollView)],
+            firstResponderHeistId: nil,
+            scrollableContainerViewsByPath: [ancestorPath: .init(view: scrollView)]
+        )
+        installSyntheticObservation(initialObservation)
+        scrollView.onSetContentOffset = { _ in
+            self.visibleObservationSource.observation = revealedObservation
+        }
+        let sourceTarget = try resolvedTarget(.label("Paged Target").and(.traits([.button])))
+        guard case .admitted(let admittedTarget) = brains.navigation.elementInflation.admitSemanticTarget(
+            sourceTarget,
+            selectedElement: knownEntry
+        ) else {
+            return XCTFail("Expected known target with missing owner to admit")
+        }
+
+        let result = await brains.navigation.scanForSemanticTarget(.init(
+            target: admittedTarget,
+            revealRootScrollViewID: ObjectIdentifier(scrollView),
+            deadline: semanticRevealDeadline(),
+            observedScrollContentActivationPoint: knownEntry.observedScrollContentActivationPoint
+        ))
+
+        guard case .revealed(_, let exploration) = result else {
+            return XCTFail("Expected ancestor paging to reveal the target, got \(result)")
+        }
+        XCTAssertEqual(exploration.progress.scrollCount, 1)
+        XCTAssertEqual(
+            scrollView.contentOffset.y,
+            -scrollView.adjustedContentInset.top
+                + scrollView.bounds.height
+                - CGFloat(ScrollContainerMetrics.pageOverlap),
+            accuracy: 0.01
+        )
+    }
+
     func testSeededKnownTargetScanCanSatisfyWithoutPaging() async throws {
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)

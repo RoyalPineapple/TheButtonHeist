@@ -323,12 +323,15 @@ extension ElementInflation {
         transaction: RevealTransaction
     ) async -> SemanticViewportMoveResult {
         guard semanticRevealInterruption(deadline: deadline) == nil else { return .unavailable }
-        transaction.record(scrollView)
         guard let scrollTarget = Navigation.ScrollableTarget.programmatic(scrollView, in: vault) else {
             return .unavailable
         }
+        guard let point = observedPoint.admit(ownerPath: scrollTarget.containerTarget.path) else {
+            return .unavailable
+        }
+        transaction.record(scrollView)
         let transition = await exploration.moveViewport(
-            .revealContentPoint(observedPoint.point, in: scrollTarget)
+            .revealContentPoint(point, in: scrollTarget)
         )
         guard semanticRevealInterruption(deadline: deadline) == nil else { return .unavailable }
         switch transition.outcome {

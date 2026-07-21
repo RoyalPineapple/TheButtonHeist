@@ -504,12 +504,11 @@ extension Navigation {
         let searchOrder: ViewportSearchOrder = request.observedScrollContentActivationPoint == nil
             ? .backwardFirst
             : .forwardFirst
-        if let observedScrollContentActivationPoint = request.observedScrollContentActivationPoint,
-           let seededResult = await moveToFallbackSeed(
-               observedScrollContentActivationPoint.point,
-               request: request
-           ) {
-            return seededResult
+        if let observedPoint = request.observedScrollContentActivationPoint {
+            if let seededResult = await moveToFallbackSeed(observedPoint, request: request) {
+                return seededResult
+            }
+            logSkippedSemanticRevealSeed(observedPoint, request: request)
         }
         let explorer = ViewportExplorer(
             navigation: self,
@@ -540,12 +539,14 @@ extension Navigation {
     }
 
     private func moveToFallbackSeed(
-        _ point: ScrollContentPoint,
+        _ observedPoint: InterfaceTree.ObservedScrollContentActivationPoint,
         request: ElementInflation.SemanticTargetRevealRequest
     ) async -> ElementInflation.SemanticTargetScanResult? {
-        guard let target = vault.liveScrollTarget(matching: request.revealRootScrollViewID) else {
-            return .unavailable
-        }
+        guard let ownerPath = request.target.scrollContainerPath,
+              let point = observedPoint.admit(ownerPath: ownerPath),
+              let target = vault.liveScrollTarget(at: ownerPath),
+              !target.scrollView.bhIsUnsafeForProgrammaticScrolling
+        else { return nil }
         let transition = await performViewportTransition(
             .revealContentPoint(
                 point,
@@ -569,6 +570,18 @@ extension Navigation {
         case .offscreen:
             return nil
         }
+    }
+
+    private func logSkippedSemanticRevealSeed(
+        _ observedPoint: InterfaceTree.ObservedScrollContentActivationPoint,
+        request: ElementInflation.SemanticTargetRevealRequest
+    ) {
+        let storedOwnerPath = observedPoint.ownerPath.indices.map(String.init).joined(separator: ".")
+        let expectedOwnerPath = request.target.scrollContainerPath?
+            .indices.map(String.init).joined(separator: ".") ?? "none"
+        let message = "semantic reveal seed skipped: storedOwnerPath=\(storedOwnerPath) "
+            + "expectedOwnerPath=\(expectedOwnerPath) fallback=ancestorPaging"
+        insideJobLogger.debug("\(message, privacy: .public)")
     }
 
     private func semanticTargetScanMatch(
