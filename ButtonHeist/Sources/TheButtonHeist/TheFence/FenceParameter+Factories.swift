@@ -6,7 +6,6 @@ import TheScore
     public static let commandName = FenceParameter<String>.string(.command, required: true)
     public static let containerName = FenceParameter<String>.string(.containerName, minLength: 1)
     public static let connectionTarget = FenceParameter<String>.string(.target)
-    public static let evidenceContinuity = FenceParameter<String>.string(.continuity, minLength: 1)
     public static let device = FenceParameter<String>.string(.device)
     public static let editAction = FenceParameter<EditAction>.enumValue(.action, required: true)
     public static let elementProperty = FenceParameter<ElementProperty>.enumValue(.property)

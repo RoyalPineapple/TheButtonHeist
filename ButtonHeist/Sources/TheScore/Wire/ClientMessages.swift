@@ -84,41 +84,9 @@ public enum ClientMessage: Codable, Sendable, Equatable {
 public struct HeistPlanRun: Codable, Sendable, Equatable {
     public let plan: HeistPlan
     public let argument: HeistArgument
-    public let historicalWaitDiagnostics: HistoricalWaitDiagnostics.Request?
 
-    public init(
-        plan: HeistPlan,
-        argument: HeistArgument = .none,
-        historicalWaitDiagnostics: HistoricalWaitDiagnostics.Request? = nil
-    ) {
+    public init(plan: HeistPlan, argument: HeistArgument = .none) {
         self.plan = plan
         self.argument = argument
-        self.historicalWaitDiagnostics = historicalWaitDiagnostics
-    }
-
-    private enum CodingKeys: String, CodingKey, CaseIterable {
-        case plan
-        case argument
-        case historicalWaitDiagnostics
-    }
-
-    public init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist plan run")
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(
-            plan: try container.decode(HeistPlan.self, forKey: .plan),
-            argument: try container.decode(HeistArgument.self, forKey: .argument),
-            historicalWaitDiagnostics: try container.decodeIfPresent(
-                HistoricalWaitDiagnostics.Request.self,
-                forKey: .historicalWaitDiagnostics
-            )
-        )
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(plan, forKey: .plan)
-        try container.encode(argument, forKey: .argument)
-        try container.encodeIfPresent(historicalWaitDiagnostics, forKey: .historicalWaitDiagnostics)
     }
 }

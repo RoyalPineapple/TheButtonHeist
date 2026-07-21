@@ -105,7 +105,6 @@ extension FenceCommandParameters: ExpressibleByArrayLiteral {
     static let columnCount = Self("columnCount")
     static let container = Self("container")
     static let continuation = Self("continuation")
-    static let continuity = Self("continuity")
     static let detail = Self("detail"), device = Self("device"), direction = Self("direction"), duration = Self("duration")
     static let edge = Self("edge"), element = Self("element"), elements = Self("elements"), end = Self("end")
     static let endOffset = Self("endOffset")

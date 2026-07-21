@@ -40,7 +40,10 @@ extension TheBrainsPipelineTests {
         XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Known"])
         XCTAssertTrue(result.outcome.actionResult.message?.contains("interface: 1 elements") == true)
         XCTAssertTrue(result.outcome.actionResult.message?.contains("last result:") == true)
-        XCTAssertNil(result.historicalWaitDiagnostics)
+        XCTAssertEqual(
+            result.historicalWaitDiagnostics?.predicateMismatches.compactMap(\.candidate.label),
+            ["Known"]
+        )
     }
 
     func testTimeoutRetainsBoundedAccessiblePredicateMismatches() async throws {
@@ -50,8 +53,7 @@ extension TheBrainsPipelineTests {
         let predicate = AccessibilityPredicate.exists(.label("Ticket saved."))
 
         let result = await brains.interactionCoordinator.waitForPredicate(
-            try resolvedWait(WaitStep(predicate: predicate, timeout: .milliseconds(1))),
-            historicalWaitDiagnostics: .predicateMismatches
+            try resolvedWait(WaitStep(predicate: predicate, timeout: .milliseconds(1)))
         )
         let evidence = try XCTUnwrap(result.historicalWaitDiagnostics)
         let mismatch = try XCTUnwrap(evidence.predicateMismatches.first)
@@ -82,8 +84,7 @@ extension TheBrainsPipelineTests {
             try resolvedWait(WaitStep(
                 predicate: .exists(.label("Missing")),
                 timeout: .milliseconds(1)
-            )),
-            historicalWaitDiagnostics: .predicateMismatches
+            ))
         )
         let evidence = try XCTUnwrap(result.historicalWaitDiagnostics)
 

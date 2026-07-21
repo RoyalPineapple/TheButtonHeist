@@ -73,9 +73,6 @@ struct RootView: View {
                     NavigationLink("Transient Flow") {
                         TransientFlowDemo()
                     }
-                    NavigationLink("Evidence Continuity") {
-                        EvidenceContinuityDemo()
-                    }
                     NavigationLink("Analog Clock") {
                         AnalogClockDemo()
                     }

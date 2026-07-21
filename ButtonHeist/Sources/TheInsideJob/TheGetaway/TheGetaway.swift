@@ -216,11 +216,7 @@ final class TheGetaway {
                 generation: generation
             )
         case .heistPlan(let run):
-            let actionResult = await brains.executeHeistPlan(
-                run.plan,
-                argument: run.argument,
-                continuity: run.continuity
-            )
+            let actionResult = await brains.executeHeistPlan(run.plan, argument: run.argument)
             await sendActionResult(
                 actionResult: actionResult,
                 requestId: requestId,

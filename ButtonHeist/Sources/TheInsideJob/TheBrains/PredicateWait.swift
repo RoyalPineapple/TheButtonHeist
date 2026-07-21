@@ -60,7 +60,6 @@ where Evidence: Sendable & Equatable {
     internal let vault: TheVault
     private let navigation: Navigation
     internal let actionEvidenceProjector: ActionEvidenceProjector
-    internal var continuityDiagnostics = EvidenceContinuityDiagnostics()
     internal var observeScheduledEffect: @MainActor (ScheduledEffect) -> Void = { _ in }
     private var heistAnnouncementCursor: AccessibilityNotificationCursor = .origin
 
@@ -79,37 +78,26 @@ where Evidence: Sendable & Equatable {
         initialTrace: AccessibilityTrace? = nil,
         changeBaseline: PredicateChangeBaselineSource = .establishFromFirstObservation,
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
-        continuity: PredicateWaitContinuity = .notProvided,
-        historicalWaitDiagnostics: HistoricalWaitDiagnostics.Request? = nil,
         onReadyToPoll: ReadyToPoll? = nil,
         startedAt: RuntimeElapsed.Instant? = nil
     ) async -> HeistWaitResult {
         let start = startedAt ?? RuntimeElapsed.now
-        let effectiveContinuity = continuity.excludingExplicitBaseline(changeBaseline)
         if case .announcement(let announcement) = step.predicate.core {
-            let result = await waitForAnnouncementPredicate(
+            return await waitForAnnouncementPredicate(
                 announcement,
                 step: step,
                 initialTrace: initialTrace,
                 start: start,
                 timeout: step.timeout,
-                cursorStrategy: announcementCursorStrategy,
-                continuity: effectiveContinuity
+                cursorStrategy: announcementCursorStrategy
             )
-            recordContinuityOutcome(
-                effectiveContinuity,
-                status: result.continuity?.status
-                    ?? effectiveContinuity.initialEvidence(for: .announcement)?.status,
-                predicate: step.predicate
-            )
-            return result
         }
 
         if let traceEvaluation = initialTraceChangeEvaluation(
             for: step,
             initialTrace: initialTrace
         ), traceEvaluation.met {
-            let result = waitResult(
+            return waitResult(
                 for: step,
                 trace: initialTrace,
                 observationSummary: nil,
@@ -117,26 +105,14 @@ where Evidence: Sendable & Equatable {
                 start: start,
                 success: true
             )
-            recordContinuityOutcome(
-                effectiveContinuity,
-                status: effectiveContinuity.initialEvidence(for: .settledObservation)?.status,
-                predicate: step.predicate
-            )
-            return result
         }
 
-        let waitStartCursor = vault.semanticObservationStream.latestCommittedObservationCursor(
-            scope: .visible
-        )
         return await execute(
             start: start,
             timeout: step.timeout.seconds,
             projection: changeProjection(
                 for: step,
                 changeBaseline: changeBaseline,
-                continuity: effectiveContinuity,
-                historicalWaitDiagnostics: historicalWaitDiagnostics,
-                waitStartCursor: waitStartCursor,
                 start: start
             ),
             onReadyToPoll: onReadyToPoll
@@ -146,9 +122,6 @@ where Evidence: Sendable & Equatable {
     private func changeProjection(
         for step: ResolvedWaitRuntimeInput,
         changeBaseline: PredicateChangeBaselineSource,
-        continuity: PredicateWaitContinuity,
-        historicalWaitDiagnostics: HistoricalWaitDiagnostics.Request?,
-        waitStartCursor: ObservationCursor?,
         start: RuntimeElapsed.Instant
     ) -> ExecutionProjection<HeistWaitResult, LifecycleEvidence> {
         ExecutionProjection(
@@ -156,8 +129,6 @@ where Evidence: Sendable & Equatable {
             continuesAfterInitialMiss: true,
             initialEvidence: LifecycleEvidence(
                 predicate: step.predicateExpression,
-                continuity: continuity.initialEvidence(for: .settledObservation),
-                historicalDiagnosticsRequest: historicalWaitDiagnostics,
                 target: step.predicate.waitTarget
             ),
             evaluate: { observation, isInitialVisible, evidence in
@@ -180,46 +151,13 @@ where Evidence: Sendable & Equatable {
                     stream: evidence.stream
                 )
                 let recorded = evidence.recording(reduced)
-                if recorded.currentEvaluation.met {
-                    return PredicateWaitEvaluation(
-                        evidence: recorded.recordingCurrentContinuityMatch(
-                            observedThrough: observation.event.cursor?.continuityPosition
-                        ),
-                        matched: true
-                    )
-                }
-                guard case .candidate(_, let boundary) = continuity,
-                      recorded.continuityIsApplied else {
-                    return PredicateWaitEvaluation(
-                        evidence: recorded,
-                        matched: false
-                    )
-                }
-                let continuityEvaluation = self.evaluateRetainedChange(
-                    predicate: step.predicate,
-                    expression: step.predicateExpression,
-                    boundary: boundary,
-                    waitStart: waitStartCursor
-                )
-                let continuityRecorded = recorded.recording(
-                    continuityEvaluation,
-                    fallbackReason: .observationHistoryUnavailable
-                )
-                if case .backdated = continuityRecorded.continuity?.match {
-                    self.recordBackdatedContinuityMatch()
-                }
                 return PredicateWaitEvaluation(
-                    evidence: continuityRecorded,
-                    matched: continuityRecorded.evaluation.met
+                    evidence: recorded,
+                    matched: recorded.evaluation.met
                 )
             },
             result: { outcome, _, evidence in
-                self.recordContinuityOutcome(
-                    continuity,
-                    status: evidence.continuity?.status,
-                    predicate: step.predicate
-                )
-                return self.waitResult(
+                self.waitResult(
                     for: step,
                     trace: evidence.lastTrace,
                     observationSummary: evidence.lastObservationSummary,
@@ -229,10 +167,9 @@ where Evidence: Sendable & Equatable {
                     baseline: evidence.changeBaseline,
                     window: evidence.observationWindow,
                     observedSequence: evidence.observedSequence,
-                    continuity: evidence.continuity,
-                    historicalWaitDiagnostics: outcome == .matched
-                        ? nil
-                        : evidence.historicalWaitDiagnostics
+                    historicalWaitDiagnostics: outcome == .timedOut
+                        ? evidence.historicalWaitDiagnostics
+                        : nil
                 )
             }
         )

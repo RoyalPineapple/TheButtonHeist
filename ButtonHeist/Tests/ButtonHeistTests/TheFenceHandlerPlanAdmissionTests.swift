@@ -193,25 +193,6 @@ extension TheFenceHandlerTests {
                 command: .activate(.predicate(.label("Pay"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 1)))),
         ])
-        XCTAssertNil(request.continuity)
-    }
-
-    @ButtonHeistActor
-    func testRunHeistDecodesOpaqueContinuityCandidateOnceAtAdmission() async throws {
-        let rawReference = "4B47F5F7-76E7-4DF1-A52E-658343D48091"
-        let expected = try JSONDecoder().decode(
-            EvidenceContinuity.Reference.self,
-            from: Data(#""4B47F5F7-76E7-4DF1-A52E-658343D48091""#.utf8)
-        )
-
-        let request = try TheFence(configuration: .init()).decodeRunHeistRequest(
-            TheFence.CommandArgumentEnvelope(values: [
-                "plan": .string(#"HeistPlan { Warn("continued") }"#),
-                "continuity": .string(rawReference),
-            ])
-        )
-
-        XCTAssertEqual(request.continuity, expected)
     }
 
     @ButtonHeistActor
@@ -230,7 +211,6 @@ extension TheFenceHandlerTests {
             .action(ActionStep(command: .activate(.predicate(.label("Pay"))))),
         ])
         XCTAssertEqual(mockConn.sent.sentHeistPlan, plan)
-        XCTAssertNil(mockConn.sent.sentHeistRun?.continuity)
         XCTAssertEqual(report.nodes.map(\.kind), [.action])
         XCTAssertNil(report.failure)
 

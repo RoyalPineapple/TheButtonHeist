@@ -52,23 +52,19 @@ extension HeistJUnitReport {
         public let timeSeconds: Double
         /// Pass or fail with diagnostic detail.
         public let outcome: Outcome
-        /// Optional output-only diagnostic derived from the canonical heist report.
-        public let systemOutput: String?
 
         public init(
             index: Int,
             command: String,
             target: AccessibilityTarget?,
             timeSeconds: Double,
-            outcome: Outcome,
-            systemOutput: String? = nil
+            outcome: Outcome
         ) {
             self.index = index
             self.command = command
             self.target = target
             self.timeSeconds = timeSeconds
             self.outcome = outcome
-            self.systemOutput = systemOutput
         }
 
         public var passed: Bool {
@@ -154,7 +150,6 @@ extension HeistJUnitReport {
     public func junitXML() -> String {
         let totalTime = String(format: "%.3f", totalTimeSeconds)
         let failed = allPassed ? 0 : 1
-        let systemOutput = steps.compactMap(\.systemOutput).joined(separator: "\n")
 
         var xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         xml += "<testsuites name=\"heist\" tests=\"1\""
@@ -176,13 +171,6 @@ extension HeistJUnitReport {
             xml += " type=\"\(xmlEscape(failureType))\">"
             xml += xmlEscape(failureBody(failedStep: failedStep))
             xml += "</failure>\n"
-            if !systemOutput.isEmpty {
-                xml += "      <system-out>\(xmlEscape(systemOutput))</system-out>\n"
-            }
-            xml += "    </testcase>\n"
-        } else if !systemOutput.isEmpty {
-            xml += ">\n"
-            xml += "      <system-out>\(xmlEscape(systemOutput))</system-out>\n"
             xml += "    </testcase>\n"
         } else {
             xml += "/>\n"

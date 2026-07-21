@@ -19,73 +19,47 @@ public struct Heist: Sendable {
     @MainActor
     public init(
         _ plan: HeistPlan,
-        argument: HeistArgument = .none,
-        continuity: EvidenceContinuity.Reference? = nil
+        argument: HeistArgument = .none
     ) async throws {
-        self.result = try await Self.execute(
-            plan,
-            argument: argument,
-            continuity: continuity,
-            runtime: .shared
-        )
+        self.result = try await Self.execute(plan, argument: argument, runtime: .shared)
     }
 
     @MainActor
     init(
         _ plan: HeistPlan,
         argument: HeistArgument = .none,
-        continuity: EvidenceContinuity.Reference? = nil,
         runtime: InAppHeistRuntime
     ) async throws {
-        self.result = try await Self.execute(
-            plan,
-            argument: argument,
-            continuity: continuity,
-            runtime: runtime
-        )
+        self.result = try await Self.execute(plan, argument: argument, runtime: runtime)
     }
 
     @MainActor
     public init(
-        continuity: EvidenceContinuity.Reference? = nil,
         @HeistBuilder _ content: () throws -> HeistContent
     ) async throws {
         let plan = try HeistPlan(content)
-        self.result = try await Self.execute(
-            plan,
-            argument: .none,
-            continuity: continuity,
-            runtime: .shared
-        )
+        self.result = try await Self.execute(plan, argument: .none, runtime: .shared)
     }
 
     @MainActor
     init(
-        continuity: EvidenceContinuity.Reference? = nil,
         runtime: InAppHeistRuntime,
         @HeistBuilder _ content: () throws -> HeistContent
     ) async throws {
         let plan = try HeistPlan(content)
-        self.result = try await Self.execute(
-            plan,
-            argument: .none,
-            continuity: continuity,
-            runtime: runtime
-        )
+        self.result = try await Self.execute(plan, argument: .none, runtime: runtime)
     }
 
     @MainActor
     public init(
         _ input: String,
         parameter: HeistReferenceName = "input",
-        continuity: EvidenceContinuity.Reference? = nil,
         @HeistBuilder _ content: (HeistReferenceName) throws -> HeistContent
     ) async throws {
         let plan = try HeistPlan(parameter: parameter, content)
         self.result = try await Self.execute(
             plan,
             argument: .string(input),
-            continuity: continuity,
             runtime: .shared
         )
     }
@@ -94,7 +68,6 @@ public struct Heist: Sendable {
     init(
         _ input: String,
         parameter: HeistReferenceName = "input",
-        continuity: EvidenceContinuity.Reference? = nil,
         runtime: InAppHeistRuntime,
         @HeistBuilder _ content: (HeistReferenceName) throws -> HeistContent
     ) async throws {
@@ -102,7 +75,6 @@ public struct Heist: Sendable {
         self.result = try await Self.execute(
             plan,
             argument: .string(input),
-            continuity: continuity,
             runtime: runtime
         )
     }
@@ -111,13 +83,11 @@ public struct Heist: Sendable {
     public init(
         _ input: AccessibilityTarget,
         parameter: HeistReferenceName = "input",
-        continuity: EvidenceContinuity.Reference? = nil,
         @HeistBuilder _ content: (AccessibilityTarget) throws -> HeistContent
     ) async throws {
         try await self.init(
             input,
             parameter: parameter,
-            continuity: continuity,
             runtime: .shared,
             content
         )
@@ -127,7 +97,6 @@ public struct Heist: Sendable {
     init(
         _ input: AccessibilityTarget,
         parameter: HeistReferenceName = "input",
-        continuity: EvidenceContinuity.Reference? = nil,
         runtime: InAppHeistRuntime,
         @HeistBuilder _ content: (AccessibilityTarget) throws -> HeistContent
     ) async throws {
@@ -135,7 +104,6 @@ public struct Heist: Sendable {
         self.result = try await Self.execute(
             plan,
             argument: .accessibilityTarget(input),
-            continuity: continuity,
             runtime: runtime
         )
     }
@@ -144,10 +112,9 @@ public struct Heist: Sendable {
     private static func execute(
         _ plan: HeistPlan,
         argument: HeistArgument,
-        continuity: EvidenceContinuity.Reference?,
         runtime: InAppHeistRuntime
     ) async throws -> HeistResult {
-        let actionResult = await runtime.execute(plan, argument, continuity)
+        let actionResult = await runtime.execute(plan, argument)
         guard case .heist(let result?) = actionResult.payload else {
             throw RuntimeError(actionResult: actionResult)
         }
@@ -223,11 +190,7 @@ public extension Heist {
 }
 
 struct InAppHeistRuntime {
-    let execute: @MainActor (
-        HeistPlan,
-        HeistArgument,
-        EvidenceContinuity.Reference?
-    ) async -> ActionResult
+    let execute: @MainActor (HeistPlan, HeistArgument) async -> ActionResult
 
     @MainActor
     static var shared: InAppHeistRuntime {
@@ -236,12 +199,8 @@ struct InAppHeistRuntime {
 
     @MainActor
     static func insideJob(_ job: TheInsideJob) -> InAppHeistRuntime {
-        InAppHeistRuntime { plan, argument, continuity in
-            await job.executeInAppHeist(
-                plan,
-                argument: argument,
-                continuity: continuity
-            )
+        InAppHeistRuntime { plan, argument in
+            await job.executeInAppHeist(plan, argument: argument)
         }
     }
 }
@@ -250,15 +209,10 @@ struct InAppHeistRuntime {
 extension TheInsideJob {
     func executeInAppHeist(
         _ plan: HeistPlan,
-        argument: HeistArgument = .none,
-        continuity: EvidenceContinuity.Reference? = nil
+        argument: HeistArgument = .none
     ) async -> ActionResult {
         switch await brains.executeInAppRequest({ [self] in
-            await executeAdmittedInAppHeist(
-                plan,
-                argument: argument,
-                continuity: continuity
-            )
+            await executeAdmittedInAppHeist(plan, argument: argument)
         }) {
         case .completed(let result):
             return result
@@ -287,8 +241,7 @@ extension TheInsideJob {
 
     private func executeAdmittedInAppHeist(
         _ plan: HeistPlan,
-        argument: HeistArgument,
-        continuity: EvidenceContinuity.Reference?
+        argument: HeistArgument
     ) async -> ActionResult {
         let shouldRestoreRuntime = !brains.semanticObservationIsActive
         if shouldRestoreRuntime {
@@ -311,11 +264,7 @@ extension TheInsideJob {
         _ = await brains.interactionCoordinator.admittedVisibleBaseline(
             timeout: SemanticObservationTiming.defaultTimeout
         )
-        let result = await brains.executeHeistPlan(
-            plan,
-            argument: argument,
-            continuity: continuity
-        )
+        let result = await brains.executeHeistPlan(plan, argument: argument)
         if shouldRestoreRuntime {
             _ = await tripwire.waitForAllClear(timeout: SemanticObservationTiming.defaultTimeout)
         }

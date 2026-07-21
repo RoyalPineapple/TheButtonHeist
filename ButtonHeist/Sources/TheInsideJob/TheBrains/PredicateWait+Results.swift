@@ -11,8 +11,7 @@ extension PredicateWait {
         initialTrace: AccessibilityTrace?,
         start: RuntimeElapsed.Instant,
         timeout: WaitTimeout,
-        cursorStrategy: AnnouncementWaitCursorStrategy,
-        continuity: PredicateWaitContinuity
+        cursorStrategy: AnnouncementWaitCursorStrategy
     ) async -> HeistWaitResult {
         if let initialTrace {
             return announcementResultFromInitialTrace(
@@ -24,66 +23,7 @@ extension PredicateWait {
         }
 
         let cursor = announcementCursor(cursorStrategy)
-        let waitStart = vault.accessibilityNotifications.cursor()
-        var continuityEvidence = continuity.initialEvidence(for: .announcement)
-        if case .candidate(_, let boundary) = continuity {
-            let notifications = vault.accessibilityNotifications
-            let retained = notifications.announcements(after: boundary.notificationCursor)
-            if let current = retained.first(where: {
-                $0.sequence > cursor.sequence && predicate.matches($0.text)
-            }) {
-                recordAnnouncementMatch(current)
-                continuityEvidence = continuityEvidence?.recordingAnnouncementCurrent(
-                    observedThrough: notifications.cursor().continuityPosition
-                )
-                return announcementResult(
-                    current,
-                    predicate: predicate,
-                    step: step,
-                    start: start,
-                    continuity: continuityEvidence
-                )
-            }
-            if !notifications.retainsHistory(after: boundary.notificationCursor) {
-                continuityEvidence = EvidenceContinuity.WaitEvidence(
-                    status: .fallback(reason: .announcementHistoryUnavailable)
-                )
-            } else if let historical = retained.first(where: { predicate.matches($0.text) }) {
-                recordAnnouncementMatch(historical)
-                let position = AccessibilityNotificationCursor(
-                    sequence: historical.sequence
-                ).continuityPosition
-                let match: EvidenceContinuity.MatchSource = historical.sequence > waitStart.sequence
-                    ? .current
-                    : .backdated(position: position)
-                continuityEvidence = continuityEvidence?.recordingAnnouncementApplied(
-                    observedThrough: notifications.cursor().continuityPosition,
-                    match: match
-                )
-                if case .backdated = match {
-                    recordBackdatedContinuityMatch()
-                }
-                return announcementResult(
-                    historical,
-                    predicate: predicate,
-                    step: step,
-                    start: start,
-                    continuity: continuityEvidence
-                )
-            }
-        }
-
         guard let announcement = await waitForAnnouncement(cursor, predicate, timeout.seconds) else {
-            if case .candidate(_, let boundary) = continuity {
-                let notifications = vault.accessibilityNotifications
-                continuityEvidence = notifications.retainsHistory(after: boundary.notificationCursor)
-                    ? continuityEvidence?.recordingAnnouncementApplied(
-                        observedThrough: notifications.cursor().continuityPosition
-                    )
-                    : EvidenceContinuity.WaitEvidence(
-                        status: .fallback(reason: .announcementHistoryUnavailable)
-                    )
-            }
             let message = Self.announcementTimeoutMessage(predicate, timeout: timeout)
             let expectation = ExpectationResult.Unmet(
                 predicate: step.predicateExpression,
@@ -92,27 +32,14 @@ extension PredicateWait {
             return .timedOut(
                 message: message,
                 traceEvidence: nil,
-                expectation: expectation,
-                continuity: continuityEvidence
-            )
-        }
-        if case .candidate(_, let boundary) = continuity,
-           !vault.accessibilityNotifications.retainsHistory(after: boundary.notificationCursor) {
-            continuityEvidence = EvidenceContinuity.WaitEvidence(
-                status: .fallback(reason: .announcementHistoryUnavailable),
-                match: .current
-            )
-        } else {
-            continuityEvidence = continuityEvidence?.recordingAnnouncementCurrent(
-                observedThrough: vault.accessibilityNotifications.cursor().continuityPosition
+                expectation: expectation
             )
         }
         return announcementResult(
             announcement,
             predicate: predicate,
             step: step,
-            start: start,
-            continuity: continuityEvidence
+            start: start
         )
     }
 
@@ -120,8 +47,7 @@ extension PredicateWait {
         _ announcement: CapturedAnnouncement,
         predicate: ResolvedAnnouncementPredicate,
         step: ResolvedWaitRuntimeInput,
-        start: RuntimeElapsed.Instant,
-        continuity: EvidenceContinuity.WaitEvidence?
+        start: RuntimeElapsed.Instant
     ) -> HeistWaitResult {
         let announcementText: ActionAnnouncementText
         do {
@@ -135,8 +61,7 @@ extension PredicateWait {
                 expectation: ExpectationResult.Unmet(
                     predicate: step.predicateExpression,
                     actual: message
-                ),
-                continuity: continuity
+                )
             )
         }
 
@@ -149,8 +74,7 @@ extension PredicateWait {
             message: Self.announcementMatchedMessage(announcement, elapsed: elapsed),
             traceEvidence: nil,
             expectation: expectation,
-            announcement: announcementText,
-            continuity: continuity
+            announcement: announcementText
         )
     }
 
@@ -228,7 +152,6 @@ extension PredicateWait {
         baseline: SettledCapture? = nil,
         window: ObservationWindow? = nil,
         observedSequence: SettledObservationSequence? = nil,
-        continuity: EvidenceContinuity.WaitEvidence? = nil,
         historicalWaitDiagnostics: HistoricalWaitDiagnostics.Evidence? = nil
     ) -> HeistWaitResult {
         let elapsed = Self.elapsedSeconds(since: start)
@@ -256,7 +179,6 @@ extension PredicateWait {
             presenceTimeoutMessage: presenceMessage,
             settledDiagnostics: settledDiagnostics,
             observedSequence: observedSequence,
-            continuity: continuity,
             historicalWaitDiagnostics: historicalWaitDiagnostics
         )
     }
@@ -278,7 +200,6 @@ extension PredicateWait {
         presenceTimeoutMessage: String? = nil,
         settledDiagnostics: SettledWaitDiagnostics? = nil,
         observedSequence: SettledObservationSequence? = nil,
-        continuity: EvidenceContinuity.WaitEvidence? = nil,
         historicalWaitDiagnostics: HistoricalWaitDiagnostics.Evidence? = nil
     ) -> HeistWaitResult {
         let message = success
@@ -299,7 +220,6 @@ extension PredicateWait {
                 expectation: expectation,
                 observedSequence: observedSequence,
                 observationSummary: observationSummary,
-                continuity: continuity,
                 historicalWaitDiagnostics: historicalWaitDiagnostics
             )
         case (false, .unmet(let expectation)):
@@ -309,7 +229,6 @@ extension PredicateWait {
                 expectation: expectation,
                 observedSequence: observedSequence,
                 observationSummary: observationSummary,
-                continuity: continuity,
                 historicalWaitDiagnostics: historicalWaitDiagnostics
             )
         case (true, .unmet):
@@ -524,34 +443,6 @@ extension PredicateWait {
             guard let baselineCapture, let window else { return false }
             return window.current.cursor.sequence > baselineCapture.cursor.sequence
         }
-    }
-}
-
-private extension EvidenceContinuity.WaitEvidence {
-    func recordingAnnouncementCurrent(
-        observedThrough: EvidenceContinuity.Position
-    ) -> EvidenceContinuity.WaitEvidence {
-        switch status {
-        case .applied:
-            return recordingAnnouncementApplied(
-                observedThrough: observedThrough,
-                match: .current
-            )
-        case .fallback, .ineligible, .notProvided:
-            return EvidenceContinuity.WaitEvidence(status: status, match: .current)
-        }
-    }
-
-    func recordingAnnouncementApplied(
-        observedThrough: EvidenceContinuity.Position,
-        match: EvidenceContinuity.MatchSource? = nil
-    ) -> EvidenceContinuity.WaitEvidence {
-        EvidenceContinuity.WaitEvidence(
-            status: status,
-            match: match,
-            actionBoundary: actionBoundary,
-            observedThrough: observedThrough
-        )
     }
 }
 

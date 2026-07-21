@@ -97,75 +97,6 @@ import TheScore
         #expect(trace.captures.last?.interface == after)
     }
 
-    @Test func `report projects every continuity status and match source from wait evidence`() throws {
-        let actionBoundary = EvidenceContinuity.Position(source: .settledObservation, sequence: 10)
-        let backdatedPosition = EvidenceContinuity.Position(source: .settledObservation, sequence: 11)
-        let observedThrough = EvidenceContinuity.Position(source: .settledObservation, sequence: 12)
-        let evidence: [EvidenceContinuity.WaitEvidence] = [
-            EvidenceContinuity.WaitEvidence(status: .notProvided, match: .current),
-            EvidenceContinuity.WaitEvidence(
-                status: .applied(reference: EvidenceContinuity.Reference()),
-                match: .current,
-                actionBoundary: actionBoundary,
-                observedThrough: observedThrough
-            ),
-            EvidenceContinuity.WaitEvidence(status: .fallback(reason: .unknownReference)),
-            EvidenceContinuity.WaitEvidence(status: .ineligible),
-            EvidenceContinuity.WaitEvidence(
-                status: .applied(reference: EvidenceContinuity.Reference()),
-                match: .backdated(position: backdatedPosition),
-                actionBoundary: actionBoundary,
-                observedThrough: observedThrough
-            ),
-        ]
-
-        let projected = try evidence.map { continuity in
-            try #require(report(continuity: continuity).outputNodes.first?.continuity)
-        }
-
-        #expect(projected.map(\.status) == [.notProvided, .applied, .fallback, .ineligible, .applied])
-        #expect(projected.map(\.match) == [
-            .current,
-            .current,
-            nil,
-            nil,
-            .backdated(position: backdatedPosition),
-        ])
-        #expect(projected[1].actionBoundary == actionBoundary)
-        #expect(projected[1].observedThrough == observedThrough)
-        #expect(projected[2].fallbackReason == .unknownReference)
-    }
-
-    @Test func `failed wait report never claims a continuity match`() throws {
-        let continuity = EvidenceContinuity.WaitEvidence(
-            status: .fallback(reason: .generationMismatch),
-            match: .current
-        )
-        let expectation = ExpectationResult(
-            met: false,
-            predicate: .exists(.label("Done")),
-            actual: "not observed"
-        )
-        let failure = HeistFailureDetail(
-            category: .wait,
-            contract: "wait predicate is satisfied",
-            observed: "timed out"
-        )
-        let result = HeistResultFixture.result(steps: [
-            HeistResultFixture.wait(
-                expectation: expectation,
-                failure: failure,
-                continuity: continuity
-            ),
-        ])
-
-        let projected = HeistReport.project(result: result).outputNodes.first?.continuity
-
-        #expect(projected?.status == HeistReport.ContinuityStatus.fallback)
-        #expect(projected?.fallbackReason == EvidenceContinuity.FallbackReason.generationMismatch)
-        #expect(projected?.match == nil)
-    }
-
     private func report(
         trace: AccessibilityTrace,
         completeness: AccessibilityTraceEvidence.Completeness
@@ -175,11 +106,5 @@ import TheScore
             result: HeistResultFixture.actionResult(traceEvidence: evidence)
         )
         return HeistReport.project(result: HeistResultFixture.result(steps: [action], durationMs: 0))
-    }
-
-    private func report(continuity: EvidenceContinuity.WaitEvidence) -> HeistReport {
-        HeistReport.project(result: HeistResultFixture.result(steps: [
-            HeistResultFixture.wait(continuity: continuity),
-        ]))
     }
 }

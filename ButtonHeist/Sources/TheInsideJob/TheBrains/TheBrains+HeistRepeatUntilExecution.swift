@@ -14,7 +14,7 @@ extension TheBrains {
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
-    ) async -> HeistStepExecution {
+    ) async -> HeistExecutionStepResult {
         let context = RepeatUntil.Context(
             path: path,
             start: start,
@@ -26,9 +26,7 @@ extension TheBrains {
         do {
             resolved = try step.resolve(in: environment)
         } catch {
-            return HeistStepExecution(
-                result: repeatUntilResolutionFailure(step, path: path, start: start, error: error)
-            )
+            return repeatUntilResolutionFailure(step, path: path, start: start, error: error)
         }
 
         let initialObservation = await runtime.settledEvidence(
@@ -54,13 +52,12 @@ extension TheBrains {
         step: ResolvedRepeatUntilStep,
         state initialState: RepeatUntil.LoopState,
         timeout: WaitTimeout
-    ) async -> HeistStepExecution {
+    ) async -> HeistExecutionStepResult {
         let deadline = SemanticObservationDeadline(
             start: context.start,
             timeoutSeconds: timeout.seconds
         )
         var state = initialState
-        var lastSuccessfulActionBoundary: EvidenceContinuity.Boundary?
 
         while case .running(let running) = state {
             guard running.iterationNodes.values.isEmpty || deadline.hasTimeRemaining(at: RuntimeElapsed.now) else {
@@ -76,8 +73,6 @@ extension TheBrains {
                 scope: context.scope,
                 path: iterationPath.iterationBody()
             )
-            lastSuccessfulActionBoundary = iterationResults.lastSuccessfulActionBoundary
-                ?? lastSuccessfulActionBoundary
             let frame = RepeatUntil.IterationFrame(
                 path: iterationPath,
                 start: iterationStart,
@@ -85,7 +80,7 @@ extension TheBrains {
                 count: iterationIndex + 1
             )
 
-            switch iterationResults.children {
+            switch iterationResults {
             case .aborted(let children):
                 let event = await repeatUntilFailedIterationEvent(
                     context: context,
@@ -134,10 +129,7 @@ extension TheBrains {
             )
         }
 
-        return HeistStepExecution(
-            result: await repeatUntilTerminalResult(context: context, step: step, state: state),
-            lastSuccessfulActionBoundary: lastSuccessfulActionBoundary
-        )
+        return await repeatUntilTerminalResult(context: context, step: step, state: state)
     }
 
     private func repeatUntilFailedIterationEvent(

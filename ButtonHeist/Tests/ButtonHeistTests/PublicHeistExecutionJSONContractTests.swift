@@ -45,75 +45,14 @@ final class PublicHeistExecutionJSONContractTests: XCTestCase {
     }
 
     func testWaitEvidenceContract() throws {
-        let waitEvidenceJSON = try evidence(
+        let evidence = try evidence(
             for: PublicHeistExecutionJSONContractFixture.wait()
         )
 
         try assertPublicHeistJSONContract(
-            waitEvidenceJSON,
+            evidence,
             equals: PublicHeistActionJSONFixture.wait
         )
-        try waitEvidenceJSON.object("wait").assertMissing("continuity")
-
-        let explicitTokenless = try evidence(
-            for: PublicHeistExecutionJSONContractFixture.wait(
-                continuity: EvidenceContinuity.WaitEvidence(
-                    status: .notProvided,
-                    match: .current
-                )
-            )
-        )
-        try explicitTokenless.object("wait").assertMissing("continuity")
-    }
-
-    func testContinuityWaitEvidenceContract() throws {
-        let actionBoundary = EvidenceContinuity.Position(source: .settledObservation, sequence: 10)
-        let matchPosition = EvidenceContinuity.Position(source: .settledObservation, sequence: 11)
-        let observedThrough = EvidenceContinuity.Position(source: .settledObservation, sequence: 12)
-        let continuity = EvidenceContinuity.WaitEvidence(
-            status: .applied(reference: EvidenceContinuity.Reference()),
-            match: .backdated(position: matchPosition),
-            actionBoundary: actionBoundary,
-            observedThrough: observedThrough
-        )
-        let wait = try evidence(
-            for: PublicHeistExecutionJSONContractFixture.wait(continuity: continuity)
-        ).object("wait")
-        let projected = try wait.object("continuity")
-
-        XCTAssertEqual(try projected.string("status"), "applied")
-        XCTAssertEqual(try projected.object("match").string("kind"), "backdated")
-        XCTAssertEqual(try projected.object("match").object("position").string("source"), "settled_observation")
-        XCTAssertEqual(try projected.object("match").object("position").int("sequence"), 11)
-        XCTAssertEqual(try projected.object("actionBoundary").int("sequence"), 10)
-        XCTAssertEqual(try projected.object("observedThrough").int("sequence"), 12)
-        try projected.assertMissing("reference")
-    }
-
-    func testContinuityFailureJSONReportsEffectiveScopeOrFallbackReasonWithoutMatch() throws {
-        let applied = EvidenceContinuity.WaitEvidence(
-            status: .applied(reference: EvidenceContinuity.Reference()),
-            actionBoundary: .init(source: .announcement, sequence: 20),
-            observedThrough: .init(source: .announcement, sequence: 24)
-        )
-        let appliedJSON = try continuityJSON(for: applied)
-
-        XCTAssertEqual(try appliedJSON.string("status"), "applied")
-        XCTAssertEqual(try appliedJSON.object("actionBoundary").int("sequence"), 20)
-        XCTAssertEqual(try appliedJSON.object("observedThrough").int("sequence"), 24)
-        try appliedJSON.assertMissing("match")
-
-        let fallback = EvidenceContinuity.WaitEvidence(
-            status: .fallback(reason: .announcementHistoryUnavailable),
-            match: .current
-        )
-        let fallbackJSON = try continuityJSON(for: fallback)
-
-        XCTAssertEqual(try fallbackJSON.string("status"), "fallback")
-        XCTAssertEqual(try fallbackJSON.string("reason"), "announcement_history_unavailable")
-        try fallbackJSON.assertMissing("match")
-        try fallbackJSON.assertMissing("actionBoundary")
-        try fallbackJSON.assertMissing("observedThrough")
     }
 
     func testCaseSelectionEvidenceContractAndOmittedCases() throws {
@@ -209,24 +148,5 @@ final class PublicHeistExecutionJSONContractTests: XCTestCase {
         profile: ProjectionProfile = .summary
     ) throws -> JSONProbe {
         try publicHeistExecutionNodeJSON(step: step, profile: profile).object("evidence")
-    }
-
-    private func continuityJSON(
-        for continuity: EvidenceContinuity.WaitEvidence
-    ) throws -> JSONProbe {
-        let step = HeistResultFixture.wait(
-            expectation: ExpectationResult(
-                met: false,
-                predicate: .exists(.label("Done")),
-                actual: "not observed"
-            ),
-            failure: HeistFailureDetail(
-                category: .wait,
-                contract: "wait predicate is satisfied",
-                observed: "timed out"
-            ),
-            continuity: continuity
-        )
-        return try evidence(for: step).object("wait").object("continuity")
     }
 }

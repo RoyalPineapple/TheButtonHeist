@@ -30,8 +30,7 @@ extension TheFence {
                 command: step.command?.rawValue ?? step.kind.rawValue,
                 target: step.target,
                 timeSeconds: Double(step.durationMs) / 1000,
-                outcome: Self.junitOutcome(for: step, report: report),
-                systemOutput: step.status == .failed ? nil : step.continuity?.breadcrumb
+                outcome: Self.junitOutcome(for: step, report: report)
             )
         }
     }
@@ -45,10 +44,9 @@ extension TheFence {
         if step.status == .failed {
             let message = step.failure?.diagnosticMessage ?? step.message ?? "heist failed"
             let failure = step.failure.map(diagnosticFailure)
-            let continuity = step.continuity?.breadcrumb
             let enriched = step.path == report.summary.abortedAtPath
-                ? junitFailureMessage(message, report: report, failure: failure, continuity: continuity)
-                : junitFailureMessage(message, failure: failure, continuity: continuity)
+                ? junitFailureMessage(message, report: report, failure: failure)
+                : junitFailureMessage(message, failure: failure)
             return .failed(message: enriched, failureKind: junitFailureKind(for: step))
         }
         if step.status == .skipped {
@@ -60,8 +58,7 @@ extension TheFence {
     private static func junitFailureMessage(
         _ message: String,
         report: HeistReport? = nil,
-        failure: DiagnosticFailure?,
-        continuity: String?
+        failure: DiagnosticFailure?
     ) -> String {
         var lines = [message]
         if let failure {
@@ -69,9 +66,6 @@ extension TheFence {
             lines.append("kind: \(failure.kind.rawValue)")
             lines.append("phase: \(failure.phase.rawValue)")
             lines.append("retryable: \(failure.retryable)")
-        }
-        if let continuity {
-            lines.append(continuity)
         }
         if let screenshot = report?.diagnostics.failureScreenshotSummary {
             lines.append(screenshot)

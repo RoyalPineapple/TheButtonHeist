@@ -43,7 +43,7 @@ extension TheBrains {
 
     enum ScreenCaptureGatewaySuccess {
         case payload(ScreenPayload)
-        case action(ScreenPayload, boundary: EvidenceContinuity.Boundary)
+        case action(ScreenPayload, evidence: ActionExpectationEvidence)
 
         var payload: ScreenPayload {
             switch self {
@@ -51,9 +51,9 @@ extension TheBrains {
             }
         }
 
-        var actionBoundary: EvidenceContinuity.Boundary? {
-            guard case .action(_, let boundary) = self else { return nil }
-            return boundary
+        var actionExpectationEvidence: ActionExpectationEvidence? {
+            guard case .action(_, let evidence) = self else { return nil }
+            return evidence
         }
     }
 
@@ -64,7 +64,7 @@ extension TheBrains {
 
     struct ScreenCaptureActionExecution {
         let result: ActionResult
-        let successfulActionBoundary: EvidenceContinuity.Boundary?
+        let actionExpectationEvidence: ActionExpectationEvidence?
     }
 
     func captureScreenPayload(mode: ScreenCaptureMode = .raw) async -> ScreenCaptureGatewayResult {
@@ -78,7 +78,7 @@ extension TheBrains {
 
     private enum CapturedScreenBoundary {
         case none
-        case action(EvidenceContinuity.Boundary)
+        case action(ActionExpectationEvidence)
     }
 
     private func captureScreenPayload(
@@ -108,9 +108,9 @@ extension TheBrains {
         case .action:
             let window = vault.accessibilityNotifications.beginActionWindow()
             notificationWindow = window
-            capturedBoundary = .action(evidenceContinuityStore.captureBoundary(
+            capturedBoundary = .action(ActionExpectationEvidence(
                 settledCapture: settledCapture,
-                notificationCursor: window.cursor
+                announcementCursor: window.cursor
             ))
         }
         defer { notificationWindow?.cancel() }
@@ -174,7 +174,7 @@ extension TheBrains {
                     message: "Captured screenshot \(Int(success.payload.width))x\(Int(success.payload.height))",
                     timing: timing.freeze()
                 ),
-                successfulActionBoundary: success.actionBoundary
+                actionExpectationEvidence: success.actionExpectationEvidence
             )
         case .failure(let failure):
             return ScreenCaptureActionExecution(
@@ -184,7 +184,7 @@ extension TheBrains {
                     message: failure.message,
                     timing: timing.freeze()
                 ),
-                successfulActionBoundary: nil
+                actionExpectationEvidence: nil
             )
         }
     }
@@ -196,8 +196,8 @@ extension TheBrains {
         switch capturedBoundary {
         case .none:
             .payload(payload)
-        case .action(let boundary):
-            .action(payload, boundary: boundary)
+        case .action(let evidence):
+            .action(payload, evidence: evidence)
         }
     }
 }

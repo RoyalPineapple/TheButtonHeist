@@ -4,39 +4,30 @@ import ThePlans
 import TheScore
 
 internal struct PredicateWaitHistoricalDiagnostics: Sendable, Equatable {
-    private let request: HistoricalWaitDiagnostics.Request?
     private let target: ResolvedAccessibilityTarget?
     private let predicateMismatches: [HistoricalWaitDiagnostics.PredicateMismatch]
 
-    internal init(
-        request: HistoricalWaitDiagnostics.Request?,
-        target: ResolvedAccessibilityTarget?
-    ) {
-        self.request = request
+    internal init(target: ResolvedAccessibilityTarget?) {
         self.target = target
         predicateMismatches = []
     }
 
     private init(
-        request: HistoricalWaitDiagnostics.Request?,
         target: ResolvedAccessibilityTarget?,
         predicateMismatches: [HistoricalWaitDiagnostics.PredicateMismatch]
     ) {
-        self.request = request
         self.target = target
         self.predicateMismatches = predicateMismatches
     }
 
     internal var evidence: HistoricalWaitDiagnostics.Evidence? {
-        guard request == .predicateMismatches else { return nil }
-        return HistoricalWaitDiagnostics.Evidence(predicateMismatches: predicateMismatches)
+        HistoricalWaitDiagnostics.Evidence(predicateMismatches: predicateMismatches)
     }
 
     internal func recording(
         _ reduction: PredicateObservationReduction
     ) -> PredicateWaitHistoricalDiagnostics {
-        guard request == .predicateMismatches,
-              !reduction.expectation.met,
+        guard !reduction.expectation.met,
               let target,
               let current = reduction.observation.event.trace.captures.last?.interface
         else { return self }
@@ -57,7 +48,6 @@ internal struct PredicateWaitHistoricalDiagnostics: Sendable, Equatable {
             )
         }
         return PredicateWaitHistoricalDiagnostics(
-            request: request,
             target: target,
             predicateMismatches: updated
         )

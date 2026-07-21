@@ -45,11 +45,6 @@ extension TheBrains {
         }
     }
 
-    private struct ForEachLoopExecution {
-        let outcome: ForEachLoopOutcome
-        let lastSuccessfulActionBoundary: EvidenceContinuity.Boundary?
-    }
-
     private struct ForEachLoopContext {
         let totalCount: Int
         let kind: ForEachLoopKind
@@ -110,25 +105,25 @@ extension TheBrains {
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
-    ) async -> HeistStepExecution {
+    ) async -> HeistExecutionStepResult {
         let resolvedMatching: ElementPredicate
         do {
             resolvedMatching = try step.matching.resolve(in: environment)
         } catch {
-            return HeistStepExecution(result: forEachResolutionFailureResult(
+            return forEachResolutionFailureResult(
                 path: path,
                 start: start,
                 step: step,
                 error: error
-            ))
+            )
         }
         guard let observation = await runtime.settledEvidence(.discovery, nil, nil) else {
-            return HeistStepExecution(result: forEachUnavailableResult(
+            return forEachUnavailableResult(
                 index: index,
                 path: path,
                 start: start,
                 step: step
-            ))
+            )
         }
 
         let matchSignature = ForEachMatchSignature(
@@ -137,13 +132,13 @@ extension TheBrains {
         )
         let matchedCount = matchSignature.count
         if matchedCount > step.limit {
-            return HeistStepExecution(result: forEachLimitResult(
+            return forEachLimitResult(
                 index: index,
                 path: path,
                 start: start,
                 matchedCount: matchedCount,
                 step: step
-            ))
+            )
         }
 
         var currentSignature = matchSignature
@@ -202,14 +197,11 @@ extension TheBrains {
             }
         )
 
-        return HeistStepExecution(
-            result: forEachElementResult(
-                path: path,
-                start: start,
-                step: step,
-                outcome: outcome.outcome
-            ),
-            lastSuccessfulActionBoundary: outcome.lastSuccessfulActionBoundary
+        return forEachElementResult(
+            path: path,
+            start: start,
+            step: step,
+            outcome: outcome
         )
     }
 
@@ -225,9 +217,8 @@ extension TheBrains {
             RuntimeElapsed.Instant,
             HeistExecutedChildren
         ) -> HeistExecutionStepResult
-    ) async -> ForEachLoopExecution {
+    ) async -> ForEachLoopOutcome {
         var iterationNodes = HeistPassingChildren.empty
-        var lastSuccessfulActionBoundary: EvidenceContinuity.Boundary?
 
         while iterationNodes.values.count < context.totalCount {
             let iterationIndex = iterationNodes.values.count
@@ -236,13 +227,10 @@ extension TheBrains {
             case .item(let nextItem):
                 item = nextItem
             case .postObservationUnavailable(let failedIterationIndex):
-                return ForEachLoopExecution(
-                    outcome: .postObservationUnavailable(
-                        totalCount: context.totalCount,
-                        iterationIndex: failedIterationIndex,
-                        iterations: iterationNodes
-                    ),
-                    lastSuccessfulActionBoundary: lastSuccessfulActionBoundary
+                return .postObservationUnavailable(
+                    totalCount: context.totalCount,
+                    iterationIndex: failedIterationIndex,
+                    iterations: iterationNodes
                 )
             }
             let iterationStart = RuntimeElapsed.now
@@ -260,33 +248,25 @@ extension TheBrains {
                 iterationIndex,
                 iterationPath,
                 iterationStart,
-                iterationResults.children
+                iterationResults
             )
-            lastSuccessfulActionBoundary = iterationResults.lastSuccessfulActionBoundary
-                ?? lastSuccessfulActionBoundary
             switch iterationNodes.appending(iterationNode) {
             case .passed(let passingIterations):
                 iterationNodes = passingIterations
             case .aborted(let abortedIterations):
-                return ForEachLoopExecution(
-                    outcome: .childFailed(
-                        totalCount: context.totalCount,
-                        failure: ForEachLoopChildFailure(
-                            iterationIndex: iterationIndex,
-                            identity: identity(item),
-                            childPath: abortedIterations.abortedAtPath
-                        ),
-                        iterations: abortedIterations
+                return .childFailed(
+                    totalCount: context.totalCount,
+                    failure: ForEachLoopChildFailure(
+                        iterationIndex: iterationIndex,
+                        identity: identity(item),
+                        childPath: abortedIterations.abortedAtPath
                     ),
-                    lastSuccessfulActionBoundary: lastSuccessfulActionBoundary
+                    iterations: abortedIterations
                 )
             }
         }
 
-        return ForEachLoopExecution(
-            outcome: .completed(totalCount: context.totalCount, iterations: iterationNodes),
-            lastSuccessfulActionBoundary: lastSuccessfulActionBoundary
-        )
+        return .completed(totalCount: context.totalCount, iterations: iterationNodes)
     }
 
     private func forEachElementIterationResult(
@@ -362,7 +342,7 @@ extension TheBrains {
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
-    ) async -> HeistStepExecution {
+    ) async -> HeistExecutionStepResult {
         let outcome = await runForEachLoop(
             context: ForEachLoopContext(
                 totalCount: step.values.count,
@@ -389,14 +369,11 @@ extension TheBrains {
                 )
             }
         )
-        return HeistStepExecution(
-            result: forEachStringResult(
-                path: path,
-                start: start,
-                step: step,
-                outcome: outcome.outcome
-            ),
-            lastSuccessfulActionBoundary: outcome.lastSuccessfulActionBoundary
+        return forEachStringResult(
+            path: path,
+            start: start,
+            step: step,
+            outcome: outcome
         )
     }
 

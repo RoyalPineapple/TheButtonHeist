@@ -4,15 +4,7 @@ import ThePlans
 import TheScore
 
 @Suite struct HistoricalWaitDiagnosticsContractTests {
-    @Test func testHistoricalWaitDiagnosticsAreTypedBoundedAndOmittedByDefault() throws {
-        let plan = try HeistPlan(body: [
-            .wait(WaitStep(predicate: .exists(.label("Ticket saved.")), timeout: 1)),
-        ])
-        let tokenless = HeistPlanRun(plan: plan)
-        let activated = HeistPlanRun(
-            plan: plan,
-            historicalWaitDiagnostics: .predicateMismatches
-        )
+    @Test func testHistoricalWaitDiagnosticsAreTypedAndBounded() throws {
         let candidate = try #require(HistoricalWaitDiagnostics.SemanticCandidate(
             label: "Ticket saved., Dismiss",
             value: nil,
@@ -44,10 +36,6 @@ import TheScore
             hint: nil,
             traits: []
         ) == nil)
-        #expect(try jsonKeys(tokenless) == ["argument", "plan"])
-        #expect(try jsonKeys(activated) == ["argument", "historicalWaitDiagnostics", "plan"])
-        #expect(tokenless.historicalWaitDiagnostics == nil)
-        #expect(activated.historicalWaitDiagnostics == .predicateMismatches)
         #expect(HistoricalWaitDiagnostics.Evidence(
             predicateMismatches: Array(
                 repeating: mismatch,

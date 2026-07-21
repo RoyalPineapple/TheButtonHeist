@@ -14,16 +14,14 @@ extension TheBrains {
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
-    ) async -> HeistStepExecution {
+    ) async -> HeistExecutionStepResult {
         let resolvedCases: [ResolvedPredicateCaseRuntimeInput]
         do {
             resolvedCases = try step.cases.map {
                 try ResolvedPredicateCaseRuntimeInput(resolving: $0, in: environment)
             }
         } catch {
-            return HeistStepExecution(
-                result: caseResolutionFailure(index: index, path: path, start: start, error: error)
-            )
+            return caseResolutionFailure(index: index, path: path, start: start, error: error)
         }
 
         let selection = await runtime.selectPredicateCase(resolvedCases, 0)
@@ -48,55 +46,39 @@ extension TheBrains {
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
-    ) async -> HeistStepExecution {
+    ) async -> HeistExecutionStepResult {
         switch dispatch.selection.outcome {
         case .matchedCase(let selectedCaseOrdinal):
             let selectedCaseIndex = Int(selectedCaseOrdinal)
-            let execution = await executeHeistSteps(
+            let children = await executeHeistSteps(
                 dispatch.cases[selectedCaseIndex].body,
                 runtime: runtime,
                 environment: environment,
                 scope: scope,
                 path: dispatch.path.conditionalCaseBody(at: selectedCaseIndex)
             )
-            return HeistStepExecution(
-                result: caseNode(
-                    dispatch,
-                    selection: dispatch.selection,
-                    children: execution.children
-                ),
-                lastSuccessfulActionBoundary: execution.lastSuccessfulActionBoundary
-            )
+            return caseNode(dispatch, selection: dispatch.selection, children: children)
 
         case .elseBranch, .timedOut, .noMatch:
             guard let elseBody = dispatch.elseBody else {
-                return HeistStepExecution(
-                    result: .conditional(
-                        path: dispatch.path,
-                        durationMs: elapsedMilliseconds(since: dispatch.start),
-                        completion: .passed(
-                            evidence: HeistCaseSelectionEvidence(selection: dispatch.selection)
-                        )
+                return .conditional(
+                    path: dispatch.path,
+                    durationMs: elapsedMilliseconds(since: dispatch.start),
+                    completion: .passed(
+                        evidence: HeistCaseSelectionEvidence(selection: dispatch.selection)
                     )
                 )
             }
 
             let selection = dispatch.selection.selectingElseBranch()
-            let execution = await executeHeistSteps(
+            let children = await executeHeistSteps(
                 elseBody,
                 runtime: runtime,
                 environment: environment,
                 scope: scope,
                 path: dispatch.path.conditionalElseBody()
             )
-            return HeistStepExecution(
-                result: caseNode(
-                    dispatch,
-                    selection: selection,
-                    children: execution.children
-                ),
-                lastSuccessfulActionBoundary: execution.lastSuccessfulActionBoundary
-            )
+            return caseNode(dispatch, selection: selection, children: children)
         }
     }
 

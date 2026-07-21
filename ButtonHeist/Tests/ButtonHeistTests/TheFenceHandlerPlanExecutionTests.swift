@@ -28,30 +28,7 @@ extension TheFenceHandlerTests {
         XCTAssertEqual(plan.name, "agentFlow")
         XCTAssertEqual(mockConn.sent.sentHeistPlan, plan)
         XCTAssertEqual(mockConn.sent.sentHeistRun?.argument, HeistArgument.none)
-        XCTAssertNil(mockConn.sent.sentHeistRun?.continuity)
         XCTAssertEqual(report, HeistReport.project(result: scriptedResult))
-    }
-
-    @ButtonHeistActor
-    func testRunHeistForwardsOpaqueContinuityCandidateToWire() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        let scriptedResult = HeistResultFixture.result(steps: [
-            HeistResultFixture.warning(message: "server result"),
-        ])
-        mockConn.responseScript = { _ in scriptedHeistResponse(scriptedResult) }
-        fence.handoff.connect(to: TheFenceFixtures.testDevice)
-        let rawReference = "4B47F5F7-76E7-4DF1-A52E-658343D48091"
-        let reference = try JSONDecoder().decode(
-            EvidenceContinuity.Reference.self,
-            from: Data(#""4B47F5F7-76E7-4DF1-A52E-658343D48091""#.utf8)
-        )
-
-        _ = try await fence.execute(command: .runHeist, values: [
-            "plan": .string(Self.pureRuntimeHeistSource),
-            "continuity": .string(rawReference),
-        ])
-
-        XCTAssertEqual(mockConn.sent.sentHeistRun?.continuity, reference)
     }
 
     @ButtonHeistActor

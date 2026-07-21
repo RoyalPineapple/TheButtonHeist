@@ -106,14 +106,7 @@ private struct PublicHeistReportNodeJSON: Encodable {
         try container.encodeIfPresent(node.message, forKey: .message)
         try container.encode(node.durationMs, forKey: .durationMs)
         if let evidence = node.evidence {
-            try container.encode(
-                PublicHeistReportEvidenceJSON(
-                    evidence: evidence,
-                    continuity: node.continuity,
-                    profile: profile
-                ),
-                forKey: .evidence
-            )
+            try container.encode(PublicHeistReportEvidenceJSON(evidence: evidence, profile: profile), forKey: .evidence)
         }
         if let failure = node.failure {
             try container.encode(PublicHeistReportFailureJSON(failure: failure), forKey: .failure)

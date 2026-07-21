@@ -11,7 +11,6 @@ extension TheFence {
         try await runHeistPlan(
             request.plan,
             argument: request.argument,
-            continuity: request.continuity,
             timeout: timeout
         )
     }
@@ -34,13 +33,11 @@ extension TheFence {
     func runHeistPlan(
         _ plan: HeistPlan,
         argument: HeistArgument = .none,
-        continuity: EvidenceContinuity.Reference? = nil,
         timeout: TimeInterval
     ) async throws -> FenceResponse {
         let result = try await sendAndAwaitHeistExecution(
             plan,
             argument: argument,
-            continuity: continuity,
             timeout: timeout
         )
         HeistResultRecorder.recordIfEnabled(result, plan: plan)

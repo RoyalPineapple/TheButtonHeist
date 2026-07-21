@@ -46,7 +46,6 @@ public struct HeistReport: Sendable, Equatable {
         public let abortedAtChildPath: HeistExecutionPath?
         public let expectation: ExpectationResult?
         public let activationTrace: ActivationTrace?
-        public let continuity: Continuity?
         public let children: [Node]
         package let evidence: Evidence?
 
@@ -78,125 +77,8 @@ public struct HeistReport: Sendable, Equatable {
             abortedAtChildPath = step.abortedAtChildPath
             expectation = step.reportExpectation
             activationTrace = actionResult?.activationTrace
-            continuity = (step.waitEvidence ?? step.invocationEvidence?.waitEvidence)
-                .flatMap(Continuity.init(waitEvidence:))
             self.children = children
             evidence = Evidence(step: step)
-        }
-    }
-
-    public enum ContinuityStatus: String, Sendable, Equatable {
-        case notProvided = "not_provided"
-        case applied
-        case fallback
-        case ineligible
-    }
-
-    public enum ContinuityMatch: Sendable, Equatable {
-        case current
-        case backdated(position: EvidenceContinuity.Position)
-    }
-
-    private enum ContinuityStorage: Sendable, Equatable {
-        case notProvided(match: ContinuityMatch?)
-        case applied(
-            match: ContinuityMatch?,
-            actionBoundary: EvidenceContinuity.Position,
-            observedThrough: EvidenceContinuity.Position
-        )
-        case fallback(reason: EvidenceContinuity.FallbackReason, match: ContinuityMatch?)
-        case ineligible(match: ContinuityMatch?)
-    }
-
-    public struct Continuity: Sendable, Equatable {
-        private let storage: ContinuityStorage
-
-        public var status: ContinuityStatus {
-            switch storage {
-            case .notProvided: .notProvided
-            case .applied: .applied
-            case .fallback: .fallback
-            case .ineligible: .ineligible
-            }
-        }
-
-        public var match: ContinuityMatch? {
-            switch storage {
-            case .notProvided(let match),
-                 .applied(let match, _, _),
-                 .fallback(_, let match),
-                 .ineligible(let match):
-                match
-            }
-        }
-
-        public var fallbackReason: EvidenceContinuity.FallbackReason? {
-            guard case .fallback(let reason, _) = storage else { return nil }
-            return reason
-        }
-
-        public var actionBoundary: EvidenceContinuity.Position? {
-            guard case .applied(_, let actionBoundary, _) = storage else { return nil }
-            return actionBoundary
-        }
-
-        public var observedThrough: EvidenceContinuity.Position? {
-            guard case .applied(_, _, let observedThrough) = storage else { return nil }
-            return observedThrough
-        }
-
-        package init?(waitEvidence: HeistWaitEvidence) {
-            guard let evidence = waitEvidence.continuity else { return nil }
-            let match = waitEvidence.outcome == .matched ? ContinuityMatch(evidence.match) : nil
-            switch evidence.status {
-            case .notProvided:
-                storage = .notProvided(match: match)
-            case .applied:
-                guard let actionBoundary = evidence.actionBoundary,
-                      let observedThrough = evidence.observedThrough else {
-                    preconditionFailure("applied continuity evidence requires an effective position window")
-                }
-                storage = .applied(
-                    match: match,
-                    actionBoundary: actionBoundary,
-                    observedThrough: observedThrough
-                )
-            case .fallback(let reason):
-                storage = .fallback(reason: reason, match: match)
-            case .ineligible:
-                storage = .ineligible(match: match)
-            }
-        }
-
-        package var breadcrumb: String? {
-            guard status != .notProvided else { return nil }
-            var components: [String]
-            switch storage {
-            case .notProvided:
-                return nil
-            case .applied:
-                components = ["continuity=applied"]
-            case .fallback(let reason, _):
-                components = ["continuity=fallback:\(reason.rawValue)"]
-            case .ineligible:
-                components = ["continuity=ineligible"]
-            }
-            switch match {
-            case .current:
-                components.append("match=current")
-            case .backdated(let position):
-                components.append("match=backdated@\(Self.describe(position))")
-            case nil:
-                break
-            }
-            if let actionBoundary, let observedThrough {
-                components.append("scope=\(Self.describe(actionBoundary))...\(Self.describe(observedThrough))")
-            }
-            return components.joined(separator: " ")
-        }
-
-        private static func describe(_ position: EvidenceContinuity.Position) -> String {
-            "\(position.source.rawValue):\(position.sequence)"
         }
     }
 
@@ -352,19 +234,6 @@ public struct HeistReport: Sendable, Equatable {
         var reducer = Reducer(durationMs: result.durationMs)
         result.steps.walk(enter: { reducer.enter($0) }, leave: { reducer.leave($0) })
         return reducer.report(result: result)
-    }
-}
-
-private extension HeistReport.ContinuityMatch {
-    init?(_ source: EvidenceContinuity.MatchSource?) {
-        switch source {
-        case .current:
-            self = .current
-        case .backdated(let position):
-            self = .backdated(position: position)
-        case nil:
-            return nil
-        }
     }
 }
 

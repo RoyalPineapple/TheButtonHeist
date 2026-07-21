@@ -18,19 +18,19 @@ extension TheBrains {
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
-    ) async -> HeistStepExecution {
+    ) async -> HeistExecutionStepResult {
         let resolvedWait: ResolvedWaitRuntimeInput
         do {
             resolvedWait = try ResolvedWaitRuntimeInput(resolving: step, in: environment)
         } catch {
-            return HeistStepExecution(result: standaloneWaitResolutionFailureResult(
+            return standaloneWaitResolutionFailureResult(
                 HeistStandaloneWaitResolutionFailure(
                     wait: step,
                     errorDescription: String(describing: error)
                 ),
                 path: path,
                 start: start
-            ))
+            )
         }
 
         let result = await runtime.wait(.standalone(resolvedWait, startedAt: start))
@@ -38,24 +38,22 @@ extension TheBrains {
         case .matched(let actionResult, let expectation):
             let evidence = HeistWaitEvidence.matched(
                 .init(executed: actionResult, expectation: expectation),
-                finalSummary: expectation.actual,
-                continuity: result.continuity
+                finalSummary: expectation.actual
             )
-            return HeistStepExecution(result: waitStepResult(
+            return waitStepResult(
                 step: step,
                 completion: .passed(evidence: .init(admitted: evidence)),
                 path: path,
                 start: start
-            ))
+            )
 
         case .unmatched(let actionResult, let expectation):
             guard let elseBody = step.elseBody else {
                 let evidence = HeistWaitEvidence.failed(
                     .init(executed: actionResult, expectation: expectation.result),
-                    finalSummary: expectation.actual,
-                    continuity: result.continuity
+                    finalSummary: expectation.actual
                 )
-                return HeistStepExecution(result: waitStepResult(
+                return waitStepResult(
                     step: step,
                     completion: .failed(
                         evidence: .observed(.init(admitted: evidence)),
@@ -63,10 +61,10 @@ extension TheBrains {
                     ),
                     path: path,
                     start: start
-                ))
+                )
             }
 
-            let execution = await executeHeistSteps(
+            let children = await executeHeistSteps(
                 elseBody,
                 runtime: runtime,
                 environment: environment,
@@ -75,11 +73,10 @@ extension TheBrains {
             )
             let evidence = HeistPassedWaitEvidence(admitted: .handledElse(
                 .init(executed: actionResult, expectation: expectation.result),
-                finalSummary: expectation.actual,
-                continuity: result.continuity
+                finalSummary: expectation.actual
             ))
             let completion: HeistWaitCompletion
-            switch execution.children {
+            switch children {
             case .passed(let children):
                 completion = .passed(evidence: evidence, children: children)
             case .aborted(let children):
@@ -89,14 +86,11 @@ extension TheBrains {
                     children: children
                 )
             }
-            return HeistStepExecution(
-                result: waitStepResult(
-                    step: step,
-                    completion: completion,
-                    path: path,
-                    start: start
-                ),
-                lastSuccessfulActionBoundary: execution.lastSuccessfulActionBoundary
+            return waitStepResult(
+                step: step,
+                completion: completion,
+                path: path,
+                start: start
             )
         }
     }
@@ -143,20 +137,17 @@ struct HeistWaitResult {
     let outcome: Outcome
     let observedSequence: SettledObservationSequence?
     let observationSummary: String?
-    let continuity: EvidenceContinuity.WaitEvidence?
     let historicalWaitDiagnostics: HistoricalWaitDiagnostics.Evidence?
 
     private init(
         outcome: Outcome,
         observedSequence: SettledObservationSequence?,
         observationSummary: String?,
-        continuity: EvidenceContinuity.WaitEvidence?,
         historicalWaitDiagnostics: HistoricalWaitDiagnostics.Evidence?
     ) {
         self.outcome = outcome
         self.observedSequence = observedSequence
         self.observationSummary = observationSummary
-        self.continuity = continuity
         self.historicalWaitDiagnostics = historicalWaitDiagnostics
     }
 
@@ -167,7 +158,6 @@ struct HeistWaitResult {
         observedSequence: SettledObservationSequence? = nil,
         observationSummary: String? = nil,
         announcement: ActionAnnouncementText? = nil,
-        continuity: EvidenceContinuity.WaitEvidence? = nil,
         historicalWaitDiagnostics: HistoricalWaitDiagnostics.Evidence? = nil
     ) -> HeistWaitResult {
         HeistWaitResult(
@@ -182,7 +172,6 @@ struct HeistWaitResult {
             ),
             observedSequence: observedSequence,
             observationSummary: observationSummary,
-            continuity: continuity,
             historicalWaitDiagnostics: historicalWaitDiagnostics
         )
     }
@@ -193,7 +182,6 @@ struct HeistWaitResult {
         expectation: ExpectationResult.Unmet,
         observedSequence: SettledObservationSequence? = nil,
         observationSummary: String? = nil,
-        continuity: EvidenceContinuity.WaitEvidence? = nil,
         historicalWaitDiagnostics: HistoricalWaitDiagnostics.Evidence? = nil
     ) -> HeistWaitResult {
         HeistWaitResult(
@@ -208,7 +196,6 @@ struct HeistWaitResult {
             ),
             observedSequence: observedSequence,
             observationSummary: observationSummary,
-            continuity: continuity,
             historicalWaitDiagnostics: historicalWaitDiagnostics
         )
     }
@@ -219,7 +206,6 @@ struct HeistWaitResult {
         traceEvidence: AccessibilityTraceEvidence?,
         expectation: ExpectationResult.Unmet,
         announcement: ActionAnnouncementText? = nil,
-        continuity: EvidenceContinuity.WaitEvidence? = nil,
         historicalWaitDiagnostics: HistoricalWaitDiagnostics.Evidence? = nil
     ) -> HeistWaitResult {
         HeistWaitResult(
@@ -234,7 +220,6 @@ struct HeistWaitResult {
             ),
             observedSequence: nil,
             observationSummary: nil,
-            continuity: continuity,
             historicalWaitDiagnostics: historicalWaitDiagnostics
         )
     }

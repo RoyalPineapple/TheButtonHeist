@@ -262,20 +262,6 @@ final class CLICommandSyncTests: XCTestCase {
         ]))
     }
 
-    func testRunHeistForwardsOpaqueContinuityReference() throws {
-        let source = #"HeistPlan { Warn("continued") }"#
-        let reference = "4B47F5F7-76E7-4DF1-A52E-658343D48091"
-
-        let arguments = try RunHeistCommand.planArguments(
-            inline: source,
-            path: nil,
-            entry: nil,
-            continuity: reference
-        )
-
-        XCTAssertEqual(arguments.value(for: .continuity), .string(reference))
-    }
-
     func testRunHeistCompilesSwiftSourceToTemporaryHeistArtifact() async throws {
         // Swift source compiles to a temp .heist the fence reads — the plan
         // crosses through the canonical codec, never a parameter round-trip.

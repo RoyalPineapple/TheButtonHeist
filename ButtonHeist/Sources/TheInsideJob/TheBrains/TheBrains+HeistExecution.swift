@@ -7,39 +7,6 @@ import ThePlans
 
 extension TheBrains {
 
-    internal struct HeistStepExecution: Sendable, Equatable {
-        internal let result: HeistExecutionStepResult
-        internal let lastSuccessfulActionBoundary: EvidenceContinuity.Boundary?
-
-        internal init(
-            result: HeistExecutionStepResult,
-            lastSuccessfulActionBoundary: EvidenceContinuity.Boundary? = nil
-        ) {
-            self.result = result
-            self.lastSuccessfulActionBoundary = lastSuccessfulActionBoundary
-        }
-    }
-
-    internal struct HeistExecutionAggregate: Sendable, Equatable {
-        internal static let empty = HeistExecutionAggregate(
-            children: .passed(.empty),
-            lastSuccessfulActionBoundary: nil
-        )
-
-        internal let children: HeistExecutedChildren
-        internal let lastSuccessfulActionBoundary: EvidenceContinuity.Boundary?
-
-        internal func appending(_ step: HeistStepExecution) -> HeistExecutionAggregate {
-            var nextChildren = children
-            nextChildren.append(step.result)
-            return HeistExecutionAggregate(
-                children: nextChildren,
-                lastSuccessfulActionBoundary: step.lastSuccessfulActionBoundary
-                    ?? lastSuccessfulActionBoundary
-            )
-        }
-    }
-
     internal struct HeistExecutionScope {
         internal let rootPlan: HeistPlan
         internal let plan: HeistPlan
@@ -171,10 +138,7 @@ extension TheBrains {
         }
 
         @MainActor
-        internal static func live(
-            _ brains: TheBrains,
-            continuity: EvidenceContinuity.Reference? = nil
-        ) -> HeistExecutionRuntime {
+        internal static func live(_ brains: TheBrains) -> HeistExecutionRuntime {
             HeistExecutionRuntime(
                 execute: { command, expectationBaselineScope in
                     await brains.executeRuntimeActionWithBaseline(
@@ -183,23 +147,12 @@ extension TheBrains {
                     )
                 },
                 wait: { request in
-                    let waitContinuity: PredicateWaitContinuity
-                    switch request {
-                    case .standalone:
-                        waitContinuity = brains.admitWaitContinuity(
-                            continuity,
-                            for: request.step.predicate
-                        )
-                    case .actionEndpoint, .immediate, .afterObservation, .baselineTraceOnly:
-                        waitContinuity = .notProvided
-                    }
                     return await brains.interactionCoordinator.waitForPredicate(
                         request.step,
                         initialTrace: request.initialTrace,
                         baselineSequence: request.afterSequence,
                         changeBaseline: request.changeBaseline,
                         announcementCursorStrategy: request.announcementCursorStrategy,
-                        continuity: waitContinuity,
                         startedAt: request.startedAt
                     )
                 },
@@ -213,40 +166,24 @@ extension TheBrains {
         }
     }
 
-    internal func executeHeistPlan(
-        _ plan: HeistPlan,
-        argument: HeistArgument = .none,
-        continuity: EvidenceContinuity.Reference? = nil
-    ) async -> ActionResult {
+    internal func executeHeistPlan(_ plan: HeistPlan, argument: HeistArgument = .none) async -> ActionResult {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(payload: .heist(nil))
         }
-        return await executeHeistPlan(
-            plan,
-            argument: argument,
-            continuity: continuity,
-            runtime: .live(self, continuity: continuity)
-        )
+        return await executeHeistPlan(plan, argument: argument, runtime: .live(self))
     }
 
     internal func executeHeistPlanForTest(
         _ plan: HeistPlan,
         argument: HeistArgument = .none,
-        continuity: EvidenceContinuity.Reference? = nil,
         runtime: HeistExecutionRuntime
     ) async -> ActionResult {
-        await executeHeistPlan(
-            plan,
-            argument: argument,
-            continuity: continuity,
-            runtime: runtime
-        )
+        await executeHeistPlan(plan, argument: argument, runtime: runtime)
     }
 
     private func executeHeistPlan(
         _ plan: HeistPlan,
         argument: HeistArgument,
-        continuity: EvidenceContinuity.Reference?,
         runtime: HeistExecutionRuntime
     ) async -> ActionResult {
         let notificationScope = vault.accessibilityNotifications.beginHeistScope()
@@ -274,8 +211,8 @@ extension TheBrains {
             scope: HeistExecutionScope(plan: plan),
             path: .body
         )
-        var stepResults = execution.children.values
-        let abortedAtPath = execution.children.abortedAtPath
+        var stepResults = execution.values
+        let abortedAtPath = execution.abortedAtPath
         if let failedPath = abortedAtPath,
            let mode = failureEvidencePolicy.captureMode,
            let failureScreenshotStep = await failureScreenshotStep(
@@ -286,16 +223,9 @@ extension TheBrains {
             stepResults.append(failureScreenshotStep)
         }
         let durationMs = elapsedMilliseconds(since: heistStart)
-        let evidenceContinuity = execution.lastSuccessfulActionBoundary.flatMap {
-            evidenceContinuityStore.register($0)
-        }
         let result: HeistResult
         do {
-            result = try HeistResult(
-                steps: stepResults,
-                durationMs: durationMs,
-                evidenceContinuity: evidenceContinuity
-            )
+            result = try HeistResult(steps: stepResults, durationMs: durationMs)
         } catch {
             return .failure(
                 payload: .heist(nil),
@@ -325,7 +255,7 @@ extension TheBrains {
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope,
         path: HeistExecutionPath = .body
-    ) async -> HeistExecutionAggregate {
+    ) async -> HeistExecutedChildren {
         await executeHeistStepAccumulator(
             steps,
             runtime: runtime,
@@ -341,16 +271,14 @@ extension TheBrains {
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope,
         path: HeistExecutionPath
-    ) async -> HeistExecutionAggregate {
-        var execution = HeistExecutionAggregate.empty
+    ) async -> HeistExecutedChildren {
+        var children = HeistExecutedChildren.empty
 
         for (index, step) in steps.enumerated() {
             let stepPath = path.step(at: index)
 
-            if execution.children.abortedAtPath != nil {
-                execution = execution.appending(HeistStepExecution(
-                    result: .skipped(path: stepPath, durationMs: 0, step: step)
-                ))
+            if children.abortedAtPath != nil {
+                children.append(.skipped(path: stepPath, durationMs: 0, step: step))
                 continue
             } else {
                 let stepResult = await executeHeistStep(
@@ -361,10 +289,10 @@ extension TheBrains {
                     environment: environment,
                     scope: scope
                 )
-                execution = execution.appending(stepResult)
+                children.append(stepResult)
             }
         }
-        return execution
+        return children
     }
 
     private func executeHeistStep(
@@ -374,7 +302,7 @@ extension TheBrains {
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
-    ) async -> HeistStepExecution {
+    ) async -> HeistExecutionStepResult {
         let start = RuntimeElapsed.now
         switch step {
         case .action(let action):
@@ -437,9 +365,9 @@ extension TheBrains {
                 scope: scope
             )
         case .warn(let warn):
-            return HeistStepExecution(result: executeWarnStep(warn, path: path, start: start))
+            return executeWarnStep(warn, path: path, start: start)
         case .fail(let fail):
-            return HeistStepExecution(result: executeFailStep(fail, path: path, start: start))
+            return executeFailStep(fail, path: path, start: start)
         case .heist(let plan):
             return await executeInlineHeistStep(
                 plan,
@@ -471,8 +399,8 @@ extension TheBrains {
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
-    ) async -> HeistStepExecution {
-        let execution = await executeHeistSteps(
+    ) async -> HeistExecutionStepResult {
+        let children = await executeHeistSteps(
             plan.body,
             runtime: runtime,
             environment: environment,
@@ -484,17 +412,16 @@ extension TheBrains {
             ),
             path: path.heistBody()
         )
-        let result: HeistExecutionStepResult
-        switch execution.children {
+        switch children {
         case .passed(let children):
-            result = .heist(
+            return .heist(
                 path: path,
                 durationMs: elapsedMilliseconds(since: start),
                 name: plan.name,
                 completion: .passed(children: children)
             )
         case .aborted(let children):
-            result = .heist(
+            return .heist(
                 path: path,
                 durationMs: elapsedMilliseconds(since: start),
                 name: plan.name,
@@ -507,10 +434,6 @@ extension TheBrains {
                 )
             )
         }
-        return HeistStepExecution(
-            result: result,
-            lastSuccessfulActionBoundary: execution.lastSuccessfulActionBoundary
-        )
     }
 
 }

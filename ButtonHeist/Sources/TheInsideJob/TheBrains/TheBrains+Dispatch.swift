@@ -4,13 +4,36 @@ import Foundation
 import ThePlans
 import TheScore
 
+internal struct ActionExpectationEvidence: Sendable, Equatable {
+    internal let settledCapture: SettledCapture
+    internal let announcementCursor: AccessibilityNotificationCursor
+}
+
 internal struct RuntimeActionExecution: Sendable, Equatable {
     internal let result: ActionResult
-    internal let successfulActionBoundary: EvidenceContinuity.Boundary?
+    internal let actionExpectationEvidence: ActionExpectationEvidence?
     internal let includesExpectationBaseline: Bool
 
+    internal init(
+        result: ActionResult,
+        actionExpectationEvidence: ActionExpectationEvidence?,
+        includesExpectationBaseline: Bool
+    ) {
+        self.result = result
+        self.actionExpectationEvidence = actionExpectationEvidence
+        self.includesExpectationBaseline = includesExpectationBaseline
+    }
+
+    internal init(result: ActionResult, expectationBaseline: SettledCapture?) {
+        self.result = result
+        actionExpectationEvidence = expectationBaseline.map {
+            ActionExpectationEvidence(settledCapture: $0, announcementCursor: .origin)
+        }
+        includesExpectationBaseline = expectationBaseline != nil
+    }
+
     internal var expectationBaseline: SettledCapture? {
-        includesExpectationBaseline ? successfulActionBoundary?.settledCapture : nil
+        includesExpectationBaseline ? actionExpectationEvidence?.settledCapture : nil
     }
 }
 
@@ -156,7 +179,7 @@ extension TheBrains {
         }
         return RuntimeActionExecution(
             result: execution.result,
-            successfulActionBoundary: execution.successfulActionBoundary,
+            actionExpectationEvidence: execution.actionExpectationEvidence,
             includesExpectationBaseline: expectationBaselineScope != nil
         )
     }
@@ -165,7 +188,7 @@ extension TheBrains {
         let execution = await executeTakeScreenshotWithBoundary()
         return RuntimeActionExecution(
             result: execution.result,
-            successfulActionBoundary: execution.successfulActionBoundary,
+            actionExpectationEvidence: execution.actionExpectationEvidence,
             includesExpectationBaseline: false
         )
     }
@@ -248,7 +271,7 @@ extension TheBrains {
         guard semanticObservationIsActive else {
             return RuntimeActionExecution(
                 result: runtimeInactiveResult(payload: payload),
-                successfulActionBoundary: nil,
+                actionExpectationEvidence: nil,
                 includesExpectationBaseline: false
             )
         }
@@ -258,7 +281,7 @@ extension TheBrains {
         guard let before = await interactionCoordinator.admittedBaseline(scope: beforeStateScope) else {
             return RuntimeActionExecution(
                 result: treeUnavailableResult(payload: payload),
-                successfulActionBoundary: nil,
+                actionExpectationEvidence: nil,
                 includesExpectationBaseline: false
             )
         }
@@ -266,7 +289,7 @@ extension TheBrains {
         let notificationWindow = vault.accessibilityNotifications.beginActionWindow()
         defer { notificationWindow.cancel() }
 
-        let actionBoundary = actionBoundary(
+        let actionExpectationEvidence = actionExpectationEvidence(
             from: before,
             scope: beforeStateScope,
             notificationCursor: notificationWindow.cursor
@@ -289,16 +312,16 @@ extension TheBrains {
         )
         return RuntimeActionExecution(
             result: actionResult,
-            successfulActionBoundary: dispatchResult.success ? actionBoundary : nil,
+            actionExpectationEvidence: dispatchResult.success ? actionExpectationEvidence : nil,
             includesExpectationBaseline: false
         )
     }
 
-    private func actionBoundary(
+    private func actionExpectationEvidence(
         from baseline: ActionEvidenceProjector.Baseline,
         scope: SemanticObservationScope,
         notificationCursor: AccessibilityNotificationCursor
-    ) -> EvidenceContinuity.Boundary {
+    ) -> ActionExpectationEvidence {
         guard let settledObservationSequence = baseline.settledObservationSequence,
               let settledCapture = vault.semanticObservationStream.settledCapture(
                 scope: scope,
@@ -306,9 +329,9 @@ extension TheBrains {
               ) else {
             preconditionFailure("admitted action baseline must retain its settled capture")
         }
-        return evidenceContinuityStore.captureBoundary(
+        return ActionExpectationEvidence(
             settledCapture: settledCapture,
-            notificationCursor: notificationCursor
+            announcementCursor: notificationCursor
         )
     }
 

@@ -150,60 +150,6 @@ final class HeistJUnitReportTests: XCTestCase {
         assertContains(xml, "step: [1] activate")
     }
 
-    func testJunitXMLIncludesOptionalSystemOutputWithoutChangingTokenlessShape() {
-        let tokenless = makeReport(outcomes: [.passed]).junitXML()
-        let step = HeistJUnitReport.StepResult(
-            index: 0,
-            command: "wait",
-            target: nil,
-            timeSeconds: 0.1,
-            outcome: .passed,
-            systemOutput: "continuity=applied match=backdated@settled_observation:11"
-        )
-        let withContinuity = HeistJUnitReport(
-            heistName: "continuity",
-            app: "com.test.app",
-            totalTimeSeconds: 0.1,
-            steps: [step]
-        ).junitXML()
-
-        XCTAssertFalse(tokenless.contains("system-out"))
-        assertContains(
-            withContinuity,
-            "<system-out>continuity=applied match=backdated@settled_observation:11</system-out>"
-        )
-    }
-
-    func testJunitXMLPreservesPassedSystemOutputWhenAHeistLaterFails() {
-        let report = HeistJUnitReport(
-            heistName: "continuity-failure",
-            app: "com.test.app",
-            totalTimeSeconds: 0.2,
-            steps: [
-                HeistJUnitReport.StepResult(
-                    index: 0,
-                    command: "wait",
-                    target: nil,
-                    timeSeconds: 0.1,
-                    outcome: .passed,
-                    systemOutput: "continuity=applied match=backdated@announcement:21"
-                ),
-                HeistJUnitReport.StepResult(
-                    index: 1,
-                    command: "wait",
-                    target: nil,
-                    timeSeconds: 0.1,
-                    outcome: .failed(message: "timed out", failureKind: nil)
-                ),
-            ]
-        )
-
-        let xml = report.junitXML()
-
-        assertContains(xml, "<failure message=\"timed out\"")
-        assertContains(xml, "<system-out>continuity=applied match=backdated@announcement:21</system-out>")
-    }
-
     func testJunitXMLFailureWithNilErrorKind() {
         let report = makeReport(outcomes: [
             .failed(message: "unknown error", failureKind: nil),

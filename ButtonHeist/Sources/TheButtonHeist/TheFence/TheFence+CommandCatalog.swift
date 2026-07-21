@@ -595,10 +595,7 @@ extension TheFence.Command {
         case .runHeist:
             return fixedResponseContract(
                 family: .heistRuntime,
-                parameters: FenceCommandParameters([
-                    Self.rootArgumentParameter,
-                    FenceParameters.evidenceContinuity.spec,
-                ] + Self.planSourceParameters),
+                parameters: FenceCommandParameters([Self.rootArgumentParameter] + Self.planSourceParameters),
                 timeout: .longAction,
                 description: Self.runHeistDescription,
                 mcpExposure: .directTool

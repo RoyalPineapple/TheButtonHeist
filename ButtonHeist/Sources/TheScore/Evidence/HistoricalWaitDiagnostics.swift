@@ -26,10 +26,6 @@ private enum HistoricalWaitDiagnosticsEvidenceCodingKey: String, CodingKey, Case
 public enum HistoricalWaitDiagnostics: Sendable {}
 
 extension HistoricalWaitDiagnostics {
-    public enum Request: String, Codable, Sendable, Equatable {
-        case predicateMismatches = "predicate_mismatches"
-    }
-
     public struct SemanticCandidate: Codable, Sendable, Equatable {
         public let label: String?
         public let value: String?

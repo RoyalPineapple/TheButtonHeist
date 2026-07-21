@@ -105,10 +105,6 @@ extension FenceResponse {
         if let expectations = report.summary.expectations {
             text += " [expectations: \(expectations.met)/\(expectations.checked) met]"
         }
-        for (index, node) in report.outputNodes.enumerated() {
-            guard let breadcrumb = node.continuity?.breadcrumb else { continue }
-            text += "\n  [\(index)] \(breadcrumb)"
-        }
         return text
     }
 
