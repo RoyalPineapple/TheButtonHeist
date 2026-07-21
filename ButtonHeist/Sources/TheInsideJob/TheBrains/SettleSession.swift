@@ -227,7 +227,7 @@ final class SettleSessionFinalObservation {
 
 /// Multi-cycle accessibility-tree settle loop with inline transient capture.
 ///
-/// Polls the parsed AX tree at fixed intervals. Returns `.settled` after
+/// Samples the parsed AX tree on the shared UI heartbeat. Returns `.settled` after
 /// `cyclesRequired` consecutive identical fingerprints — with elements
 /// carrying `UIAccessibilityTraits.updatesFrequently` masked out so spinners
 /// don't block settle. CALayer animations are *not* consulted: a UI is
@@ -245,7 +245,7 @@ final class SettleSessionFinalObservation {
 /// state. Viewport movement uses this same reducer with a two-cycle policy.
 ///
 /// The loop seeds `previousFingerprint` from a synchronous parse *before*
-/// the first sleep, so a static screen settles after exactly
+/// the first heartbeat, so a static screen settles after exactly
 /// `cyclesRequired` cycles (300 ms with the default 3 × 100 ms), not
 /// `cyclesRequired + 1`.
 ///
@@ -301,7 +301,7 @@ final class SettleSessionFinalObservation {
     typealias ParseProvider = @MainActor () -> InterfaceObservation?
     typealias TripwireSignalProvider = @MainActor () -> TheTripwire.TripwireSignal
     typealias Sleeper = @Sendable (UInt64) async -> Void
-    typealias ObservationYield = @MainActor () async -> Void
+    typealias ObservationYield = @MainActor (Duration) async -> TheTripwire.HeartbeatWaitOutcome
     typealias Clock = @MainActor () -> RuntimeElapsed.Instant
 
     let parseProvider: ParseProvider
@@ -338,8 +338,9 @@ final class SettleSessionFinalObservation {
         self.init(
             parseProvider: parseProvider,
             tripwireSignalProvider: tripwireSignalProvider,
-            observationYield: {
+            observationYield: { _ in
                 await sleeper(UInt64(cycleIntervalMs) * 1_000_000)
+                return Task.isCancelled ? .cancelled : .observed
             },
             policy: .consecutiveCycles(required: cyclesRequired),
             clock: { RuntimeElapsed.now },
@@ -377,13 +378,17 @@ final class SettleSessionFinalObservation {
     ) -> SettleSession {
         let observationYield: ObservationYield = switch policy {
         case .consecutiveCycles:
-            { _ = await Task.cancellableSleep(
-                nanoseconds: UInt64(SettleSession.defaultCycleIntervalMs) * 1_000_000
-            ) }
+            { timeout in
+                await tripwire.waitForNextHeartbeat(timeout: timeout, demand: .ambient)
+            }
         case .quietWindow:
-            { await tripwire.yieldRealFrames(1) }
+            { timeout in
+                await tripwire.waitForNextHeartbeat(timeout: timeout, demand: .immediate)
+            }
         case .postIdleConfirmation:
-            { await tripwire.yieldRealFrames(1) }
+            { timeout in
+                await tripwire.waitForNextHeartbeat(timeout: timeout, demand: .immediate)
+            }
         }
         return SettleSession(
             parseProvider: { vault.refreshLiveCapture() },
@@ -406,7 +411,9 @@ final class SettleSessionFinalObservation {
         SettleSession(
             parseProvider: { vault.refreshLiveCapture() },
             tripwireSignalProvider: { tripwire.tripwireSignal() },
-            observationYield: { await tripwire.yieldRealFrames(1) },
+            observationYield: { timeout in
+                await tripwire.waitForNextHeartbeat(timeout: timeout, demand: .immediate)
+            },
             policy: .consecutiveCycles(required: 2),
             clock: { RuntimeElapsed.now },
             timeoutMs: timeoutMs
@@ -552,10 +559,17 @@ private struct SettleLoopRunner {
         }
 
         while deadline.hasTimeRemaining(at: clock()) {
-            await observationYield()
-            if Task.isCancelled {
+            let heartbeat = await observationYield(
+                deadline.remainingDuration(at: clock())
+            )
+            if heartbeat == .cancelled || Task.isCancelled {
                 return result(
                     .cancelled(timeMs: deadline.elapsedMilliseconds(at: clock()))
+                )
+            }
+            guard heartbeat == .observed else {
+                return result(
+                    .timedOut(timeMs: deadline.elapsedMilliseconds(at: clock()))
                 )
             }
 

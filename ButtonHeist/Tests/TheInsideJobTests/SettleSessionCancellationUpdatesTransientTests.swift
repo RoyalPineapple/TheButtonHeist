@@ -17,10 +17,11 @@ extension SettleSessionTests {
         let session = SettleSession(
             parseProvider: { stable },
             tripwireSignalProvider: { self.tripwireSignal(topmostVC: nil) },
-            observationYield: {
+            observationYield: { _ in
                 yieldStarted.fulfill()
-                _ = await Task.cancellableSleep(for: .seconds(10))
+                let completed = await Task.cancellableSleep(for: .seconds(10))
                 clock.advance(milliseconds: 10)
+                return completed ? .observed : .cancelled
             },
             clock: { clock.currentTime() },
             quietWindowMs: 30,

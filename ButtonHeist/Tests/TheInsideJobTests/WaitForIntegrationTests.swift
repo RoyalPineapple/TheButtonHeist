@@ -222,7 +222,12 @@ final class WaitForIntegrationTests: XCTestCase {
         // semantic snapshot still observes absence and the poll path observes
         // the later arrival.
         let addTask = Task { @MainActor in
-            await self.insideJob.tripwire.yieldRealFrames(2)
+            for _ in 0..<2 {
+                guard await self.insideJob.tripwire.waitForNextHeartbeat(
+                    timeout: .seconds(1),
+                    demand: .immediate
+                ) == .observed else { return }
+            }
             _ = self.addLabel("WaitFor-Delayed")
         }
 

@@ -201,7 +201,11 @@ extension TheBrainsPipelineTests {
             tripwire: TheTripwire(),
             visibleObservationSource: spy.capture
         )
-        defer { isolatedBrains.stopSemanticObservation() }
+        isolatedBrains.tripwire.startPulse()
+        defer {
+            isolatedBrains.stopSemanticObservation()
+            isolatedBrains.tripwire.stopPulse()
+        }
         isolatedBrains.interactionCoordinator.observePredicateWaitScheduledEffects(spy.observe)
         isolatedBrains.vault.semanticObservationStream.settleVisibleObservation = { vault, _, _, baseline, _ in
             spy.settle(vault: vault, baseline: baseline)

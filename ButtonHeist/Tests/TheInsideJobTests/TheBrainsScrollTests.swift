@@ -227,7 +227,10 @@ final class TheBrainsScrollTests: XCTestCase {
         let inflation = brains.navigation.elementInflation
         inflation.geometryEnvironment = .init(
             now: { now },
-            awaitFrame: { now = now.advanced(by: .seconds(1)) }
+            awaitFrame: { _ in
+                now = now.advanced(by: .seconds(1))
+                return .observed
+            }
         )
         let inflatedTarget = ElementInflation.InflatedElementTarget(
             target: try resolvedTarget(.label("Deadline Target")),

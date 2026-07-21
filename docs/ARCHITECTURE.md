@@ -173,8 +173,13 @@ parser confirms that first post-idle fingerprint once on the next real frame;
 it no longer waits an arbitrary quiet duration on the normal active path. It
 rechecks the animation count at the run-loop edge so a newly started animation
 repeats the gate. If private idle tracking is unavailable, its immediate
-failure selects the 60 ms AX quiet-window policy; an idle wait that exhausts
-the authored deadline remains timed out. An already-zero counter completes its
+failure selects the 60 ms AX quiet-window policy; both policies sample through
+Button Heist's one CADisplayLink heartbeat. The heartbeat runs at the configured
+ambient rate and temporarily rises to the active screen's maximum refresh rate
+while an immediate one-shot waiter exists, then restores the ambient rate on
+observation, cancellation, timeout, or shutdown. No parser-owned timer or
+second display link exists. An idle wait that exhausts the authored deadline
+remains timed out. An already-zero counter completes its
 phase immediately, and an unmatched stop clamps at zero. Nested heists inherit
 the root lease and counter; they never install parallel hooks. The root heist
 invalidates the observer and restores both methods with `defer` only after

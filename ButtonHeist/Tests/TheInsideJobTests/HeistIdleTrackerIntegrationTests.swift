@@ -76,6 +76,9 @@ final class HeistIdleTrackerIntegrationTests: XCTestCase {
         }
 
         let tripwire = TheTripwire()
+        tripwire.startPulse()
+        defer { tripwire.stopPulse() }
+        let vault = TheVault(tripwire: tripwire)
         let lease = try tripwire.heistIdleTracker.beginTracking()
         defer { lease.cancel() }
 
@@ -90,6 +93,17 @@ final class HeistIdleTrackerIntegrationTests: XCTestCase {
         let becameIdle = await tripwire.heistIdleTracker.waitUntilIdle(timeout: .seconds(1))
         XCTAssertTrue(becameIdle)
         XCTAssertEqual(animatedView.accessibilityLabel, "Ready")
+        let settlement = await SettleSession.live(
+            vault: vault,
+            tripwire: tripwire,
+            timeoutMs: 1_000,
+            policy: .postIdleConfirmation
+        ).run(
+            start: RuntimeElapsed.now,
+            baselineTripwireSignal: tripwire.tripwireSignal()
+        )
+        XCTAssertTrue(settlement.outcome.didSettleCleanly)
+        XCTAssertTrue(tripwire.runningContext?.heartbeatWaiters.isEmpty == true)
         let labels = AccessibilityHierarchyParser()
             .parseAccessibilityHierarchy(in: viewController.view, rotorResultLimit: 0)
             .flattenToElements()

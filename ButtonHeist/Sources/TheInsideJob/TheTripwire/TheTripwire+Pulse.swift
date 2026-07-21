@@ -15,6 +15,7 @@ extension TheTripwire {
         var latestReading: PulseReading?
         var tickCount: UInt64 = 0
         var settleWaiters = WaiterStore<UInt64, SettleWaiter>()
+        var heartbeatWaiters = WaiterStore<UInt64, HeartbeatWaiter>()
 
         init(link: CADisplayLink, target: PulseTick) {
             self.link = link
@@ -40,6 +41,23 @@ extension TheTripwire {
         let continuation: TimedOneShot<Bool>
     }
 
+    enum HeartbeatDemand: Equatable, Sendable {
+        case ambient
+        case immediate
+    }
+
+    enum HeartbeatWaitOutcome: Equatable, Sendable {
+        case observed
+        case timedOut
+        case cancelled
+        case unavailable
+    }
+
+    struct HeartbeatWaiter: Sendable {
+        let demand: HeartbeatDemand
+        let continuation: TimedOneShot<HeartbeatWaitOutcome>
+    }
+
     // MARK: - Pulse Lifecycle
 
     var isPulseRunning: Bool { runningContext != nil }
@@ -58,10 +76,12 @@ extension TheTripwire {
         context.link.invalidate()
 
         let waiters = context.settleWaiters.removeAll()
+        let heartbeatWaiters = context.heartbeatWaiters.removeAll()
 
         for waiter in waiters {
             waiter.continuation.resolve(returning: false)
         }
+        heartbeatWaiters.forEach { $0.continuation.resolve(returning: .unavailable) }
         pulsePhase = .idle
     }
 
@@ -108,6 +128,42 @@ extension TheTripwire {
         _ = runningContext?.settleWaiters.remove(id: id)
     }
 
+    /// Waits for one future tick of Button Heist's single CADisplayLink heartbeat.
+    /// Immediate demand temporarily raises the same link to the active screen's
+    /// maximum refresh rate; ambient demand preserves the configured monitor rate.
+    func waitForNextHeartbeat(
+        timeout: Duration,
+        demand: HeartbeatDemand
+    ) async -> HeartbeatWaitOutcome {
+        guard timeout > .zero else { return .timedOut }
+        guard let context = runningContext else { return .unavailable }
+        let waiterID = context.heartbeatWaiters.reserveID()
+        let oneShot = TimedOneShot<HeartbeatWaitOutcome>()
+        return await oneShot.wait(
+            cancellationValue: .cancelled,
+            onRegistered: { oneShot in
+                guard runningContext === context else {
+                    oneShot.resolve(returning: .unavailable)
+                    return
+                }
+                context.heartbeatWaiters.insert(
+                    HeartbeatWaiter(demand: demand, continuation: oneShot),
+                    id: waiterID
+                )
+                updateDisplayLinkRate(context)
+                oneShot.armTimeout(after: timeout) { [weak self] in
+                    await self?.resolveHeartbeatWaiter(
+                        id: waiterID,
+                        returning: .timedOut
+                    )
+                }
+            },
+            onFinished: { [weak self] in
+                self?.removeHeartbeatWaiter(id: waiterID, from: context)
+            }
+        )
+    }
+
     /// Wait for the interface to become all clear.
     ///
     /// Delegates to `waitForSettle`; the caller must already own a running
@@ -148,21 +204,6 @@ extension TheTripwire {
         }
     }
 
-    /// Yield frames with real wall-clock time between each.
-    /// Unlike `yieldFrames` (which uses `Task.yield()`), this uses
-    /// `Task.sleep` to give CADisplayLink animations time to process.
-    /// Required for accessibility SPI scroll methods that queue animated
-    /// scrolls — `Task.yield()` alone doesn't advance the animation.
-    ///
-    /// Same fixed-count contract as `yieldFrames(_:)` — see that doc for
-    /// the four-implementation settle-signal boundary.
-    func yieldRealFrames(_ count: Int, intervalMs: UInt64 = 16) async {
-        for _ in 0..<count {
-            CATransaction.flush()
-            guard await Task.cancellableSleep(for: .milliseconds(intervalMs)) else { break }
-        }
-    }
-
     // MARK: - Tick Handler
 
     func onTick() {
@@ -197,6 +238,47 @@ extension TheTripwire {
         context.latestReading = reading
 
         resolveSettleWaiters(context: context, now: now, isQuiet: isQuiet)
+        observeHeartbeat(context)
+    }
+
+    private func observeHeartbeat(_ context: RunningContext) {
+        let waiters = context.heartbeatWaiters.removeAll()
+        guard !waiters.isEmpty else { return }
+        updateDisplayLinkRate(context)
+        waiters.forEach { $0.continuation.resolve(returning: .observed) }
+    }
+
+    private func resolveHeartbeatWaiter(
+        id: UInt64,
+        returning outcome: HeartbeatWaitOutcome
+    ) {
+        guard let context = runningContext else { return }
+        guard let waiter = context.heartbeatWaiters.remove(id: id) else { return }
+        updateDisplayLinkRate(context)
+        waiter.continuation.resolve(returning: outcome)
+    }
+
+    private func removeHeartbeatWaiter(id: UInt64, from context: RunningContext) {
+        guard context.heartbeatWaiters.remove(id: id) != nil else { return }
+        updateDisplayLinkRate(context)
+    }
+
+    private func updateDisplayLinkRate(_ context: RunningContext) {
+        let hasImmediateDemand = context.heartbeatWaiters.contains {
+            $0.demand == .immediate
+        }
+        context.link.preferredFrameRateRange = hasImmediateDemand
+            ? Self.activeDisplayFrameRateRange(
+                maximumFramesPerSecond: activeScreenMaximumFramesPerSecond()
+            )
+            : Self.pulseFrameRateRange
+    }
+
+    private func activeScreenMaximumFramesPerSecond() -> Int {
+        captureTraversableWindows()
+            .lazy
+            .compactMap { $0.window.windowScene?.screen.maximumFramesPerSecond }
+            .first ?? 60
     }
 
     private func resolveSettleWaiters(context: RunningContext, now: CFAbsoluteTime, isQuiet: Bool) {

@@ -50,8 +50,9 @@ extension SettleSessionTests {
                 ])
             },
             tripwireSignalProvider: { self.tripwireSignal(topmostVC: nil) },
-            observationYield: {
+            observationYield: { _ in
                 clock.advance(milliseconds: 10)
+                return .observed
             },
             clock: { clock.currentTime() },
             quietWindowMs: 30,

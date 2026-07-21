@@ -419,7 +419,10 @@ final class HeistResultTests: XCTestCase {
             },
             execute: { _, _ in
                 XCTFail("Warning-only heist must not execute an action")
-                return RuntimeActionExecution(result: .success(payload: .activate), expectationBaseline: nil)
+                return RuntimeActionExecution(
+                    result: .success(payload: .activate),
+                    actionExpectationContext: nil
+                )
             },
             wait: { _ in
                 XCTFail("Warning-only heist must not wait")

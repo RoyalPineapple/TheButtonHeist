@@ -222,6 +222,8 @@ final class TheBrainsPipelineTests: XCTestCase {
     // MARK: - Semantic Discovery Observation
 
     func testSemanticDiscoveryObservationCommitsUnion() async {
+        brains.tripwire.startPulse()
+        defer { brains.tripwire.stopPulse() }
         // Exploration seeds the local union from the interface tree and merges each
         // parse into it. The observation stream commits the completed union as
         // settled discovery truth. There is no pruning — the union is the
@@ -244,6 +246,8 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testExploreScreenStopsEarlyWhenTargetAlreadyResolved() async throws {
+        brains.tripwire.startPulse()
+        defer { brains.tripwire.stopPulse() }
         let screen = try XCTUnwrap(
             brains.vault.refreshLiveCapture(),
             "Expected a live hierarchy in the hosted test app"

@@ -4,8 +4,9 @@ import UIKit
 
 /// Detects UIKit tripwire triggers without touching the accessibility tree.
 ///
-/// TheTripwire monitors UIKit signals via a persistent low-frequency pulse — a single
-/// CADisplayLink that samples all UI state on one clock. Every tick runs the
+/// TheTripwire monitors UIKit signals via one persistent CADisplayLink heartbeat.
+/// Ambient observation runs at a low rate; immediate one-shot demand temporarily
+/// raises that same link to the active screen's maximum refresh rate. Every tick runs the
 /// full set of checks: layer scan (presentation fingerprint and layout), VC
 /// identity, public navigation state, and ordered visible windows.
 ///
@@ -54,6 +55,12 @@ final class TheTripwire {
             maximum: Float(maximum),
             preferred: Float(preferred)
         )
+    }
+
+    static func activeDisplayFrameRateRange(maximumFramesPerSecond: Int) -> CAFrameRateRange {
+        precondition(maximumFramesPerSecond > 0, "display refresh rate must be positive")
+        let maximum = Float(maximumFramesPerSecond)
+        return CAFrameRateRange(minimum: maximum, maximum: maximum, preferred: maximum)
     }
 }
 

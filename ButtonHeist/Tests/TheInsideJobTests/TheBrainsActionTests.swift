@@ -182,11 +182,14 @@ final class TheBrainsActionTests: XCTestCase {
             tripwire: TheTripwire(),
             visibleObservationSource: visibleObservationSource.capture
         )
+        brains.tripwire.startPulse()
+        installObservedGeometryHeartbeat()
         brains.startSemanticObservation()
     }
 
     override func tearDown() async throws {
         brains.stopSemanticObservation()
+        brains.tripwire.stopPulse()
         brains = nil
         visibleObservationSource = nil
         try await super.tearDown()
@@ -200,7 +203,16 @@ final class TheBrainsActionTests: XCTestCase {
             keyboardInput: keyboardInput,
             visibleObservationSource: visibleObservationSource.capture
         )
+        brains.tripwire.startPulse()
+        installObservedGeometryHeartbeat()
         brains.startSemanticObservation()
+    }
+
+    private func installObservedGeometryHeartbeat() {
+        brains.navigation.elementInflation.geometryEnvironment = .init(
+            now: { RuntimeElapsed.now },
+            awaitFrame: { _ in .observed }
+        )
     }
 
     // MARK: - Helpers
