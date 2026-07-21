@@ -140,7 +140,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertFalse(returnedResult)
     }
 
-    func testScanForHeistIdReturnsNilWhenInitialSettlementIsCancelled() async {
+    func testSemanticTargetScanIsUnavailableWhenInitialSettlementIsCancelled() async throws {
         let staleId: HeistId = "stale_action_target"
         brains.vault.installObservationForTesting(.makeForTests([
             .init(
@@ -148,25 +148,60 @@ final class TheBrainsScrollTests: XCTestCase {
                 heistId: staleId
             ),
         ]))
+        let selected = try XCTUnwrap(brains.vault.interfaceElement(heistId: staleId))
+        let sourceTarget = try resolvedTarget(.label("Stale action target").and(.traits([.button])))
+        guard case .admitted(let target) = brains.navigation.elementInflation.admitSemanticTarget(
+            sourceTarget,
+            selectedElement: selected
+        ) else {
+            return XCTFail("Expected a portable semantic target")
+        }
+        let scrollView = UIScrollView()
         let deadline = semanticRevealDeadline()
         let scanTask = Task { @MainActor in
-            await brains.navigation.scanForHeistId(staleId, deadline: deadline) == nil
+            await brains.navigation.scanForSemanticTarget(.init(
+                target: target,
+                revealRootScrollViewID: ObjectIdentifier(scrollView),
+                deadline: deadline
+            ))
         }
         scanTask.cancel()
 
-        let returnedNil = await scanTask.value
-        XCTAssertTrue(returnedNil)
+        guard case .unavailable = await scanTask.value else {
+            return XCTFail("Expected cancelled semantic scan to be unavailable")
+        }
     }
 
-    func testScanForHeistIdReturnsNilWhenDeadlineIsExpired() async {
+    func testSemanticTargetScanIsUnavailableWhenDeadlineIsExpired() async throws {
+        let targetId: HeistId = "stale_action_target"
+        brains.vault.installObservationForTesting(.makeForTests([
+            .init(
+                AccessibilityElement.make(label: "Stale action target", traits: .button),
+                heistId: targetId
+            ),
+        ]))
+        let selected = try XCTUnwrap(brains.vault.interfaceElement(heistId: targetId))
+        let sourceTarget = try resolvedTarget(.label("Stale action target").and(.traits([.button])))
+        guard case .admitted(let target) = brains.navigation.elementInflation.admitSemanticTarget(
+            sourceTarget,
+            selectedElement: selected
+        ) else {
+            return XCTFail("Expected a portable semantic target")
+        }
         let deadline = SemanticObservationDeadline(
             start: RuntimeElapsed.now,
             timeoutSeconds: 0
         )
 
-        let result = await brains.navigation.scanForHeistId("stale_action_target", deadline: deadline)
+        let result = await brains.navigation.scanForSemanticTarget(.init(
+            target: target,
+            revealRootScrollViewID: ObjectIdentifier(UIScrollView()),
+            deadline: deadline
+        ))
 
-        XCTAssertNil(result)
+        guard case .unavailable = result else {
+            return XCTFail("Expected expired semantic scan to be unavailable")
+        }
     }
 
     func testGeometryCrossingDeadlineDuringFrameAwaitTimesOut() async throws {

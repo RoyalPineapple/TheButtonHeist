@@ -61,8 +61,8 @@ extension TheBrainsScrollTests {
             deadline: semanticRevealDeadline()
         )
 
-        guard case .failed(.noLiveScrollableAncestor) = result else {
-            return XCTFail("Expected direct reused-ID evidence to fail closed, got \(result)")
+        guard case .targetResolutionFailed(.notFound) = result else {
+            return XCTFail("Expected direct reused-ID evidence to fail as not found, got \(result)")
         }
         XCTAssertEqual(scrollView.setContentOffsetAnimations, [false])
         XCTAssertNotEqual(scrollView.contentOffset, CGPoint(x: 0, y: 80))
@@ -116,7 +116,7 @@ extension TheBrainsScrollTests {
             brains.vault.latestObservation
         )
         let originalMoveViewport = brains.navigation.elementInflation.exploration.moveViewport
-        var fallbackRequest: ElementInflation.KnownTargetRevealRequest?
+        var fallbackRequest: ElementInflation.SemanticTargetRevealRequest?
         brains.navigation.elementInflation.exploration.moveViewport = { _ in
             Navigation.ViewportTransition(
                 outcome: .moved,
@@ -141,7 +141,10 @@ extension TheBrainsScrollTests {
         guard case .failed(.noLiveScrollableAncestor) = result else {
             return XCTFail("Expected fallback scan miss, got \(result)")
         }
-        XCTAssertEqual(fallbackRequest?.heistId, "settings_button")
+        XCTAssertEqual(
+            fallbackRequest?.target.target,
+            try resolvedTarget(.label("Settings"))
+        )
         XCTAssertEqual(
             fallbackRequest?.observedScrollContentActivationPoint,
             InterfaceTree.ObservedScrollContentActivationPoint(observedPoint)
@@ -168,21 +171,22 @@ extension TheBrainsScrollTests {
             traits: .button,
             frame: CGRect(x: 40, y: 160, width: 220, height: 44)
         )
+        let currentTargetId = targetId
         let visibleEntry = InterfaceTree.Element(
-            heistId: targetId,
+            heistId: currentTargetId,
             scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: nil),
             element: visibleTarget
         )
         let revealedObservation = InterfaceObservation.makeForTests(
-            elements: [targetId: visibleEntry],
+            elements: [currentTargetId: visibleEntry],
             hierarchy: [
                 .container(makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame), children: [
                     .element(visibleTarget, traversalIndex: 0)
                 ])
             ],
             containerNamesByPath: [TreePath([0]): "known_offscreen_scroll"],
-            heistIdsByPath: [TreePath([0, 0]): targetId],
-            elementRefs: [targetId: .init(object: retainedLiveObject(), scrollView: scrollView)],
+            heistIdsByPath: [TreePath([0, 0]): currentTargetId],
+            elementRefs: [currentTargetId: .init(object: retainedLiveObject(), scrollView: scrollView)],
             containerRefsByPath: [TreePath([0]): .init(object: scrollView)],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [TreePath([0]): .init(view: scrollView)]
@@ -191,15 +195,106 @@ extension TheBrainsScrollTests {
             self.visibleObservationSource.observation = revealedObservation
         }
 
-        let result = await brains.navigation.scanForHeistId(
-            targetId,
-            deadline: semanticRevealDeadline(),
-            observedScrollContentActivationPoint: observedPoint
+        let initialElement = try XCTUnwrap(brains.vault.interfaceElement(heistId: targetId))
+        let sourceTarget = try resolvedTarget(.label("Settings").and(.traits([.button])))
+        guard case .admitted(let admittedTarget) = brains.navigation.elementInflation.admitSemanticTarget(
+            sourceTarget,
+            selectedElement: initialElement
+        ) else {
+            return XCTFail("Expected Settings to admit a portable semantic target")
+        }
+        let rootScrollViewID = try XCTUnwrap(
+            brains.vault.liveScrollViewIDForRevealing(heistId: targetId)
         )
 
-        XCTAssertNotNil(result)
-        XCTAssertEqual(result?.progress.scrollCount, 0)
+        let result = await brains.navigation.scanForSemanticTarget(.init(
+            target: admittedTarget,
+            revealRootScrollViewID: rootScrollViewID,
+            deadline: semanticRevealDeadline(),
+            observedScrollContentActivationPoint: observedPoint
+        ))
+
+        guard case .revealed(let currentElement, let exploration) = result else {
+            return XCTFail("Expected seeded semantic scan to reveal the target, got \(result)")
+        }
+        XCTAssertEqual(currentElement.heistId, currentTargetId)
+        XCTAssertEqual(exploration.progress.scrollCount, 0)
         XCTAssertEqual(scrollView.setContentOffsetAnimations, [false])
+    }
+
+    func testSemanticRevealAdoptsCurrentIdAfterCandidateReordering() async throws {
+        let selectedObject = SemanticActivationView()
+        let siblingObject = SemanticActivationView()
+        let postRevealObservation = InterfaceObservation.makeForTests([
+            .init(
+                reviewPRElement(priority: "P2"),
+                heistId: "current_priority_one",
+                object: siblingObject
+            ),
+            .init(
+                reviewPRElement(priority: "P1"),
+                heistId: "stabilized_priority_one",
+                object: selectedObject
+            ),
+        ])
+
+        let result = try await inflateSemanticDuplicate(
+            postRevealObservation: postRevealObservation
+        )
+
+        guard case .inflated(let inflatedTarget) = result else {
+            return XCTFail("Expected semantic identity to survive geometry stabilization, got \(result)")
+        }
+        XCTAssertEqual(inflatedTarget.treeElement.heistId, "stabilized_priority_one")
+        XCTAssertTrue(inflatedTarget.liveTarget.object === selectedObject)
+        _ = AccessibilityActionDispatcher().activate(inflatedTarget.liveTarget)
+        XCTAssertEqual(selectedObject.activationCount, 1)
+        XCTAssertEqual(siblingObject.activationCount, 0)
+    }
+
+    func testSemanticRevealFailsWhenTargetDisappearsAtGeometryCapture() async throws {
+        let siblingObject = SemanticActivationView()
+        let result = try await inflateSemanticDuplicate(
+            postRevealObservation: .makeForTests([
+                .init(
+                    reviewPRElement(priority: "P2"),
+                    heistId: "current_priority_one",
+                    object: siblingObject
+                ),
+            ])
+        )
+
+        guard case .failed(let failure) = result else {
+            return XCTFail("Expected the missing admitted target to fail, got \(result)")
+        }
+        XCTAssertEqual(failure.failedStep, .notFound)
+        XCTAssertEqual(siblingObject.activationCount, 0)
+    }
+
+    func testSemanticRevealFailsWhenTargetBecomesAmbiguousAtGeometryCapture() async throws {
+        let firstObject = SemanticActivationView()
+        let secondObject = SemanticActivationView()
+        let result = try await inflateSemanticDuplicate(
+            postRevealObservation: .makeForTests([
+                .init(
+                    reviewPRElement(priority: "P1"),
+                    heistId: "current_priority_one",
+                    object: firstObject
+                ),
+                .init(
+                    reviewPRElement(priority: "P1"),
+                    heistId: "stabilized_priority_one",
+                    object: secondObject
+                ),
+            ])
+        )
+
+        guard case .failed(let failure) = result else {
+            return XCTFail("Expected the ambiguous admitted target to fail, got \(result)")
+        }
+        XCTAssertEqual(failure.failedStep, .ambiguous)
+        XCTAssertEqual(firstObject.activationCount, 0)
+        XCTAssertEqual(secondObject.activationCount, 0)
     }
 
     func testKnownTargetRevealReturnsTimedOutInflationFailureBeforeWork() async throws {
@@ -324,6 +419,93 @@ extension TheBrainsScrollTests {
             failure.message
         )
         XCTAssertTrue(failure.message.contains("element inflation failed [noRevealPath]"))
+    }
+
+    private func inflateSemanticDuplicate(
+        postRevealObservation: InterfaceObservation
+    ) async throws -> ElementInflation.ElementInflationResult {
+        let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        installScreenWithOffViewport(
+            visible: .init(reviewPRElement(priority: "P2"), heistId: "initial_priority_two"),
+            offscreen: .init(
+                reviewPRElement(
+                    priority: "P1",
+                    frame: CGRect(x: 40, y: 1_200, width: 240, height: 44)
+                ),
+                heistId: "initial_priority_one",
+                contentActivationPoint: CGPoint(x: 160, y: 1_200),
+                scrollView: scrollView
+            )
+        )
+        let revealedObject = SemanticActivationView()
+        let revealedObservation = InterfaceObservation.makeForTests([
+            .init(
+                reviewPRElement(priority: "P1"),
+                heistId: "current_priority_one",
+                object: revealedObject
+            ),
+            .init(
+                reviewPRElement(priority: "P2"),
+                heistId: "current_priority_two",
+                object: SemanticActivationView()
+            ),
+        ])
+        let originalMoveViewport = brains.navigation.elementInflation.exploration.moveViewport
+        let originalGeometryEnvironment = brains.navigation.elementInflation.geometryEnvironment
+        brains.navigation.elementInflation.exploration.moveViewport = { _ in .unavailable() }
+        brains.navigation.elementInflation.geometryEnvironment = .init(
+            now: { RuntimeElapsed.now },
+            awaitFrame: {}
+        )
+        brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in
+            self.brains.vault.observeInterface(revealedObservation)
+            let event = self.brains.vault.semanticObservationStream
+                .commitDiscoveryObservationForTesting(revealedObservation)
+            self.visibleObservationSource.observation = postRevealObservation
+            guard let current = self.brains.vault.interfaceElement(heistId: "current_priority_one") else {
+                return .unavailable
+            }
+            return .revealed(
+                current,
+                Navigation.InterfaceExplorationResult(
+                    event: event,
+                    progress: .init(),
+                    didMoveViewport: true
+                )
+            )
+        }
+        defer {
+            brains.navigation.elementInflation.exploration.moveViewport = originalMoveViewport
+            brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in .unavailable }
+            brains.navigation.elementInflation.geometryEnvironment = originalGeometryEnvironment
+        }
+        let target = try resolvedTarget(
+            .label("Review PR").and(
+                .traits([.button]),
+                .customContent(.init(label: "Priority", value: "P1"))
+            )
+        )
+        return await brains.navigation.elementInflation.inflate(
+            for: target,
+            method: .activate,
+            activationPointPolicy: .liveObjectOnly
+        )
+    }
+
+    private func reviewPRElement(
+        priority: String,
+        frame: CGRect = CGRect(x: 40, y: 120, width: 240, height: 44)
+    ) -> AccessibilityElement {
+        .make(
+            label: "Review PR",
+            traits: .button,
+            shape: .frame(AccessibilityRect(frame)),
+            customContent: [
+                .init(label: "Category", value: "Infrastructure", isImportant: true),
+                .init(label: "Priority", value: priority, isImportant: true),
+            ]
+        )
     }
 
 }

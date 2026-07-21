@@ -87,17 +87,20 @@ internal final class ElementInflation {
         case containerTarget
     }
 
-    internal struct KnownTargetRevealRequest {
-        internal let heistId: HeistId
+    internal struct SemanticTargetRevealRequest {
+        internal let target: AdmittedSemanticTarget
+        internal let revealRootScrollViewID: ObjectIdentifier
         internal let deadline: SemanticObservationDeadline
         internal let observedScrollContentActivationPoint: InterfaceTree.ObservedScrollContentActivationPoint?
 
         internal init(
-            heistId: HeistId,
+            target: AdmittedSemanticTarget,
+            revealRootScrollViewID: ObjectIdentifier,
             deadline: SemanticObservationDeadline,
             observedScrollContentActivationPoint: InterfaceTree.ObservedScrollContentActivationPoint? = nil
         ) {
-            self.heistId = heistId
+            self.target = target
+            self.revealRootScrollViewID = revealRootScrollViewID
             self.deadline = deadline
             self.observedScrollContentActivationPoint = observedScrollContentActivationPoint
         }
@@ -113,8 +116,8 @@ internal final class ElementInflation {
             ResolvedAccessibilityTarget,
         ) async -> Navigation.InterfaceExplorationResult?
         internal var revealKnownTarget: @MainActor (
-            KnownTargetRevealRequest,
-        ) async -> Navigation.InterfaceExplorationResult?
+            SemanticTargetRevealRequest,
+        ) async -> SemanticTargetScanResult?
         internal var moveViewport: MoveViewport
     }
 
@@ -124,17 +127,18 @@ internal final class ElementInflation {
     }
 
     internal struct CommittedElementTarget {
-        private let sourceTarget: ResolvedAccessibilityTarget
+        private let identity: CrossCaptureTarget
         private let resolvedHeistId: HeistId
         private let resolution: ActionSubjectResolution
 
         internal init(_ inflatedTarget: InflatedElementTarget) {
-            sourceTarget = inflatedTarget.target
+            identity = inflatedTarget.identity
             resolvedHeistId = inflatedTarget.treeElement.heistId
             resolution = inflatedTarget.resolution
         }
 
-        internal var target: ResolvedAccessibilityTarget { sourceTarget }
+        internal var target: ResolvedAccessibilityTarget { identity.sourceTarget }
+        internal var crossCaptureTarget: CrossCaptureTarget { identity }
         internal var heistId: HeistId { resolvedHeistId }
         internal var subjectResolution: ActionSubjectResolution { resolution }
     }
@@ -203,14 +207,14 @@ internal final class ElementInflation {
                 switch await findTargetInTree(target) {
                 case .success(.visible(let treeElement, let resolution)):
                     nextState = .refreshing(
-                        target: target,
+                        target: .captureLocal(target),
                         treeElement: treeElement,
                         deadline: operationDeadline ?? handoffDeadline(for: treeElement),
                         resolution: resolution
                     )
                 case .success(.known(let treeElement, let resolution)):
                     nextState = .revealing(
-                        target: target,
+                        target: .captureLocal(target),
                         treeElement: treeElement,
                         deadline: operationDeadline ?? handoffDeadline(for: treeElement),
                         resolution: resolution
@@ -223,7 +227,7 @@ internal final class ElementInflation {
             case .revealing(let target, let treeElement, let deadline, let resolution):
                 let nextState = await stateAfterReveal(
                     treeElement,
-                    target: target,
+                    identity: target,
                     deadline: deadline,
                     resolution: resolution,
                     transaction: revealTransaction
@@ -232,7 +236,7 @@ internal final class ElementInflation {
 
             case .refreshing(let target, let treeElement, let deadline, let resolution):
                 let nextState = await stateAfterRefresh(
-                    target: target,
+                    identity: target,
                     treeElement: treeElement,
                     resolution: resolution,
                     method: method,
@@ -267,22 +271,37 @@ internal final class ElementInflation {
         guard !Task.isCancelled else {
             return .failed(.cancelled("element inflation was cancelled before committed target refresh"))
         }
-        guard let treeElement = vault.interfaceElement(heistId: target.heistId) else {
-            return .failed(.staleRefresh(
-                "committed target \(target.heistId) disappeared before \(method.rawValue) refresh",
-                failureKind: .targetUnavailable
-            ))
+        let treeElement: InterfaceTree.Element
+        switch target.crossCaptureTarget {
+        case .captureLocal:
+            guard let current = vault.interfaceElement(heistId: target.heistId) else {
+                return .failed(.staleRefresh(
+                    "committed target \(target.heistId) disappeared before \(method.rawValue) refresh",
+                    failureKind: .targetUnavailable
+                ))
+            }
+            treeElement = current
+        case .admitted(_, let semanticTarget):
+            switch resolveAdmittedSemanticTarget(
+                semanticTarget,
+                in: vault.latestObservation.tree
+            ) {
+            case .success(let current):
+                treeElement = current
+            case .failure(let failure):
+                return .failed(failure.inflationFailure)
+            }
         }
         let deadline = handoffDeadline(for: treeElement)
-        let initialState: State = vault.liveContains(heistId: target.heistId)
+        let initialState: State = vault.liveContains(heistId: treeElement.heistId)
             ? .refreshing(
-                target: target.target,
+                target: target.crossCaptureTarget,
                 treeElement: treeElement,
                 deadline: deadline,
                 resolution: target.subjectResolution
             )
             : .revealing(
-                target: target.target,
+                target: target.crossCaptureTarget,
                 treeElement: treeElement,
                 deadline: deadline,
                 resolution: target.subjectResolution
