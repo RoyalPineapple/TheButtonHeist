@@ -103,7 +103,8 @@ extension PredicateWait {
         trace: AccessibilityTrace,
         start: RuntimeElapsed.Instant
     ) -> HeistWaitResult {
-        guard let announcement = trace.capturedAnnouncements.first else {
+        let announcements = trace.capturedAnnouncements
+        guard let firstAnnouncement = announcements.first else {
             let message = Self.missingActionAnnouncementMessage(predicate)
             return .timedOut(
                 message: message,
@@ -114,6 +115,9 @@ extension PredicateWait {
                 )
             )
         }
+        let announcement = announcements.first {
+            predicate.matches($0.text)
+        } ?? firstAnnouncement
         let announcementText: ActionAnnouncementText
         do {
             announcementText = try ActionAnnouncementText(validating: announcement.text)
@@ -171,7 +175,7 @@ extension PredicateWait {
         baseline: SettledCapture? = nil,
         window: ObservationWindow? = nil,
         observedSequence: SettledObservationSequence? = nil,
-        timeoutMismatchBreadcrumb: String? = nil
+        timeoutMismatchMessage: String? = nil
     ) -> HeistWaitResult {
         let elapsed = Self.elapsedSeconds(since: start)
         let presenceMessage = success || observationSummary == nil
@@ -198,7 +202,7 @@ extension PredicateWait {
             presenceTimeoutMessage: presenceMessage,
             settledDiagnostics: settledDiagnostics,
             observedSequence: observedSequence,
-            timeoutMismatchBreadcrumb: timeoutMismatchBreadcrumb
+            timeoutMismatchMessage: timeoutMismatchMessage
         )
     }
 
@@ -219,7 +223,7 @@ extension PredicateWait {
         presenceTimeoutMessage: String? = nil,
         settledDiagnostics: SettledWaitDiagnostics? = nil,
         observedSequence: SettledObservationSequence? = nil,
-        timeoutMismatchBreadcrumb: String? = nil
+        timeoutMismatchMessage: String? = nil
     ) -> HeistWaitResult {
         let message = success
             ? waitSuccessMessage(for: step.predicate, elapsed: elapsed)
@@ -232,7 +236,7 @@ extension PredicateWait {
                     presenceTimeoutMessage: presenceTimeoutMessage,
                     settledDiagnostics: settledDiagnostics
                 ),
-                timeoutMismatchBreadcrumb,
+                timeoutMismatchMessage,
             ].compactMap { $0 }.joined(separator: "; ")
         switch (success, expectation) {
         case (true, .met(let expectation)):

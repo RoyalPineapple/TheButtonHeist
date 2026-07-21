@@ -29,13 +29,11 @@ internal struct PredicateWaitHistoricalDiagnostics: Sendable, Equatable {
         self.candidates = candidates
     }
 
-    internal var timeoutMismatchBreadcrumb: String? {
+    internal var timeoutMismatchMessage: String? {
         guard !candidates.isEmpty else { return nil }
         return candidates.map {
-            AutomaticTimeoutMismatchDiagnostic.breadcrumb(
-                candidateDescription: $0.rendered(using: .predicateMismatchCandidate),
-                exactPredicateDescription: predicate.description
-            )
+            "observed accessibility candidate \($0.rendered(using: .predicateMismatchCandidate)) "
+                + "did not match \(predicate.description)"
         }.joined(separator: "; ")
     }
 
@@ -71,7 +69,14 @@ internal struct PredicateWaitHistoricalDiagnostics: Sendable, Equatable {
 private extension ElementDiagnosticSummary {
     init?(waitMismatchCandidate element: HeistElement) {
         self.init(element: element)
-        guard !rendered(using: .predicateMismatchCandidate).isEmpty else { return nil }
+        guard label != nil
+                || identifier != nil
+                || value != nil
+                || hint != nil
+                || !traits.isEmpty
+                || !actions.isEmpty
+                || !rotors.isEmpty
+        else { return nil }
     }
 }
 

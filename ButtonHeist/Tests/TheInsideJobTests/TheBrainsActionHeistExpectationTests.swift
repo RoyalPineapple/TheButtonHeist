@@ -327,6 +327,40 @@ observation: .settledTrace(
         XCTAssertEqual(steps.last?.actionEvidence?.expectationResult?.announcement, "Confirmed")
     }
 
+    func testSettledTraceAnnouncementUsesFirstMatch() async throws {
+        let notifications = ["Saving", "Confirmed"].enumerated().map { index, text in
+            AccessibilityNotificationEvidence(
+                sequence: UInt64(index + 1),
+                kind: .announcement,
+                timestamp: Date(timeIntervalSince1970: Double(index)),
+                notificationData: .string(text),
+                associatedElement: .none
+            )
+        }
+        let interface = try XCTUnwrap(Interface(
+            admitting: Date(timeIntervalSince1970: 0),
+            tree: []
+        ))
+        let trace = AccessibilityTrace(interface: interface).appending(
+            interface,
+            transition: AccessibilityTrace.Transition(accessibilityNotifications: notifications)
+        )
+        let result = await brains.interactionCoordinator.waitForPredicate(
+            try resolvedWait(WaitStep(
+                predicate: .announcement("Confirmed"),
+                timeout: .milliseconds(1)
+            )),
+            initialTrace: trace
+        )
+
+        guard case .matched(let actionResult, let expectation) = result.outcome else {
+            return XCTFail("Expected matching announcement in settled trace")
+        }
+        XCTAssertTrue(actionResult.outcome.isSuccess)
+        XCTAssertEqual(actionResult.accessibilityTrace, trace)
+        XCTAssertEqual(expectation.actual, "Confirmed")
+    }
+
     func testStandaloneWaitStartsAtItsOwnFirstObservation() async throws {
         let saveObject = ActionActivationOverrideView()
         let saveElement = makeElement(label: "Save", traits: .button)
