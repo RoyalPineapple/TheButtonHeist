@@ -80,12 +80,40 @@ where Evidence: Sendable & Equatable {
             return await waitForAnnouncementPredicate(
                 announcement,
                 step: step,
-                initialTrace: initialTrace,
+                initialTrace: actionExpectationContext == nil ? initialTrace : nil,
                 start: start,
                 timeout: step.timeout,
                 cursor: actionExpectationContext?.announcementCursor
                     ?? vault.accessibilityNotifications.cursor()
             )
+        }
+
+        if let contextReduction = reduceActionContext(
+            for: step,
+            context: actionExpectationContext
+        ) {
+            switch contextReduction {
+            case .matched(let reduction):
+                return waitResult(
+                    for: step,
+                    trace: reduction.trace,
+                    observationSummary: reduction.observation.summary,
+                    expectation: reduction.expectation,
+                    start: start,
+                    success: true,
+                    baseline: reduction.changeBaseline,
+                    window: reduction.observationWindow,
+                    observedSequence: reduction.observation.event.sequence
+                )
+            case .unmatched:
+                break
+            case .unavailable(let error):
+                return unavailableActionContextResult(
+                    for: step,
+                    context: actionExpectationContext,
+                    error: error
+                )
+            }
         }
 
         if let traceEvaluation = initialTraceChangeEvaluation(
@@ -102,23 +130,6 @@ where Evidence: Sendable & Equatable {
             )
         }
 
-        if let contextEvaluation = actionContextChangeEvaluation(
-            for: step,
-            context: actionExpectationContext
-        ) {
-            return waitResult(
-                for: step,
-                trace: contextEvaluation.window.trace,
-                observationSummary: contextEvaluation.observation.summary,
-                expectation: contextEvaluation.expectation,
-                start: start,
-                success: true,
-                baseline: contextEvaluation.window.baseline,
-                window: contextEvaluation.window,
-                observedSequence: contextEvaluation.observation.event.sequence
-            )
-        }
-
         return await execute(
             start: start,
             timeout: step.timeout.seconds,
@@ -128,6 +139,29 @@ where Evidence: Sendable & Equatable {
                 start: start
             ),
             onReadyToPoll: onReadyToPoll
+        )
+    }
+
+    private func unavailableActionContextResult(
+        for step: ResolvedWaitRuntimeInput,
+        context: ActionExpectationContext?,
+        error: ObservationHistoryReadError
+    ) -> HeistWaitResult {
+        let message = "Action expectation observation history unavailable: \(error)"
+        let traceEvidence = context.flatMap {
+            AccessibilityTraceEvidence(
+                trace: AccessibilityTrace(captures: [$0.preActionCapture.capture]),
+                completeness: .incomplete
+            )
+        }
+        return .failed(
+            failureKind: .actionFailed,
+            message: message,
+            traceEvidence: traceEvidence,
+            expectation: ExpectationResult.Unmet(
+                predicate: step.predicateExpression,
+                actual: message
+            )
         )
     }
 

@@ -441,7 +441,7 @@ observation: .settledTrace(
         )
         let expectationContext = ActionExpectationContext(
             preActionCapture: baseline,
-            observations: [],
+            throughObservationCursor: baseline.cursor,
             announcementCursor: .origin
         )
         var waitRequests: [TheBrains.HeistRuntimeWaitRequest] = []
@@ -486,6 +486,42 @@ observation: .settledTrace(
         XCTAssertEqual(step.actionEvidence?.expectationResult?.method, .wait)
         XCTAssertEqual(step.reportExpectation?.met, false)
         XCTAssertNil(step.actionEvidence?.expectationResult?.accessibilityTrace)
+    }
+
+    func testActionExpectationRejectsUnavailableObservationBound() async throws {
+        let baselineEvent = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            .makeForTests()
+        )
+        let baseline = try XCTUnwrap(baselineEvent.settledCapture)
+        let unavailableCursor = ObservationCursor(
+            generation: baseline.cursor.generation,
+            scope: baseline.cursor.scope,
+            sequence: baseline.cursor.sequence + 1,
+            capture: baseline.capture,
+            notificationSequence: baseline.cursor.notificationSequence
+        )
+        let context = ActionExpectationContext(
+            preActionCapture: baseline,
+            throughObservationCursor: unavailableCursor,
+            announcementCursor: .origin
+        )
+
+        let result = await brains.interactionCoordinator.waitForPredicate(
+            try resolvedWait(WaitStep(
+                predicate: .changed(.elements()),
+                timeout: 1
+            )),
+            actionExpectationContext: context
+        )
+
+        guard case .unmatched(let actionResult, let expectation) = result.outcome else {
+            return XCTFail("Expected unavailable action observation evidence to fail")
+        }
+        XCTAssertEqual(actionResult.outcome.failureKind, .actionFailed)
+        XCTAssertTrue(
+            actionResult.message?.hasPrefix("Action expectation observation history unavailable:") == true
+        )
+        XCTAssertEqual(expectation.actual, actionResult.message)
     }
 
     func testTemporalActionExpectationCarriesUnavailableBaselineWithoutReplacement() async throws {

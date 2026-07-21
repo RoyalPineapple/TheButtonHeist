@@ -5,10 +5,10 @@ import ThePlans
 import TheScore
 
 extension PredicateWait {
-    internal struct ActionContextChangeEvaluation {
-        internal let observation: SettledObservationEvidence
-        internal let expectation: ExpectationResult
-        internal let window: ObservationWindow
+    internal enum ActionContextReduction {
+        case matched(PredicateObservationReduction)
+        case unmatched
+        case unavailable(ObservationHistoryReadError)
     }
 
     internal func initialTraceChangeEvaluation(
@@ -25,39 +25,49 @@ extension PredicateWait {
         return step.predicate.evaluate(in: evidence).expectation(for: step.predicateExpression)
     }
 
-    internal func actionContextChangeEvaluation(
+    internal func reduceActionContext(
         for step: ResolvedWaitRuntimeInput,
         context: ActionExpectationContext?
-    ) -> ActionContextChangeEvaluation? {
-        guard case .changed = step.predicate.core,
-              let context else { return nil }
+    ) -> ActionContextReduction? {
+        guard case .changed = step.predicate.core, let context else { return nil }
 
-        for index in context.observations.indices {
-            let window: ObservationWindow
-            do {
-                window = try ObservationWindow(
-                    baseline: context.preActionCapture,
-                    retainedEntries: Array(context.observations[...index])
-                )
-            } catch {
-                return nil
-            }
-            let observation = actionEvidenceProjector.projectSettledEvidence(
-                from: context.observations[index].event
-            )
-            let expectation = PredicateObservationEvidence(
-                observation: observation,
-                baseline: context.preActionCapture,
-                window: window
-            ).evaluate(step.predicate, expression: step.predicateExpression)
-            guard expectation.met else { continue }
-            return ActionContextChangeEvaluation(
-                observation: observation,
-                expectation: expectation,
-                window: window
-            )
+        var stream = PredicateObservationStreamState()
+        var cursor = context.preActionCapture.cursor
+        let upperBound = context.throughObservationCursor
+        guard upperBound.scope == cursor.scope,
+              upperBound.sequence >= cursor.sequence else {
+            return .unavailable(.cursorUnavailable(upperBound))
         }
-        return nil
+        while cursor != upperBound {
+            let entry: ObservationEntry
+            switch vault.semanticObservationStream.readRetainedObservation(
+                after: cursor,
+                scope: cursor.scope
+            ) {
+            case .entry(let retained):
+                guard retained.cursor.sequence <= upperBound.sequence else {
+                    return .unavailable(.cursorUnavailable(upperBound))
+                }
+                entry = retained
+            case .pending:
+                return .unavailable(.cursorUnavailable(upperBound))
+            case .failure(let error):
+                return .unavailable(error)
+            }
+            let reduction = reduceObservation(
+                actionEvidenceProjector.projectSettledEvidence(from: entry.event),
+                predicate: step.predicate,
+                predicateExpression: step.predicateExpression,
+                baselineSeed: .supplied(context.preActionCapture),
+                stream: stream
+            )
+            stream = reduction.state
+            if reduction.reduction.expectation.met {
+                return .matched(reduction.reduction)
+            }
+            cursor = entry.cursor
+        }
+        return .unmatched
     }
 
 }

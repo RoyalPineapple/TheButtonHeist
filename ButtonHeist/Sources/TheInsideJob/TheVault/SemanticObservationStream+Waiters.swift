@@ -80,6 +80,13 @@ extension SemanticObservationStream {
         observationStore.retainedEntries(scope: scope)
     }
 
+    internal func readRetainedObservation(
+        after cursor: ObservationCursor,
+        scope: SemanticObservationScope
+    ) -> ObservationHistoryRead {
+        observationStore.read(after: cursor, scope: scope)
+    }
+
     internal func settledCapture(
         scope: SemanticObservationScope,
         at sequence: SettledObservationSequence

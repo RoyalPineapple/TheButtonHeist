@@ -6,16 +6,21 @@ import TheScore
 
 internal struct ActionExpectationContext: Sendable, Equatable {
     internal let preActionCapture: SettledCapture
-    internal let observations: [ObservationEntry]
+    internal let throughObservationCursor: ObservationCursor
     internal let announcementCursor: AccessibilityNotificationCursor
 
-    internal func recording(_ retainedEntries: [ObservationEntry]) -> ActionExpectationContext {
-        ActionExpectationContext(
+    internal func bounded(through cursor: ObservationCursor) -> ActionExpectationContext {
+        precondition(
+            cursor.scope == preActionCapture.cursor.scope,
+            "action expectation observation bound must keep its baseline scope"
+        )
+        precondition(
+            cursor.sequence >= preActionCapture.cursor.sequence,
+            "action expectation observation bound cannot precede its baseline"
+        )
+        return ActionExpectationContext(
             preActionCapture: preActionCapture,
-            observations: retainedEntries.filter {
-                $0.cursor.scope == preActionCapture.cursor.scope
-                    && $0.cursor.sequence > preActionCapture.cursor.sequence
-            },
+            throughObservationCursor: cursor,
             announcementCursor: announcementCursor
         )
     }
@@ -326,10 +331,11 @@ extension TheBrains {
             postActionCommitScope: postActionCommitScope,
             notificationWindow: notificationWindow
         )
-        let completedExpectationContext = actionExpectationContext.map {
-            $0.recording(vault.semanticObservationStream.retainedObservationEntries(
-                scope: $0.preActionCapture.cursor.scope
-            ))
+        let completedExpectationContext = actionExpectationContext.map { context in
+            let cursor = vault.semanticObservationStream.latestCommittedObservationCursor(
+                scope: context.preActionCapture.cursor.scope
+            ) ?? context.preActionCapture.cursor
+            return context.bounded(through: cursor)
         }
         return RuntimeActionExecution(
             result: actionResult,
@@ -351,7 +357,7 @@ extension TheBrains {
         }
         return ActionExpectationContext(
             preActionCapture: settledCapture,
-            observations: [],
+            throughObservationCursor: settledCapture.cursor,
             announcementCursor: announcementCursor
         )
     }

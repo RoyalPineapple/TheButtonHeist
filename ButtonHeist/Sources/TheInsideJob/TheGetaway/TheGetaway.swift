@@ -349,15 +349,15 @@ final class TheGetaway {
         insideJobLogger.debug("InterfaceObservation requested")
 
         switch await brains.captureScreenPayload(mode: mode) {
-        case .success(let success):
+        case .success(let payload, context: _):
             await sendMessage(
-                .screen(success.payload),
+                .screen(payload),
                 requestId: requestId,
                 respond: respond,
                 generation: generation
             )
             insideJobLogger.debug(
-                "InterfaceObservation sent: \(success.payload.pngData.count) base64 characters"
+                "InterfaceObservation sent: \(payload.pngData.count) base64 characters"
             )
         case .failure(let failure):
             let message: ServerErrorMessage
