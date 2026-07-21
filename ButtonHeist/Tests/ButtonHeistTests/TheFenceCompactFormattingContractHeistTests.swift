@@ -278,6 +278,64 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertEqual(try node.string("message"), "Unknown screen")
     }
 
+    @ButtonHeistActor
+    func testTimeoutMismatchUsesCanonicalFailureAcrossPresentations() async throws {
+        let predicate = AccessibilityPredicate.exists(.label("Ticket saved."))
+        let breadcrumb = #"observed accessibility candidate label="Ticket saved., Dismiss" traits=[staticText] "#
+            + #"did not match exists(target(predicate(label="Ticket saved.")))"#
+        let message = "timed out waiting for exact predicate; \(breadcrumb)"
+        let plan = try HeistPlan(body: [
+            .wait(WaitStep(predicate: predicate, timeout: 1)),
+        ])
+        let step = HeistResultFixture.wait(
+            actionResult: .failure(payload: .wait, failureKind: .timeout, message: message),
+            expectation: ExpectationResult(met: false, predicate: predicate, actual: "element not found"),
+            failure: HeistFailureDetail(
+                category: .wait,
+                contract: "wait predicate is met before timeout",
+                observed: message,
+                expected: predicate.description
+            )
+        )
+        let report = HeistReport.project(result: try HeistResult(steps: [step], durationMs: 1))
+        let response = FenceResponse.heistExecution(plan: plan, report: report)
+        let node = try XCTUnwrap(try publicJSONProbe(response).object("report").array("nodes").first)
+        let (fence, _) = makeConnectedFence()
+
+        XCTAssertEqual(try node.object("failure").string("observed"), message)
+        XCTAssertTrue(response.compactFormatted().contains(breadcrumb), response.compactFormatted())
+        XCTAssertTrue(response.humanFormatted().contains(breadcrumb), response.humanFormatted())
+        let junit = fence.junitReport(for: report, heistName: "toast").junitXML()
+        XCTAssertTrue(junit.contains(#"observed accessibility candidate label=&quot;Ticket saved., Dismiss&quot;"#))
+        XCTAssertTrue(junit.contains(#"did not match exists(target(predicate(label=&quot;Ticket saved.&quot;)))"#))
+        try node.assertMissing("historicalDiagnostics")
+        try node.assertMissing("continuity")
+    }
+
+    func testHumanTimeoutWithoutCandidatePreservesLegacyBytes() throws {
+        let predicate = AccessibilityPredicate.exists(.label("Done"))
+        let plan = try HeistPlan(body: [.wait(WaitStep(predicate: predicate, timeout: 1))])
+        let step = HeistResultFixture.wait(
+            actionResult: .failure(payload: .wait, failureKind: .timeout, message: "timed out"),
+            expectation: ExpectationResult(met: false, predicate: predicate, actual: "element not found"),
+            failure: HeistFailureDetail(
+                category: .wait,
+                contract: "wait predicate is met before timeout",
+                observed: "timed out",
+                expected: predicate.description
+            )
+        )
+        let response = FenceResponse.heistExecution(
+            plan: plan,
+            report: HeistReport.project(result: try HeistResult(steps: [step], durationMs: 1))
+        )
+
+        XCTAssertEqual(
+            response.humanFormatted(),
+            "Heist: 1 top-level step(s) executed in 1ms (stopped at $.body[0]) [expectations: 0/1 met]"
+        )
+    }
+
     func testAbortedHeistOutputCountsOnlyResultNodes() throws {
         let plan = try HeistPlan(body: [
             .warn(WarnStep(message: "before")),

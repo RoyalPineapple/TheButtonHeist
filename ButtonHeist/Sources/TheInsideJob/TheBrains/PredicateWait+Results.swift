@@ -207,14 +207,17 @@ extension PredicateWait {
     ) -> HeistWaitResult {
         let message = success
             ? waitSuccessMessage(for: step.predicate, elapsed: elapsed)
-            : waitTimeoutMessage(
-                for: step,
-                expectation: expectation,
-                observationSummary: observationSummary,
-                elapsed: elapsed,
-                presenceTimeoutMessage: presenceTimeoutMessage,
-                settledDiagnostics: settledDiagnostics
-            )
+            : [
+                waitTimeoutMessage(
+                    for: step,
+                    expectation: expectation,
+                    observationSummary: observationSummary,
+                    elapsed: elapsed,
+                    presenceTimeoutMessage: presenceTimeoutMessage,
+                    settledDiagnostics: settledDiagnostics
+                ),
+                historicalWaitDiagnostics?.timeoutMismatchBreadcrumb,
+            ].compactMap { $0 }.joined(separator: "; ")
         switch (success, expectation) {
         case (true, .met(let expectation)):
             return .matched(

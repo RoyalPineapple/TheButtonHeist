@@ -70,6 +70,41 @@ extension TheBrainsPipelineTests {
         XCTAssertNotEqual(mismatch.candidate.label, "Ticket saved.")
     }
 
+    func testTimeoutReportIncludesObservedCombinedLabelMismatch() async throws {
+        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            makeScreen(elements: [("Ticket saved., Dismiss", .staticText, "toast")])
+        )
+        let wait = WaitStep(
+            predicate: .exists(.label("Ticket saved.")),
+            timeout: try .milliseconds(1)
+        )
+        let result = await brains.interactionCoordinator.waitForPredicate(try resolvedWait(wait))
+        guard case .unmatched(let actionResult, let expectation) = result.outcome else {
+            return XCTFail("Expected the exact predicate to time out")
+        }
+        let evidence = HeistWaitEvidence.failed(
+            .init(executed: actionResult, expectation: expectation.result),
+            finalSummary: expectation.actual
+        )
+        let step = HeistExecutionStepResult.wait(
+            path: "$.body[0]",
+            durationMs: 1,
+            predicate: wait.predicate,
+            timeout: wait.timeout,
+            completion: .failed(
+                evidence: .observed(.init(admitted: evidence)),
+                failure: brains.standaloneWaitFailureDetail(wait: wait, result: result)
+            )
+        )
+        let report = HeistReport.project(result: try HeistResult(steps: [step], durationMs: 1))
+        let failure = try XCTUnwrap(report.failure?.message)
+
+        XCTAssertTrue(failure.contains(#"observed accessibility candidate label="Ticket saved., Dismiss""#), failure)
+        XCTAssertTrue(failure.contains(#"did not match exists(target(predicate(label="Ticket saved.")))"#), failure)
+        XCTAssertEqual(report.failure?.actionKind, .timeout)
+        XCTAssertFalse(report.summary.expectations?.allMet == true)
+    }
+
     func testRepeatedTimeoutCandidatesCoalesceAcrossObservationProvenance() throws {
         let predicate = AccessibilityPredicate.exists(.label("Ticket saved."))
         let step = try resolvedWait(WaitStep(predicate: predicate, timeout: .milliseconds(1)))

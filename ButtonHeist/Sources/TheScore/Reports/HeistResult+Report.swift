@@ -30,6 +30,13 @@ public struct HeistReport: Sendable, Equatable {
         public let actionKind: ActionFailure.Kind?
 
         package var diagnosticMessage: String { message ?? detail.observed }
+
+        package var automaticTimeoutMismatchBreadcrumb: String? {
+            let prefix = "observed accessibility candidate "
+            guard actionKind == .timeout,
+                  let range = diagnosticMessage.range(of: prefix) else { return nil }
+            return String(diagnosticMessage[range.lowerBound...])
+        }
     }
 
     public struct Node: Sendable, Equatable {

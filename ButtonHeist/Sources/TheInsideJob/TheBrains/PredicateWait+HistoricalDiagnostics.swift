@@ -51,6 +51,13 @@ extension HistoricalWaitDiagnostics {
 
         internal let predicateMismatches: [PredicateMismatch]
 
+        internal var timeoutMismatchBreadcrumb: String {
+            predicateMismatches.map {
+                "observed accessibility candidate \($0.candidate.diagnosticDescription) "
+                    + "did not match \($0.exactPredicate.description)"
+            }.joined(separator: "; ")
+        }
+
         internal init?(predicateMismatches: [PredicateMismatch]) {
             guard !predicateMismatches.isEmpty,
                   predicateMismatches.count <= Self.maximumCandidateCount else {
@@ -154,6 +161,15 @@ internal struct PredicateWaitHistoricalDiagnostics: Sendable, Equatable {
 }
 
 private extension HistoricalWaitDiagnostics.SemanticCandidate {
+    var diagnosticDescription: String {
+        [
+            label.map { "label=\(String(reflecting: $0))" },
+            value.map { "value=\(String(reflecting: $0))" },
+            hint.map { "hint=\(String(reflecting: $0))" },
+            traits.isEmpty ? nil : "traits=[\(traits.map(\.rawValue).joined(separator: ", "))]",
+        ].compactMap { $0 }.joined(separator: " ")
+    }
+
     init?(element: HeistElement) {
         self.init(
             label: element.label,
