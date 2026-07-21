@@ -822,10 +822,12 @@ final class TheBrainsScrollTests: XCTestCase {
 
     final class RecordingScrollView: UIScrollView {
         var setContentOffsetAnimations: [Bool] = []
+        var requestedContentOffsets: [CGPoint] = []
         var onSetContentOffset: (@MainActor (RecordingScrollView) -> Void)?
 
         override func setContentOffset(_ contentOffset: CGPoint, animated: Bool) {
             setContentOffsetAnimations.append(animated)
+            requestedContentOffsets.append(contentOffset)
             onSetContentOffset?(self)
             super.setContentOffset(contentOffset, animated: animated)
         }

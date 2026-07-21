@@ -235,7 +235,7 @@ extension TheBrainsScrollTests {
         XCTAssertEqual(dispatchedOwnerPaths, [TreePath([0])])
     }
 
-    func testKnownTargetMissingOwnerContinuesAncestorPaging() async throws {
+    func testMissingInnerOwnerPagesAncestorWithoutReusingInnerContentPoint() async throws {
         let rootView = UIView()
         rootView.backgroundColor = .white
         let scrollView = RecordingScrollView(
@@ -253,6 +253,7 @@ extension TheBrainsScrollTests {
 
         let ancestorPath = TreePath([0])
         let missingOwnerPath = ancestorPath.appending(0)
+        let innerContentPoint = CGPoint(x: 160, y: 1_000)
         let container = makeScrollableContainer(
             contentSize: scrollView.contentSize,
             frame: scrollView.frame
@@ -268,7 +269,7 @@ extension TheBrainsScrollTests {
             heistId: "known_paged_target",
             scrollMembership: .init(containerPath: missingOwnerPath, index: nil),
             observedScrollContentActivationPoint: observedContentActivationPoint(
-                CGPoint(x: 160, y: 1_000),
+                innerContentPoint,
                 ownerPath: missingOwnerPath
             ),
             element: knownElement
@@ -308,7 +309,9 @@ extension TheBrainsScrollTests {
             scrollableContainerViewsByPath: [ancestorPath: .init(view: scrollView)]
         )
         installSyntheticObservation(initialObservation)
-        scrollView.onSetContentOffset = { _ in
+        var movementTargets: [ObjectIdentifier] = []
+        scrollView.onSetContentOffset = { scrollView in
+            movementTargets.append(ObjectIdentifier(scrollView))
             self.visibleObservationSource.observation = revealedObservation
         }
         let sourceTarget = try resolvedTarget(.label("Paged Target").and(.traits([.button])))
@@ -329,88 +332,110 @@ extension TheBrainsScrollTests {
         guard case .revealed(_, let exploration) = result else {
             return XCTFail("Expected ancestor paging to reveal the target, got \(result)")
         }
+        let expectedPageOffset = scrollView.bounds.height
+            - CGFloat(ScrollContainerMetrics.pageOverlap) - scrollView.adjustedContentInset.top
+        let innerSeedOffset = innerContentPoint.y - scrollView.bounds.height / 2
         XCTAssertEqual(exploration.progress.scrollCount, 1)
-        XCTAssertEqual(
-            scrollView.contentOffset.y,
-            -scrollView.adjustedContentInset.top
-                + scrollView.bounds.height
-                - CGFloat(ScrollContainerMetrics.pageOverlap),
-            accuracy: 0.01
-        )
+        XCTAssertEqual(movementTargets, [ObjectIdentifier(scrollView)])
+        XCTAssertEqual(scrollView.requestedContentOffsets, [CGPoint(x: 0, y: expectedPageOffset)])
+        XCTAssertNotEqual(scrollView.requestedContentOffsets[0].y, innerSeedOffset, accuracy: 0.01)
+        XCTAssertEqual(scrollView.contentOffset.y, expectedPageOffset, accuracy: 0.01)
     }
 
-    func testSeededKnownTargetScanCanSatisfyWithoutPaging() async throws {
-        let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
-        scrollView.contentSize = CGSize(width: 320, height: 1_600)
-        let targetId: HeistId = "settings_button"
-        let observedPoint = observedContentActivationPoint(
-            CGPoint(x: 160, y: 1_200),
-            ownerPath: TreePath([0])
-        )
-        installScreenWithOffViewport(
-            visible: .init(makeElement(label: "Visible"), heistId: "visible_element"),
-            offscreen: .init(
-                makeElement(label: "Settings", traits: .button),
-                heistId: targetId,
-                contentActivationPoint: observedPoint.point.cgPoint,
-                scrollView: scrollView
-            )
-        )
-
-        let visibleTarget = AccessibilityElement.make(
-            label: "Settings",
-            traits: .button,
-            frame: CGRect(x: 40, y: 160, width: 220, height: 44)
-        )
-        let currentTargetId = targetId
-        let visibleEntry = InterfaceTree.Element(
-            heistId: currentTargetId,
-            scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: nil),
-            element: visibleTarget
-        )
-        let revealedObservation = InterfaceObservation.makeForTests(
-            elements: [currentTargetId: visibleEntry],
-            hierarchy: [
-                .container(makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame), children: [
-                    .element(visibleTarget, traversalIndex: 0)
-                ])
-            ],
-            containerNamesByPath: [TreePath([0]): "known_offscreen_scroll"],
-            heistIdsByPath: [TreePath([0, 0]): currentTargetId],
-            elementRefs: [currentTargetId: .init(object: retainedLiveObject(), scrollView: scrollView)],
-            containerRefsByPath: [TreePath([0]): .init(object: scrollView)],
-            firstResponderHeistId: nil,
-            scrollableContainerViewsByPath: [TreePath([0]): .init(view: scrollView)]
-        )
-        scrollView.onSetContentOffset = { _ in
-            self.visibleObservationSource.observation = revealedObservation
+    func testSiblingOwnerMismatchDoesNotDispatchSeed() async throws {
+        let fixture = siblingOwnerMismatchFixture()
+        let window = try installModalWindow(rootView: fixture.rootView)
+        defer {
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
         }
+        await brains.tripwire.yieldFrames(3)
 
-        let initialElement = try XCTUnwrap(brains.vault.interfaceElement(heistId: targetId))
-        let sourceTarget = try resolvedTarget(.label("Settings").and(.traits([.button])))
+        installSyntheticObservation(fixture.initialObservation)
+        fixture.siblingScrollView.onSetContentOffset = { _ in
+            self.visibleObservationSource.observation = fixture.revealedObservation
+        }
+        let sourceTarget = try resolvedTarget(
+            .label("Sibling Target").and(.traits([.button]))
+        )
         guard case .admitted(let admittedTarget) = brains.navigation.elementInflation.admitSemanticTarget(
             sourceTarget,
-            selectedElement: initialElement
+            selectedElement: fixture.targetEntry
         ) else {
-            return XCTFail("Expected Settings to admit a portable semantic target")
+            return XCTFail("Expected sibling target to admit")
         }
-        let rootScrollViewID = try XCTUnwrap(
-            brains.vault.liveScrollViewIDForRevealing(heistId: targetId)
-        )
 
         let result = await brains.navigation.scanForSemanticTarget(.init(
             target: admittedTarget,
-            revealRootScrollViewID: rootScrollViewID,
+            revealRootScrollViewID: ObjectIdentifier(fixture.ancestorScrollView),
             deadline: semanticRevealDeadline(),
-            observedScrollContentActivationPoint: observedPoint
+            observedScrollContentActivationPoint: fixture.targetEntry.observedScrollContentActivationPoint
+        ))
+
+        guard case .revealed(_, let exploration) = result else {
+            return XCTFail("Expected sibling paging to reveal the target, got \(result)")
+        }
+        let expectedPageOffset = -fixture.siblingScrollView.adjustedContentInset.top
+            + fixture.siblingScrollView.bounds.height
+            - CGFloat(ScrollContainerMetrics.pageOverlap)
+        let storedSeedOffset = fixture.storedInnerPoint.y
+            - fixture.siblingScrollView.bounds.height / 2
+        XCTAssertEqual(exploration.progress.scrollCount, 1)
+        XCTAssertTrue(fixture.ancestorScrollView.requestedContentOffsets.isEmpty)
+        XCTAssertEqual(fixture.siblingScrollView.requestedContentOffsets.count, 1)
+        XCTAssertEqual(fixture.siblingScrollView.requestedContentOffsets[0].x, 0, accuracy: 0.01)
+        XCTAssertEqual(fixture.siblingScrollView.requestedContentOffsets[0].y, expectedPageOffset, accuracy: 0.01)
+        XCTAssertNotEqual(fixture.siblingScrollView.requestedContentOffsets[0].y, storedSeedOffset, accuracy: 0.01)
+    }
+
+    func testLaterOwnerMatchConsumesStoredSeed() async throws {
+        let fixture = laterOwnerMatchFixture()
+        installSyntheticObservation(fixture.unavailableObservation)
+        let sourceTarget = try resolvedTarget(
+            .label("Later Owner Target").and(.traits([.button]))
+        )
+        guard case .admitted(let admittedTarget) = brains.navigation.elementInflation.admitSemanticTarget(
+            sourceTarget,
+            selectedElement: fixture.targetEntry
+        ) else {
+            return XCTFail("Expected later owner target to admit")
+        }
+
+        let unavailableResult = await brains.navigation.scanForSemanticTarget(.init(
+            target: admittedTarget,
+            revealRootScrollViewID: ObjectIdentifier(fixture.ownerScrollView),
+            deadline: semanticRevealDeadline(),
+            observedScrollContentActivationPoint: fixture.observedPoint
+        ))
+
+        guard case .unavailable = unavailableResult else {
+            return XCTFail("Expected absent owner request to remain unavailable, got \(unavailableResult)")
+        }
+        XCTAssertTrue(fixture.ownerScrollView.requestedContentOffsets.isEmpty)
+        XCTAssertTrue(fixture.decoyScrollView.requestedContentOffsets.isEmpty)
+
+        installSyntheticObservation(fixture.matchingObservation)
+        fixture.ownerScrollView.onSetContentOffset = { _ in
+            self.visibleObservationSource.observation = fixture.revealedObservation
+        }
+
+        let result = await brains.navigation.scanForSemanticTarget(.init(
+            target: admittedTarget,
+            revealRootScrollViewID: ObjectIdentifier(fixture.ownerScrollView),
+            deadline: semanticRevealDeadline(),
+            observedScrollContentActivationPoint: fixture.observedPoint
         ))
 
         guard case .revealed(let currentElement, let exploration) = result else {
-            return XCTFail("Expected seeded semantic scan to reveal the target, got \(result)")
+            return XCTFail("Expected restored owner to consume the seed, got \(result)")
         }
-        XCTAssertEqual(currentElement.heistId, currentTargetId)
+        XCTAssertEqual(currentElement.heistId, fixture.targetEntry.heistId)
         XCTAssertEqual(exploration.progress.scrollCount, 0)
-        XCTAssertEqual(scrollView.setContentOffsetAnimations, [false])
+        XCTAssertEqual(fixture.ownerScrollView.setContentOffsetAnimations, [false])
+        XCTAssertEqual(fixture.ownerScrollView.requestedContentOffsets.count, 1)
+        XCTAssertEqual(fixture.ownerScrollView.requestedContentOffsets[0].x, 0, accuracy: 0.01)
+        XCTAssertEqual(fixture.ownerScrollView.requestedContentOffsets[0].y, 1_000, accuracy: 0.01)
+        XCTAssertTrue(fixture.decoyScrollView.requestedContentOffsets.isEmpty)
     }
 
     func testSemanticRevealAdoptsCurrentIdAfterCandidateReordering() async throws {
@@ -610,6 +635,211 @@ extension TheBrainsScrollTests {
             failure.message
         )
         XCTAssertTrue(failure.message.contains("element inflation failed [noRevealPath]"))
+    }
+
+    private struct SiblingOwnerMismatchFixture {
+        let rootView: UIView
+        let ancestorScrollView: RecordingScrollView
+        let siblingScrollView: RecordingScrollView
+        let storedInnerPoint: CGPoint
+        let targetEntry: InterfaceTree.Element
+        let initialObservation: InterfaceObservation
+        let revealedObservation: InterfaceObservation
+    }
+
+    private func siblingOwnerMismatchFixture() -> SiblingOwnerMismatchFixture {
+        let rootView = UIView()
+        rootView.backgroundColor = .white
+        let ancestorScrollView = RecordingScrollView(
+            frame: CGRect(x: 0, y: 0, width: 320, height: 400)
+        )
+        ancestorScrollView.contentSize = CGSize(width: 320, height: 1_200)
+        let siblingScrollView = RecordingScrollView(
+            frame: CGRect(x: 0, y: 0, width: 320, height: 300)
+        )
+        siblingScrollView.contentSize = CGSize(width: 320, height: 1_800)
+        ancestorScrollView.addSubview(siblingScrollView)
+        rootView.addSubview(ancestorScrollView)
+
+        let ancestorPath = TreePath([0])
+        let siblingPath = ancestorPath.appending(0)
+        let storedOwnerPath = ancestorPath.appending(1)
+        let storedInnerPoint = CGPoint(x: 160, y: 1_300)
+        let ancestorContainer = makeScrollableContainer(
+            contentSize: ancestorScrollView.contentSize,
+            frame: ancestorScrollView.frame
+        )
+        let siblingContainer = makeScrollableContainer(
+            contentSize: siblingScrollView.contentSize,
+            frame: siblingScrollView.frame
+        )
+        let targetElement = makeElement(label: "Sibling Target", traits: .button)
+        let targetEntry = InterfaceTree.Element(
+            heistId: "sibling_target",
+            scrollMembership: .init(containerPath: siblingPath, index: nil),
+            observedScrollContentActivationPoint: observedContentActivationPoint(
+                storedInnerPoint,
+                ownerPath: storedOwnerPath
+            ),
+            element: targetElement
+        )
+        let containerRefs: [TreePath: LiveCapture.ContainerRef] = [
+            ancestorPath: .init(object: ancestorScrollView),
+            siblingPath: .init(object: siblingScrollView),
+        ]
+        let containerMemberships: [TreePath: InterfaceTree.ScrollMembership] = [
+            siblingPath: .init(containerPath: ancestorPath, index: nil),
+        ]
+        let scrollableViews: [TreePath: LiveCapture.ScrollableViewRef] = [
+            ancestorPath: .init(view: ancestorScrollView),
+            siblingPath: .init(view: siblingScrollView),
+        ]
+        let initialObservation = InterfaceObservation.makeForTests(
+            elements: [targetEntry.heistId: targetEntry],
+            hierarchy: [
+                .container(ancestorContainer, children: [
+                    .container(siblingContainer, children: []),
+                ]),
+            ],
+            containerRefsByPath: containerRefs,
+            containerScrollMembershipsByPath: containerMemberships,
+            firstResponderHeistId: nil,
+            scrollableContainerViewsByPath: scrollableViews
+        )
+        let revealedEntry = InterfaceTree.Element(
+            heistId: targetEntry.heistId,
+            scrollMembership: .init(containerPath: siblingPath, index: nil),
+            element: targetElement
+        )
+        let revealedObservation = InterfaceObservation.makeForTests(
+            elements: [revealedEntry.heistId: revealedEntry],
+            hierarchy: [
+                .container(ancestorContainer, children: [
+                    .container(siblingContainer, children: [
+                        .element(targetElement, traversalIndex: 0),
+                    ]),
+                ]),
+            ],
+            heistIdsByPath: [siblingPath.appending(0): revealedEntry.heistId],
+            elementRefs: [
+                revealedEntry.heistId: .init(
+                    object: retainedLiveObject(),
+                    scrollView: siblingScrollView
+                ),
+            ],
+            containerRefsByPath: containerRefs,
+            containerScrollMembershipsByPath: containerMemberships,
+            firstResponderHeistId: nil,
+            scrollableContainerViewsByPath: scrollableViews
+        )
+        return SiblingOwnerMismatchFixture(
+            rootView: rootView,
+            ancestorScrollView: ancestorScrollView,
+            siblingScrollView: siblingScrollView,
+            storedInnerPoint: storedInnerPoint,
+            targetEntry: targetEntry,
+            initialObservation: initialObservation,
+            revealedObservation: revealedObservation
+        )
+    }
+
+    private struct LaterOwnerMatchFixture {
+        let ownerScrollView: RecordingScrollView
+        let decoyScrollView: RecordingScrollView
+        let observedPoint: InterfaceTree.ObservedScrollContentActivationPoint
+        let targetEntry: InterfaceTree.Element
+        let unavailableObservation: InterfaceObservation
+        let matchingObservation: InterfaceObservation
+        let revealedObservation: InterfaceObservation
+    }
+
+    private func laterOwnerMatchFixture() -> LaterOwnerMatchFixture {
+        let ownerPath = TreePath([0])
+        let decoyPath = TreePath([1])
+        let ownerScrollView = RecordingScrollView(
+            frame: CGRect(x: 0, y: 0, width: 320, height: 400)
+        )
+        ownerScrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let decoyScrollView = RecordingScrollView(
+            frame: CGRect(x: 0, y: 420, width: 320, height: 400)
+        )
+        decoyScrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let ownerContainer = makeScrollableContainer(
+            contentSize: ownerScrollView.contentSize,
+            frame: ownerScrollView.frame
+        )
+        let decoyContainer = makeScrollableContainer(
+            contentSize: decoyScrollView.contentSize,
+            frame: decoyScrollView.frame
+        )
+        let targetId: HeistId = "later_owner_target"
+        let targetElement = makeElement(label: "Later Owner Target", traits: .button)
+        let observedPoint = observedContentActivationPoint(
+            CGPoint(x: 160, y: 1_200),
+            ownerPath: ownerPath
+        )
+        let targetEntry = InterfaceTree.Element(
+            heistId: targetId,
+            scrollMembership: .init(containerPath: ownerPath, index: nil),
+            observedScrollContentActivationPoint: observedPoint,
+            element: targetElement
+        )
+        let unavailableObservation = InterfaceObservation.makeForTests(
+            elements: [targetId: targetEntry],
+            hierarchy: [
+                .container(ownerContainer, children: []),
+                .container(decoyContainer, children: []),
+            ],
+            firstResponderHeistId: nil
+        )
+        let containerRefs: [TreePath: LiveCapture.ContainerRef] = [
+            ownerPath: .init(object: ownerScrollView),
+            decoyPath: .init(object: decoyScrollView),
+        ]
+        let scrollableViews: [TreePath: LiveCapture.ScrollableViewRef] = [
+            ownerPath: .init(view: ownerScrollView),
+            decoyPath: .init(view: decoyScrollView),
+        ]
+        let matchingObservation = InterfaceObservation.makeForTests(
+            elements: [targetId: targetEntry],
+            hierarchy: [
+                .container(ownerContainer, children: []),
+                .container(decoyContainer, children: []),
+            ],
+            containerRefsByPath: containerRefs,
+            firstResponderHeistId: nil,
+            scrollableContainerViewsByPath: scrollableViews
+        )
+        let visibleEntry = InterfaceTree.Element(
+            heistId: targetId,
+            scrollMembership: .init(containerPath: ownerPath, index: nil),
+            element: targetElement
+        )
+        let revealedObservation = InterfaceObservation.makeForTests(
+            elements: [targetId: visibleEntry],
+            hierarchy: [
+                .container(ownerContainer, children: [
+                    .element(targetElement, traversalIndex: 0),
+                ]),
+                .container(decoyContainer, children: []),
+            ],
+            heistIdsByPath: [ownerPath.appending(0): targetId],
+            elementRefs: [
+                targetId: .init(object: retainedLiveObject(), scrollView: ownerScrollView),
+            ],
+            containerRefsByPath: containerRefs,
+            firstResponderHeistId: nil,
+            scrollableContainerViewsByPath: scrollableViews
+        )
+        return LaterOwnerMatchFixture(
+            ownerScrollView: ownerScrollView,
+            decoyScrollView: decoyScrollView,
+            observedPoint: observedPoint,
+            targetEntry: targetEntry,
+            unavailableObservation: unavailableObservation,
+            matchingObservation: matchingObservation,
+            revealedObservation: revealedObservation
+        )
     }
 
     private func inflateSemanticDuplicate(
