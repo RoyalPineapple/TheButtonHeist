@@ -50,6 +50,9 @@ extension FenceResponse {
             if let expectation = step.expectation {
                 line += expectation.met ? " ✓" : " ✗"
             }
+            if let breadcrumb = step.continuity?.breadcrumb {
+                line += " [\(breadcrumb)]"
+            }
             text += "\n\(line)"
             if !detailLines.isEmpty {
                 text += "\n" + detailLines.joined(separator: "\n")

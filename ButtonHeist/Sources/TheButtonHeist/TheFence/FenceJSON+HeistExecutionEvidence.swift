@@ -7,6 +7,7 @@ struct PublicHeistReportEvidenceJSON: Encodable {
     }
 
     let evidence: HeistReport.Evidence
+    let continuity: HeistReport.Continuity?
     let profile: ProjectionProfile
 
     func encode(to encoder: Encoder) throws {
@@ -18,7 +19,14 @@ struct PublicHeistReportEvidenceJSON: Encodable {
                 forKey: .action
             )
         case .wait(let evidence):
-            try container.encode(PublicHeistWaitEvidenceJSON(evidence: evidence, profile: profile), forKey: .wait)
+            try container.encode(
+                PublicHeistWaitEvidenceJSON(
+                    evidence: evidence,
+                    continuity: continuity,
+                    profile: profile
+                ),
+                forKey: .wait
+            )
         case .caseSelection(let evidence):
             try container.encode(
                 PublicHeistCaseSelectionEvidenceJSON(evidence: evidence, profile: profile),
@@ -41,7 +49,12 @@ struct PublicHeistReportEvidenceJSON: Encodable {
             )
         case .invocation(let invocation, let evidence):
             try container.encode(
-                PublicHeistInvocationEvidenceJSON(invocation: invocation, evidence: evidence, profile: profile),
+                PublicHeistInvocationEvidenceJSON(
+                    invocation: invocation,
+                    evidence: evidence,
+                    continuity: continuity,
+                    profile: profile
+                ),
                 forKey: .invocation
             )
         case .warning(let warning):
@@ -89,10 +102,11 @@ private struct PublicHeistActionEvidenceJSON: Encodable {
 
 private struct PublicHeistWaitEvidenceJSON: Encodable {
     private enum CodingKeys: String, CodingKey {
-        case outcome, result, expectation, baselineSummary, finalSummary
+        case outcome, result, expectation, baselineSummary, finalSummary, continuity
     }
 
     let evidence: HeistWaitEvidence
+    let continuity: HeistReport.Continuity?
     let profile: ProjectionProfile
 
     func encode(to encoder: Encoder) throws {
@@ -109,6 +123,47 @@ private struct PublicHeistWaitEvidenceJSON: Encodable {
         try container.encode(PublicHeistEvidenceOutputs.expectation(evidence.expectation), forKey: .expectation)
         try container.encodeIfPresent(evidence.baselineSummary, forKey: .baselineSummary)
         try container.encodeIfPresent(evidence.finalSummary, forKey: .finalSummary)
+        let presentedContinuity = continuity?.status == .notProvided ? nil : continuity
+        try container.encodeIfPresent(
+            presentedContinuity.map(PublicHeistContinuityJSON.init),
+            forKey: .continuity
+        )
+    }
+}
+
+private struct PublicHeistContinuityJSON: Encodable {
+    private enum CodingKeys: String, CodingKey {
+        case status, reason, match, actionBoundary, observedThrough
+    }
+
+    let continuity: HeistReport.Continuity
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(continuity.status.rawValue, forKey: .status)
+        try container.encodeIfPresent(continuity.fallbackReason, forKey: .reason)
+        try container.encodeIfPresent(continuity.match.map(PublicHeistContinuityMatchJSON.init), forKey: .match)
+        try container.encodeIfPresent(continuity.actionBoundary, forKey: .actionBoundary)
+        try container.encodeIfPresent(continuity.observedThrough, forKey: .observedThrough)
+    }
+}
+
+private struct PublicHeistContinuityMatchJSON: Encodable {
+    private enum CodingKeys: String, CodingKey {
+        case kind, position
+    }
+
+    let match: HeistReport.ContinuityMatch
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch match {
+        case .current:
+            try container.encode("current", forKey: .kind)
+        case .backdated(let position):
+            try container.encode("backdated", forKey: .kind)
+            try container.encode(position, forKey: .position)
+        }
     }
 }
 
@@ -214,6 +269,7 @@ private struct PublicHeistInvocationEvidenceJSON: Encodable {
 
     let invocation: HeistInvocationStep
     let evidence: HeistInvocationEvidence
+    let continuity: HeistReport.Continuity?
     let profile: ProjectionProfile
 
     func encode(to encoder: Encoder) throws {
@@ -235,7 +291,13 @@ private struct PublicHeistInvocationEvidenceJSON: Encodable {
             forKey: .expectation
         )
         try container.encodeIfPresent(
-            evidence.waitEvidence.map { PublicHeistWaitEvidenceJSON(evidence: $0, profile: profile) },
+            evidence.waitEvidence.map {
+                PublicHeistWaitEvidenceJSON(
+                    evidence: $0,
+                    continuity: continuity,
+                    profile: profile
+                )
+            },
             forKey: .expectationEvidence
         )
     }

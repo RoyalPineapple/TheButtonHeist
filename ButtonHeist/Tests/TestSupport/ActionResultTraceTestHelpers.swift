@@ -125,7 +125,8 @@ package enum HeistResultFixture {
             predicate: .exists(.label("Done"))
         ),
         durationMs: ElapsedMilliseconds = 1,
-        failure: HeistFailureDetail? = nil
+        failure: HeistFailureDetail? = nil,
+        continuity: EvidenceContinuity.WaitEvidence? = nil
     ) -> HeistExecutionStepResult {
         let evidence: HeistWaitEvidence
         if failure == nil {
@@ -136,7 +137,7 @@ package enum HeistResultFixture {
                   ) else {
                 preconditionFailure("passed wait fixture requires matched evidence")
             }
-            evidence = .matched(matched)
+            evidence = .matched(matched, continuity: continuity)
         } else {
             guard let unmatched = HeistWaitEvidence.UnmatchedCheck(
                 actionResult: actionResult,
@@ -144,7 +145,7 @@ package enum HeistResultFixture {
             ) else {
                 preconditionFailure("failed wait fixture requires unmatched evidence")
             }
-            evidence = .failed(unmatched)
+            evidence = .failed(unmatched, continuity: continuity)
         }
 
         let predicate = expectation.predicate

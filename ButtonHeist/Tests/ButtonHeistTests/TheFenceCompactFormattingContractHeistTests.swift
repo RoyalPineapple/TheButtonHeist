@@ -7,6 +7,105 @@ import TheScore
 
 extension TheFenceCompactFormattingContractTests {
 
+    func testContinuityBreadcrumbsUseCanonicalReportFactsAcrossTextFormats() throws {
+        let backdated = continuity(
+            match: .backdated(position: .init(source: .settledObservation, sequence: 11))
+        )
+        let response = try continuityResponse(
+            step: HeistResultFixture.wait(continuity: backdated)
+        )
+
+        let expected = "continuity=applied match=backdated@settled_observation:11 "
+            + "scope=settled_observation:10...settled_observation:12"
+        XCTAssertTrue(response.compactFormatted().contains(expected), response.compactFormatted())
+        XCTAssertTrue(response.humanFormatted().contains(expected), response.humanFormatted())
+    }
+
+    func testFallbackFailureBreadcrumbReportsReasonWithoutClaimingMatch() throws {
+        let fallback = EvidenceContinuity.WaitEvidence(
+            status: .fallback(reason: .observationHistoryUnavailable),
+            match: .current
+        )
+        let step = HeistResultFixture.wait(
+            expectation: ExpectationResult(
+                met: false,
+                predicate: .exists(.label("Done")),
+                actual: "not observed"
+            ),
+            failure: HeistFailureDetail(
+                category: .wait,
+                contract: "wait predicate is satisfied",
+                observed: "timed out"
+            ),
+            continuity: fallback
+        )
+        let response = try continuityResponse(step: step)
+        let output = response.compactFormatted()
+
+        XCTAssertTrue(output.contains("continuity=fallback:observation_history_unavailable"), output)
+        XCTAssertFalse(output.contains("match=current"), output)
+    }
+
+    @ButtonHeistActor
+    func testJUnitUsesContinuityBreadcrumbForPassedSystemOutputAndFailureDiagnostics() async throws {
+        let fence = TheFence(configuration: .init())
+        let passedReport = continuityReport(
+            step: HeistResultFixture.wait(continuity: continuity(match: .current))
+        )
+        let passedXML = fence.junitReport(for: passedReport, heistName: "continuity-pass").junitXML()
+
+        XCTAssertTrue(passedXML.contains("<system-out>continuity=applied match=current"), passedXML)
+
+        let failedStep = HeistResultFixture.wait(
+            expectation: ExpectationResult(
+                met: false,
+                predicate: .exists(.label("Done")),
+                actual: "not observed"
+            ),
+            failure: HeistFailureDetail(
+                category: .wait,
+                contract: "wait predicate is satisfied",
+                observed: "timed out"
+            ),
+            continuity: continuity(match: nil)
+        )
+        let failedXML = fence.junitReport(
+            for: continuityReport(step: failedStep),
+            heistName: "continuity-failure"
+        ).junitXML()
+
+        XCTAssertTrue(
+            failedXML.contains(
+                "continuity=applied scope=settled_observation:10...settled_observation:12"
+            ),
+            failedXML
+        )
+    }
+
+    private func continuity(
+        match: EvidenceContinuity.MatchSource?
+    ) -> EvidenceContinuity.WaitEvidence {
+        EvidenceContinuity.WaitEvidence(
+            status: .applied(reference: EvidenceContinuity.Reference()),
+            match: match,
+            actionBoundary: .init(source: .settledObservation, sequence: 10),
+            observedThrough: .init(source: .settledObservation, sequence: 12)
+        )
+    }
+
+    private func continuityResponse(step: HeistExecutionStepResult) throws -> FenceResponse {
+        .heistExecution(
+            plan: try HeistPlan(body: [
+                .wait(WaitStep(predicate: .exists(.label("Done")), timeout: 1)),
+            ]),
+            report: continuityReport(step: step)
+        )
+    }
+
+    private func continuityReport(step: HeistExecutionStepResult) -> HeistReport {
+        HeistReport.project(result: HeistResultFixture.result(steps: [step]))
+    }
+
     private struct MeasurementExpectation: Equatable {
         let name: String
         let valueMs: Int

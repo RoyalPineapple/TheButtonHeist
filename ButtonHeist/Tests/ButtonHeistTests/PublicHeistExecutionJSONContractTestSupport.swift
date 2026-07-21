@@ -22,8 +22,10 @@ enum PublicHeistExecutionJSONContractFixture {
         )
     }
 
-    static func wait() throws -> HeistExecutionStepResult {
-        let evidence = try waitEvidence()
+    static func wait(
+        continuity: EvidenceContinuity.WaitEvidence? = nil
+    ) throws -> HeistExecutionStepResult {
+        let evidence = try waitEvidence(continuity: continuity)
         return .wait(
             path: "$.body[0]",
             durationMs: 5,
@@ -226,7 +228,9 @@ enum PublicHeistExecutionJSONContractFixture {
         )
     }
 
-    private static func waitEvidence() throws -> HeistWaitEvidence {
+    private static func waitEvidence(
+        continuity: EvidenceContinuity.WaitEvidence? = nil
+    ) throws -> HeistWaitEvidence {
         let expectation = ExpectationResult.Met(
             predicate: donePredicate,
             actual: "Done visible"
@@ -238,7 +242,8 @@ enum PublicHeistExecutionJSONContractFixture {
         return .matched(
             check,
             baselineSummary: "Loading",
-            finalSummary: "Done visible"
+            finalSummary: "Done visible",
+            continuity: continuity
         )
     }
 }
