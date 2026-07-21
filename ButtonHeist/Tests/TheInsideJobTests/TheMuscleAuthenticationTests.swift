@@ -46,7 +46,12 @@ final class TheMuscleAuthenticationTests: TheMuscleTestCase {
         let pingData = try JSONEncoder().encode(RequestEnvelope(message: .ping))
         let (respond, responses) = collectResponses()
 
-        _ = await muscle.admitClientMessage(1, data: pingData, respond: respond)
+        _ = await muscle.admitClientMessage(
+            1,
+            data: pingData,
+            respond: respond,
+            generation: deliveryGeneration
+        )
 
         let authFailure = responses()
             .compactMap(decodeServerMessage)
@@ -61,7 +66,12 @@ final class TheMuscleAuthenticationTests: TheMuscleTestCase {
     func testMalformedPreAuthMessageSendsErrorBeforeDisconnect() async {
         let (respond, responses) = collectResponses()
 
-        _ = await muscle.admitClientMessage(1, data: Data("not json".utf8), respond: respond)
+        _ = await muscle.admitClientMessage(
+            1,
+            data: Data("not json".utf8),
+            respond: respond,
+            generation: deliveryGeneration
+        )
 
         let validationError = responses()
             .compactMap(decodeServerMessage)

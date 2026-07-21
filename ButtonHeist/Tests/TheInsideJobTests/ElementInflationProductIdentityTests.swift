@@ -153,6 +153,42 @@ extension ElementInflationProductTests {
         ])
     }
 
+    func testSemanticAdmissionKeepsDuplicateIdentityAcrossVisibilityAndCandidateOrder() throws {
+        let fixture = try installAmbiguousActivationFixture()
+        defer { fixture.cleanup() }
+        let target = try AccessibilityTarget.element(
+            .label("Duplicate"),
+            .identifier("duplicate_first"),
+            traits: [.button]
+        ).resolve(in: .empty)
+        let firstVisible = try observation(for: [fixture.first, fixture.second])
+        let firstOffscreen = InterfaceObservation.makeForTests(
+            tree: firstVisible.tree,
+            liveCapture: .makeForTests()
+        )
+
+        let before = try admittedSemanticTarget(target, observation: firstOffscreen)
+
+        fixture.first.superview?.insertSubview(fixture.second, belowSubview: fixture.first)
+        fixture.window.layoutIfNeeded()
+        let reorderedVisible = try observation(for: [fixture.second, fixture.first])
+        let during = try admittedSemanticTarget(target, observation: reorderedVisible)
+        let after = try admittedSemanticTarget(
+            target,
+            observation: InterfaceObservation.makeForTests(
+                tree: reorderedVisible.tree,
+                liveCapture: .makeForTests()
+            )
+        )
+
+        XCTAssertEqual(before.target, target)
+        XCTAssertEqual(during.target, target)
+        XCTAssertEqual(after.target, target)
+        XCTAssertNil(before.scrollContainerPath)
+        XCTAssertNil(during.scrollContainerPath)
+        XCTAssertNil(after.scrollContainerPath)
+    }
+
     private func installAmbiguousActivationFixture() throws -> AmbiguousActivationFixture {
         let windowScene = try requireForegroundWindowScene()
         let viewController = UIViewController()
@@ -216,6 +252,29 @@ extension ElementInflationProductTests {
                 object: view
             )
         })
+    }
+
+    private func admittedSemanticTarget(
+        _ target: ResolvedAccessibilityTarget,
+        observation: InterfaceObservation
+    ) throws -> ElementInflation.AdmittedSemanticTarget {
+        brains.vault.installObservationForTesting(observation)
+        let resolvedElement: InterfaceTree.Element? = {
+            guard case .resolved(.element(let element)) = brains.vault.resolveTarget(target) else {
+                return nil
+            }
+            return element
+        }()
+        let selected = try XCTUnwrap(resolvedElement)
+        let decision = brains.navigation.elementInflation.admitSemanticTarget(
+            target,
+            selectedElement: selected
+        )
+        let admittedTarget: ElementInflation.AdmittedSemanticTarget? = {
+            guard case .admitted(let admitted) = decision else { return nil }
+            return admitted
+        }()
+        return try XCTUnwrap(admittedTarget, "Expected semantic target admission, got \(decision)")
     }
 }
 

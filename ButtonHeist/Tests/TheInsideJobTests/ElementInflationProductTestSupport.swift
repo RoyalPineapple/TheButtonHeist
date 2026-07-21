@@ -142,7 +142,8 @@ final class ElementInflationProductTests: XCTestCase {
         )
         let observedActivationPoint = try observedContentActivationPoint(
             origin: fixture.frameOrigin,
-            size: fixture.target.bounds.size
+            size: fixture.target.bounds.size,
+            ownerPath: scrollContainerPath
         )
         let entry = InterfaceTree.Element(
             heistId: fixture.knownHeistId,
@@ -164,12 +165,13 @@ final class ElementInflationProductTests: XCTestCase {
 
     func observedContentActivationPoint(
         origin: CGPoint,
-        size: CGSize
+        size: CGSize,
+        ownerPath: TreePath
     ) throws -> InterfaceTree.ObservedScrollContentActivationPoint {
         try XCTUnwrap(InterfaceTree.ObservedScrollContentActivationPoint(CGPoint(
             x: origin.x + size.width / 2,
             y: origin.y + size.height / 2
-        )))
+        ), ownerPath: ownerPath))
     }
     func firstLiveScrollableContainerPath(in observation: InterfaceObservation) -> TreePath? {
         for item in observation.liveCapture.hierarchy.scrollablePathIndexedContainers {

@@ -47,6 +47,15 @@ extension ElementInflation {
         let treeElement = liveTarget.treeElement
         let description = Navigation.ScrollTargetDescription(treeElement).description
         let settledSequence = vault.semanticObservationStream.latestCommittedEvent?.sequence
+        let admittedTarget: Result<AdmittedSemanticTarget, SemanticTargetResolutionFailure>
+        if let admitted = inflatedTarget.identity.admittedSemanticTarget {
+            admittedTarget = .success(admitted)
+        } else {
+            admittedTarget = admittedSemanticTarget(
+                inflatedTarget.target,
+                selectedElement: treeElement
+            )
+        }
         let placement = await scrollActivationPointIntoBounds(
             liveTarget.activationPoint,
             in: vault.liveScrollView(for: treeElement),
@@ -67,9 +76,17 @@ extension ElementInflation {
                 requireOnscreenActivationPoint: true
             )
         case .success(.moved):
+            let target: AdmittedSemanticTarget
+            switch admittedTarget {
+            case .success(let admitted):
+                target = admitted
+            case .failure(let failure):
+                return .failed(failure.inflationFailure)
+            }
             switch await awaitLiveTargetRefresh(
-                for: inflatedTarget.target,
-                treeElement: inflatedTarget.treeElement,
+                for: target,
+                sourceTarget: inflatedTarget.target,
+                pinnedElement: treeElement,
                 method: method,
                 after: settledSequence,
                 deadline: inflatedTarget.deadline,
@@ -245,16 +262,29 @@ extension ElementInflation {
                 )
             }
             guard vault.refreshLiveCapture() != nil else { continue }
-            guard let currentTreeElement = vault.interfaceElement(
-                heistId: inflatedTarget.treeElement.heistId
-            ) else {
-                return .failed(.staleRefresh(
-                    "selected target \(inflatedTarget.treeElement.heistId.rawValue) left committed semantic truth"
-                ))
+            let currentTreeElement: InterfaceTree.Element
+            switch stableTarget.identity {
+            case .captureLocal:
+                guard let current = vault.interfaceElement(
+                    heistId: stableTarget.treeElement.heistId
+                ) else {
+                    return .failed(.staleRefresh(
+                        "selected target \(stableTarget.treeElement.heistId.rawValue) "
+                            + "left committed semantic truth"
+                    ))
+                }
+                currentTreeElement = current
+            case .admitted(_, let target):
+                switch resolveAdmittedSemanticTarget(target, in: vault.latestObservation.tree) {
+                case .success(let current):
+                    currentTreeElement = current
+                case .failure(let failure):
+                    return .failed(failure.inflationFailure)
+                }
             }
             let currentTarget: InflatedElementTarget
             switch stableActionTarget(
-                target: inflatedTarget.target,
+                identity: stableTarget.identity,
                 treeElement: currentTreeElement,
                 deadline: deadline,
                 resolution: stableTarget.resolution
@@ -333,7 +363,7 @@ extension ElementInflation {
     }
 
     private func stableActionTarget(
-        target: ResolvedAccessibilityTarget,
+        identity: CrossCaptureTarget,
         treeElement: InterfaceTree.Element,
         deadline: SemanticObservationDeadline,
         resolution: ActionSubjectResolution
@@ -348,7 +378,7 @@ extension ElementInflation {
             return .unavailable
         }
         return .resolved(InflatedElementTarget(
-            target: target,
+            identity: identity,
             treeElement: treeElement,
             liveTarget: liveTarget,
             deadline: deadline,

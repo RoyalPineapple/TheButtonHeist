@@ -298,6 +298,15 @@ import Testing
             "invalid override: \(invalidValue)"
         )
     }
+    for invalidLowerBoundary in [-Double.leastNonzeroMagnitude, 0] {
+        #expect(throws: WaitTimeoutError.self) {
+            _ = try WaitTimeout(validatingSeconds: invalidLowerBoundary)
+        }
+    }
+    let smallestPositiveBoundary = Double.leastNonzeroMagnitude
+    #expect(
+        try WaitTimeout(validatingSeconds: smallestPositiveBoundary).seconds == smallestPositiveBoundary
+    )
     #expect(try WaitTimeout(validatingSeconds: 120, maximumSeconds: configuredMaximum).seconds == 120)
     #expect(throws: WaitTimeoutError.self) {
         _ = try WaitTimeout(

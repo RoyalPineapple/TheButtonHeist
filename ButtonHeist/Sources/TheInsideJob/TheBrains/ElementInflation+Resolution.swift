@@ -6,6 +6,17 @@ import ThePlans
 
 extension ElementInflation {
 
+    internal func admitSemanticTarget(
+        _ sourceTarget: ResolvedAccessibilityTarget,
+        selectedElement: InterfaceTree.Element
+    ) -> SemanticTargetAdmissionDecision {
+        AdmittedSemanticTarget.admit(
+            sourceTarget,
+            selectedElement: selectedElement,
+            resolve: vault.resolveTarget
+        )
+    }
+
     internal func stateAfterRefresh(
         target: ResolvedAccessibilityTarget,
         treeElement: InterfaceTree.Element,
@@ -14,9 +25,34 @@ extension ElementInflation {
         activationPointPolicy: ActivationPointPolicy,
         deadline: SemanticObservationDeadline
     ) async -> State {
-        switch resolveFreshElementTarget(
-            target: target,
+        await stateAfterRefresh(
+            identity: .captureLocal(target),
             treeElement: treeElement,
+            resolution: resolution,
+            method: method,
+            activationPointPolicy: activationPointPolicy,
+            deadline: deadline
+        )
+    }
+
+    internal func stateAfterRefresh(
+        identity: CrossCaptureTarget,
+        treeElement: InterfaceTree.Element,
+        resolution: ActionSubjectResolution,
+        method: ActionMethod,
+        activationPointPolicy: ActivationPointPolicy,
+        deadline: SemanticObservationDeadline
+    ) async -> State {
+        let currentElement: InterfaceTree.Element
+        switch resolveCurrentElement(for: identity, pinnedElement: treeElement) {
+        case .success(let resolved):
+            currentElement = resolved
+        case .failure(let failure):
+            return .failed(failure)
+        }
+        switch resolveFreshElementTarget(
+            identity: identity,
+            treeElement: currentElement,
             method: method,
             deadline: deadline,
             resolution: resolution
@@ -30,9 +66,20 @@ extension ElementInflation {
             let refreshedResolution = resolution.adding(reason.adjustment)
             let pendingRetry: (reason: RetryReason, resolution: ActionSubjectResolution)
             if vault.refreshLiveCapture() != nil {
+                let refreshedElement: InterfaceTree.Element
+                switch resolveCurrentElement(
+                    for: identity,
+                    pinnedElement: currentElement,
+                    semanticTree: vault.latestObservation.tree
+                ) {
+                case .success(let resolved):
+                    refreshedElement = resolved
+                case .failure(let failure):
+                    return .failed(failure)
+                }
                 let refreshed = resolveCurrentLiveElementTarget(
-                    treeElement: treeElement,
-                    target: target,
+                    treeElement: refreshedElement,
+                    identity: identity,
                     method: method,
                     deadline: deadline,
                     resolution: refreshedResolution
@@ -54,14 +101,29 @@ extension ElementInflation {
             } else {
                 pendingRetry = (reason, refreshedResolution)
             }
-            switch await awaitLiveTargetRefresh(
-                for: target,
-                treeElement: treeElement,
-                method: method,
-                after: vault.semanticObservationStream.latestCommittedEvent?.sequence,
-                deadline: deadline,
-                resolution: pendingRetry.resolution
-            ) {
+            let refresh: TargetRefreshTerminal
+            switch identity {
+            case .captureLocal(let target):
+                refresh = await awaitLiveTargetRefresh(
+                    for: target,
+                    treeElement: currentElement,
+                    method: method,
+                    after: vault.semanticObservationStream.latestCommittedEvent?.sequence,
+                    deadline: deadline,
+                    resolution: pendingRetry.resolution
+                )
+            case .admitted(let sourceTarget, let semanticTarget):
+                refresh = await awaitLiveTargetRefresh(
+                    for: semanticTarget,
+                    sourceTarget: sourceTarget,
+                    pinnedElement: currentElement,
+                    method: method,
+                    after: vault.semanticObservationStream.latestCommittedEvent?.sequence,
+                    deadline: deadline,
+                    resolution: pendingRetry.resolution
+                )
+            }
+            switch refresh {
             case .inflated(let inflatedTarget):
                 return await stateAfterResolvedFreshTarget(
                     inflatedTarget,
@@ -78,6 +140,26 @@ extension ElementInflation {
             }
         case .failure(let failure):
             return .failed(failure)
+        }
+    }
+
+    private func resolveCurrentElement(
+        for identity: CrossCaptureTarget,
+        pinnedElement: InterfaceTree.Element,
+        semanticTree: InterfaceTree? = nil
+    ) -> Result<InterfaceTree.Element, ElementInflationFailure> {
+        switch identity {
+        case .captureLocal:
+            return .success(pinnedElement)
+        case .admitted(_, let target):
+            let resolution = semanticTree.map { resolveAdmittedSemanticTarget(target, in: $0) }
+                ?? resolveAdmittedSemanticTarget(target)
+            switch resolution {
+            case .success(let current):
+                return .success(current)
+            case .failure(let failure):
+                return .failure(failure.inflationFailure)
+            }
         }
     }
 
@@ -156,19 +238,26 @@ extension ElementInflation {
 
     internal func resolveCurrentLiveElementTarget(
         treeElement: InterfaceTree.Element,
-        target: ResolvedAccessibilityTarget,
+        identity: CrossCaptureTarget,
         method: ActionMethod,
         deadline: SemanticObservationDeadline,
         resolution: ActionSubjectResolution
     ) -> FreshElementTargetResolution {
-        guard let committed = vault.interfaceElement(heistId: treeElement.heistId) else {
-            return .retry(.staleTarget)
+        let currentElement: InterfaceTree.Element
+        switch identity {
+        case .captureLocal:
+            guard let committed = vault.interfaceElement(heistId: treeElement.heistId) else {
+                return .retry(.staleTarget)
+            }
+            currentElement = committed
+        case .admitted:
+            currentElement = treeElement
         }
-        switch vault.resolveLiveActionTarget(for: committed) {
+        switch vault.resolveLiveActionTarget(for: currentElement) {
         case .resolved(let liveTarget):
             return .success(InflatedElementTarget(
-                target: target,
-                treeElement: committed,
+                identity: identity,
+                treeElement: currentElement,
                 liveTarget: liveTarget,
                 deadline: deadline,
                 resolution: resolution
@@ -179,22 +268,22 @@ extension ElementInflation {
             return .failure(.geometryNotActionable(
                 ActionCapabilityDiagnostic.gestureTargetUnavailable(
                     method: method,
-                    element: committed,
-                    isVisible: vault.viewportElementIDs.contains(committed.heistId)
+                    element: currentElement,
+                    isVisible: vault.currentLiveCapture.contains(heistId: currentElement.heistId)
                 )
             ))
         }
     }
 
     private func resolveFreshElementTarget(
-        target: ResolvedAccessibilityTarget,
+        identity: CrossCaptureTarget,
         treeElement: InterfaceTree.Element,
         method: ActionMethod,
         deadline: SemanticObservationDeadline,
         resolution: ActionSubjectResolution
     ) -> FreshElementTargetResolution {
         resolveLiveElementTarget(
-            target: target,
+            identity: identity,
             treeElement: treeElement,
             method: method,
             deadline: deadline,
@@ -203,7 +292,7 @@ extension ElementInflation {
     }
 
     private func resolveLiveElementTarget(
-        target: ResolvedAccessibilityTarget,
+        identity: CrossCaptureTarget,
         treeElement: InterfaceTree.Element,
         method: ActionMethod,
         deadline: SemanticObservationDeadline,
@@ -211,7 +300,7 @@ extension ElementInflation {
     ) -> FreshElementTargetResolution {
         resolveCurrentLiveElementTarget(
             treeElement: treeElement,
-            target: target,
+            identity: identity,
             method: method,
             deadline: deadline,
             resolution: resolution

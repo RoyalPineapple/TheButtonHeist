@@ -214,20 +214,58 @@ import ThePlans
         #expect(result.steps.map(\.status) == [.failed, .skipped, .passed])
     }
 
-    @Test func `codec admission rejects passed roots after abort`() throws {
-        let data = try resultData(
-            steps: [
-                HeistResultFixture.explicitFailure(path: "$.body[0]", message: "stop"),
-                HeistResultFixture.warning(path: "$.body[1]", message: "after"),
-            ]
+    @Test(
+        "post-terminal execution is rejected with both paths at every depth",
+        arguments: TerminalOrderDepth.allCases
+    )
+    func postTerminalNestedExecutionIsRejectedWithBothPaths(_ depth: TerminalOrderDepth) {
+        expectTerminalOrderAdmissionError(postTerminalFixture(at: depth))
+    }
+
+    @Test(arguments: TerminalOrderDepth.allCases)
+    func `decoded post-terminal execution is rejected with both paths at every depth`(
+        _ depth: TerminalOrderDepth
+    ) throws {
+        try expectTerminalOrderDecodeError(postTerminalFixture(at: depth))
+    }
+
+    @Test func `nested skipped siblings after abort remain admitted`() throws {
+        let children = [
+            HeistResultFixture.warning(
+                path: "$.body[0].conditional.cases[0].body[0]",
+                message: "before"
+            ),
+            HeistResultFixture.explicitFailure(
+                path: "$.body[0].conditional.cases[0].body[1]",
+                message: "stop"
+            ),
+            skippedWarning(path: "$.body[0].conditional.cases[0].body[2]"),
+        ]
+        let root = HeistResultFixture.conditional(
+            selection: firstCaseSelection(),
+            children: children
         )
 
-        try expectResultDecodeError(
-            data,
-            format: .json,
-            limits: .default,
-            containing: ["regular root cannot execute after abort", "$.body[1]", "$.body[0]"]
+        let result = try HeistResult(steps: [root], durationMs: 3)
+        let decoded = try HeistResultCodec.decode(try resultData(steps: [root], durationMs: 3))
+
+        #expect(result.steps.first?.children.map(\.status) == [.passed, .failed, .skipped])
+        #expect(decoded == result)
+    }
+
+    @Test func `codec admits a result at exact node and nesting limits`() throws {
+        let data = nestedResultData()
+        let limits = HeistResultCodecLimits(
+            maxJSONBytes: data.count,
+            maxGzipCompressedBytes: 1,
+            maxGzipDecompressedBytes: 1,
+            maxNodeCount: 2,
+            maxNestingDepth: 2
         )
+
+        let result = try HeistResultCodec.decode(data, format: .json, limits: limits)
+
+        #expect(result.steps.first?.children.count == 1)
     }
 
     @Test func `aggregate admission rejects failure capture before owning root`() throws {
@@ -546,6 +584,80 @@ import ThePlans
         }
     }
 
+    private func expectTerminalOrderAdmissionError(_ fixture: TerminalOrderFixture) {
+        let expected = HeistResultCodecError.incoherentExecutionEvidence(
+            path: fixture.offendingPath,
+            reason: "ordered sequence cannot execute after abort at \(fixture.terminalPath)"
+        )
+        #expect(throws: expected) {
+            _ = try HeistResult(steps: fixture.steps, durationMs: 1)
+        }
+    }
+
+    private func expectTerminalOrderDecodeError(_ fixture: TerminalOrderFixture) throws {
+        let data = try resultData(steps: fixture.steps)
+        do {
+            _ = try HeistResultCodec.decode(data)
+            Issue.record("Expected result decode to fail for \(fixture.depth)")
+        } catch DecodingError.dataCorrupted(let context) {
+            let expected = HeistResultCodecError.incoherentExecutionEvidence(
+                path: fixture.offendingPath,
+                reason: "ordered sequence cannot execute after abort at \(fixture.terminalPath)"
+            )
+            #expect(context.debugDescription == expected.description)
+        } catch {
+            Issue.record("Expected DecodingError.dataCorrupted for \(fixture.depth), got \(error)")
+        }
+    }
+
+    private func postTerminalFixture(at depth: TerminalOrderDepth) -> TerminalOrderFixture {
+        let paths = depth.paths
+        let terminal = HeistResultFixture.explicitFailure(
+            path: paths.terminal,
+            message: "stop"
+        )
+        let offending = HeistResultFixture.warning(
+            path: paths.offending,
+            message: "after"
+        )
+        let steps: [HeistExecutionStepResult]
+        switch depth {
+        case .root:
+            steps = [terminal, offending]
+        case .nested:
+            steps = [HeistResultFixture.conditional(
+                selection: firstCaseSelection(),
+                children: [terminal, offending]
+            )]
+        case .deeplyNested:
+            let inner = HeistResultFixture.conditional(
+                path: "$.body[0].conditional.cases[0].body[0]",
+                selection: firstCaseSelection(),
+                children: [terminal, offending]
+            )
+            steps = [HeistResultFixture.conditional(
+                selection: firstCaseSelection(),
+                children: [inner]
+            )]
+        }
+        return TerminalOrderFixture(
+            depth: depth,
+            steps: steps,
+            terminalPath: executionPath(paths.terminal),
+            offendingPath: executionPath(paths.offending)
+        )
+    }
+
+    private func firstCaseSelection() -> HeistCaseSelectionResult {
+        HeistCaseSelectionResult.selectingFirstMatch(
+            cases: [
+                HeistCaseMatchResult(predicate: .exists(.label("First")), met: true),
+            ],
+            ifNone: .noMatch,
+            elapsedMs: 1
+        )
+    }
+
     private struct RawResult: Encodable {
         let steps: [HeistExecutionStepResult]
         let durationMs: ElapsedMilliseconds
@@ -581,6 +693,41 @@ import ThePlans
             contract: "explicit heist failure",
             observed: observed
         )
+    }
+
+    private struct TerminalOrderFixture {
+        let depth: TerminalOrderDepth
+        let steps: [HeistExecutionStepResult]
+        let terminalPath: HeistExecutionPath
+        let offendingPath: HeistExecutionPath
+    }
+
+    enum TerminalOrderDepth: String, CaseIterable, Sendable {
+        case root
+        case nested
+        case deeplyNested
+
+        var paths: TerminalOrderPaths {
+            switch self {
+            case .root:
+                TerminalOrderPaths(terminal: "$.body[0]", offending: "$.body[1]")
+            case .nested:
+                TerminalOrderPaths(
+                    terminal: "$.body[0].conditional.cases[0].body[0]",
+                    offending: "$.body[0].conditional.cases[0].body[1]"
+                )
+            case .deeplyNested:
+                TerminalOrderPaths(
+                    terminal: "$.body[0].conditional.cases[0].body[0].conditional.cases[0].body[0]",
+                    offending: "$.body[0].conditional.cases[0].body[0].conditional.cases[0].body[1]"
+                )
+            }
+        }
+    }
+
+    struct TerminalOrderPaths {
+        let terminal: String
+        let offending: String
     }
 
 }

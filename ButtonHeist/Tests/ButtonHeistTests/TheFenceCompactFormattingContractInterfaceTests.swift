@@ -475,6 +475,184 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertEqual(tree.count, 2)
     }
 
+    func testScrollInventoryCompletenessMatchesCaptureBudgetBoundaries() throws {
+        let cases: [(
+            name: String,
+            totalElementCount: Int,
+            materializedElementCount: Int,
+            visibleElementBudget: Int,
+            expectedCompleteness: String
+        )] = [
+            ("zero-empty", 0, 0, 0, "full"),
+            ("zero-nonempty", 3, 0, 0, "truncated"),
+            ("below-cap", 2, 2, 3, "full"),
+            ("at-cap", 2, 2, 2, "full"),
+            ("above-cap", 3, 1, 2, "truncated"),
+        ]
+
+        for testCase in cases {
+            let interface = try scrollInventoryInterface(
+                totalElementCount: testCase.totalElementCount,
+                materializedElementCount: testCase.materializedElementCount
+            )
+            let publicInterface = PublicInterface(
+                interface: interface,
+                detail: .summary,
+                visibleElementBudget: testCase.visibleElementBudget
+            )
+            let json = try publicInterfaceJSONProbe(publicInterface)
+            let rendering = try json.object("rendering")
+            let container = try XCTUnwrap(try json.array("tree").first).object("container")
+            let compact = FenceResponse.compactInterface(
+                interface,
+                detail: .summary,
+                visibleElementBudget: testCase.visibleElementBudget
+            )
+            let completenessCount = max(
+                testCase.totalElementCount,
+                testCase.materializedElementCount
+            )
+
+            XCTAssertEqual(
+                try rendering.string("completeness"),
+                testCase.expectedCompleteness,
+                testCase.name
+            )
+            XCTAssertEqual(
+                try container.int("observedElementCount"),
+                completenessCount,
+                testCase.name
+            )
+            XCTAssertTrue(
+                compact.contains(#"── container "inventory_scroll" \#(completenessCount) elements ──"#),
+                "\(testCase.name): \(compact)"
+            )
+
+            if testCase.expectedCompleteness == "truncated" {
+                let truncation = try container.object("truncation")
+                let omittedElementCount = completenessCount - testCase.materializedElementCount
+                XCTAssertEqual(
+                    try truncation.int("observedElementCount"),
+                    completenessCount,
+                    testCase.name
+                )
+                XCTAssertEqual(
+                    try truncation.int("renderedElementCount"),
+                    testCase.materializedElementCount,
+                    testCase.name
+                )
+                XCTAssertEqual(
+                    try truncation.int("omittedElementCount"),
+                    omittedElementCount,
+                    testCase.name
+                )
+                XCTAssertTrue(
+                    compact.contains("⋮ \(omittedElementCount) more"),
+                    "\(testCase.name): \(compact)"
+                )
+            } else {
+                try container.assertMissing("truncation")
+                XCTAssertFalse(compact.contains("⋮"), "\(testCase.name): \(compact)")
+            }
+        }
+    }
+
+    func testScrollInventoryCompletenessSharesCaptureBudgetAcrossSiblingOwners() throws {
+        let interface = try siblingScrollInventoryInterface(
+            totalElementCount: 2,
+            materializedElementCounts: [2, 1]
+        )
+        let json = try publicInterfaceJSONProbe(PublicInterface(
+            interface: interface,
+            detail: .summary,
+            visibleElementBudget: 3
+        ))
+        let rendering = try json.object("rendering")
+        let containers = try json.array("tree").map { try $0.object("container") }
+        let compact = FenceResponse.compactInterface(
+            interface,
+            detail: .summary,
+            visibleElementBudget: 3
+        )
+
+        XCTAssertEqual(try rendering.string("completeness"), "truncated")
+        try containers[0].assertMissing("truncation")
+        let secondTruncation = try containers[1].object("truncation")
+        XCTAssertEqual(try secondTruncation.int("observedElementCount"), 2)
+        XCTAssertEqual(try secondTruncation.int("renderedElementCount"), 1)
+        XCTAssertEqual(try secondTruncation.int("omittedElementCount"), 1)
+        XCTAssertTrue(compact.contains(#"── container "inventory_scroll_0" 2 elements ──"#), compact)
+        XCTAssertTrue(compact.contains(#"── container "inventory_scroll_1" 2 elements ──"#), compact)
+        XCTAssertEqual(compact.components(separatedBy: "⋮ 1 more").count - 1, 1, compact)
+    }
+
+    func testNestedScrollInventoryCountAppliesOnlyToOwningContainer() throws {
+        let innerElements = (0..<2).map { index in
+            AccessibilityHierarchy.element(
+                makeTestAccessibilityElement(makeTestHeistElement(label: "Inner \(index)")),
+                traversalIndex: index
+            )
+        }
+        let innerScroll = AccessibilityHierarchy.container(
+            makeTestScrollableContainer(
+                contentWidth: 390,
+                contentHeight: 1_200,
+                frameWidth: 390,
+                frameHeight: 400
+            ),
+            children: innerElements
+        )
+        let outerElement = AccessibilityHierarchy.element(
+            makeTestAccessibilityElement(makeTestHeistElement(label: "Outer")),
+            traversalIndex: 2
+        )
+        let tree = [
+            AccessibilityHierarchy.container(
+                makeTestScrollableContainer(
+                    contentWidth: 390,
+                    contentHeight: 2_000,
+                    frameWidth: 390,
+                    frameHeight: 400
+                ),
+                children: [innerScroll, outerElement]
+            ),
+        ]
+        let inventory = try XCTUnwrap(ScrollInventory(totalElementCount: 5, visibleIndices: [4]))
+        let interface = try Interface(
+            timestamp: Date(timeIntervalSince1970: 0),
+            tree: tree,
+            annotations: InterfaceAnnotations(containers: [
+                InterfaceContainerAnnotation(path: TreePath([0]), containerName: "outer_scroll"),
+                InterfaceContainerAnnotation(
+                    path: TreePath([0, 0]),
+                    containerName: "inner_scroll",
+                    scrollInventory: inventory
+                ),
+            ])
+        )
+
+        let json = try publicInterfaceJSONProbe(PublicInterface(
+            interface: interface,
+            detail: .summary,
+            visibleElementBudget: 10
+        ))
+        let rendering = try json.object("rendering")
+        let outer = try XCTUnwrap(try json.array("tree").first).object("container")
+        let inner = try XCTUnwrap(try outer.array("children").first).object("container")
+        let compact = FenceResponse.compactInterface(
+            interface,
+            detail: .summary,
+            visibleElementBudget: 10
+        )
+
+        XCTAssertEqual(try rendering.string("completeness"), "full")
+        XCTAssertEqual(try outer.int("observedElementCount"), 3)
+        XCTAssertEqual(try inner.int("observedElementCount"), 5)
+        XCTAssertTrue(compact.contains(#"── container "outer_scroll" 3 elements ──"#), compact)
+        XCTAssertTrue(compact.contains(#"── container "inner_scroll" 5 elements ──"#), compact)
+        XCTAssertFalse(compact.contains("⋮"), compact)
+    }
+
     func testCompactContainerEscapesLabelsAndContainerNames() {
         let interface = makeTestInterface(nodes: [
             .container(
@@ -526,6 +704,78 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertTrue(full.contains(#"group "Actions" id="actions" containerName: semantic_actions__actions frame=(0,40,200,100)"#), full)
     }
 
+}
+
+private func scrollInventoryInterface(
+    totalElementCount: Int,
+    materializedElementCount: Int
+) throws -> Interface {
+    let children = (0..<materializedElementCount).map { index in
+        AccessibilityHierarchy.element(
+            makeTestAccessibilityElement(makeTestHeistElement(label: "Row \(index)")),
+            traversalIndex: index
+        )
+    }
+    let tree = [
+        AccessibilityHierarchy.container(
+            makeTestScrollableContainer(
+                contentWidth: 390,
+                contentHeight: 1_200,
+                frameWidth: 390,
+                frameHeight: 400
+            ),
+            children: children
+        ),
+    ]
+    let inventory = ScrollInventory(totalElementCount: totalElementCount, visibleIndices: [])
+    return try Interface(
+        timestamp: Date(timeIntervalSince1970: 0),
+        tree: tree,
+        annotations: InterfaceAnnotations(containers: [
+            InterfaceContainerAnnotation(
+                path: TreePath([0]),
+                containerName: "inventory_scroll",
+                scrollInventory: inventory
+            ),
+        ])
+    )
+}
+
+private func siblingScrollInventoryInterface(
+    totalElementCount: Int,
+    materializedElementCounts: [Int]
+) throws -> Interface {
+    let tree = materializedElementCounts.enumerated().map { containerIndex, materializedElementCount in
+        AccessibilityHierarchy.container(
+            makeTestScrollableContainer(
+                contentWidth: 390,
+                contentHeight: 1_200,
+                frameWidth: 390,
+                frameHeight: 400
+            ),
+            children: (0..<materializedElementCount).map { elementIndex in
+                AccessibilityHierarchy.element(
+                    makeTestAccessibilityElement(
+                        makeTestHeistElement(label: "Row \(containerIndex)-\(elementIndex)")
+                    ),
+                    traversalIndex: elementIndex
+                )
+            }
+        )
+    }
+    let inventory = try XCTUnwrap(ScrollInventory(totalElementCount: totalElementCount, visibleIndices: []))
+    let annotations = materializedElementCounts.indices.map { index in
+        InterfaceContainerAnnotation(
+            path: TreePath([index]),
+            containerName: ContainerName(stringLiteral: "inventory_scroll_\(index)"),
+            scrollInventory: inventory
+        )
+    }
+    return try Interface(
+        timestamp: Date(timeIntervalSince1970: 0),
+        tree: tree,
+        annotations: InterfaceAnnotations(containers: annotations)
+    )
 }
 
 private func publicInterfaceContractDTO(

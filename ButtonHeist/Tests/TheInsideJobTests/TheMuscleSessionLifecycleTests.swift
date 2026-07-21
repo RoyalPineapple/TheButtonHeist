@@ -68,7 +68,7 @@ final class TheMuscleSessionLifecycleTests: TheMuscleTestCase {
         let driverId = await muscle.sessionOwner
         XCTAssertNotNil(driverId)
 
-        await muscle.handleClientDisconnected(1)
+        await muscle.handleClientDisconnected(1, generation: deliveryGeneration)
 
         let driverIdAfter = await muscle.sessionOwner
         XCTAssertNotNil(driverIdAfter, "Session should still be active during grace period")
@@ -76,7 +76,7 @@ final class TheMuscleSessionLifecycleTests: TheMuscleTestCase {
 
     func testSameDriverRejoinsAfterDisconnect() async throws {
         try await authenticate(clientId: 1, token: "test-token", respond: respondSink())
-        await muscle.handleClientDisconnected(1)
+        await muscle.handleClientDisconnected(1, generation: deliveryGeneration)
 
         try await authenticate(clientId: 2, token: "test-token", respond: respondSink())
 
@@ -86,7 +86,7 @@ final class TheMuscleSessionLifecycleTests: TheMuscleTestCase {
 
     func testDrainingSessionSurvivesForRejoin() async throws {
         try await authenticate(clientId: 1, token: "test-token", respond: respondSink())
-        await muscle.handleClientDisconnected(1)
+        await muscle.handleClientDisconnected(1, generation: deliveryGeneration)
 
         let connectionsDuringDrain = await muscle.activeSessionConnections
         XCTAssertTrue(connectionsDuringDrain.isEmpty, "No connections during draining")
@@ -113,7 +113,7 @@ final class TheMuscleSessionLifecycleTests: TheMuscleTestCase {
             driverId: "driver-a",
             respond: respondSink()
         )
-        await muscle.handleClientDisconnected(1)
+        await muscle.handleClientDisconnected(1, generation: deliveryGeneration)
 
         let (respond, responses) = collectResponses()
         try await authenticate(
@@ -142,9 +142,13 @@ final class TheMuscleSessionLifecycleTests: TheMuscleTestCase {
             driverId: "driver-a",
             respond: respondSink()
         )
-        await muscle.registerClientAddress(2, address: "127.0.0.1")
+        await muscle.registerClientAddress(
+            2,
+            address: "127.0.0.1",
+            generation: deliveryGeneration
+        )
 
-        await muscle.handleClientDisconnected(2)
+        await muscle.handleClientDisconnected(2, generation: deliveryGeneration)
         await yieldScheduler()
 
         let connections = await muscle.activeSessionConnections
@@ -162,7 +166,7 @@ final class TheMuscleSessionLifecycleTests: TheMuscleTestCase {
             driverId: "driver-a",
             respond: respondSink()
         )
-        await muscle.handleClientDisconnected(1)
+        await muscle.handleClientDisconnected(1, generation: deliveryGeneration)
         await muscle.awaitSessionReleaseTimerForTesting()
 
         let driverId = await muscle.sessionOwner

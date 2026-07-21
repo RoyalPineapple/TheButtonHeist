@@ -10,6 +10,37 @@ import UIKit
 @MainActor
 extension TheBrainsScrollTests {
 
+    func testOrdinalOnlyKnownTargetFailsBeforeViewportScan() async throws {
+        let duplicate = makeElement(label: "Review PR", traits: .button)
+        installScreenWithOffViewportEntry(
+            liveHierarchy: [(makeElement(label: "Overview"), "overview")],
+            offViewport: [
+                .init(duplicate, heistId: "duplicate_a", scrollContainerPath: TreePath([0])),
+                .init(duplicate, heistId: "duplicate_b", scrollContainerPath: TreePath([0])),
+            ]
+        )
+        let selected = try XCTUnwrap(brains.vault.interfaceElement(heistId: "duplicate_b"))
+        var scanAttempts = 0
+        brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in
+            scanAttempts += 1
+            return nil
+        }
+
+        let state = await brains.navigation.elementInflation.stateAfterReveal(
+            selected,
+            target: try resolvedTarget(.target(.label("Review PR"), ordinal: 1)),
+            deadline: semanticRevealDeadline(),
+            resolution: ActionSubjectResolution(origin: .known),
+            transaction: .init(vault: brains.vault)
+        )
+
+        guard case .failed(let failure) = state else {
+            return XCTFail("Expected ordinal-only semantic identity to fail, got \(state)")
+        }
+        XCTAssertEqual(failure.failedStep, .ambiguous)
+        XCTAssertEqual(scanAttempts, 0)
+    }
+
     func testTargetDiscoveryMissDoesNotRevealStaleOffViewportTarget() async throws {
         let staleScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
@@ -419,7 +450,7 @@ extension TheBrainsScrollTests {
 
         await inflation.value
         guard case .inflated(let inflatedTarget)? = resultBox.value else {
-            return XCTFail("Expected settled observation to recover stale reveal")
+            return XCTFail("Expected settled observation to recover stale reveal, got \(String(describing: resultBox.value))")
         }
         XCTAssertEqual(discoveryAttempts, 0)
         XCTAssertEqual(staleScrollView.setContentOffsetAnimations, [false])
@@ -483,14 +514,13 @@ extension TheBrainsScrollTests {
         )
         XCTAssertTrue(recoveredScreen.tree.viewportElementIDs.contains(recoveredEntry.heistId))
         XCTAssertNotNil(recoveredScreen.liveCapture.object(for: recoveredEntry.heistId))
+        let target = try resolvedTarget(AccessibilityTarget.label("Coke").and(.traits([.button])))
         var revealAttempts = 0
         brains.navigation.elementInflation.exploration.revealKnownTarget = { request in
-            XCTAssertEqual(request.heistId, targetId)
+            XCTAssertEqual(request.target.target, target)
             revealAttempts += 1
             return nil
         }
-
-        let target = try resolvedTarget(AccessibilityTarget.label("Coke").and(.traits([.button])))
         let resultBox = InflationResultBox()
         let inflation = Task { @MainActor in
             resultBox.value = await self.brains.navigation.elementInflation.inflate(
@@ -506,7 +536,7 @@ extension TheBrainsScrollTests {
         guard case .inflated(let inflatedTarget)? = resultBox.value else {
             return XCTFail("Expected current visible target recovery, got \(String(describing: resultBox.value))")
         }
-        XCTAssertEqual(revealAttempts, 1)
+        XCTAssertEqual(revealAttempts, 0)
         XCTAssertEqual(staleScrollView.setContentOffsetAnimations, [])
         XCTAssertEqual(inflatedTarget.treeElement.heistId, recoveredEntry.heistId)
         XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.x, recoveredFrame.midX, accuracy: 0.01)

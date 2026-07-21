@@ -397,7 +397,7 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
                         depth: depth,
                         hasMultipleRootNodes: hasMultipleRootNodes
                     ) {
-                        return (depth, true)
+                        return depth
                     }
                     let facts = container.containerPredicateFacts
                     components.append(
@@ -412,7 +412,7 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
                             )
                         )
                     )
-                    return (depth + 1, true)
+                    return depth + 1
                 },
                 descend: { depth, _ in depth }
             )

@@ -446,7 +446,8 @@ final class ClientRequestPipelineTests: XCTestCase {
         ClientTransportRequest(
             clientId: clientId,
             data: Data(requestId.description.utf8),
-            respond: { _ in .delivered }
+            respond: { _ in .delivered },
+            generation: .init(rawValue: 1)
         )
     }
 }

@@ -27,6 +27,8 @@ class TheMuscleTestCase: XCTestCase {
     var muscle: TheMuscle!
 
     private var sink: TheMuscleCallbackSink!
+    private var latestDeliveryGenerationRawValue: UInt64 = 0
+    private(set) var deliveryGeneration = ClientDelivery.Generation(rawValue: 0)
 
     var sentMessages: [(data: Data, clientId: Int)] { sink.sentMessages }
     var disconnectedClients: [Int] { sink.disconnectedClients }
@@ -57,8 +59,10 @@ class TheMuscleTestCase: XCTestCase {
 
     func installCallbacks() async {
         let sink = self.sink!
-        let generation = ClientDelivery.Generation()
-        await muscle.beginCallbackWiring(generation)
+        precondition(latestDeliveryGenerationRawValue < .max)
+        latestDeliveryGenerationRawValue += 1
+        deliveryGeneration = ClientDelivery.Generation(rawValue: latestDeliveryGenerationRawValue)
+        await muscle.beginCallbackWiring(deliveryGeneration)
         await muscle.installCallbacks(
             sendToClient: { data, clientId in
                 sink.appendSent((data, clientId))
@@ -70,7 +74,7 @@ class TheMuscleTestCase: XCTestCase {
             onClientAuthenticated: { clientId, respond in
                 sink.appendAuthenticatedCallback((clientId, respond))
             },
-            generation: generation
+            generation: deliveryGeneration
         )
     }
 
@@ -103,15 +107,25 @@ class TheMuscleTestCase: XCTestCase {
         address: ClientNetworkAddress = "127.0.0.1",
         respond: @escaping SocketResponseHandler
     ) async throws {
-        await muscle.registerClientAddress(clientId, address: address)
+        await muscle.registerClientAddress(
+            clientId,
+            address: address,
+            generation: deliveryGeneration
+        )
         guard let hello = try? JSONEncoder().encode(RequestEnvelope(message: .clientHello)) else {
             return XCTFail("Failed to encode clientHello")
         }
-        _ = await muscle.admitClientMessage(clientId, data: hello, respond: respond)
+        _ = await muscle.admitClientMessage(
+            clientId,
+            data: hello,
+            respond: respond,
+            generation: deliveryGeneration
+        )
         _ = await muscle.admitClientMessage(
             clientId,
             data: try encodeAuth(token: token, driverId: driverId),
-            respond: respond
+            respond: respond,
+            generation: deliveryGeneration
         )
     }
 

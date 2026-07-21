@@ -18,6 +18,26 @@ private struct RevealMovement {
 
 extension ElementInflation {
 
+    internal enum CrossCaptureTarget {
+        case captureLocal(ResolvedAccessibilityTarget)
+        case admitted(
+            sourceTarget: ResolvedAccessibilityTarget,
+            semanticTarget: AdmittedSemanticTarget
+        )
+
+        internal var sourceTarget: ResolvedAccessibilityTarget {
+            switch self {
+            case .captureLocal(let target), .admitted(let target, _):
+                return target
+            }
+        }
+
+        internal var admittedSemanticTarget: AdmittedSemanticTarget? {
+            guard case .admitted(_, let target) = self else { return nil }
+            return target
+        }
+    }
+
     @MainActor
     internal final class RevealTransaction {
         private unowned let vault: TheVault
@@ -84,15 +104,47 @@ extension ElementInflation {
     }
 
     internal struct InflatedElementTarget {
-        internal let target: ResolvedAccessibilityTarget
+        internal let identity: CrossCaptureTarget
         internal let treeElement: InterfaceTree.Element
         internal let liveTarget: TheVault.LiveActionTarget
         internal let deadline: SemanticObservationDeadline
         internal let resolution: ActionSubjectResolution
 
+        internal var target: ResolvedAccessibilityTarget { identity.sourceTarget }
+
+        internal init(
+            target: ResolvedAccessibilityTarget,
+            treeElement: InterfaceTree.Element,
+            liveTarget: TheVault.LiveActionTarget,
+            deadline: SemanticObservationDeadline,
+            resolution: ActionSubjectResolution
+        ) {
+            self.init(
+                identity: .captureLocal(target),
+                treeElement: treeElement,
+                liveTarget: liveTarget,
+                deadline: deadline,
+                resolution: resolution
+            )
+        }
+
+        internal init(
+            identity: CrossCaptureTarget,
+            treeElement: InterfaceTree.Element,
+            liveTarget: TheVault.LiveActionTarget,
+            deadline: SemanticObservationDeadline,
+            resolution: ActionSubjectResolution
+        ) {
+            self.identity = identity
+            self.treeElement = treeElement
+            self.liveTarget = liveTarget
+            self.deadline = deadline
+            self.resolution = resolution
+        }
+
         internal func replacingLiveTarget(_ liveTarget: TheVault.LiveActionTarget) -> Self {
             Self(
-                target: target,
+                identity: identity,
                 treeElement: liveTarget.treeElement,
                 liveTarget: liveTarget,
                 deadline: deadline,
@@ -146,13 +198,13 @@ extension ElementInflation {
     internal enum State: CustomStringConvertible {
         case resolving
         case revealing(
-            target: ResolvedAccessibilityTarget,
+            target: CrossCaptureTarget,
             treeElement: InterfaceTree.Element,
             deadline: SemanticObservationDeadline,
             resolution: ActionSubjectResolution
         )
         case refreshing(
-            target: ResolvedAccessibilityTarget,
+            target: CrossCaptureTarget,
             treeElement: InterfaceTree.Element,
             deadline: SemanticObservationDeadline,
             resolution: ActionSubjectResolution
@@ -206,7 +258,7 @@ extension ElementInflation.InflatedElementTarget {
         _ adjustment: ActionSubjectResolution.Adjustment
     ) -> ElementInflation.InflatedElementTarget {
         ElementInflation.InflatedElementTarget(
-            target: target,
+            identity: identity,
             treeElement: treeElement,
             liveTarget: liveTarget,
             deadline: deadline,

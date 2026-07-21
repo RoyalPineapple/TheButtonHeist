@@ -104,6 +104,73 @@ final class AdversarialNavigationTests: XCTestCase {
         XCTAssertEqual(try counterValue(named: "Nested target activations", in: actionResult), 1)
     }
 
+    func testDuplicateLabelIdentitySurvivesBothViewportDirectionsAndCandidateReordering() async throws {
+        let target = AccessibilityTarget.label("Review PR").and(
+            .customContent(.init(label: "Category", value: "Home")),
+            .customContent(.init(label: "Priority", value: "High"))
+        )
+        try await AdversarialLabRoute.open(.duplicateLabels)
+        let heist = try await runHeist("AdversarialDuplicateLabelsPass") {
+            WaitFor(.exists(target), timeout: 4)
+
+            Activate(target)
+                .expect(.exists(.element(
+                    .label("Home High activations"),
+                    .value("1")
+                )), timeout: 6)
+            WaitFor(.exists(.element(
+                .label("Duplicate candidate order"),
+                .value("Reordered")
+            )), timeout: 2)
+
+            Activate(.label("Return to duplicate top"))
+                .expect(.exists(.element(
+                    .label("Duplicate target visibility"),
+                    .value("Offscreen")
+                )), timeout: 6)
+            WaitFor(.exists(target), timeout: 2)
+
+            Activate(target)
+                .expect(.exists(.element(
+                    .label("Home High activations"),
+                    .value("2")
+                )), timeout: 6)
+            WaitFor(.exists(.element(
+                .label("Work High activations"),
+                .value("0")
+            )), timeout: 2)
+            WaitFor(.exists(.element(
+                .label("Work Low activations"),
+                .value("0")
+            )), timeout: 2)
+        }
+
+        XCTAssertNil(heist.result.firstFailedStep)
+        let targetActivations = heist.result.outputNodes.lazy
+            .compactMap { $0.actionEvidence?.dispatchResult }
+            .filter { result in
+                guard let subject = result.subjectEvidence,
+                      subject.element.label == "Review PR"
+                else { return false }
+                let customContent = subject.element.customContent ?? []
+                return customContent.contains {
+                    $0.label == "Category" && $0.value == "Home"
+                } && customContent.contains {
+                    $0.label == "Priority" && $0.value == "High"
+                }
+            }
+        XCTAssertEqual(targetActivations.count, 2)
+        for actionResult in targetActivations {
+            let subject = try XCTUnwrap(actionResult.subjectEvidence)
+            XCTAssertEqual(subject.source, .resolvedSemanticTarget)
+            XCTAssertEqual(subject.resolution.origin, .known)
+        }
+        let finalActionResult = try XCTUnwrap(targetActivations.last)
+        XCTAssertEqual(try counterValue(named: "Home High activations", in: finalActionResult), 2)
+        XCTAssertEqual(try counterValue(named: "Work High activations", in: finalActionResult), 0)
+        XCTAssertEqual(try counterValue(named: "Work Low activations", in: finalActionResult), 0)
+    }
+
     // MARK: - Result Evidence
 
     private func counterValue(

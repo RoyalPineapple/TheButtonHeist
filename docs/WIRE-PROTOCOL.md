@@ -318,13 +318,17 @@ predicate chain. Inclusion uses the positive check (`.traits([...])`,
 }
 ```
 
-Semantic action steps identify elements semantically. The host resolves the
-target against settled state once, pins the resolved capture-local `HeistId`,
-and derives one deadline from its scroll-membership ancestor graph. Nested
-ancestors reveal outermost-first. Refresh, geometry stabilization, and dispatch
-must continue to resolve that exact id; a different element that matches the
-original selector cannot take over the action. Cached coordinates from a prior
-capture are not the authority.
+Semantic action steps identify elements semantically. The host first resolves
+the target against settled state and derives one deadline from the selected
+element's scroll-membership ancestor graph. If inflation crosses a capture
+boundary, the host removes the terminal ordinal and admits the target only when
+that semantic form uniquely selects the same element in the complete committed
+interface. Nested ancestors reveal outermost-first. After every committed
+capture, the host re-resolves the admitted semantic target and adopts only that
+match's current capture-local `HeistId` and live reference for refresh, geometry
+stabilization, and dispatch. Missing or ambiguous re-resolution fails the action;
+the host never retains a stale id or substitutes a sibling. Cached coordinates
+and `HeistId` values from a prior capture are not authority.
 
 Explicit viewport commands such as `scroll`, `scroll_to_edge`, and
 `scroll_to_visible` remain public Fence commands because moving the viewport is

@@ -40,7 +40,7 @@ let buttonHeistRules = RuleSet {
     checkedConcurrencyRule
     heistContentOpacityRule
     planElseOwnershipRule
-    exportedTupleReturnRule
+    exportedTupleContractRule
     Rules.boundaryOnly(
         function: "commitObservation",
         allowed: .files([semanticObservationSettlementPath]),
@@ -213,27 +213,189 @@ private let planElseOwnershipRule = Rules.files(
         }
 }
 
-private let exportedTupleReturnRule = Rules.files(
+private let exportedTupleContractRule = Rules.files(
     "buttonheist.exported_tuple_return",
     severity: .error,
-    summary: "Exported functions return named contract types, not multi-value tuples."
+    summary: "Exported declarations use named contract types, not multi-value tuples."
 ) { file in
-    functions()
-        .filter { match in
-            hasExportedAccess(match.node)
-                && (match.node.signature.returnClause?.type.as(TupleTypeSyntax.self)?.elements.count ?? 0) > 1
+    declarationContracts(in: file).compactMap { contract in
+        guard contract.effectiveAccess.isExported,
+              let observed = contract.observedTupleContract else {
+            return nil
         }
+        return file.failure(
+            at: contract.node,
+            message: "exported \(contract.kind.rawValue) contains a tuple contract",
+            evidence: ViolationEvidence(
+                observed: observed,
+                expectation: "use named Swift types for public, open, or package API"
+            )
+        )
+    }
+}
+
+private struct DeclarationContract {
+    let node: Syntax
+    let kind: Kind
+    let effectiveAccess: ContractAccess
+    let types: [TypeSyntax]
+
+    enum Kind: String {
+        case function
+        case property
+        case subscriptDeclaration = "subscript"
+    }
+
+    var observedTupleContract: String? {
+        let tuples = types.flatMap { type in
+            type.descendants(of: TupleTypeSyntax.self).filter { tuple in
+                tuple.elements.count > 1
+            }
+        }
+        guard !tuples.isEmpty else {
+            return nil
+        }
+        return tuples.map(\.trimmedDescription).joined(separator: ", ")
+    }
+}
+
+private enum ContractAccess: Int, Comparable {
+    case `private`
+    case `fileprivate`
+    case `internal`
+    case `package`
+    case `public`
+    case open
+
+    static func < (lhs: Self, rhs: Self) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+
+    var isExported: Bool {
+        self >= .package
+    }
+}
+
+private let contractDeclarationScope = SyntaxScope.fileScope.union(.typeMembers)
+
+private func declarationContracts(in file: SourceFileContext) -> [DeclarationContract] {
+    let functionContracts = functions()
+        .lexically(within: contractDeclarationScope)
         .matches(in: file)
         .map { match in
-            match.failure(
-                message: "exported function returns a tuple contract",
-                evidence: ViolationEvidence(
-                    observed: match.node.signature.returnClause?.type.trimmedDescription
-                        ?? match.node.trimmedDescription,
-                    expectation: "return a named Swift type for public, open, or package API"
-                )
+            DeclarationContract(
+                node: Syntax(match.node),
+                kind: .function,
+                effectiveAccess: effectiveAccess(
+                    of: match.node,
+                    modifiers: match.node.modifiers
+                ),
+                types: functionContractTypes(match.node)
             )
         }
+
+    let propertyContracts = variables()
+        .lexically(within: contractDeclarationScope)
+        .matches(in: file)
+        .flatMap { match -> [DeclarationContract] in
+            let access = effectiveAccess(of: match.node, modifiers: match.node.modifiers)
+            return match.node.bindings.compactMap { binding -> DeclarationContract? in
+                guard let type = binding.typeAnnotation?.type else {
+                    return nil
+                }
+                return DeclarationContract(
+                    node: Syntax(binding),
+                    kind: .property,
+                    effectiveAccess: access,
+                    types: [type]
+                )
+            }
+        }
+
+    let subscriptContracts = SyntaxQuery<SubscriptDeclSyntax>()
+        .lexically(within: contractDeclarationScope)
+        .matches(in: file)
+        .map { match in
+            DeclarationContract(
+                node: Syntax(match.node),
+                kind: .subscriptDeclaration,
+                effectiveAccess: effectiveAccess(
+                    of: match.node,
+                    modifiers: match.node.modifiers
+                ),
+                types: subscriptContractTypes(match.node)
+            )
+        }
+
+    return functionContracts + propertyContracts + subscriptContracts
+}
+
+private func functionContractTypes(_ node: FunctionDeclSyntax) -> [TypeSyntax] {
+    let parameterTypes = node.signature.parameterClause.parameters.map(\.type)
+    return parameterTypes + [node.signature.returnClause?.type].compactMap { $0 }
+}
+
+private func subscriptContractTypes(_ node: SubscriptDeclSyntax) -> [TypeSyntax] {
+    node.parameterClause.parameters.map(\.type) + [node.returnClause.type]
+}
+
+private func effectiveAccess(
+    of node: some SyntaxProtocol,
+    modifiers: DeclModifierListSyntax
+) -> ContractAccess {
+    let declared = explicitAccess(modifiers) ?? inheritedDefaultAccess(of: node) ?? .internal
+    return node.ancestors.compactMap(accessCap).reduce(declared, min)
+}
+
+private func inheritedDefaultAccess(of node: some SyntaxProtocol) -> ContractAccess? {
+    for ancestor in node.ancestors {
+        if let declaration = ancestor.as(ProtocolDeclSyntax.self) {
+            return effectiveAccess(of: declaration, modifiers: declaration.modifiers)
+        }
+        if let declaration = ancestor.as(ExtensionDeclSyntax.self) {
+            return explicitAccess(declaration.modifiers) ?? .internal
+        }
+        if nominalModifiers(ancestor) != nil {
+            return .internal
+        }
+    }
+    return nil
+}
+
+private func accessCap(_ ancestor: Syntax) -> ContractAccess? {
+    if let declaration = ancestor.as(ExtensionDeclSyntax.self) {
+        return explicitAccess(declaration.modifiers)
+    }
+    guard let modifiers = nominalModifiers(ancestor) else {
+        return nil
+    }
+    return effectiveAccess(of: ancestor, modifiers: modifiers)
+}
+
+private func nominalModifiers(_ node: Syntax) -> DeclModifierListSyntax? {
+    node.asProtocol(DeclGroupSyntax.self)?.modifiers
+}
+
+private func explicitAccess(_ modifiers: DeclModifierListSyntax) -> ContractAccess? {
+    for modifier in modifiers {
+        switch modifier.name.text {
+        case "private":
+            return .private
+        case "fileprivate":
+            return .fileprivate
+        case "internal":
+            return .internal
+        case "package":
+            return .package
+        case "public":
+            return .public
+        case "open":
+            return .open
+        default:
+            continue
+        }
+    }
+    return nil
 }
 
 private func isAllowedAnyBoundary(_ node: IdentifierTypeSyntax) -> Bool {
@@ -291,15 +453,4 @@ private func functionName(_ node: FunctionDeclSyntax) -> String {
 private func isAllowedPlanElseOwner(_ node: FunctionDeclSyntax) -> Bool {
     let owner = node.bumper.lexicalContext.enclosingNominalNames.first
     return owner == "WaitFor" || owner == "IfContent"
-}
-
-private func hasExportedAccess(_ node: FunctionDeclSyntax) -> Bool {
-    node.modifiers.contains { modifier in
-        switch modifier.name.text {
-        case "open", "public", "package":
-            true
-        default:
-            false
-        }
-    }
 }

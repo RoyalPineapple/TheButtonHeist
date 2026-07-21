@@ -28,20 +28,9 @@ final class TheGetaway {
     var identity: ServerIdentity
     let pongPayload: PongPayload
 
-    struct TransportWiringAttempt: Equatable {
-        let id: UUID
+    struct TransportWiringAttempt {
         let transport: ServerTransport
         let deliveryGeneration: ClientDelivery.Generation
-
-        init(transport: ServerTransport) {
-            self.id = UUID()
-            self.transport = transport
-            self.deliveryGeneration = ClientDelivery.Generation(id: id)
-        }
-
-        static func == (lhs: Self, rhs: Self) -> Bool {
-            lhs.id == rhs.id
-        }
     }
 
     struct WiredTransportAdmission {
@@ -96,18 +85,40 @@ final class TheGetaway {
 
         func admits(_ attempt: TransportWiringAttempt) -> Bool {
             guard case .wiring(let current) = self else { return false }
-            return current == attempt
+            return current.deliveryGeneration == attempt.deliveryGeneration
+        }
+
+        func admitsEvent(generation: ClientDelivery.Generation) -> Bool {
+            guard case .wired(let current) = self else { return false }
+            return current.attempt.deliveryGeneration == generation
         }
     }
 
     /// Transport wiring is one explicit state machine so teardown cannot leave a
     /// stale transport or consumer behind while callback installation is suspended.
     var transportWiring: TransportWiringState = .unwired
+    private var latestIssuedDeliveryGenerationRawValue: UInt64 = 0
 
+    var pauseBeforeTransportCallbackBeginForTesting: (@MainActor @Sendable () async -> Void)?
     var pauseBeforeTransportCallbackInstallationForTesting: (@MainActor @Sendable () async -> Void)?
+    var pauseAfterClientRequestAdmissionForTesting: (
+        @MainActor @Sendable (ClientDelivery.Generation) async -> Void
+    )?
+    var observeClientRequestCompletionForTesting: (
+        @MainActor @Sendable (ClientDelivery.Generation) -> Void
+    )?
 
     var transport: ServerTransport? {
         transportWiring.transport
+    }
+
+    func issueDeliveryGeneration() -> ClientDelivery.Generation {
+        precondition(
+            latestIssuedDeliveryGenerationRawValue < .max,
+            "ClientDelivery.Generation exhausted"
+        )
+        latestIssuedDeliveryGenerationRawValue += 1
+        return ClientDelivery.Generation(rawValue: latestIssuedDeliveryGenerationRawValue)
     }
 
     /// Frames are admitted and executed in per-client order. Transport
@@ -125,7 +136,11 @@ final class TheGetaway {
 
     // MARK: - Message Execution
 
-    func executeClientMessage(_ admitted: AdmittedClientMessage, respond: @escaping SocketResponseHandler) async {
+    func executeClientMessage(
+        _ admitted: AdmittedClientMessage,
+        respond: @escaping SocketResponseHandler,
+        generation: ClientDelivery.Generation
+    ) async {
         let clientId = admitted.clientId
         let envelope = admitted.envelope
         let requestId = envelope.requestId
@@ -142,42 +157,71 @@ final class TheGetaway {
                     message: "Protocol messages are handled by admission before app dispatch."
                 )),
                 requestId: requestId,
-                respond: respond
+                respond: respond,
+                generation: generation
             )
         case .requestInterface(let query):
             insideJobLogger.debug("Interface requested by client \(clientId)")
-            await sendInterface(query: query, requestId: requestId, respond: respond)
+            await sendInterface(
+                query: query,
+                requestId: requestId,
+                respond: respond,
+                generation: generation
+            )
         case .ping:
             await muscle.noteClientActivity(clientId)
-            await sendMessage(.pong(pongPayload.withServerTimestamp()), requestId: requestId, respond: respond)
+            await sendMessage(
+                .pong(pongPayload.withServerTimestamp()),
+                requestId: requestId,
+                respond: respond,
+                generation: generation
+            )
         case .status:
-            await sendMessage(.status(await captureStatus()), requestId: requestId, respond: respond)
+            await sendMessage(
+                .status(await captureStatus()),
+                requestId: requestId,
+                respond: respond,
+                generation: generation
+            )
 
         // Observation
         case .getPasteboard:
             let result = brains.executePasteboardRead()
-            await sendMessage(.actionResult(result), requestId: requestId, respond: respond)
+            await sendMessage(
+                .actionResult(result),
+                requestId: requestId,
+                respond: respond,
+                generation: generation
+            )
         case .getAnnouncements:
-            await sendMessage(.announcements(brains.capturedAnnouncements()), requestId: requestId, respond: respond)
+            await sendMessage(
+                .announcements(brains.capturedAnnouncements()),
+                requestId: requestId,
+                respond: respond,
+                generation: generation
+            )
         case .requestScreen(let payload):
             await sendScreen(
                 mode: payload.mode,
                 requestId: requestId,
-                respond: respond
+                respond: respond,
+                generation: generation
             )
         case .runtimeAction(let command):
             let actionResult = await executeDirectRuntimeAction(command)
             await sendActionResult(
                 actionResult: actionResult,
                 requestId: requestId,
-                respond: respond
+                respond: respond,
+                generation: generation
             )
         case .heistPlan(let run):
             let actionResult = await brains.executeHeistPlan(run.plan, argument: run.argument)
             await sendActionResult(
                 actionResult: actionResult,
                 requestId: requestId,
-                respond: respond
+                respond: respond,
+                generation: generation
             )
         }
     }
@@ -251,19 +295,22 @@ final class TheGetaway {
     private func sendActionResult(
         actionResult: ActionResult,
         requestId: RequestID?,
-        respond: @escaping SocketResponseHandler
+        respond: @escaping SocketResponseHandler,
+        generation: ClientDelivery.Generation
     ) async {
         await sendMessage(
             .actionResult(actionResult),
             requestId: requestId,
-            respond: respond
+            respond: respond,
+            generation: generation
         )
     }
 
     func sendInterface(
         query: InterfaceQuery = InterfaceQuery(),
         requestId: RequestID? = nil,
-        respond: @escaping SocketResponseHandler
+        respond: @escaping SocketResponseHandler,
+        generation: ClientDelivery.Generation
     ) async {
         switch await brains.observeInterface(query) {
         case .success(let interface):
@@ -271,7 +318,8 @@ final class TheGetaway {
             await sendMessage(
                 .interface(interface),
                 requestId: requestId,
-                respond: respond
+                respond: respond,
+                generation: generation
             )
         case .failure(let error):
             let message: ServerErrorMessage
@@ -284,7 +332,8 @@ final class TheGetaway {
             await sendMessage(
                 .error(ServerError(kind: .general, message: message)),
                 requestId: requestId,
-                respond: respond
+                respond: respond,
+                generation: generation
             )
         }
     }
@@ -294,13 +343,19 @@ final class TheGetaway {
     func sendScreen(
         mode: ScreenCaptureMode = .raw,
         requestId: RequestID? = nil,
-        respond: @escaping SocketResponseHandler
+        respond: @escaping SocketResponseHandler,
+        generation: ClientDelivery.Generation
     ) async {
         insideJobLogger.debug("InterfaceObservation requested")
 
         switch await brains.captureScreenPayload(mode: mode) {
         case .success(let payload):
-            await sendMessage(.screen(payload), requestId: requestId, respond: respond)
+            await sendMessage(
+                .screen(payload),
+                requestId: requestId,
+                respond: respond,
+                generation: generation
+            )
             insideJobLogger.debug("InterfaceObservation sent: \(payload.pngData.count) base64 characters")
         case .failure(let failure):
             let message: ServerErrorMessage
@@ -313,7 +368,8 @@ final class TheGetaway {
             await sendMessage(
                 .error(ServerError(kind: .general, message: message)),
                 requestId: requestId,
-                respond: respond
+                respond: respond,
+                generation: generation
             )
         }
     }

@@ -35,11 +35,7 @@ final class Navigation {
             },
             revealKnownTarget: { [weak self] request in
                 guard let self else { return nil }
-                return await self.scanForHeistId(
-                    request.heistId,
-                    deadline: request.deadline,
-                    observedScrollContentActivationPoint: request.observedScrollContentActivationPoint
-                )
+                return await self.scanForSemanticTarget(request)
             },
             moveViewport: { [weak self] intent in
                 guard let self else { return .unavailable() }

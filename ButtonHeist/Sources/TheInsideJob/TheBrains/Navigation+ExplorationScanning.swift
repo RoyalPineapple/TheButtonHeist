@@ -490,68 +490,119 @@ extension Navigation {
 
     }
 
-    func scanForHeistId(
-        _ heistId: HeistId,
-        deadline: SemanticObservationDeadline,
-        observedScrollContentActivationPoint: InterfaceTree.ObservedScrollContentActivationPoint? = nil
-    ) async -> InterfaceExplorationResult? {
-        guard let rootScrollViewID = revealRootScrollViewID(for: heistId) else { return nil }
-        var didFindTarget = false
-        let searchOrder: ViewportSearchOrder = observedScrollContentActivationPoint == nil
+    private enum SemanticTargetScanMatch {
+        case visible(InterfaceTree.Element)
+        case offscreen
+        case failed(ElementInflation.SemanticTargetResolutionFailure)
+    }
+
+    func scanForSemanticTarget(
+        _ request: ElementInflation.SemanticTargetRevealRequest
+    ) async -> ElementInflation.SemanticTargetScanResult {
+        var visibleTarget: InterfaceTree.Element?
+        var resolutionFailure: ElementInflation.SemanticTargetResolutionFailure?
+        let searchOrder: ViewportSearchOrder = request.observedScrollContentActivationPoint == nil
             ? .backwardFirst
             : .forwardFirst
-        if let observedScrollContentActivationPoint,
-           let seededResult = await moveToFallbackSeed(
-               observedScrollContentActivationPoint.point,
-               rootScrollViewID: rootScrollViewID,
-               heistId: heistId,
-               deadline: deadline
-           ) {
-            return seededResult
+        if let observedPoint = request.observedScrollContentActivationPoint {
+            if let seededResult = await moveToFallbackSeed(observedPoint, request: request) {
+                return seededResult
+            }
+            logSkippedSemanticRevealSeed(observedPoint, request: request)
         }
         let explorer = ViewportExplorer(
             navigation: self,
             exploration: SemanticExploration(
                 baseline: .interfaceMemory(vault.interfaceMemoryBaseline()),
-                deadline: deadline
+                deadline: request.deadline
             ),
             searchOrder: searchOrder,
-            revealRootScrollViewID: rootScrollViewID,
+            revealRootScrollViewID: request.revealRootScrollViewID,
         )
-        let explored = await explorer.exploreViewports(exitPosition: .current) { event in
-            didFindTarget = event.settledObservation.observation.liveCapture.contains(heistId: heistId)
-            return didFindTarget ? .goalSatisfied : .continue
+        let explored = await explorer.exploreViewports(exitPosition: .current) { _ in
+            switch self.semanticTargetScanMatch(request.target) {
+            case .visible(let current):
+                visibleTarget = current
+                return .goalSatisfied
+            case .failed(let failure):
+                resolutionFailure = failure
+                return .goalSatisfied
+            case .offscreen:
+                return .continue
+            }
         }
-        return didFindTarget ? explored : nil
+        if let resolutionFailure {
+            return .failed(resolutionFailure)
+        }
+        guard let visibleTarget, let explored else { return .unavailable }
+        return .revealed(visibleTarget, explored)
     }
 
     private func moveToFallbackSeed(
-        _ point: ScrollContentPoint,
-        rootScrollViewID: ObjectIdentifier,
-        heistId: HeistId,
-        deadline: SemanticObservationDeadline
-    ) async -> InterfaceExplorationResult? {
-        guard let target = vault.liveScrollTarget(matching: rootScrollViewID) else { return nil }
+        _ observedPoint: InterfaceTree.ObservedScrollContentActivationPoint,
+        request: ElementInflation.SemanticTargetRevealRequest
+    ) async -> ElementInflation.SemanticTargetScanResult? {
+        guard let ownerPath = request.target.scrollContainerPath,
+              let point = observedPoint.admit(ownerPath: ownerPath),
+              let target = vault.liveScrollTarget(at: ownerPath),
+              !target.scrollView.bhIsUnsafeForProgrammaticScrolling
+        else { return nil }
         let transition = await performViewportTransition(
             .revealContentPoint(
                 point,
                 in: .uiScrollView(container: target.container, scrollView: target.scrollView)
             ),
-            deadline: deadline
+            deadline: request.deadline
         )
         guard transition.outcome.didMove,
-              let event = transition.event,
-              event.settledObservation.observation.liveCapture.contains(heistId: heistId)
+              let event = transition.event
         else { return nil }
-        return InterfaceExplorationResult(
+        let exploration = InterfaceExplorationResult(
             event: event,
             progress: .init(),
             didMoveViewport: true
         )
+        switch semanticTargetScanMatch(request.target) {
+        case .visible(let current):
+            return .revealed(current, exploration)
+        case .failed(let failure):
+            return .failed(failure)
+        case .offscreen:
+            return nil
+        }
     }
 
-    private func revealRootScrollViewID(for heistId: HeistId) -> ObjectIdentifier? {
-        vault.liveScrollViewIDForRevealing(heistId: heistId)
+    private func logSkippedSemanticRevealSeed(
+        _ observedPoint: InterfaceTree.ObservedScrollContentActivationPoint,
+        request: ElementInflation.SemanticTargetRevealRequest
+    ) {
+        let storedOwnerPath = observedPoint.ownerPath.indices.map(String.init).joined(separator: ".")
+        let expectedOwnerPath = request.target.scrollContainerPath?
+            .indices.map(String.init).joined(separator: ".") ?? "none"
+        let message = "semantic reveal seed skipped: storedOwnerPath=\(storedOwnerPath) "
+            + "expectedOwnerPath=\(expectedOwnerPath) fallback=ancestorPaging"
+        insideJobLogger.debug("\(message, privacy: .public)")
+    }
+
+    private func semanticTargetScanMatch(
+        _ target: ElementInflation.AdmittedSemanticTarget
+    ) -> SemanticTargetScanMatch {
+        switch vault.resolveTarget(target.target) {
+        case .resolved(.element(let current)):
+            return vault.visibleLiveElementAliasing(current) == nil
+                ? .offscreen
+                : .visible(current)
+        case .resolved(.container):
+            return .failed(.containerTarget)
+        case .notFound(let facts):
+            return .failed(.notFound(
+                TargetResolutionDiagnostics.message(for: .notFound(facts))
+            ))
+        case .ambiguous(let facts):
+            return .failed(.ambiguous(
+                TargetResolutionDiagnostics.message(for: .ambiguous(facts))
+            ))
+        }
     }
 
     static func visualOrigin(in scrollView: UIScrollView) -> CGPoint {

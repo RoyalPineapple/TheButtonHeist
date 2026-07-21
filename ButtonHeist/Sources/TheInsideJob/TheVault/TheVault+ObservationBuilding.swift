@@ -38,7 +38,7 @@ extension TheVault {
         let projection = buildObservationProjection(
             identityContext: identityContext,
             facts: facts,
-            offscreenScrollElements: result.offscreenScrollElements
+            offscreenScrollElements: result.inventoryEnumeration.offscreenElements
         )
         logObservationBuildEvents(projection.logEvents)
         return try admitObservation(
@@ -92,13 +92,12 @@ extension TheVault {
 
         var logEvents: [ObservationBuildLogEvent] = []
         for entry in entries {
-            if let observedScrollContentActivationPoint = entry.treeElement.observedScrollContentActivationPoint,
-               let scrollMembership = entry.treeElement.scrollMembership {
+            if let observedScrollContentActivationPoint = entry.treeElement.observedScrollContentActivationPoint {
                 logEvents.append(
                     .capturedObservedScrollContentActivationPoint(
                         heistId: entry.heistId,
-                        containerPath: scrollMembership.containerPath,
-                        index: scrollMembership.index,
+                        containerPath: observedScrollContentActivationPoint.ownerPath,
+                        index: entry.treeElement.scrollMembership?.index,
                         point: observedScrollContentActivationPoint.point.cgPoint
                     )
                 )

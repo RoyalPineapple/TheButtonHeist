@@ -83,7 +83,7 @@ extension TheBrainsScrollTests {
         )
     }
 
-    func testScrollToVisiblePostSemanticRevealDoesNotRetargetCommittedIdentity() async throws {
+    func testScrollToVisibleFailsWhenAdmittedIdentityBecomesAmbiguous() async throws {
         let rootView = UIView()
         rootView.backgroundColor = .white
         let scrollView = AccessibilityRevealingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
@@ -135,7 +135,7 @@ extension TheBrainsScrollTests {
             observedScrollContentActivationPoint: observedContentActivationPoint(CGPoint(
                 x: firstTarget.frame.midX,
                 y: firstTarget.frame.midY
-            )),
+            ), ownerPath: scrollContainerPath),
             element: interfaceElement
         )
         let knownScreen = InterfaceObservation.makeForTests(
@@ -156,9 +156,9 @@ extension TheBrainsScrollTests {
         guard case .failed(let failure) = result else {
             return XCTFail("Expected uncommitted live identities to fail closed, got \(result)")
         }
-        XCTAssertEqual(failure.failedStep, .noRevealPath)
-        XCTAssertEqual(failure.failureKind, .actionFailed)
-        XCTAssertFalse(failure.message.contains("[ambiguous]"))
+        XCTAssertEqual(failure.failedStep, .ambiguous)
+        XCTAssertEqual(failure.failureKind, .targetUnavailable)
+        XCTAssertTrue(failure.message.contains("[ambiguous]"))
     }
 
 }

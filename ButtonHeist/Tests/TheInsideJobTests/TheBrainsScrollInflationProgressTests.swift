@@ -218,10 +218,10 @@ extension TheBrainsScrollTests {
         visibleObservationSource.observation = freshKnownScreen
         brains.vault.semanticObservationStream.commitVisibleObservationForTesting(freshKnownScreen)
         await waitForSettledSemanticWaiter()
-        XCTAssertEqual(revealAttempts, 1)
+        XCTAssertEqual(revealAttempts, 0)
         brains.vault.semanticObservationStream.commitVisibleObservationForTesting(freshKnownScreen)
         await waitForSettledSemanticWaiter()
-        XCTAssertEqual(revealAttempts, 1)
+        XCTAssertEqual(revealAttempts, 0)
         inflation.cancel()
 
         await inflation.value

@@ -1,12 +1,21 @@
 import Foundation
+import os
+
+import TheScore
+
+let muscleLogger = ButtonHeistLog.logger(.insideJob(.auth))
 
 /// Typed callback/delivery wiring for `TheMuscle`.
 enum ClientDelivery: Sendable {
-    struct Generation: Equatable, Sendable {
-        private let id: UUID
+    struct Generation: RawRepresentable, Comparable, Sendable {
+        let rawValue: UInt64
 
-        init(id: UUID = UUID()) {
-            self.id = id
+        init(rawValue: UInt64) {
+            self.rawValue = rawValue
+        }
+
+        static func < (lhs: Self, rhs: Self) -> Bool {
+            lhs.rawValue < rhs.rawValue
         }
     }
 
@@ -19,8 +28,14 @@ enum ClientDelivery: Sendable {
         ) async -> Void
     }
 
-    enum CallbackOutcome: Equatable, Sendable {
+    enum BeginOutcome: Equatable, Sendable {
+        case admitted
+        case rejected
+    }
+
+    enum DeliveryOutcome: Equatable, Sendable {
         case delivered
+        case rejected
         case failed(ClientDeliveryFailure)
     }
 
@@ -29,69 +44,176 @@ enum ClientDelivery: Sendable {
         case rejected
     }
 
+    enum InvalidateOutcome: Equatable, Sendable {
+        case invalidated
+        case rejected
+    }
+
     enum ClientDeliveryFailure: Error, Equatable, Sendable {
         case callbacksNotInstalled(String)
     }
 
-    case unwired
+    case idle(latest: Generation?)
     case wiring(Generation)
     case wired(Generation, Callbacks)
 
     var generation: Generation? {
         switch self {
-        case .unwired:
+        case .idle:
             nil
         case .wiring(let generation), .wired(let generation, _):
             generation
         }
     }
 
-    mutating func begin(_ generation: Generation) {
+    var latestGeneration: Generation? {
+        switch self {
+        case .idle(let latest):
+            latest
+        case .wiring(let generation), .wired(let generation, _):
+            generation
+        }
+    }
+
+    @discardableResult
+    mutating func begin(_ generation: Generation) -> BeginOutcome {
+        guard latestGeneration.map({ generation > $0 }) ?? true else {
+            logRejection(.begin, candidate: generation)
+            return .rejected
+        }
         self = .wiring(generation)
+        return .admitted
     }
 
     mutating func install(_ callbacks: Callbacks, for generation: Generation) -> InstallOutcome {
         guard case .wiring(let currentGeneration) = self,
               currentGeneration == generation
-        else { return .rejected }
+        else {
+            logRejection(.install, candidate: generation)
+            return .rejected
+        }
         self = .wired(generation, callbacks)
         return .installed
     }
 
-    mutating func invalidate(_ generation: Generation) {
-        guard self.generation == generation else { return }
-        self = .unwired
+    @discardableResult
+    mutating func invalidate(_ generation: Generation) -> InvalidateOutcome {
+        switch self {
+        case .wiring(let currentGeneration) where currentGeneration == generation,
+             .wired(let currentGeneration, _) where currentGeneration == generation:
+            self = .idle(latest: generation)
+            return .invalidated
+        default:
+            logRejection(.invalidate, candidate: generation)
+            return .rejected
+        }
     }
 
     mutating func reset() {
-        self = .unwired
+        self = .idle(latest: latestGeneration)
     }
 
-    func send(_ data: Data, toClient clientId: Int) async -> ServerSendOutcome {
-        guard case .wired(_, let callbacks) = self else {
+    func send(
+        _ data: Data,
+        toClient clientId: Int,
+        generation: Generation
+    ) async -> ServerSendOutcome {
+        guard case .admitted(let callbacks) = deliveryDecision(
+            for: generation,
+            operation: .send
+        ) else {
             return .failed(.transportUnavailable)
         }
         return await callbacks.sendToClient(data, clientId)
     }
 
+    func respond(
+        _ data: Data,
+        using respond: @escaping SocketResponseHandler,
+        generation: Generation
+    ) async -> ServerSendOutcome {
+        guard case .admitted = deliveryDecision(
+            for: generation,
+            operation: .respond
+        ) else {
+            return .failed(.transportUnavailable)
+        }
+        return await respond(data)
+    }
+
     @discardableResult
-    func disconnect(_ clientId: Int) async -> CallbackOutcome {
-        guard case .wired(_, let callbacks) = self else {
+    func disconnect(_ clientId: Int, generation: Generation) async -> DeliveryOutcome {
+        switch deliveryDecision(for: generation, operation: .disconnect) {
+        case .admitted(let callbacks):
+            await callbacks.disconnectClient(clientId)
+            return .delivered
+        case .rejected:
+            return .rejected
+        case .callbacksUnavailable:
             return .failed(.callbacksNotInstalled("disconnectClient"))
         }
-        await callbacks.disconnectClient(clientId)
-        return .delivered
     }
 
     @discardableResult
     func clientAuthenticated(
         _ clientId: Int,
-        respond: @escaping SocketResponseHandler
-    ) async -> CallbackOutcome {
-        guard case .wired(_, let callbacks) = self else {
+        respond: @escaping SocketResponseHandler,
+        generation: Generation
+    ) async -> DeliveryOutcome {
+        switch deliveryDecision(for: generation, operation: .clientAuthenticated) {
+        case .admitted(let callbacks):
+            await callbacks.onClientAuthenticated(clientId, respond)
+            return .delivered
+        case .rejected:
+            return .rejected
+        case .callbacksUnavailable:
             return .failed(.callbacksNotInstalled("onClientAuthenticated"))
         }
-        await callbacks.onClientAuthenticated(clientId, respond)
-        return .delivered
+    }
+
+    func isWired(generation: Generation) -> Bool {
+        guard case .wired(let currentGeneration, _) = self else { return false }
+        return currentGeneration == generation
+    }
+
+    private enum Operation: String {
+        case begin
+        case clientAuthenticated
+        case disconnect
+        case install
+        case invalidate
+        case respond
+        case send
+    }
+
+    private enum DeliveryDecision {
+        case admitted(Callbacks)
+        case rejected
+        case callbacksUnavailable
+    }
+
+    private func deliveryDecision(
+        for candidate: Generation,
+        operation: Operation
+    ) -> DeliveryDecision {
+        switch self {
+        case .wired(let current, let callbacks) where current == candidate:
+            return .admitted(callbacks)
+        case .wiring(let current) where current == candidate,
+             .idle(let current?) where current == candidate:
+            return .callbacksUnavailable
+        case .idle(latest: nil):
+            return .callbacksUnavailable
+        case .idle, .wiring, .wired:
+            logRejection(operation, candidate: candidate)
+            return .rejected
+        }
+    }
+
+    private func logRejection(_ operation: Operation, candidate: Generation) {
+        let current = latestGeneration.map { String($0.rawValue) } ?? "none"
+        muscleLogger.debug(
+            "Rejected callback \(operation.rawValue, privacy: .public): candidate=\(candidate.rawValue) current=\(current, privacy: .public)"
+        )
     }
 }

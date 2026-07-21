@@ -181,14 +181,21 @@ struct InterfaceTree: Sendable, Equatable {
     /// off-viewport elements.
     struct ObservedScrollContentActivationPoint: Sendable, Equatable {
         let point: ScrollContentPoint
+        let ownerPath: TreePath
 
-        init?(_ point: CGPoint) {
+        init?(_ point: CGPoint, ownerPath: TreePath) {
             guard let point = try? ScrollContentPoint(validating: point) else { return nil }
             self.point = point
+            self.ownerPath = ownerPath
         }
 
-        init?(_ point: ScrollContentPoint) {
+        init(_ point: ScrollContentPoint, ownerPath: TreePath) {
             self.point = point
+            self.ownerPath = ownerPath
+        }
+
+        func admit(ownerPath: TreePath) -> ScrollContentPoint? {
+            ownerPath == self.ownerPath ? point : nil
         }
     }
 

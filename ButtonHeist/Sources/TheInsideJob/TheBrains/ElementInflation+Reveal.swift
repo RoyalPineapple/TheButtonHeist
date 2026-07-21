@@ -8,13 +8,13 @@ extension ElementInflation {
 
     private enum TargetRefreshMode {
         case revealPath(
-            treeElement: InterfaceTree.Element,
+            target: AdmittedSemanticTarget,
             transaction: RevealTransaction,
             resolution: ActionSubjectResolution
         )
         case liveTarget(
-            treeElement: InterfaceTree.Element,
-            target: ResolvedAccessibilityTarget,
+            identity: CrossCaptureTarget,
+            pinnedElement: InterfaceTree.Element,
             method: ActionMethod,
             resolution: ActionSubjectResolution
         )
@@ -42,10 +42,44 @@ extension ElementInflation {
         resolution: ActionSubjectResolution,
         transaction: RevealTransaction
     ) async -> State {
+        await stateAfterReveal(
+            treeElement,
+            identity: .captureLocal(target),
+            deadline: deadline,
+            resolution: resolution,
+            transaction: transaction
+        )
+    }
+
+    internal func stateAfterReveal(
+        _ treeElement: InterfaceTree.Element,
+        identity: CrossCaptureTarget,
+        deadline: SemanticObservationDeadline,
+        resolution: ActionSubjectResolution,
+        transaction: RevealTransaction
+    ) async -> State {
+        let sourceTarget = identity.sourceTarget
+
+        let admittedTarget: AdmittedSemanticTarget
+        if let admitted = identity.admittedSemanticTarget {
+            admittedTarget = admitted
+        } else {
+            switch admittedSemanticTarget(sourceTarget, selectedElement: treeElement) {
+            case .success(let target):
+                admittedTarget = target
+            case .failure(let failure):
+                return .failed(failure.inflationFailure)
+            }
+        }
+        let admittedIdentity = CrossCaptureTarget.admitted(
+            sourceTarget: sourceTarget,
+            semanticTarget: admittedTarget
+        )
+
         if vault.liveContains(heistId: treeElement.heistId),
            let committed = vault.interfaceElement(heistId: treeElement.heistId) {
             return .refreshing(
-                target: target,
+                target: admittedIdentity,
                 treeElement: committed,
                 deadline: deadline,
                 resolution: resolution
@@ -54,7 +88,8 @@ extension ElementInflation {
 
         let settledSequence = vault.semanticObservationStream.latestCommittedEvent?.sequence
         let reveal = await revealSemanticTarget(
-            treeElement,
+            admittedTarget,
+            initialElement: treeElement,
             deadline: deadline,
             transaction: transaction
         )
@@ -67,13 +102,12 @@ extension ElementInflation {
             return .failed(.timedOut(
                 "semantic target reveal reached the action deadline before the target became actionable"
             ))
+        case .targetResolutionFailed(let failure):
+            return .failed(failure.inflationFailure)
         case .failed(let failure):
-            if failure == .scanDidNotRevealTarget {
-                return .failed(.noRevealPath(semanticRevealFailureMessage(failure, entry: treeElement)))
-            }
             switch await awaitTargetRefresh(
                 mode: .revealPath(
-                    treeElement: treeElement,
+                    target: admittedTarget,
                     transaction: transaction,
                     resolution: resolution
                 ),
@@ -82,7 +116,7 @@ extension ElementInflation {
             ) {
             case .treeElement(let resolved, let refreshedResolution):
                 return .refreshing(
-                    target: target,
+                    target: admittedIdentity,
                     treeElement: resolved,
                     deadline: deadline,
                     resolution: refreshedResolution
@@ -91,7 +125,7 @@ extension ElementInflation {
                 return .failed(refreshFailure)
             case .inflated(let inflatedTarget):
                 return .refreshing(
-                    target: target,
+                    target: admittedIdentity,
                     treeElement: inflatedTarget.treeElement,
                     deadline: deadline,
                     resolution: inflatedTarget.resolution
@@ -107,16 +141,36 @@ extension ElementInflation {
                         + "; reveal path wait was cancelled before a path appeared"
                 ))
             }
-        case .alreadyVisible, .revealed:
-            break
+        case .alreadyVisible(let current), .revealed(let current):
+            return .refreshing(
+                target: admittedIdentity,
+                treeElement: current,
+                deadline: deadline,
+                resolution: reveal.didReveal && transaction.didMove
+                    ? resolution.adding(.semanticReveal)
+                    : resolution
+            )
         }
-        return .refreshing(
-            target: target,
-            treeElement: treeElement,
-            deadline: deadline,
-            resolution: reveal.didReveal && transaction.didMove
-                ? resolution.adding(.semanticReveal)
-                : resolution
+    }
+
+    internal func awaitLiveTargetRefresh(
+        for target: AdmittedSemanticTarget,
+        sourceTarget: ResolvedAccessibilityTarget,
+        pinnedElement: InterfaceTree.Element,
+        method: ActionMethod,
+        after settledSequence: SettledObservationSequence?,
+        deadline: SemanticObservationDeadline,
+        resolution: ActionSubjectResolution
+    ) async -> TargetRefreshTerminal {
+        await awaitTargetRefresh(
+            mode: .liveTarget(
+                identity: .admitted(sourceTarget: sourceTarget, semanticTarget: target),
+                pinnedElement: pinnedElement,
+                method: method,
+                resolution: resolution
+            ),
+            after: settledSequence,
+            deadline: deadline
         )
     }
 
@@ -130,8 +184,8 @@ extension ElementInflation {
     ) async -> TargetRefreshTerminal {
         await awaitTargetRefresh(
             mode: .liveTarget(
-                treeElement: treeElement,
-                target: target,
+                identity: .captureLocal(target),
+                pinnedElement: treeElement,
                 method: method,
                 resolution: resolution
             ),
@@ -177,25 +231,28 @@ extension ElementInflation {
                 break
             }
 
-            guard case .revealPath(let treeElement, let transaction, _) = mode,
+            guard case .revealPath(let target, let transaction, _) = mode,
                   !didAttemptKnownTargetReveal,
-                  let fresh = vault.interfaceElement(heistId: treeElement.heistId),
+                  case .success(let fresh) = resolveAdmittedSemanticTarget(target),
                   fresh.scrollMembership != nil
             else { continue }
 
             didAttemptKnownTargetReveal = true
             switch await revealSemanticTarget(
-                fresh,
+                target,
+                initialElement: fresh,
                 deadline: deadline,
                 transaction: transaction
             ) {
-            case .alreadyVisible:
-                return .treeElement(fresh, resolution)
-            case .revealed:
+            case .alreadyVisible(let current):
+                return .treeElement(current, resolution)
+            case .revealed(let current):
                 return .treeElement(
-                    fresh,
+                    current,
                     transaction.didMove ? resolution.adding(.semanticReveal) : resolution
                 )
+            case .targetResolutionFailed(let failure):
+                return .failure(failure.inflationFailure)
             case .failed:
                 continue
             case .cancelled:
@@ -214,16 +271,35 @@ extension ElementInflation {
         resolution: ActionSubjectResolution
     ) -> TargetRefreshResolution {
         switch mode {
-        case .revealPath(let treeElement, _, _):
-            guard vault.liveContains(heistId: treeElement.heistId),
-                  let committed = vault.interfaceElement(heistId: treeElement.heistId)
-            else { return .missing }
-            return .treeElement(committed)
+        case .revealPath(let target, _, _):
+            switch resolveAdmittedSemanticTarget(target) {
+            case .success(let current):
+                return vault.liveContains(heistId: current.heistId)
+                    ? .treeElement(current)
+                    : .missing
+            case .failure(let failure):
+                return .failed(failure.inflationFailure)
+            }
 
-        case .liveTarget(let treeElement, let target, let method, _):
+        case .liveTarget(let identity, let pinnedElement, let method, _):
+            let current: InterfaceTree.Element
+            switch identity {
+            case .captureLocal:
+                guard let committed = vault.interfaceElement(heistId: pinnedElement.heistId) else {
+                    return .retry(.staleTarget)
+                }
+                current = committed
+            case .admitted(_, let target):
+                switch resolveAdmittedSemanticTarget(target) {
+                case .success(let element):
+                    current = element
+                case .failure(let failure):
+                    return .failed(failure.inflationFailure)
+                }
+            }
             switch resolveCurrentLiveElementTarget(
-                treeElement: treeElement,
-                target: target,
+                treeElement: current,
+                identity: identity,
                 method: method,
                 deadline: deadline,
                 resolution: resolution

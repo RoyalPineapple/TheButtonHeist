@@ -78,9 +78,13 @@ final class TheBrainsScrollTests: XCTestCase {
     }
 
     func observedContentActivationPoint(
-        _ point: CGPoint
+        _ point: CGPoint,
+        ownerPath: TreePath
     ) -> InterfaceTree.ObservedScrollContentActivationPoint {
-        guard let observedPoint = InterfaceTree.ObservedScrollContentActivationPoint(point) else {
+        guard let observedPoint = InterfaceTree.ObservedScrollContentActivationPoint(
+            point,
+            ownerPath: ownerPath
+        ) else {
             preconditionFailure("Test content activation point must be finite")
         }
         return observedPoint
@@ -140,7 +144,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertFalse(returnedResult)
     }
 
-    func testScanForHeistIdReturnsNilWhenInitialSettlementIsCancelled() async {
+    func testSemanticTargetScanIsUnavailableWhenInitialSettlementIsCancelled() async throws {
         let staleId: HeistId = "stale_action_target"
         brains.vault.installObservationForTesting(.makeForTests([
             .init(
@@ -148,25 +152,60 @@ final class TheBrainsScrollTests: XCTestCase {
                 heistId: staleId
             ),
         ]))
+        let selected = try XCTUnwrap(brains.vault.interfaceElement(heistId: staleId))
+        let sourceTarget = try resolvedTarget(.label("Stale action target").and(.traits([.button])))
+        guard case .admitted(let target) = brains.navigation.elementInflation.admitSemanticTarget(
+            sourceTarget,
+            selectedElement: selected
+        ) else {
+            return XCTFail("Expected a portable semantic target")
+        }
+        let scrollView = UIScrollView()
         let deadline = semanticRevealDeadline()
         let scanTask = Task { @MainActor in
-            await brains.navigation.scanForHeistId(staleId, deadline: deadline) == nil
+            await brains.navigation.scanForSemanticTarget(.init(
+                target: target,
+                revealRootScrollViewID: ObjectIdentifier(scrollView),
+                deadline: deadline
+            ))
         }
         scanTask.cancel()
 
-        let returnedNil = await scanTask.value
-        XCTAssertTrue(returnedNil)
+        guard case .unavailable = await scanTask.value else {
+            return XCTFail("Expected cancelled semantic scan to be unavailable")
+        }
     }
 
-    func testScanForHeistIdReturnsNilWhenDeadlineIsExpired() async {
+    func testSemanticTargetScanIsUnavailableWhenDeadlineIsExpired() async throws {
+        let targetId: HeistId = "stale_action_target"
+        brains.vault.installObservationForTesting(.makeForTests([
+            .init(
+                AccessibilityElement.make(label: "Stale action target", traits: .button),
+                heistId: targetId
+            ),
+        ]))
+        let selected = try XCTUnwrap(brains.vault.interfaceElement(heistId: targetId))
+        let sourceTarget = try resolvedTarget(.label("Stale action target").and(.traits([.button])))
+        guard case .admitted(let target) = brains.navigation.elementInflation.admitSemanticTarget(
+            sourceTarget,
+            selectedElement: selected
+        ) else {
+            return XCTFail("Expected a portable semantic target")
+        }
         let deadline = SemanticObservationDeadline(
             start: RuntimeElapsed.now,
             timeoutSeconds: 0
         )
 
-        let result = await brains.navigation.scanForHeistId("stale_action_target", deadline: deadline)
+        let result = await brains.navigation.scanForSemanticTarget(.init(
+            target: target,
+            revealRootScrollViewID: ObjectIdentifier(UIScrollView()),
+            deadline: deadline
+        ))
 
-        XCTAssertNil(result)
+        guard case .unavailable = result else {
+            return XCTFail("Expected expired semantic scan to be unavailable")
+        }
     }
 
     func testGeometryCrossingDeadlineDuringFrameAwaitTimesOut() async throws {
@@ -470,7 +509,7 @@ final class TheBrainsScrollTests: XCTestCase {
     struct OffViewportScrollTarget {
         let element: AccessibilityElement
         let heistId: HeistId
-        let observedActivationPoint: InterfaceTree.ObservedScrollContentActivationPoint
+        let contentActivationPoint: ScrollContentPoint
         let scrollView: UIScrollView
 
         init(
@@ -479,12 +518,12 @@ final class TheBrainsScrollTests: XCTestCase {
             contentActivationPoint: CGPoint,
             scrollView: UIScrollView
         ) {
-            guard let observedActivationPoint = InterfaceTree.ObservedScrollContentActivationPoint(contentActivationPoint) else {
+            guard let contentActivationPoint = try? ScrollContentPoint(validating: contentActivationPoint) else {
                 preconditionFailure("Test content activation point must be finite")
             }
             self.element = element
             self.heistId = heistId
-            self.observedActivationPoint = observedActivationPoint
+            self.contentActivationPoint = contentActivationPoint
             self.scrollView = scrollView
         }
     }
@@ -509,7 +548,10 @@ final class TheBrainsScrollTests: XCTestCase {
         let offscreenEntry = InterfaceTree.Element(
             heistId: offscreen.heistId,
             scrollMembership: InterfaceTree.ScrollMembership(containerPath: scrollContainerPath, index: nil),
-            observedScrollContentActivationPoint: offscreen.observedActivationPoint,
+            observedScrollContentActivationPoint: InterfaceTree.ObservedScrollContentActivationPoint(
+                offscreen.contentActivationPoint,
+                ownerPath: scrollContainerPath
+            ),
             element: offscreen.element
         )
         let observation = InterfaceObservation.makeForTests(
@@ -780,10 +822,12 @@ final class TheBrainsScrollTests: XCTestCase {
 
     final class RecordingScrollView: UIScrollView {
         var setContentOffsetAnimations: [Bool] = []
+        var requestedContentOffsets: [CGPoint] = []
         var onSetContentOffset: (@MainActor (RecordingScrollView) -> Void)?
 
         override func setContentOffset(_ contentOffset: CGPoint, animated: Bool) {
             setContentOffsetAnimations.append(animated)
+            requestedContentOffsets.append(contentOffset)
             onSetContentOffset?(self)
             super.setContentOffset(contentOffset, animated: animated)
         }

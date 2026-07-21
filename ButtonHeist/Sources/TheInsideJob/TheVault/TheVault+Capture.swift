@@ -6,6 +6,49 @@ import TheScore
 
 import AccessibilitySnapshotParser
 
+enum InventoryEnumeration {
+    enum ReportedCount: Equatable {
+        case known(Int)
+        case unknown
+
+        init(_ rawValue: Int) {
+            if rawValue == NSNotFound || rawValue < 0 {
+                self = .unknown
+            } else {
+                self = .known(rawValue)
+            }
+        }
+
+        var value: Int? {
+            guard case .known(let count) = self else { return nil }
+            return count
+        }
+    }
+
+    struct Result {
+        let reportedCountsByContainerPath: [TreePath: ReportedCount]
+        let attemptedIndicesByContainerPath: [TreePath: [Int]]
+        let offscreenElements: [TheVault.OffscreenScrollElement]
+        let knownUnattemptedCount: Int
+
+        init(
+            reportedCountsByContainerPath: [TreePath: ReportedCount] = [:],
+            attemptedIndicesByContainerPath: [TreePath: [Int]] = [:],
+            offscreenElements: [TheVault.OffscreenScrollElement] = [],
+            knownUnattemptedCount: Int = 0
+        ) {
+            self.reportedCountsByContainerPath = reportedCountsByContainerPath
+            self.attemptedIndicesByContainerPath = attemptedIndicesByContainerPath
+            self.offscreenElements = offscreenElements
+            self.knownUnattemptedCount = knownUnattemptedCount
+        }
+
+        var attemptedCount: Int {
+            attemptedIndicesByContainerPath.values.reduce(0) { $0 + $1.count }
+        }
+    }
+}
+
 extension TheVault {
     struct OffscreenScrollElement {
         let path: TreePath
@@ -22,7 +65,7 @@ extension TheVault {
         let containerObjectsByPath: [TreePath: NSObject]
         let scrollViewsByPath: [TreePath: UIScrollView]
         let screenCoordinateOffsetsByPath: [TreePath: CGPoint]
-        let offscreenScrollElements: [OffscreenScrollElement]
+        let inventoryEnumeration: InventoryEnumeration.Result
 
         init(
             hierarchy: [AccessibilityHierarchy],
@@ -30,14 +73,14 @@ extension TheVault {
             containerObjectsByPath: [TreePath: NSObject] = [:],
             scrollViewsByPath: [TreePath: UIScrollView] = [:],
             screenCoordinateOffsetsByPath: [TreePath: CGPoint] = [:],
-            offscreenScrollElements: [OffscreenScrollElement] = []
+            inventoryEnumeration: InventoryEnumeration.Result = .init()
         ) {
             self.hierarchy = hierarchy
             self.objectsByPath = objectsByPath
             self.containerObjectsByPath = containerObjectsByPath
             self.scrollViewsByPath = scrollViewsByPath
             self.screenCoordinateOffsetsByPath = screenCoordinateOffsetsByPath
-            self.offscreenScrollElements = offscreenScrollElements
+            self.inventoryEnumeration = inventoryEnumeration
         }
     }
 
@@ -140,7 +183,7 @@ extension TheVault {
             from: scrollViewsByPath,
             containerObjectsByPath: containerObjectsByPath
         )
-        let offscreenScrollElements = captureOffscreenScrollElements(
+        let inventoryEnumeration = enumerateOffscreenScrollInventory(
             objectsByPath: objectsByPath,
             scrollViewsByPath: canonicalScrollViewsByPath
         )
@@ -151,40 +194,47 @@ extension TheVault {
             containerObjectsByPath: containerObjectsByPath,
             scrollViewsByPath: canonicalScrollViewsByPath,
             screenCoordinateOffsetsByPath: screenCoordinateOffsetsByPath,
-            offscreenScrollElements: offscreenScrollElements
+            inventoryEnumeration: inventoryEnumeration
         )
     }
 
-    private func captureOffscreenScrollElements(
+    func enumerateOffscreenScrollInventory(
         objectsByPath: [TreePath: NSObject],
         scrollViewsByPath: [TreePath: UIScrollView],
         budget: Int = ButtonHeistRuntimeKnobs.current.visibleElementBudget
-    ) -> [OffscreenScrollElement] {
-        guard budget > 0 else {
-            logDroppedOffscreenScrollElements(
-                candidateCount(in: scrollViewsByPath, representedObjects: Array(objectsByPath.values))
-            )
-            return []
-        }
-
+    ) -> InventoryEnumeration.Result {
+        let admittedInventories = scrollViewsByPath
+            .sorted(by: { $0.key < $1.key })
+            .compactMap { path, scrollView -> (TreePath, UIScrollView, InventoryEnumeration.ReportedCount)? in
+                guard Self.admitsOffscreenInventory(from: scrollView) else { return nil }
+                return (path, scrollView, InventoryEnumeration.ReportedCount(scrollView.accessibilityElementCount()))
+            }
+        let reportedCountsByContainerPath = Dictionary(
+            uniqueKeysWithValues: admittedInventories.map { ($0.0, $0.2) }
+        )
         var representedObjectIDs = Set(objectsByPath.values.map(ObjectIdentifier.init))
         var elements: [OffscreenScrollElement] = []
-        var dropped = 0
+        var attemptedIndicesByContainerPath: [TreePath: [Int]] = [:]
+        var remainingRequests = max(0, budget)
+        var knownUnattemptedCount = 0
 
-        for (containerPath, scrollView) in scrollViewsByPath.sorted(by: { $0.key < $1.key }) {
-            guard Self.admitsOffscreenInventory(from: scrollView) else { continue }
-            let count = scrollView.accessibilityElementCount()
-            guard count != NSNotFound, count > 0 else { continue }
+        for (containerPath, scrollView, reportedCount) in admittedInventories {
+            guard let count = reportedCount.value, count > 0 else { continue }
 
             for index in 0..<count {
+                guard remainingRequests > 0 else {
+                    knownUnattemptedCount = Self.saturatingSum(
+                        knownUnattemptedCount,
+                        count - index
+                    )
+                    break
+                }
+                remainingRequests -= 1
+                attemptedIndicesByContainerPath[containerPath, default: []].append(index)
+
                 guard let object = scrollView.accessibilityElement(at: index) as? NSObject,
                       representedObjectIDs.insert(ObjectIdentifier(object)).inserted
                 else { continue }
-
-                guard elements.count < budget else {
-                    dropped += 1
-                    continue
-                }
 
                 guard let element = captureObject(object)?.withVisibility(.offscreen) else { continue }
                 elements.append(OffscreenScrollElement(
@@ -194,56 +244,56 @@ extension TheVault {
                     element: element,
                     observedScrollContentActivationPoint: observedScrollContentActivationPoint(
                         for: element,
-                        in: scrollView
+                        in: scrollView,
+                        ownerPath: containerPath
                     )
                 ))
             }
         }
 
-        logDroppedOffscreenScrollElements(dropped)
-        return elements
+        let result = InventoryEnumeration.Result(
+            reportedCountsByContainerPath: reportedCountsByContainerPath,
+            attemptedIndicesByContainerPath: attemptedIndicesByContainerPath,
+            offscreenElements: elements,
+            knownUnattemptedCount: knownUnattemptedCount
+        )
+        logBoundedInventoryEnumeration(result, budget: max(0, budget))
+        return result
     }
 
     private static func admitsOffscreenInventory(from scrollView: UIScrollView) -> Bool {
         !(scrollView is UITableView) && !(scrollView is UICollectionView)
     }
 
-    private func candidateCount(
-        in scrollViewsByPath: [TreePath: UIScrollView],
-        representedObjects: [NSObject]
-    ) -> Int {
-        let representedObjectIDs = Set(representedObjects.map(ObjectIdentifier.init))
-        return scrollViewsByPath.values.reduce(into: 0) { count, scrollView in
-            guard Self.admitsOffscreenInventory(from: scrollView) else { return }
-            let elementCount = scrollView.accessibilityElementCount()
-            guard elementCount != NSNotFound, elementCount > 0 else { return }
-            for index in 0..<elementCount {
-                guard let object = scrollView.accessibilityElement(at: index) as? NSObject,
-                      !representedObjectIDs.contains(ObjectIdentifier(object))
-                else { continue }
-                count += 1
-            }
-        }
+    private static func saturatingSum(_ lhs: Int, _ rhs: Int) -> Int {
+        let (sum, overflow) = lhs.addingReportingOverflow(rhs)
+        return overflow ? Int.max : sum
     }
 
-    private func logDroppedOffscreenScrollElements(_ count: Int) {
-        guard count > 0 else { return }
+    private func logBoundedInventoryEnumeration(
+        _ result: InventoryEnumeration.Result,
+        budget: Int
+    ) {
+        guard result.knownUnattemptedCount > 0 else { return }
         insideJobLogger.warning(
             """
-            Dropped \(count, privacy: .public) offscreen accessibility scroll element(s) \
-            because BH_SCROLL_SUBTREE_ELEMENT_BUDGET was exhausted.
+            Bounded offscreen accessibility inventory at budget \(budget, privacy: .public): \
+            attempted \(result.attemptedCount, privacy: .public) request(s), \
+            omitted \(result.knownUnattemptedCount, privacy: .public) known request(s).
             """
         )
     }
 
     private func observedScrollContentActivationPoint(
         for element: AccessibilityElement,
-        in scrollView: UIScrollView
+        in scrollView: UIScrollView,
+        ownerPath: TreePath
     ) -> InterfaceTree.ObservedScrollContentActivationPoint? {
         let activationPoint = element.bhResolvedActivationPoint
         guard activationPoint.x.isFinite, activationPoint.y.isFinite else { return nil }
         return InterfaceTree.ObservedScrollContentActivationPoint(
-            scrollView.convert(activationPoint, from: nil)
+            scrollView.convert(activationPoint, from: nil),
+            ownerPath: ownerPath
         )
     }
 

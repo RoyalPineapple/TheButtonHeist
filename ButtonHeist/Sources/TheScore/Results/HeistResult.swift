@@ -145,6 +145,7 @@ public struct HeistResult: Codable, Sendable, Equatable {
                     child.edge.map { (child.step, $0) }
                 }
             )
+            try admitOrderedExecution(current.step.children)
             pending.append(contentsOf: children.reversed().map {
                 (
                     step: $0.step,
@@ -172,6 +173,13 @@ public struct HeistResult: Codable, Sendable, Equatable {
         var admission = RootExecutionAdmission()
         for root in roots {
             try admission.admit(root)
+        }
+    }
+
+    private static func admitOrderedExecution(_ steps: [HeistExecutionStepResult]) throws {
+        var admission = OrderedExecutionAdmission()
+        for step in steps {
+            try admission.admit(step)
         }
     }
 
@@ -270,8 +278,27 @@ public struct HeistResult: Codable, Sendable, Equatable {
         .incoherentExecutionEvidence(path: step.path, reason: reason)
     }
 
+    private struct OrderedExecutionAdmission {
+        private(set) var terminalFailurePath: HeistExecutionPath?
+
+        mutating func admit(_ step: HeistExecutionStepResult) throws {
+            if let terminalFailurePath {
+                guard step.status == .skipped else {
+                    throw HeistResult.incoherent(
+                        step,
+                        "ordered sequence cannot execute after abort at \(terminalFailurePath)"
+                    )
+                }
+                return
+            }
+
+            guard step.status == .failed else { return }
+            terminalFailurePath = step.abortedAtChildPath ?? step.path
+        }
+    }
+
     private struct RootExecutionAdmission {
-        private var abortedAtPath: HeistExecutionPath?
+        private var orderedExecution = OrderedExecutionAdmission()
         private var nextFailureActionIndex = 0
         private var terminalEvidenceStarted = false
 
@@ -287,23 +314,14 @@ public struct HeistResult: Codable, Sendable, Equatable {
                     "regular root appears after terminal failure-capture evidence"
                 )
             }
-            guard let abortedAtPath else {
-                self.abortedAtPath = root.firstFailedStepInResultOrder?.path
-                return
-            }
-            guard root.status == .skipped else {
-                throw HeistResult.incoherent(
-                    root,
-                    "regular root cannot execute after abort at \(abortedAtPath)"
-                )
-            }
+            try orderedExecution.admit(root)
         }
 
         private mutating func admitAuxiliaryFailureAction(
             _ root: HeistExecutionStepResult,
             ancestor: HeistExecutionPath.FailureActionAncestor
         ) throws {
-            guard let abortedAtPath else {
+            guard let abortedAtPath = orderedExecution.terminalFailurePath else {
                 throw HeistResult.incoherent(root, "failure-capture root appears before any abort")
             }
             guard ancestor.path == abortedAtPath else {

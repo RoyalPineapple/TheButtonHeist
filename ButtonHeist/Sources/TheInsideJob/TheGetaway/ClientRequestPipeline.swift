@@ -6,6 +6,7 @@ struct ClientTransportRequest: Sendable {
     let clientId: Int
     let data: Data
     let respond: SocketResponseHandler
+    let generation: ClientDelivery.Generation
 }
 
 /// One bounded, ordered frame-admission stream for one connected client.

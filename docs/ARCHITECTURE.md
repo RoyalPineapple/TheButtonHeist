@@ -110,10 +110,15 @@ current retained entry. No predicate, action, or adapter owns another history.
 
 A raw parser read may replace live object and geometry evidence, but only a
 `HeistId` resolved from the committed `InterfaceTree` can select that evidence
-for action. Parsed nodes do not become targetable until a proven commit. Once
-an action resolves a semantic target, element inflation pins that exact
-`HeistId`; reveal, refresh, geometry stabilization, and dispatch cannot switch
-to a newly matching element.
+for action. Parsed nodes do not become targetable until a proven commit.
+`HeistId` is a capture-local join key, not identity across committed captures.
+When reveal crosses a capture boundary, element inflation admits one
+`AdmittedSemanticTarget`: the resolved target with its terminal ordinal removed,
+but only when that target uniquely resolves to the originally selected element
+in the complete committed interface. Every later committed capture re-resolves
+that semantic target and adopts the matching element's current `HeistId` for
+live UIKit handoff. Missing or ambiguous re-resolution fails safely; it never
+retains the previous id or substitutes a sibling duplicate.
 
 The window materializes `AccessibilityTrace` evidence and its ordered
 `ChangeFact` values for temporal predicates and results. Presence predicates
@@ -192,11 +197,16 @@ new viewport, yields one run-loop turn, and parses again. Matching semantic
 fingerprints prove the viewport in one turn; layout churn may consume another
 turn, bounded by the 250 ms transition ceiling. Page, edge, swipe, known
 content-point reveal, and restore intents all commit their admitted observation into the
-canonical Store and produce one settled event. When a target is already present
-in `InterfaceTree`, inflation uses its parser-derived scroll membership and
-two-dimensional content point to jump directly to it; blank intervening pages
-are irrelevant. `ViewportExplorer` is the fallback for unknown targets or
-missing reveal evidence. It dispatches exactly one viewport movement,
+canonical Store and produce one settled event. A captured reveal content point
+and the semantic `TreePath` of the scroll container whose coordinate space
+produced it form one evidence value. Immediately before dispatch, inflation
+admits that point only when the live movement candidate has the exact owner
+path. This owner-qualified seed is an optional shortcut for a known target;
+blank intervening pages are irrelevant when it succeeds. A missing or
+mismatched owner skips the seed without donating its coordinate to an ancestor
+or sibling, and `ViewportExplorer` continues the established ancestor paging
+route. The explorer is also the fallback for unknown targets or missing reveal
+evidence. It dispatches exactly one viewport movement,
 waits for settle, parse, Store commit, and callback, and only
 then may request another movement.
 
@@ -254,22 +264,53 @@ The pipeline is:
 
 1. Resolve the semantic target against settled accessibility state.
 2. Reject missing or ambiguous targets with diagnostics.
-3. Pin the resolved `HeistId` and one deadline derived from its scroll-membership
-   ancestor graph.
+3. Derive one deadline from the selected element's scroll-membership graph. If
+   reveal will cross a capture boundary, admit an ordinal-free
+   `AdmittedSemanticTarget` that still uniquely selects that exact element.
 4. Reveal nested scroll ancestors outermost-first when viewport movement is
-   required, proving each graph path against current live containment.
-5. Refresh by the pinned `HeistId`; never rerun the semantic selector to choose
-   a replacement element.
+   required, using the initial capture's `HeistId` only to locate the live scroll
+   owner and proving each graph path against current live containment. Each
+   captured content point remains paired with its producing container's semantic
+   path and is admitted only when that path exactly matches the current movement
+   candidate, immediately before dispatch.
+5. After every committed capture, re-resolve the admitted semantic target and
+   adopt that match's current capture-local `HeistId`. Missing or ambiguous
+   resolution ends inflation without a live handoff.
 6. Acquire and stabilize fresh live geometry under the same deadline.
 7. Execute the accessibility operation or explicit spatial gesture.
 8. Return settled semantic evidence through `InteractionCoordinator`.
 
 Predicate evaluation uses semantic observations, not live UIKit geometry. Live
 geometry is used for inflation and explicit spatial gesture or viewport commands; it
-is not durable identity. If inflation cannot be proven, the command fails with
+is not durable identity. `CommittedElementTarget` carries the admitted or
+capture-local target together with only the current capture's resolved
+`HeistId`; it does not create another semantic identity. If admission,
+re-resolution, or live handoff cannot be proven, the command fails with
 diagnostics instead of acting on stale or guessed state. See the
 [element inflation diagram](diagrams/element-inflation.md) for the resolution
-flowchart.
+flowchart. Owner-qualified point dispatch is only a seed optimization: if its
+owner is missing or mismatched, the runtime does not reuse the coordinate on an
+ancestor or sibling and instead continues the existing bounded ancestor paging
+route. Both routes keep UIKit movement, transition settlement, Store commit, and
+target re-resolution on the same canonical pipelines; they introduce no public
+navigation, result, evidence, or metric contract.
+
+### Capture Budgets Precede UIKit Enumeration
+
+TheVault owns offscreen accessibility inventory enumeration. It reads each
+admitted scroll container's reported count once in deterministic semantic-path
+order, then uses one capture-global `InventoryEnumeration.RequestAdmission`.
+Every `accessibilityElement(at:)` call requires an `.admitted` decision first,
+so a zero budget performs no individual element requests and nil, represented,
+filtered, or uncapturable responses still consume allowance.
+
+`InventoryEnumeration.Result` is the single internal result for this work. It
+owns reported count snapshots, attempted indices, captured offscreen elements,
+and known unattempted count. TheVault projects those facts into the existing
+`ScrollInventory` annotations. TheFence replays the same global admission order
+when deriving the existing completeness and truncation projections, so known
+omissions are reported at the owning scroll container without adding another
+result, evidence, JSON, compact, CLI, MCP, or `.heist` model.
 
 ### State Has One Owner
 
@@ -285,6 +326,8 @@ The approved long-lived owners are:
   `SemanticObservationStream` is the sole visible-observation producer and
   waiter-delivery owner.
 - `TheMuscle`: auth, admission, and session state inside the app.
+- `ClientDelivery`: the newest admitted callback generation and its current
+  callbacks inside the app.
 - `TheHandoff`: external connection phase and discovery state outside the app.
 - `PendingRequestRegistry`: typed `RequestID` to continuation correlation,
   removed on resolve, timeout, or cancellation.
@@ -297,16 +340,29 @@ single capture and must not become stable identity. Transport registries and
 auth registries may share a client key, but they stay separate: transport does
 not own authentication semantics.
 
+`ClientDelivery` is the canonical callback-generation owner. A begin is
+admitted only when its generation is strictly newer than the retained latest
+generation. The idle phase retains that latest-generation tombstone, while the
+wiring and wired phases carry the current generation; only the wired phase
+carries callbacks. Stale begin, installation, invalidation or teardown, event,
+and delivery work cannot mutate current callbacks or produce client-visible
+delivery. Normal-order work for the exact current generation may install and
+invoke the current callbacks. `TheGetaway` issues generations before suspension
+and admits matching wiring and events, while `TheMuscle` routes callback effects
+through `ClientDelivery` for an exact-generation check at the delivery boundary.
+
 The implementation owners for the bounded coordination and projection
 pipelines are explicit:
 
 | Concept | Canonical owner | Thin projections or lifecycle callers |
 | --- | --- | --- |
 | UI request admission and cancellation | `InteractionRequestExecutor` in `TheBrains.swift` | `TheGetaway+Transport.swift`, `Heist.swift` |
+| Callback generation admission and delivery | `ClientDelivery.swift` | `TheGetaway` issues strictly increasing generations and admits matching wiring and events; `TheMuscle` routes generation-scoped callback effects through the owner |
 | Drainable callback work | `TaskTracker.swift` | Lifecycle, listener-generation, and delayed-disconnect owners |
 | Discovery callback delivery | `DeviceDiscoveryEventStream.swift` | `DeviceDiscovery.swift` |
 | Compiler process terminal outcome | `HeistCompilerProcess.Runner` in `HeistCompilerProcess.swift` | `HeistSwiftFileCompilation.swift`; diagnostic rendering lives in `HeistSwiftFileCompilationError.swift` |
 | Result construction and relationship validity | `HeistExecutionStepResult+Construction.swift` | Runtime step executors and result decoding |
+| Result aggregate admission | `HeistResult.admitStructure` in `HeistResult.swift` | Package initialization and decoding; one ordered-sequence reducer admits regular roots and every recursively visited child sequence, while the root adapter alone admits auxiliary failure-capture evidence |
 | Result private storage codec | `HeistExecutionStepNode.swift` and `HeistExecutionStepNode+Codable.swift` | External result JSON projection only |
 | Action semantic and wire payload | `ActionResult.Payload` with `ActionResult` custom `Codable` | Runtime construction and wire encoding/decoding |
 | Result interpretation | `HeistReport.project(result:)` in `HeistResult+Report.swift` | JSON, compact, human, JUnit, doctor, and metric renderers |
@@ -318,6 +374,7 @@ pipelines are explicit:
 | Semantic observation waiter delivery | `SemanticObservationStream+Waiters.swift` | Cursor, window, replay, and timeout projections |
 | Testing request construction | `ButtonHeistTesting.swift` | Synchronous helpers and joined sessions live in their named extension files |
 | Fence action JSON | `FenceJSON+Action.swift` and `FenceJSON+HeistExecution.swift`, one result family each | Fence response formatting |
+| Exported tuple contract enforcement | The single `buttonheist.exported_tuple_return` Bumper rule | One effective-access projection covers functions, properties, subscripts, protocol requirements, and inherited public or package visibility; private and local tuple scratch values never enter the exported-contract projection |
 | Test scheme, destination, and artifact topology | `scripts/test-runner.py` | CI and local invocations |
 
 ### Report and Action Evidence Have One Owner
@@ -641,9 +698,10 @@ unconstructible.
    then lowers it into a one-step or composed `HeistPlan` and sends
    `ClientMessage.heistPlan`.
 3. TheGetaway routes the plan to TheBrains' heist runtime.
-4. TheBrains captures before-state, resolves and pins the target `HeistId`,
-   performs the action into one `ActionDispatchResult`, waits for stable UI,
-   and parses after-state.
+4. TheBrains captures before-state, resolves the semantic target, carries an
+   admitted identity across any reveal captures, and joins its current-capture
+   `HeistId` to live UIKit evidence before performing the action into one
+   `ActionDispatchResult`, waiting for stable UI, and parsing after-state.
 5. The settled entry is appended to the retained observation log; the action
    checkpoint reads scoped notification evidence without consuming it.
 6. Presence predicates evaluate the current tree. Temporal predicates evaluate
@@ -657,11 +715,12 @@ unconstructible.
 `wait` is a one-step heist with an explicit bounded lifecycle. It checks the
 latest visible committed state first and exits immediately on a match. If
 unmatched, an eligible wait with one already-resolvable terminal element target
-uses element inflation to reveal that exact `HeistId` and exits `.current`,
-retaining the revealed viewport. A standalone temporal wait establishes its
-baseline only after that positioning commit. Each later retained entry is
-evaluated against the complete accumulated window from that immutable baseline;
-an unmatched entry triggers another reveal before the wait returns to idle.
+uses element inflation to admit and reveal that exact semantic target, adopting
+each committed capture's local `HeistId`, and exits `.current`, retaining the
+revealed viewport. A standalone temporal wait establishes its baseline only
+after that positioning commit. Each later retained entry is evaluated against
+the complete accumulated window from that immutable baseline; an unmatched
+entry triggers another reveal before the wait returns to idle.
 
 Appearance assertions, unresolved element targets, container targets, and
 predicates containing multiple targets use the canonical viewport explorer

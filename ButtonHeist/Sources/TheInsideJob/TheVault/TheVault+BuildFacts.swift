@@ -111,7 +111,8 @@ extension TheVault.BuildFacts {
                 ),
                 inventoriesByPath: scrollInventories(
                     visibleIndicesByContainerPath: elementScrollExtraction.visibleIndicesByContainerPath,
-                    scrollViewsByPath: result.scrollViewsByPath
+                    scrollViewsByPath: result.scrollViewsByPath,
+                    reportedCountsByContainerPath: result.inventoryEnumeration.reportedCountsByContainerPath
                 )
             ),
             focus: TheVault.FocusFacts(
@@ -167,7 +168,8 @@ extension TheVault.BuildFacts {
                 ),
                 observedScrollContentActivationPoint: observedScrollContentActivationPoint(
                     for: identity.element,
-                    in: scrollView
+                    in: scrollView,
+                    ownerPath: membership.containerPath
                 )
             )
         }
@@ -180,23 +182,18 @@ extension TheVault.BuildFacts {
 
     private static func scrollInventories(
         visibleIndicesByContainerPath: [TreePath: Set<Int>],
-        scrollViewsByPath: [TreePath: UIScrollView]
+        scrollViewsByPath: [TreePath: UIScrollView],
+        reportedCountsByContainerPath: [TreePath: InventoryEnumeration.ReportedCount]
     ) -> [TreePath: ScrollInventory] {
         Dictionary(
-            uniqueKeysWithValues: scrollViewsByPath.compactMap { path, scrollView in
+            uniqueKeysWithValues: scrollViewsByPath.keys.compactMap { path in
                 guard let inventory = ScrollInventory(
-                    totalElementCount: totalElementCount(in: scrollView),
+                    totalElementCount: reportedCountsByContainerPath[path]?.value,
                     visibleIndices: (visibleIndicesByContainerPath[path] ?? []).sorted()
                 ) else { return nil }
                 return (path, inventory)
             }
         )
-    }
-
-    private static func totalElementCount(in scrollView: UIScrollView) -> Int? {
-        let count = scrollView.accessibilityElementCount()
-        guard count != NSNotFound, count >= 0 else { return nil }
-        return count
     }
 
     private static func scrollIndex(of object: NSObject?, in scrollView: UIScrollView) -> Int? {
@@ -208,12 +205,14 @@ extension TheVault.BuildFacts {
 
     private static func observedScrollContentActivationPoint(
         for element: AccessibilityElement,
-        in scrollView: UIScrollView
+        in scrollView: UIScrollView,
+        ownerPath: TreePath
     ) -> InterfaceTree.ObservedScrollContentActivationPoint? {
         let activationPoint = element.bhResolvedActivationPoint
         guard activationPoint.x.isFinite, activationPoint.y.isFinite else { return nil }
         return InterfaceTree.ObservedScrollContentActivationPoint(
-            scrollView.convert(activationPoint, from: nil)
+            scrollView.convert(activationPoint, from: nil),
+            ownerPath: ownerPath
         )
     }
 
@@ -230,7 +229,8 @@ extension TheVault.BuildFacts {
                 let activationPoint = CGPoint(x: frame.midX, y: frame.midY)
                 guard activationPoint.x.isFinite, activationPoint.y.isFinite,
                       let observedPoint = InterfaceTree.ObservedScrollContentActivationPoint(
-                          scrollView.convert(activationPoint, from: nil)
+                          scrollView.convert(activationPoint, from: nil),
+                          ownerPath: membership.containerPath
                       )
                 else { return nil }
                 return (identity.path, observedPoint)
