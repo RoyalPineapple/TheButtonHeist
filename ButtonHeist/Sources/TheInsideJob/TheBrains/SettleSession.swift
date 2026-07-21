@@ -82,6 +82,9 @@ enum SettleOutcome: Equatable, Sendable {
 enum SettlePolicy: Equatable, Sendable {
     case consecutiveCycles(required: Int)
     case quietWindow(milliseconds: Int)
+    /// The composite animation/run-loop idle edge supplies the timing proof;
+    /// the parser only confirms that its first post-idle snapshot repeats.
+    case postIdleConfirmation
 }
 
 struct SettleObservationSample: Equatable, Sendable {
@@ -91,6 +94,7 @@ struct SettleObservationSample: Equatable, Sendable {
 private enum SettleLoopStability: Equatable, Sendable {
     case consecutiveCycles(required: Int, completed: Int)
     case quietWindow(milliseconds: Int, startedAtMs: Int?)
+    case postIdleConfirmation
 
     init(policy: SettlePolicy) {
         switch policy {
@@ -98,6 +102,8 @@ private enum SettleLoopStability: Equatable, Sendable {
             self = .consecutiveCycles(required: required, completed: 0)
         case .quietWindow(let milliseconds):
             self = .quietWindow(milliseconds: milliseconds, startedAtMs: nil)
+        case .postIdleConfirmation:
+            self = .postIdleConfirmation
         }
     }
 
@@ -114,6 +120,9 @@ private enum SettleLoopStability: Equatable, Sendable {
             }
             self = .quietWindow(milliseconds: milliseconds, startedAtMs: startedAtMs)
             return startedAtMs.map { elapsedMs - $0 >= milliseconds } ?? false
+
+        case .postIdleConfirmation:
+            return repeatedFingerprint
         }
     }
 
@@ -123,6 +132,8 @@ private enum SettleLoopStability: Equatable, Sendable {
             self = .consecutiveCycles(required: required, completed: 0)
         case .quietWindow(let milliseconds, _):
             self = .quietWindow(milliseconds: milliseconds, startedAtMs: nil)
+        case .postIdleConfirmation:
+            break
         }
     }
 }
@@ -226,8 +237,9 @@ final class SettleSessionFinalObservation {
 ///
 /// **Settle signal boundary.** SettleSession watches settled AX semantics for
 /// both passive observation and active heists. Its policy selects consecutive
-/// fingerprint cycles or a quiet wall-clock window; the reducer and runner are
-/// shared. `TheTripwire.waitForAllClear`
+/// fingerprint cycles, a quiet wall-clock fallback, or one post-idle
+/// fingerprint confirmation; the reducer and runner are shared.
+/// `TheTripwire.waitForAllClear`
 /// watches CALayers and is deliberately blind to the AX tree; "no layer
 /// motion" and "AX tree stable" disagree on every spinner-driven loading
 /// state. Viewport movement uses this same reducer with a two-cycle policy.
@@ -369,6 +381,8 @@ final class SettleSessionFinalObservation {
                 nanoseconds: UInt64(SettleSession.defaultCycleIntervalMs) * 1_000_000
             ) }
         case .quietWindow:
+            { await tripwire.yieldRealFrames(1) }
+        case .postIdleConfirmation:
             { await tripwire.yieldRealFrames(1) }
         }
         return SettleSession(

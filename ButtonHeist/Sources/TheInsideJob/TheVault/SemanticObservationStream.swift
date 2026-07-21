@@ -9,7 +9,7 @@ import TheScore
 @MainActor
 internal final class SemanticObservationStream {
     private static let passiveSettleTimeoutMs = 1_000
-    private static let activeQuietWindowMs = 60
+    private static let activeFallbackQuietWindowMs = 60
     private static let passiveDiscoveryCadence: Duration = .seconds(1)
 
     internal typealias VisibleObservationSettler = @MainActor (
@@ -103,10 +103,10 @@ internal final class SemanticObservationStream {
             let policy: SettlePolicy
             switch demand {
             case .active:
-                _ = await tripwire.heistIdleTracker.waitUntilIdle(
+                let idleReached = await tripwire.heistIdleTracker.waitUntilIdle(
                     timeout: .milliseconds(timeoutMs)
                 )
-                policy = .quietWindow(milliseconds: Self.activeQuietWindowMs)
+                policy = Self.activeSettlePolicy(idleReached: idleReached)
             case .idle:
                 policy = .consecutiveCycles(required: SettleSession.defaultCyclesRequired)
             }
@@ -120,6 +120,12 @@ internal final class SemanticObservationStream {
                 baselineTripwireSignal: baseline
             )
         }
+    }
+
+    static func activeSettlePolicy(idleReached: Bool) -> SettlePolicy {
+        idleReached
+            ? .postIdleConfirmation
+            : .quietWindow(milliseconds: Self.activeFallbackQuietWindowMs)
     }
 
     internal func start(

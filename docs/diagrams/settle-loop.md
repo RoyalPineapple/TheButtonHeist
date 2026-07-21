@@ -9,7 +9,7 @@ The tripwire and the settle loop as cooperating mechanisms: TheTripwire watches 
 stateDiagram-v2
     direction TB
     state "consecutiveCycles" as cycles
-    state "quietWindow" as quiet
+    state "post-idle fingerprint" as postIdle
     state "settled(timeMs:)" as settled
     state "timedOut(timeMs:)" as timedOut
     state "cancelled(timeMs:)" as cancelled
@@ -28,16 +28,20 @@ stateDiagram-v2
     animating --> runLoopIdle : aggregate count reaches zero
     [*] --> runLoopIdle : count already zero
     runLoopIdle --> animating : animation started before idle edge
-    runLoopIdle --> quiet : idle edge with count still zero
-    quiet --> settled : window elapsed unchanged
+    runLoopIdle --> postIdle : idle edge with count still zero
+    postIdle --> postIdle : fingerprint changed, replace baseline
+    postIdle --> settled : fingerprint repeats next frame
 
     settled --> [*]
     timedOut --> [*]
     cancelled --> [*]
 ```
 
-`quietWindow` shares the same `timedOut` and `cancelled` edges as
-`consecutiveCycles`; they are drawn once to keep the picture readable.
+`post-idle fingerprint` shares the same `timedOut` and `cancelled` edges as
+`consecutiveCycles`; they are drawn once to keep the picture readable. If the
+private idle tracker is unavailable, active settlement falls back to the 60 ms
+AX quiet-window policy. An idle wait that consumes the authored deadline stays
+timed out.
 
 The two clocks:
 
@@ -57,7 +61,7 @@ flowchart TD
         FP["fingerprint complete hierarchy:<br/>paths · ordering · semantic facts · containers<br/>heist ids · first responder · coarse geometry"]
         PARSE --> FP
     end
-    RUN_LOOP_IDLE -- "opens active AX<br/>quiet-window sampling" --> PARSE
+    RUN_LOOP_IDLE -- "opens active AX parse;<br/>confirm once next frame" --> PARSE
     SIGNAL -- "signal change resets<br/>the settle baseline" --> PARSE
 ```
 

@@ -168,13 +168,17 @@ swizzles call UIKit's original `UIViewAnimationState` start/stop methods first,
 then update one aggregate counter. A public `CFRunLoopObserver` publishes
 one-shot main-loop `beforeWaiting` edges. Active settlement requires the
 animation counter to reach zero and then observes a main-loop idle edge before
-the AX quiet window runs, all within the same authored operation deadline. It
+capturing the AX tree, all within the same authored operation deadline. The
+parser confirms that first post-idle fingerprint once on the next real frame;
+it no longer waits an arbitrary quiet duration on the normal active path. It
 rechecks the animation count at the run-loop edge so a newly started animation
-repeats the gate. An already-zero counter completes its phase immediately, and
-an unmatched stop clamps at zero. Nested heists inherit the root lease and
-counter; they never install parallel hooks. The root heist invalidates the
-observer and restores both methods with `defer` only after nested execution and
-terminal evidence capture finish.
+repeats the gate. If private idle tracking is unavailable, its immediate
+failure selects the 60 ms AX quiet-window policy; an idle wait that exhausts
+the authored deadline remains timed out. An already-zero counter completes its
+phase immediately, and an unmatched stop clamps at zero. Nested heists inherit
+the root lease and counter; they never install parallel hooks. The root heist
+invalidates the observer and restores both methods with `defer` only after
+nested execution and terminal evidence capture finish.
 
 That shared deadline is an operation bound, not a main-thread responsiveness
 probe. A true liveness probe must originate off the main actor, schedule a
