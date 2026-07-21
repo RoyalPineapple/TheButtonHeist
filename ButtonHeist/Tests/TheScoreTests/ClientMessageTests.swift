@@ -147,6 +147,41 @@ final class ClientMessageTests: XCTestCase {
 
     // MARK: - Heist Plan Tests
 
+    func testHeistPlanRunAcceptsOnlyCurrentCanonicalFields() throws {
+        let run = HeistPlanRun(plan: try HeistPlan(body: [
+            .wait(WaitStep(predicate: .exists(.label("Ready")), timeout: 1)),
+        ]))
+
+        let encoded = try JSONEncoder().encode(run)
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        XCTAssertEqual(Set(object.keys), ["argument", "plan"])
+        let decoded = try JSONDecoder().decode(HeistPlanRun.self, from: encoded)
+        XCTAssertEqual(decoded.argument, .none)
+        XCTAssertEqual(decoded.plan.body.count, 1)
+    }
+
+    func testHeistPlanRunRejectsRemovedAndUnknownFields() throws {
+        let run = HeistPlanRun(plan: try HeistPlan(body: [
+            .wait(WaitStep(predicate: .exists(.label("Ready")), timeout: 1)),
+        ]))
+        let encoded = try JSONEncoder().encode(run)
+        let canonicalObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+
+        for field in ["continuity", "historicalWaitDiagnostics", "unknownField"] {
+            var object = canonicalObject
+            object[field] = true
+            let data = try JSONSerialization.data(withJSONObject: object)
+
+            XCTAssertThrowsError(try JSONDecoder().decode(HeistPlanRun.self, from: data), field) { error in
+                XCTAssertTrue("\(error)".contains(field), "Expected \(field) in error, got \(error)")
+            }
+        }
+    }
+
     func testHeistPlanClientMessageRoundTrip() throws {
         let saveTarget = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save", traits: [.button]))
         let plan = try HeistPlan(body: [
