@@ -67,23 +67,12 @@ private struct PublicHeistActionEvidenceJSON: Encodable {
         case .commandResolutionFailure:
             break
         case .dispatch(let result):
-            try container.encode(actionOutput(result, method: .heist(command)), forKey: .result)
+            try container.encode(PublicHeistOutput.action(result, method: .heist(command), profile: profile), forKey: .result)
         case .expectation(let result, let expectationResult, let expectation):
-            try container.encode(actionOutput(result, method: .heist(command)), forKey: .result)
-            try container.encode(
-                actionOutput(expectationResult, method: .result(expectationResult.method)),
-                forKey: .expectationResult
-            )
-            try container.encode(expectationOutput(expectation), forKey: .expectation)
+            try container.encode(PublicHeistOutput.action(result, method: .heist(command), profile: profile), forKey: .result)
+            try container.encode(PublicHeistOutput.actionResult(expectationResult, profile: profile), forKey: .expectationResult)
+            try container.encode(PublicHeistOutput.expectation(expectation), forKey: .expectation)
         }
-    }
-
-    private func actionOutput(_ result: ActionResult, method: ActionMethodProjection) -> PublicActionResultOutput {
-        PublicHeistEvidenceOutputs.action(result, method: method, profile: profile)
-    }
-
-    private func expectationOutput(_ result: ExpectationResult) -> PublicExpectationResult {
-        PublicHeistEvidenceOutputs.expectation(result)
     }
 }
 
@@ -98,15 +87,8 @@ private struct PublicHeistWaitEvidenceJSON: Encodable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(evidence.outcome, forKey: .outcome)
-        try container.encode(
-            PublicHeistEvidenceOutputs.action(
-                evidence.actionResult,
-                method: .result(evidence.actionResult.method),
-                profile: profile
-            ),
-            forKey: .result
-        )
-        try container.encode(PublicHeistEvidenceOutputs.expectation(evidence.expectation), forKey: .expectation)
+        try container.encode(PublicHeistOutput.actionResult(evidence.actionResult, profile: profile), forKey: .result)
+        try container.encode(PublicHeistOutput.expectation(evidence.expectation), forKey: .expectation)
         try container.encodeIfPresent(evidence.baselineSummary, forKey: .baselineSummary)
         try container.encodeIfPresent(evidence.finalSummary, forKey: .finalSummary)
     }
@@ -153,11 +135,9 @@ private struct PublicHeistRepeatUntilEvidenceJSON: Encodable {
         try container.encode(declaration.timeout.seconds, forKey: .timeout)
         try container.encode(evidence.iterationCount, forKey: .iterationCount)
         try container.encodeIfPresent(evidence.iterationOrdinal, forKey: .iterationOrdinal)
-        try container.encode(PublicHeistEvidenceOutputs.expectation(evidence.expectation), forKey: .expectation)
+        try container.encode(PublicHeistOutput.expectation(evidence.expectation), forKey: .expectation)
         try container.encodeIfPresent(
-            evidence.actionResult.map {
-                PublicHeistEvidenceOutputs.action($0, method: .result($0.method), profile: profile)
-            },
+            PublicHeistOutput.actionResult(evidence.actionResult, profile: profile),
             forKey: .result
         )
         try container.encodeIfPresent(evidence.lastObservedSummary, forKey: .lastObservedSummary)
@@ -225,13 +205,11 @@ private struct PublicHeistInvocationEvidenceJSON: Encodable {
         )
         try container.encodeIfPresent(evidence.childFailedPath?.description, forKey: .childFailedPath)
         try container.encodeIfPresent(
-            evidence.expectationActionResult.map {
-                PublicHeistEvidenceOutputs.action($0, method: .result($0.method), profile: profile)
-            },
+            PublicHeistOutput.actionResult(evidence.expectationActionResult, profile: profile),
             forKey: .expectationResult
         )
         try container.encodeIfPresent(
-            evidence.expectation.map(PublicHeistEvidenceOutputs.expectation),
+            PublicHeistOutput.expectation(evidence.expectation),
             forKey: .expectation
         )
         try container.encodeIfPresent(
@@ -241,7 +219,21 @@ private struct PublicHeistInvocationEvidenceJSON: Encodable {
     }
 }
 
-private enum PublicHeistEvidenceOutputs {
+private enum PublicHeistOutput {
+    static func actionResult(
+        _ result: ActionResult,
+        profile: ProjectionProfile
+    ) -> PublicActionResultOutput {
+        action(result, method: .result(result.method), profile: profile)
+    }
+
+    static func actionResult(
+        _ result: ActionResult?,
+        profile: ProjectionProfile
+    ) -> PublicActionResultOutput? {
+        result.map { actionResult($0, profile: profile) }
+    }
+
     static func action(
         _ result: ActionResult,
         method: ActionMethodProjection,
@@ -260,5 +252,9 @@ private enum PublicHeistEvidenceOutputs {
 
     static func expectation(_ result: ExpectationResult) -> PublicExpectationResult {
         PublicExpectationResult(projection: ExpectationProjection(result: result))
+    }
+
+    static func expectation(_ result: ExpectationResult?) -> PublicExpectationResult? {
+        result.map(expectation)
     }
 }
