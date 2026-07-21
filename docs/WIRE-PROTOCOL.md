@@ -330,6 +330,12 @@ stabilization, and dispatch. Missing or ambiguous re-resolution fails the action
 the host never retains a stale id or substitutes a sibling. Cached coordinates
 and `HeistId` values from a prior capture are not authority.
 
+`heistPlan.payload` is strict: its only keys are `plan` and `argument`, and both
+are required. The decoder rejects every unknown key, including proposed
+continuity, evidence, or diagnostic controls. Action-linked evidence and
+automatic timeout diagnostics remain runtime-internal; no opt-in, token, or
+result field crosses the wire.
+
 Explicit viewport commands such as `scroll`, `scroll_to_edge`, and
 `scroll_to_visible` remain public Fence commands because moving the viewport is
 the requested behavior. They are non-durable debug operations and cross the
@@ -355,10 +361,22 @@ The host evaluates current-tree predicates against the current delivered
 interface first, then extends one observation window until the predicate is met
 or the timeout expires. `exists` and `missing` read current state. Lifecycle
 assertions require observed facts and never pass from an implied final state.
+Each standalone wait establishes an invocation-local baseline and announcement
+cursor, so it cannot consume prior action or heist evidence. An expectation
+explicitly attached to an action instead uses the exact pre-action settled
+baseline and opening announcement cursor, then replays canonical Store entries
+only through the cursor committed after that action settles. This preserves
+transient appeared and disappeared facts while limiting announcements to those
+after the action began.
 The response is a heist execution result, even for a single wait. Public report
 JSON includes `netDelta` only when the complete accumulated execution trace
 proves a change; not-applicable, incomplete, and complete unchanged evidence do
 not emit a delta.
+
+On timeout, the runtime may append bounded exact-predicate mismatch details from
+observations the wait already evaluated to the existing failure message and
+report. It performs no extra capture, settlement, reveal, discovery, polling,
+or predicate evaluation, and adds no wire field.
 
 To assert current settled container presence without requiring a transition,
 put the container in the canonical target slot:
@@ -405,8 +423,9 @@ is exactly one tagged case: `none`, `announcement`, `trace`, or `settledTrace`.
 Only `settledTrace` owns the tagged settlement shape
 `{"kind":"settled|timedOut","durationMs":...}`.
 The `trace` case cannot include `settlement`.
-`settledTrace` with `timedOut` may carry result-local diagnostic captures, but
-those captures are not admitted to settled semantic state.
+`settledTrace` with `timedOut` may carry result-local action-settlement
+diagnostic captures, but those captures are not admitted to settled semantic
+state.
 Captured announcements derive from the trace; standalone announcements use the
 `announcement` case. Settlement duration does not also appear in stored timing.
 Warnings are valid only in successful evidence and are not duplicated on a
@@ -444,9 +463,9 @@ notification ownership. Presence predicates read the current tree directly.
 
 `AccessibilityTrace` is the durable wire/result evidence materialized from
 that lineage, and the runtime derives ordered `ChangeFact` values from its
-adjacent captures. A timed-out action may return a diagnostic trace in its
-result, but that trace is not committed or usable as a settled observation
-baseline. No separate stored or endpoint temporal model exists.
+adjacent captures. An action-settlement timeout may return a diagnostic trace
+in its result, but that trace is not committed or usable as a settled
+observation baseline. No separate stored or endpoint temporal model exists.
 
 Only `CommittableInterfaceObservation` values are committed and appended to
 retained semantic history. A raw `InterfaceObservation` is live parser evidence
@@ -476,7 +495,8 @@ clears or transfers ownership of them. The selected events are strictly after
 the action window's opening cursor and no later than the batch's exact
 through-cursor. That through-cursor becomes the observation's notification
 cursor. A failed settle closes the attribution window and does not attach its
-events to that diagnostic trace. The ingress log remains non-destructive:
+events to that action-settlement diagnostic trace. The ingress log remains
+non-destructive:
 because no settled cursor advanced, an eligible scoped event can still be
 claimed by the next admitted commit. Ambient events remain outside scoped heist
 evidence. If the bounded notification stream discarded relevant events, the

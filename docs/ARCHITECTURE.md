@@ -123,10 +123,10 @@ retains the previous id or substitutes a sibling duplicate.
 The window materializes `AccessibilityTrace` evidence and its ordered
 `ChangeFact` values for temporal predicates and results. Presence predicates
 do not need a temporal window; they read the current tree through the same
-target resolver actions and `get_interface` use. A timed-out action may return
-a result-local diagnostic trace, but that trace is not committed, targetable,
-or an observation baseline. A public response may expose a compact `delta`, but
-that value is a one-way, lossy fold of ordered facts and is never fed back into
+target resolver actions and `get_interface` use. An action-settlement diagnostic
+trace is result-local evidence; it is not committed, targetable, or an
+observation baseline. A public response may expose a compact `delta`, but that
+value is a one-way, lossy fold of ordered facts and is never fed back into
 predicate evaluation.
 
 Agents should start from `get_interface`, then inspect an action result's public
@@ -244,11 +244,17 @@ reveal. Appearance assertions, unresolved targets, containers, and predicates
 with multiple targets use canonical discovery with `.origin`. Every temporal
 evaluation asks the log for the accumulated baseline-through-current
 `ObservationWindow`. Action expectations retain their supplied pre-action
-baseline rather than establishing or replacing it inside the wait. Terminal
-verification is scheduled before the authored operation deadline by reserving
-the longest observed reveal or discovery route cost. Its visible settle and
-final reveal or discovery inherit that same deadline; no phase receives a fresh
-budget and no discovery continues after it expires.
+baseline and replay only through the cursor committed at the end of that
+action's settlement. Replay uses the same predicate reducer as ordinary wait
+observations, so an intermediate appearance or disappearance can satisfy the
+expectation even when the settled endpoint no longer contains it. Action
+announcement expectations likewise begin at the announcement cursor captured
+before dispatch. A standalone wait establishes its own invocation-local
+baseline and announcement cursor; it cannot consume earlier action or heist
+evidence. Terminal verification is scheduled before the authored operation
+deadline by reserving the longest observed reveal or discovery route cost. Its
+visible settle and final reveal or discovery inherit that same deadline; no
+phase receives a fresh budget and no discovery continues after it expires.
 
 Detail level is separate: `detail: "summary"` keeps responses compact, while
 `detail: "full"` adds geometry and heavier accessibility fields.
@@ -561,9 +567,10 @@ flowchart TD
 
     StepKind -->|WaitFor| WaitForPath["PredicateWait.wait<br/>timeout default 30s"]
 
-    StepKind -->|Action + expect| PreAction["Record pre-action ObservationCursor"]
+    StepKind -->|Action + expect| PreAction["Capture exact pre-action SettledCapture<br/>+ announcement cursor"]
     PreAction --> Invoke["Invoke action<br/>ActionDispatchResult"]
-    Invoke --> ExpectPath["PredicateWait.wait<br/>timeout default 1s"]
+    Invoke --> ActionBound["Settle and commit action<br/>freeze through ObservationCursor"]
+    ActionBound --> ExpectPath["Replay Store baseline → bound<br/>then PredicateWait.wait if unmet"]
 
     StepKind -->|Action.until / RepeatUntil| LoopBaseline["Read baseline observation<br/>without evaluating stop predicate"]
     LoopBaseline --> RunBody["Run body action<br/>at least once"]
@@ -607,11 +614,15 @@ The `WaitFor`, post-action `.expect`, and `RepeatUntil` progress paths all call
 - `WaitFor(...)`: presence predicates read the current tree immediately. For a
   temporal predicate with one eligible, already-resolvable element target, the
   wait reveals and retains that target before using the resulting settled cursor
-  as its standalone baseline. Other standalone temporal waits establish their
-  baseline from canonical discovery.
+  as its invocation-local baseline. Other standalone temporal waits establish
+  their own baseline from canonical discovery. Neither route can read evidence
+  from an action or heist that completed before the wait began.
 - `Action(...).expect(...)`: a temporal expectation supplies the exact
-  pre-action `SettledCapture` to the wait. The wait preserves that baseline;
-  presence and announcement expectations need no temporal baseline.
+  pre-action `SettledCapture` and the upper `ObservationCursor` committed after
+  action settlement. The wait replays only that same-action Store window and
+  preserves the baseline if live waiting must continue. An announcement
+  expectation reads only notifications after the action's opening cursor.
+  Presence expectations read current settled state.
 - `RunHeist(...).expect(...)`: baseline is the nested heist boundary and stays
   action-like.
 - `RepeatUntil(...)` and action `.until(...)`: a direct semantic observation
@@ -629,14 +640,15 @@ not. The semantic log retains bounded per-scope history and builds a new
 accumulated `ObservationWindow` from the immutable baseline through every
 settled capture the wait evaluates. The wait does not maintain a second capture
 array, baseline, or notification claim. Action expectations carry the exact
-capture across the action boundary; they never replace it with a standalone
-wait baseline or manufacture a cursor by combining fields from different
-captures.
+capture and announcement cursor across the action boundary, then bound replay
+with the post-settlement cursor. They never replace that evidence with a
+standalone wait baseline or manufacture a cursor by combining fields from
+different captures.
 
-A settled action endpoint may satisfy a temporal expectation immediately from
-its causal before/after trace. A timed-out diagnostic endpoint cannot take that
-fast path; it continues from the exact settled baseline through the observation
-log, so uncommitted evidence never becomes a successful change verdict.
+Bounded action replay may satisfy a temporal expectation before live waiting
+begins. An action-settlement diagnostic trace cannot take that path; the
+predicate reducer reads only committed Store observations, so uncommitted
+evidence never becomes a successful change verdict.
 
 A scoped screen notification or snapshot-inferred replacement carrying typed
 `fallbackReason` evidence ends the current observation generation and starts
@@ -682,6 +694,13 @@ including elements, containers, and descendant-scoped targets. `appeared`,
 types make invalid combinations such as an `updated` screen assertion
 unconstructible.
 
+The wait reducer also records a bounded set of semantic candidates from unmet
+observations it has already evaluated. On timeout, the projector renders exact
+predicate mismatches into the existing failure message and `HeistReport`.
+Diagnostics do not schedule another capture, settlement, reveal, discovery,
+poll, or predicate evaluation, and they do not add a public option, token,
+result shape, or wire field.
+
 ## Core Flows
 
 ### Read
@@ -702,10 +721,12 @@ unconstructible.
    admitted identity across any reveal captures, and joins its current-capture
    `HeistId` to live UIKit evidence before performing the action into one
    `ActionDispatchResult`, waiting for stable UI, and parsing after-state.
-5. The settled entry is appended to the retained observation log; the action
-   checkpoint reads scoped notification evidence without consuming it.
+5. For an action with `.expect(...)`, the pre-action settled capture and opening
+   announcement cursor are retained internally. The settled entry is appended
+   to the observation log, and its cursor closes that action's replay window;
+   the checkpoint reads scoped notification evidence without consuming it.
 6. Presence predicates evaluate the current tree. Temporal predicates evaluate
-   the applicable observation window and its ordered facts.
+   the bounded Store replay and its ordered facts through the canonical reducer.
 7. The response includes the heist execution result. `HeistReport` classifies
    its accumulated accessibility evidence once, and public renderers project
    any resulting delta from that classification.
@@ -728,7 +749,10 @@ instead. Discovery searches both directional rays and exits `.origin`. The wait
 then sits idle on retained-log waiter coordination rather than polling or
 reparsing; an unmatched retained entry permits one bounded rediscovery. Action
 expectations do not establish a standalone baseline in either route: they keep
-the supplied pre-action `SettledCapture`.
+the supplied pre-action `SettledCapture` and replay no later than the action's
+post-settlement cursor. Standalone waits establish their baseline and
+announcement cursor inside their own invocation and cannot consume evidence
+from a prior action or heist.
 
 Every settle, reveal, discovery, and waiter phase inherits one authored
 operation deadline. Already-settled truth remains immediately evaluable, but a

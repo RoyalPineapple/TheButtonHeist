@@ -269,6 +269,22 @@ ordered `ChangeFact.elementsChanged` and `ChangeFact.screenChanged` values from
 the window's capture lineage. `AccessibilityTrace` is the durable result form
 of that evidence, not a second observation pipeline.
 
+An action with an attached `.expect(...)` captures its exact pre-action
+`SettledCapture` and announcement cursor before dispatch. After action
+settlement commits, the runtime freezes the same-action upper
+`ObservationCursor` and replays Store entries between those bounds through the
+canonical predicate reducer. A transient appearance or disappearance therefore
+qualifies even when the element is absent again at the settled endpoint.
+Announcements are eligible only when they occur after the action's opening
+announcement cursor. Presence expectations still resolve against current
+settled state.
+
+That context belongs only to the explicitly attached expectation. A standalone
+`WaitFor` establishes its own invocation-local baseline and announcement cursor;
+it cannot consume evidence from an earlier action or heist. If an attached
+expectation is still unmet after bounded replay, it continues through the same
+wait lifecycle without replacing its pre-action baseline.
+
 A screen boundary emits three ordered facts: all old-tree nodes disappear, the
 screen marker occurs, then all new-tree nodes appear. Element updates exist only
 between captures in the same screen generation. A scoped `screenChanged`
@@ -281,9 +297,14 @@ absence does not by itself prove replacement or stability.
 
 An incomplete window cannot prove `noChange`. A complete window may span
 multiple entries and retains fast intermediate changes until evaluation.
-A settled action's causal trace may satisfy its attached temporal expectation
-immediately. A timed-out diagnostic action trace is result evidence only and
-cannot bypass the settled observation window.
+An action-settlement diagnostic trace is result evidence only and cannot bypass
+the settled observation window.
+
+On timeout, the runtime retains a bounded set of semantic candidates from the
+observations the wait already evaluated. Exact predicate mismatches are appended
+to the existing timeout failure message and report. This diagnostic reduction
+schedules no additional capture, settlement, reveal, discovery, polling, or
+predicate work. It has no public opt-in, continuity token, or result field.
 
 Responses may include compact public deltas named `noChange`,
 `elementsChanged`, or `screenChanged`. This `delta` is a one-way temporal fold:
@@ -567,6 +588,9 @@ update assertions use `before` and `after` matcher objects for the property
 change; raw `from`/`to` fields are not accepted. Old `change`, `scopes`,
 `screenChanged`, flat element/container predicate fields, aliases, and fallback
 spellings are rejected rather than adapted.
+
+Action-linked evidence and automatic timeout diagnostics are runtime details.
+They do not add Swift authoring options, wire controls, or public result fields.
 
 ## Minimal Integration
 
