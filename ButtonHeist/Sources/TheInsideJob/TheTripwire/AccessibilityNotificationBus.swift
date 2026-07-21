@@ -120,20 +120,6 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
         after cursor: AccessibilityNotificationCursor,
         matching predicate: ResolvedAnnouncementPredicate,
         timeout: TimeInterval
-    ) async -> CapturedAnnouncement? {
-        let outcome = await waitForAnnouncementOutcome(
-            after: cursor,
-            matching: predicate,
-            timeout: timeout
-        )
-        guard case .matched(let announcement) = outcome else { return nil }
-        return announcement
-    }
-
-    func waitForAnnouncementOutcome(
-        after cursor: AccessibilityNotificationCursor,
-        matching predicate: ResolvedAnnouncementPredicate,
-        timeout: TimeInterval
     ) async -> AccessibilityAnnouncementWaitOutcome {
         let waiterId = reserveAnnouncementWaiterIdentifier()
         let continuationBox = TimedOneShot<AccessibilityAnnouncementWaitOutcome>()
@@ -279,14 +265,14 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
         matching predicate: ResolvedAnnouncementPredicate
     ) -> AccessibilityAnnouncementWaitOutcome {
         let batch = ingressLog.checkpoint(after: cursor, selection: .all)
-        if let gap = batch.gap {
-            return .historyUnavailable(gap)
-        }
         for event in batch.events {
             guard let announcement = event.capturedAnnouncement,
                   predicate.matches(announcement.text)
             else { continue }
             return .matched(announcement)
+        }
+        if let gap = batch.gap {
+            return .historyUnavailable(gap)
         }
         return .timedOut
     }

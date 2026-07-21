@@ -84,10 +84,12 @@ where Evidence: Sendable & Equatable {
                 start: start,
                 timeout: step.timeout,
                 cursor: actionExpectationContext?.announcementCursor
-                    ?? vault.accessibilityNotifications.cursor()
+                    ?? vault.accessibilityNotifications.cursor(),
+                isActionExpectation: actionExpectationContext != nil
             )
         }
 
+        var replayedEvidence: LifecycleEvidence?
         if let contextReduction = reduceActionContext(
             for: step,
             context: actionExpectationContext
@@ -105,7 +107,9 @@ where Evidence: Sendable & Equatable {
                     window: reduction.observationWindow,
                     observedSequence: reduction.observation.event.sequence
                 )
-            case .unmatched:
+            case .unmatched(let evidence):
+                replayedEvidence = evidence
+            case .empty:
                 break
             case .unavailable(let error):
                 return unavailableActionContextResult(
@@ -116,7 +120,8 @@ where Evidence: Sendable & Equatable {
             }
         }
 
-        if let traceEvaluation = initialTraceChangeEvaluation(
+        if replayedEvidence == nil,
+           let traceEvaluation = initialTraceChangeEvaluation(
             for: step,
             initialTrace: initialTrace
         ), traceEvaluation.met {
@@ -136,7 +141,8 @@ where Evidence: Sendable & Equatable {
             projection: changeProjection(
                 for: step,
                 changeBaseline: changeBaseline,
-                start: start
+                start: start,
+                replayedEvidence: replayedEvidence
             ),
             onReadyToPoll: onReadyToPoll
         )
@@ -168,12 +174,13 @@ where Evidence: Sendable & Equatable {
     private func changeProjection(
         for step: ResolvedWaitRuntimeInput,
         changeBaseline: PredicateChangeBaselineSource,
-        start: RuntimeElapsed.Instant
+        start: RuntimeElapsed.Instant,
+        replayedEvidence: LifecycleEvidence?
     ) -> ExecutionProjection<HeistWaitResult, LifecycleEvidence> {
         ExecutionProjection(
             target: step.predicate.waitTarget,
             continuesAfterInitialMiss: true,
-            initialEvidence: LifecycleEvidence(
+            initialEvidence: replayedEvidence ?? LifecycleEvidence(
                 predicate: step.predicateExpression,
                 target: step.predicate.waitTarget
             ),
@@ -563,8 +570,8 @@ where Evidence: Sendable & Equatable {
 
 }
 
-private extension ResolvedAccessibilityPredicate {
-    var waitTarget: ResolvedAccessibilityTarget? {
+extension ResolvedAccessibilityPredicate {
+    internal var waitTarget: ResolvedAccessibilityTarget? {
         switch core {
         case .presence(let presence):
             return presence.target

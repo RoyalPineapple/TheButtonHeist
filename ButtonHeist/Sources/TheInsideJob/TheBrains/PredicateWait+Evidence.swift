@@ -7,7 +7,8 @@ import TheScore
 extension PredicateWait {
     internal enum ActionContextReduction {
         case matched(PredicateObservationReduction)
-        case unmatched
+        case unmatched(LifecycleEvidence)
+        case empty
         case unavailable(ObservationHistoryReadError)
     }
 
@@ -29,9 +30,13 @@ extension PredicateWait {
         for step: ResolvedWaitRuntimeInput,
         context: ActionExpectationContext?
     ) -> ActionContextReduction? {
-        guard case .changed = step.predicate.core, let context else { return nil }
+        guard step.predicate.requiresChangeBaseline, let context else { return nil }
 
-        var stream = PredicateObservationStreamState()
+        var evidence = LifecycleEvidence(
+            predicate: step.predicateExpression,
+            target: step.predicate.waitTarget
+        )
+        var lastReduction: PredicateObservationReduction?
         var cursor = context.preActionCapture.cursor
         let upperBound = context.throughObservationCursor
         guard upperBound.scope == cursor.scope,
@@ -59,15 +64,20 @@ extension PredicateWait {
                 predicate: step.predicate,
                 predicateExpression: step.predicateExpression,
                 baselineSeed: .supplied(context.preActionCapture),
-                stream: stream
+                stream: evidence.stream
             )
-            stream = reduction.state
-            if reduction.reduction.expectation.met {
+            evidence = evidence.recording(reduction)
+            lastReduction = reduction.reduction
+            if case .changed = step.predicate.core,
+               reduction.reduction.expectation.met {
                 return .matched(reduction.reduction)
             }
             cursor = entry.cursor
         }
-        return .unmatched
+        guard let lastReduction else { return .empty }
+        return lastReduction.expectation.met
+            ? .matched(lastReduction)
+            : .unmatched(evidence)
     }
 
 }

@@ -214,7 +214,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             )
         }
 
-        let outcome = await bus.waitForAnnouncementOutcome(
+        let outcome = await bus.waitForAnnouncement(
             after: cursor,
             matching: ResolvedAnnouncementPredicate(
                 match: ResolvedStringMatch(core: .exact("Expected announcement"))
@@ -226,6 +226,41 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             outcome,
             .historyUnavailable(AccessibilityNotificationGap(droppedThroughSequence: 1))
         )
+        XCTAssertEqual(bus.announcementWaiterCount, 0)
+    }
+
+    func testAnnouncementWaitOutcomePrefersRetainedMatchOverEarlierGap() async {
+        let bus = AccessibilityNotificationBus()
+        let cursor = bus.cursor()
+        for index in 0..<64 {
+            bus.recordForTesting(
+                code: 1008,
+                notificationData: CapturedAccessibilityNotificationPayload(
+                    "Unrelated announcement \(index)" as NSString
+                ),
+                associatedElement: .none
+            )
+        }
+        bus.recordForTesting(
+            code: 1008,
+            notificationData: CapturedAccessibilityNotificationPayload(
+                "Expected announcement" as NSString
+            ),
+            associatedElement: .none
+        )
+
+        let outcome = await bus.waitForAnnouncement(
+            after: cursor,
+            matching: ResolvedAnnouncementPredicate(
+                match: ResolvedStringMatch(core: .exact("Expected announcement"))
+            ),
+            timeout: 60
+        )
+
+        guard case .matched(let announcement) = outcome else {
+            return XCTFail("Expected the retained announcement to match")
+        }
+        XCTAssertEqual(announcement.text, "Expected announcement")
         XCTAssertEqual(bus.announcementWaiterCount, 0)
     }
 
@@ -303,9 +338,11 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             associatedElement: .none
         )
 
-        let announcement = await result
-        XCTAssertEqual(announcement?.text, "3 items selected")
-        XCTAssertEqual(announcement?.kind, .elementChanged(.layout))
+        guard case .matched(let announcement) = await result else {
+            return XCTFail("Expected the layout announcement to match")
+        }
+        XCTAssertEqual(announcement.text, "3 items selected")
+        XCTAssertEqual(announcement.kind, .elementChanged(.layout))
     }
 
     func testOverlappingConsumersProjectTheSameRetainedEvents() async throws {
@@ -332,7 +369,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             associatedElement: .none
         )
 
-        let announcement = await announcementTask.value
+        let announcementOutcome = await announcementTask.value
         let actionBatch = try XCTUnwrap(action.capture())
         let heistBatch = bus.checkpoint(after: heist.cursor)
         let announcementProjection = bus.announcements(after: announcementCursor)
@@ -346,7 +383,10 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         ]
         XCTAssertEqual(actionBatch.events.map(\.kind), expectedKinds)
         XCTAssertEqual(heistBatch.events.map(\.kind), expectedKinds)
-        XCTAssertEqual(announcement?.sequence, 3)
+        guard case .matched(let announcement) = announcementOutcome else {
+            return XCTFail("Expected the retained announcement to match")
+        }
+        XCTAssertEqual(announcement.sequence, 3)
         XCTAssertEqual(announcementProjection.map(\.sequence), [3])
         XCTAssertEqual(
             bus.checkpoint(after: .origin, selection: .all).events.map(\.kind),
@@ -370,7 +410,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         task.cancel()
         let result = await task.value
 
-        XCTAssertNil(result)
+        XCTAssertEqual(result, .timedOut)
         XCTAssertEqual(bus.announcementWaiterCount, 0)
     }
 

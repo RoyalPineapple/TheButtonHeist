@@ -113,6 +113,7 @@ extension TheBrainsPipelineTests {
 
     func testTimeoutDiagnosticsIncludeIdentifierActionsAndRotors() async throws {
         let candidate = AccessibilityElement.make(
+            label: "Checkout",
             identifier: "checkout_identifier",
             customActions: [.init(name: "Archive")],
             customRotors: [.init(name: "Errors")],
@@ -124,14 +125,14 @@ extension TheBrainsPipelineTests {
 
         let result = await brains.interactionCoordinator.waitForPredicate(
             try resolvedWait(WaitStep(
-                predicate: .exists(.identifier("missing_identifier")),
+                predicate: .exists(.label("Missing")),
                 timeout: .milliseconds(1)
             ))
         )
         let message = try XCTUnwrap(result.outcome.actionResult.message)
 
         XCTAssertTrue(message.contains(#"identifier="checkout_identifier""#), message)
-        XCTAssertTrue(message.contains("actions=[Archive]"), message)
+        XCTAssertTrue(message.contains("actions=[activate, Archive]"), message)
         XCTAssertTrue(message.contains(#"rotors=["Errors"]"#), message)
     }
 

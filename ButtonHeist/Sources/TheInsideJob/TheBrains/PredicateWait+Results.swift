@@ -11,7 +11,8 @@ extension PredicateWait {
         initialTrace: AccessibilityTrace?,
         start: RuntimeElapsed.Instant,
         timeout: WaitTimeout,
-        cursor: AccessibilityNotificationCursor
+        cursor: AccessibilityNotificationCursor,
+        isActionExpectation: Bool
     ) async -> HeistWaitResult {
         if let initialTrace {
             return announcementResultFromInitialTrace(
@@ -22,11 +23,19 @@ extension PredicateWait {
             )
         }
 
-        guard let announcement = await vault.accessibilityNotifications.waitForAnnouncement(
+        switch await vault.accessibilityNotifications.waitForAnnouncement(
             after: cursor,
             matching: predicate,
             timeout: timeout.seconds
-        ) else {
+        ) {
+        case .matched(let announcement):
+            return announcementResult(
+                announcement,
+                predicate: predicate,
+                step: step,
+                start: start
+            )
+        case .timedOut:
             let message = Self.announcementTimeoutMessage(predicate, timeout: timeout)
             let expectation = ExpectationResult.Unmet(
                 predicate: step.predicateExpression,
@@ -37,13 +46,20 @@ extension PredicateWait {
                 traceEvidence: nil,
                 expectation: expectation
             )
+        case .historyUnavailable(let gap):
+            let message = isActionExpectation
+                ? "Action expectation announcement history unavailable: dropped through sequence \(gap.droppedThroughSequence)"
+                : "Announcement history unexpectedly unavailable: dropped through sequence \(gap.droppedThroughSequence)"
+            return .failed(
+                failureKind: .actionFailed,
+                message: message,
+                traceEvidence: nil,
+                expectation: ExpectationResult.Unmet(
+                    predicate: step.predicateExpression,
+                    actual: message
+                )
+            )
         }
-        return announcementResult(
-            announcement,
-            predicate: predicate,
-            step: step,
-            start: start
-        )
     }
 
     private func announcementResult(
