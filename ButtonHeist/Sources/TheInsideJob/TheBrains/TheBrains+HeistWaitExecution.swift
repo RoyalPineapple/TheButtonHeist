@@ -18,19 +18,19 @@ extension TheBrains {
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
-    ) async -> HeistExecutionStepResult {
+    ) async -> HeistStepExecution {
         let resolvedWait: ResolvedWaitRuntimeInput
         do {
             resolvedWait = try ResolvedWaitRuntimeInput(resolving: step, in: environment)
         } catch {
-            return standaloneWaitResolutionFailureResult(
+            return HeistStepExecution(result: standaloneWaitResolutionFailureResult(
                 HeistStandaloneWaitResolutionFailure(
                     wait: step,
                     errorDescription: String(describing: error)
                 ),
                 path: path,
                 start: start
-            )
+            ))
         }
 
         let result = await runtime.wait(.standalone(resolvedWait, startedAt: start))
@@ -40,12 +40,12 @@ extension TheBrains {
                 .init(executed: actionResult, expectation: expectation),
                 finalSummary: expectation.actual
             )
-            return waitStepResult(
+            return HeistStepExecution(result: waitStepResult(
                 step: step,
                 completion: .passed(evidence: .init(admitted: evidence)),
                 path: path,
                 start: start
-            )
+            ))
 
         case .unmatched(let actionResult, let expectation):
             guard let elseBody = step.elseBody else {
@@ -53,7 +53,7 @@ extension TheBrains {
                     .init(executed: actionResult, expectation: expectation.result),
                     finalSummary: expectation.actual
                 )
-                return waitStepResult(
+                return HeistStepExecution(result: waitStepResult(
                     step: step,
                     completion: .failed(
                         evidence: .observed(.init(admitted: evidence)),
@@ -61,10 +61,10 @@ extension TheBrains {
                     ),
                     path: path,
                     start: start
-                )
+                ))
             }
 
-            let children = await executeHeistSteps(
+            let execution = await executeHeistSteps(
                 elseBody,
                 runtime: runtime,
                 environment: environment,
@@ -76,7 +76,7 @@ extension TheBrains {
                 finalSummary: expectation.actual
             ))
             let completion: HeistWaitCompletion
-            switch children {
+            switch execution.children {
             case .passed(let children):
                 completion = .passed(evidence: evidence, children: children)
             case .aborted(let children):
@@ -86,11 +86,14 @@ extension TheBrains {
                     children: children
                 )
             }
-            return waitStepResult(
-                step: step,
-                completion: completion,
-                path: path,
-                start: start
+            return HeistStepExecution(
+                result: waitStepResult(
+                    step: step,
+                    completion: completion,
+                    path: path,
+                    start: start
+                ),
+                lastSuccessfulActionBoundary: execution.lastSuccessfulActionBoundary
             )
         }
     }

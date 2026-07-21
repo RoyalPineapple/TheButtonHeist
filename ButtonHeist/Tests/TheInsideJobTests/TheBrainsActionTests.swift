@@ -451,6 +451,7 @@ final class TheBrainsActionTests: XCTestCase {
     func heistRuntime(
         observations: [ActionEvidenceProjector.Baseline],
         executionBaseline: SettledCapture? = nil,
+        actionBoundaries: [EvidenceContinuity.Boundary] = [],
         execute: (@MainActor (ResolvedHeistActionCommand) async -> ActionResult)? = nil,
         wait: (@MainActor (TheBrains.HeistRuntimeWaitRequest) async -> ActionResult)? = nil,
         observedScopes: (@MainActor (SemanticObservationScope) -> Void)? = nil,
@@ -469,6 +470,7 @@ final class TheBrainsActionTests: XCTestCase {
             line: line
         )
         let caseBrains = TheBrains(tripwire: TheTripwire())
+        var nextActionBoundaryIndex = 0
 
         return TheBrains.HeistExecutionRuntime(
             execute: { command, baselineScope in
@@ -481,9 +483,20 @@ final class TheBrainsActionTests: XCTestCase {
                         payload: command.resultPayload
                     )
                 }
+                let scriptedBoundary = actionBoundaries.indices.contains(nextActionBoundaryIndex)
+                    ? actionBoundaries[nextActionBoundaryIndex]
+                    : nil
+                nextActionBoundaryIndex += 1
+                let actionBoundary = scriptedBoundary ?? executionBaseline.map {
+                    self.brains.evidenceContinuityStore.captureBoundary(
+                        settledCapture: $0,
+                        notificationCursor: .origin
+                    )
+                }
                 return RuntimeActionExecution(
                     result: result,
-                    expectationBaseline: executionBaseline
+                    successfulActionBoundary: result.outcome.isSuccess ? actionBoundary : nil,
+                    includesExpectationBaseline: baselineScope != nil
                 )
             },
             wait: { request in
@@ -532,7 +545,11 @@ final class TheBrainsActionTests: XCTestCase {
                         payload: command.resultPayload
                     )
                 }
-                return RuntimeActionExecution(result: result, expectationBaseline: nil)
+                return RuntimeActionExecution(
+                    result: result,
+                    successfulActionBoundary: nil,
+                    includesExpectationBaseline: false
+                )
             },
             wait: wait,
             selectPredicateCase: { _, _ in

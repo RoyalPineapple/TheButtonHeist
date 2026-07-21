@@ -41,18 +41,79 @@ extension TheBrains {
         }
     }
 
+    enum ScreenCaptureGatewaySuccess {
+        case payload(ScreenPayload)
+        case action(ScreenPayload, boundary: EvidenceContinuity.Boundary)
+
+        var payload: ScreenPayload {
+            switch self {
+            case .payload(let payload), .action(let payload, _): payload
+            }
+        }
+
+        var actionBoundary: EvidenceContinuity.Boundary? {
+            guard case .action(_, let boundary) = self else { return nil }
+            return boundary
+        }
+    }
+
     enum ScreenCaptureGatewayResult {
-        case success(ScreenPayload)
+        case success(ScreenCaptureGatewaySuccess)
         case failure(ScreenCaptureFailure)
     }
 
+    struct ScreenCaptureActionExecution {
+        let result: ActionResult
+        let successfulActionBoundary: EvidenceContinuity.Boundary?
+    }
+
     func captureScreenPayload(mode: ScreenCaptureMode = .raw) async -> ScreenCaptureGatewayResult {
+        await captureScreenPayload(mode: mode, boundaryRequest: .none)
+    }
+
+    private enum ScreenCaptureBoundaryRequest {
+        case none
+        case action
+    }
+
+    private enum CapturedScreenBoundary {
+        case none
+        case action(EvidenceContinuity.Boundary)
+    }
+
+    private func captureScreenPayload(
+        mode: ScreenCaptureMode,
+        boundaryRequest: ScreenCaptureBoundaryRequest
+    ) async -> ScreenCaptureGatewayResult {
         guard semanticObservationIsActive else {
             return .failure(.inactiveRuntime)
         }
         guard let observation = await interactionCoordinator.admittedVisibleBaseline(timeout: 1.0) else {
             return .failure(.accessibilityTreeUnavailable)
         }
+        guard let sequence = observation.settledObservationSequence,
+              let settledCapture = vault.semanticObservationStream.settledCapture(
+                scope: .visible,
+                at: sequence
+              ) else {
+            preconditionFailure("admitted screenshot baseline must retain its settled capture")
+        }
+
+        let notificationWindow: AccessibilityNotificationScopeLease?
+        let capturedBoundary: CapturedScreenBoundary
+        switch boundaryRequest {
+        case .none:
+            notificationWindow = nil
+            capturedBoundary = .none
+        case .action:
+            let window = vault.accessibilityNotifications.beginActionWindow()
+            notificationWindow = window
+            capturedBoundary = .action(evidenceContinuityStore.captureBoundary(
+                settledCapture: settledCapture,
+                notificationCursor: window.cursor
+            ))
+        }
+        defer { notificationWindow?.cancel() }
 
         guard let screenCapture = vault.captureScreen() else {
             return .failure(.appWindowUnavailable)
@@ -62,11 +123,14 @@ extension TheBrains {
             guard let payload = renderAccessibilitySnapshotPayload(
                 image: screenCapture.image,
                 bounds: screenCapture.bounds,
-                interface: observation.interface
+                interface: settledCapture.capture.interface
             ) else {
                 return .failure(.accessibilitySnapshotRenderingFailed)
             }
-            return .success(payload)
+            return .success(screenCaptureSuccess(
+                payload: payload,
+                capturedBoundary: capturedBoundary
+            ))
         }
 
         guard let pngData = screenCapture.image.pngData() else {
@@ -77,29 +141,63 @@ extension TheBrains {
             pngData: pngData.base64EncodedString(),
             width: screenCapture.bounds.width,
             height: screenCapture.bounds.height,
-            interface: observation.interface
+            interface: settledCapture.capture.interface
         ) else {
             return .failure(.invalidScreenDimensions)
         }
-        return .success(payload)
+        return .success(screenCaptureSuccess(
+            payload: payload,
+            capturedBoundary: capturedBoundary
+        ))
     }
 
     func executeTakeScreenshot(mode: ScreenCaptureMode = .raw) async -> ActionResult {
+        await executeTakeScreenshot(mode: mode, boundaryRequest: .none).result
+    }
+
+    func executeTakeScreenshotWithBoundary(
+        mode: ScreenCaptureMode = .raw
+    ) async -> ScreenCaptureActionExecution {
+        await executeTakeScreenshot(mode: mode, boundaryRequest: .action)
+    }
+
+    private func executeTakeScreenshot(
+        mode: ScreenCaptureMode,
+        boundaryRequest: ScreenCaptureBoundaryRequest
+    ) async -> ScreenCaptureActionExecution {
         let timing = ActionTiming()
-        switch await captureScreenPayload(mode: mode) {
-        case .success(let payload):
-            return .success(
-                payload: .screenshot(payload),
-                message: "Captured screenshot \(Int(payload.width))x\(Int(payload.height))",
-                timing: timing.freeze()
+        switch await captureScreenPayload(mode: mode, boundaryRequest: boundaryRequest) {
+        case .success(let success):
+            return ScreenCaptureActionExecution(
+                result: .success(
+                    payload: .screenshot(success.payload),
+                    message: "Captured screenshot \(Int(success.payload.width))x\(Int(success.payload.height))",
+                    timing: timing.freeze()
+                ),
+                successfulActionBoundary: success.actionBoundary
             )
         case .failure(let failure):
-            return .failure(
-                payload: .screenshot(nil),
-                failureKind: failure.actionFailureKind,
-                message: failure.message,
-                timing: timing.freeze()
+            return ScreenCaptureActionExecution(
+                result: .failure(
+                    payload: .screenshot(nil),
+                    failureKind: failure.actionFailureKind,
+                    message: failure.message,
+                    timing: timing.freeze()
+                ),
+                successfulActionBoundary: nil
             )
+        }
+    }
+
+    private func screenCaptureSuccess(
+        payload: ScreenPayload,
+        capturedBoundary: CapturedScreenBoundary
+    ) -> ScreenCaptureGatewaySuccess {
+        switch capturedBoundary {
+        case .none:
+            .payload(payload)
+        case .action(let boundary):
+            .action(payload, boundary: boundary)
         }
     }
 }

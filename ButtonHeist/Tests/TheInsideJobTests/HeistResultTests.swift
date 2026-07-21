@@ -655,7 +655,8 @@ private func repeatUntilRuntime(
         execute: { command, _ in
             RuntimeActionExecution(
                 result: await execute(command),
-                expectationBaseline: nil
+                successfulActionBoundary: nil,
+                includesExpectationBaseline: false
             )
         },
         wait: { request in

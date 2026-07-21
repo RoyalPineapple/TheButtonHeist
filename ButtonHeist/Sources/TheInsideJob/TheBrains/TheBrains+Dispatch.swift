@@ -6,7 +6,12 @@ import TheScore
 
 internal struct RuntimeActionExecution: Sendable, Equatable {
     internal let result: ActionResult
-    internal let expectationBaseline: SettledCapture?
+    internal let successfulActionBoundary: EvidenceContinuity.Boundary?
+    internal let includesExpectationBaseline: Bool
+
+    internal var expectationBaseline: SettledCapture? {
+        includesExpectationBaseline ? successfulActionBoundary?.settledCapture : nil
+    }
 }
 
 struct ActionTiming {
@@ -74,39 +79,35 @@ extension TheBrains {
         _ command: ResolvedHeistActionCommand,
         expectationBaselineScope: SemanticObservationScope? = nil
     ) async -> RuntimeActionExecution {
-        let expectationBaseline = await interactionCoordinator.settledCapture(
-            scope: expectationBaselineScope
-        )
-
         clearRotorCursorBeforeNonRotorAction(command)
-        let result: ActionResult
+        let execution: RuntimeActionExecution
         switch command {
         case .activate(let target):
-            result = await performInteraction(payload: .activate) { timing in
+            execution = await performInteraction(payload: .activate) { timing in
                 await self.actions.executeActivate(target, timing: &timing)
             }
         case .increment(let target):
-            result = await performInteraction(payload: .increment) { timing in
+            execution = await performInteraction(payload: .increment) { timing in
                 await self.actions.executeIncrement(target, timing: &timing)
             }
         case .decrement(let target):
-            result = await performInteraction(payload: .decrement) { timing in
+            execution = await performInteraction(payload: .decrement) { timing in
                 await self.actions.executeDecrement(target, timing: &timing)
             }
         case .customAction(let name, let target):
-            result = await performInteraction(payload: .customAction) { timing in
+            execution = await performInteraction(payload: .customAction) { timing in
                 await self.actions.executeCustomAction(name: name, target: target, timing: &timing)
             }
         case .dismiss:
-            result = await performInteraction(payload: .dismiss) { _ in
+            execution = await performInteraction(payload: .dismiss) { _ in
                 await self.actions.executeDismiss()
             }
         case .magicTap:
-            result = await performInteraction(payload: .magicTap) { _ in
+            execution = await performInteraction(payload: .magicTap) { _ in
                 await self.actions.executeMagicTap()
             }
         case .rotor(let selection, let target, let direction):
-            result = await performInteraction(payload: .rotor(nil)) { timing in
+            execution = await performInteraction(payload: .rotor(nil)) { timing in
                 await self.actions.executeRotor(
                     selection: selection,
                     target: target,
@@ -115,51 +116,61 @@ extension TheBrains {
                 )
             }
         case .editAction(let target):
-            result = await performInteraction(payload: .editAction) { _ in
+            execution = await performInteraction(payload: .editAction) { _ in
                 await self.actions.executeEditAction(target)
             }
         case .setPasteboard(let target):
-            result = await performInteraction(payload: .setPasteboard(nil)) { _ in
+            execution = await performInteraction(payload: .setPasteboard(nil)) { _ in
                 await self.actions.executeSetPasteboard(target)
             }
         case .takeScreenshot:
-            result = await executeTakeScreenshot()
+            execution = await executeScreenshotAction()
         case .dismissKeyboard:
-            result = await performInteraction(payload: .dismissKeyboard) { _ in
+            execution = await performInteraction(payload: .dismissKeyboard) { _ in
                 await self.actions.executeResignFirstResponder()
             }
         case .oneFingerTap(let target):
-            result = await performInteraction(payload: .oneFingerTap) { _ in
+            execution = await performInteraction(payload: .oneFingerTap) { _ in
                 await self.actions.executeTap(target)
             }
         case .longPress(let target):
-            result = await performInteraction(payload: .longPress) { _ in
+            execution = await performInteraction(payload: .longPress) { _ in
                 await self.actions.executeLongPress(target)
             }
         case .swipe(let target):
-            result = await performInteraction(payload: .swipe) { _ in
+            execution = await performInteraction(payload: .swipe) { _ in
                 await self.actions.executeSwipe(target)
             }
         case .drag(let target):
-            result = await performInteraction(payload: .drag) { _ in
+            execution = await performInteraction(payload: .drag) { _ in
                 await self.actions.executeDrag(target)
             }
         case .typeText(let payload):
-            result = await executeTypeText(payload)
+            execution = await executeTypeText(payload)
         case .scroll(let target):
-            result = await executeViewportScroll(target)
+            execution = await executeViewportScroll(target)
         case .scrollToVisible(let target):
-            result = await executeViewportScrollToVisible(target)
+            execution = await executeViewportScrollToVisible(target)
         case .scrollToEdge(let target):
-            result = await executeViewportScrollToEdge(target)
+            execution = await executeViewportScrollToEdge(target)
         }
         return RuntimeActionExecution(
-            result: result,
-            expectationBaseline: expectationBaseline
+            result: execution.result,
+            successfulActionBoundary: execution.successfulActionBoundary,
+            includesExpectationBaseline: expectationBaselineScope != nil
         )
     }
 
-    private func executeTypeText(_ payload: ResolvedTypeTextTarget) async -> ActionResult {
+    private func executeScreenshotAction() async -> RuntimeActionExecution {
+        let execution = await executeTakeScreenshotWithBoundary()
+        return RuntimeActionExecution(
+            result: execution.result,
+            successfulActionBoundary: execution.successfulActionBoundary,
+            includesExpectationBaseline: false
+        )
+    }
+
+    private func executeTypeText(_ payload: ResolvedTypeTextTarget) async -> RuntimeActionExecution {
         await performInteraction(
             payload: .typeText(nil),
             afterStateValue: { context in
@@ -173,7 +184,7 @@ extension TheBrains {
         )
     }
 
-    private func executeViewportScroll(_ target: ResolvedScrollTarget) async -> ActionResult {
+    private func executeViewportScroll(_ target: ResolvedScrollTarget) async -> RuntimeActionExecution {
         await performInteraction(
             payload: .scroll,
             postActionCommitScope: .discovery
@@ -182,7 +193,9 @@ extension TheBrains {
         }
     }
 
-    private func executeViewportScrollToVisible(_ target: ResolvedAccessibilityTarget) async -> ActionResult {
+    private func executeViewportScrollToVisible(
+        _ target: ResolvedAccessibilityTarget
+    ) async -> RuntimeActionExecution {
         await performInteraction(
             payload: .scrollToVisible,
             postActionCommitScope: .discovery
@@ -191,7 +204,9 @@ extension TheBrains {
         }
     }
 
-    private func executeViewportScrollToEdge(_ target: ResolvedScrollToEdgeTarget) async -> ActionResult {
+    private func executeViewportScrollToEdge(
+        _ target: ResolvedScrollToEdgeTarget
+    ) async -> RuntimeActionExecution {
         await performInteraction(
             payload: .scrollToEdge,
             postActionCommitScope: .discovery
@@ -229,34 +244,71 @@ extension TheBrains {
         postActionCommitScope: SemanticObservationScope = .visible,
         afterStateValue: ((ActionPayloadEvidence) -> String?)? = nil,
         interaction: (inout ActionTiming) async -> TheSafecracker.ActionDispatchResult
-    ) async -> ActionResult {
+    ) async -> RuntimeActionExecution {
         guard semanticObservationIsActive else {
-            return runtimeInactiveResult(payload: payload)
+            return RuntimeActionExecution(
+                result: runtimeInactiveResult(payload: payload),
+                successfulActionBoundary: nil,
+                includesExpectationBaseline: false
+            )
         }
 
         var timing = ActionTiming()
         let beforeStart = RuntimeElapsed.now
         guard let before = await interactionCoordinator.admittedBaseline(scope: beforeStateScope) else {
-            return treeUnavailableResult(payload: payload)
+            return RuntimeActionExecution(
+                result: treeUnavailableResult(payload: payload),
+                successfulActionBoundary: nil,
+                includesExpectationBaseline: false
+            )
         }
         timing.record(.beforeObservation, since: beforeStart)
         let notificationWindow = vault.accessibilityNotifications.beginActionWindow()
         defer { notificationWindow.cancel() }
 
+        let actionBoundary = actionBoundary(
+            from: before,
+            scope: beforeStateScope,
+            notificationCursor: notificationWindow.cursor
+        )
+
         let demand = vault.semanticObservationStream.beginActiveObservationDemand()
         defer { demand.cancel() }
 
         let interactionStart = RuntimeElapsed.now
-        let result = await interaction(&timing)
+        let dispatchResult = await interaction(&timing)
         timing.record(.interaction, since: interactionStart)
 
-        return await interactionCoordinator.settleAfterAction(
-            dispatchResult: result,
+        let actionResult = await interactionCoordinator.settleAfterAction(
+            dispatchResult: dispatchResult,
             timing: timing,
             afterStateValue: afterStateValue,
             before: before,
             postActionCommitScope: postActionCommitScope,
             notificationWindow: notificationWindow
+        )
+        return RuntimeActionExecution(
+            result: actionResult,
+            successfulActionBoundary: dispatchResult.success ? actionBoundary : nil,
+            includesExpectationBaseline: false
+        )
+    }
+
+    private func actionBoundary(
+        from baseline: ActionEvidenceProjector.Baseline,
+        scope: SemanticObservationScope,
+        notificationCursor: AccessibilityNotificationCursor
+    ) -> EvidenceContinuity.Boundary {
+        guard let settledObservationSequence = baseline.settledObservationSequence,
+              let settledCapture = vault.semanticObservationStream.settledCapture(
+                scope: scope,
+                at: settledObservationSequence
+              ) else {
+            preconditionFailure("admitted action baseline must retain its settled capture")
+        }
+        return evidenceContinuityStore.captureBoundary(
+            settledCapture: settledCapture,
+            notificationCursor: notificationCursor
         )
     }
 

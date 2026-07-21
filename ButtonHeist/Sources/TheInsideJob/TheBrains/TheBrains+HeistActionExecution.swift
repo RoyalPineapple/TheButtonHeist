@@ -22,19 +22,19 @@ extension TheBrains {
         start: RuntimeElapsed.Instant,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment
-    ) async -> HeistExecutionStepResult {
+    ) async -> HeistStepExecution {
         let resolvedCommand: ResolvedHeistActionCommand
         do {
             resolvedCommand = try step.command.resolve(in: environment)
         } catch {
-            return actionResolutionFailureResult(
+            return HeistStepExecution(result: actionResolutionFailureResult(
                 HeistActionResolutionFailure(
                     command: step.command,
                     errorDescription: String(describing: error)
                 ),
                 path: path,
                 start: start
-            )
+            ))
         }
 
         let expectation = step.expectationPolicy.expectedStep
@@ -44,11 +44,14 @@ extension TheBrains {
         let execution = await runtime.execute(resolvedCommand, baselineScope)
         let actionResult = execution.result
         guard actionResult.outcome.isSuccess, let expectation else {
-            return actionStepResult(
-                command: step.command,
-                actionResult: actionResult,
-                path: path,
-                start: start
+            return actionStepExecution(
+                result: actionStepResult(
+                    command: step.command,
+                    actionResult: actionResult,
+                    path: path,
+                    start: start
+                ),
+                runtimeExecution: execution
             )
         }
 
@@ -56,15 +59,18 @@ extension TheBrains {
         do {
             resolvedWait = try ResolvedWaitRuntimeInput(resolving: expectation, in: environment)
         } catch {
-            return expectationResolutionFailureResult(
-                HeistExpectationResolutionFailure(
-                    wait: expectation,
-                    errorDescription: String(describing: error)
+            return actionStepExecution(
+                result: expectationResolutionFailureResult(
+                    HeistExpectationResolutionFailure(
+                        wait: expectation,
+                        errorDescription: String(describing: error)
+                    ),
+                    command: step.command,
+                    actionResult: actionResult,
+                    path: path,
+                    start: start
                 ),
-                command: step.command,
-                actionResult: actionResult,
-                path: path,
-                start: start
+                runtimeExecution: execution
             )
         }
 
@@ -76,13 +82,26 @@ extension TheBrains {
             trace: settledTrace,
             baseline: execution.expectationBaseline
         ))
-        return actionExpectationStepResult(
-            command: step.command,
-            actionResult: actionResult,
-            wait: expectation,
+        return actionStepExecution(
+            result: actionExpectationStepResult(
+                command: step.command,
+                actionResult: actionResult,
+                wait: expectation,
+                result: result,
+                path: path,
+                start: start
+            ),
+            runtimeExecution: execution
+        )
+    }
+
+    private func actionStepExecution(
+        result: HeistExecutionStepResult,
+        runtimeExecution: RuntimeActionExecution
+    ) -> HeistStepExecution {
+        HeistStepExecution(
             result: result,
-            path: path,
-            start: start
+            lastSuccessfulActionBoundary: runtimeExecution.successfulActionBoundary
         )
     }
 

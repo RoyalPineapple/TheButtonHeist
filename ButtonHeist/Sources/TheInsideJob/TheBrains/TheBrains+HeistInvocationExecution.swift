@@ -73,7 +73,7 @@ extension TheBrains {
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
-    ) async -> HeistExecutionStepResult {
+    ) async -> HeistStepExecution {
         let resolution = resolveInvocation(invoke, scope: scope)
         let context = InvocationExecutionContext(
             invoke: invoke,
@@ -82,17 +82,22 @@ extension TheBrains {
             requestedName: resolution.requestedName
         )
         guard !scope.invocationStack.contains(resolution.resolvedName) else {
-            return recursiveInvocationResult(context: context, resolvedInvocationName: resolution.resolvedName)
+            return HeistStepExecution(result: recursiveInvocationResult(
+                context: context,
+                resolvedInvocationName: resolution.resolvedName
+            ))
         }
         guard let definition = resolution.definition else {
-            return unknownInvocationResult(context: context)
+            return HeistStepExecution(result: unknownInvocationResult(context: context))
         }
 
         let childEnvironment: HeistExecutionEnvironment
         do {
             childEnvironment = try environment.binding(argument: invoke.argument, to: definition.parameter)
         } catch {
-            return invocationBindingFailureResult(context: context, error: error)
+            return HeistStepExecution(
+                result: invocationBindingFailureResult(context: context, error: error)
+            )
         }
 
         let expectationContext: InvocationExpectationContext?
@@ -102,10 +107,10 @@ extension TheBrains {
         case .prepared(let prepared):
             expectationContext = prepared
         case .failed(let result):
-            return result
+            return HeistStepExecution(result: result)
         }
 
-        let children = await executeHeistSteps(
+        let execution = await executeHeistSteps(
             definition.body,
             runtime: runtime,
             environment: childEnvironment,
@@ -120,13 +125,16 @@ extension TheBrains {
         let expectationOutcome = await evaluateInvocationExpectation(
             expectationContext,
             runtime: runtime,
-            childExecution: children
+            childExecution: execution.children
         )
-        return completedInvocationResult(
-            context: context,
-            childExecution: children,
-            expectationContext: expectationContext,
-            expectationOutcome: expectationOutcome
+        return HeistStepExecution(
+            result: completedInvocationResult(
+                context: context,
+                childExecution: execution.children,
+                expectationContext: expectationContext,
+                expectationOutcome: expectationOutcome
+            ),
+            lastSuccessfulActionBoundary: execution.lastSuccessfulActionBoundary
         )
     }
 
