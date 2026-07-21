@@ -121,6 +121,8 @@ package struct ElementDiagnosticSummary: Equatable, Sendable {
             return renderCompactStash(using: profile)
         case .failureInterface(let displayIndex):
             return renderFailureInterface(displayIndex: displayIndex, using: profile)
+        case .predicateMismatchCandidate:
+            return renderPredicateMismatchCandidate(using: profile)
         case .selectedFields(let fields):
             return renderSelectedFields(fields, using: profile)
         case .availability:
@@ -260,6 +262,18 @@ package struct ElementDiagnosticSummary: Equatable, Sendable {
         return parts.joined(separator: " ")
     }
 
+    private func renderPredicateMismatchCandidate(using profile: RenderProfile) -> String {
+        var parts = [
+            label.map { "label=\(profile.renderString($0))" },
+            value.map { "value=\(profile.renderString($0))" },
+            hint.map { "hint=\(profile.renderString($0))" },
+        ].compactMap { $0 }
+        if !traits.isEmpty {
+            parts.append("traits=\(profile.renderList(traits.map(\.rawValue)))")
+        }
+        return parts.joined(separator: " ")
+    }
+
     private func renderSelectedFields(_ fields: [Field], using profile: RenderProfile) -> String {
         fields.compactMap { field -> String? in
             switch field {
@@ -308,6 +322,7 @@ private enum ElementDiagnosticSummaryRenderBody: Equatable, Sendable {
     case containerCandidate(type: String, isModalBoundary: Bool)
     case compactStash
     case failureInterface(displayIndex: Int?)
+    case predicateMismatchCandidate
     case selectedFields([ElementDiagnosticSummary.Field])
     case availability
 }
@@ -389,6 +404,11 @@ package extension ElementDiagnosticSummary {
                 includesGeometry: includeGeometry
             )
         }
+
+        package static let predicateMismatchCandidate = RenderProfile(
+            body: .predicateMismatchCandidate,
+            stringStyle: .actionCapability
+        )
 
         package static func selectedFields(_ fields: [Field]) -> RenderProfile {
             RenderProfile(

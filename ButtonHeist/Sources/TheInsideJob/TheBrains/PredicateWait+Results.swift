@@ -225,8 +225,7 @@ extension PredicateWait {
                 traceEvidence: traceEvidence,
                 expectation: expectation,
                 observedSequence: observedSequence,
-                observationSummary: observationSummary,
-                historicalWaitDiagnostics: historicalWaitDiagnostics
+                observationSummary: observationSummary
             )
         case (false, .unmet(let expectation)):
             return .timedOut(
@@ -234,8 +233,7 @@ extension PredicateWait {
                 traceEvidence: traceEvidence,
                 expectation: expectation,
                 observedSequence: observedSequence,
-                observationSummary: observationSummary,
-                historicalWaitDiagnostics: historicalWaitDiagnostics
+                observationSummary: observationSummary
             )
         case (true, .unmet):
             preconditionFailure("Successful predicate wait requires a met expectation")

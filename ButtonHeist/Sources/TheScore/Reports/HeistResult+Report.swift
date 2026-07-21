@@ -1,6 +1,26 @@
 import Foundation
 import ThePlans
 
+package enum AutomaticTimeoutMismatchDiagnostic {
+    private static let prefix = "observed accessibility candidate "
+
+    package static func breadcrumb(
+        candidateDescription: String,
+        exactPredicateDescription: String
+    ) -> String {
+        "\(prefix)\(candidateDescription) did not match \(exactPredicateDescription)"
+    }
+
+    package static func extract(
+        from diagnosticMessage: String,
+        actionKind: ActionFailure.Kind?
+    ) -> String? {
+        guard actionKind == .timeout,
+              let range = diagnosticMessage.range(of: prefix) else { return nil }
+        return String(diagnosticMessage[range.lowerBound...])
+    }
+}
+
 /// The canonical semantic interpretation of a completed heist execution.
 public struct HeistReport: Sendable, Equatable {
     public struct Summary: Sendable, Equatable {
@@ -32,10 +52,10 @@ public struct HeistReport: Sendable, Equatable {
         package var diagnosticMessage: String { message ?? detail.observed }
 
         package var automaticTimeoutMismatchBreadcrumb: String? {
-            let prefix = "observed accessibility candidate "
-            guard actionKind == .timeout,
-                  let range = diagnosticMessage.range(of: prefix) else { return nil }
-            return String(diagnosticMessage[range.lowerBound...])
+            AutomaticTimeoutMismatchDiagnostic.extract(
+                from: diagnosticMessage,
+                actionKind: actionKind
+            )
         }
     }
 
