@@ -90,37 +90,6 @@ extension TheBrainsActionTests {
         XCTAssertTrue(trace.changeFacts.contains { if case .elementsChanged = $0 { true } else { false } })
     }
 
-    func testStandaloneAnnouncementWaitDoesNotConsumeEarlierActionAnnouncement() async throws {
-        let heistId: HeistId = "save_button"
-        let liveObject = ActionActivationOverrideView()
-        liveObject.onActivation = {
-            self.brains.vault.accessibilityNotifications.recordForTesting(
-                code: 1008,
-                notificationData: CapturedAccessibilityNotificationPayload("Saved" as NSString),
-                associatedElement: .none
-            )
-        }
-        registerScreenElement(
-            heistId: heistId,
-            element: makeElement(label: "Save", traits: .button),
-            object: liveObject
-        )
-        let plan = try HeistPlan(body: [
-            .action(ActionStep(command: .activate(.label("Save")))),
-            .wait(WaitStep(
-                predicate: .announcement("Saved"),
-                timeout: .milliseconds(1)
-            )),
-        ])
-
-        let result = await brains.executeHeistPlan(plan)
-        let waitStep = try XCTUnwrap(result.resultPayload?.steps.first { $0.kind == .wait })
-
-        XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(liveObject.activationCount, 1)
-        XCTAssertEqual(waitStep.waitEvidence?.expectation.met, false)
-    }
-
     func testFailedActionBatchBelongsToDiagnosticAndNextActionClaimsOnlyItsBatch() async {
         let isolatedBrains = TheBrains(tripwire: TheTripwire())
         let baseline = InterfaceObservation.makeForTests(elements: [
@@ -281,90 +250,129 @@ observation: .settledTrace(
         } == true)
     }
 
-    func testProductionActionContextRetainsTransientElementTransition() async throws {
-        let before = InterfaceObservation.makeForTests(elements: [
-            (makeElement(label: "Ready"), "ready"),
-        ])
-        let transient = InterfaceObservation.makeForTests(elements: [
-            (makeElement(label: "Ready"), "ready"),
-            (makeElement(label: "Saved"), "saved"),
-        ])
-        let after = InterfaceObservation.makeForTests(elements: [
-            (makeElement(label: "Ready"), "ready"),
-        ])
-        let liveObject = ActionActivationOverrideView()
-        liveObject.onActivation = {
+    func testActionExpectationUsesSettlementEvidence() async throws {
+        let saveObject = ActionActivationOverrideView()
+        let announceObject = ActionActivationOverrideView()
+        let saveElement = makeElement(label: "Save", traits: .button)
+        let announceElement = makeElement(label: "Announce", traits: .button)
+        let elements: [(AccessibilityElement, HeistId)] = [
+            (saveElement, "save_button"),
+            (announceElement, "announce_button"),
+        ]
+        let objects: [HeistId: NSObject?] = [
+            "save_button": saveObject,
+            "announce_button": announceObject,
+        ]
+        let before = InterfaceObservation.makeForTests(elements: elements, objects: objects)
+        let transient = InterfaceObservation.makeForTests(
+            elements: elements + [(makeElement(label: "Saved", traits: .staticText), "saved")],
+            objects: objects
+        )
+        let after = InterfaceObservation.makeForTests(elements: elements, objects: objects)
+        saveObject.onActivation = {
             _ = self.brains.vault.semanticObservationStream
                 .commitVisibleObservationForTesting(transient)
             _ = self.brains.vault.semanticObservationStream
                 .commitVisibleObservationForTesting(after)
             self.visibleObservationSource.observation = after
         }
-        installSyntheticObservation(InterfaceObservation.makeForTests(
-            elements: before.tree.orderedElements.map { ($0.element, $0.heistId) },
-            objects: ["ready": liveObject]
-        ))
-        let command = try HeistActionCommand.activate(.label("Ready")).resolve(in: .empty)
-
-        let execution = await brains.executeRuntimeActionForHeist(
-            command,
-            expectationContextScope: .visible
-        )
-        let context = try XCTUnwrap(execution.actionExpectationContext)
-        let retainedLabels = context.observations.map {
-            $0.event.settledObservation.observation.tree.orderedElements.compactMap(\.element.label)
+        announceObject.onActivation = {
+            self.brains.vault.accessibilityNotifications.recordForTesting(
+                code: 1008,
+                notificationData: CapturedAccessibilityNotificationPayload("Confirmed" as NSString),
+                associatedElement: .none
+            )
         }
-        let result = await brains.interactionCoordinator.waitForPredicate(
-            try resolvedWait(WaitStep(
-                predicate: .changed(.elements([.appeared(.label("Saved"))])),
-                timeout: try .milliseconds(1)
+        installSyntheticObservation(before)
+        let plan = try HeistPlan(body: [
+            .action(ActionStep(
+                command: .activate(.label("Save")),
+                expectationPolicy: .expect(try ActionExpectation(WaitStep(
+                    predicate: .changed(.elements([.appeared(.label("Saved"))])),
+                    timeout: .milliseconds(1)
+                )))
             )),
-            actionExpectationContext: context
-        )
+            .action(ActionStep(
+                command: .activate(.label("Announce")),
+                expectationPolicy: .expect(try ActionExpectation(WaitStep(
+                    predicate: .announcement("Confirmed"),
+                    timeout: .milliseconds(1)
+                )))
+            )),
+        ])
 
-        XCTAssertTrue(execution.result.outcome.isSuccess, execution.result.message ?? "action failed")
-        XCTAssertTrue(retainedLabels.contains(["Ready", "Saved"]))
-        guard case .matched(let waitResult, _) = result.outcome else {
-            return XCTFail("Expected retained transient transition to match")
-        }
-        XCTAssertTrue(waitResult.outcome.isSuccess)
+        let result = await brains.executeHeistPlan(plan)
+        let steps = try XCTUnwrap(result.resultPayload?.steps)
+        let elementTrace = try XCTUnwrap(steps.first?.actionEvidence?.expectationResult?.accessibilityTrace)
+
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "heist failed")
+        XCTAssertEqual(saveObject.activationCount, 1)
+        XCTAssertEqual(announceObject.activationCount, 1)
+        XCTAssertEqual(steps.map(\.reportExpectation?.met), [true, true])
+        XCTAssertEqual(
+            elementTrace.captures.first?.interface.projectedElements.compactMap(\.label),
+            ["Save", "Announce"]
+        )
+        XCTAssertEqual(
+            elementTrace.captures.last?.interface.projectedElements.compactMap(\.label),
+            ["Save", "Announce", "Saved"]
+        )
+        XCTAssertEqual(steps.last?.actionEvidence?.expectationResult?.announcement, "Confirmed")
     }
 
-    func testProductionActionContextCapturesAnnouncementBoundary() async throws {
-        let heistId: HeistId = "save_button"
-        let liveObject = ActionActivationOverrideView()
-        liveObject.onActivation = {
+    func testStandaloneWaitStartsAtItsOwnFirstObservation() async throws {
+        let saveObject = ActionActivationOverrideView()
+        let saveElement = makeElement(label: "Save", traits: .button)
+        let elements: [(AccessibilityElement, HeistId)] = [(saveElement, "save_button")]
+        let objects: [HeistId: NSObject?] = ["save_button": saveObject]
+        let before = InterfaceObservation.makeForTests(elements: elements, objects: objects)
+        let transient = InterfaceObservation.makeForTests(
+            elements: elements + [(makeElement(label: "Saved", traits: .staticText), "saved")],
+            objects: objects
+        )
+        let after = InterfaceObservation.makeForTests(elements: elements, objects: objects)
+        saveObject.onActivation = {
+            _ = self.brains.vault.semanticObservationStream
+                .commitVisibleObservationForTesting(transient)
+            _ = self.brains.vault.semanticObservationStream
+                .commitVisibleObservationForTesting(after)
+            self.visibleObservationSource.observation = after
             self.brains.vault.accessibilityNotifications.recordForTesting(
                 code: 1008,
                 notificationData: CapturedAccessibilityNotificationPayload("Saved" as NSString),
                 associatedElement: .none
             )
         }
-        registerScreenElement(
-            heistId: heistId,
-            element: makeElement(label: "Save", traits: .button),
-            object: liveObject
-        )
-        let command = try HeistActionCommand.activate(.label("Save")).resolve(in: .empty)
+        installSyntheticObservation(before)
 
-        let execution = await brains.executeRuntimeActionForHeist(
-            command,
-            expectationContextScope: .visible
-        )
-        let context = try XCTUnwrap(execution.actionExpectationContext)
-        let result = await brains.interactionCoordinator.waitForPredicate(
-            try resolvedWait(WaitStep(
-                predicate: .announcement("Saved"),
-                timeout: try .milliseconds(1)
-            )),
-            actionExpectationContext: context
-        )
+        let action = await brains.executeHeistPlan(try HeistPlan(body: [
+            .action(ActionStep(command: .activate(.label("Save")))),
+        ]))
+        let appeared = await brains.performWait(step: try resolvedWait(WaitStep(
+            predicate: .changed(.elements([.appeared(.label("Saved"))])),
+            timeout: .milliseconds(1)
+        )))
+        let exists = await brains.performWait(step: try resolvedWait(WaitStep(
+            predicate: .exists(.label("Saved")),
+            timeout: .milliseconds(1)
+        )))
+        let announcement = await brains.performWait(step: try resolvedWait(WaitStep(
+            predicate: .announcement("Saved"),
+            timeout: .milliseconds(1)
+        )))
 
-        XCTAssertTrue(execution.result.outcome.isSuccess, execution.result.message ?? "action failed")
-        guard case .matched(let waitResult, _) = result.outcome else {
-            return XCTFail("Expected action announcement to match")
+        XCTAssertTrue(action.outcome.isSuccess, action.message ?? "action heist failed")
+        XCTAssertEqual(saveObject.activationCount, 1)
+        for result in [appeared, exists, announcement] {
+            XCTAssertFalse(result.outcome.isSuccess)
+            XCTAssertEqual(result.outcome.failureKind, .timeout)
         }
-        XCTAssertEqual(waitResult.announcement, "Saved")
+        XCTAssertTrue(appeared.accessibilityTrace?.changeFacts.isEmpty == true)
+        XCTAssertEqual(
+            appeared.accessibilityTrace?.captures.first?.interface.projectedElements.compactMap(\.label),
+            ["Save"]
+        )
+        XCTAssertNil(announcement.announcement)
     }
 
     func testFailedProductionDispatchDiscardsActionExpectationContext() async throws {
