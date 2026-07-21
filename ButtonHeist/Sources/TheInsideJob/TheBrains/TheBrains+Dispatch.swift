@@ -150,7 +150,7 @@ extension TheBrains {
                 await self.actions.executeSetPasteboard(target)
             }
         case .takeScreenshot:
-            execution = await executeScreenshotAction(
+            execution = await executeTakeScreenshot(
                 capturesExpectationContext: expectationContextScope != nil
             )
         case .dismissKeyboard:
@@ -183,22 +183,6 @@ extension TheBrains {
             execution = await executeViewportScrollToEdge(target, expectationContextScope: expectationContextScope)
         }
         return execution
-    }
-
-    private func executeScreenshotAction(
-        capturesExpectationContext: Bool
-    ) async -> RuntimeActionExecution {
-        guard capturesExpectationContext else {
-            return RuntimeActionExecution(
-                result: await executeTakeScreenshot(),
-                actionExpectationContext: nil
-            )
-        }
-        let execution = await executeTakeScreenshotWithExpectationContext()
-        return RuntimeActionExecution(
-            result: execution.result,
-            actionExpectationContext: execution.actionExpectationContext
-        )
     }
 
     private func executeTypeText(

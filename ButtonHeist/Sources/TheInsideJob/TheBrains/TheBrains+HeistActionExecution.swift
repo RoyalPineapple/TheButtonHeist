@@ -168,7 +168,7 @@ extension TheBrains {
         let start = RuntimeElapsed.now
         let result = mode == .raw
             ? await runtime.execute(.takeScreenshot, nil).result
-            : await executeTakeScreenshot(mode: mode)
+            : await executeTakeScreenshot(mode: mode).result
         guard result.method == .takeScreenshot else { return nil }
 
         let command = HeistActionCommand.takeScreenshot

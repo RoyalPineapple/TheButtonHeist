@@ -46,13 +46,9 @@ extension TheBrains {
         case failure(ScreenCaptureFailure)
     }
 
-    func captureScreenPayload(mode: ScreenCaptureMode = .raw) async -> ScreenCaptureGatewayResult {
-        await captureScreenPayload(mode: mode, capturesExpectationContext: false)
-    }
-
-    private func captureScreenPayload(
-        mode: ScreenCaptureMode,
-        capturesExpectationContext: Bool
+    func captureScreenPayload(
+        mode: ScreenCaptureMode = .raw,
+        capturesExpectationContext: Bool = false
     ) async -> ScreenCaptureGatewayResult {
         guard semanticObservationIsActive else {
             return .failure(.inactiveRuntime)
@@ -114,22 +110,9 @@ extension TheBrains {
         return .success(payload, context: actionExpectationContext)
     }
 
-    func executeTakeScreenshot(mode: ScreenCaptureMode = .raw) async -> ActionResult {
-        await executeTakeScreenshot(
-            mode: mode,
-            capturesExpectationContext: false
-        ).result
-    }
-
-    func executeTakeScreenshotWithExpectationContext(
-        mode: ScreenCaptureMode = .raw
-    ) async -> RuntimeActionExecution {
-        await executeTakeScreenshot(mode: mode, capturesExpectationContext: true)
-    }
-
-    private func executeTakeScreenshot(
-        mode: ScreenCaptureMode,
-        capturesExpectationContext: Bool
+    func executeTakeScreenshot(
+        mode: ScreenCaptureMode = .raw,
+        capturesExpectationContext: Bool = false
     ) async -> RuntimeActionExecution {
         let timing = ActionTiming()
         switch await captureScreenPayload(
