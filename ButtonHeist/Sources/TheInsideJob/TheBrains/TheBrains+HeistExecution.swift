@@ -199,24 +199,40 @@ extension TheBrains {
         }
     }
 
-    internal func executeHeistPlan(_ plan: HeistPlan, argument: HeistArgument = .none) async -> ActionResult {
+    internal func executeHeistPlan(
+        _ plan: HeistPlan,
+        argument: HeistArgument = .none,
+        continuity: EvidenceContinuity.Reference? = nil
+    ) async -> ActionResult {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(payload: .heist(nil))
         }
-        return await executeHeistPlan(plan, argument: argument, runtime: .live(self))
+        return await executeHeistPlan(
+            plan,
+            argument: argument,
+            continuity: continuity,
+            runtime: .live(self)
+        )
     }
 
     internal func executeHeistPlanForTest(
         _ plan: HeistPlan,
         argument: HeistArgument = .none,
+        continuity: EvidenceContinuity.Reference? = nil,
         runtime: HeistExecutionRuntime
     ) async -> ActionResult {
-        await executeHeistPlan(plan, argument: argument, runtime: runtime)
+        await executeHeistPlan(
+            plan,
+            argument: argument,
+            continuity: continuity,
+            runtime: runtime
+        )
     }
 
     private func executeHeistPlan(
         _ plan: HeistPlan,
         argument: HeistArgument,
+        continuity: EvidenceContinuity.Reference?,
         runtime: HeistExecutionRuntime
     ) async -> ActionResult {
         let notificationScope = vault.accessibilityNotifications.beginHeistScope()

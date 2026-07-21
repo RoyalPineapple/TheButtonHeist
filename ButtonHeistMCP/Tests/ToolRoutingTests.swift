@@ -143,6 +143,21 @@ struct ToolRoutingTests {
         ]))
     }
 
+    @Test func `run_heist routes continuity opaquely`() throws {
+        let reference = "4B47F5F7-76E7-4DF1-A52E-658343D48091"
+
+        let operation = try routed(
+            TheFence.Command.runHeist.rawValue,
+            [
+                "plan": .string("HeistPlan { Warn(\"continued\") }"),
+                "continuity": .string(reference),
+            ]
+        )
+
+        #expect(operation.command == .runHeist)
+        #expect(operation.arguments.value(for: .continuity) == .string(reference))
+    }
+
     @Test("validate_heist routes source and lint opaquely")
     func validateHeistRoutesSourceAndLint() throws {
         let operation = try routed(

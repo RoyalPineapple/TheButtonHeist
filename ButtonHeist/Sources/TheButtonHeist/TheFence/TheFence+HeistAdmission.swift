@@ -8,6 +8,7 @@ extension TheFence {
     struct RunHeistRequest {
         let plan: HeistPlan
         let argument: HeistArgument
+        let continuity: EvidenceContinuity.Reference?
     }
 
     struct PerformRequest {
@@ -85,11 +86,15 @@ extension TheFence {
         let plan = try admitRuntimeSafeHeistPlanSource(
             from: arguments,
             commandName: Command.runHeist.rawValue,
-            droppingPlanKeys: [.argument]
+            droppingPlanKeys: [.argument, .continuity]
         )
         let argument = try decodeRootHeistArgument(from: arguments)
         try validateRootHeistArgument(argument, for: plan)
-        return RunHeistRequest(plan: plan, argument: argument)
+        return RunHeistRequest(
+            plan: plan,
+            argument: argument,
+            continuity: try decodeEvidenceContinuity(from: arguments)
+        )
     }
 
     func decodeValidateHeistRequest(_ arguments: CommandArgumentEnvelope) throws -> ValidateHeistRequest {
@@ -276,6 +281,17 @@ private extension TheFence {
         case .failure(let diagnostics):
             throw buildDiagnosticFenceError(diagnostics)
         }
+    }
+
+    func decodeEvidenceContinuity(
+        from arguments: CommandArgumentEnvelope
+    ) throws -> EvidenceContinuity.Reference? {
+        guard let value = arguments.value(for: .continuity) else { return nil }
+        return try HeistValuePayloadDecoder.decode(
+            value,
+            field: FenceParameterKey.continuity.rawValue,
+            as: EvidenceContinuity.Reference.self
+        )
     }
 
     func validateRootHeistArgument(_ argument: HeistArgument, for plan: HeistPlan) throws {

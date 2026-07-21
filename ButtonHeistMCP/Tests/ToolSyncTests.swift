@@ -336,12 +336,13 @@ struct ToolSyncTests {
         // The MCP run_heist tool exposes only public authoring sources:
         // canonical ButtonHeist source, .heist artifact path, and root
         // argument. Raw JSON IR fields remain internal and are not advertised.
-        for field in ["path", "plan", "argument"] {
+        for field in ["path", "plan", "argument", "continuity"] {
             #expect(
                 schemaValue(at: ["properties", field], in: tool.inputSchema) != nil,
                 "run_heist schema must expose \(field)"
             )
         }
+        #expect(schemaValue(at: ["properties", "continuity", "type"], in: tool.inputSchema) == .string("string"))
         for field in ["version", "name", "parameter", "definitions", "body"] {
             #expect(
                 schemaValue(at: ["properties", field], in: tool.inputSchema) == nil,

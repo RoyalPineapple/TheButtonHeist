@@ -51,8 +51,9 @@ extension TheFence.Command {
         `Fail("message")`
 
         Provide exactly one source: `path` or `plan`. Use `argument` when the root
-        heist takes a string or accessibility target. Runtime source is restricted
-        ButtonHeist DSL, not arbitrary Swift.
+        heist takes a string or accessibility target. Use `continuity` to opt a
+        later heist into evidence retained from a prior action result. Runtime
+        source is restricted ButtonHeist DSL, not arbitrary Swift.
         """
 
     static let validateHeistDescription = """

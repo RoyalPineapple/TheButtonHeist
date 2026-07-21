@@ -52,6 +52,7 @@ public enum HeistTestResultRecording: Sendable, Equatable {
 @discardableResult
 public func runHeistSync(
     _ path: HeistDefinitionPath,
+    continuity: EvidenceContinuity.Reference? = nil,
     timeout: TimeInterval = 60,
     recordResult: HeistTestResultRecording = .environment,
     to resultDirectory: URL? = nil,
@@ -60,7 +61,7 @@ public func runHeistSync(
     @HeistBuilder _ content: @escaping () throws -> HeistContent
 ) -> Heist? {
     runHeistSyncRequest(
-        makeRequest: { try makeRunHeistRequest(path, content) },
+        makeRequest: { try makeRunHeistRequest(path, continuity: continuity, content) },
         timeout: timeout,
         recordResult: recordResult,
         resultDirectory: resultDirectory,
@@ -75,6 +76,7 @@ public func runHeistSync(
     _ path: HeistDefinitionPath,
     argument input: String,
     parameter: HeistReferenceName = "input",
+    continuity: EvidenceContinuity.Reference? = nil,
     timeout: TimeInterval = 60,
     recordResult: HeistTestResultRecording = .environment,
     to resultDirectory: URL? = nil,
@@ -84,7 +86,13 @@ public func runHeistSync(
 ) -> Heist? {
     runHeistSyncRequest(
         makeRequest: {
-            try makeRunHeistRequest(path, argument: input, parameter: parameter, content)
+            try makeRunHeistRequest(
+                path,
+                argument: input,
+                parameter: parameter,
+                continuity: continuity,
+                content
+            )
         },
         timeout: timeout,
         recordResult: recordResult,
@@ -101,6 +109,7 @@ public func runHeistSync(
     _ path: HeistDefinitionPath,
     argument input: AccessibilityTarget,
     parameter: HeistReferenceName = "input",
+    continuity: EvidenceContinuity.Reference? = nil,
     timeout: TimeInterval = 60,
     recordResult: HeistTestResultRecording = .environment,
     to resultDirectory: URL? = nil,
@@ -110,7 +119,13 @@ public func runHeistSync(
 ) -> Heist? {
     runHeistSyncRequest(
         makeRequest: {
-            try makeRunHeistRequest(path, argument: input, parameter: parameter, content)
+            try makeRunHeistRequest(
+                path,
+                argument: input,
+                parameter: parameter,
+                continuity: continuity,
+                content
+            )
         },
         timeout: timeout,
         recordResult: recordResult,
@@ -147,7 +162,11 @@ private func runHeistSyncRequest(
 
     return runHeistSyncOperation(timeout: timeout, file: file, line: line) { @MainActor in
         do {
-            let heist = try await Heist(request.plan, argument: request.argument)
+            let heist = try await Heist(
+                request.plan,
+                argument: request.argument,
+                continuity: request.continuity
+            )
             try recordResultIfRequested(
                 heist.result,
                 plan: request.plan,

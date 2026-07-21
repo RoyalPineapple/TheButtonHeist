@@ -293,9 +293,9 @@
     },
     {
       "cliExposure" : "directCommand",
-      "description" : "Run a durable heist from a ButtonHeist source plan in `plan`, or from a generated `.heist` package at `path`.\n\nAuthor plans as ButtonHeist source, not raw JSON IR:\n`HeistPlan(\"shop\") { ... }`\n`HeistDef<String>(\"Cart.addItem\", parameter: \"item\") { item in ... }`\n`RunHeist(\"Cart.addItem\", \"Milk\").expect(.changed(.elements([.appeared(.element(.label(\"subtotal\"), .value(.contains(\"1 item\"))))])))`\n`If(.label(\"Pay\")) { ... }.else { ... }`\n`WaitFor(.changed(.screen()), timeout: 10).else { ... }`\n`ForEach(\"Milk\", \"Bread\") { item in ... }`\n`ForEach(.element(.label(.prefix(\"Delete\")), .traits([.button])), limit: 20) { target in ... }`\n`Warn(\"message\")`\n`Fail(\"message\")`\n\nProvide exactly one source: `path` or `plan`. Use `argument` when the root\nheist takes a string or accessibility target. Runtime source is restricted\nButtonHeist DSL, not arbitrary Swift.",
+      "description" : "Run a durable heist from a ButtonHeist source plan in `plan`, or from a generated `.heist` package at `path`.\n\nAuthor plans as ButtonHeist source, not raw JSON IR:\n`HeistPlan(\"shop\") { ... }`\n`HeistDef<String>(\"Cart.addItem\", parameter: \"item\") { item in ... }`\n`RunHeist(\"Cart.addItem\", \"Milk\").expect(.changed(.elements([.appeared(.element(.label(\"subtotal\"), .value(.contains(\"1 item\"))))])))`\n`If(.label(\"Pay\")) { ... }.else { ... }`\n`WaitFor(.changed(.screen()), timeout: 10).else { ... }`\n`ForEach(\"Milk\", \"Bread\") { item in ... }`\n`ForEach(.element(.label(.prefix(\"Delete\")), .traits([.button])), limit: 20) { target in ... }`\n`Warn(\"message\")`\n`Fail(\"message\")`\n\nProvide exactly one source: `path` or `plan`. Use `argument` when the root\nheist takes a string or accessibility target. Use `continuity` to opt a\nlater heist into evidence retained from a prior action result. Runtime\nsource is restricted ButtonHeist DSL, not arbitrary Swift.",
       "family" : "heistRuntime",
-      "inputSchemaSHA256" : "6aa76922c485bc436fb81792a67c687e2398c363b5f6d62d987c40863302ac92",
+      "inputSchemaSHA256" : "3fa423a75a234a916f0b539889142e71622e708cf337e2dea51db0668d0a063a",
       "mcpExposure" : "directTool",
       "name" : "run_heist",
       "requiresConnectionBeforeDispatch" : true,

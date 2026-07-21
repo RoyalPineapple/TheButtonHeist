@@ -70,6 +70,19 @@ final class HeistResultTests: XCTestCase {
         ])
     }
 
+    func testRunHeistFacadeAcceptsEvidenceContinuity() async throws {
+        let reference = try evidenceContinuityReference()
+
+        let heist = try await runHeist(
+            "PublicFacade.continuity",
+            continuity: reference
+        ) {
+            Warn("continued")
+        }
+
+        XCTAssertEqual(heist.result.steps.map(\.kind), [.invoke])
+    }
+
     func testRunHeistSyncRecordsPassingResultWhenRequested() throws {
         try withResultDirectory(prefix: "buttonheist-sync-results") { directory in
             let heist = try XCTUnwrap(runHeistSync(
@@ -84,6 +97,17 @@ final class HeistResultTests: XCTestCase {
             let result = try HeistResultCodec.decode(contentsOf: resultURL)
             XCTAssertEqual(result, heist.result)
         }
+    }
+
+    func testRunHeistSyncAcceptsEvidenceContinuity() throws {
+        let heist = runHeistSync(
+            "syncContinuity",
+            continuity: try evidenceContinuityReference()
+        ) {
+            Warn("continued")
+        }
+
+        XCTAssertNotNil(heist)
     }
 
     func testRunHeistSyncRecordsXCTestFailureWhenHeistFails() {
@@ -181,6 +205,46 @@ final class HeistResultTests: XCTestCase {
         XCTAssertFalse(job.isRunning)
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.tripwire.isPulseRunning)
+    }
+
+    func testHeistInitializersForwardEvidenceContinuityToInAppRuntime() async throws {
+        let job = try TheInsideJob(token: "in-app-heist-continuity-test")
+        let capture = RuntimeCapture(job: job)
+        let reference = try evidenceContinuityReference()
+        let plan = try HeistPlan { Warn("prebuilt") }
+
+        _ = try await Heist(
+            plan,
+            continuity: reference,
+            runtime: capture.runtime
+        )
+        XCTAssertEqual(capture.continuity, reference)
+
+        _ = try await Heist(
+            continuity: reference,
+            runtime: capture.runtime
+        ) {
+            Warn("builder")
+        }
+        XCTAssertEqual(capture.continuity, reference)
+
+        _ = try await Heist(
+            "milk",
+            continuity: reference,
+            runtime: capture.runtime
+        ) { _ in
+            Warn("string")
+        }
+        XCTAssertEqual(capture.continuity, reference)
+
+        _ = try await Heist(
+            AccessibilityTarget.label("Delete"),
+            continuity: reference,
+            runtime: capture.runtime
+        ) { _ in
+            Warn("target")
+        }
+        XCTAssertEqual(capture.continuity, reference)
     }
 
     func testTopLevelHeistBootstrapsFromFreshVisibleScreen() async throws {
@@ -529,18 +593,31 @@ private final class RuntimeCapture {
     private let job: TheInsideJob
     private(set) var plan: HeistPlan?
     private(set) var argument: HeistArgument?
+    private(set) var continuity: EvidenceContinuity.Reference?
 
     init(job: TheInsideJob) {
         self.job = job
     }
 
     var runtime: InAppHeistRuntime {
-        InAppHeistRuntime { plan, argument in
+        InAppHeistRuntime { plan, argument, continuity in
             self.plan = plan
             self.argument = argument
-            return await self.job.executeInAppHeist(plan, argument: argument)
+            self.continuity = continuity
+            return await self.job.executeInAppHeist(
+                plan,
+                argument: argument,
+                continuity: continuity
+            )
         }
     }
+}
+
+private func evidenceContinuityReference() throws -> EvidenceContinuity.Reference {
+    try JSONDecoder().decode(
+        EvidenceContinuity.Reference.self,
+        from: Data(#""4B47F5F7-76E7-4DF1-A52E-658343D48091""#.utf8)
+    )
 }
 
 @MainActor

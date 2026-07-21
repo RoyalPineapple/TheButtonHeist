@@ -40,6 +40,9 @@ struct RunHeistCommand: ConnectedOneShotCLICommand {
     @Option(name: .long, help: "Root heist argument as canonical HeistArgument JSON object.")
     var argument: String?
 
+    @Option(name: .long, help: "Opaque evidence continuity reference from a prior heist result.")
+    var continuity: String?
+
     @Option(name: .long, help: "Zero-argument Swift entry symbol returning HeistPlan.")
     var entry: String?
 
@@ -57,7 +60,8 @@ struct RunHeistCommand: ConnectedOneShotCLICommand {
                 inline: plan,
                 path: prepared.path,
                 entry: prepared.entry,
-                argument: argument
+                argument: argument,
+                continuity: continuity
             )
             let heistPath = prepared.path
             let format = output.format ?? .auto
@@ -190,6 +194,7 @@ struct RunHeistCommand: ConnectedOneShotCLICommand {
         path: String?,
         entry: String?,
         argument: String? = nil,
+        continuity: String? = nil,
         commandName: String = Self.cliCommandName,
         additionalFields: [CommandArgumentEnvelopeBuilder.Field] = []
     ) throws -> TheFence.CommandArgumentEnvelope {
@@ -215,7 +220,8 @@ struct RunHeistCommand: ConnectedOneShotCLICommand {
             // Forward the artifact path; the fence reads the package into a HeistPlan.
             var builder = CommandArgumentEnvelopeBuilder(
                 CommandArgumentEnvelopeBuilder.value(.path, path),
-                CommandArgumentEnvelopeBuilder.optional(.argument, try argument.map(parseRootArgument))
+                CommandArgumentEnvelopeBuilder.optional(.argument, try argument.map(parseRootArgument)),
+                CommandArgumentEnvelopeBuilder.optional(.continuity, continuity.map(HeistValue.string))
             )
             builder.set(additionalFields.map(Optional.some))
             return builder.build()
@@ -233,7 +239,8 @@ struct RunHeistCommand: ConnectedOneShotCLICommand {
         }
         var builder = CommandArgumentEnvelopeBuilder(
             CommandArgumentEnvelopeBuilder.value(.plan, inline),
-            CommandArgumentEnvelopeBuilder.optional(.argument, try argument.map(parseRootArgument))
+            CommandArgumentEnvelopeBuilder.optional(.argument, try argument.map(parseRootArgument)),
+            CommandArgumentEnvelopeBuilder.optional(.continuity, continuity.map(HeistValue.string))
         )
         builder.set(additionalFields.map(Optional.some))
         return builder.build()

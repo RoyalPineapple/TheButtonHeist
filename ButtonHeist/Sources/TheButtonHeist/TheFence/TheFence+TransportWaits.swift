@@ -33,9 +33,14 @@ extension TheFence {
     func sendAndAwaitHeistExecution(
         _ plan: HeistPlan,
         argument: HeistArgument = .none,
+        continuity: EvidenceContinuity.Reference? = nil,
         timeout: TimeInterval
     ) async throws -> HeistResult {
-        let message = ClientMessage.heistPlan(HeistPlanRun(plan: plan, argument: argument))
+        let message = ClientMessage.heistPlan(HeistPlanRun(
+            plan: plan,
+            argument: argument,
+            continuity: continuity
+        ))
         return try await sendAndAwait(message, expecting: .heistExecution, timeout: timeout)
     }
 
