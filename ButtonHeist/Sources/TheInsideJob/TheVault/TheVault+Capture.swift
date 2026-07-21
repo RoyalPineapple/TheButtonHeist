@@ -47,25 +47,6 @@ enum InventoryEnumeration {
             attemptedIndicesByContainerPath.values.reduce(0) { $0 + $1.count }
         }
     }
-
-    enum RequestDecision {
-        case admitted
-        case exhausted
-    }
-
-    struct RequestAdmission {
-        private(set) var remainingRequests: Int
-
-        init(budget: Int) {
-            remainingRequests = max(0, budget)
-        }
-
-        mutating func admit() -> RequestDecision {
-            guard remainingRequests > 0 else { return .exhausted }
-            remainingRequests -= 1
-            return .admitted
-        }
-    }
 }
 
 extension TheVault {
@@ -86,35 +67,13 @@ extension TheVault {
         let screenCoordinateOffsetsByPath: [TreePath: CGPoint]
         let inventoryEnumeration: InventoryEnumeration.Result
 
-        var offscreenScrollElements: [OffscreenScrollElement] {
-            inventoryEnumeration.offscreenElements
-        }
-
         init(
             hierarchy: [AccessibilityHierarchy],
             objectsByPath: [TreePath: NSObject] = [:],
             containerObjectsByPath: [TreePath: NSObject] = [:],
             scrollViewsByPath: [TreePath: UIScrollView] = [:],
             screenCoordinateOffsetsByPath: [TreePath: CGPoint] = [:],
-            offscreenScrollElements: [OffscreenScrollElement] = []
-        ) {
-            self.hierarchy = hierarchy
-            self.objectsByPath = objectsByPath
-            self.containerObjectsByPath = containerObjectsByPath
-            self.scrollViewsByPath = scrollViewsByPath
-            self.screenCoordinateOffsetsByPath = screenCoordinateOffsetsByPath
-            inventoryEnumeration = InventoryEnumeration.Result(
-                offscreenElements: offscreenScrollElements
-            )
-        }
-
-        init(
-            hierarchy: [AccessibilityHierarchy],
-            objectsByPath: [TreePath: NSObject] = [:],
-            containerObjectsByPath: [TreePath: NSObject] = [:],
-            scrollViewsByPath: [TreePath: UIScrollView] = [:],
-            screenCoordinateOffsetsByPath: [TreePath: CGPoint] = [:],
-            inventoryEnumeration: InventoryEnumeration.Result
+            inventoryEnumeration: InventoryEnumeration.Result = .init()
         ) {
             self.hierarchy = hierarchy
             self.objectsByPath = objectsByPath
@@ -256,20 +215,21 @@ extension TheVault {
         var representedObjectIDs = Set(objectsByPath.values.map(ObjectIdentifier.init))
         var elements: [OffscreenScrollElement] = []
         var attemptedIndicesByContainerPath: [TreePath: [Int]] = [:]
-        var requestAdmission = InventoryEnumeration.RequestAdmission(budget: budget)
+        var remainingRequests = max(0, budget)
         var knownUnattemptedCount = 0
 
         for (containerPath, scrollView, reportedCount) in admittedInventories {
             guard let count = reportedCount.value, count > 0 else { continue }
 
             for index in 0..<count {
-                guard case .admitted = requestAdmission.admit() else {
+                guard remainingRequests > 0 else {
                     knownUnattemptedCount = Self.saturatingSum(
                         knownUnattemptedCount,
                         count - index
                     )
                     break
                 }
+                remainingRequests -= 1
                 attemptedIndicesByContainerPath[containerPath, default: []].append(index)
 
                 guard let object = scrollView.accessibilityElement(at: index) as? NSObject,

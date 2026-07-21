@@ -141,15 +141,15 @@ final class TheVaultObservationBuildingTests: XCTestCase {
             objectsByPath: [visiblePath: NSObject()],
             containerObjectsByPath: [scrollContainerPath: scrollView],
             scrollViewsByPath: [scrollContainerPath: scrollView],
-            offscreenScrollElements: [
+            inventoryEnumeration: .init(offscreenElements: [
                 .init(
                     path: offscreenPath,
                     scrollContainerPath: scrollContainerPath,
                     scrollIndex: 4,
                     element: offscreen,
                     observedScrollContentActivationPoint: observedPoint
-                )
-            ]
+                ),
+            ])
         )
 
         let observation = TheVault.buildObservation(from: result)

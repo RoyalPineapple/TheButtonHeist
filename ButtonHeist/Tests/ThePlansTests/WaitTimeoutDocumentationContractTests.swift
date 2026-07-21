@@ -18,23 +18,11 @@ import Testing
 }
 
 @Test func timeoutDocumentationValidationRejectsContradictoryClaims() {
-    let fixtures = [
-        TimeoutDocumentationFixture(
-            document: "WaitFor(.exists(.label(\"Done\")), timeout: 0)",
-            contradiction: .zeroValuedExample
-        ),
-        TimeoutDocumentationFixture(
-            document: "A timeout of zero is valid for bounded waits.",
-            contradiction: .zeroIsValid
-        ),
-        TimeoutDocumentationFixture(
-            document: "A timeout of zero executes the bounded wait once.",
-            contradiction: .zeroExecutesOnce
-        ),
-        TimeoutDocumentationFixture(
-            document: "Timeouts satisfy `0 <= value <= configuredMaximum`.",
-            contradiction: .nonStrictLowerBound
-        ),
+    let fixtures: [(document: String, contradiction: TimeoutDocumentationContradiction)] = [
+        ("WaitFor(.exists(.label(\"Done\")), timeout: 0)", .zeroValuedExample),
+        ("A timeout of zero is valid for bounded waits.", .zeroIsValid),
+        ("A timeout of zero executes the bounded wait once.", .zeroExecutesOnce),
+        ("Timeouts satisfy `0 <= value <= configuredMaximum`.", .nonStrictLowerBound),
     ]
 
     for fixture in fixtures {
@@ -45,11 +33,6 @@ import Testing
     }
 
     #expect(timeoutDocumentationViolation(in: "Timeouts satisfy `0 < value <= configuredMaximum`.") == nil)
-}
-
-private struct TimeoutDocumentationFixture {
-    let document: String
-    let contradiction: TimeoutDocumentationContradiction
 }
 
 private enum TimeoutDocumentationContradiction: String, CustomStringConvertible {

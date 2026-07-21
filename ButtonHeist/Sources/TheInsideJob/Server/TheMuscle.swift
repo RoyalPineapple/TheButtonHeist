@@ -194,9 +194,7 @@ actor TheMuscle {
         guard admission.contains(clientId) else {
             return .failed(.clientNotFound(clientId))
         }
-        guard let generation = delivery.generation,
-              delivery.isWired(generation: generation)
-        else {
+        guard let generation = delivery.generation else {
             return .failed(.transportUnavailable)
         }
         return await delivery.send(data, toClient: clientId, generation: generation)
@@ -352,7 +350,7 @@ actor TheMuscle {
                     preconditionFailure("Delayed disconnects require a callback generation")
                 }
                 authenticationTimeouts.cancel(clientId)
-                scheduleDelayedDisconnect(.init(clientId: clientId, generation: generation))
+                scheduleDelayedDisconnect(clientId, generation: generation)
             case .log(let event):
                 recordAdmissionLog(event)
             }
@@ -396,20 +394,14 @@ actor TheMuscle {
 
     // MARK: - Delayed Disconnect
 
-    private struct DelayedDisconnect: Sendable {
-        let clientId: Int
-        let generation: ClientDelivery.Generation
-    }
-
     /// Schedule a delayed disconnect so the recipient can flush the final error payload.
-    private func scheduleDelayedDisconnect(_ effect: DelayedDisconnect) {
-        delayedDisconnects.schedule(clientId: effect.clientId) { [weak self] in
-            await self?.fireDisconnect(effect)
+    private func scheduleDelayedDisconnect(
+        _ clientId: Int,
+        generation: ClientDelivery.Generation
+    ) {
+        delayedDisconnects.schedule(clientId: clientId) { [weak self] in
+            await self?.disconnectClient(clientId, generation: generation)
         }
-    }
-
-    private func fireDisconnect(_ effect: DelayedDisconnect) async {
-        _ = await delivery.disconnect(effect.clientId, generation: effect.generation)
     }
 
     // MARK: - Authentication Deadline

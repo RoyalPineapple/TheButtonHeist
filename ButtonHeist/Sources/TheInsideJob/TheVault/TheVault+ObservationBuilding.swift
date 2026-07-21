@@ -38,7 +38,7 @@ extension TheVault {
         let projection = buildObservationProjection(
             identityContext: identityContext,
             facts: facts,
-            offscreenScrollElements: result.offscreenScrollElements
+            offscreenScrollElements: result.inventoryEnumeration.offscreenElements
         )
         logObservationBuildEvents(projection.logEvents)
         return try admitObservation(

@@ -373,19 +373,7 @@ private func accessCap(_ ancestor: Syntax) -> ContractAccess? {
 }
 
 private func nominalModifiers(_ node: Syntax) -> DeclModifierListSyntax? {
-    if let declaration = node.as(StructDeclSyntax.self) {
-        return declaration.modifiers
-    }
-    if let declaration = node.as(ClassDeclSyntax.self) {
-        return declaration.modifiers
-    }
-    if let declaration = node.as(EnumDeclSyntax.self) {
-        return declaration.modifiers
-    }
-    if let declaration = node.as(ActorDeclSyntax.self) {
-        return declaration.modifiers
-    }
-    return node.as(ProtocolDeclSyntax.self)?.modifiers
+    node.asProtocol(DeclGroupSyntax.self)?.modifiers
 }
 
 private func explicitAccess(_ modifiers: DeclModifierListSyntax) -> ContractAccess? {
