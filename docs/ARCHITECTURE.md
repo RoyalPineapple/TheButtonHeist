@@ -197,11 +197,16 @@ new viewport, yields one run-loop turn, and parses again. Matching semantic
 fingerprints prove the viewport in one turn; layout churn may consume another
 turn, bounded by the 250 ms transition ceiling. Page, edge, swipe, known
 content-point reveal, and restore intents all commit their admitted observation into the
-canonical Store and produce one settled event. When a target is already present
-in `InterfaceTree`, inflation uses its parser-derived scroll membership and
-two-dimensional content point to jump directly to it; blank intervening pages
-are irrelevant. `ViewportExplorer` is the fallback for unknown targets or
-missing reveal evidence. It dispatches exactly one viewport movement,
+canonical Store and produce one settled event. A captured reveal content point
+and the semantic `TreePath` of the scroll container whose coordinate space
+produced it form one evidence value. Immediately before dispatch, inflation
+admits that point only when the live movement candidate has the exact owner
+path. This owner-qualified seed is an optional shortcut for a known target;
+blank intervening pages are irrelevant when it succeeds. A missing or
+mismatched owner skips the seed without donating its coordinate to an ancestor
+or sibling, and `ViewportExplorer` continues the established ancestor paging
+route. The explorer is also the fallback for unknown targets or missing reveal
+evidence. It dispatches exactly one viewport movement,
 waits for settle, parse, Store commit, and callback, and only
 then may request another movement.
 
@@ -264,7 +269,10 @@ The pipeline is:
    `AdmittedSemanticTarget` that still uniquely selects that exact element.
 4. Reveal nested scroll ancestors outermost-first when viewport movement is
    required, using the initial capture's `HeistId` only to locate the live scroll
-   owner and proving each graph path against current live containment.
+   owner and proving each graph path against current live containment. Each
+   captured content point remains paired with its producing container's semantic
+   path and is admitted only when that path exactly matches the current movement
+   candidate, immediately before dispatch.
 5. After every committed capture, re-resolve the admitted semantic target and
    adopt that match's current capture-local `HeistId`. Missing or ambiguous
    resolution ends inflation without a live handoff.
@@ -280,7 +288,12 @@ capture-local target together with only the current capture's resolved
 re-resolution, or live handoff cannot be proven, the command fails with
 diagnostics instead of acting on stale or guessed state. See the
 [element inflation diagram](diagrams/element-inflation.md) for the resolution
-flowchart.
+flowchart. Owner-qualified point dispatch is only a seed optimization: if its
+owner is missing or mismatched, the runtime does not reuse the coordinate on an
+ancestor or sibling and instead continues the existing bounded ancestor paging
+route. Both routes keep UIKit movement, transition settlement, Store commit, and
+target re-resolution on the same canonical pipelines; they introduce no public
+navigation, result, evidence, or metric contract.
 
 ### Capture Budgets Precede UIKit Enumeration
 

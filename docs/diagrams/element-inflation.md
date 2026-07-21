@@ -31,13 +31,17 @@ flowchart TD
 
     IDENTITY --> BUDGET["derive one deadline from<br/>scroll-membership ancestor count"]
     BUDGET --> GRAPH["walk semantic ancestor graph<br/>outermost-first"]
-    GRAPH --> REVEAL["reveal next ancestor or target<br/>through viewport transition"]
-    REVEAL --> COMMIT["settle and commit<br/>the resulting capture"]
+    GRAPH --> SEED["captured content point +<br/>semantic owner path"]
+    SEED --> OWNER{"candidate path exactly<br/>matches owner path?"}
+    OWNER -- "yes" --> POINT["dispatch point reveal<br/>through viewport transition"]
+    OWNER -- "no: missing or mismatch" --> PAGE["skip coordinate and page<br/>an available ancestor"]
+    POINT --> COMMIT["settle and commit<br/>the resulting capture"]
+    PAGE --> COMMIT
     COMMIT --> RERESOLVE{"resolve admitted semantic target<br/>in this committed InterfaceTree"}
     RERESOLVE -- "one match" --> CURRENT["adopt this capture's current HeistId<br/>and live reference"]
     RERESOLVE -- "missing or ambiguous" --> MISS
     CURRENT --> MORE{"more viewport movement<br/>required?"}
-    MORE -- "yes" --> REVEAL
+    MORE -- "yes" --> GRAPH
     MORE -- "no" --> STABLE["stabilize frame + activationPoint<br/>under the same deadline"]
     STABLE -- "fresh committed capture" --> RERESOLVE
     STABLE -- "stable and onscreen" --> ACT["LiveActionTarget<br/>for current-capture HeistId"]
@@ -62,8 +66,14 @@ Notes:
   resolution fails; a stale id or newly visible sibling cannot take over.
 - The handoff budget is graph-derived: `max(2, unique scroll-membership ancestors + 1)` one-second ticks. Nested reveal follows that graph outermost-first, proves each semantic path against current live containment, and shares the same deadline with geometry stabilization.
 - A known semantic target that later gains scroll membership earns at most one
-  direct reveal attempt. Content absent from settled semantic truth cannot be
-  revealed, and exploration never scans for an old `HeistId` as identity.
+  direct reveal attempt. Its captured content point and producing scroll
+  container's semantic path are one evidence value. Exact-owner admission occurs
+  immediately before point dispatch; a missing or mismatched owner cannot donate
+  its coordinate to an ancestor or sibling and instead selects the established
+  ancestor paging route. Point reveal and paging both use the canonical viewport
+  transition, settlement, Store commit, and target re-resolution pipelines.
+  Content absent from settled semantic truth cannot be revealed, and exploration
+  never scans for an old `HeistId` as identity.
 - The ordinal is a capture-local disambiguator over a semantic base selector,
   never durable identity. A target that becomes unique only through its terminal
   ordinal cannot be admitted across a capture boundary.

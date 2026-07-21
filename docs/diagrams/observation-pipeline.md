@@ -99,11 +99,15 @@ all submit movement intent to it. No next movement can dispatch until the
 previous viewport has committed; exploration additionally waits for its
 predicate callback.
 
-Known semantic targets do not page through blank space. If `InterfaceTree`
-already carries a target's scroll membership and parser-derived two-dimensional
-content point, inflation submits that point directly to the same transition.
-Directional page discovery is the fallback for unknown targets or missing
-reveal evidence.
+Known semantic targets can avoid paging through blank space. `InterfaceTree`
+stores a parser-derived two-dimensional content point together with the semantic
+path of the scroll container whose coordinate space produced it. Immediately
+before dispatch, inflation admits that optional seed only when the current live
+movement candidate has the exact owner path. A missing or mismatched owner never
+donates its coordinate to an ancestor or sibling; an unusable seed falls through
+to the established ancestor paging route. Point reveal and directional paging
+both use the same viewport transition, settlement, Store commit, and target
+re-resolution pipelines.
 
 After a physical page move, the first settled capture whose semantic viewport
 differs from the pre-movement viewport commits immediately. An identical settled
@@ -142,9 +146,13 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    Target{"known target with<br/>scroll-content point?"} -->|yes| Direct["jump directly to 2D content point"]
+    Target{"known target with owner-qualified<br/>scroll-content point?"} -->|yes| Owner{"live candidate path exactly<br/>matches owner path?"}
+    Owner -->|yes| Direct["dispatch 2D point to<br/>its exact owner"]
     Direct --> DirectCommit["minimal settle → parse + admit<br/>→ Store commit"]
-    DirectCommit --> RetainKnown["retain revealed viewport"]
+    DirectCommit --> SeedResult{"seed moved viewport<br/>and revealed target?"}
+    SeedResult -->|yes| RetainKnown["retain revealed viewport"]
+    SeedResult -->|no| Save
+    Owner -->|no: missing or mismatch<br/>never reuse coordinate| Save["save visual origin"]
     Target -->|no| Save["save visual origin"]
     Save --> Order{"caller-selected search order"}
     Order -->|forwardFirst| FirstForward["scan forward ray first"]
