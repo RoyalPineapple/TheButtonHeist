@@ -127,6 +127,7 @@ private struct InterfaceProjectionBuilder {
     private let graph: InterfaceGraph
     private let visibleElementBudget: Int
     private let measurements: InterfaceProjectionMeasurements
+    private let inventoryAdmissionDecisions: [TreePath: InventoryProjectionAdmission.Decision]
 
     private var accumulator: InterfaceProjectionAccumulator
     private var rootChildren: [InterfaceNodeProjection] = []
@@ -138,6 +139,10 @@ private struct InterfaceProjectionBuilder {
         self.graph = graph
         self.visibleElementBudget = visibleElementBudget
         measurements = InterfaceProjectionMeasurements(nodes: graph.nodesInPathOrder)
+        inventoryAdmissionDecisions = InventoryProjectionAdmission.decisions(
+            nodes: graph.nodesInPathOrder,
+            budget: visibleElementBudget
+        )
         accumulator = InterfaceProjectionAccumulator(totalNodeBudget: totalNodeBudget)
     }
 
@@ -204,10 +209,16 @@ private struct InterfaceProjectionBuilder {
             return
         }
 
-        let observedElementCount = measurements.elementCount(at: record.path)
+        let materializedElementCount = measurements.elementCount(at: record.path)
+        let scrollInventory = record.annotation?.scrollInventory
+        let observedElementCount = max(
+            materializedElementCount,
+            scrollInventory?.totalElementCount ?? materializedElementCount
+        )
         let scrollPolicy = ScrollSubtreeProjectionPolicy(
             container: record.container,
             observedElementCount: observedElementCount,
+            inventoryAdmissionDecision: inventoryAdmissionDecisions[record.path],
             visibleElementBudget: visibleElementBudget,
             parentRemainingElementBudget: remainingElementBudget
         )
@@ -215,7 +226,7 @@ private struct InterfaceProjectionBuilder {
             path: record.path,
             container: record.container,
             containerName: record.annotation?.containerName?.rawValue,
-            scrollInventory: record.annotation?.scrollInventory,
+            scrollInventory: scrollInventory,
             observedElementCount: observedElementCount,
             scrollPolicy: scrollPolicy,
             remainingElementBudget: scrollPolicy.childRemainingElementBudget
@@ -270,6 +281,40 @@ private struct InterfaceProjectionBuilder {
     }
 }
 
+private struct InventoryProjectionAdmission {
+    enum Decision {
+        case complete
+        case omittedKnownElements
+    }
+
+    private var remainingRequests: Int
+
+    init(budget: Int) {
+        remainingRequests = max(0, budget)
+    }
+
+    mutating func admit(elementCount: Int) -> Decision {
+        let admittedCount = min(elementCount, remainingRequests)
+        remainingRequests -= admittedCount
+        return admittedCount == elementCount ? .complete : .omittedKnownElements
+    }
+
+    static func decisions(
+        nodes: [InterfaceGraphNodeRecord],
+        budget: Int
+    ) -> [TreePath: Decision] {
+        var admission = Self(budget: budget)
+        var decisions: [TreePath: Decision] = [:]
+        for record in nodes {
+            guard case .container(let container) = record.kind,
+                  let elementCount = container.annotation?.scrollInventory?.totalElementCount
+            else { continue }
+            decisions[record.path] = admission.admit(elementCount: elementCount)
+        }
+        return decisions
+    }
+}
+
 private struct InterfaceProjectionMeasurements {
     private let elementCountByPath: [TreePath: Int]
 
@@ -315,17 +360,23 @@ private struct ScrollSubtreeProjectionPolicy {
     let visibleElementBudget: Int
     let parentRemainingElementBudget: Int?
     let isActive: Bool
+    private let inventoryAdmissionOmittedKnownElements: Bool
 
     init(
         container: AccessibilityContainer,
         observedElementCount: Int,
+        inventoryAdmissionDecision: InventoryProjectionAdmission.Decision?,
         visibleElementBudget: Int,
         parentRemainingElementBudget: Int?
     ) {
+        let admittedVisibleElementBudget = max(0, visibleElementBudget)
         self.observedElementCount = observedElementCount
-        self.visibleElementBudget = max(0, visibleElementBudget)
+        self.visibleElementBudget = admittedVisibleElementBudget
         self.parentRemainingElementBudget = parentRemainingElementBudget
-        isActive = Self.isScrollable(container) && observedElementCount > self.visibleElementBudget
+        inventoryAdmissionOmittedKnownElements = inventoryAdmissionDecision == .omittedKnownElements
+        isActive = Self.isScrollable(container) && (
+            observedElementCount > admittedVisibleElementBudget || inventoryAdmissionOmittedKnownElements
+        )
     }
 
     var childRemainingElementBudget: Int? {
@@ -348,7 +399,9 @@ private struct ScrollSubtreeProjectionPolicy {
         let renderedElementCount = renderedElementCount(after: remainingElementBudget)
         let omittedElementCount = max(0, observedElementCount - renderedElementCount)
         let scrollBudgetHit = (remainingElementBudget ?? 0) <= 0
-        guard scrollBudgetHit, omittedElementCount > 0 else { return nil }
+        guard scrollBudgetHit || inventoryAdmissionOmittedKnownElements,
+              omittedElementCount > 0
+        else { return nil }
 
         accumulator.recordTruncatedScrollContainer()
         return InterfaceSubtreeTruncationProjection(
