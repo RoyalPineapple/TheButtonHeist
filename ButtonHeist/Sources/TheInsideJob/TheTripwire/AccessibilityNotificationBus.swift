@@ -72,7 +72,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
     private struct AnnouncementWaiter {
         let afterSequence: UInt64
         let predicate: ResolvedAnnouncementPredicate
-        let continuation: TimedOneShot<CapturedAnnouncement?>
+        let continuation: TimedOneShot<AccessibilityAnnouncementWaitOutcome>
     }
 
     private struct NotificationResumptions {
@@ -121,29 +121,50 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
         matching predicate: ResolvedAnnouncementPredicate,
         timeout: TimeInterval
     ) async -> CapturedAnnouncement? {
-        let waiterId = reserveAnnouncementWaiterIdentifier()
-        let continuationBox = TimedOneShot<CapturedAnnouncement?>()
+        let outcome = await waitForAnnouncementOutcome(
+            after: cursor,
+            matching: predicate,
+            timeout: timeout
+        )
+        guard case .matched(let announcement) = outcome else { return nil }
+        return announcement
+    }
 
-        let result: CapturedAnnouncement? = await withTaskCancellationHandler {
-            await withCheckedContinuation { (continuation: CheckedContinuation<CapturedAnnouncement?, Never>) in
+    func waitForAnnouncementOutcome(
+        after cursor: AccessibilityNotificationCursor,
+        matching predicate: ResolvedAnnouncementPredicate,
+        timeout: TimeInterval
+    ) async -> AccessibilityAnnouncementWaitOutcome {
+        let waiterId = reserveAnnouncementWaiterIdentifier()
+        let continuationBox = TimedOneShot<AccessibilityAnnouncementWaitOutcome>()
+
+        let outcome: AccessibilityAnnouncementWaitOutcome = await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
                 if Task.isCancelled {
-                    continuation.resume(returning: nil)
+                    continuation.resume(returning: .timedOut)
                     return
                 }
                 guard continuationBox.register(continuation) else {
-                    continuation.resume(returning: nil)
+                    continuation.resume(returning: .timedOut)
                     return
                 }
 
                 lock.lock()
-                if let announcement = firstAnnouncementLocked(after: cursor, matching: predicate) {
+                switch announcementOutcomeLocked(after: cursor, matching: predicate) {
+                case .matched(let announcement):
                     lock.unlock()
-                    continuationBox.resolve(returning: announcement)
+                    continuationBox.resolve(returning: .matched(announcement))
                     return
+                case .historyUnavailable(let gap):
+                    lock.unlock()
+                    continuationBox.resolve(returning: .historyUnavailable(gap))
+                    return
+                case .timedOut:
+                    break
                 }
                 guard timeout > 0 else {
                     lock.unlock()
-                    continuationBox.resolve(returning: nil)
+                    continuationBox.resolve(returning: .timedOut)
                     return
                 }
 
@@ -154,15 +175,15 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
                     continuation: continuationBox
                 ), id: waiterId)
                 continuationBox.armTimeout(after: .milliseconds(timeoutMilliseconds)) { [weak self] in
-                    self?.completeAnnouncementWaiter(waiterId, returning: nil)
+                    self?.completeAnnouncementWaiter(waiterId, returning: .timedOut)
                 }
                 lock.unlock()
             }
         } onCancel: {
-            continuationBox.resolve(returning: nil)
+            continuationBox.resolve(returning: .timedOut)
         }
-        completeAnnouncementWaiter(waiterId, returning: nil)
-        return result
+        completeAnnouncementWaiter(waiterId, returning: .timedOut)
+        return outcome
     }
 
     private func recordAnnouncementEventLocked(_ event: PendingAccessibilityNotificationEvent) -> [(AnnouncementWaiter, CapturedAnnouncement)] {
@@ -182,13 +203,13 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
 
     private func completeAnnouncementWaiter(
         _ waiterId: UInt64,
-        returning announcement: CapturedAnnouncement?
+        returning outcome: AccessibilityAnnouncementWaitOutcome
     ) {
         lock.lock()
         let waiter = announcementWaiters.remove(id: waiterId)
         lock.unlock()
 
-        waiter?.continuation.resolve(returning: announcement)
+        waiter?.continuation.resolve(returning: outcome)
     }
 
     /// Opens the outer correlation window for a running heist.
@@ -249,22 +270,25 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
 
     private func resume(_ resumptions: NotificationResumptions) {
         for (waiter, announcement) in resumptions.announcementWaiters {
-            waiter.continuation.resolve(returning: announcement)
+            waiter.continuation.resolve(returning: .matched(announcement))
         }
     }
 
-    private func firstAnnouncementLocked(
+    private func announcementOutcomeLocked(
         after cursor: AccessibilityNotificationCursor,
         matching predicate: ResolvedAnnouncementPredicate
-    ) -> CapturedAnnouncement? {
-        let events = ingressLog.checkpoint(after: cursor, selection: .all).events
-        for event in events {
+    ) -> AccessibilityAnnouncementWaitOutcome {
+        let batch = ingressLog.checkpoint(after: cursor, selection: .all)
+        if let gap = batch.gap {
+            return .historyUnavailable(gap)
+        }
+        for event in batch.events {
             guard let announcement = event.capturedAnnouncement,
                   predicate.matches(announcement.text)
             else { continue }
-            return announcement
+            return .matched(announcement)
         }
-        return nil
+        return .timedOut
     }
 
     fileprivate static func stringPayload(_ value: AnyObject?) -> String? {
@@ -374,6 +398,12 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
     private var provenanceLocked: AccessibilityNotificationProvenance {
         activeScopeLeases > 0 ? .scoped : .ambient
     }
+}
+
+enum AccessibilityAnnouncementWaitOutcome: Sendable, Equatable {
+    case matched(CapturedAnnouncement)
+    case timedOut
+    case historyUnavailable(AccessibilityNotificationGap)
 }
 
 struct AccessibilityNotificationCursor: Sendable, Equatable {

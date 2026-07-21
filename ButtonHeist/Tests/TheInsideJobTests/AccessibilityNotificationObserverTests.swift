@@ -201,6 +201,34 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertTrue(scoped.events.isEmpty)
     }
 
+    func testAnnouncementWaitOutcomeReportsRetainedHistoryGap() async {
+        let bus = AccessibilityNotificationBus()
+        let cursor = bus.cursor()
+        for index in 0..<65 {
+            bus.recordForTesting(
+                code: 1008,
+                notificationData: CapturedAccessibilityNotificationPayload(
+                    "Unrelated announcement \(index)" as NSString
+                ),
+                associatedElement: .none
+            )
+        }
+
+        let outcome = await bus.waitForAnnouncementOutcome(
+            after: cursor,
+            matching: ResolvedAnnouncementPredicate(
+                match: ResolvedStringMatch(core: .exact("Expected announcement"))
+            ),
+            timeout: 60
+        )
+
+        XCTAssertEqual(
+            outcome,
+            .historyUnavailable(AccessibilityNotificationGap(droppedThroughSequence: 1))
+        )
+        XCTAssertEqual(bus.announcementWaiterCount, 0)
+    }
+
     func testStoppingSemanticObservationDoesNotClearNotificationHistory() {
         let vault = TheVault(tripwire: TheTripwire())
         let heist = vault.accessibilityNotifications.beginHeistScope()
