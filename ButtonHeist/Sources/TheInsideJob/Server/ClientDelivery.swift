@@ -109,38 +109,101 @@ enum ClientDelivery: Sendable {
         self = .idle(latest: latestGeneration)
     }
 
-    func send(_ data: Data, toClient clientId: Int) async -> ServerSendOutcome {
-        guard case .wired(_, let callbacks) = self else {
+    func send(
+        _ data: Data,
+        toClient clientId: Int,
+        generation: Generation
+    ) async -> ServerSendOutcome {
+        guard case .admitted(let callbacks) = deliveryDecision(
+            for: generation,
+            operation: .send
+        ) else {
             return .failed(.transportUnavailable)
         }
         return await callbacks.sendToClient(data, clientId)
     }
 
+    func respond(
+        _ data: Data,
+        using respond: @escaping SocketResponseHandler,
+        generation: Generation
+    ) async -> ServerSendOutcome {
+        guard case .admitted = deliveryDecision(
+            for: generation,
+            operation: .respond
+        ) else {
+            return .failed(.transportUnavailable)
+        }
+        return await respond(data)
+    }
+
     @discardableResult
-    func disconnect(_ clientId: Int) async -> DeliveryOutcome {
-        guard case .wired(_, let callbacks) = self else {
+    func disconnect(_ clientId: Int, generation: Generation) async -> DeliveryOutcome {
+        switch deliveryDecision(for: generation, operation: .disconnect) {
+        case .admitted(let callbacks):
+            await callbacks.disconnectClient(clientId)
+            return .delivered
+        case .rejected:
+            return .rejected
+        case .callbacksUnavailable:
             return .failed(.callbacksNotInstalled("disconnectClient"))
         }
-        await callbacks.disconnectClient(clientId)
-        return .delivered
     }
 
     @discardableResult
     func clientAuthenticated(
         _ clientId: Int,
-        respond: @escaping SocketResponseHandler
+        respond: @escaping SocketResponseHandler,
+        generation: Generation
     ) async -> DeliveryOutcome {
-        guard case .wired(_, let callbacks) = self else {
+        switch deliveryDecision(for: generation, operation: .clientAuthenticated) {
+        case .admitted(let callbacks):
+            await callbacks.onClientAuthenticated(clientId, respond)
+            return .delivered
+        case .rejected:
+            return .rejected
+        case .callbacksUnavailable:
             return .failed(.callbacksNotInstalled("onClientAuthenticated"))
         }
-        await callbacks.onClientAuthenticated(clientId, respond)
-        return .delivered
+    }
+
+    func isWired(generation: Generation) -> Bool {
+        guard case .wired(let currentGeneration, _) = self else { return false }
+        return currentGeneration == generation
     }
 
     private enum Operation: String {
         case begin
+        case clientAuthenticated
+        case disconnect
         case install
         case invalidate
+        case respond
+        case send
+    }
+
+    private enum DeliveryDecision {
+        case admitted(Callbacks)
+        case rejected
+        case callbacksUnavailable
+    }
+
+    private func deliveryDecision(
+        for candidate: Generation,
+        operation: Operation
+    ) -> DeliveryDecision {
+        switch self {
+        case .wired(let current, let callbacks) where current == candidate:
+            return .admitted(callbacks)
+        case .wiring(let current) where current == candidate,
+             .idle(let current?) where current == candidate:
+            return .callbacksUnavailable
+        case .idle(latest: nil):
+            return .callbacksUnavailable
+        case .idle, .wiring, .wired:
+            logRejection(operation, candidate: candidate)
+            return .rejected
+        }
     }
 
     private func logRejection(_ operation: Operation, candidate: Generation) {

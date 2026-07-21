@@ -84,27 +84,6 @@ enum ResponseEnvelopeDelivery {
         }
     }
 
-    static func sendMessage(
-        _ message: ServerMessage,
-        requestId: RequestID? = nil,
-        respond: @escaping SocketResponseHandler
-    ) async -> ResponseDeliveryOutcome {
-        switch encodeEnvelope(
-            message,
-            requestId: requestId
-        ) {
-        case .success(let data):
-            insideJobLogger.debug("Sending \(data.count) bytes")
-            switch await respond(data) {
-            case .delivered:
-                return .delivered
-            case .failed(let failure):
-                return ResponseDeliveryOutcome(sendFailure: failure)
-            }
-        case .failure(let failure):
-            return .failed(.responseEncodingFailed(failure))
-        }
-    }
 }
 
 extension TheGetaway {
@@ -140,11 +119,15 @@ extension TheGetaway {
     func sendMessage(
         _ message: ServerMessage,
         requestId: RequestID? = nil,
-        respond: @escaping SocketResponseHandler
+        respond: @escaping SocketResponseHandler,
+        generation: ClientDelivery.Generation
     ) async -> ResponseDeliveryOutcome {
-        let outcome = await ResponseEnvelopeDelivery.sendMessage(message, requestId: requestId, respond: respond)
-        logDeliveryOutcome(outcome)
-        return outcome
+        await muscle.sendResponse(
+            message,
+            requestId: requestId,
+            respond: respond,
+            generation: generation
+        )
     }
 
     func sendEncodedData(_ data: Data, toClient clientId: Int) async -> ResponseDeliveryOutcome {

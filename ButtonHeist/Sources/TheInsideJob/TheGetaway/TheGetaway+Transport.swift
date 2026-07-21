@@ -52,6 +52,7 @@ extension TheGetaway {
         // non-Sendable) so the closures don't drag a non-Sendable type into
         // actor-isolated storage.
         let server = transport.server
+        let generation = attempt.deliveryGeneration
         let sendToClient: @Sendable (Data, Int) async -> ServerSendOutcome = { data, clientId in
             await server.send(data, to: clientId)
         }
@@ -59,7 +60,7 @@ extension TheGetaway {
             await server.removeClient(clientId)
         }
         let onAuthenticated: @MainActor @Sendable (Int, @escaping SocketResponseHandler) async -> Void = { [weak self] _, respond in
-            await self?.sendServerInfo(respond: respond)
+            await self?.sendServerInfo(respond: respond, generation: generation)
         }
         if let pauseBeforeTransportCallbackInstallationForTesting {
             await pauseBeforeTransportCallbackInstallationForTesting()
@@ -81,10 +82,15 @@ extension TheGetaway {
             await muscle.invalidateCallbacks(for: attempt.deliveryGeneration)
             return .rejected
         }
-        let eventConsumer = Task { @MainActor [weak self, events = transport.events, onBacklogOverflow] in
+        let events = transport.events
+        let eventConsumer = Task { @MainActor [weak self, events, generation, onBacklogOverflow] in
             for await event in events {
                 guard let self else { return }
-                await self.observeTransportEvent(event, onBacklogOverflow: onBacklogOverflow)
+                await self.observeTransportEvent(
+                    event,
+                    generation: generation,
+                    onBacklogOverflow: onBacklogOverflow
+                )
             }
         }
         transportWiring = .wired(WiredTransport(attempt: attempt, eventConsumer: eventConsumer))
@@ -96,8 +102,13 @@ extension TheGetaway {
     /// traffic can continue while a request is suspended.
     func observeTransportEvent(
         _ event: TransportEvent,
+        generation: ClientDelivery.Generation,
         onBacklogOverflow: @MainActor @Sendable (Int) async -> Void
     ) async {
+        guard transportWiring.admitsEvent(generation: generation) else {
+            logRejectedTransportEvent(generation: generation)
+            return
+        }
         switch event {
         case .clientConnected(let clientId, let remoteAddress):
             insideJobLogger.info("Client \(clientId) connected from \(remoteAddress ?? "unknown"), awaiting hello")
@@ -105,18 +116,24 @@ extension TheGetaway {
             if let remoteAddress {
                 await muscle.registerClientAddress(
                     clientId,
-                    address: ClientNetworkAddress(remoteAddress)
+                    address: ClientNetworkAddress(remoteAddress),
+                    generation: generation
                 )
             }
-            await muscle.sendServerHello(clientId: clientId)
+            await muscle.sendServerHello(clientId: clientId, generation: generation)
 
         case .clientDisconnected(let clientId):
             insideJobLogger.info("Client \(clientId) disconnected")
             stopClientRequestPipeline(clientId: clientId)
-            await observeClientDisconnection(clientId: clientId)
+            await observeClientDisconnection(clientId: clientId, generation: generation)
 
         case .dataReceived(let clientId, let data, let respond):
-            await enqueueClientRequest(clientId: clientId, data: data, respond: respond)
+            await enqueueClientRequest(
+                clientId: clientId,
+                data: data,
+                respond: respond,
+                generation: generation
+            )
 
         case .backlogOverflow(let maxEvents):
             await onBacklogOverflow(maxEvents)
@@ -146,8 +163,11 @@ extension TheGetaway {
         await tearDown()
     }
 
-    private func observeClientDisconnection(clientId: Int) async {
-        await muscle.handleClientDisconnected(clientId)
+    private func observeClientDisconnection(
+        clientId: Int,
+        generation: ClientDelivery.Generation
+    ) async {
+        await muscle.handleClientDisconnected(clientId, generation: generation)
     }
 
     private func logRejectedTransportWiring(
@@ -158,6 +178,14 @@ extension TheGetaway {
             .map { String($0.rawValue) } ?? "none"
         insideJobLogger.debug(
             "Rejected transport callback \(operation.rawValue): candidate=\(attempt.deliveryGeneration.rawValue) current=\(currentGeneration)"
+        )
+    }
+
+    private func logRejectedTransportEvent(generation: ClientDelivery.Generation) {
+        let currentGeneration = transportWiring.deliveryGeneration
+            .map { String($0.rawValue) } ?? "none"
+        insideJobLogger.debug(
+            "Rejected transport callback event: candidate=\(generation.rawValue) current=\(currentGeneration)"
         )
     }
 
@@ -177,14 +205,25 @@ extension TheGetaway {
     private func enqueueClientRequest(
         clientId: Int,
         data: Data,
-        respond: @escaping SocketResponseHandler
+        respond: @escaping SocketResponseHandler,
+        generation: ClientDelivery.Generation
     ) async {
+        guard transportWiring.admitsEvent(generation: generation) else {
+            logRejectedTransportEvent(generation: generation)
+            return
+        }
         guard let pipeline = clientRequestPipelines[clientId] else {
             insideJobLogger.error("Dropping request for disconnected client \(clientId)")
             return
         }
 
-        switch pipeline.enqueue(ClientTransportRequest(clientId: clientId, data: data, respond: respond)) {
+        let request = ClientTransportRequest(
+            clientId: clientId,
+            data: data,
+            respond: respond,
+            generation: generation
+        )
+        switch pipeline.enqueue(request) {
         case .enqueued:
             break
         case .stopped:
@@ -194,34 +233,69 @@ extension TheGetaway {
                 "Client \(clientId) request backlog exceeded \(ClientRequestPipeline.maximumQueuedRequests), disconnecting"
             )
             stopClientRequestPipeline(clientId: clientId)
-            await transport?.server.removeClient(clientId)
+            await muscle.disconnectClient(clientId, generation: generation)
         }
     }
 
     private func executeClientRequest(_ request: ClientTransportRequest) async {
+        defer { observeClientRequestCompletionForTesting?(request.generation) }
+        guard transportWiring.admitsEvent(generation: request.generation) else {
+            logRejectedTransportEvent(generation: request.generation)
+            return
+        }
         let admission = await muscle.admitClientMessage(
             request.clientId,
             data: request.data,
-            respond: request.respond
+            respond: request.respond,
+            generation: request.generation
         )
+        if let pauseAfterClientRequestAdmissionForTesting {
+            await pauseAfterClientRequestAdmissionForTesting(request.generation)
+        }
         guard !Task.isCancelled else { return }
+        guard transportWiring.admitsEvent(generation: request.generation) else {
+            logRejectedTransportEvent(generation: request.generation)
+            return
+        }
 
         switch admission {
         case .admitted(let message):
             switch message.envelope.message.executionLane {
             case .control:
-                await executeClientMessage(message, respond: request.respond)
+                await executeClientMessage(
+                    message,
+                    respond: request.respond,
+                    generation: request.generation
+                )
             case .userInterface:
+                guard transportWiring.admitsEvent(generation: request.generation) else {
+                    logRejectedTransportEvent(generation: request.generation)
+                    return
+                }
                 let submission = brains.submitTransportRequest(clientId: request.clientId) { [weak self] in
-                    guard !Task.isCancelled else { return }
-                    await self?.executeClientMessage(message, respond: request.respond)
+                    guard !Task.isCancelled,
+                          let self,
+                          self.transportWiring.admitsEvent(generation: request.generation)
+                    else { return }
+                    await self.executeClientMessage(
+                        message,
+                        respond: request.respond,
+                        generation: request.generation
+                    )
                 }
                 if case .rejected(let rejection) = submission {
+                    guard transportWiring.admitsEvent(generation: request.generation) else {
+                        logRejectedTransportEvent(generation: request.generation)
+                        return
+                    }
                     insideJobLogger.error(
                         "Client \(request.clientId) interaction submission rejected: \(String(describing: rejection))"
                     )
                     stopClientRequestPipeline(clientId: request.clientId)
-                    await transport?.server.removeClient(request.clientId)
+                    await muscle.disconnectClient(
+                        request.clientId,
+                        generation: request.generation
+                    )
                 }
             }
         case .handled:

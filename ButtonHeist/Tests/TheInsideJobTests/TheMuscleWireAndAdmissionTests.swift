@@ -6,6 +6,27 @@ import TheScore
 
 @MainActor
 final class TheMuscleWireTests: TheMuscleTestCase {
+    func testServerHelloDeliveryRejectsStaleGenerationAndAdmitsCurrentGeneration() async {
+        let staleGeneration = deliveryGeneration
+        await installCallbacks()
+        let currentGeneration = deliveryGeneration
+        let initialSendCount = sentMessages.count
+
+        let staleOutcome = await muscle.sendServerHello(
+            clientId: 7,
+            generation: staleGeneration
+        )
+        XCTAssertEqual(staleOutcome, .transportUnavailable(clientId: nil))
+        XCTAssertEqual(sentMessages.count, initialSendCount)
+
+        let currentOutcome = await muscle.sendServerHello(
+            clientId: 7,
+            generation: currentGeneration
+        )
+        XCTAssertEqual(currentOutcome, .delivered)
+        XCTAssertEqual(sentMessages.count, initialSendCount + 1)
+    }
+
     func testExplicitErrorEnvelopeStillEncodes() async throws {
         let requestID: RequestID = "explicit-error"
         let result = await muscle.encodeEnvelope(
@@ -26,7 +47,7 @@ final class TheMuscleWireTests: TheMuscleTestCase {
     }
 
     func testServerHelloResponseEnvelopeKeepsStableWireShape() async throws {
-        let outcome = await muscle.sendServerHello(clientId: 7)
+        let outcome = await muscle.sendServerHello(clientId: 7, generation: deliveryGeneration)
 
         XCTAssertEqual(outcome, .delivered)
         let sent = try XCTUnwrap(sentMessages.first)
@@ -46,7 +67,12 @@ final class TheMuscleWireTests: TheMuscleTestCase {
         let (respond, responses) = collectResponses()
         let data = try JSONEncoder().encode(RequestEnvelope(requestId: "unauth-ping", message: .ping))
 
-        _ = await muscle.admitClientMessage(1, data: data, respond: respond)
+        _ = await muscle.admitClientMessage(
+            1,
+            data: data,
+            respond: respond,
+            generation: deliveryGeneration
+        )
 
         let response = try XCTUnwrap(responses().first)
         let envelope = try JSONDecoder().decode(ResponseEnvelope.self, from: response)

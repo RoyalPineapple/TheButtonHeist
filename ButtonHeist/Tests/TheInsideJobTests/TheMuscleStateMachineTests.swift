@@ -411,13 +411,14 @@ final class TheMuscleStateMachineTests: XCTestCase {
 
     func testClientDeliveryReportsIdleFailuresAsTypedOutcomes() async {
         let delivery = ClientDelivery.idle(latest: nil)
+        let generation = ClientDelivery.Generation(rawValue: 1)
 
-        let sendOutcome = await delivery.send(Data("hello".utf8), toClient: 1)
+        let sendOutcome = await delivery.send(Data("hello".utf8), toClient: 1, generation: generation)
         guard case .failed(.transportUnavailable) = sendOutcome else {
             return XCTFail("Expected missing transport to be a typed send failure, got \(sendOutcome)")
         }
 
-        let callbackOutcome = await delivery.disconnect(1)
+        let callbackOutcome = await delivery.disconnect(1, generation: generation)
         XCTAssertEqual(callbackOutcome, .failed(.callbacksNotInstalled("disconnectClient")))
     }
 
@@ -450,6 +451,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         let currentGeneration = ClientDelivery.Generation(rawValue: 2)
         let staleDeliveries = ClientDeliveryTestCounter()
         let currentDeliveries = ClientDeliveryTestCounter()
+        let responseDeliveries = ClientDeliveryTestCounter()
         let staleCallbacks = clientDeliveryCallbacks(counter: staleDeliveries)
         let currentCallbacks = clientDeliveryCallbacks(counter: currentDeliveries)
         var delivery = ClientDelivery.idle(latest: nil)
@@ -461,12 +463,67 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertEqual(delivery.install(staleCallbacks, for: staleGeneration), .rejected)
         XCTAssertEqual(delivery.invalidate(staleGeneration), .rejected)
         XCTAssertEqual(delivery.generation, currentGeneration)
-        let disconnectOutcome = await delivery.disconnect(7)
+        let staleSendOutcome = await delivery.send(
+            Data("stale".utf8),
+            toClient: 7,
+            generation: staleGeneration
+        )
+        let staleDisconnectOutcome = await delivery.disconnect(7, generation: staleGeneration)
+        let staleAuthenticationOutcome = await delivery.clientAuthenticated(
+            7,
+            respond: { _ in .delivered },
+            generation: staleGeneration
+        )
+        let staleResponseOutcome = await delivery.respond(
+            Data("stale-response".utf8),
+            using: { _ in
+                await responseDeliveries.increment()
+                return .delivered
+            },
+            generation: staleGeneration
+        )
+        guard case .failed(.transportUnavailable) = staleSendOutcome else {
+            return XCTFail("Expected stale send to report transport unavailable, got \(staleSendOutcome)")
+        }
+        guard case .failed(.transportUnavailable) = staleResponseOutcome else {
+            return XCTFail("Expected stale response to report transport unavailable, got \(staleResponseOutcome)")
+        }
+        XCTAssertEqual(staleDisconnectOutcome, .rejected)
+        XCTAssertEqual(staleAuthenticationOutcome, .rejected)
+        let deliveryCountAfterStaleAttempts = await currentDeliveries.value
+        let responseCountAfterStaleAttempts = await responseDeliveries.value
+        XCTAssertEqual(deliveryCountAfterStaleAttempts, 0)
+        XCTAssertEqual(responseCountAfterStaleAttempts, 0)
+
+        let sendOutcome = await delivery.send(
+            Data("current".utf8),
+            toClient: 7,
+            generation: currentGeneration
+        )
+        let disconnectOutcome = await delivery.disconnect(7, generation: currentGeneration)
+        let authenticationOutcome = await delivery.clientAuthenticated(
+            7,
+            respond: { _ in .delivered },
+            generation: currentGeneration
+        )
+        let responseOutcome = await delivery.respond(
+            Data("current-response".utf8),
+            using: { _ in
+                await responseDeliveries.increment()
+                return .delivered
+            },
+            generation: currentGeneration
+        )
         let staleDeliveryCount = await staleDeliveries.value
         let currentDeliveryCount = await currentDeliveries.value
+        let responseDeliveryCount = await responseDeliveries.value
+        XCTAssertEqual(sendOutcome, .delivered)
         XCTAssertEqual(disconnectOutcome, .delivered)
+        XCTAssertEqual(authenticationOutcome, .delivered)
+        XCTAssertEqual(responseOutcome, .delivered)
         XCTAssertEqual(staleDeliveryCount, 0)
-        XCTAssertEqual(currentDeliveryCount, 1)
+        XCTAssertEqual(currentDeliveryCount, 3)
+        XCTAssertEqual(responseDeliveryCount, 1)
     }
 
     func testClientDeliveryInvalidationAndResetRetainGenerationTombstone() async {
@@ -480,7 +537,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertEqual(delivery.invalidate(currentGeneration), .invalidated)
         XCTAssertNil(delivery.generation)
         XCTAssertEqual(delivery.latestGeneration, currentGeneration)
-        let invalidatedDisconnectOutcome = await delivery.disconnect(7)
+        let invalidatedDisconnectOutcome = await delivery.disconnect(7, generation: currentGeneration)
         XCTAssertEqual(
             invalidatedDisconnectOutcome,
             .failed(.callbacksNotInstalled("disconnectClient"))
