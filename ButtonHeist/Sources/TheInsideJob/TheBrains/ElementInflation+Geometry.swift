@@ -242,16 +242,14 @@ extension ElementInflation {
         )
 
         while deadline.hasTimeRemaining(at: geometryEnvironment.now()) {
-            guard !Task.isCancelled else {
+            let remaining = deadline.remainingDuration(at: geometryEnvironment.now())
+            let heartbeat = await geometryEnvironment.awaitFrame(remaining)
+            guard heartbeat == .observed, !Task.isCancelled else {
+                let event: LiveGeometryStabilizationEvent = heartbeat == .cancelled || Task.isCancelled
+                    ? .cancelled
+                    : .deadlineExpired
                 return stateAfterGeometryReduction(
-                    stabilization.reduce(.cancelled),
-                    target: stableTarget
-                )
-            }
-            await geometryEnvironment.awaitFrame()
-            guard !Task.isCancelled else {
-                return stateAfterGeometryReduction(
-                    stabilization.reduce(.cancelled),
+                    stabilization.reduce(event),
                     target: stableTarget
                 )
             }

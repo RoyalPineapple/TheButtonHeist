@@ -270,6 +270,8 @@ final class TheVaultCustomRotorTests: XCTestCase {
         )
 
         let brains = TheBrains(tripwire: TheTripwire())
+        brains.tripwire.startPulse()
+        defer { brains.tripwire.stopPulse() }
         guard let observation = brains.vault.refreshLiveCapture() else {
             XCTFail("Expected live capture")
             return

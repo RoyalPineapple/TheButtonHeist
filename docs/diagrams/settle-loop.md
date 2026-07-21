@@ -3,13 +3,13 @@
 The tripwire and the settle loop as cooperating mechanisms: TheTripwire watches UIKit timing signals on a display-link pulse, while SettleSession proves the accessibility tree stable by fingerprinting consecutive parses. This diagram makes "settled evidence" concrete — it answers "what exactly does Button Heist mean when it says the screen settled?"
 
 **Illustrates:** [ARCHITECTURE.md](../ARCHITECTURE.md), [ACCESSIBILITY-CONTRACT.md](../ACCESSIBILITY-CONTRACT.md), [SCOPE-AND-LIMITS.md](../SCOPE-AND-LIMITS.md)
-**Source of truth:** `ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/SettleTimeline.swift`, `ButtonHeist/Sources/TheInsideJob/TheTripwire/TheTripwire.swift`, `ButtonHeist/Sources/TheInsideJob/TheTripwire/TheTripwire+Pulse.swift`, `ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift`
+**Source of truth:** `ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/SettleTimeline.swift`, `ButtonHeist/Sources/TheInsideJob/TheTripwire/HeistIdleTracker.swift`, `ButtonHeist/Sources/TheInsideJob/TheTripwire/TheTripwire.swift`, `ButtonHeist/Sources/TheInsideJob/TheTripwire/TheTripwire+Pulse.swift`, `ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift`
 
 ```mermaid
 stateDiagram-v2
     direction TB
     state "consecutiveCycles" as cycles
-    state "quietWindow" as quiet
+    state "post-idle fingerprint" as postIdle
     state "settled(timeMs:)" as settled
     state "timedOut(timeMs:)" as timedOut
     state "cancelled(timeMs:)" as cancelled
@@ -21,31 +21,51 @@ stateDiagram-v2
     cycles --> timedOut : defaultTimeoutMs = 5000
     cycles --> cancelled : context cancelled
 
-    [*] --> quiet : quiet-window mode
-    quiet --> settled : window elapsed unchanged
+    state "animation count > 0" as animating
+    state "main run loop BeforeWaiting" as runLoopIdle
+    state "shared CADisplayLink heartbeat" as heartbeat
+
+    [*] --> animating : active heist settlement
+    animating --> runLoopIdle : aggregate count reaches zero
+    [*] --> runLoopIdle : count already zero
+    runLoopIdle --> animating : animation started before idle edge
+    runLoopIdle --> heartbeat : idle edge with count still zero
+    heartbeat --> postIdle : next native-rate tick
+    postIdle --> postIdle : fingerprint changed, replace baseline
+    postIdle --> settled : fingerprint repeats next frame
 
     settled --> [*]
     timedOut --> [*]
     cancelled --> [*]
 ```
 
-`quietWindow` shares the same `timedOut` and `cancelled` edges as
-`consecutiveCycles`; they are drawn once to keep the picture readable.
+`post-idle fingerprint` shares the same `timedOut` and `cancelled` edges as
+`consecutiveCycles`; they are drawn once to keep the picture readable. If the
+private idle tracker is unavailable, active settlement falls back to the 60 ms
+AX quiet-window policy. Both policies use the single CADisplayLink heartbeat;
+immediate demand boosts it from the ambient rate to the active screen maximum
+until the next tick. An idle wait that consumes the authored deadline stays timed out.
 
 The two clocks:
 
 ```mermaid
 flowchart TD
     subgraph tripwire["TheTripwire — UIKit signals"]
-        PULSE["CADisplayLink pulse<br/>default 10 Hz (BH_TRIPWIRE_PULSE_HZ)"]
+        ANIMATION["heist-scoped UIViewAnimationState hooks<br/>one aggregate start/stop counter"]
+        ANIMATION_IDLE["animation idle edge<br/>count 1 → 0"]
+        RUN_LOOP_IDLE["CFRunLoopObserver<br/>beforeWaiting"]
+        PULSE["one CADisplayLink heartbeat<br/>ambient 10 Hz · immediate native maximum"]
         SIGNAL["TripwireSignal<br/>layer scan · VC identity · window stack"]
+        ANIMATION --> ANIMATION_IDLE --> RUN_LOOP_IDLE
         PULSE --> SIGNAL
     end
     subgraph settle["SettleSession — AX tree"]
-        PARSE["parse cycle every<br/>defaultCycleIntervalMs = 100"]
+        PARSE["parse on heartbeat<br/>ambient or immediate demand"]
         FP["fingerprint complete hierarchy:<br/>paths · ordering · semantic facts · containers<br/>heist ids · first responder · coarse geometry"]
         PARSE --> FP
     end
+    RUN_LOOP_IDLE -- "opens active AX parse;<br/>confirm once next frame" --> PARSE
+    PULSE --> PARSE
     SIGNAL -- "signal change resets<br/>the settle baseline" --> PARSE
 ```
 

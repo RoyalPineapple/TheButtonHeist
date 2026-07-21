@@ -45,6 +45,11 @@ struct SemanticObservationDeadline: Sendable, Equatable {
         max(0, now.duration(to: deadline) / .seconds(1))
     }
 
+    func remainingDuration(at now: RuntimeElapsed.Instant = RuntimeElapsed.now) -> Duration {
+        let remaining = now.duration(to: deadline)
+        return remaining > .zero ? remaining : .zero
+    }
+
     func elapsedMilliseconds(at now: RuntimeElapsed.Instant = RuntimeElapsed.now) -> Int {
         max(0, Int(start.duration(to: now) / .milliseconds(1)))
     }

@@ -9,7 +9,7 @@ import TheScore
 @MainActor
 internal final class SemanticObservationStream {
     private static let passiveSettleTimeoutMs = 1_000
-    private static let activeQuietWindowMs = 60
+    private static let activeFallbackQuietWindowMs = 60
     private static let passiveDiscoveryCadence: Duration = .seconds(1)
 
     internal typealias VisibleObservationSettler = @MainActor (
@@ -99,11 +99,16 @@ internal final class SemanticObservationStream {
         self.tripwire = tripwire
         self.readTripwireSignal = { tripwire.tripwireSignal() }
         self.settleVisibleObservation = settleVisibleObservation ?? { vault, tripwire, demand, baseline, timeoutMs in
-            let policy: SettlePolicy = switch demand {
+            let settlementStartedAt = RuntimeElapsed.now
+            let policy: SettlePolicy
+            switch demand {
             case .active:
-                .quietWindow(milliseconds: Self.activeQuietWindowMs)
+                let idleReached = await tripwire.heistIdleTracker.waitUntilIdle(
+                    timeout: .milliseconds(timeoutMs)
+                )
+                policy = Self.activeSettlePolicy(idleReached: idleReached)
             case .idle:
-                .consecutiveCycles(required: SettleSession.defaultCyclesRequired)
+                policy = .consecutiveCycles(required: SettleSession.defaultCyclesRequired)
             }
             return await SettleSession.live(
                 vault: vault,
@@ -111,10 +116,16 @@ internal final class SemanticObservationStream {
                 timeoutMs: timeoutMs,
                 policy: policy
             ).run(
-                start: RuntimeElapsed.now,
+                start: settlementStartedAt,
                 baselineTripwireSignal: baseline
             )
         }
+    }
+
+    static func activeSettlePolicy(idleReached: Bool) -> SettlePolicy {
+        idleReached
+            ? .postIdleConfirmation
+            : .quietWindow(milliseconds: Self.activeFallbackQuietWindowMs)
     }
 
     internal func start(

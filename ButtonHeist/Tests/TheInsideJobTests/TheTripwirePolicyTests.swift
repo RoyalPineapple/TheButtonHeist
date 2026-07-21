@@ -11,15 +11,13 @@ final class TheTripwirePolicyTests: XCTestCase {
             name: String,
             layoutPending: Bool,
             quietFrames: Int,
-            hasRelevantAnimations: Bool,
             topmostVC: ObjectIdentifier?,
             expected: Bool
         )] = [
-            ("quiet", false, 2, false, nil, true),
-            ("layout pending", true, 5, false, nil, false),
-            ("one quiet frame", false, 1, false, nil, false),
-            ("stable platform animation", false, 5, true, nil, true),
-            ("keyboard and view-controller signals", false, 2, false, ObjectIdentifier(viewController), true),
+            ("quiet", false, 2, nil, true),
+            ("layout pending", true, 5, nil, false),
+            ("one quiet frame", false, 1, nil, false),
+            ("keyboard and view-controller signals", false, 2, ObjectIdentifier(viewController), true),
         ]
 
         for testCase in cases {
@@ -28,7 +26,6 @@ final class TheTripwirePolicyTests: XCTestCase {
                 timestamp: CFAbsoluteTimeGetCurrent(),
                 layoutPending: testCase.layoutPending,
                 fingerprint: fingerprint(),
-                hasRelevantAnimations: testCase.hasRelevantAnimations,
                 topmostVC: testCase.topmostVC,
                 tripwireSignal: .empty,
                 windowCount: 3,
@@ -76,21 +73,6 @@ final class TheTripwirePolicyTests: XCTestCase {
                 TheTripwire.SemanticWindowSignal(level: 7, isKeyWindow: true),
             ])
         )
-    }
-
-    func testIgnoredAnimationPrefixesClassifyOnlyPlatformNoise() {
-        let cases = [
-            (key: "_UIParallaxMotionEffect_layer", ignored: true),
-            (key: "match-transition", ignored: true),
-            (key: "someRealAnimation", ignored: false),
-        ]
-
-        for testCase in cases {
-            let ignored = TheTripwire.ignoredAnimationKeyPrefixes.contains {
-                testCase.key.hasPrefix($0)
-            }
-            XCTAssertEqual(ignored, testCase.ignored, testCase.key)
-        }
     }
 
     private func fingerprint(

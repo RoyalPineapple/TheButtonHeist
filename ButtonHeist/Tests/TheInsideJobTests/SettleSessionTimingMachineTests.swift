@@ -207,6 +207,45 @@ extension SettleSessionTests {
         XCTAssertEqual(step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
+    func testMachinePostIdleConfirmationRejectsOneSnapshotTransient() {
+        let loading = makeParseResult([
+            makeElement(label: "Loading", traits: .staticText),
+        ])
+        let ready = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText),
+        ])
+        let machine = SettleLoopMachine()
+        var ledger = SettleObservationLedger()
+        var state = SettleLoopMachine.State(
+            policy: .postIdleConfirmation,
+            tripwireBaseline: tripwireSignal(topmostVC: nil)
+        )
+
+        XCTAssertContinue(reduceObservation(loading, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
+        XCTAssertContinue(reduceObservation(ready, elapsedMs: 1_000, machine: machine, ledger: &ledger, state: &state))
+        let step = reduceObservation(ready, elapsedMs: 1_001, machine: machine, ledger: &ledger, state: &state)
+
+        guard case .terminal(.settled(let timeMs)) = step.decision else {
+            return XCTFail("Expected a repeated post-idle fingerprint, got \(step.decision)")
+        }
+        XCTAssertEqual(timeMs, 1_001)
+        XCTAssertEqual(
+            step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label,
+            "Ready"
+        )
+    }
+
+    func testActiveSettlePolicyUsesIdleConfirmationWithQuietWindowFallback() {
+        XCTAssertEqual(
+            SemanticObservationStream.activeSettlePolicy(idleReached: true),
+            .postIdleConfirmation
+        )
+        XCTAssertEqual(
+            SemanticObservationStream.activeSettlePolicy(idleReached: false),
+            .quietWindow(milliseconds: 60)
+        )
+    }
+
     func testMachineFingerprintChangeResetsStability() {
         let loading = makeParseResult([
             makeElement(label: "Loading", traits: .staticText),
@@ -273,6 +312,7 @@ extension SettleSessionTests {
         for policy in [
             SettlePolicy.consecutiveCycles(required: 1),
             .quietWindow(milliseconds: 1),
+            .postIdleConfirmation,
         ] {
             let machine = SettleLoopMachine()
             var ledger = SettleObservationLedger()

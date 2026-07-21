@@ -25,6 +25,10 @@ package struct WaiterStore<Key: Hashable, Waiter> {
         storage.isEmpty
     }
 
+    package func contains(where predicate: (Waiter) -> Bool) -> Bool {
+        storage.values.contains(where: predicate)
+    }
+
     package subscript(key: Key) -> Waiter? {
         storage[key]
     }

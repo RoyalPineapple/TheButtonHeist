@@ -133,9 +133,10 @@ final class SettleSessionTests: XCTestCase {
                     accessibilityNotificationSequence: notificationBox.next()
                 )
             },
-            observationYield: {
+            observationYield: { _ in
                 _ = yieldCount?.next()
                 clock.advance(milliseconds: frameMs)
+                return .observed
             },
             clock: { clock.currentTime() },
             quietWindowMs: quietWindowMs,

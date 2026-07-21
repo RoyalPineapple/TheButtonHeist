@@ -98,24 +98,6 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
         XCTAssertTrue(tripwire.scanLayers().hasPendingLayout)
     }
 
-    func testLayerScanReportsRelevantAnimation() throws {
-        let window = try XCTUnwrap(tripwire.captureTraversableWindows().first?.window)
-        let layer = CALayer()
-        window.layer.addSublayer(layer)
-        defer {
-            layer.removeAllAnimations()
-            layer.removeFromSuperlayer()
-        }
-
-        let animation = CABasicAnimation(keyPath: "opacity")
-        animation.fromValue = 1.0
-        animation.toValue = 0.0
-        animation.duration = 10.0
-        layer.add(animation, forKey: "testAnimation")
-
-        XCTAssertTrue(tripwire.scanLayers().hasRelevantAnimations)
-    }
-
     func testLayerScanIgnoresNeedsDisplay() throws {
         let window = try XCTUnwrap(tripwire.captureTraversableWindows().first?.window)
         let layer = CALayer()

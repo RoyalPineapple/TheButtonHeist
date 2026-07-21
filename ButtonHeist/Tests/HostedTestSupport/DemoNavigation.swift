@@ -27,6 +27,7 @@ package enum DemoNavigation {
     package static let openMenu = HeistDef<Void>("DemoNavigation.openMenu") {
         try backToRootIfNeeded()
 
+        WaitFor(.exists(.label("Menu")), timeout: 4)
         Activate(.label("Menu"))
             .expect(.changed(.screen([.exists(.label("Menu"))])), timeout: 8)
     }

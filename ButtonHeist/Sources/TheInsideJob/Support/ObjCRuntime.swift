@@ -23,10 +23,91 @@ enum ObjCRuntime {
     struct ObjectReturningBoolArgument<Argument: NSObject> {}
     struct PointRadiusArguments<Result: NSObject> {}
 
+    enum SwizzleInstallationError: Error, Equatable, CustomStringConvertible {
+        case classUnavailable(ClassName)
+        case methodUnavailable(className: ClassName, method: String)
+        case methodIsInherited(className: ClassName, method: String)
+        case incompatibleSignature(className: ClassName, method: String)
+
+        var description: String {
+            switch self {
+            case .classUnavailable(let className):
+                return "Objective-C class is unavailable: \(className)"
+            case .methodUnavailable(let className, let method):
+                return "Objective-C method is unavailable: \(className).\(method)"
+            case .methodIsInherited(let className, let method):
+                return "Objective-C method must be declared directly on the swizzled class: \(className).\(method)"
+            case .incompatibleSignature(let className, let method):
+                return "Objective-C method has an incompatible signature: \(className).\(method)"
+            }
+        }
+    }
+
+    enum SwizzleRestoration: Equatable {
+        case restored
+        case superseded
+        case alreadyRestored
+    }
+
+    private enum InstanceMethodSwizzlePhase {
+        case installed(RawObjCMethodSwizzle)
+        case restored
+    }
+
+    @MainActor
+    struct ObjectArgumentInvocation<Argument: NSObject> {
+        let argument: Argument
+        private let original: @MainActor () -> Void
+
+        fileprivate init(argument: Argument, original: @escaping @MainActor () -> Void) {
+            self.argument = argument
+            self.original = original
+        }
+
+        func callOriginal() {
+            original()
+        }
+    }
+
+    @MainActor
+    struct ObjectBoolArgumentsInvocation<Argument: NSObject> {
+        let argument: Argument
+        let flag: Bool
+        private let original: @MainActor () -> Void
+
+        fileprivate init(argument: Argument, flag: Bool, original: @escaping @MainActor () -> Void) {
+            self.argument = argument
+            self.flag = flag
+            self.original = original
+        }
+
+        func callOriginal() {
+            original()
+        }
+    }
+
+    @MainActor
+    final class InstanceMethodSwizzle {
+        private var phase: InstanceMethodSwizzlePhase
+
+        fileprivate init(_ swizzle: RawObjCMethodSwizzle) {
+            phase = .installed(swizzle)
+        }
+
+        func restore() -> SwizzleRestoration {
+            guard case .installed(let swizzle) = phase else {
+                return .alreadyRestored
+            }
+            let restoration = swizzle.restore()
+            phase = .restored
+            return restoration
+        }
+    }
+
     struct ClassName: Equatable, CustomStringConvertible {
         let rawValue: String
 
-        fileprivate init(_ rawValue: String) {
+        init(_ rawValue: String) {
             self.rawValue = rawValue
         }
 
@@ -37,7 +118,7 @@ enum ObjCRuntime {
         let rawValue: String
         fileprivate let selector: Selector
 
-        fileprivate init(_ rawValue: String) {
+        init(_ rawValue: String) {
             self.rawValue = rawValue
             selector = NSSelectorFromString(rawValue)
         }
@@ -193,6 +274,34 @@ enum ObjCRuntime {
     ) -> Value? {
         resolve(getter, on: className)?.get()
     }
+
+    @MainActor
+    static func swizzle<Argument: NSObject>(
+        _ method: ObjectMethod<ObjectArgument<Argument>>,
+        on className: ClassName,
+        with replacement: @escaping @MainActor (ObjectArgumentInvocation<Argument>) -> Void
+    ) throws -> InstanceMethodSwizzle {
+        let swizzle = try RawObjCMethodSwizzle.installObjectArgument(
+            method: method,
+            on: className,
+            replacement: replacement
+        )
+        return InstanceMethodSwizzle(swizzle)
+    }
+
+    @MainActor
+    static func swizzle<Argument: NSObject>(
+        _ method: ObjectMethod<ObjectBoolArguments<Argument>>,
+        on className: ClassName,
+        with replacement: @escaping @MainActor (ObjectBoolArgumentsInvocation<Argument>) -> Void
+    ) throws -> InstanceMethodSwizzle {
+        let swizzle = try RawObjCMethodSwizzle.installObjectBoolArguments(
+            method: method,
+            on: className,
+            replacement: replacement
+        )
+        return InstanceMethodSwizzle(swizzle)
+    }
 }
 
 // MARK: - Typed Method Catalog
@@ -200,6 +309,15 @@ enum ObjCRuntime {
 extension ObjCRuntime.ClassName {
     static let uiKeyboardImpl = ObjCRuntime.ClassName("UIKeyboardImpl")
     static let uiHitTestContext = ObjCRuntime.ClassName("_UIHitTestContext")
+    static let uiViewAnimationState = ObjCRuntime.ClassName("UIViewAnimationState")
+}
+
+extension ObjCRuntime.ObjectMethod where Arguments == ObjCRuntime.ObjectArgument<NSObject> {
+    static let animationDidStart = ObjCRuntime.ObjectMethod<Arguments>("animationDidStart:")
+}
+
+extension ObjCRuntime.ObjectMethod where Arguments == ObjCRuntime.ObjectBoolArguments<NSObject> {
+    static let animationDidStop = ObjCRuntime.ObjectMethod<Arguments>("animationDidStop:finished:")
 }
 
 extension ObjCRuntime.ClassGetter where Value == NSObject {
@@ -379,6 +497,230 @@ extension ObjCRuntime.ClassMessage {
     func call<Result: NSObject>(_ point: CGPoint, radius: CGFloat) -> Result?
         where Arguments == ObjCRuntime.PointRadiusArguments<Result> {
         bridge.sendObject(point, radius: radius)
+    }
+}
+
+/// Owns one reversible instance-method replacement. All raw runtime types,
+/// type-encoding checks, IMP casts, and block bridging stay behind this
+/// boundary; callers only see phantom-typed Objective-C methods.
+private final class RawObjCMethodSwizzle {
+    private typealias RawReceiver = AnyObject
+    private typealias ObjectArgumentIMP = @convention(c) (
+        RawReceiver,
+        Selector,
+        RawReceiver
+    ) -> Void
+    private typealias ObjectBoolArgumentsIMP = @convention(c) (
+        RawReceiver,
+        Selector,
+        RawReceiver,
+        Bool
+    ) -> Void
+    private typealias ObjectArgumentBlock = @convention(block) (
+        RawReceiver,
+        RawReceiver
+    ) -> Void
+    private typealias ObjectBoolArgumentsBlock = @convention(block) (
+        RawReceiver,
+        RawReceiver,
+        Bool
+    ) -> Void
+
+    private enum Signature {
+        case objectArgument
+        case objectBoolArguments
+
+        var argumentCount: UInt32 {
+            switch self {
+            case .objectArgument: 3
+            case .objectBoolArguments: 4
+            }
+        }
+    }
+
+    private let targetClass: AnyClass
+    private let selector: Selector
+    private let original: IMP
+    private let replacement: IMP
+
+    private init(
+        targetClass: AnyClass,
+        selector: Selector,
+        original: IMP,
+        replacement: IMP
+    ) {
+        self.targetClass = targetClass
+        self.selector = selector
+        self.original = original
+        self.replacement = replacement
+    }
+
+    @MainActor
+    static func installObjectArgument<Argument: NSObject>(
+        method: ObjCRuntime.ObjectMethod<ObjCRuntime.ObjectArgument<Argument>>,
+        on className: ObjCRuntime.ClassName,
+        replacement typedReplacement: @escaping @MainActor (
+            ObjCRuntime.ObjectArgumentInvocation<Argument>
+        ) -> Void
+    ) throws -> RawObjCMethodSwizzle {
+        let resolved = try resolve(method: method, on: className, signature: .objectArgument)
+        let original = unsafeBitCast(resolved.implementation, to: ObjectArgumentIMP.self)
+        let block: ObjectArgumentBlock = { receiver, argument in
+            guard let argument = argument as? Argument else {
+                original(receiver, resolved.selector, argument)
+                return
+            }
+            MainActor.assumeIsolated {
+                typedReplacement(ObjCRuntime.ObjectArgumentInvocation(
+                    argument: argument,
+                    original: { original(receiver, resolved.selector, argument) }
+                ))
+            }
+        }
+        return install(resolved: resolved, block: block)
+    }
+
+    @MainActor
+    static func installObjectBoolArguments<Argument: NSObject>(
+        method: ObjCRuntime.ObjectMethod<ObjCRuntime.ObjectBoolArguments<Argument>>,
+        on className: ObjCRuntime.ClassName,
+        replacement typedReplacement: @escaping @MainActor (
+            ObjCRuntime.ObjectBoolArgumentsInvocation<Argument>
+        ) -> Void
+    ) throws -> RawObjCMethodSwizzle {
+        let resolved = try resolve(method: method, on: className, signature: .objectBoolArguments)
+        let original = unsafeBitCast(resolved.implementation, to: ObjectBoolArgumentsIMP.self)
+        let block: ObjectBoolArgumentsBlock = { receiver, argument, flag in
+            guard let argument = argument as? Argument else {
+                original(receiver, resolved.selector, argument, flag)
+                return
+            }
+            MainActor.assumeIsolated {
+                typedReplacement(ObjCRuntime.ObjectBoolArgumentsInvocation(
+                    argument: argument,
+                    flag: flag,
+                    original: { original(receiver, resolved.selector, argument, flag) }
+                ))
+            }
+        }
+        return install(resolved: resolved, block: block)
+    }
+
+    func restore() -> ObjCRuntime.SwizzleRestoration {
+        guard
+            let method = class_getInstanceMethod(targetClass, selector),
+            Self.sameIMP(method_getImplementation(method), replacement)
+        else {
+            // A later swizzler may retain this IMP as its original. Removing
+            // the block would invalidate that chain, so a superseded token
+            // deliberately leaves it alive and does not clobber the method.
+            return .superseded
+        }
+        method_setImplementation(method, original)
+        imp_removeBlock(replacement)
+        return .restored
+    }
+
+    private struct ResolvedMethod {
+        let targetClass: AnyClass
+        let selector: Selector
+        let method: Method
+        let implementation: IMP
+    }
+
+    private static func resolve<Arguments>(
+        method: ObjCRuntime.ObjectMethod<Arguments>,
+        on className: ObjCRuntime.ClassName,
+        signature: Signature
+    ) throws -> ResolvedMethod {
+        guard let targetClass = NSClassFromString(className.rawValue) else {
+            throw ObjCRuntime.SwizzleInstallationError.classUnavailable(className)
+        }
+        guard let resolvedMethod = class_getInstanceMethod(targetClass, method.selector) else {
+            throw ObjCRuntime.SwizzleInstallationError.methodUnavailable(
+                className: className,
+                method: method.rawValue
+            )
+        }
+        guard declares(method.selector, on: targetClass) else {
+            throw ObjCRuntime.SwizzleInstallationError.methodIsInherited(
+                className: className,
+                method: method.rawValue
+            )
+        }
+        guard has(signature, method: resolvedMethod) else {
+            throw ObjCRuntime.SwizzleInstallationError.incompatibleSignature(
+                className: className,
+                method: method.rawValue
+            )
+        }
+        return ResolvedMethod(
+            targetClass: targetClass,
+            selector: method.selector,
+            method: resolvedMethod,
+            implementation: method_getImplementation(resolvedMethod)
+        )
+    }
+
+    private static func install<Block>(
+        resolved: ResolvedMethod,
+        block: Block
+    ) -> RawObjCMethodSwizzle {
+        let replacement = imp_implementationWithBlock(block)
+        method_setImplementation(resolved.method, replacement)
+        return RawObjCMethodSwizzle(
+            targetClass: resolved.targetClass,
+            selector: resolved.selector,
+            original: resolved.implementation,
+            replacement: replacement
+        )
+    }
+
+    private static func declares(_ selector: Selector, on targetClass: AnyClass) -> Bool {
+        var count: UInt32 = 0
+        guard let methods = class_copyMethodList(targetClass, &count) else { return false }
+        defer { free(methods) }
+        return (0..<Int(count)).contains { method_getName(methods[$0]) == selector }
+    }
+
+    private static func has(_ signature: Signature, method: Method) -> Bool {
+        guard
+            method_getNumberOfArguments(method) == signature.argumentCount,
+            typeEncoding(ofReturnValueFor: method) == "v",
+            typeEncoding(ofArgument: 0, for: method) == "@",
+            typeEncoding(ofArgument: 1, for: method) == ":",
+            typeEncoding(ofArgument: 2, for: method)?.hasPrefix("@") == true
+        else {
+            return false
+        }
+        switch signature {
+        case .objectArgument:
+            return true
+        case .objectBoolArguments:
+            let boolEncoding = typeEncoding(ofArgument: 3, for: method)
+            return boolEncoding == "B" || boolEncoding == "c"
+        }
+    }
+
+    private static func typeEncoding(ofReturnValueFor method: Method) -> String? {
+        var buffer = [CChar](repeating: 0, count: 32)
+        method_getReturnType(method, &buffer, buffer.count)
+        return decodeTypeEncoding(buffer)
+    }
+
+    private static func typeEncoding(ofArgument index: UInt32, for method: Method) -> String? {
+        var buffer = [CChar](repeating: 0, count: 32)
+        method_getArgumentType(method, index, &buffer, buffer.count)
+        return decodeTypeEncoding(buffer)
+    }
+
+    private static func decodeTypeEncoding(_ buffer: [CChar]) -> String? {
+        let bytes = buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
+        return String(bytes: bytes, encoding: .utf8)
+    }
+
+    private static func sameIMP(_ lhs: IMP, _ rhs: IMP) -> Bool {
+        unsafeBitCast(lhs, to: UnsafeRawPointer.self) == unsafeBitCast(rhs, to: UnsafeRawPointer.self)
     }
 }
 

@@ -91,7 +91,10 @@ extension ElementInflationProductTests {
         let deadlineStart = now
         brains.navigation.elementInflation.geometryEnvironment = .init(
             now: { now },
-            awaitFrame: { now = now.advanced(by: .milliseconds(10)) }
+            awaitFrame: { _ in
+                now = now.advanced(by: .milliseconds(10))
+                return .observed
+            }
         )
 
         let result = await brains.navigation.elementInflation.refreshCommittedTarget(

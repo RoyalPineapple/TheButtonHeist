@@ -8,6 +8,14 @@ import UIKit
 @_spi(ButtonHeistInternals) @testable import TheScore
 
 @MainActor
+private func advanceInflationHeartbeatClock(
+    _ now: inout RuntimeElapsed.Instant
+) -> TheTripwire.HeartbeatWaitOutcome {
+    now = now.advanced(by: .milliseconds(10))
+    return .observed
+}
+
+@MainActor
 extension TheBrainsScrollTests {
 
     func testActivationPointPlacementAddsTypedAdjustment() async throws {
@@ -83,7 +91,7 @@ extension TheBrainsScrollTests {
         var now = RuntimeElapsed.now
         inflation.geometryEnvironment = .init(
             now: { now },
-            awaitFrame: { now = now.advanced(by: .milliseconds(10)) }
+            awaitFrame: { _ in advanceInflationHeartbeatClock(&now) }
         )
         inflation.exploration.moveViewport = { _ in
             object.accessibilityFrame = placedFrame

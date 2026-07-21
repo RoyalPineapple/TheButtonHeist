@@ -105,6 +105,8 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             tripwire: TheTripwire(),
             visibleObservationSource: visibleObservationSource.capture
         )
+        brains.tripwire.startPulse()
+        defer { brains.tripwire.stopPulse() }
         let expectedObject = UITextField()
         let replacementObject = UITextField()
         let expectedEntry = InterfaceObservation.TestEntry(

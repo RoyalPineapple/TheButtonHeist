@@ -82,6 +82,9 @@ enum SettleOutcome: Equatable, Sendable {
 enum SettlePolicy: Equatable, Sendable {
     case consecutiveCycles(required: Int)
     case quietWindow(milliseconds: Int)
+    /// The composite animation/run-loop idle edge supplies the timing proof;
+    /// the parser only confirms that its first post-idle snapshot repeats.
+    case postIdleConfirmation
 }
 
 struct SettleObservationSample: Equatable, Sendable {
@@ -91,6 +94,7 @@ struct SettleObservationSample: Equatable, Sendable {
 private enum SettleLoopStability: Equatable, Sendable {
     case consecutiveCycles(required: Int, completed: Int)
     case quietWindow(milliseconds: Int, startedAtMs: Int?)
+    case postIdleConfirmation
 
     init(policy: SettlePolicy) {
         switch policy {
@@ -98,6 +102,8 @@ private enum SettleLoopStability: Equatable, Sendable {
             self = .consecutiveCycles(required: required, completed: 0)
         case .quietWindow(let milliseconds):
             self = .quietWindow(milliseconds: milliseconds, startedAtMs: nil)
+        case .postIdleConfirmation:
+            self = .postIdleConfirmation
         }
     }
 
@@ -114,6 +120,9 @@ private enum SettleLoopStability: Equatable, Sendable {
             }
             self = .quietWindow(milliseconds: milliseconds, startedAtMs: startedAtMs)
             return startedAtMs.map { elapsedMs - $0 >= milliseconds } ?? false
+
+        case .postIdleConfirmation:
+            return repeatedFingerprint
         }
     }
 
@@ -123,6 +132,8 @@ private enum SettleLoopStability: Equatable, Sendable {
             self = .consecutiveCycles(required: required, completed: 0)
         case .quietWindow(let milliseconds, _):
             self = .quietWindow(milliseconds: milliseconds, startedAtMs: nil)
+        case .postIdleConfirmation:
+            break
         }
     }
 }
@@ -216,7 +227,7 @@ final class SettleSessionFinalObservation {
 
 /// Multi-cycle accessibility-tree settle loop with inline transient capture.
 ///
-/// Polls the parsed AX tree at fixed intervals. Returns `.settled` after
+/// Samples the parsed AX tree on the shared UI heartbeat. Returns `.settled` after
 /// `cyclesRequired` consecutive identical fingerprints — with elements
 /// carrying `UIAccessibilityTraits.updatesFrequently` masked out so spinners
 /// don't block settle. CALayer animations are *not* consulted: a UI is
@@ -226,14 +237,15 @@ final class SettleSessionFinalObservation {
 ///
 /// **Settle signal boundary.** SettleSession watches settled AX semantics for
 /// both passive observation and active heists. Its policy selects consecutive
-/// fingerprint cycles or a quiet wall-clock window; the reducer and runner are
-/// shared. `TheTripwire.waitForAllClear`
+/// fingerprint cycles, a quiet wall-clock fallback, or one post-idle
+/// fingerprint confirmation; the reducer and runner are shared.
+/// `TheTripwire.waitForAllClear`
 /// watches CALayers and is deliberately blind to the AX tree; "no layer
 /// motion" and "AX tree stable" disagree on every spinner-driven loading
 /// state. Viewport movement uses this same reducer with a two-cycle policy.
 ///
 /// The loop seeds `previousFingerprint` from a synchronous parse *before*
-/// the first sleep, so a static screen settles after exactly
+/// the first heartbeat, so a static screen settles after exactly
 /// `cyclesRequired` cycles (300 ms with the default 3 × 100 ms), not
 /// `cyclesRequired + 1`.
 ///
@@ -289,7 +301,7 @@ final class SettleSessionFinalObservation {
     typealias ParseProvider = @MainActor () -> InterfaceObservation?
     typealias TripwireSignalProvider = @MainActor () -> TheTripwire.TripwireSignal
     typealias Sleeper = @Sendable (UInt64) async -> Void
-    typealias ObservationYield = @MainActor () async -> Void
+    typealias ObservationYield = @MainActor (Duration) async -> TheTripwire.HeartbeatWaitOutcome
     typealias Clock = @MainActor () -> RuntimeElapsed.Instant
 
     let parseProvider: ParseProvider
@@ -326,8 +338,9 @@ final class SettleSessionFinalObservation {
         self.init(
             parseProvider: parseProvider,
             tripwireSignalProvider: tripwireSignalProvider,
-            observationYield: {
+            observationYield: { _ in
                 await sleeper(UInt64(cycleIntervalMs) * 1_000_000)
+                return Task.isCancelled ? .cancelled : .observed
             },
             policy: .consecutiveCycles(required: cyclesRequired),
             clock: { RuntimeElapsed.now },
@@ -365,11 +378,17 @@ final class SettleSessionFinalObservation {
     ) -> SettleSession {
         let observationYield: ObservationYield = switch policy {
         case .consecutiveCycles:
-            { _ = await Task.cancellableSleep(
-                nanoseconds: UInt64(SettleSession.defaultCycleIntervalMs) * 1_000_000
-            ) }
+            { timeout in
+                await tripwire.waitForNextHeartbeat(timeout: timeout, demand: .ambient)
+            }
         case .quietWindow:
-            { await tripwire.yieldRealFrames(1) }
+            { timeout in
+                await tripwire.waitForNextHeartbeat(timeout: timeout, demand: .immediate)
+            }
+        case .postIdleConfirmation:
+            { timeout in
+                await tripwire.waitForNextHeartbeat(timeout: timeout, demand: .immediate)
+            }
         }
         return SettleSession(
             parseProvider: { vault.refreshLiveCapture() },
@@ -392,7 +411,9 @@ final class SettleSessionFinalObservation {
         SettleSession(
             parseProvider: { vault.refreshLiveCapture() },
             tripwireSignalProvider: { tripwire.tripwireSignal() },
-            observationYield: { await tripwire.yieldRealFrames(1) },
+            observationYield: { timeout in
+                await tripwire.waitForNextHeartbeat(timeout: timeout, demand: .immediate)
+            },
             policy: .consecutiveCycles(required: 2),
             clock: { RuntimeElapsed.now },
             timeoutMs: timeoutMs
@@ -538,10 +559,17 @@ private struct SettleLoopRunner {
         }
 
         while deadline.hasTimeRemaining(at: clock()) {
-            await observationYield()
-            if Task.isCancelled {
+            let heartbeat = await observationYield(
+                deadline.remainingDuration(at: clock())
+            )
+            if heartbeat == .cancelled || Task.isCancelled {
                 return result(
                     .cancelled(timeMs: deadline.elapsedMilliseconds(at: clock()))
+                )
+            }
+            guard heartbeat == .observed else {
+                return result(
+                    .timedOut(timeMs: deadline.elapsedMilliseconds(at: clock()))
                 )
             }
 

@@ -157,8 +157,10 @@ final class WaitForIntegrationTests: XCTestCase {
         animation.repeatCount = .infinity
         animatedLayer.add(animation, forKey: "semanticObservationRegressionMotion")
 
-        let scan = insideJob.tripwire.scanLayers()
-        XCTAssertTrue(scan.hasRelevantAnimations, "Regression setup must keep an unrelated CALayer animation active")
+        XCTAssertNotNil(
+            animatedLayer.animation(forKey: "semanticObservationRegressionMotion"),
+            "Regression setup must keep an unrelated CALayer animation active"
+        )
 
         insideJob.brains.vault.invalidateSettledObservationFromTripwire()
         let observation = await insideJob.brains.interactionCoordinator.settledEvidence(
@@ -220,7 +222,12 @@ final class WaitForIntegrationTests: XCTestCase {
         // semantic snapshot still observes absence and the poll path observes
         // the later arrival.
         let addTask = Task { @MainActor in
-            await self.insideJob.tripwire.yieldRealFrames(2)
+            for _ in 0..<2 {
+                guard await self.insideJob.tripwire.waitForNextHeartbeat(
+                    timeout: .seconds(1),
+                    demand: .immediate
+                ) == .observed else { return }
+            }
             _ = self.addLabel("WaitFor-Delayed")
         }
 
