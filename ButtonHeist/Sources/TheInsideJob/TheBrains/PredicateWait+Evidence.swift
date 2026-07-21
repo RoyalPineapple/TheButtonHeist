@@ -5,6 +5,13 @@ import ThePlans
 import TheScore
 
 extension PredicateWait {
+    internal enum ActionContextReduction {
+        case matched(PredicateObservationReduction)
+        case unmatched(LifecycleEvidence)
+        case empty
+        case unavailable(ObservationHistoryReadError)
+    }
+
     internal func initialTraceChangeEvaluation(
         for step: ResolvedWaitRuntimeInput,
         initialTrace: AccessibilityTrace?
@@ -17,6 +24,60 @@ extension PredicateWait {
         )
         else { return nil }
         return step.predicate.evaluate(in: evidence).expectation(for: step.predicateExpression)
+    }
+
+    internal func reduceActionContext(
+        for step: ResolvedWaitRuntimeInput,
+        context: ActionExpectationContext?
+    ) -> ActionContextReduction? {
+        guard step.predicate.requiresChangeBaseline, let context else { return nil }
+
+        var evidence = LifecycleEvidence(
+            predicate: step.predicateExpression,
+            target: step.predicate.waitTarget
+        )
+        var lastReduction: PredicateObservationReduction?
+        var cursor = context.preActionCapture.cursor
+        let upperBound = context.throughObservationCursor
+        guard upperBound.scope == cursor.scope,
+              upperBound.sequence >= cursor.sequence else {
+            return .unavailable(.cursorUnavailable(upperBound))
+        }
+        while cursor != upperBound {
+            let entry: ObservationEntry
+            switch vault.semanticObservationStream.readRetainedObservation(
+                after: cursor,
+                scope: cursor.scope
+            ) {
+            case .entry(let retained):
+                guard retained.cursor.sequence <= upperBound.sequence else {
+                    return .unavailable(.cursorUnavailable(upperBound))
+                }
+                entry = retained
+            case .pending:
+                return .unavailable(.cursorUnavailable(upperBound))
+            case .failure(let error):
+                return .unavailable(error)
+            }
+            let reduction = reduceObservation(
+                actionEvidenceProjector.projectSettledEvidence(from: entry.event),
+                predicate: step.predicate,
+                predicateExpression: step.predicateExpression,
+                baselineSeed: .supplied(context.preActionCapture),
+                stream: evidence.stream
+            )
+            evidence = evidence.recording(reduction)
+            lastReduction = reduction.reduction
+            if case .changed = step.predicate.core,
+               reduction.reduction.expectation.met {
+                return .matched(reduction.reduction)
+            }
+            cursor = entry.cursor
+        }
+        guard let lastReduction else { return .empty }
+        return lastReduction.expectation.met
+            ? .matched(lastReduction)
+            : .unmatched(evidence)
     }
 
 }

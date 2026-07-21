@@ -9,9 +9,11 @@ import XCTest
 
 final class ActionActivationOverrideView: UIView {
     private(set) var activationCount = 0
+    var onActivation: (@MainActor () -> Void)?
 
     override func accessibilityActivate() -> Bool {
         activationCount += 1
+        onActivation?()
         return true
     }
 }
@@ -450,12 +452,12 @@ final class TheBrainsActionTests: XCTestCase {
 
     func heistRuntime(
         observations: [ActionEvidenceProjector.Baseline],
-        executionBaseline: SettledCapture? = nil,
+        actionExpectationContext: ActionExpectationContext? = nil,
         execute: (@MainActor (ResolvedHeistActionCommand) async -> ActionResult)? = nil,
         wait: (@MainActor (TheBrains.HeistRuntimeWaitRequest) async -> ActionResult)? = nil,
         observedScopes: (@MainActor (SemanticObservationScope) -> Void)? = nil,
         observedTimeouts: (@MainActor (Double?) -> Void)? = nil,
-        executionBaselineScopes: (@MainActor (SemanticObservationScope?) -> Void)? = nil,
+        expectationContextScopes: (@MainActor (SemanticObservationScope?) -> Void)? = nil,
         unavailableObservationCount: Int = 0,
         file: StaticString = #filePath,
         line: UInt = #line
@@ -471,8 +473,8 @@ final class TheBrainsActionTests: XCTestCase {
         let caseBrains = TheBrains(tripwire: TheTripwire())
 
         return TheBrains.HeistExecutionRuntime(
-            execute: { command, baselineScope in
-                executionBaselineScopes?(baselineScope)
+            execute: { command, contextScope in
+                expectationContextScopes?(contextScope)
                 let result: ActionResult
                 if let execute {
                     result = await execute(command)
@@ -483,7 +485,7 @@ final class TheBrainsActionTests: XCTestCase {
                 }
                 return RuntimeActionExecution(
                     result: result,
-                    expectationBaseline: executionBaseline
+                    actionExpectationContext: actionExpectationContext
                 )
             },
             wait: { request in
@@ -532,7 +534,7 @@ final class TheBrainsActionTests: XCTestCase {
                         payload: command.resultPayload
                     )
                 }
-                return RuntimeActionExecution(result: result, expectationBaseline: nil)
+                return RuntimeActionExecution(result: result, actionExpectationContext: nil)
             },
             wait: wait,
             selectPredicateCase: { _, _ in

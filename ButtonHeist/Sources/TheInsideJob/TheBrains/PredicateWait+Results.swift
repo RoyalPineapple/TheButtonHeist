@@ -11,7 +11,8 @@ extension PredicateWait {
         initialTrace: AccessibilityTrace?,
         start: RuntimeElapsed.Instant,
         timeout: WaitTimeout,
-        cursorStrategy: AnnouncementWaitCursorStrategy
+        cursor: AccessibilityNotificationCursor,
+        isActionExpectation: Bool
     ) async -> HeistWaitResult {
         if let initialTrace {
             return announcementResultFromInitialTrace(
@@ -22,8 +23,19 @@ extension PredicateWait {
             )
         }
 
-        let cursor = announcementCursor(cursorStrategy)
-        guard let announcement = await waitForAnnouncement(cursor, predicate, timeout.seconds) else {
+        switch await vault.accessibilityNotifications.waitForAnnouncement(
+            after: cursor,
+            matching: predicate,
+            timeout: timeout.seconds
+        ) {
+        case .matched(let announcement):
+            return announcementResult(
+                announcement,
+                predicate: predicate,
+                step: step,
+                start: start
+            )
+        case .timedOut:
             let message = Self.announcementTimeoutMessage(predicate, timeout: timeout)
             let expectation = ExpectationResult.Unmet(
                 predicate: step.predicateExpression,
@@ -34,7 +46,28 @@ extension PredicateWait {
                 traceEvidence: nil,
                 expectation: expectation
             )
+        case .historyUnavailable(let gap):
+            let message = isActionExpectation
+                ? "Action expectation announcement history unavailable: dropped through sequence \(gap.droppedThroughSequence)"
+                : "Announcement history unexpectedly unavailable: dropped through sequence \(gap.droppedThroughSequence)"
+            return .failed(
+                failureKind: .actionFailed,
+                message: message,
+                traceEvidence: nil,
+                expectation: ExpectationResult.Unmet(
+                    predicate: step.predicateExpression,
+                    actual: message
+                )
+            )
         }
+    }
+
+    private func announcementResult(
+        _ announcement: CapturedAnnouncement,
+        predicate: ResolvedAnnouncementPredicate,
+        step: ResolvedWaitRuntimeInput,
+        start: RuntimeElapsed.Instant
+    ) -> HeistWaitResult {
         let announcementText: ActionAnnouncementText
         do {
             announcementText = try ActionAnnouncementText(validating: announcement.text)
@@ -137,7 +170,8 @@ extension PredicateWait {
         success: Bool,
         baseline: SettledCapture? = nil,
         window: ObservationWindow? = nil,
-        observedSequence: SettledObservationSequence? = nil
+        observedSequence: SettledObservationSequence? = nil,
+        timeoutMismatchBreadcrumb: String? = nil
     ) -> HeistWaitResult {
         let elapsed = Self.elapsedSeconds(since: start)
         let presenceMessage = success || observationSummary == nil
@@ -163,7 +197,8 @@ extension PredicateWait {
             success: success,
             presenceTimeoutMessage: presenceMessage,
             settledDiagnostics: settledDiagnostics,
-            observedSequence: observedSequence
+            observedSequence: observedSequence,
+            timeoutMismatchBreadcrumb: timeoutMismatchBreadcrumb
         )
     }
 
@@ -183,18 +218,22 @@ extension PredicateWait {
         success: Bool,
         presenceTimeoutMessage: String? = nil,
         settledDiagnostics: SettledWaitDiagnostics? = nil,
-        observedSequence: SettledObservationSequence? = nil
+        observedSequence: SettledObservationSequence? = nil,
+        timeoutMismatchBreadcrumb: String? = nil
     ) -> HeistWaitResult {
         let message = success
             ? waitSuccessMessage(for: step.predicate, elapsed: elapsed)
-            : waitTimeoutMessage(
-                for: step,
-                expectation: expectation,
-                observationSummary: observationSummary,
-                elapsed: elapsed,
-                presenceTimeoutMessage: presenceTimeoutMessage,
-                settledDiagnostics: settledDiagnostics
-            )
+            : [
+                waitTimeoutMessage(
+                    for: step,
+                    expectation: expectation,
+                    observationSummary: observationSummary,
+                    elapsed: elapsed,
+                    presenceTimeoutMessage: presenceTimeoutMessage,
+                    settledDiagnostics: settledDiagnostics
+                ),
+                timeoutMismatchBreadcrumb,
+            ].compactMap { $0 }.joined(separator: "; ")
         switch (success, expectation) {
         case (true, .met(let expectation)):
             return .matched(

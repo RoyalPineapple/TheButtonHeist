@@ -42,17 +42,43 @@ extension TheBrains {
     }
 
     enum ScreenCaptureGatewayResult {
-        case success(ScreenPayload)
+        case success(ScreenPayload, context: ActionExpectationContext?)
         case failure(ScreenCaptureFailure)
     }
 
-    func captureScreenPayload(mode: ScreenCaptureMode = .raw) async -> ScreenCaptureGatewayResult {
+    func captureScreenPayload(
+        mode: ScreenCaptureMode = .raw,
+        capturesExpectationContext: Bool = false
+    ) async -> ScreenCaptureGatewayResult {
         guard semanticObservationIsActive else {
             return .failure(.inactiveRuntime)
         }
         guard let observation = await interactionCoordinator.admittedVisibleBaseline(timeout: 1.0) else {
             return .failure(.accessibilityTreeUnavailable)
         }
+        guard let sequence = observation.settledObservationSequence,
+              let settledCapture = vault.semanticObservationStream.settledCapture(
+                scope: .visible,
+                at: sequence
+              ) else {
+            preconditionFailure("admitted screenshot baseline must retain its settled capture")
+        }
+
+        let notificationWindow: AccessibilityNotificationScopeLease?
+        let actionExpectationContext: ActionExpectationContext?
+        if capturesExpectationContext {
+            let window = vault.accessibilityNotifications.beginActionWindow()
+            notificationWindow = window
+            actionExpectationContext = ActionExpectationContext(
+                preActionCapture: settledCapture,
+                throughObservationCursor: settledCapture.cursor,
+                announcementCursor: window.cursor
+            )
+        } else {
+            notificationWindow = nil
+            actionExpectationContext = nil
+        }
+        defer { notificationWindow?.cancel() }
 
         guard let screenCapture = vault.captureScreen() else {
             return .failure(.appWindowUnavailable)
@@ -62,11 +88,11 @@ extension TheBrains {
             guard let payload = renderAccessibilitySnapshotPayload(
                 image: screenCapture.image,
                 bounds: screenCapture.bounds,
-                interface: observation.interface
+                interface: settledCapture.capture.interface
             ) else {
                 return .failure(.accessibilitySnapshotRenderingFailed)
             }
-            return .success(payload)
+            return .success(payload, context: actionExpectationContext)
         }
 
         guard let pngData = screenCapture.image.pngData() else {
@@ -77,28 +103,40 @@ extension TheBrains {
             pngData: pngData.base64EncodedString(),
             width: screenCapture.bounds.width,
             height: screenCapture.bounds.height,
-            interface: observation.interface
+            interface: settledCapture.capture.interface
         ) else {
             return .failure(.invalidScreenDimensions)
         }
-        return .success(payload)
+        return .success(payload, context: actionExpectationContext)
     }
 
-    func executeTakeScreenshot(mode: ScreenCaptureMode = .raw) async -> ActionResult {
+    func executeTakeScreenshot(
+        mode: ScreenCaptureMode = .raw,
+        capturesExpectationContext: Bool = false
+    ) async -> RuntimeActionExecution {
         let timing = ActionTiming()
-        switch await captureScreenPayload(mode: mode) {
-        case .success(let payload):
-            return .success(
-                payload: .screenshot(payload),
-                message: "Captured screenshot \(Int(payload.width))x\(Int(payload.height))",
-                timing: timing.freeze()
+        switch await captureScreenPayload(
+            mode: mode,
+            capturesExpectationContext: capturesExpectationContext
+        ) {
+        case .success(let payload, let context):
+            return RuntimeActionExecution(
+                result: .success(
+                    payload: .screenshot(payload),
+                    message: "Captured screenshot \(Int(payload.width))x\(Int(payload.height))",
+                    timing: timing.freeze()
+                ),
+                actionExpectationContext: context
             )
         case .failure(let failure):
-            return .failure(
-                payload: .screenshot(nil),
-                failureKind: failure.actionFailureKind,
-                message: failure.message,
-                timing: timing.freeze()
+            return RuntimeActionExecution(
+                result: .failure(
+                    payload: .screenshot(nil),
+                    failureKind: failure.actionFailureKind,
+                    message: failure.message,
+                    timing: timing.freeze()
+                ),
+                actionExpectationContext: nil
             )
         }
     }

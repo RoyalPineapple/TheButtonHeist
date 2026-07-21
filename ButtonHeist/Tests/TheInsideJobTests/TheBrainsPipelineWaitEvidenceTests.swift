@@ -42,6 +42,252 @@ extension TheBrainsPipelineTests {
         XCTAssertTrue(result.outcome.actionResult.message?.contains("last result:") == true)
     }
 
+    func testTimeoutReportIncludesObservedCombinedLabelMismatch() async throws {
+        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            makeScreen(elements: [("Ticket saved., Dismiss", .staticText, "toast")])
+        )
+        let wait = WaitStep(
+            predicate: .exists(.label("Ticket saved.")),
+            timeout: try .milliseconds(1)
+        )
+        let result = await brains.interactionCoordinator.waitForPredicate(try resolvedWait(wait))
+        guard case .unmatched(let actionResult, let expectation) = result.outcome else {
+            return XCTFail("Expected the exact predicate to time out")
+        }
+        let evidence = HeistWaitEvidence.failed(
+            .init(executed: actionResult, expectation: expectation.result),
+            finalSummary: expectation.actual
+        )
+        let step = HeistExecutionStepResult.wait(
+            path: "$.body[0]",
+            durationMs: 1,
+            predicate: wait.predicate,
+            timeout: wait.timeout,
+            completion: .failed(
+                evidence: .observed(.init(admitted: evidence)),
+                failure: brains.standaloneWaitFailureDetail(wait: wait, result: result)
+            )
+        )
+        let report = HeistReport.project(result: try HeistResult(steps: [step], durationMs: 1))
+        let failure = try XCTUnwrap(report.failure?.message)
+
+        XCTAssertTrue(failure.contains(#"observed accessibility candidate label="Ticket saved., Dismiss""#), failure)
+        XCTAssertTrue(failure.contains(#"did not match exists(target(predicate(label="Ticket saved.")))"#), failure)
+        XCTAssertEqual(report.failure?.actionKind, .timeout)
+        XCTAssertFalse(report.summary.expectations?.allMet == true)
+    }
+
+    func testTimeoutDiagnosticsExcludeImperceptibleUIKitDescendants() async throws {
+        let combined = UIView(frame: CGRect(x: 0, y: 0, width: 240, height: 44))
+        combined.isAccessibilityElement = true
+        combined.accessibilityLabel = "Ticket saved., Dismiss"
+        combined.accessibilityTraits = .staticText
+        let inner = UILabel(frame: combined.bounds)
+        inner.text = "Ticket saved."
+        inner.isAccessibilityElement = true
+        combined.addSubview(inner)
+
+        let semanticElement = try XCTUnwrap(brains.vault.captureObject(combined))
+        XCTAssertEqual(semanticElement.label, "Ticket saved., Dismiss")
+        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            .makeForTests([.init(semanticElement, heistId: HeistId(rawValue: "toast"))])
+        )
+
+        let result = await brains.interactionCoordinator.waitForPredicate(
+            try resolvedWait(WaitStep(
+                predicate: .exists(.label("Ticket saved.")),
+                timeout: .milliseconds(1)
+            ))
+        )
+        let message = try XCTUnwrap(result.outcome.actionResult.message)
+
+        XCTAssertTrue(
+            message.contains(#"observed accessibility candidate label="Ticket saved., Dismiss""#),
+            message
+        )
+        XCTAssertFalse(
+            message.contains(#"observed accessibility candidate label="Ticket saved." did not match"#),
+            message
+        )
+    }
+
+    func testTimeoutDiagnosticsIncludeIdentifierActionsAndRotors() async throws {
+        let candidate = AccessibilityElement.make(
+            label: "Checkout",
+            identifier: "checkout_identifier",
+            customActions: [.init(name: "Archive")],
+            customRotors: [.init(name: "Errors")],
+            respondsToUserInteraction: false
+        )
+        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            .makeForTests([.init(candidate, heistId: HeistId(rawValue: "checkout"))])
+        )
+
+        let result = await brains.interactionCoordinator.waitForPredicate(
+            try resolvedWait(WaitStep(
+                predicate: .exists(.label("Missing")),
+                timeout: .milliseconds(1)
+            ))
+        )
+        let message = try XCTUnwrap(result.outcome.actionResult.message)
+
+        XCTAssertTrue(message.contains(#"identifier="checkout_identifier""#), message)
+        XCTAssertTrue(message.contains("actions=[activate, Archive]"), message)
+        XCTAssertTrue(message.contains(#"rotors=["Errors"]"#), message)
+    }
+
+    func testAutomaticTimeoutDiagnosticsScheduleNoExtraWork() async throws {
+        let withCandidate = try await automaticTimeoutRun(
+            screen: makeScreen(elements: [("Ticket saved., Dismiss", .staticText, "toast")])
+        )
+        let withoutCandidate = try await automaticTimeoutRun(screen: .empty)
+
+        let candidateMessage = try XCTUnwrap(withCandidate.result.outcome.actionResult.message)
+        let emptyMessage = try XCTUnwrap(withoutCandidate.result.outcome.actionResult.message)
+
+        XCTAssertTrue(candidateMessage.contains("observed accessibility candidate"), candidateMessage)
+        XCTAssertFalse(emptyMessage.contains("observed accessibility candidate"), emptyMessage)
+        XCTAssertFalse(withCandidate.result.outcome.actionResult.outcome.isSuccess)
+        XCTAssertFalse(withoutCandidate.result.outcome.actionResult.outcome.isSuccess)
+        XCTAssertEqual(withCandidate.result.outcome.actionResult.outcome.failureKind, .timeout)
+        XCTAssertEqual(withoutCandidate.result.outcome.actionResult.outcome.failureKind, .timeout)
+        XCTAssertEqual(withCandidate.work, withoutCandidate.work)
+        XCTAssertGreaterThan(withCandidate.work.captureCount, 0)
+        XCTAssertGreaterThan(withCandidate.work.commitCount, 0)
+        XCTAssertGreaterThan(withCandidate.work.settlementCount, 0)
+        XCTAssertGreaterThan(withCandidate.work.actionCount, 0)
+        XCTAssertGreaterThan(withCandidate.work.discoveryCount, 0)
+        XCTAssertGreaterThan(withCandidate.work.observationWaitCount, 0)
+        XCTAssertGreaterThan(withCandidate.work.scheduledSettlementCount, 0)
+        XCTAssertNil(withCandidate.result.outcome.actionResult.warning)
+        XCTAssertNil(withoutCandidate.result.outcome.actionResult.warning)
+    }
+
+    func testTimeoutDiagnosticsRemainScopedToEachStandaloneWait() async throws {
+        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            makeScreen(elements: [("First candidate", .staticText, "first")])
+        )
+        let first = await brains.interactionCoordinator.waitForPredicate(
+            try resolvedWait(WaitStep(
+                predicate: .exists(.label("Missing")),
+                timeout: .milliseconds(1)
+            ))
+        )
+
+        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            makeScreen(elements: [("Second candidate", .staticText, "second")])
+        )
+        let second = await brains.interactionCoordinator.waitForPredicate(
+            try resolvedWait(WaitStep(
+                predicate: .exists(.label("Missing")),
+                timeout: .milliseconds(1)
+            ))
+        )
+
+        let firstMessage = try XCTUnwrap(first.outcome.actionResult.message)
+        let secondMessage = try XCTUnwrap(second.outcome.actionResult.message)
+
+        XCTAssertTrue(firstMessage.contains("First candidate"), firstMessage)
+        XCTAssertFalse(firstMessage.contains("Second candidate"), firstMessage)
+        XCTAssertTrue(secondMessage.contains("Second candidate"), secondMessage)
+        XCTAssertFalse(secondMessage.contains("First candidate"), secondMessage)
+    }
+
+    private func automaticTimeoutRun(
+        screen: InterfaceObservation
+    ) async throws -> HistoricalWaitAutomaticRun {
+        let spy = HistoricalWaitUIWorkSpy(observation: screen)
+        let isolatedBrains = TheBrains(
+            tripwire: TheTripwire(),
+            visibleObservationSource: spy.capture
+        )
+        defer { isolatedBrains.stopSemanticObservation() }
+        isolatedBrains.interactionCoordinator.observePredicateWaitScheduledEffects(spy.observe)
+        isolatedBrains.vault.semanticObservationStream.settleVisibleObservation = { vault, _, _, baseline, _ in
+            spy.settle(vault: vault, baseline: baseline)
+        }
+        let wait = WaitStep(
+            predicate: .exists(.label("Ticket saved.")),
+            timeout: try .milliseconds(350)
+        )
+        let runtime = TheBrains.HeistExecutionRuntime(
+            execute: { command, _ in
+                spy.execute(command)
+            },
+            wait: { request in
+                let result = await isolatedBrains.interactionCoordinator.waitForPredicate(
+                    request.step,
+                    initialTrace: request.initialTrace,
+                    baselineSequence: request.afterSequence,
+                    changeBaseline: request.changeBaseline,
+                    actionExpectationContext: request.actionExpectationContext,
+                    startedAt: request.startedAt
+                )
+                spy.record(result)
+                return result
+            },
+            selectPredicateCase: { cases, timeout in
+                await isolatedBrains.interactionCoordinator.waitForPredicateCases(
+                    cases,
+                    timeout: timeout
+                )
+            },
+            settledEvidence: { scope, sequence, timeout in
+                await isolatedBrains.interactionCoordinator.settledEvidence(
+                    scope: scope,
+                    after: sequence,
+                    timeout: timeout
+                )
+            }
+        )
+        let plan = try HeistPlan(body: [
+            .action(ActionStep(
+                command: .setPasteboard(SetPasteboardTarget(text: "diagnostic work probe")),
+                expectationPolicy: .expect(try ActionExpectation(wait))
+            )),
+        ])
+
+        _ = await isolatedBrains.executeHeistPlanForTest(plan, runtime: runtime)
+        let result = try XCTUnwrap(spy.waitResult)
+        return HistoricalWaitAutomaticRun(
+            result: result,
+            work: spy.snapshot(
+                commitCount: isolatedBrains.vault.semanticObservationStream
+                    .latestCommittedObservation?.sequence.rawValue ?? 0
+            )
+        )
+    }
+
+    func testTimeoutDiagnosticEvictsOldestSemanticCandidatesDeterministically() async throws {
+        let elements = (0 ..< 10).map { index in
+            ("Candidate \(index)", UIAccessibilityTraits.staticText, HeistId(rawValue: "candidate_\(index)"))
+        }
+        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            makeScreen(elements: elements)
+        )
+
+        let result = await brains.interactionCoordinator.waitForPredicate(
+            try resolvedWait(WaitStep(
+                predicate: .exists(.label("Missing")),
+                timeout: .milliseconds(1)
+            ))
+        )
+        let message = try XCTUnwrap(result.outcome.actionResult.message)
+
+        for index in 0 ..< 2 {
+            XCTAssertFalse(
+                message.contains("observed accessibility candidate label=\"Candidate \(index)\" traits="),
+                message
+            )
+        }
+        for index in 2 ..< 10 {
+            XCTAssertTrue(
+                message.contains("observed accessibility candidate label=\"Candidate \(index)\" traits="),
+                message
+            )
+        }
+    }
+
     func testAppearedWaitRequiresObservedTransitionWhenFinalStateIsAlreadyPresent() async throws {
         let ready = makeScreen(elements: [("Ready", .staticText, "ready")])
         let result = try await temporalWaitResult(
@@ -407,6 +653,96 @@ extension TheBrainsPipelineTests {
         ).evaluate(try resolvedPredicate(expression), expression: expression)
         XCTAssertTrue(predicateResult.met)
     }
+
+}
+
+@MainActor
+private final class HistoricalWaitUIWorkSpy {
+    private let observation: InterfaceObservation
+    private var captureCount = 0
+    private var settlementCount = 0
+    private(set) var waitResult: HeistWaitResult?
+    private var actionCount = 0
+    private var discoveryCount = 0
+    private var observationWaitCount = 0
+    private var scheduledSettlementCount = 0
+
+    init(observation: InterfaceObservation) {
+        self.observation = observation
+    }
+
+    func snapshot(commitCount: UInt64) -> HistoricalWaitUIWork {
+        HistoricalWaitUIWork(
+            captureCount: captureCount,
+            commitCount: commitCount,
+            settlementCount: settlementCount,
+            actionCount: actionCount,
+            discoveryCount: discoveryCount,
+            observationWaitCount: observationWaitCount,
+            scheduledSettlementCount: scheduledSettlementCount
+        )
+    }
+
+    func observe(_ effect: PredicateWait.ScheduledEffect) {
+        switch effect {
+        case .discovery:
+            discoveryCount += 1
+        case .observationWait:
+            observationWaitCount += 1
+        case .settlement:
+            scheduledSettlementCount += 1
+        }
+    }
+
+    func execute(_ command: ResolvedHeistActionCommand) -> RuntimeActionExecution {
+        actionCount += 1
+        return RuntimeActionExecution(
+            result: .success(payload: command.resultPayload),
+            actionExpectationContext: nil
+        )
+    }
+
+    func record(_ result: HeistWaitResult) {
+        waitResult = result
+    }
+
+    func capture(_ vault: TheVault) -> InterfaceObservation? {
+        captureCount += 1
+        return observation
+    }
+
+    func settle(
+        vault: TheVault,
+        baseline: TheTripwire.TripwireSignal
+    ) -> SettleSession.Result {
+        settlementCount += 1
+        guard let captured = capture(vault) else {
+            preconditionFailure("historical wait work fixture must capture an observation")
+        }
+        vault.latestObservation = captured
+        return SettleSession.Result(
+            outcome: .settled(timeMs: 0),
+            events: [],
+            finalObservation: SettleSessionFinalObservation(observation: captured),
+            elementsByKey: [:],
+            tripwireSignal: baseline
+        )
+    }
+}
+
+private struct HistoricalWaitUIWork: Equatable {
+    let captureCount: Int
+    let commitCount: UInt64
+    let settlementCount: Int
+    let actionCount: Int
+    let discoveryCount: Int
+    let observationWaitCount: Int
+    let scheduledSettlementCount: Int
+}
+
+private struct HistoricalWaitAutomaticRun {
+    let result: HeistWaitResult
+    let work: HistoricalWaitUIWork
 }
 
 #endif

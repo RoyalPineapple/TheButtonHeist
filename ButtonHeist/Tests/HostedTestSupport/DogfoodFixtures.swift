@@ -110,4 +110,13 @@ package enum CalculatorScreen {
     }
 }
 
+package enum TransientFlowScreen {
+    package static let lifecycle = AccessibilityPredicate.changed(.elements([
+        .appeared(.label("Processing")),
+        .disappeared(.label("Submit")),
+    ]))
+    package static let announcement = AccessibilityPredicate.announcement("Ticket saved.")
+    package static let exactToastText = AccessibilityPredicate.exists(.label("Ticket saved."))
+}
+
 #endif // canImport(UIKit)

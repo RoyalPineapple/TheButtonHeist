@@ -31,7 +31,7 @@ extension TheBrains {
         case actionEndpoint(
             ResolvedWaitRuntimeInput,
             trace: AccessibilityTrace?,
-            baseline: SettledCapture?
+            context: ActionExpectationContext?
         )
         case immediate(ResolvedWaitRuntimeInput)
         case afterObservation(
@@ -82,8 +82,8 @@ extension TheBrains {
                  .immediate,
                  .baselineTraceOnly:
                 return nil
-            case .actionEndpoint(_, _, let baseline):
-                return baseline?.cursor.sequence
+            case .actionEndpoint(_, _, let context):
+                return context?.preActionCapture.cursor.sequence
             case .afterObservation(_, _, let sequence):
                 return sequence
             }
@@ -91,8 +91,8 @@ extension TheBrains {
 
         internal var changeBaseline: PredicateChangeBaselineSource {
             switch self {
-            case .actionEndpoint(_, _, let baseline):
-                .supplied(baseline)
+            case .actionEndpoint(_, _, let context):
+                .supplied(context?.preActionCapture)
             case .baselineTraceOnly:
                 .supplied(nil)
             case .standalone, .immediate, .afterObservation:
@@ -100,17 +100,11 @@ extension TheBrains {
             }
         }
 
-        internal var announcementCursorStrategy: AnnouncementWaitCursorStrategy {
-            switch self {
-            case .standalone:
-                return .heistScoped
-            case .actionEndpoint,
-                 .immediate,
-                 .afterObservation,
-                 .baselineTraceOnly:
-                return .futureOnly
-            }
+        internal var actionExpectationContext: ActionExpectationContext? {
+            guard case .actionEndpoint(_, _, let context) = self else { return nil }
+            return context
         }
+
     }
 
     internal struct HeistExecutionRuntime {
@@ -140,10 +134,10 @@ extension TheBrains {
         @MainActor
         internal static func live(_ brains: TheBrains) -> HeistExecutionRuntime {
             HeistExecutionRuntime(
-                execute: { command, expectationBaselineScope in
-                    await brains.executeRuntimeActionWithBaseline(
+                execute: { command, expectationContextScope in
+                    await brains.executeRuntimeActionForHeist(
                         command,
-                        expectationBaselineScope: expectationBaselineScope
+                        expectationContextScope: expectationContextScope
                     )
                 },
                 wait: { request in
@@ -152,7 +146,7 @@ extension TheBrains {
                         initialTrace: request.initialTrace,
                         baselineSequence: request.afterSequence,
                         changeBaseline: request.changeBaseline,
-                        announcementCursorStrategy: request.announcementCursorStrategy,
+                        actionExpectationContext: request.actionExpectationContext,
                         startedAt: request.startedAt
                     )
                 },
@@ -187,7 +181,6 @@ extension TheBrains {
         runtime: HeistExecutionRuntime
     ) async -> ActionResult {
         let notificationScope = vault.accessibilityNotifications.beginHeistScope()
-        interactionCoordinator.resetAnnouncementWaitCursorForHeist(to: notificationScope.cursor)
         defer { notificationScope.cancel() }
 
         let demand = vault.semanticObservationStream.beginActiveObservationDemand()

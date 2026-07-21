@@ -90,63 +90,6 @@ extension TheBrainsActionTests {
         XCTAssertTrue(trace.changeFacts.contains { if case .elementsChanged = $0 { true } else { false } })
     }
 
-    func testHeistScopedAnnouncementWaitStartsAtScopeCursor() async throws {
-        let isolatedBrains = TheBrains(tripwire: TheTripwire())
-        let notifications = isolatedBrains.vault.accessibilityNotifications
-        let priorHeist = notifications.beginHeistScope()
-        notifications.recordForTesting(
-            code: 1008,
-            notificationData: CapturedAccessibilityNotificationPayload("Ready" as NSString),
-            associatedElement: .none
-        )
-        priorHeist.cancel()
-        notifications.recordForTesting(
-            code: 1008,
-            notificationData: CapturedAccessibilityNotificationPayload("Ready" as NSString),
-            associatedElement: .none
-        )
-
-        let currentHeist = notifications.beginHeistScope()
-        defer { currentHeist.cancel() }
-        isolatedBrains.interactionCoordinator.resetAnnouncementWaitCursorForHeist(
-            to: currentHeist.cursor
-        )
-        let staleResult = await isolatedBrains.interactionCoordinator.waitForPredicate(
-            try resolvedWait(WaitStep(predicate: .announcement("Ready"), timeout: .milliseconds(1))),
-            announcementCursorStrategy: .heistScoped
-        )
-
-        guard case .unmatched(let staleActionResult, _) = staleResult.outcome else {
-            return XCTFail("Expected the stale announcement not to match")
-        }
-        XCTAssertFalse(staleActionResult.outcome.isSuccess)
-
-        notifications.recordForTesting(
-            code: 1008,
-            notificationData: CapturedAccessibilityNotificationPayload("Ready" as NSString),
-            associatedElement: .none
-        )
-        let currentResult = await isolatedBrains.interactionCoordinator.waitForPredicate(
-            try resolvedWait(WaitStep(predicate: .announcement("Ready"), timeout: .milliseconds(1))),
-            announcementCursorStrategy: .heistScoped
-        )
-
-        guard case .matched(let currentActionResult, _) = currentResult.outcome else {
-            return XCTFail("Expected the current announcement to match")
-        }
-        XCTAssertTrue(currentActionResult.outcome.isSuccess)
-        XCTAssertEqual(currentActionResult.announcement, "Ready")
-
-        let repeatedResult = await isolatedBrains.interactionCoordinator.waitForPredicate(
-            try resolvedWait(WaitStep(predicate: .announcement("Ready"), timeout: .milliseconds(1))),
-            announcementCursorStrategy: .heistScoped
-        )
-        guard case .unmatched(let repeatedActionResult, _) = repeatedResult.outcome else {
-            return XCTFail("Expected the consumed announcement not to match again")
-        }
-        XCTAssertFalse(repeatedActionResult.outcome.isSuccess)
-    }
-
     func testFailedActionBatchBelongsToDiagnosticAndNextActionClaimsOnlyItsBatch() async {
         let isolatedBrains = TheBrains(tripwire: TheTripwire())
         let baseline = InterfaceObservation.makeForTests(elements: [
@@ -307,6 +250,174 @@ observation: .settledTrace(
         } == true)
     }
 
+    func testActionExpectationUsesSettlementEvidence() async throws {
+        let saveObject = ActionActivationOverrideView()
+        let announceObject = ActionActivationOverrideView()
+        let saveElement = makeElement(label: "Save", traits: .button)
+        let announceElement = makeElement(label: "Announce", traits: .button)
+        let elements: [(AccessibilityElement, HeistId)] = [
+            (saveElement, "save_button"),
+            (announceElement, "announce_button"),
+        ]
+        let objects: [HeistId: NSObject?] = [
+            "save_button": saveObject,
+            "announce_button": announceObject,
+        ]
+        let before = InterfaceObservation.makeForTests(elements: elements, objects: objects)
+        let transient = InterfaceObservation.makeForTests(
+            elements: elements + [(makeElement(label: "Saved", traits: .staticText), "saved")],
+            objects: objects
+        )
+        let after = InterfaceObservation.makeForTests(elements: elements, objects: objects)
+        saveObject.onActivation = {
+            _ = self.brains.vault.semanticObservationStream
+                .commitVisibleObservationForTesting(transient)
+            _ = self.brains.vault.semanticObservationStream
+                .commitVisibleObservationForTesting(after)
+            self.visibleObservationSource.observation = after
+        }
+        announceObject.onActivation = {
+            self.brains.vault.accessibilityNotifications.recordForTesting(
+                code: 1008,
+                notificationData: CapturedAccessibilityNotificationPayload("Confirmed" as NSString),
+                associatedElement: .none
+            )
+        }
+        installSyntheticObservation(before)
+        let plan = try HeistPlan(body: [
+            .action(ActionStep(
+                command: .activate(.label("Save")),
+                expectationPolicy: .expect(try ActionExpectation(WaitStep(
+                    predicate: .changed(.elements([
+                        .appeared(.label("Saved")),
+                        .disappeared(.label("Saved")),
+                    ])),
+                    timeout: .milliseconds(1)
+                )))
+            )),
+            .action(ActionStep(
+                command: .activate(.label("Announce")),
+                expectationPolicy: .expect(try ActionExpectation(WaitStep(
+                    predicate: .announcement("Confirmed"),
+                    timeout: .milliseconds(1)
+                )))
+            )),
+        ])
+
+        let result = await brains.executeHeistPlan(plan)
+        let steps = try XCTUnwrap(result.resultPayload?.steps)
+        let elementTrace = try XCTUnwrap(steps.first?.actionEvidence?.expectationResult?.accessibilityTrace)
+
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "heist failed")
+        XCTAssertEqual(saveObject.activationCount, 1)
+        XCTAssertEqual(announceObject.activationCount, 1)
+        XCTAssertEqual(steps.map(\.reportExpectation?.met), [true, true])
+        XCTAssertEqual(
+            elementTrace.captures.first?.interface.projectedElements.compactMap(\.label),
+            ["Save", "Announce"]
+        )
+        XCTAssertEqual(
+            elementTrace.captures.dropFirst().first?.interface.projectedElements.compactMap(\.label),
+            ["Save", "Announce", "Saved"]
+        )
+        XCTAssertEqual(
+            elementTrace.captures.last?.interface.projectedElements.compactMap(\.label),
+            ["Save", "Announce"]
+        )
+        XCTAssertEqual(steps.last?.actionEvidence?.expectationResult?.announcement, "Confirmed")
+    }
+
+    func testStandaloneWaitStartsAtItsOwnFirstObservation() async throws {
+        let saveObject = ActionActivationOverrideView()
+        let saveElement = makeElement(label: "Save", traits: .button)
+        let elements: [(AccessibilityElement, HeistId)] = [(saveElement, "save_button")]
+        let objects: [HeistId: NSObject?] = ["save_button": saveObject]
+        let before = InterfaceObservation.makeForTests(elements: elements, objects: objects)
+        let transient = InterfaceObservation.makeForTests(
+            elements: elements + [(makeElement(label: "Saved", traits: .staticText), "saved")],
+            objects: objects
+        )
+        let after = InterfaceObservation.makeForTests(elements: elements, objects: objects)
+        saveObject.onActivation = {
+            _ = self.brains.vault.semanticObservationStream
+                .commitVisibleObservationForTesting(transient)
+            _ = self.brains.vault.semanticObservationStream
+                .commitVisibleObservationForTesting(after)
+            self.visibleObservationSource.observation = after
+            self.brains.vault.accessibilityNotifications.recordForTesting(
+                code: 1008,
+                notificationData: CapturedAccessibilityNotificationPayload("Saved" as NSString),
+                associatedElement: .none
+            )
+        }
+        installSyntheticObservation(before)
+
+        let action = await brains.executeHeistPlan(try HeistPlan(body: [
+            .action(ActionStep(command: .activate(.label("Save")))),
+        ]))
+        let appeared = await brains.performWait(step: try resolvedWait(WaitStep(
+            predicate: .changed(.elements([.appeared(.label("Saved"))])),
+            timeout: .milliseconds(1)
+        )))
+        let disappeared = await brains.performWait(step: try resolvedWait(WaitStep(
+            predicate: .changed(.elements([.disappeared(.label("Saved"))])),
+            timeout: .milliseconds(1)
+        )))
+        let exists = await brains.performWait(step: try resolvedWait(WaitStep(
+            predicate: .exists(.label("Saved")),
+            timeout: .milliseconds(1)
+        )))
+        let announcement = await brains.performWait(step: try resolvedWait(WaitStep(
+            predicate: .announcement("Saved"),
+            timeout: .milliseconds(1)
+        )))
+
+        XCTAssertTrue(action.outcome.isSuccess, action.message ?? "action heist failed")
+        XCTAssertEqual(saveObject.activationCount, 1)
+        for result in [appeared, disappeared, exists, announcement] {
+            XCTAssertFalse(result.outcome.isSuccess)
+            XCTAssertEqual(result.outcome.failureKind, .timeout)
+        }
+        XCTAssertTrue(appeared.accessibilityTrace?.changeFacts.isEmpty == true)
+        XCTAssertEqual(
+            appeared.accessibilityTrace?.captures.first?.interface.projectedElements.compactMap(\.label),
+            ["Save"]
+        )
+        XCTAssertNil(announcement.announcement)
+    }
+
+    func testFailedProductionDispatchDiscardsActionExpectationContext() async throws {
+        let heistId: HeistId = "options_button"
+        let liveObject = UIView()
+        liveObject.accessibilityCustomActions = [
+            UIAccessibilityCustomAction(name: "Archive") { _ in
+                self.brains.vault.accessibilityNotifications.recordForTesting(
+                    code: 1008,
+                    notificationData: CapturedAccessibilityNotificationPayload("Declined" as NSString),
+                    associatedElement: .none
+                )
+                return false
+            },
+        ]
+        registerScreenElement(
+            heistId: heistId,
+            element: makeElement(label: "Options", traits: .button, customActions: ["Archive"]),
+            object: liveObject
+        )
+        let command = try HeistActionCommand.customAction(
+            name: "Archive",
+            target: .label("Options")
+        ).resolve(in: .empty)
+
+        let execution = await brains.executeRuntimeActionForHeist(
+            command,
+            expectationContextScope: .visible
+        )
+
+        XCTAssertFalse(execution.result.outcome.isSuccess)
+        XCTAssertNil(execution.actionExpectationContext)
+    }
+
     func testWaitResultTimeoutRetainsFinalSettledEvidence() async throws {
         let isolatedBrains = TheBrains(tripwire: TheTripwire())
         let knownScreen = InterfaceObservation.makeForTests(elements: [
@@ -339,11 +450,16 @@ observation: .settledTrace(
             predicate: .changed(.elements()),
             timeout: try .milliseconds(1)
         )
+        let expectationContext = ActionExpectationContext(
+            preActionCapture: baseline,
+            throughObservationCursor: baseline.cursor,
+            announcementCursor: .origin
+        )
         var waitRequests: [TheBrains.HeistRuntimeWaitRequest] = []
-        var baselineScopes: [SemanticObservationScope?] = []
+        var contextScopes: [SemanticObservationScope?] = []
         let runtime = heistRuntime(
             observations: [],
-            executionBaseline: baseline,
+            actionExpectationContext: expectationContext,
             execute: { _ in
                 ActionResult.success(payload: .activate)
             },
@@ -351,8 +467,8 @@ observation: .settledTrace(
                 waitRequests.append(request)
                 return ActionResult.success(payload: .wait)
             },
-            executionBaselineScopes: { scope in
-                baselineScopes.append(scope)
+            expectationContextScopes: { scope in
+                contextScopes.append(scope)
             }
         )
         let plan = try HeistPlan(body: [
@@ -366,14 +482,15 @@ observation: .settledTrace(
         let step = try XCTUnwrap(heistResult.steps.first)
 
         XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(baselineScopes.first, .visible)
+        XCTAssertEqual(contextScopes.first, .visible)
         XCTAssertEqual(waitRequests.count, 1)
         if case .actionEndpoint(
             let request,
             trace: nil,
-            baseline: baseline
+            context: let capturedContext
         )? = waitRequests.first {
             XCTAssertEqual(request, try resolvedWait(expectation))
+            XCTAssertEqual(capturedContext, expectationContext)
         } else {
             XCTFail("Expected action endpoint wait request")
         }
@@ -382,10 +499,195 @@ observation: .settledTrace(
         XCTAssertNil(step.actionEvidence?.expectationResult?.accessibilityTrace)
     }
 
+    func testActionExpectationRejectsUnavailableObservationBound() async throws {
+        let baselineEvent = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            .makeForTests()
+        )
+        let baseline = try XCTUnwrap(baselineEvent.settledCapture)
+        let unavailableCursor = ObservationCursor(
+            generation: baseline.cursor.generation,
+            scope: baseline.cursor.scope,
+            sequence: baseline.cursor.sequence + 1,
+            capture: baseline.capture,
+            notificationSequence: baseline.cursor.notificationSequence
+        )
+        let context = ActionExpectationContext(
+            preActionCapture: baseline,
+            throughObservationCursor: unavailableCursor,
+            announcementCursor: .origin
+        )
+
+        let result = await brains.interactionCoordinator.waitForPredicate(
+            try resolvedWait(WaitStep(
+                predicate: .changed(.elements()),
+                timeout: 1
+            )),
+            actionExpectationContext: context
+        )
+
+        guard case .unmatched(let actionResult, let expectation) = result.outcome else {
+            return XCTFail("Expected unavailable action observation evidence to fail")
+        }
+        XCTAssertEqual(actionResult.outcome.failureKind, .actionFailed)
+        XCTAssertTrue(
+            actionResult.message?.hasPrefix("Action expectation observation history unavailable:") == true
+        )
+        XCTAssertEqual(expectation.actual, actionResult.message)
+    }
+
+    func testActionNoChangeUsesFrozenUpperBoundBeforeLaterObservation() async throws {
+        let stream = brains.vault.semanticObservationStream
+        let baselineEvent = stream.commitVisibleObservationForTesting(actionVolumeObservation(value: "50%"))
+        let actionEndpoint = stream.commitVisibleObservationForTesting(actionVolumeObservation(value: "50%"))
+        _ = stream.commitVisibleObservationForTesting(actionVolumeObservation(value: "60%"))
+        let baseline = try XCTUnwrap(baselineEvent.settledCapture)
+        let actionEndpointCapture = try XCTUnwrap(actionEndpoint.settledCapture)
+        let context = ActionExpectationContext(
+            preActionCapture: baseline,
+            throughObservationCursor: actionEndpointCapture.cursor,
+            announcementCursor: .origin
+        )
+
+        let result = await brains.interactionCoordinator.waitForPredicate(
+            try resolvedWait(WaitStep(predicate: .noChange, timeout: .milliseconds(1))),
+            actionExpectationContext: context
+        )
+
+        XCTAssertTrue(result.outcome.actionResult.outcome.isSuccess)
+        XCTAssertTrue(result.outcome.expectation.met)
+        XCTAssertEqual(result.observedSequence, actionEndpoint.sequence)
+    }
+
+    func testActionNoChangeConsumesEntireFrozenWindow() async throws {
+        let stream = brains.vault.semanticObservationStream
+        let baselineEvent = stream.commitVisibleObservationForTesting(actionVolumeObservation(value: "50%"))
+        _ = stream.commitVisibleObservationForTesting(actionVolumeObservation(value: "50%"))
+        let actionEndpoint = stream.commitVisibleObservationForTesting(actionVolumeObservation(value: "60%"))
+        let baseline = try XCTUnwrap(baselineEvent.settledCapture)
+        let actionEndpointCapture = try XCTUnwrap(actionEndpoint.settledCapture)
+        let context = ActionExpectationContext(
+            preActionCapture: baseline,
+            throughObservationCursor: actionEndpointCapture.cursor,
+            announcementCursor: .origin
+        )
+
+        let result = await brains.interactionCoordinator.waitForPredicate(
+            try resolvedWait(WaitStep(predicate: .noChange, timeout: .milliseconds(1))),
+            actionExpectationContext: context
+        )
+
+        XCTAssertFalse(result.outcome.actionResult.outcome.isSuccess)
+        XCTAssertEqual(result.outcome.actionResult.outcome.failureKind, .timeout)
+        XCTAssertFalse(result.outcome.expectation.met)
+    }
+
+    func testActionNoChangeRejectsEvictedObservationHistory() async throws {
+        let stream = brains.vault.semanticObservationStream
+        let baselineEvent = stream.commitVisibleObservationForTesting(actionVolumeObservation(value: "50%"))
+        let baseline = try XCTUnwrap(baselineEvent.settledCapture)
+        var actionEndpoint = baselineEvent
+        for _ in 0...SemanticObservationStore.defaultRetentionLimit {
+            actionEndpoint = stream.commitVisibleObservationForTesting(actionVolumeObservation(value: "50%"))
+        }
+        let actionEndpointCapture = try XCTUnwrap(actionEndpoint.settledCapture)
+        let context = ActionExpectationContext(
+            preActionCapture: baseline,
+            throughObservationCursor: actionEndpointCapture.cursor,
+            announcementCursor: .origin
+        )
+
+        let result = await brains.interactionCoordinator.waitForPredicate(
+            try resolvedWait(WaitStep(predicate: .noChange, timeout: .milliseconds(1))),
+            actionExpectationContext: context
+        )
+
+        XCTAssertEqual(result.outcome.actionResult.outcome.failureKind, .actionFailed)
+        XCTAssertTrue(
+            result.outcome.actionResult.message?.hasPrefix(
+                "Action expectation observation history unavailable:"
+            ) == true
+        )
+    }
+
+    func testActionReplayCarriesTransientNearMissIntoTimeoutDiagnostics() async throws {
+        let stream = brains.vault.semanticObservationStream
+        let baselineEvent = stream.commitVisibleObservationForTesting(.makeForTests())
+        _ = stream.commitVisibleObservationForTesting(.makeForTests(elements: [
+            (
+                makeElement(label: "Ticket saved., Dismiss", traits: .staticText),
+                HeistId(rawValue: "toast")
+            ),
+        ]))
+        let actionEndpoint = stream.commitVisibleObservationForTesting(.makeForTests())
+        let baseline = try XCTUnwrap(baselineEvent.settledCapture)
+        let actionEndpointCapture = try XCTUnwrap(actionEndpoint.settledCapture)
+        let context = ActionExpectationContext(
+            preActionCapture: baseline,
+            throughObservationCursor: actionEndpointCapture.cursor,
+            announcementCursor: .origin
+        )
+
+        let result = await brains.interactionCoordinator.waitForPredicate(
+            try resolvedWait(WaitStep(
+                predicate: .changed(.elements([.appeared(.label("Ticket saved."))])),
+                timeout: .milliseconds(1)
+            )),
+            actionExpectationContext: context
+        )
+        let message = try XCTUnwrap(result.outcome.actionResult.message)
+
+        XCTAssertEqual(result.outcome.actionResult.outcome.failureKind, .timeout)
+        XCTAssertTrue(message.contains(#"label="Ticket saved., Dismiss""#), message)
+    }
+
+    func testActionAnnouncementRejectsEvictedMatchingEvidence() async throws {
+        let baselineEvent = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            .makeForTests()
+        )
+        let baseline = try XCTUnwrap(baselineEvent.settledCapture)
+        let announcementCursor = brains.vault.accessibilityNotifications.cursor()
+        brains.vault.accessibilityNotifications.recordForTesting(
+            code: 1008,
+            notificationData: CapturedAccessibilityNotificationPayload(
+                "Expected announcement" as NSString
+            ),
+            associatedElement: .none
+        )
+        for index in 0..<64 {
+            brains.vault.accessibilityNotifications.recordForTesting(
+                code: 1008,
+                notificationData: CapturedAccessibilityNotificationPayload(
+                    "Unrelated announcement \(index)" as NSString
+                ),
+                associatedElement: .none
+            )
+        }
+        let context = ActionExpectationContext(
+            preActionCapture: baseline,
+            throughObservationCursor: baseline.cursor,
+            announcementCursor: announcementCursor
+        )
+
+        let result = await brains.interactionCoordinator.waitForPredicate(
+            try resolvedWait(WaitStep(
+                predicate: .announcement("Expected announcement"),
+                timeout: .milliseconds(1)
+            )),
+            actionExpectationContext: context
+        )
+
+        XCTAssertEqual(result.outcome.actionResult.outcome.failureKind, .actionFailed)
+        XCTAssertTrue(
+            result.outcome.actionResult.message?.hasPrefix(
+                "Action expectation announcement history unavailable:"
+            ) == true
+        )
+    }
+
     func testTemporalActionExpectationCarriesUnavailableBaselineWithoutReplacement() async throws {
         let expectation = WaitStep(predicate: .changed(.elements()), timeout: 1)
         var waitRequests: [TheBrains.HeistRuntimeWaitRequest] = []
-        var baselineScopes: [SemanticObservationScope?] = []
+        var contextScopes: [SemanticObservationScope?] = []
         let runtime = heistRuntime(
             observations: [],
             execute: { _ in
@@ -395,8 +697,8 @@ observation: .settledTrace(
                 waitRequests.append(request)
                 return ActionResult.success(payload: .wait)
             },
-            executionBaselineScopes: { scope in
-                baselineScopes.append(scope)
+            expectationContextScopes: { scope in
+                contextScopes.append(scope)
             }
         )
         let plan = try HeistPlan(body: [
@@ -409,10 +711,10 @@ observation: .settledTrace(
         let step = try XCTUnwrap(result.resultPayload?.steps.first)
 
         XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(baselineScopes.first, .visible)
+        XCTAssertEqual(contextScopes.first, .visible)
         XCTAssertEqual(waitRequests.count, 1)
-        guard case .actionEndpoint(_, trace: nil, baseline: nil)? = waitRequests.first else {
-            return XCTFail("Expected action endpoint wait with unavailable baseline")
+        guard case .actionEndpoint(_, trace: nil, context: nil)? = waitRequests.first else {
+            return XCTFail("Expected action endpoint wait with unavailable context")
         }
         XCTAssertEqual(step.reportExpectation?.met, false)
         XCTAssertNil(step.actionEvidence?.expectationResult?.accessibilityTrace)
@@ -422,7 +724,7 @@ observation: .settledTrace(
         let observedReady = observedState(labels: ["Long List"])
         let target = AccessibilityTarget.identifier("target")
         var observedScopes: [SemanticObservationScope] = []
-        var baselineScopes: [SemanticObservationScope?] = []
+        var contextScopes: [SemanticObservationScope?] = []
         let runtime = heistRuntime(
             observations: [observedReady],
             execute: { _ in
@@ -431,8 +733,8 @@ observation: .settledTrace(
             observedScopes: { scope in
                 observedScopes.append(scope)
             },
-            executionBaselineScopes: { scope in
-                baselineScopes.append(scope)
+            expectationContextScopes: { scope in
+                contextScopes.append(scope)
             }
         )
         let plan = try HeistPlan(body: [
@@ -447,7 +749,7 @@ observation: .settledTrace(
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "heist failed")
-        XCTAssertEqual(baselineScopes, [nil])
+        XCTAssertEqual(contextScopes, [.visible])
         XCTAssertEqual(observedScopes, [.visible])
     }
 
@@ -756,6 +1058,15 @@ observation: .settledTrace(
             HeistCaseSelectionOutcome.elseBranch(reason: .noMatch)
         )
         XCTAssertEqual(step.caseSelectionEvidence?.selection.cases.first?.result.met, false)
+    }
+
+    private func actionVolumeObservation(value: String) -> InterfaceObservation {
+        .makeForTests(elements: [
+            (
+                makeElement(label: "Volume", value: value, traits: .adjustable),
+                HeistId(rawValue: "volume")
+            ),
+        ])
     }
 
 }

@@ -21,8 +21,12 @@ extension PredicateWait {
         internal let stream: PredicateObservationStreamState
         private let initialExpectation: ExpectationResult
         private let snapshot: Snapshot?
+        private let historicalDiagnostics: PredicateWaitHistoricalDiagnostics
 
-        internal init(predicate: AccessibilityPredicate) {
+        internal init(
+            predicate: AccessibilityPredicate,
+            target: ResolvedAccessibilityTarget? = nil
+        ) {
             stream = PredicateObservationStreamState()
             initialExpectation = ExpectationResult(
                 met: false,
@@ -30,16 +34,22 @@ extension PredicateWait {
                 actual: "no settled semantic observation available"
             )
             snapshot = nil
+            historicalDiagnostics = PredicateWaitHistoricalDiagnostics(
+                target: target,
+                predicate: predicate
+            )
         }
 
         private init(
             stream: PredicateObservationStreamState,
             initialExpectation: ExpectationResult,
-            snapshot: Snapshot
+            snapshot: Snapshot?,
+            historicalDiagnostics: PredicateWaitHistoricalDiagnostics
         ) {
             self.stream = stream
             self.initialExpectation = initialExpectation
             self.snapshot = snapshot
+            self.historicalDiagnostics = historicalDiagnostics
         }
 
         internal var evaluation: ExpectationResult {
@@ -66,11 +76,16 @@ extension PredicateWait {
             snapshot?.window
         }
 
+        internal var timeoutMismatchBreadcrumb: String? {
+            historicalDiagnostics.timeoutMismatchBreadcrumb
+        }
+
         internal func recording(_ reduction: PredicateObservationStreamReduction) -> LifecycleEvidence {
             LifecycleEvidence(
                 stream: reduction.state,
                 initialExpectation: initialExpectation,
-                snapshot: Snapshot(reduction.reduction)
+                snapshot: Snapshot(reduction.reduction),
+                historicalDiagnostics: historicalDiagnostics.recording(reduction.reduction)
             )
         }
     }

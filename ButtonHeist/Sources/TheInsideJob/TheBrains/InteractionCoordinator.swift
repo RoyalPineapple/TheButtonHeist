@@ -31,10 +31,6 @@ final class InteractionCoordinator {
         )
     }
 
-    func resetAnnouncementWaitCursorForHeist(to cursor: AccessibilityNotificationCursor) {
-        predicateWait.resetAnnouncementWaitCursorForHeist(to: cursor)
-    }
-
     func admittedBaseline(
         scope: SemanticObservationScope = .visible,
         timeout: Double? = InteractionCoordinator.defaultVisibleStateTimeout
@@ -117,7 +113,7 @@ final class InteractionCoordinator {
         initialTrace: AccessibilityTrace? = nil,
         baselineSequence: SettledObservationSequence? = nil,
         changeBaseline: PredicateChangeBaselineSource = .establishFromFirstObservation,
-        announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
+        actionExpectationContext: ActionExpectationContext? = nil,
         onReadyToPoll: PredicateWait.ReadyToPoll? = nil,
         startedAt: RuntimeElapsed.Instant? = nil
     ) async -> HeistWaitResult {
@@ -135,10 +131,16 @@ final class InteractionCoordinator {
             for: step,
             initialTrace: initialTrace,
             changeBaseline: baselineSource,
-            announcementCursorStrategy: announcementCursorStrategy,
+            actionExpectationContext: actionExpectationContext,
             onReadyToPoll: onReadyToPoll,
             startedAt: startedAt
         )
+    }
+
+    internal func observePredicateWaitScheduledEffects(
+        _ observer: @escaping @MainActor (PredicateWait.ScheduledEffect) -> Void
+    ) {
+        predicateWait.observeScheduledEffect = observer
     }
 
     func waitForPredicateCases(

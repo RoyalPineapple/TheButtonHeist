@@ -9,11 +9,6 @@ internal enum PredicateObservationDiagnostics {
     internal static let changePredicateNeedsFutureObservationMessage = "change predicate requires future settled observation after baseline"
 }
 
-internal enum AnnouncementWaitCursorStrategy: Sendable, Equatable {
-    case futureOnly
-    case heistScoped
-}
-
 internal enum PredicateChangeBaselineSource: Sendable, Equatable {
     case establishFromFirstObservation
     case supplied(SettledCapture?)
@@ -34,6 +29,12 @@ where Evidence: Sendable & Equatable {
         case skip
     }
 
+    internal enum ScheduledEffect: Sendable, Equatable {
+        case discovery
+        case observationWait
+        case settlement
+    }
+
     internal struct ExecutionProjection<Result, Evidence>
     where Evidence: Sendable & Equatable {
         let target: ResolvedAccessibilityTarget?
@@ -51,10 +52,10 @@ where Evidence: Sendable & Equatable {
         ) -> Result
     }
 
-    private let vault: TheVault
+    internal let vault: TheVault
     private let navigation: Navigation
-    private let actionEvidenceProjector: ActionEvidenceProjector
-    private var heistAnnouncementCursor: AccessibilityNotificationCursor = .origin
+    internal let actionEvidenceProjector: ActionEvidenceProjector
+    internal var observeScheduledEffect: @MainActor (ScheduledEffect) -> Void = { _ in }
 
     internal init(
         vault: TheVault,
@@ -70,7 +71,7 @@ where Evidence: Sendable & Equatable {
         for step: ResolvedWaitRuntimeInput,
         initialTrace: AccessibilityTrace? = nil,
         changeBaseline: PredicateChangeBaselineSource = .establishFromFirstObservation,
-        announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
+        actionExpectationContext: ActionExpectationContext? = nil,
         onReadyToPoll: ReadyToPoll? = nil,
         startedAt: RuntimeElapsed.Instant? = nil
     ) async -> HeistWaitResult {
@@ -79,14 +80,48 @@ where Evidence: Sendable & Equatable {
             return await waitForAnnouncementPredicate(
                 announcement,
                 step: step,
-                initialTrace: initialTrace,
+                initialTrace: actionExpectationContext == nil ? initialTrace : nil,
                 start: start,
                 timeout: step.timeout,
-                cursorStrategy: announcementCursorStrategy
+                cursor: actionExpectationContext?.announcementCursor
+                    ?? vault.accessibilityNotifications.cursor(),
+                isActionExpectation: actionExpectationContext != nil
             )
         }
 
-        if let traceEvaluation = initialTraceChangeEvaluation(
+        var replayedEvidence: LifecycleEvidence?
+        if let contextReduction = reduceActionContext(
+            for: step,
+            context: actionExpectationContext
+        ) {
+            switch contextReduction {
+            case .matched(let reduction):
+                return waitResult(
+                    for: step,
+                    trace: reduction.trace,
+                    observationSummary: reduction.observation.summary,
+                    expectation: reduction.expectation,
+                    start: start,
+                    success: true,
+                    baseline: reduction.changeBaseline,
+                    window: reduction.observationWindow,
+                    observedSequence: reduction.observation.event.sequence
+                )
+            case .unmatched(let evidence):
+                replayedEvidence = evidence
+            case .empty:
+                break
+            case .unavailable(let error):
+                return unavailableActionContextResult(
+                    for: step,
+                    context: actionExpectationContext,
+                    error: error
+                )
+            }
+        }
+
+        if replayedEvidence == nil,
+           let traceEvaluation = initialTraceChangeEvaluation(
             for: step,
             initialTrace: initialTrace
         ), traceEvaluation.met {
@@ -103,50 +138,93 @@ where Evidence: Sendable & Equatable {
         return await execute(
             start: start,
             timeout: step.timeout.seconds,
-            projection: ExecutionProjection(
-                target: step.predicate.waitTarget,
-                continuesAfterInitialMiss: true,
-                initialEvidence: LifecycleEvidence(predicate: step.predicateExpression),
-                evaluate: { observation, isInitialVisible, evidence in
-                    let baselineSeed: PredicateObservationBaselineSeed
-                    if evidence.stream.observationBaseline != nil {
-                        baselineSeed = .preserve
-                    } else {
-                        baselineSeed = switch changeBaseline {
-                        case .supplied(let supplied):
-                            supplied.map(PredicateObservationBaselineSeed.supplied) ?? .preserve
-                        case .establishFromFirstObservation:
-                            isInitialVisible ? .preserve : .currentObservation
-                        }
-                    }
-                    let reduced = self.reduceObservation(
-                        observation,
-                        predicate: step.predicate,
-                        predicateExpression: step.predicateExpression,
-                        baselineSeed: baselineSeed,
-                        stream: evidence.stream
-                    )
-                    let recorded = evidence.recording(reduced)
-                    return PredicateWaitEvaluation(
-                        evidence: recorded,
-                        matched: recorded.evaluation.met
-                    )
-                },
-                result: { outcome, _, evidence in
-                    self.waitResult(
-                        for: step,
-                        trace: evidence.lastTrace,
-                        observationSummary: evidence.lastObservationSummary,
-                        expectation: evidence.evaluation,
-                        start: start,
-                        success: outcome == .matched,
-                        baseline: evidence.changeBaseline,
-                        window: evidence.observationWindow,
-                        observedSequence: evidence.observedSequence
-                    )
-                }
+            projection: changeProjection(
+                for: step,
+                changeBaseline: changeBaseline,
+                start: start,
+                replayedEvidence: replayedEvidence
             ),
             onReadyToPoll: onReadyToPoll
+        )
+    }
+
+    private func unavailableActionContextResult(
+        for step: ResolvedWaitRuntimeInput,
+        context: ActionExpectationContext?,
+        error: ObservationHistoryReadError
+    ) -> HeistWaitResult {
+        let message = "Action expectation observation history unavailable: \(error)"
+        let traceEvidence = context.flatMap {
+            AccessibilityTraceEvidence(
+                trace: AccessibilityTrace(captures: [$0.preActionCapture.capture]),
+                completeness: .incomplete
+            )
+        }
+        return .failed(
+            failureKind: .actionFailed,
+            message: message,
+            traceEvidence: traceEvidence,
+            expectation: ExpectationResult.Unmet(
+                predicate: step.predicateExpression,
+                actual: message
+            )
+        )
+    }
+
+    private func changeProjection(
+        for step: ResolvedWaitRuntimeInput,
+        changeBaseline: PredicateChangeBaselineSource,
+        start: RuntimeElapsed.Instant,
+        replayedEvidence: LifecycleEvidence?
+    ) -> ExecutionProjection<HeistWaitResult, LifecycleEvidence> {
+        ExecutionProjection(
+            target: step.predicate.waitTarget,
+            continuesAfterInitialMiss: true,
+            initialEvidence: replayedEvidence ?? LifecycleEvidence(
+                predicate: step.predicateExpression,
+                target: step.predicate.waitTarget
+            ),
+            evaluate: { observation, isInitialVisible, evidence in
+                let baselineSeed: PredicateObservationBaselineSeed
+                if evidence.stream.observationBaseline != nil {
+                    baselineSeed = .preserve
+                } else {
+                    baselineSeed = switch changeBaseline {
+                    case .supplied(let supplied):
+                        supplied.map(PredicateObservationBaselineSeed.supplied) ?? .preserve
+                    case .establishFromFirstObservation:
+                        isInitialVisible ? .preserve : .currentObservation
+                    }
+                }
+                let reduced = self.reduceObservation(
+                    observation,
+                    predicate: step.predicate,
+                    predicateExpression: step.predicateExpression,
+                    baselineSeed: baselineSeed,
+                    stream: evidence.stream
+                )
+                let recorded = evidence.recording(reduced)
+                return PredicateWaitEvaluation(
+                    evidence: recorded,
+                    matched: recorded.evaluation.met
+                )
+            },
+            result: { outcome, _, evidence in
+                self.waitResult(
+                    for: step,
+                    trace: evidence.lastTrace,
+                    observationSummary: evidence.lastObservationSummary,
+                    expectation: evidence.evaluation,
+                    start: start,
+                    success: outcome == .matched,
+                    baseline: evidence.changeBaseline,
+                    window: evidence.observationWindow,
+                    observedSequence: evidence.observedSequence,
+                    timeoutMismatchBreadcrumb: outcome == .timedOut
+                        ? evidence.timeoutMismatchBreadcrumb
+                        : nil
+                )
+            }
         )
     }
 
@@ -233,6 +311,7 @@ where Evidence: Sendable & Equatable {
             let stream = wait.vault.semanticObservationStream
             var cursor = stream.latestCommittedObservationCursor(scope: .visible)
             while true {
+                wait.observeScheduledEffect(.observationWait)
                 switch await stream.waitForObservation(
                     after: cursor,
                     scope: .visible,
@@ -316,6 +395,7 @@ where Evidence: Sendable & Equatable {
             ) else {
                 return PredicateWaitDiscoveryResult(evaluation: evaluation, event: nil)
             }
+            wait.observeScheduledEffect(.discovery)
             var lastEvaluatedSequence: SettledObservationSequence?
             let event: SettledObservationEvent?
             if let waitTarget = projection.target,
@@ -408,41 +488,6 @@ where Evidence: Sendable & Equatable {
         )
     }
 
-    internal func resetAnnouncementWaitCursorForHeist(
-        to cursor: AccessibilityNotificationCursor
-    ) {
-        heistAnnouncementCursor = cursor
-    }
-
-    internal func announcementCursor(
-        _ strategy: AnnouncementWaitCursorStrategy
-    ) -> AccessibilityNotificationCursor {
-        switch strategy {
-        case .futureOnly:
-            vault.accessibilityNotifications.cursor()
-        case .heistScoped:
-            heistAnnouncementCursor
-        }
-    }
-
-    internal func waitForAnnouncement(
-        _ cursor: AccessibilityNotificationCursor,
-        _ predicate: ResolvedAnnouncementPredicate,
-        _ timeout: Double
-    ) async -> CapturedAnnouncement? {
-        let announcement = await vault.accessibilityNotifications.waitForAnnouncement(
-            after: cursor,
-            matching: predicate,
-            timeout: timeout
-        )
-        if let announcement {
-            heistAnnouncementCursor = AccessibilityNotificationCursor(
-                sequence: max(heistAnnouncementCursor.sequence, announcement.sequence)
-            )
-        }
-        return announcement
-    }
-
     internal func latestCommittedEvent() -> SettledObservationEvent? { vault.semanticObservationStream.latestCommittedEvent }
 
     internal func latestSettleFailure() -> String? {
@@ -469,6 +514,7 @@ where Evidence: Sendable & Equatable {
             before: deadline,
             at: RuntimeElapsed.now
         ) else { return nil }
+        observeScheduledEffect(.settlement)
         return await vault.semanticObservationStream.admittedVisibleObservation(
             timeout: min(
                 Double(SettleSession.defaultTimeoutMs) / 1_000,
@@ -524,8 +570,8 @@ where Evidence: Sendable & Equatable {
 
 }
 
-private extension ResolvedAccessibilityPredicate {
-    var waitTarget: ResolvedAccessibilityTarget? {
+extension ResolvedAccessibilityPredicate {
+    internal var waitTarget: ResolvedAccessibilityTarget? {
         switch core {
         case .presence(let presence):
             return presence.target

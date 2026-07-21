@@ -77,18 +77,32 @@ extension TheBrainsScrollTests {
             object: object,
             scrollView: scrollView
         )
-        let originalMoveViewport = brains.navigation.elementInflation.exploration.moveViewport
-        brains.navigation.elementInflation.exploration.moveViewport = { intent in
+        let inflation = brains.navigation.elementInflation
+        let originalMoveViewport = inflation.exploration.moveViewport
+        let originalGeometryEnvironment = inflation.geometryEnvironment
+        var now = RuntimeElapsed.now
+        inflation.geometryEnvironment = .init(
+            now: { now },
+            awaitFrame: { now = now.advanced(by: .milliseconds(10)) }
+        )
+        inflation.exploration.moveViewport = { _ in
             object.accessibilityFrame = placedFrame
             object.accessibilityActivationPoint = placedActivationPoint
             self.visibleObservationSource.observation = placedScreen
-            return await originalMoveViewport(intent)
+            let event = self.brains.vault.semanticObservationStream
+                .commitDiscoveryObservationAfterViewportMovementForTesting(placedScreen)
+            return Navigation.ViewportTransition(
+                outcome: .moved,
+                previousVisibleIds: [targetId],
+                event: event
+            )
         }
         defer {
-            brains.navigation.elementInflation.exploration.moveViewport = originalMoveViewport
+            inflation.exploration.moveViewport = originalMoveViewport
+            inflation.geometryEnvironment = originalGeometryEnvironment
         }
 
-        let result = await brains.navigation.elementInflation.inflate(
+        let result = await inflation.inflate(
             for: try resolvedTarget(AccessibilityTarget.label("Placed Target").and(.traits([.button]))),
             method: .activate
         )

@@ -4,9 +4,31 @@ import Foundation
 import ThePlans
 import TheScore
 
+internal struct ActionExpectationContext: Sendable, Equatable {
+    internal let preActionCapture: SettledCapture
+    internal let throughObservationCursor: ObservationCursor
+    internal let announcementCursor: AccessibilityNotificationCursor
+
+    internal func bounded(through cursor: ObservationCursor) -> ActionExpectationContext {
+        precondition(
+            cursor.scope == preActionCapture.cursor.scope,
+            "action expectation observation bound must keep its baseline scope"
+        )
+        precondition(
+            cursor.sequence >= preActionCapture.cursor.sequence,
+            "action expectation observation bound cannot precede its baseline"
+        )
+        return ActionExpectationContext(
+            preActionCapture: preActionCapture,
+            throughObservationCursor: cursor,
+            announcementCursor: announcementCursor
+        )
+    }
+}
+
 internal struct RuntimeActionExecution: Sendable, Equatable {
     internal let result: ActionResult
-    internal let expectationBaseline: SettledCapture?
+    internal let actionExpectationContext: ActionExpectationContext?
 }
 
 struct ActionTiming {
@@ -67,46 +89,48 @@ struct ActionTiming {
 
 extension TheBrains {
     func executeRuntimeAction(_ command: ResolvedHeistActionCommand) async -> ActionResult {
-        await executeRuntimeActionWithBaseline(command).result
+        await executeRuntimeActionForHeist(command, expectationContextScope: nil).result
     }
 
-    func executeRuntimeActionWithBaseline(
+    func executeRuntimeActionForHeist(
         _ command: ResolvedHeistActionCommand,
-        expectationBaselineScope: SemanticObservationScope? = nil
+        expectationContextScope: SemanticObservationScope?
     ) async -> RuntimeActionExecution {
-        let expectationBaseline = await interactionCoordinator.settledCapture(
-            scope: expectationBaselineScope
-        )
-
         clearRotorCursorBeforeNonRotorAction(command)
-        let result: ActionResult
+        let execution: RuntimeActionExecution
         switch command {
         case .activate(let target):
-            result = await performInteraction(payload: .activate) { timing in
+            execution = await performInteraction(payload: .activate, expectationContextScope: expectationContextScope) { timing in
                 await self.actions.executeActivate(target, timing: &timing)
             }
         case .increment(let target):
-            result = await performInteraction(payload: .increment) { timing in
+            execution = await performInteraction(payload: .increment, expectationContextScope: expectationContextScope) { timing in
                 await self.actions.executeIncrement(target, timing: &timing)
             }
         case .decrement(let target):
-            result = await performInteraction(payload: .decrement) { timing in
+            execution = await performInteraction(payload: .decrement, expectationContextScope: expectationContextScope) { timing in
                 await self.actions.executeDecrement(target, timing: &timing)
             }
         case .customAction(let name, let target):
-            result = await performInteraction(payload: .customAction) { timing in
+            execution = await performInteraction(
+                payload: .customAction,
+                expectationContextScope: expectationContextScope
+            ) { timing in
                 await self.actions.executeCustomAction(name: name, target: target, timing: &timing)
             }
         case .dismiss:
-            result = await performInteraction(payload: .dismiss) { _ in
+            execution = await performInteraction(payload: .dismiss, expectationContextScope: expectationContextScope) { _ in
                 await self.actions.executeDismiss()
             }
         case .magicTap:
-            result = await performInteraction(payload: .magicTap) { _ in
+            execution = await performInteraction(payload: .magicTap, expectationContextScope: expectationContextScope) { _ in
                 await self.actions.executeMagicTap()
             }
         case .rotor(let selection, let target, let direction):
-            result = await performInteraction(payload: .rotor(nil)) { timing in
+            execution = await performInteraction(
+                payload: .rotor(nil),
+                expectationContextScope: expectationContextScope
+            ) { timing in
                 await self.actions.executeRotor(
                     selection: selection,
                     target: target,
@@ -115,53 +139,59 @@ extension TheBrains {
                 )
             }
         case .editAction(let target):
-            result = await performInteraction(payload: .editAction) { _ in
+            execution = await performInteraction(payload: .editAction, expectationContextScope: expectationContextScope) { _ in
                 await self.actions.executeEditAction(target)
             }
         case .setPasteboard(let target):
-            result = await performInteraction(payload: .setPasteboard(nil)) { _ in
+            execution = await performInteraction(
+                payload: .setPasteboard(nil),
+                expectationContextScope: expectationContextScope
+            ) { _ in
                 await self.actions.executeSetPasteboard(target)
             }
         case .takeScreenshot:
-            result = await executeTakeScreenshot()
+            execution = await executeTakeScreenshot(
+                capturesExpectationContext: expectationContextScope != nil
+            )
         case .dismissKeyboard:
-            result = await performInteraction(payload: .dismissKeyboard) { _ in
+            execution = await performInteraction(payload: .dismissKeyboard, expectationContextScope: expectationContextScope) { _ in
                 await self.actions.executeResignFirstResponder()
             }
         case .oneFingerTap(let target):
-            result = await performInteraction(payload: .oneFingerTap) { _ in
+            execution = await performInteraction(payload: .oneFingerTap, expectationContextScope: expectationContextScope) { _ in
                 await self.actions.executeTap(target)
             }
         case .longPress(let target):
-            result = await performInteraction(payload: .longPress) { _ in
+            execution = await performInteraction(payload: .longPress, expectationContextScope: expectationContextScope) { _ in
                 await self.actions.executeLongPress(target)
             }
         case .swipe(let target):
-            result = await performInteraction(payload: .swipe) { _ in
+            execution = await performInteraction(payload: .swipe, expectationContextScope: expectationContextScope) { _ in
                 await self.actions.executeSwipe(target)
             }
         case .drag(let target):
-            result = await performInteraction(payload: .drag) { _ in
+            execution = await performInteraction(payload: .drag, expectationContextScope: expectationContextScope) { _ in
                 await self.actions.executeDrag(target)
             }
         case .typeText(let payload):
-            result = await executeTypeText(payload)
+            execution = await executeTypeText(payload, expectationContextScope: expectationContextScope)
         case .scroll(let target):
-            result = await executeViewportScroll(target)
+            execution = await executeViewportScroll(target, expectationContextScope: expectationContextScope)
         case .scrollToVisible(let target):
-            result = await executeViewportScrollToVisible(target)
+            execution = await executeViewportScrollToVisible(target, expectationContextScope: expectationContextScope)
         case .scrollToEdge(let target):
-            result = await executeViewportScrollToEdge(target)
+            execution = await executeViewportScrollToEdge(target, expectationContextScope: expectationContextScope)
         }
-        return RuntimeActionExecution(
-            result: result,
-            expectationBaseline: expectationBaseline
-        )
+        return execution
     }
 
-    private func executeTypeText(_ payload: ResolvedTypeTextTarget) async -> ActionResult {
+    private func executeTypeText(
+        _ payload: ResolvedTypeTextTarget,
+        expectationContextScope: SemanticObservationScope?
+    ) async -> RuntimeActionExecution {
         await performInteraction(
             payload: .typeText(nil),
+            expectationContextScope: expectationContextScope,
             afterStateValue: { context in
                 context.resolvedElementId.flatMap {
                     self.actions.typeTextPayload(resolvedElementId: $0, in: context.committedBaseline)
@@ -173,28 +203,40 @@ extension TheBrains {
         )
     }
 
-    private func executeViewportScroll(_ target: ResolvedScrollTarget) async -> ActionResult {
+    private func executeViewportScroll(
+        _ target: ResolvedScrollTarget,
+        expectationContextScope: SemanticObservationScope?
+    ) async -> RuntimeActionExecution {
         await performInteraction(
             payload: .scroll,
-            postActionCommitScope: .discovery
+            postActionCommitScope: .discovery,
+            expectationContextScope: expectationContextScope
         ) { _ in
             await self.navigation.executeScroll(target)
         }
     }
 
-    private func executeViewportScrollToVisible(_ target: ResolvedAccessibilityTarget) async -> ActionResult {
+    private func executeViewportScrollToVisible(
+        _ target: ResolvedAccessibilityTarget,
+        expectationContextScope: SemanticObservationScope?
+    ) async -> RuntimeActionExecution {
         await performInteraction(
             payload: .scrollToVisible,
-            postActionCommitScope: .discovery
+            postActionCommitScope: .discovery,
+            expectationContextScope: expectationContextScope
         ) { _ in
             await self.navigation.executeScrollToVisible(target: target)
         }
     }
 
-    private func executeViewportScrollToEdge(_ target: ResolvedScrollToEdgeTarget) async -> ActionResult {
+    private func executeViewportScrollToEdge(
+        _ target: ResolvedScrollToEdgeTarget,
+        expectationContextScope: SemanticObservationScope?
+    ) async -> RuntimeActionExecution {
         await performInteraction(
             payload: .scrollToEdge,
-            postActionCommitScope: .discovery
+            postActionCommitScope: .discovery,
+            expectationContextScope: expectationContextScope
         ) { _ in
             await self.navigation.executeScrollToEdge(target)
         }
@@ -227,36 +269,80 @@ extension TheBrains {
         payload: ActionResult.Payload,
         beforeStateScope: SemanticObservationScope = .visible,
         postActionCommitScope: SemanticObservationScope = .visible,
+        expectationContextScope: SemanticObservationScope?,
         afterStateValue: ((ActionPayloadEvidence) -> String?)? = nil,
         interaction: (inout ActionTiming) async -> TheSafecracker.ActionDispatchResult
-    ) async -> ActionResult {
+    ) async -> RuntimeActionExecution {
         guard semanticObservationIsActive else {
-            return runtimeInactiveResult(payload: payload)
+            return RuntimeActionExecution(
+                result: runtimeInactiveResult(payload: payload),
+                actionExpectationContext: nil
+            )
         }
 
         var timing = ActionTiming()
         let beforeStart = RuntimeElapsed.now
         guard let before = await interactionCoordinator.admittedBaseline(scope: beforeStateScope) else {
-            return treeUnavailableResult(payload: payload)
+            return RuntimeActionExecution(
+                result: treeUnavailableResult(payload: payload),
+                actionExpectationContext: nil
+            )
         }
         timing.record(.beforeObservation, since: beforeStart)
         let notificationWindow = vault.accessibilityNotifications.beginActionWindow()
         defer { notificationWindow.cancel() }
 
+        let actionExpectationContext = expectationContextScope.map {
+            self.actionExpectationContext(
+                from: before,
+                scope: $0,
+                announcementCursor: notificationWindow.cursor
+            )
+        }
+
         let demand = vault.semanticObservationStream.beginActiveObservationDemand()
         defer { demand.cancel() }
 
         let interactionStart = RuntimeElapsed.now
-        let result = await interaction(&timing)
+        let dispatchResult = await interaction(&timing)
         timing.record(.interaction, since: interactionStart)
 
-        return await interactionCoordinator.settleAfterAction(
-            dispatchResult: result,
+        let actionResult = await interactionCoordinator.settleAfterAction(
+            dispatchResult: dispatchResult,
             timing: timing,
             afterStateValue: afterStateValue,
             before: before,
             postActionCommitScope: postActionCommitScope,
             notificationWindow: notificationWindow
+        )
+        let completedExpectationContext = actionExpectationContext.map { context in
+            let cursor = vault.semanticObservationStream.latestCommittedObservationCursor(
+                scope: context.preActionCapture.cursor.scope
+            ) ?? context.preActionCapture.cursor
+            return context.bounded(through: cursor)
+        }
+        return RuntimeActionExecution(
+            result: actionResult,
+            actionExpectationContext: dispatchResult.success ? completedExpectationContext : nil
+        )
+    }
+
+    private func actionExpectationContext(
+        from baseline: ActionEvidenceProjector.Baseline,
+        scope: SemanticObservationScope,
+        announcementCursor: AccessibilityNotificationCursor
+    ) -> ActionExpectationContext {
+        guard let settledObservationSequence = baseline.settledObservationSequence,
+              let settledCapture = vault.semanticObservationStream.settledCapture(
+                scope: scope,
+                at: settledObservationSequence
+              ) else {
+            preconditionFailure("admitted action baseline must retain its settled capture")
+        }
+        return ActionExpectationContext(
+            preActionCapture: settledCapture,
+            throughObservationCursor: settledCapture.cursor,
+            announcementCursor: announcementCursor
         )
     }
 

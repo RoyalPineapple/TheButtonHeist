@@ -89,4 +89,22 @@ public struct HeistPlanRun: Codable, Sendable, Equatable {
         self.plan = plan
         self.argument = argument
     }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case plan
+        case argument
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist plan run")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        plan = try container.decode(HeistPlan.self, forKey: .plan)
+        argument = try container.decode(HeistArgument.self, forKey: .argument)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(plan, forKey: .plan)
+        try container.encode(argument, forKey: .argument)
+    }
 }

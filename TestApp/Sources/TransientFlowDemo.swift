@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Multi-step transition flow used to verify auto-settle and transient
 /// capture end-to-end:
@@ -30,6 +31,8 @@ struct TransientFlowDemo: View {
     @State private var phase: Phase = .idle
     @State private var lastOutcome: String = "No flow run yet"
     @State private var pendingTask: Task<Void, Never>?
+    @State private var toastTask: Task<Void, Never>?
+    @State private var showsSavedToast = false
 
     var body: some View {
         VStack(spacing: 24) {
@@ -51,6 +54,10 @@ struct TransientFlowDemo: View {
             .padding()
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
 
+            if showsSavedToast {
+                savedToast
+            }
+
             Spacer()
         }
         .padding()
@@ -58,6 +65,8 @@ struct TransientFlowDemo: View {
         .onDisappear {
             pendingTask?.cancel()
             pendingTask = nil
+            toastTask?.cancel()
+            toastTask = nil
         }
     }
 
@@ -124,12 +133,35 @@ struct TransientFlowDemo: View {
         }
     }
 
+    private var savedToast: some View {
+        Button {
+            toastTask?.cancel()
+            showsSavedToast = false
+        } label: {
+            HStack(spacing: 12) {
+                Text("Ticket saved.")
+                Text("Dismiss")
+            }
+        }
+        .buttonStyle(.plain)
+        .padding()
+        .background(Color(uiColor: .secondarySystemBackground), in: Capsule())
+    }
+
     // MARK: - Flow
 
     /// Run loading → success → confirmation → auto-dismiss with
     /// approximately the timing of a real network-backed payment flow.
     private func runFlow() {
         pendingTask?.cancel()
+        toastTask?.cancel()
+        showsSavedToast = true
+        UIAccessibility.post(notification: .announcement, argument: "Ticket saved.")
+        toastTask = Task {
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled else { return }
+            showsSavedToast = false
+        }
         pendingTask = Task {
             do {
                 phase = .loading
