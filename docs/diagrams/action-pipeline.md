@@ -26,9 +26,23 @@ sequenceDiagram
 
     Brains->>Inflation: inflate AccessibilityTarget
     Inflation->>Vault: resolve against current InterfaceTree
-    Vault-->>Inflation: pinned InterfaceTree.Element after any container scope
-    Note over Inflation,Vault: reveal and geometry refresh retain the same HeistId
-    Inflation-->>Brains: live target for pinned identity
+    Vault-->>Inflation: selected InterfaceTree.Element after any container scope
+    alt live handoff stays in the current capture
+        Inflation->>Vault: join selected element's current HeistId to live evidence
+        Vault-->>Inflation: current LiveActionTarget
+    else reveal or refresh crosses a capture boundary
+        Inflation->>Vault: admit ordinal-free semantic target for selected element
+        Vault-->>Inflation: AdmittedSemanticTarget or typed admission failure
+        loop after every committed capture
+            Inflation->>Vault: resolve admitted target in committed InterfaceTree
+            alt exactly one semantic match
+                Vault-->>Inflation: matching element's current HeistId and live reference
+            else missing or ambiguous
+                Vault-->>Inflation: terminal target-resolution failure
+            end
+        end
+    end
+    Inflation-->>Brains: current LiveActionTarget or safe failure
 
     Brains->>Safecracker: dispatch resolved action
     Safecracker-->>Brains: ActionDispatchResult
@@ -57,8 +71,11 @@ Notes:
 - `AccessibilityTarget` is the only target currency. Element, container, and
   descendant-scoped targets resolve through the same current tree used by
   waits, expectations, and `get_interface` selection.
-- Semantic resolution pins one committed `HeistId`. Reveal, refresh, geometry
-  stabilization, and dispatch cannot switch to another semantic match.
+- When inflation crosses a capture boundary, it first admits the selected
+  target without its terminal ordinal as `AdmittedSemanticTarget`. Every later
+  committed capture re-resolves that identity; only the unique match's current
+  `HeistId` may join to live UIKit evidence for geometry and dispatch. Missing
+  or ambiguous resolution is terminal, with no stale-id or sibling fallback.
 - `ActionDispatchResult` is the sole pre-observation dispatch result.
   `ActionEvidenceProjector` adds settlement and trace evidence directly to that
   outcome to produce `ActionResult`.

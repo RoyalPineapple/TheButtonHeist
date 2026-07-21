@@ -18,27 +18,30 @@ flowchart TD
     WITHIN --> MATCH
 
     MATCH -- "0 matches" --> NOTFOUND[".notFound(TargetNotFoundFacts)<br/>reason .noMatches<br/>+ interface elements in scope as suggestions"]
-    MATCH -- "1 match, no ordinal" --> RESOLVED[".resolved(InterfaceTree.Element)<br/>pin exact HeistId"]
+    MATCH -- "1 match, no ordinal" --> RESOLVED[".resolved(InterfaceTree.Element)<br/>selected in this capture"]
     MATCH -- "2+ matches, no ordinal" --> AMBIG[".ambiguous(TargetAmbiguityFacts)<br/>first candidates listed —<br/>ordinal required to proceed"]
     MATCH -- "ordinal given, in range" --> RESOLVED
     MATCH -- "ordinal given, out of range" --> NOTFOUND2[".notFound<br/>reason .ordinalOutOfRange / .ordinalNegative"]
 
-    RESOLVED --> BUDGET["derive one deadline from<br/>scroll-membership ancestor count"]
-    BUDGET --> LIVE{"pinned HeistId live<br/>in latest capture?"}
-    LIVE -- "yes" --> REFRESH["refresh exact HeistId"]
-    LIVE -- "off-viewport,<br/>has scrollMembership" --> GRAPH["walk semantic ancestor graph<br/>outermost-first"]
-    GRAPH --> ALIAS{"each path has exact current<br/>live alias / direct containment?"}
-    ALIAS -- "yes" --> REVEAL["reveal ancestor, then target"]
-    ALIAS -- "no" --> SCAN["bounded exploration scan<br/>for the same HeistId"]
-    SCAN --> REFRESH
-    REVEAL --> REFRESH
-    REFRESH --> EXACT{"committed tree and live capture<br/>still contain pinned HeistId?"}
-    EXACT -- "yes" --> STABLE["stabilize frame + activationPoint<br/>under the same deadline"]
-    EXACT -- "no, time remains" --> WAIT["await next clean settled<br/>visible observation"]
-    WAIT --> REFRESH
-    STABLE -- "stable and onscreen" --> ACT["LiveActionTarget<br/>for pinned HeistId"]
-    STABLE -- "deadline / offscreen" --> MISS["failure with diagnostics"]
-    WAIT -- "deadline reached" --> MISS
+    RESOLVED --> BOUNDARY{"will inflation cross<br/>a capture boundary?"}
+    BOUNDARY -- "no" --> CURRENT["join selected element's current HeistId<br/>to current live UIKit evidence"]
+    BOUNDARY -- "yes" --> ADMIT["remove terminal ordinal and resolve<br/>against the complete committed tree"]
+    ADMIT -- "unique match is selected element" --> IDENTITY["AdmittedSemanticTarget<br/>ordinal-free target + semantic scroll path"]
+    ADMIT -- "missing, ambiguous,<br/>or different element" --> MISS["inflation failure with diagnostics<br/>no live handoff"]
+
+    IDENTITY --> BUDGET["derive one deadline from<br/>scroll-membership ancestor count"]
+    BUDGET --> GRAPH["walk semantic ancestor graph<br/>outermost-first"]
+    GRAPH --> REVEAL["reveal next ancestor or target<br/>through viewport transition"]
+    REVEAL --> COMMIT["settle and commit<br/>the resulting capture"]
+    COMMIT --> RERESOLVE{"resolve admitted semantic target<br/>in this committed InterfaceTree"}
+    RERESOLVE -- "one match" --> CURRENT["adopt this capture's current HeistId<br/>and live reference"]
+    RERESOLVE -- "missing or ambiguous" --> MISS
+    CURRENT --> MORE{"more viewport movement<br/>required?"}
+    MORE -- "yes" --> REVEAL
+    MORE -- "no" --> STABLE["stabilize frame + activationPoint<br/>under the same deadline"]
+    STABLE -- "fresh committed capture" --> RERESOLVE
+    STABLE -- "stable and onscreen" --> ACT["LiveActionTarget<br/>for current-capture HeistId"]
+    STABLE -- "deadline / offscreen" --> MISS
 ```
 
 Notes:
@@ -47,7 +50,20 @@ Notes:
 - Container-only targets are valid for predicates and subtree queries. Element-
   only actions reject a resolved container with a typed target-kind error.
 - Matching is **exact or miss**: string checks are case-insensitive with typography folding (smart quotes, dashes, ellipsis fold to ASCII), traits compare as sets. On a miss the resolver returns structured facts — the interface elements in scope — through the diagnostic path; substring matching is not part of resolution.
-- The first successful semantic resolution pins one `HeistId`. Every reveal, refresh, geometry sample, multi-stage action handoff, and final dispatch must retain that id; the original selector is not rerun to choose a replacement.
+- A capture-local action can join the selected element's current `HeistId`
+  directly to live UIKit evidence. Before any cross-capture reveal, inflation
+  admits an `AdmittedSemanticTarget` only when the selected target without its
+  terminal ordinal uniquely resolves to that same element in the complete
+  committed interface.
+- `AdmittedSemanticTarget` is the sole identity retained across committed
+  captures. After every viewport transition or other fresh committed capture,
+  inflation re-resolves it and adopts only the matching element's current
+  `HeistId` and live reference for geometry and dispatch. Missing or ambiguous
+  resolution fails; a stale id or newly visible sibling cannot take over.
 - The handoff budget is graph-derived: `max(2, unique scroll-membership ancestors + 1)` one-second ticks. Nested reveal follows that graph outermost-first, proves each semantic path against current live containment, and shares the same deadline with geometry stabilization.
-- A missing direct reveal path may trigger bounded exploration for the same pinned `HeistId`. A known target that later gains scroll membership earns at most one direct reveal attempt; content absent from settled semantic truth cannot be revealed.
-- The ordinal is a disambiguator over a semantic base selector, never a selector by itself.
+- A known semantic target that later gains scroll membership earns at most one
+  direct reveal attempt. Content absent from settled semantic truth cannot be
+  revealed, and exploration never scans for an old `HeistId` as identity.
+- The ordinal is a capture-local disambiguator over a semantic base selector,
+  never durable identity. A target that becomes unique only through its terminal
+  ordinal cannot be admitted across a capture boundary.

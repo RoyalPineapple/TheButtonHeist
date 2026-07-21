@@ -183,9 +183,17 @@ flowchart TD
     Start["PredicateWait.Execution<br/>one direct wait pipeline"] --> Visible["bounded visible check"]
     Visible -->|matched| Match["return matched"]
     Visible -->|unmatched| Route{"one eligible, already-resolvable<br/>terminal element target?"}
-    Route -->|yes| Reveal["inflate exact HeistId<br/>reveal + retain .current"]
+    Route -->|yes| Admit{"ordinal-free semantic target<br/>uniquely selects chosen element?"}
+    Admit -->|yes| Reveal["reveal semantic target<br/>retain .current"]
+    Admit -->|no: ordinal-dependent,<br/>missing, or ambiguous| TargetFailure["target-resolution failure<br/>no stale-id fallback"]
+    Reveal --> RevealCommit["settle and commit<br/>each viewport capture"]
+    RevealCommit --> ResolveCurrent{"re-resolve semantic target<br/>in committed InterfaceTree"}
+    ResolveCurrent -->|one match| CurrentHandoff["adopt this capture's HeistId<br/>for live handoff"]
+    ResolveCurrent -->|missing or ambiguous| TargetFailure
+    CurrentHandoff -->|more movement| Reveal
+    CurrentHandoff -->|positioned| Prepare
     Route -->|appearance, unresolved,<br/>container, or multiple targets| Discovery["canonical directional discovery<br/>restore .origin"]
-    Reveal --> Prepare["standalone temporal: establish baseline once<br/>action expectation: preserve supplied baseline"]
+    Prepare["standalone temporal: establish baseline once<br/>action expectation: preserve supplied baseline"]
     Discovery --> Prepare
     ActionBaseline["supplied pre-action SettledCapture"] -.-> Prepare
     Prepare --> Evaluate["evaluate current tree or accumulated<br/>baseline-through-current window"]
@@ -215,6 +223,11 @@ reserves the longest observed duration so terminal verification starts before
 that deadline. Terminal work receives no fresh 250 ms budget and no discovery
 continues after the operation deadline. Every stage returns immediately when
 the predicate is fulfilled, and no compatibility wait orchestration exists.
+An eligible exact-target reveal admits semantic identity before its first
+capture boundary, re-resolves that identity after every reveal commit, and uses
+only the resulting capture's current `HeistId` for live handoff. A missing or
+ambiguous match ends that inflation attempt safely instead of retaining an old
+id or substituting a sibling.
 `PredicateWait.Execution` directly coordinates the visible, reveal/discovery,
 retained-log waiter, and terminal verification stages.
 `PredicateObservationStreamState` only reduces one settled observation against
