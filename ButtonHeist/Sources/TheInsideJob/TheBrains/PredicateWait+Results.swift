@@ -155,7 +155,7 @@ extension PredicateWait {
         baseline: SettledCapture? = nil,
         window: ObservationWindow? = nil,
         observedSequence: SettledObservationSequence? = nil,
-        historicalWaitDiagnostics: HistoricalWaitDiagnostics.Evidence? = nil
+        timeoutMismatchBreadcrumb: String? = nil
     ) -> HeistWaitResult {
         let elapsed = Self.elapsedSeconds(since: start)
         let presenceMessage = success || observationSummary == nil
@@ -182,7 +182,7 @@ extension PredicateWait {
             presenceTimeoutMessage: presenceMessage,
             settledDiagnostics: settledDiagnostics,
             observedSequence: observedSequence,
-            historicalWaitDiagnostics: historicalWaitDiagnostics
+            timeoutMismatchBreadcrumb: timeoutMismatchBreadcrumb
         )
     }
 
@@ -203,7 +203,7 @@ extension PredicateWait {
         presenceTimeoutMessage: String? = nil,
         settledDiagnostics: SettledWaitDiagnostics? = nil,
         observedSequence: SettledObservationSequence? = nil,
-        historicalWaitDiagnostics: HistoricalWaitDiagnostics.Evidence? = nil
+        timeoutMismatchBreadcrumb: String? = nil
     ) -> HeistWaitResult {
         let message = success
             ? waitSuccessMessage(for: step.predicate, elapsed: elapsed)
@@ -216,7 +216,7 @@ extension PredicateWait {
                     presenceTimeoutMessage: presenceTimeoutMessage,
                     settledDiagnostics: settledDiagnostics
                 ),
-                historicalWaitDiagnostics?.timeoutMismatchBreadcrumb,
+                timeoutMismatchBreadcrumb,
             ].compactMap { $0 }.joined(separator: "; ")
         switch (success, expectation) {
         case (true, .met(let expectation)):

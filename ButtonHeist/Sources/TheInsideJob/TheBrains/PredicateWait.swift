@@ -213,8 +213,8 @@ where Evidence: Sendable & Equatable {
                     baseline: evidence.changeBaseline,
                     window: evidence.observationWindow,
                     observedSequence: evidence.observedSequence,
-                    historicalWaitDiagnostics: outcome == .timedOut
-                        ? evidence.historicalWaitDiagnostics
+                    timeoutMismatchBreadcrumb: outcome == .timedOut
+                        ? evidence.timeoutMismatchBreadcrumb
                         : nil
                 )
             }

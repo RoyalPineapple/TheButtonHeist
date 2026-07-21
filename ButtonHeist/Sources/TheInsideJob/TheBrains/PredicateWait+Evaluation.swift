@@ -34,7 +34,10 @@ extension PredicateWait {
                 actual: "no settled semantic observation available"
             )
             snapshot = nil
-            historicalDiagnostics = PredicateWaitHistoricalDiagnostics(target: target)
+            historicalDiagnostics = PredicateWaitHistoricalDiagnostics(
+                target: target,
+                predicate: predicate
+            )
         }
 
         private init(
@@ -73,8 +76,8 @@ extension PredicateWait {
             snapshot?.window
         }
 
-        internal var historicalWaitDiagnostics: HistoricalWaitDiagnostics.Evidence? {
-            historicalDiagnostics.evidence
+        internal var timeoutMismatchBreadcrumb: String? {
+            historicalDiagnostics.timeoutMismatchBreadcrumb
         }
 
         internal func recording(_ reduction: PredicateObservationStreamReduction) -> LifecycleEvidence {

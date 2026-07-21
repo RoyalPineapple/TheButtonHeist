@@ -265,11 +265,18 @@ package struct ElementDiagnosticSummary: Equatable, Sendable {
     private func renderPredicateMismatchCandidate(using profile: RenderProfile) -> String {
         var parts = [
             label.map { "label=\(profile.renderString($0))" },
+            identifier.map { "identifier=\(profile.renderString($0))" },
             value.map { "value=\(profile.renderString($0))" },
             hint.map { "hint=\(profile.renderString($0))" },
         ].compactMap { $0 }
         if !traits.isEmpty {
             parts.append("traits=\(profile.renderList(traits.map(\.rawValue)))")
+        }
+        if !actions.isEmpty {
+            parts.append("actions=\(profile.renderList(actions.map(\.description)))")
+        }
+        if !rotors.isEmpty {
+            parts.append("rotors=\(profile.renderList(rotors, itemStyle: .quoted))")
         }
         return parts.joined(separator: " ")
     }

@@ -111,6 +111,30 @@ extension TheBrainsPipelineTests {
         )
     }
 
+    func testTimeoutDiagnosticsIncludeIdentifierActionsAndRotors() async throws {
+        let candidate = AccessibilityElement.make(
+            identifier: "checkout_identifier",
+            customActions: [.init(name: "Archive")],
+            customRotors: [.init(name: "Errors")],
+            respondsToUserInteraction: false
+        )
+        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            .makeForTests([.init(candidate, heistId: HeistId(rawValue: "checkout"))])
+        )
+
+        let result = await brains.interactionCoordinator.waitForPredicate(
+            try resolvedWait(WaitStep(
+                predicate: .exists(.identifier("missing_identifier")),
+                timeout: .milliseconds(1)
+            ))
+        )
+        let message = try XCTUnwrap(result.outcome.actionResult.message)
+
+        XCTAssertTrue(message.contains(#"identifier="checkout_identifier""#), message)
+        XCTAssertTrue(message.contains("actions=[Archive]"), message)
+        XCTAssertTrue(message.contains(#"rotors=["Errors"]"#), message)
+    }
+
     func testAutomaticTimeoutDiagnosticsScheduleNoExtraWork() async throws {
         let withCandidate = try await automaticTimeoutRun(
             screen: makeScreen(elements: [("Ticket saved., Dismiss", .staticText, "toast")])
