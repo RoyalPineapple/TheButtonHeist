@@ -30,6 +30,9 @@ final class RunLoopIdleObserver {
             preconditionFailure("Main run-loop idle observer must be constructible")
         }
         phase = .observing(observer)
+        // A heist may still be settling while the loop is in a common mode
+        // such as event tracking. Restricting this observer to default mode
+        // would postpone that idle edge until the mode transition completes.
         CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
     }
 
