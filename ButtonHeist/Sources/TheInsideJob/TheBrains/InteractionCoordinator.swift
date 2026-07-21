@@ -118,6 +118,7 @@ final class InteractionCoordinator {
         baselineSequence: SettledObservationSequence? = nil,
         changeBaseline: PredicateChangeBaselineSource = .establishFromFirstObservation,
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
+        continuity: PredicateWaitContinuity = .notProvided,
         onReadyToPoll: PredicateWait.ReadyToPoll? = nil,
         startedAt: RuntimeElapsed.Instant? = nil
     ) async -> HeistWaitResult {
@@ -136,9 +137,20 @@ final class InteractionCoordinator {
             initialTrace: initialTrace,
             changeBaseline: baselineSource,
             announcementCursorStrategy: announcementCursorStrategy,
+            continuity: continuity,
             onReadyToPoll: onReadyToPoll,
             startedAt: startedAt
         )
+    }
+
+    internal var evidenceContinuityDiagnostics: EvidenceContinuityDiagnosticsSnapshot {
+        predicateWait.continuityDiagnostics.snapshot
+    }
+
+    internal func observePredicateWaitScheduledEffects(
+        _ observer: @escaping @MainActor (PredicateWait.ScheduledEffect) -> Void
+    ) {
+        predicateWait.observeScheduledEffect = observer
     }
 
     func waitForPredicateCases(

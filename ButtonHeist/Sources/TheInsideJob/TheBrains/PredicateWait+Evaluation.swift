@@ -21,8 +21,13 @@ extension PredicateWait {
         internal let stream: PredicateObservationStreamState
         private let initialExpectation: ExpectationResult
         private let snapshot: Snapshot?
+        private let continuitySnapshot: Snapshot?
+        internal let continuity: EvidenceContinuity.WaitEvidence?
 
-        internal init(predicate: AccessibilityPredicate) {
+        internal init(
+            predicate: AccessibilityPredicate,
+            continuity: EvidenceContinuity.WaitEvidence? = nil
+        ) {
             stream = PredicateObservationStreamState()
             initialExpectation = ExpectationResult(
                 met: false,
@@ -30,48 +35,120 @@ extension PredicateWait {
                 actual: "no settled semantic observation available"
             )
             snapshot = nil
+            continuitySnapshot = nil
+            self.continuity = continuity
         }
 
         private init(
             stream: PredicateObservationStreamState,
             initialExpectation: ExpectationResult,
-            snapshot: Snapshot
+            snapshot: Snapshot?,
+            continuitySnapshot: Snapshot?,
+            continuity: EvidenceContinuity.WaitEvidence?
         ) {
             self.stream = stream
             self.initialExpectation = initialExpectation
             self.snapshot = snapshot
+            self.continuitySnapshot = continuitySnapshot
+            self.continuity = continuity
         }
 
         internal var evaluation: ExpectationResult {
+            continuitySnapshot?.expectation ?? currentEvaluation
+        }
+
+        internal var currentEvaluation: ExpectationResult {
             snapshot?.expectation ?? initialExpectation
         }
 
         internal var lastTrace: AccessibilityTrace? {
-            snapshot?.observation.trace
+            (continuitySnapshot ?? snapshot)?.observation.trace
         }
 
         internal var lastObservationSummary: String? {
-            snapshot?.observation.summary
+            (continuitySnapshot ?? snapshot)?.observation.summary
         }
 
         internal var observedSequence: SettledObservationSequence? {
-            snapshot?.observation.sequence
+            (continuitySnapshot ?? snapshot)?.observation.sequence
         }
 
         internal var changeBaseline: SettledCapture? {
-            snapshot?.baseline
+            (continuitySnapshot ?? snapshot)?.baseline
         }
 
         internal var observationWindow: ObservationWindow? {
-            snapshot?.window
+            (continuitySnapshot ?? snapshot)?.window
+        }
+
+        internal var continuityIsApplied: Bool {
+            guard let continuity else { return false }
+            if case .applied = continuity.status { return true }
+            return false
         }
 
         internal func recording(_ reduction: PredicateObservationStreamReduction) -> LifecycleEvidence {
             LifecycleEvidence(
                 stream: reduction.state,
                 initialExpectation: initialExpectation,
-                snapshot: Snapshot(reduction.reduction)
+                snapshot: Snapshot(reduction.reduction),
+                continuitySnapshot: nil,
+                continuity: continuity
             )
+        }
+
+        internal func recordingCurrentContinuityMatch(
+            observedThrough: EvidenceContinuity.Position?
+        ) -> LifecycleEvidence {
+            LifecycleEvidence(
+                stream: stream,
+                initialExpectation: initialExpectation,
+                snapshot: snapshot,
+                continuitySnapshot: nil,
+                continuity: continuity?.recordingCurrentMatch(observedThrough: observedThrough)
+            )
+        }
+
+        internal func recording(
+            _ evaluation: PredicateContinuityChangeEvaluation,
+            fallbackReason: EvidenceContinuity.FallbackReason
+        ) -> LifecycleEvidence {
+            switch evaluation {
+            case .matched(let observation, let expectation, let window, let match, let observedThrough):
+                return LifecycleEvidence(
+                    stream: stream,
+                    initialExpectation: initialExpectation,
+                    snapshot: snapshot,
+                    continuitySnapshot: Snapshot(
+                        observation: observation,
+                        expectation: expectation,
+                        baseline: window.baseline,
+                        window: window
+                    ),
+                    continuity: continuity?.recordingApplied(
+                        observedThrough: observedThrough,
+                        match: match
+                    )
+                )
+            case .unmatched(let observedThrough):
+                return LifecycleEvidence(
+                    stream: stream,
+                    initialExpectation: initialExpectation,
+                    snapshot: snapshot,
+                    continuitySnapshot: nil,
+                    continuity: continuity?.recordingApplied(observedThrough: observedThrough)
+                )
+            case .fallback:
+                return LifecycleEvidence(
+                    stream: stream,
+                    initialExpectation: initialExpectation,
+                    snapshot: snapshot,
+                    continuitySnapshot: nil,
+                    continuity: EvidenceContinuity.WaitEvidence(
+                        status: .fallback(reason: fallbackReason)
+                    )
+                )
+            }
         }
     }
 
@@ -91,12 +168,64 @@ extension PredicateWait {
             baseline = reduction.changeBaseline
             window = reduction.observationWindow
         }
+
+        internal init(
+            observation: SettledObservationEvidence,
+            expectation: ExpectationResult,
+            baseline: SettledCapture,
+            window: ObservationWindow
+        ) {
+            self.observation = WaitObservation(
+                trace: window.trace,
+                summary: observation.summary,
+                sequence: window.current.cursor.sequence
+            )
+            self.expectation = expectation
+            self.baseline = baseline
+            self.window = window
+        }
     }
 
     internal struct WaitObservation: Sendable, Equatable {
         internal let trace: AccessibilityTrace?
         internal let summary: String
         internal let sequence: SettledObservationSequence
+    }
+}
+
+private extension EvidenceContinuity.WaitEvidence {
+    func recordingCurrentMatch(
+        observedThrough: EvidenceContinuity.Position?
+    ) -> EvidenceContinuity.WaitEvidence {
+        switch status {
+        case .applied:
+            return EvidenceContinuity.WaitEvidence(
+                status: status,
+                match: .current,
+                actionBoundary: actionBoundary,
+                observedThrough: observedThrough ?? self.observedThrough
+            )
+        case .fallback, .ineligible, .notProvided:
+            return EvidenceContinuity.WaitEvidence(status: status, match: .current)
+        }
+    }
+
+    func recordingApplied(
+        observedThrough: EvidenceContinuity.Position,
+        match: EvidenceContinuity.MatchSource? = nil
+    ) -> EvidenceContinuity.WaitEvidence {
+        precondition(continuityStatusIsApplied)
+        return EvidenceContinuity.WaitEvidence(
+            status: status,
+            match: match,
+            actionBoundary: actionBoundary,
+            observedThrough: observedThrough
+        )
+    }
+
+    private var continuityStatusIsApplied: Bool {
+        if case .applied = status { return true }
+        return false
     }
 }
 

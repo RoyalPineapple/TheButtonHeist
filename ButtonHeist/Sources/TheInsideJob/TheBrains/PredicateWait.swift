@@ -34,6 +34,12 @@ where Evidence: Sendable & Equatable {
         case skip
     }
 
+    internal enum ScheduledEffect: Sendable, Equatable {
+        case discovery
+        case observationWait
+        case settlement
+    }
+
     internal struct ExecutionProjection<Result, Evidence>
     where Evidence: Sendable & Equatable {
         let target: ResolvedAccessibilityTarget?
@@ -51,9 +57,11 @@ where Evidence: Sendable & Equatable {
         ) -> Result
     }
 
-    private let vault: TheVault
+    internal let vault: TheVault
     private let navigation: Navigation
-    private let actionEvidenceProjector: ActionEvidenceProjector
+    internal let actionEvidenceProjector: ActionEvidenceProjector
+    internal var continuityDiagnostics = EvidenceContinuityDiagnostics()
+    internal var observeScheduledEffect: @MainActor (ScheduledEffect) -> Void = { _ in }
     private var heistAnnouncementCursor: AccessibilityNotificationCursor = .origin
 
     internal init(
@@ -71,26 +79,36 @@ where Evidence: Sendable & Equatable {
         initialTrace: AccessibilityTrace? = nil,
         changeBaseline: PredicateChangeBaselineSource = .establishFromFirstObservation,
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
+        continuity: PredicateWaitContinuity = .notProvided,
         onReadyToPoll: ReadyToPoll? = nil,
         startedAt: RuntimeElapsed.Instant? = nil
     ) async -> HeistWaitResult {
         let start = startedAt ?? RuntimeElapsed.now
+        let effectiveContinuity = continuity.excludingExplicitBaseline(changeBaseline)
         if case .announcement(let announcement) = step.predicate.core {
-            return await waitForAnnouncementPredicate(
+            let result = await waitForAnnouncementPredicate(
                 announcement,
                 step: step,
                 initialTrace: initialTrace,
                 start: start,
                 timeout: step.timeout,
-                cursorStrategy: announcementCursorStrategy
+                cursorStrategy: announcementCursorStrategy,
+                continuity: effectiveContinuity
             )
+            recordContinuityOutcome(
+                effectiveContinuity,
+                status: result.continuity?.status
+                    ?? effectiveContinuity.initialEvidence(for: .announcement)?.status,
+                predicate: step.predicate
+            )
+            return result
         }
 
         if let traceEvaluation = initialTraceChangeEvaluation(
             for: step,
             initialTrace: initialTrace
         ), traceEvaluation.met {
-            return waitResult(
+            let result = waitResult(
                 for: step,
                 trace: initialTrace,
                 observationSummary: nil,
@@ -98,55 +116,117 @@ where Evidence: Sendable & Equatable {
                 start: start,
                 success: true
             )
+            recordContinuityOutcome(
+                effectiveContinuity,
+                status: effectiveContinuity.initialEvidence(for: .settledObservation)?.status,
+                predicate: step.predicate
+            )
+            return result
         }
 
+        let waitStartCursor = vault.semanticObservationStream.latestCommittedObservationCursor(
+            scope: .visible
+        )
         return await execute(
             start: start,
             timeout: step.timeout.seconds,
-            projection: ExecutionProjection(
-                target: step.predicate.waitTarget,
-                continuesAfterInitialMiss: true,
-                initialEvidence: LifecycleEvidence(predicate: step.predicateExpression),
-                evaluate: { observation, isInitialVisible, evidence in
-                    let baselineSeed: PredicateObservationBaselineSeed
-                    if evidence.stream.observationBaseline != nil {
-                        baselineSeed = .preserve
-                    } else {
-                        baselineSeed = switch changeBaseline {
-                        case .supplied(let supplied):
-                            supplied.map(PredicateObservationBaselineSeed.supplied) ?? .preserve
-                        case .establishFromFirstObservation:
-                            isInitialVisible ? .preserve : .currentObservation
-                        }
-                    }
-                    let reduced = self.reduceObservation(
-                        observation,
-                        predicate: step.predicate,
-                        predicateExpression: step.predicateExpression,
-                        baselineSeed: baselineSeed,
-                        stream: evidence.stream
-                    )
-                    let recorded = evidence.recording(reduced)
-                    return PredicateWaitEvaluation(
-                        evidence: recorded,
-                        matched: recorded.evaluation.met
-                    )
-                },
-                result: { outcome, _, evidence in
-                    self.waitResult(
-                        for: step,
-                        trace: evidence.lastTrace,
-                        observationSummary: evidence.lastObservationSummary,
-                        expectation: evidence.evaluation,
-                        start: start,
-                        success: outcome == .matched,
-                        baseline: evidence.changeBaseline,
-                        window: evidence.observationWindow,
-                        observedSequence: evidence.observedSequence
-                    )
-                }
+            projection: changeProjection(
+                for: step,
+                changeBaseline: changeBaseline,
+                continuity: effectiveContinuity,
+                waitStartCursor: waitStartCursor,
+                start: start
             ),
             onReadyToPoll: onReadyToPoll
+        )
+    }
+
+    private func changeProjection(
+        for step: ResolvedWaitRuntimeInput,
+        changeBaseline: PredicateChangeBaselineSource,
+        continuity: PredicateWaitContinuity,
+        waitStartCursor: ObservationCursor?,
+        start: RuntimeElapsed.Instant
+    ) -> ExecutionProjection<HeistWaitResult, LifecycleEvidence> {
+        ExecutionProjection(
+            target: step.predicate.waitTarget,
+            continuesAfterInitialMiss: true,
+            initialEvidence: LifecycleEvidence(
+                predicate: step.predicateExpression,
+                continuity: continuity.initialEvidence(for: .settledObservation)
+            ),
+            evaluate: { observation, isInitialVisible, evidence in
+                let baselineSeed: PredicateObservationBaselineSeed
+                if evidence.stream.observationBaseline != nil {
+                    baselineSeed = .preserve
+                } else {
+                    baselineSeed = switch changeBaseline {
+                    case .supplied(let supplied):
+                        supplied.map(PredicateObservationBaselineSeed.supplied) ?? .preserve
+                    case .establishFromFirstObservation:
+                        isInitialVisible ? .preserve : .currentObservation
+                    }
+                }
+                let reduced = self.reduceObservation(
+                    observation,
+                    predicate: step.predicate,
+                    predicateExpression: step.predicateExpression,
+                    baselineSeed: baselineSeed,
+                    stream: evidence.stream
+                )
+                let recorded = evidence.recording(reduced)
+                if recorded.currentEvaluation.met {
+                    return PredicateWaitEvaluation(
+                        evidence: recorded.recordingCurrentContinuityMatch(
+                            observedThrough: observation.event.cursor?.continuityPosition
+                        ),
+                        matched: true
+                    )
+                }
+                guard case .candidate(_, let boundary) = continuity,
+                      recorded.continuityIsApplied else {
+                    return PredicateWaitEvaluation(
+                        evidence: recorded,
+                        matched: false
+                    )
+                }
+                let continuityEvaluation = self.evaluateRetainedChange(
+                    predicate: step.predicate,
+                    expression: step.predicateExpression,
+                    boundary: boundary,
+                    waitStart: waitStartCursor
+                )
+                let continuityRecorded = recorded.recording(
+                    continuityEvaluation,
+                    fallbackReason: .observationHistoryUnavailable
+                )
+                if case .backdated = continuityRecorded.continuity?.match {
+                    self.recordBackdatedContinuityMatch()
+                }
+                return PredicateWaitEvaluation(
+                    evidence: continuityRecorded,
+                    matched: continuityRecorded.evaluation.met
+                )
+            },
+            result: { outcome, _, evidence in
+                self.recordContinuityOutcome(
+                    continuity,
+                    status: evidence.continuity?.status,
+                    predicate: step.predicate
+                )
+                return self.waitResult(
+                    for: step,
+                    trace: evidence.lastTrace,
+                    observationSummary: evidence.lastObservationSummary,
+                    expectation: evidence.evaluation,
+                    start: start,
+                    success: outcome == .matched,
+                    baseline: evidence.changeBaseline,
+                    window: evidence.observationWindow,
+                    observedSequence: evidence.observedSequence,
+                    continuity: evidence.continuity
+                )
+            }
         )
     }
 
@@ -233,6 +313,7 @@ where Evidence: Sendable & Equatable {
             let stream = wait.vault.semanticObservationStream
             var cursor = stream.latestCommittedObservationCursor(scope: .visible)
             while true {
+                wait.observeScheduledEffect(.observationWait)
                 switch await stream.waitForObservation(
                     after: cursor,
                     scope: .visible,
@@ -316,6 +397,7 @@ where Evidence: Sendable & Equatable {
             ) else {
                 return PredicateWaitDiscoveryResult(evaluation: evaluation, event: nil)
             }
+            wait.observeScheduledEffect(.discovery)
             var lastEvaluatedSequence: SettledObservationSequence?
             let event: SettledObservationEvent?
             if let waitTarget = projection.target,
@@ -443,6 +525,12 @@ where Evidence: Sendable & Equatable {
         return announcement
     }
 
+    internal func recordAnnouncementMatch(_ announcement: CapturedAnnouncement) {
+        heistAnnouncementCursor = AccessibilityNotificationCursor(
+            sequence: max(heistAnnouncementCursor.sequence, announcement.sequence)
+        )
+    }
+
     internal func latestCommittedEvent() -> SettledObservationEvent? { vault.semanticObservationStream.latestCommittedEvent }
 
     internal func latestSettleFailure() -> String? {
@@ -469,6 +557,7 @@ where Evidence: Sendable & Equatable {
             before: deadline,
             at: RuntimeElapsed.now
         ) else { return nil }
+        observeScheduledEffect(.settlement)
         return await vault.semanticObservationStream.admittedVisibleObservation(
             timeout: min(
                 Double(SettleSession.defaultTimeoutMs) / 1_000,

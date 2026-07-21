@@ -171,7 +171,10 @@ extension TheBrains {
         }
 
         @MainActor
-        internal static func live(_ brains: TheBrains) -> HeistExecutionRuntime {
+        internal static func live(
+            _ brains: TheBrains,
+            continuity: EvidenceContinuity.Reference? = nil
+        ) -> HeistExecutionRuntime {
             HeistExecutionRuntime(
                 execute: { command, expectationBaselineScope in
                     await brains.executeRuntimeActionWithBaseline(
@@ -180,12 +183,23 @@ extension TheBrains {
                     )
                 },
                 wait: { request in
+                    let waitContinuity: PredicateWaitContinuity
+                    switch request {
+                    case .standalone:
+                        waitContinuity = brains.admitWaitContinuity(
+                            continuity,
+                            for: request.step.predicate
+                        )
+                    case .actionEndpoint, .immediate, .afterObservation, .baselineTraceOnly:
+                        waitContinuity = .notProvided
+                    }
                     return await brains.interactionCoordinator.waitForPredicate(
                         request.step,
                         initialTrace: request.initialTrace,
                         baselineSequence: request.afterSequence,
                         changeBaseline: request.changeBaseline,
                         announcementCursorStrategy: request.announcementCursorStrategy,
+                        continuity: waitContinuity,
                         startedAt: request.startedAt
                     )
                 },
@@ -211,7 +225,7 @@ extension TheBrains {
             plan,
             argument: argument,
             continuity: continuity,
-            runtime: .live(self)
+            runtime: .live(self, continuity: continuity)
         )
     }
 

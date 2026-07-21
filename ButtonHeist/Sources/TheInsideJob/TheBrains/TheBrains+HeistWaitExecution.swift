@@ -38,7 +38,8 @@ extension TheBrains {
         case .matched(let actionResult, let expectation):
             let evidence = HeistWaitEvidence.matched(
                 .init(executed: actionResult, expectation: expectation),
-                finalSummary: expectation.actual
+                finalSummary: expectation.actual,
+                continuity: result.continuity
             )
             return HeistStepExecution(result: waitStepResult(
                 step: step,
@@ -51,7 +52,8 @@ extension TheBrains {
             guard let elseBody = step.elseBody else {
                 let evidence = HeistWaitEvidence.failed(
                     .init(executed: actionResult, expectation: expectation.result),
-                    finalSummary: expectation.actual
+                    finalSummary: expectation.actual,
+                    continuity: result.continuity
                 )
                 return HeistStepExecution(result: waitStepResult(
                     step: step,
@@ -73,7 +75,8 @@ extension TheBrains {
             )
             let evidence = HeistPassedWaitEvidence(admitted: .handledElse(
                 .init(executed: actionResult, expectation: expectation.result),
-                finalSummary: expectation.actual
+                finalSummary: expectation.actual,
+                continuity: result.continuity
             ))
             let completion: HeistWaitCompletion
             switch execution.children {
@@ -140,15 +143,18 @@ struct HeistWaitResult {
     let outcome: Outcome
     let observedSequence: SettledObservationSequence?
     let observationSummary: String?
+    let continuity: EvidenceContinuity.WaitEvidence?
 
     private init(
         outcome: Outcome,
         observedSequence: SettledObservationSequence?,
-        observationSummary: String?
+        observationSummary: String?,
+        continuity: EvidenceContinuity.WaitEvidence?
     ) {
         self.outcome = outcome
         self.observedSequence = observedSequence
         self.observationSummary = observationSummary
+        self.continuity = continuity
     }
 
     static func matched(
@@ -157,7 +163,8 @@ struct HeistWaitResult {
         expectation: ExpectationResult.Met,
         observedSequence: SettledObservationSequence? = nil,
         observationSummary: String? = nil,
-        announcement: ActionAnnouncementText? = nil
+        announcement: ActionAnnouncementText? = nil,
+        continuity: EvidenceContinuity.WaitEvidence? = nil
     ) -> HeistWaitResult {
         HeistWaitResult(
             outcome: .matched(
@@ -170,7 +177,8 @@ struct HeistWaitResult {
                 expectation
             ),
             observedSequence: observedSequence,
-            observationSummary: observationSummary
+            observationSummary: observationSummary,
+            continuity: continuity
         )
     }
 
@@ -179,7 +187,8 @@ struct HeistWaitResult {
         traceEvidence: AccessibilityTraceEvidence?,
         expectation: ExpectationResult.Unmet,
         observedSequence: SettledObservationSequence? = nil,
-        observationSummary: String? = nil
+        observationSummary: String? = nil,
+        continuity: EvidenceContinuity.WaitEvidence? = nil
     ) -> HeistWaitResult {
         HeistWaitResult(
             outcome: .unmatched(
@@ -192,7 +201,8 @@ struct HeistWaitResult {
                 expectation
             ),
             observedSequence: observedSequence,
-            observationSummary: observationSummary
+            observationSummary: observationSummary,
+            continuity: continuity
         )
     }
 
@@ -201,7 +211,8 @@ struct HeistWaitResult {
         message: String?,
         traceEvidence: AccessibilityTraceEvidence?,
         expectation: ExpectationResult.Unmet,
-        announcement: ActionAnnouncementText? = nil
+        announcement: ActionAnnouncementText? = nil,
+        continuity: EvidenceContinuity.WaitEvidence? = nil
     ) -> HeistWaitResult {
         HeistWaitResult(
             outcome: .unmatched(
@@ -214,7 +225,8 @@ struct HeistWaitResult {
                 expectation
             ),
             observedSequence: nil,
-            observationSummary: nil
+            observationSummary: nil,
+            continuity: continuity
         )
     }
 
