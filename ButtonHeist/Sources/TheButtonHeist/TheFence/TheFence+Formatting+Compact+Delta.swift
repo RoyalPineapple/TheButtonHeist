@@ -9,15 +9,19 @@ extension FenceResponse {
     }
 
     static func compactDelta(_ projection: DeltaProjection, method: String) -> String {
+        compactDeltaRendering(projection).lines(method: method).joined(separator: "\n")
+    }
+
+    static func compactDeltaRendering(_ projection: DeltaProjection) -> CompactDeltaRendering {
         switch projection {
         case .noChange(let metadata):
             // Auto-settle can produce a no-change delta carrying transients
             // when an element appeared and disappeared during settle but
             // baseline and final are otherwise identical. Surface those.
             if metadata.transient.elements.isEmpty {
-                return "\(method): no change"
+                return CompactDeltaRendering(summary: "no change")
             }
-            var lines: [String] = ["\(method): no net change (\(metadata.elementCount) elements)"]
+            var lines: [String] = []
             for element in metadata.transient.elements {
                 lines.append("  +- \(compactElementLine(element))")
             }
@@ -25,11 +29,14 @@ extension FenceResponse {
                 lines.append("  ... transient omitted \(omitted) observed elements")
             }
             lines.append(contentsOf: compactNotificationLines(metadata.accessibilityNotifications))
-            return lines.joined(separator: "\n")
+            return CompactDeltaRendering(
+                summary: "no net change (\(metadata.elementCount) elements)",
+                detailLines: lines
+            )
 
         case .elementsChanged(let delta):
             let metadata = delta.metadata
-            var lines: [String] = ["\(method): elements changed (\(metadata.elementCount) elements)"]
+            var lines: [String] = []
             lines.append(contentsOf: compactEditLines(delta.edits))
             for element in metadata.transient.elements {
                 lines.append("  +- \(compactElementLine(element))")
@@ -38,17 +45,20 @@ extension FenceResponse {
                 lines.append("  ... transient omitted \(omitted) observed elements")
             }
             lines.append(contentsOf: compactNotificationLines(metadata.accessibilityNotifications))
-            return lines.joined(separator: "\n")
+            return CompactDeltaRendering(
+                summary: "elements changed (\(metadata.elementCount) elements)",
+                detailLines: lines
+            )
 
         case .screenChanged(let delta):
-            var lines: [String] = ["\(method): screen changed"]
+            var lines: [String] = []
             if let interface = delta.screen.interface {
                 lines.append(compactInterface(interface))
             } else {
                 lines.append("\(delta.screen.screenDescription) (\(delta.screen.elementCount) elements)")
             }
             lines.append(contentsOf: compactNotificationLines(delta.metadata.accessibilityNotifications))
-            return lines.joined(separator: "\n")
+            return CompactDeltaRendering(summary: "screen changed", detailLines: lines)
         }
     }
 
@@ -117,4 +127,20 @@ extension FenceResponse {
         return element.description
     }
 
+}
+
+extension FenceResponse {
+    struct CompactDeltaRendering: Sendable, Equatable {
+        let summary: String
+        let detailLines: [String]
+
+        init(summary: String, detailLines: [String] = []) {
+            self.summary = summary
+            self.detailLines = detailLines
+        }
+
+        func lines(method: String) -> [String] {
+            ["\(method): \(summary)"] + detailLines
+        }
+    }
 }

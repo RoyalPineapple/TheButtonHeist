@@ -34,7 +34,7 @@ extension FenceResponse {
             let delta = step.evidence?.traceDelta(profile: profile)
             if let failureMessage = step.failure?.message {
                 line += " -> error: \(failureMessage)"
-                detailLines = Self.compactHeistFailureDeltaLines(delta, step: step)
+                detailLines = Self.compactHeistFailureDeltaLines(delta)
                 if let activationTrace = step.activationTrace {
                     detailLines.append("    activation: \(Self.compactActivationTrace(activationTrace))")
                 }
@@ -43,9 +43,7 @@ extension FenceResponse {
             } else if let warning = step.warning {
                 line += " -> warning: \(warning.message)"
             } else if let delta {
-                if let summary = Self.compactHeistDeltaSummary(delta, step: step) {
-                    line += " -> \(summary)"
-                }
+                line += " -> \(Self.compactDeltaRendering(delta).summary)"
             }
             if let expectation = step.expectation {
                 line += expectation.met ? " ✓" : " ✗"
@@ -58,47 +56,13 @@ extension FenceResponse {
         return text
     }
 
-    private static func compactHeistDeltaSummary(
-        _ delta: DeltaProjection,
-        step: HeistReport.Node
-    ) -> String? {
-        let renderedDelta = Self.compactDelta(
-            delta,
-            method: Self.compactHeistStepName(step)
-        )
-        return renderedDelta
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .first
-            .map(String.init)
-            .map { Self.compactHeistStepDeltaSummary($0, step: step) }
-    }
-
     private static func compactHeistFailureDeltaLines(
-        _ delta: DeltaProjection?,
-        step: HeistReport.Node
+        _ delta: DeltaProjection?
     ) -> [String] {
         guard let delta else { return [] }
-        let renderedDelta = Self.compactDelta(
-            delta,
-            method: Self.compactHeistStepName(step)
-        )
-        var deltaLines = renderedDelta
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .map(String.init)
-        guard let summary = deltaLines.first else { return [] }
-        deltaLines.removeFirst()
-        return ["    evidence: \(Self.compactHeistStepDeltaSummary(summary, step: step))"]
-            + deltaLines.map { "    \($0)" }
-    }
-
-    private static func compactHeistStepDeltaSummary(
-        _ summary: String,
-        step: HeistReport.Node
-    ) -> String {
-        let method = Self.compactHeistStepName(step)
-        let prefix = "\(method): "
-        guard summary.hasPrefix(prefix) else { return summary }
-        return String(summary.dropFirst(prefix.count))
+        let rendering = Self.compactDeltaRendering(delta)
+        return ["    evidence: \(rendering.summary)"]
+            + rendering.detailLines.map { "    \($0)" }
     }
 
     private static func compactHeistStepName(_ step: HeistReport.Node) -> String {
