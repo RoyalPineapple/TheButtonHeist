@@ -135,7 +135,7 @@ extension TheBrainsScrollTests {
             observedScrollContentActivationPoint: observedContentActivationPoint(CGPoint(
                 x: firstTarget.frame.midX,
                 y: firstTarget.frame.midY
-            )),
+            ), ownerPath: scrollContainerPath),
             element: interfaceElement
         )
         let knownScreen = InterfaceObservation.makeForTests(

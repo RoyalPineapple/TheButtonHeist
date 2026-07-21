@@ -284,7 +284,8 @@ extension TheVault {
                     element: element,
                     observedScrollContentActivationPoint: observedScrollContentActivationPoint(
                         for: element,
-                        in: scrollView
+                        in: scrollView,
+                        ownerPath: containerPath
                     )
                 ))
             }
@@ -325,12 +326,14 @@ extension TheVault {
 
     private func observedScrollContentActivationPoint(
         for element: AccessibilityElement,
-        in scrollView: UIScrollView
+        in scrollView: UIScrollView,
+        ownerPath: TreePath
     ) -> InterfaceTree.ObservedScrollContentActivationPoint? {
         let activationPoint = element.bhResolvedActivationPoint
         guard activationPoint.x.isFinite, activationPoint.y.isFinite else { return nil }
         return InterfaceTree.ObservedScrollContentActivationPoint(
-            scrollView.convert(activationPoint, from: nil)
+            scrollView.convert(activationPoint, from: nil),
+            ownerPath: ownerPath
         )
     }
 

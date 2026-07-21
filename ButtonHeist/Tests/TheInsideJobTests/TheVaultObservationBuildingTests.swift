@@ -127,7 +127,10 @@ final class TheVaultObservationBuildingTests: XCTestCase {
             visibility: .offscreen
         )
         let observedPoint = try XCTUnwrap(
-            InterfaceTree.ObservedScrollContentActivationPoint(CGPoint(x: 150, y: 1_142))
+            InterfaceTree.ObservedScrollContentActivationPoint(
+                CGPoint(x: 150, y: 1_142),
+                ownerPath: scrollContainerPath
+            )
         )
         let result = TheVault.CaptureResult(
             hierarchy: [
@@ -469,6 +472,80 @@ final class TheVaultObservationBuildingTests: XCTestCase {
 
     // MARK: - Scroll membership
 
+    func testObservedScrollContentActivationPointAdmitsOnlyMatchingOwner() throws {
+        let ownerPath = TreePath([0, 1])
+        let point = try XCTUnwrap(
+            InterfaceTree.ObservedScrollContentActivationPoint(
+                CGPoint(x: 120, y: 640),
+                ownerPath: ownerPath
+            )
+        )
+
+        XCTAssertEqual(point.admit(ownerPath: ownerPath), point.point)
+        XCTAssertNil(point.admit(ownerPath: TreePath([0])))
+        XCTAssertNil(point.admit(ownerPath: TreePath([0, 2])))
+    }
+
+    func testObservedContentPointsCarryProducingContainerPath() throws {
+        let outerPath = TreePath([0])
+        let viewportElementPath = TreePath([0, 0])
+        let nestedPath = TreePath([0, 1])
+        let outerScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 500))
+        outerScrollView.contentSize = CGSize(width: 320, height: 2_000)
+        let offscreenElement = UIAccessibilityElement(accessibilityContainer: NSObject())
+        offscreenElement.accessibilityLabel = "Offscreen"
+        offscreenElement.accessibilityTraits = .button
+        offscreenElement.accessibilityFrame = CGRect(x: 20, y: 900, width: 160, height: 44)
+        offscreenElement.accessibilityActivationPoint = CGPoint(x: 100, y: 922)
+        let nestedScrollView = ObservationInventoryScrollView(element: offscreenElement)
+        nestedScrollView.frame = CGRect(x: 0, y: 500, width: 320, height: 300)
+        nestedScrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let viewportElement = makeElement(
+            label: "Viewport",
+            traits: .button,
+            frame: CGRect(x: 20, y: 120, width: 160, height: 44),
+            activationPoint: CGPoint(x: 100, y: 142)
+        )
+        let inventory = vault.enumerateOffscreenScrollInventory(
+            objectsByPath: [:],
+            scrollViewsByPath: [nestedPath: nestedScrollView],
+            budget: 1
+        )
+        XCTAssertEqual(inventory.offscreenElements.count, 1)
+        let offscreenPoint = try XCTUnwrap(
+            inventory.offscreenElements.first?.observedScrollContentActivationPoint
+        )
+        let result = TheVault.CaptureResult(
+            hierarchy: [
+                .container(makeScrollableContainer(), children: [
+                    .element(viewportElement, traversalIndex: 0),
+                    .container(
+                        makeScrollableContainer(
+                            frame: CGRect(x: 0, y: 500, width: 320, height: 300)
+                        ),
+                        children: []
+                    ),
+                ]),
+            ],
+            scrollViewsByPath: [
+                outerPath: outerScrollView,
+                nestedPath: nestedScrollView,
+            ]
+        )
+
+        let observation = TheVault.buildObservation(from: result)
+        let viewportHeistId = try XCTUnwrap(observation.liveCapture.heistId(forPath: viewportElementPath))
+        let viewportPoint = try XCTUnwrap(
+            observation.tree.elements[viewportHeistId]?.observedScrollContentActivationPoint
+        )
+        let nestedPoint = try XCTUnwrap(
+            observation.tree.containers[nestedPath]?.observedScrollContentActivationPoint
+        )
+        XCTAssertEqual(viewportPoint.ownerPath, outerPath)
+        XCTAssertEqual(nestedPoint.ownerPath, outerPath)
+        XCTAssertEqual(offscreenPoint.ownerPath, nestedPath)
+    }
+
     func testPropagatesScrollMembershipForScrollableContainerChild() {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 100, width: 320, height: 500))
         scrollView.contentSize = CGSize(width: 320, height: 2000)
@@ -528,10 +605,16 @@ final class TheVaultObservationBuildingTests: XCTestCase {
             frame: CGRect(x: 10, y: 160, width: 120, height: 44)
         )
         let observedElementPoint = try XCTUnwrap(
-            InterfaceTree.ObservedScrollContentActivationPoint(CGPoint(x: 70, y: 180))
+            InterfaceTree.ObservedScrollContentActivationPoint(
+                CGPoint(x: 70, y: 180),
+                ownerPath: scrollPath
+            )
         )
         let observedContainerPoint = try XCTUnwrap(
-            InterfaceTree.ObservedScrollContentActivationPoint(CGPoint(x: 160, y: 200))
+            InterfaceTree.ObservedScrollContentActivationPoint(
+                CGPoint(x: 160, y: 200),
+                ownerPath: scrollPath
+            )
         )
         let inventory = try XCTUnwrap(
             ScrollInventory(totalElementCount: 20, visibleIndices: [7])
@@ -612,6 +695,29 @@ final class TheVaultObservationBuildingTests: XCTestCase {
             scrollableContentSize: AccessibilitySize(contentSize),
             frame: AccessibilityRect(frame)
         )
+    }
+}
+
+@MainActor
+private final class ObservationInventoryScrollView: UIScrollView {
+    private let element: NSObject
+
+    init(element: NSObject) {
+        self.element = element
+        super.init(frame: .zero)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    override func accessibilityElementCount() -> Int {
+        1
+    }
+
+    override func accessibilityElement(at index: Int) -> Any? {
+        index == 0 ? element : nil
     }
 }
 

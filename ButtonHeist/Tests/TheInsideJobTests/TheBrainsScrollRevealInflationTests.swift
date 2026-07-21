@@ -147,7 +147,10 @@ extension TheBrainsScrollTests {
         )
         XCTAssertEqual(
             fallbackRequest?.observedScrollContentActivationPoint,
-            InterfaceTree.ObservedScrollContentActivationPoint(observedPoint)
+            InterfaceTree.ObservedScrollContentActivationPoint(
+                try ScrollContentPoint(validating: observedPoint),
+                ownerPath: TreePath([0])
+            )
         )
     }
 
@@ -155,7 +158,10 @@ extension TheBrainsScrollTests {
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let targetId: HeistId = "settings_button"
-        let observedPoint = observedContentActivationPoint(CGPoint(x: 160, y: 1_200))
+        let observedPoint = observedContentActivationPoint(
+            CGPoint(x: 160, y: 1_200),
+            ownerPath: TreePath([0])
+        )
         installScreenWithOffViewport(
             visible: .init(makeElement(label: "Visible"), heistId: "visible_element"),
             offscreen: .init(

@@ -505,7 +505,8 @@ extension ElementInflationProductTests {
         )
         let observedActivationPoint = try observedContentActivationPoint(
             origin: fixture.frameOrigin,
-            size: fixture.target.bounds.size
+            size: fixture.target.bounds.size,
+            ownerPath: scrollContainerPath
         )
         let entry = InterfaceTree.Element(
             heistId: fixture.knownHeistId,
@@ -573,7 +574,8 @@ extension ElementInflationProductTests {
         )
         let observedTargetActivationPoint = try observedContentActivationPoint(
             origin: fixture.targetFrameOrigin,
-            size: fixture.target.bounds.size
+            size: fixture.target.bounds.size,
+            ownerPath: innerContainerPath
         )
         let entry = InterfaceTree.Element(
             heistId: fixture.knownHeistId,
@@ -588,7 +590,8 @@ extension ElementInflationProductTests {
         let observedContainerActivationPoint = try capturedInnerContainer?.observedScrollContentActivationPoint
             ?? observedContentActivationPoint(
             origin: fixture.innerFrameOrigin,
-            size: fixture.innerScrollView.frame.size
+            size: fixture.innerScrollView.frame.size,
+            ownerPath: outerContainerPath
         )
         containers[innerContainerPath] = InterfaceTree.Container(
             container: innerContainer,

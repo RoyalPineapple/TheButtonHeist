@@ -78,9 +78,13 @@ final class TheBrainsScrollTests: XCTestCase {
     }
 
     func observedContentActivationPoint(
-        _ point: CGPoint
+        _ point: CGPoint,
+        ownerPath: TreePath
     ) -> InterfaceTree.ObservedScrollContentActivationPoint {
-        guard let observedPoint = InterfaceTree.ObservedScrollContentActivationPoint(point) else {
+        guard let observedPoint = InterfaceTree.ObservedScrollContentActivationPoint(
+            point,
+            ownerPath: ownerPath
+        ) else {
             preconditionFailure("Test content activation point must be finite")
         }
         return observedPoint
@@ -505,7 +509,7 @@ final class TheBrainsScrollTests: XCTestCase {
     struct OffViewportScrollTarget {
         let element: AccessibilityElement
         let heistId: HeistId
-        let observedActivationPoint: InterfaceTree.ObservedScrollContentActivationPoint
+        let contentActivationPoint: ScrollContentPoint
         let scrollView: UIScrollView
 
         init(
@@ -514,12 +518,12 @@ final class TheBrainsScrollTests: XCTestCase {
             contentActivationPoint: CGPoint,
             scrollView: UIScrollView
         ) {
-            guard let observedActivationPoint = InterfaceTree.ObservedScrollContentActivationPoint(contentActivationPoint) else {
+            guard let contentActivationPoint = try? ScrollContentPoint(validating: contentActivationPoint) else {
                 preconditionFailure("Test content activation point must be finite")
             }
             self.element = element
             self.heistId = heistId
-            self.observedActivationPoint = observedActivationPoint
+            self.contentActivationPoint = contentActivationPoint
             self.scrollView = scrollView
         }
     }
@@ -544,7 +548,10 @@ final class TheBrainsScrollTests: XCTestCase {
         let offscreenEntry = InterfaceTree.Element(
             heistId: offscreen.heistId,
             scrollMembership: InterfaceTree.ScrollMembership(containerPath: scrollContainerPath, index: nil),
-            observedScrollContentActivationPoint: offscreen.observedActivationPoint,
+            observedScrollContentActivationPoint: InterfaceTree.ObservedScrollContentActivationPoint(
+                offscreen.contentActivationPoint,
+                ownerPath: scrollContainerPath
+            ),
             element: offscreen.element
         )
         let observation = InterfaceObservation.makeForTests(
