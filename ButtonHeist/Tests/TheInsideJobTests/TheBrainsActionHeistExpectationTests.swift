@@ -288,7 +288,10 @@ observation: .settledTrace(
             .action(ActionStep(
                 command: .activate(.label("Save")),
                 expectationPolicy: .expect(try ActionExpectation(WaitStep(
-                    predicate: .changed(.elements([.appeared(.label("Saved"))])),
+                    predicate: .changed(.elements([
+                        .appeared(.label("Saved")),
+                        .disappeared(.label("Saved")),
+                    ])),
                     timeout: .milliseconds(1)
                 )))
             )),
@@ -314,8 +317,12 @@ observation: .settledTrace(
             ["Save", "Announce"]
         )
         XCTAssertEqual(
-            elementTrace.captures.last?.interface.projectedElements.compactMap(\.label),
+            elementTrace.captures.dropFirst().first?.interface.projectedElements.compactMap(\.label),
             ["Save", "Announce", "Saved"]
+        )
+        XCTAssertEqual(
+            elementTrace.captures.last?.interface.projectedElements.compactMap(\.label),
+            ["Save", "Announce"]
         )
         XCTAssertEqual(steps.last?.actionEvidence?.expectationResult?.announcement, "Confirmed")
     }
@@ -352,6 +359,10 @@ observation: .settledTrace(
             predicate: .changed(.elements([.appeared(.label("Saved"))])),
             timeout: .milliseconds(1)
         )))
+        let disappeared = await brains.performWait(step: try resolvedWait(WaitStep(
+            predicate: .changed(.elements([.disappeared(.label("Saved"))])),
+            timeout: .milliseconds(1)
+        )))
         let exists = await brains.performWait(step: try resolvedWait(WaitStep(
             predicate: .exists(.label("Saved")),
             timeout: .milliseconds(1)
@@ -363,7 +374,7 @@ observation: .settledTrace(
 
         XCTAssertTrue(action.outcome.isSuccess, action.message ?? "action heist failed")
         XCTAssertEqual(saveObject.activationCount, 1)
-        for result in [appeared, exists, announcement] {
+        for result in [appeared, disappeared, exists, announcement] {
             XCTAssertFalse(result.outcome.isSuccess)
             XCTAssertEqual(result.outcome.failureKind, .timeout)
         }

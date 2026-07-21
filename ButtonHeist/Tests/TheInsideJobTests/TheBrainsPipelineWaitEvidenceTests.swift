@@ -128,9 +128,12 @@ extension TheBrainsPipelineTests {
         XCTAssertEqual(withoutCandidate.result.outcome.actionResult.outcome.failureKind, .timeout)
         XCTAssertEqual(withCandidate.work, withoutCandidate.work)
         XCTAssertGreaterThan(withCandidate.work.captureCount, 0)
-        XCTAssertGreaterThan(withCandidate.work.observationCount, 0)
+        XCTAssertGreaterThan(withCandidate.work.commitCount, 0)
         XCTAssertGreaterThan(withCandidate.work.settlementCount, 0)
         XCTAssertGreaterThan(withCandidate.work.actionCount, 0)
+        XCTAssertGreaterThan(withCandidate.work.discoveryCount, 0)
+        XCTAssertGreaterThan(withCandidate.work.observationWaitCount, 0)
+        XCTAssertGreaterThan(withCandidate.work.scheduledSettlementCount, 0)
         XCTAssertNil(withCandidate.result.outcome.actionResult.warning)
         XCTAssertNil(withoutCandidate.result.outcome.actionResult.warning)
     }
@@ -174,6 +177,7 @@ extension TheBrainsPipelineTests {
             visibleObservationSource: spy.capture
         )
         defer { isolatedBrains.stopSemanticObservation() }
+        isolatedBrains.interactionCoordinator.observePredicateWaitScheduledEffects(spy.observe)
         isolatedBrains.vault.semanticObservationStream.settleVisibleObservation = { vault, _, _, baseline, _ in
             spy.settle(vault: vault, baseline: baseline)
         }
@@ -223,7 +227,7 @@ extension TheBrainsPipelineTests {
         return HistoricalWaitAutomaticRun(
             result: result,
             work: spy.snapshot(
-                observationCount: isolatedBrains.vault.semanticObservationStream
+                commitCount: isolatedBrains.vault.semanticObservationStream
                     .latestCommittedObservation?.sequence.rawValue ?? 0
             )
         )
@@ -634,18 +638,35 @@ private final class HistoricalWaitUIWorkSpy {
     private var settlementCount = 0
     private(set) var waitResult: HeistWaitResult?
     private var actionCount = 0
+    private var discoveryCount = 0
+    private var observationWaitCount = 0
+    private var scheduledSettlementCount = 0
 
     init(observation: InterfaceObservation) {
         self.observation = observation
     }
 
-    func snapshot(observationCount: UInt64) -> HistoricalWaitUIWork {
+    func snapshot(commitCount: UInt64) -> HistoricalWaitUIWork {
         HistoricalWaitUIWork(
             captureCount: captureCount,
-            observationCount: observationCount,
+            commitCount: commitCount,
             settlementCount: settlementCount,
-            actionCount: actionCount
+            actionCount: actionCount,
+            discoveryCount: discoveryCount,
+            observationWaitCount: observationWaitCount,
+            scheduledSettlementCount: scheduledSettlementCount
         )
+    }
+
+    func observe(_ effect: PredicateWait.ScheduledEffect) {
+        switch effect {
+        case .discovery:
+            discoveryCount += 1
+        case .observationWait:
+            observationWaitCount += 1
+        case .settlement:
+            scheduledSettlementCount += 1
+        }
     }
 
     func execute(_ command: ResolvedHeistActionCommand) -> RuntimeActionExecution {
@@ -686,9 +707,12 @@ private final class HistoricalWaitUIWorkSpy {
 
 private struct HistoricalWaitUIWork: Equatable {
     let captureCount: Int
-    let observationCount: UInt64
+    let commitCount: UInt64
     let settlementCount: Int
     let actionCount: Int
+    let discoveryCount: Int
+    let observationWaitCount: Int
+    let scheduledSettlementCount: Int
 }
 
 private struct HistoricalWaitAutomaticRun {
