@@ -28,20 +28,9 @@ final class TheGetaway {
     var identity: ServerIdentity
     let pongPayload: PongPayload
 
-    struct TransportWiringAttempt: Equatable {
-        let id: UUID
+    struct TransportWiringAttempt {
         let transport: ServerTransport
         let deliveryGeneration: ClientDelivery.Generation
-
-        init(transport: ServerTransport, deliveryGeneration: ClientDelivery.Generation) {
-            self.id = UUID()
-            self.transport = transport
-            self.deliveryGeneration = deliveryGeneration
-        }
-
-        static func == (lhs: Self, rhs: Self) -> Bool {
-            lhs.id == rhs.id
-        }
     }
 
     struct WiredTransportAdmission {
@@ -96,7 +85,7 @@ final class TheGetaway {
 
         func admits(_ attempt: TransportWiringAttempt) -> Bool {
             guard case .wiring(let current) = self else { return false }
-            return current == attempt
+            return current.deliveryGeneration == attempt.deliveryGeneration
         }
     }
 
@@ -105,6 +94,7 @@ final class TheGetaway {
     var transportWiring: TransportWiringState = .unwired
     private var latestIssuedDeliveryGenerationRawValue: UInt64 = 0
 
+    var pauseBeforeTransportCallbackBeginForTesting: (@MainActor @Sendable () async -> Void)?
     var pauseBeforeTransportCallbackInstallationForTesting: (@MainActor @Sendable () async -> Void)?
 
     var transport: ServerTransport? {

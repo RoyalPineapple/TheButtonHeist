@@ -31,7 +31,20 @@ extension TheGetaway {
         let previousEventConsumer = transportWiring.eventConsumer
         previousEventConsumer?.cancel()
         transportWiring = .wiring(attempt)
-        await muscle.beginCallbackWiring(attempt.deliveryGeneration)
+        if let pauseBeforeTransportCallbackBeginForTesting {
+            await pauseBeforeTransportCallbackBeginForTesting()
+        }
+        let beginOutcome = await muscle.beginCallbackWiring(attempt.deliveryGeneration)
+        guard beginOutcome == .admitted,
+              transportWiring.admits(attempt)
+        else {
+            logRejectedTransportWiring(.begin, attempt: attempt)
+            if transportWiring.admits(attempt) {
+                transportWiring = .unwired
+            }
+            await muscle.invalidateCallbacks(for: attempt.deliveryGeneration)
+            return .rejected
+        }
 
         // Install actor-isolated callbacks on TheMuscle. Each callback is
         // `@Sendable`. We capture the inner `SimpleSocketServer` actor (which
@@ -61,6 +74,10 @@ extension TheGetaway {
         guard installOutcome == .installed,
               transportWiring.admits(attempt)
         else {
+            logRejectedTransportWiring(.install, attempt: attempt)
+            if transportWiring.admits(attempt) {
+                transportWiring = .unwired
+            }
             await muscle.invalidateCallbacks(for: attempt.deliveryGeneration)
             return .rejected
         }
@@ -133,6 +150,17 @@ extension TheGetaway {
         await muscle.handleClientDisconnected(clientId)
     }
 
+    private func logRejectedTransportWiring(
+        _ operation: TransportWiringOperation,
+        attempt: TransportWiringAttempt
+    ) {
+        let currentGeneration = transportWiring.deliveryGeneration
+            .map { String($0.rawValue) } ?? "none"
+        insideJobLogger.debug(
+            "Rejected transport callback \(operation.rawValue): candidate=\(attempt.deliveryGeneration.rawValue) current=\(currentGeneration)"
+        )
+    }
+
     private func replaceClientRequestPipeline(clientId: Int) {
         brains.cancelTransportRequests(clientId: clientId)
         clientRequestPipelines.removeValue(forKey: clientId)?.stop()
@@ -200,6 +228,11 @@ extension TheGetaway {
             break
         }
     }
+}
+
+private enum TransportWiringOperation: String {
+    case begin
+    case install
 }
 
 private enum ClientRequestExecutionLane: Equatable {

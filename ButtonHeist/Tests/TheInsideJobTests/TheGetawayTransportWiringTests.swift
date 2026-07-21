@@ -7,6 +7,59 @@ import TheScore
 @MainActor
 final class TheGetawayTransportWiringTests: XCTestCase {
 
+    func testOlderWiringPausedBeforeBeginCannotReplaceCurrentWiring() async {
+        let muscle = TheMuscle(sessionToken: "transport-wiring-token", sessionReleaseTimeout: 1)
+        let brains = TheBrains(tripwire: TheTripwire())
+        let getaway = TheGetaway(
+            muscle: muscle,
+            brains: brains,
+            identity: .init(
+                launchId: "transport-wiring-launch",
+                effectiveInstanceId: "transport-wiring-instance",
+                tlsActive: false
+            )
+        )
+        let staleTransport = ServerTransport(token: "transport-wiring-token")
+        let currentTransport = ServerTransport(token: "transport-wiring-token")
+        let enteredStaleBegin = CompletionSignal()
+        let releaseStaleBegin = CompletionSignal()
+        getaway.pauseBeforeTransportCallbackBeginForTesting = {
+            enteredStaleBegin.finish()
+            await releaseStaleBegin.wait()
+        }
+
+        let staleWiringTask = Task { @MainActor in
+            let outcome = await getaway.wireTransport(staleTransport) { _ in }
+            guard case .rejected = outcome else { return false }
+            return true
+        }
+        await enteredStaleBegin.wait()
+        getaway.pauseBeforeTransportCallbackBeginForTesting = nil
+
+        let currentOutcome = await getaway.wireTransport(currentTransport) { _ in }
+        guard case .admitted(let currentAdmission) = currentOutcome else {
+            return XCTFail("Expected current wiring to be admitted")
+        }
+        var staleReachedInstallation = false
+        getaway.pauseBeforeTransportCallbackInstallationForTesting = {
+            staleReachedInstallation = true
+        }
+
+        releaseStaleBegin.finish()
+        let staleRejectedWiring = await staleWiringTask.value
+
+        XCTAssertTrue(staleRejectedWiring, "Expected stale begin to reject its wiring attempt")
+        XCTAssertFalse(staleReachedInstallation, "Rejected begin must not continue to callback installation")
+        let finalGeneration = await muscle.callbackDeliveryGenerationForTesting
+        XCTAssertEqual(finalGeneration, currentAdmission.attempt.deliveryGeneration)
+        guard case .wired(let wiredTransport) = getaway.transportWiring else {
+            return XCTFail("Expected current transport to remain wired, got \(getaway.transportWiring)")
+        }
+        XCTAssertTrue(wiredTransport.attempt.transport === currentTransport)
+        await getaway.tearDown()
+        await muscle.tearDown()
+    }
+
     func testTearDownDuringTransportWiringPreventsStaleConsumerCommit() async {
         let muscle = TheMuscle(sessionToken: "transport-wiring-token", sessionReleaseTimeout: 1)
         let brains = TheBrains(tripwire: TheTripwire())
@@ -139,6 +192,20 @@ final class TheGetawayTransportWiringTests: XCTestCase {
         XCTAssertTrue(rejectedStartup, "Expected rejected wiring to cancel startup before listener start")
         XCTAssertEqual(listeners.invocationCount, 0)
         await job.muscle.tearDown()
+    }
+
+    func testTransportWiringAttemptIdentityIsDeliveryGeneration() {
+        let generation = ClientDelivery.Generation(rawValue: 1)
+        let currentAttempt = TheGetaway.TransportWiringAttempt(
+            transport: ServerTransport(token: "transport-wiring-token"),
+            deliveryGeneration: generation
+        )
+        let matchingAttempt = TheGetaway.TransportWiringAttempt(
+            transport: ServerTransport(token: "transport-wiring-token"),
+            deliveryGeneration: generation
+        )
+
+        XCTAssertTrue(TheGetaway.TransportWiringState.wiring(currentAttempt).admits(matchingAttempt))
     }
 }
 #endif // canImport(UIKit)

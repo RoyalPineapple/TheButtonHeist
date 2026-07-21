@@ -140,7 +140,8 @@ actor TheMuscle {
 
     // MARK: - Callback Wiring
 
-    func beginCallbackWiring(_ generation: ClientDelivery.Generation) {
+    @discardableResult
+    func beginCallbackWiring(_ generation: ClientDelivery.Generation) -> ClientDelivery.BeginOutcome {
         delivery.begin(generation)
     }
 
