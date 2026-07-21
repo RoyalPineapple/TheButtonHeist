@@ -69,7 +69,7 @@ actor TheMuscle {
     private static let authTimeoutSeconds: UInt64 = 10
     private var admission: ClientAdmission.Reducer
     private var session: SessionLease
-    private var delivery: ClientDelivery = .unwired
+    private var delivery: ClientDelivery = .idle(latest: nil)
     private var sessionReleaseTimer = SessionReleaseTimer()
 
     private var delayedDisconnects = ClientAdmission.DelayedDisconnects(

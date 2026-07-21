@@ -33,10 +33,10 @@ final class TheGetaway {
         let transport: ServerTransport
         let deliveryGeneration: ClientDelivery.Generation
 
-        init(transport: ServerTransport) {
+        init(transport: ServerTransport, deliveryGeneration: ClientDelivery.Generation) {
             self.id = UUID()
             self.transport = transport
-            self.deliveryGeneration = ClientDelivery.Generation(id: id)
+            self.deliveryGeneration = deliveryGeneration
         }
 
         static func == (lhs: Self, rhs: Self) -> Bool {
@@ -103,11 +103,21 @@ final class TheGetaway {
     /// Transport wiring is one explicit state machine so teardown cannot leave a
     /// stale transport or consumer behind while callback installation is suspended.
     var transportWiring: TransportWiringState = .unwired
+    private var latestIssuedDeliveryGenerationRawValue: UInt64 = 0
 
     var pauseBeforeTransportCallbackInstallationForTesting: (@MainActor @Sendable () async -> Void)?
 
     var transport: ServerTransport? {
         transportWiring.transport
+    }
+
+    func issueDeliveryGeneration() -> ClientDelivery.Generation {
+        precondition(
+            latestIssuedDeliveryGenerationRawValue < .max,
+            "ClientDelivery.Generation exhausted"
+        )
+        latestIssuedDeliveryGenerationRawValue += 1
+        return ClientDelivery.Generation(rawValue: latestIssuedDeliveryGenerationRawValue)
     }
 
     /// Frames are admitted and executed in per-client order. Transport

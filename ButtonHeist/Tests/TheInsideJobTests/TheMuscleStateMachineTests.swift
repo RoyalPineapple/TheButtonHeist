@@ -409,8 +409,8 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertEqual(lease.release(), [.cancelReleaseTimer])
     }
 
-    func testClientDeliveryReportsUnwiredFailuresAsTypedOutcomes() async {
-        let delivery = ClientDelivery.unwired
+    func testClientDeliveryReportsIdleFailuresAsTypedOutcomes() async {
+        let delivery = ClientDelivery.idle(latest: nil)
 
         let sendOutcome = await delivery.send(Data("hello".utf8), toClient: 1)
         guard case .failed(.transportUnavailable) = sendOutcome else {
@@ -421,28 +421,81 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertEqual(callbackOutcome, .failed(.callbacksNotInstalled("disconnectClient")))
     }
 
-    func testClientDeliveryRejectsStaleCallbackGeneration() {
-        var delivery = ClientDelivery.unwired
-        let staleGeneration = ClientDelivery.Generation()
-        let currentGeneration = ClientDelivery.Generation()
-        let callbacks = ClientDelivery.Callbacks(
-            sendToClient: { _, _ in .delivered },
-            disconnectClient: { _ in },
-            onClientAuthenticated: { _, _ in }
-        )
+    func testClientDeliveryBeginAdmissionIsStrictlyMonotonic() {
+        let currentGeneration = ClientDelivery.Generation(rawValue: 2)
+        let cases: [(candidate: UInt64, outcome: ClientDelivery.BeginOutcome, latest: UInt64)] = [
+            (1, .rejected, 2),
+            (2, .rejected, 2),
+            (3, .admitted, 3),
+        ]
 
-        delivery.begin(staleGeneration)
-        delivery.begin(currentGeneration)
+        for testCase in cases {
+            var delivery = ClientDelivery.idle(latest: currentGeneration)
 
-        XCTAssertEqual(delivery.install(callbacks, for: staleGeneration), .rejected)
+            XCTAssertEqual(
+                delivery.begin(.init(rawValue: testCase.candidate)),
+                testCase.outcome,
+                "candidate \(testCase.candidate)"
+            )
+            XCTAssertEqual(
+                delivery.latestGeneration,
+                .init(rawValue: testCase.latest),
+                "candidate \(testCase.candidate)"
+            )
+        }
+    }
+
+    func testClientDeliveryRejectsStaleLifecycleWorkWithoutChangingCurrentCallbacks() async {
+        let staleGeneration = ClientDelivery.Generation(rawValue: 1)
+        let currentGeneration = ClientDelivery.Generation(rawValue: 2)
+        let staleDeliveries = ClientDeliveryTestCounter()
+        let currentDeliveries = ClientDeliveryTestCounter()
+        let staleCallbacks = clientDeliveryCallbacks(counter: staleDeliveries)
+        let currentCallbacks = clientDeliveryCallbacks(counter: currentDeliveries)
+        var delivery = ClientDelivery.idle(latest: nil)
+
+        XCTAssertEqual(delivery.begin(currentGeneration), .admitted)
+        XCTAssertEqual(delivery.install(currentCallbacks, for: currentGeneration), .installed)
+
+        XCTAssertEqual(delivery.begin(staleGeneration), .rejected)
+        XCTAssertEqual(delivery.install(staleCallbacks, for: staleGeneration), .rejected)
+        XCTAssertEqual(delivery.invalidate(staleGeneration), .rejected)
+        XCTAssertEqual(delivery.generation, currentGeneration)
+        let disconnectOutcome = await delivery.disconnect(7)
+        let staleDeliveryCount = await staleDeliveries.value
+        let currentDeliveryCount = await currentDeliveries.value
+        XCTAssertEqual(disconnectOutcome, .delivered)
+        XCTAssertEqual(staleDeliveryCount, 0)
+        XCTAssertEqual(currentDeliveryCount, 1)
+    }
+
+    func testClientDeliveryInvalidationAndResetRetainGenerationTombstone() async {
+        let currentGeneration = ClientDelivery.Generation(rawValue: 2)
+        let newerGeneration = ClientDelivery.Generation(rawValue: 3)
+        let callbacks = clientDeliveryCallbacks(counter: ClientDeliveryTestCounter())
+        var delivery = ClientDelivery.idle(latest: nil)
+
+        XCTAssertEqual(delivery.begin(currentGeneration), .admitted)
         XCTAssertEqual(delivery.install(callbacks, for: currentGeneration), .installed)
-        XCTAssertEqual(delivery.generation, currentGeneration)
-
-        delivery.invalidate(staleGeneration)
-        XCTAssertEqual(delivery.generation, currentGeneration)
-
-        delivery.invalidate(currentGeneration)
+        XCTAssertEqual(delivery.invalidate(currentGeneration), .invalidated)
         XCTAssertNil(delivery.generation)
+        XCTAssertEqual(delivery.latestGeneration, currentGeneration)
+        let invalidatedDisconnectOutcome = await delivery.disconnect(7)
+        XCTAssertEqual(
+            invalidatedDisconnectOutcome,
+            .failed(.callbacksNotInstalled("disconnectClient"))
+        )
+        XCTAssertEqual(delivery.begin(currentGeneration), .rejected)
+        XCTAssertEqual(delivery.begin(newerGeneration), .admitted)
+        XCTAssertEqual(delivery.install(callbacks, for: newerGeneration), .installed)
+
+        delivery.reset()
+
+        XCTAssertNil(delivery.generation)
+        XCTAssertEqual(delivery.latestGeneration, newerGeneration)
+        XCTAssertEqual(delivery.begin(currentGeneration), .rejected)
+        XCTAssertEqual(delivery.begin(newerGeneration), .rejected)
+        XCTAssertEqual(delivery.begin(.init(rawValue: 4)), .admitted)
     }
 
     func testServerTransportFailurePreservesNetworkDiagnosticReason() {
@@ -458,4 +511,27 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertTrue(failure.localizedDescription.contains("posix"))
     }
 
+}
+
+private actor ClientDeliveryTestCounter {
+    private(set) var value = 0
+
+    func increment() {
+        value += 1
+    }
+}
+
+private func clientDeliveryCallbacks(counter: ClientDeliveryTestCounter) -> ClientDelivery.Callbacks {
+    ClientDelivery.Callbacks(
+        sendToClient: { _, _ in
+            await counter.increment()
+            return .delivered
+        },
+        disconnectClient: { _ in
+            await counter.increment()
+        },
+        onClientAuthenticated: { _, _ in
+            await counter.increment()
+        }
+    )
 }

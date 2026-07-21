@@ -24,7 +24,10 @@ extension TheGetaway {
         _ transport: ServerTransport,
         onBacklogOverflow: @escaping @MainActor @Sendable (Int) async -> Void
     ) async -> TransportWiringOutcome {
-        let attempt = TransportWiringAttempt(transport: transport)
+        let attempt = TransportWiringAttempt(
+            transport: transport,
+            deliveryGeneration: issueDeliveryGeneration()
+        )
         let previousEventConsumer = transportWiring.eventConsumer
         previousEventConsumer?.cancel()
         transportWiring = .wiring(attempt)

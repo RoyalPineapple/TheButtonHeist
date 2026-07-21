@@ -27,6 +27,7 @@ class TheMuscleTestCase: XCTestCase {
     var muscle: TheMuscle!
 
     private var sink: TheMuscleCallbackSink!
+    private var latestDeliveryGenerationRawValue: UInt64 = 0
 
     var sentMessages: [(data: Data, clientId: Int)] { sink.sentMessages }
     var disconnectedClients: [Int] { sink.disconnectedClients }
@@ -57,7 +58,9 @@ class TheMuscleTestCase: XCTestCase {
 
     func installCallbacks() async {
         let sink = self.sink!
-        let generation = ClientDelivery.Generation()
+        precondition(latestDeliveryGenerationRawValue < .max)
+        latestDeliveryGenerationRawValue += 1
+        let generation = ClientDelivery.Generation(rawValue: latestDeliveryGenerationRawValue)
         await muscle.beginCallbackWiring(generation)
         await muscle.installCallbacks(
             sendToClient: { data, clientId in
