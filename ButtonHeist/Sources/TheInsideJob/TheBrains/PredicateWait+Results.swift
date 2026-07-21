@@ -11,7 +11,7 @@ extension PredicateWait {
         initialTrace: AccessibilityTrace?,
         start: RuntimeElapsed.Instant,
         timeout: WaitTimeout,
-        cursorStrategy: AnnouncementWaitCursorStrategy
+        cursor: AccessibilityNotificationCursor
     ) async -> HeistWaitResult {
         if let initialTrace {
             return announcementResultFromInitialTrace(
@@ -22,8 +22,11 @@ extension PredicateWait {
             )
         }
 
-        let cursor = announcementCursor(cursorStrategy)
-        guard let announcement = await waitForAnnouncement(cursor, predicate, timeout.seconds) else {
+        guard let announcement = await vault.accessibilityNotifications.waitForAnnouncement(
+            after: cursor,
+            matching: predicate,
+            timeout: timeout.seconds
+        ) else {
             let message = Self.announcementTimeoutMessage(predicate, timeout: timeout)
             let expectation = ExpectationResult.Unmet(
                 predicate: step.predicateExpression,

@@ -38,10 +38,10 @@ extension TheBrains {
         }
 
         let expectation = step.expectationPolicy.expectedStep
-        let baselineScope = expectation?.predicate.requiresChangeBaseline == true
-            ? SemanticObservationScope.visible
-            : nil
-        let execution = await runtime.execute(resolvedCommand, baselineScope)
+        let expectationContextScope = expectation == nil
+            ? nil
+            : SemanticObservationScope.visible
+        let execution = await runtime.execute(resolvedCommand, expectationContextScope)
         let actionResult = execution.result
         guard actionResult.outcome.isSuccess, let expectation else {
             return actionStepResult(
@@ -74,7 +74,7 @@ extension TheBrains {
         let result = await runtime.wait(.actionEndpoint(
             resolvedWait,
             trace: settledTrace,
-            baseline: execution.expectationBaseline
+            context: execution.actionExpectationContext
         ))
         return actionExpectationStepResult(
             command: step.command,

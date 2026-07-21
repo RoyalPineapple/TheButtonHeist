@@ -5,6 +5,12 @@ import ThePlans
 import TheScore
 
 extension PredicateWait {
+    internal struct ActionContextChangeEvaluation {
+        internal let observation: SettledObservationEvidence
+        internal let expectation: ExpectationResult
+        internal let window: ObservationWindow
+    }
+
     internal func initialTraceChangeEvaluation(
         for step: ResolvedWaitRuntimeInput,
         initialTrace: AccessibilityTrace?
@@ -17,6 +23,41 @@ extension PredicateWait {
         )
         else { return nil }
         return step.predicate.evaluate(in: evidence).expectation(for: step.predicateExpression)
+    }
+
+    internal func actionContextChangeEvaluation(
+        for step: ResolvedWaitRuntimeInput,
+        context: ActionExpectationContext?
+    ) -> ActionContextChangeEvaluation? {
+        guard case .changed = step.predicate.core,
+              let context else { return nil }
+
+        for index in context.observations.indices {
+            let window: ObservationWindow
+            do {
+                window = try ObservationWindow(
+                    baseline: context.preActionCapture,
+                    retainedEntries: Array(context.observations[...index])
+                )
+            } catch {
+                return nil
+            }
+            let observation = actionEvidenceProjector.projectSettledEvidence(
+                from: context.observations[index].event
+            )
+            let expectation = PredicateObservationEvidence(
+                observation: observation,
+                baseline: context.preActionCapture,
+                window: window
+            ).evaluate(step.predicate, expression: step.predicateExpression)
+            guard expectation.met else { continue }
+            return ActionContextChangeEvaluation(
+                observation: observation,
+                expectation: expectation,
+                window: window
+            )
+        }
+        return nil
     }
 
 }

@@ -9,11 +9,6 @@ internal enum PredicateObservationDiagnostics {
     internal static let changePredicateNeedsFutureObservationMessage = "change predicate requires future settled observation after baseline"
 }
 
-internal enum AnnouncementWaitCursorStrategy: Sendable, Equatable {
-    case futureOnly
-    case heistScoped
-}
-
 internal enum PredicateChangeBaselineSource: Sendable, Equatable {
     case establishFromFirstObservation
     case supplied(SettledCapture?)
@@ -61,7 +56,6 @@ where Evidence: Sendable & Equatable {
     private let navigation: Navigation
     internal let actionEvidenceProjector: ActionEvidenceProjector
     internal var observeScheduledEffect: @MainActor (ScheduledEffect) -> Void = { _ in }
-    private var heistAnnouncementCursor: AccessibilityNotificationCursor = .origin
 
     internal init(
         vault: TheVault,
@@ -77,7 +71,7 @@ where Evidence: Sendable & Equatable {
         for step: ResolvedWaitRuntimeInput,
         initialTrace: AccessibilityTrace? = nil,
         changeBaseline: PredicateChangeBaselineSource = .establishFromFirstObservation,
-        announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
+        actionExpectationContext: ActionExpectationContext? = nil,
         onReadyToPoll: ReadyToPoll? = nil,
         startedAt: RuntimeElapsed.Instant? = nil
     ) async -> HeistWaitResult {
@@ -89,7 +83,8 @@ where Evidence: Sendable & Equatable {
                 initialTrace: initialTrace,
                 start: start,
                 timeout: step.timeout,
-                cursorStrategy: announcementCursorStrategy
+                cursor: actionExpectationContext?.announcementCursor
+                    ?? vault.accessibilityNotifications.cursor()
             )
         }
 
@@ -104,6 +99,23 @@ where Evidence: Sendable & Equatable {
                 expectation: traceEvaluation,
                 start: start,
                 success: true
+            )
+        }
+
+        if let contextEvaluation = actionContextChangeEvaluation(
+            for: step,
+            context: actionExpectationContext
+        ) {
+            return waitResult(
+                for: step,
+                trace: contextEvaluation.window.trace,
+                observationSummary: contextEvaluation.observation.summary,
+                expectation: contextEvaluation.expectation,
+                start: start,
+                success: true,
+                baseline: contextEvaluation.window.baseline,
+                window: contextEvaluation.window,
+                observedSequence: contextEvaluation.observation.event.sequence
             )
         }
 
@@ -432,47 +444,6 @@ where Evidence: Sendable & Equatable {
             predicate: predicate,
             predicateExpression: predicateExpression,
             observationWindow: window
-        )
-    }
-
-    internal func resetAnnouncementWaitCursorForHeist(
-        to cursor: AccessibilityNotificationCursor
-    ) {
-        heistAnnouncementCursor = cursor
-    }
-
-    internal func announcementCursor(
-        _ strategy: AnnouncementWaitCursorStrategy
-    ) -> AccessibilityNotificationCursor {
-        switch strategy {
-        case .futureOnly:
-            vault.accessibilityNotifications.cursor()
-        case .heistScoped:
-            heistAnnouncementCursor
-        }
-    }
-
-    internal func waitForAnnouncement(
-        _ cursor: AccessibilityNotificationCursor,
-        _ predicate: ResolvedAnnouncementPredicate,
-        _ timeout: Double
-    ) async -> CapturedAnnouncement? {
-        let announcement = await vault.accessibilityNotifications.waitForAnnouncement(
-            after: cursor,
-            matching: predicate,
-            timeout: timeout
-        )
-        if let announcement {
-            heistAnnouncementCursor = AccessibilityNotificationCursor(
-                sequence: max(heistAnnouncementCursor.sequence, announcement.sequence)
-            )
-        }
-        return announcement
-    }
-
-    internal func recordAnnouncementMatch(_ announcement: CapturedAnnouncement) {
-        heistAnnouncementCursor = AccessibilityNotificationCursor(
-            sequence: max(heistAnnouncementCursor.sequence, announcement.sequence)
         )
     }
 

@@ -43,7 +43,7 @@ extension TheBrains {
 
     enum ScreenCaptureGatewaySuccess {
         case payload(ScreenPayload)
-        case action(ScreenPayload, evidence: ActionExpectationEvidence)
+        case action(ScreenPayload, context: ActionExpectationContext)
 
         var payload: ScreenPayload {
             switch self {
@@ -51,9 +51,9 @@ extension TheBrains {
             }
         }
 
-        var actionExpectationEvidence: ActionExpectationEvidence? {
-            guard case .action(_, let evidence) = self else { return nil }
-            return evidence
+        var actionExpectationContext: ActionExpectationContext? {
+            guard case .action(_, let context) = self else { return nil }
+            return context
         }
     }
 
@@ -64,7 +64,7 @@ extension TheBrains {
 
     struct ScreenCaptureActionExecution {
         let result: ActionResult
-        let actionExpectationEvidence: ActionExpectationEvidence?
+        let actionExpectationContext: ActionExpectationContext?
     }
 
     func captureScreenPayload(mode: ScreenCaptureMode = .raw) async -> ScreenCaptureGatewayResult {
@@ -78,7 +78,7 @@ extension TheBrains {
 
     private enum CapturedScreenBoundary {
         case none
-        case action(ActionExpectationEvidence)
+        case action(ActionExpectationContext)
     }
 
     private func captureScreenPayload(
@@ -108,8 +108,9 @@ extension TheBrains {
         case .action:
             let window = vault.accessibilityNotifications.beginActionWindow()
             notificationWindow = window
-            capturedBoundary = .action(ActionExpectationEvidence(
-                settledCapture: settledCapture,
+            capturedBoundary = .action(ActionExpectationContext(
+                preActionCapture: settledCapture,
+                observations: [],
                 announcementCursor: window.cursor
             ))
         }
@@ -155,7 +156,7 @@ extension TheBrains {
         await executeTakeScreenshot(mode: mode, boundaryRequest: .none).result
     }
 
-    func executeTakeScreenshotWithBoundary(
+    func executeTakeScreenshotWithExpectationContext(
         mode: ScreenCaptureMode = .raw
     ) async -> ScreenCaptureActionExecution {
         await executeTakeScreenshot(mode: mode, boundaryRequest: .action)
@@ -174,7 +175,7 @@ extension TheBrains {
                     message: "Captured screenshot \(Int(success.payload.width))x\(Int(success.payload.height))",
                     timing: timing.freeze()
                 ),
-                actionExpectationEvidence: success.actionExpectationEvidence
+                actionExpectationContext: success.actionExpectationContext
             )
         case .failure(let failure):
             return ScreenCaptureActionExecution(
@@ -184,7 +185,7 @@ extension TheBrains {
                     message: failure.message,
                     timing: timing.freeze()
                 ),
-                actionExpectationEvidence: nil
+                actionExpectationContext: nil
             )
         }
     }
@@ -196,8 +197,8 @@ extension TheBrains {
         switch capturedBoundary {
         case .none:
             .payload(payload)
-        case .action(let evidence):
-            .action(payload, evidence: evidence)
+        case .action(let context):
+            .action(payload, context: context)
         }
     }
 }
