@@ -12,13 +12,27 @@ import ThePlans
 final class TargetResolutionAlgebraTests: XCTestCase {
 
     private var vault: TheVault!
+    private var inflation: ElementInflation!
 
     override func setUp() async throws {
-        vault = TheVault(tripwire: TheTripwire())
+        let tripwire = TheTripwire()
+        vault = TheVault(tripwire: tripwire)
+        inflation = ElementInflation(
+            vault: vault,
+            safecracker: TheSafecracker(fingerprintsEnabled: false),
+            tripwire: tripwire,
+            exploration: ElementInflation.Exploration(
+                settleForDiscovery: {},
+                discoverTarget: { _ in nil },
+                revealKnownTarget: { _ in nil },
+                moveViewport: { _ in .unavailable() }
+            )
+        )
     }
 
     override func tearDown() async throws {
         vault.semanticObservationStream.stop()
+        inflation = nil
         vault = nil
     }
 
@@ -112,6 +126,90 @@ final class TargetResolutionAlgebraTests: XCTestCase {
         XCTAssertEqual(matches.exactMatches.map(\.path), [firstPath, secondPath])
     }
 
+    func testSemanticAdmissionRemovesTerminalOrdinalWhenSemanticTargetIsUnique() throws {
+        let scrollPath = TreePath([0])
+        let selected = InterfaceTree.Element(
+            heistId: "save_button",
+            path: TreePath([0, 0]),
+            scrollMembership: .init(containerPath: scrollPath, index: 4),
+            element: element(label: "Save")
+        )
+        installTree(
+            elements: [selected],
+            containers: [container(path: scrollPath, label: "Actions", identifier: "actions")]
+        )
+        let sourceTarget = try resolvedTarget(.target(.element(.label("Save")), ordinal: 0))
+        let expectedTarget = try resolvedTarget(.element(.label("Save")))
+
+        let decision = inflation.admitSemanticTarget(sourceTarget, selectedElement: selected)
+
+        guard case .admitted(let admitted) = decision else {
+            return XCTFail("Expected unique semantic target admission, got \(decision)")
+        }
+        XCTAssertEqual(admitted.target, expectedTarget)
+        XCTAssertEqual(admitted.scrollContainerPath, scrollPath)
+    }
+
+    func testSemanticAdmissionRejectsOrdinalDependentDuplicate() throws {
+        vault.installObservationForTesting(InterfaceObservation.makeForTests(elements: [
+            (element(label: "Save", y: 0), "first_save"),
+            (element(label: "Save", y: 50), "second_save"),
+        ]))
+        let sourceTarget = try resolvedTarget(.target(.element(.label("Save")), ordinal: 1))
+        let selected = try XCTUnwrap(vault.interfaceElement(heistId: "second_save"))
+
+        let decision = inflation.admitSemanticTarget(sourceTarget, selectedElement: selected)
+
+        guard case .rejected(.ordinalDependent(let facts)) = decision else {
+            return XCTFail("Expected ordinal-dependent rejection, got \(decision)")
+        }
+        XCTAssertEqual(facts.matchedCount, 2)
+    }
+
+    func testSemanticAdmissionRejectsAmbiguousTargetWithoutOrdinal() throws {
+        vault.installObservationForTesting(InterfaceObservation.makeForTests(elements: [
+            (element(label: "Save", y: 0), "first_save"),
+            (element(label: "Save", y: 50), "second_save"),
+        ]))
+        let sourceTarget = try resolvedTarget(.element(.label("Save")))
+        let selected = try XCTUnwrap(vault.interfaceElement(heistId: "first_save"))
+
+        let decision = inflation.admitSemanticTarget(sourceTarget, selectedElement: selected)
+
+        guard case .rejected(.ambiguous(let facts)) = decision else {
+            return XCTFail("Expected ambiguous semantic rejection, got \(decision)")
+        }
+        XCTAssertEqual(facts.matchedCount, 2)
+    }
+
+    func testSemanticAdmissionRejectsMissingTarget() throws {
+        vault.installObservationForTesting(InterfaceObservation.makeForTests(elements: [
+            (element(label: "Cancel"), "cancel_button"),
+        ]))
+        let sourceTarget = try resolvedTarget(.element(.label("Save")))
+        let selected = try XCTUnwrap(vault.interfaceElement(heistId: "cancel_button"))
+
+        let decision = inflation.admitSemanticTarget(sourceTarget, selectedElement: selected)
+
+        guard case .rejected(.notFound(let facts)) = decision else {
+            return XCTFail("Expected missing semantic rejection, got \(decision)")
+        }
+        XCTAssertEqual(facts.reason, .noMatches)
+    }
+
+    func testSemanticAdmissionRejectsWitnessDifferentFromUniqueMatch() throws {
+        vault.installObservationForTesting(InterfaceObservation.makeForTests(elements: [
+            (element(label: "Save"), "save_button"),
+            (element(label: "Cancel"), "cancel_button"),
+        ]))
+        let sourceTarget = try resolvedTarget(.element(.label("Save")))
+        let selected = try XCTUnwrap(vault.interfaceElement(heistId: "cancel_button"))
+
+        let decision = inflation.admitSemanticTarget(sourceTarget, selectedElement: selected)
+
+        XCTAssertSemanticAdmissionRejected(decision, as: .selectedElementMismatch)
+    }
+
     private func resolvedTarget(_ target: AccessibilityTarget) throws -> ResolvedAccessibilityTarget {
         try target.resolve(in: .empty)
     }
@@ -146,8 +244,15 @@ final class TargetResolutionAlgebraTests: XCTestCase {
     }
 
     private func installContainers(_ containers: [InterfaceTree.Container]) {
+        installTree(elements: [], containers: containers)
+    }
+
+    private func installTree(
+        elements: [InterfaceTree.Element],
+        containers: [InterfaceTree.Container] = []
+    ) {
         let tree = InterfaceTree(
-            elements: [:],
+            elements: Dictionary(uniqueKeysWithValues: elements.map { ($0.heistId, $0) }),
             containers: Dictionary(uniqueKeysWithValues: containers.map { ($0.path, $0) })
         )
         vault.installObservationForTesting(InterfaceObservation.makeForTests(
@@ -155,5 +260,17 @@ final class TargetResolutionAlgebraTests: XCTestCase {
             liveCapture: .makeForTests()
         ))
     }
+}
+
+private func XCTAssertSemanticAdmissionRejected(
+    _ decision: ElementInflation.SemanticTargetAdmissionDecision,
+    as expected: ElementInflation.SemanticTargetAdmissionRejection,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) {
+    guard case .rejected(let rejection) = decision else {
+        return XCTFail("Expected semantic admission rejection, got \(decision)", file: file, line: line)
+    }
+    XCTAssertEqual(rejection, expected, file: file, line: line)
 }
 #endif // canImport(UIKit)

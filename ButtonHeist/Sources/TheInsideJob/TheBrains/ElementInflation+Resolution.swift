@@ -6,6 +6,17 @@ import ThePlans
 
 extension ElementInflation {
 
+    internal func admitSemanticTarget(
+        _ sourceTarget: ResolvedAccessibilityTarget,
+        selectedElement: InterfaceTree.Element
+    ) -> SemanticTargetAdmissionDecision {
+        AdmittedSemanticTarget.admit(
+            sourceTarget,
+            selectedElement: selectedElement,
+            resolve: vault.resolveTarget
+        )
+    }
+
     internal func stateAfterRefresh(
         target: ResolvedAccessibilityTarget,
         treeElement: InterfaceTree.Element,

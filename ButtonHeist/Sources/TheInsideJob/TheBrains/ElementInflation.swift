@@ -8,6 +8,85 @@ import ThePlans
 @MainActor
 internal final class ElementInflation {
 
+    private struct PortableSemanticTarget {
+        let target: ResolvedAccessibilityTarget
+        let removedTerminalOrdinal: Bool
+    }
+
+    internal struct AdmittedSemanticTarget: Sendable {
+        internal let target: ResolvedAccessibilityTarget
+        internal let scrollContainerPath: TreePath?
+
+        private init(
+            target: ResolvedAccessibilityTarget,
+            scrollContainerPath: TreePath?
+        ) {
+            self.target = target
+            self.scrollContainerPath = scrollContainerPath
+        }
+
+        internal static func admit(
+            _ sourceTarget: ResolvedAccessibilityTarget,
+            selectedElement: InterfaceTree.Element,
+            resolve: (ResolvedAccessibilityTarget) -> TheVault.TargetResolution
+        ) -> SemanticTargetAdmissionDecision {
+            let portableTarget = portableTarget(from: sourceTarget)
+            switch resolve(portableTarget.target) {
+            case .resolved(.element(let match)) where match == selectedElement:
+                return .admitted(AdmittedSemanticTarget(
+                    target: portableTarget.target,
+                    scrollContainerPath: selectedElement.scrollMembership?.containerPath
+                ))
+            case .resolved(.element):
+                return .rejected(.selectedElementMismatch)
+            case .resolved(.container):
+                return .rejected(.containerTarget)
+            case .notFound(let facts):
+                return .rejected(.notFound(facts))
+            case .ambiguous(let facts):
+                return .rejected(portableTarget.removedTerminalOrdinal
+                    ? .ordinalDependent(facts)
+                    : .ambiguous(facts))
+            }
+        }
+
+        private static func portableTarget(
+            from sourceTarget: ResolvedAccessibilityTarget
+        ) -> PortableSemanticTarget {
+            switch sourceTarget {
+            case .predicate(let predicate, let ordinal):
+                return PortableSemanticTarget(
+                    target: .predicate(predicate, ordinal: nil),
+                    removedTerminalOrdinal: ordinal != nil
+                )
+            case .container(let predicate, let ordinal):
+                return PortableSemanticTarget(
+                    target: .container(predicate, ordinal: nil),
+                    removedTerminalOrdinal: ordinal != nil
+                )
+            case .within(let container, let nestedTarget):
+                let nestedPortableTarget = portableTarget(from: nestedTarget)
+                return PortableSemanticTarget(
+                    target: .within(container: container, target: nestedPortableTarget.target),
+                    removedTerminalOrdinal: nestedPortableTarget.removedTerminalOrdinal
+                )
+            }
+        }
+    }
+
+    internal enum SemanticTargetAdmissionDecision {
+        case admitted(AdmittedSemanticTarget)
+        case rejected(SemanticTargetAdmissionRejection)
+    }
+
+    internal enum SemanticTargetAdmissionRejection: Equatable {
+        case ordinalDependent(TheVault.TargetAmbiguityFacts)
+        case notFound(TheVault.TargetNotFoundFacts)
+        case ambiguous(TheVault.TargetAmbiguityFacts)
+        case selectedElementMismatch
+        case containerTarget
+    }
+
     internal struct KnownTargetRevealRequest {
         internal let heistId: HeistId
         internal let deadline: SemanticObservationDeadline
