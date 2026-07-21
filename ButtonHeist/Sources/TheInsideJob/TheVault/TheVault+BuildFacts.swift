@@ -111,7 +111,8 @@ extension TheVault.BuildFacts {
                 ),
                 inventoriesByPath: scrollInventories(
                     visibleIndicesByContainerPath: elementScrollExtraction.visibleIndicesByContainerPath,
-                    scrollViewsByPath: result.scrollViewsByPath
+                    scrollViewsByPath: result.scrollViewsByPath,
+                    reportedCountsByContainerPath: result.inventoryEnumeration.reportedCountsByContainerPath
                 )
             ),
             focus: TheVault.FocusFacts(
@@ -180,23 +181,18 @@ extension TheVault.BuildFacts {
 
     private static func scrollInventories(
         visibleIndicesByContainerPath: [TreePath: Set<Int>],
-        scrollViewsByPath: [TreePath: UIScrollView]
+        scrollViewsByPath: [TreePath: UIScrollView],
+        reportedCountsByContainerPath: [TreePath: InventoryEnumeration.ReportedCount]
     ) -> [TreePath: ScrollInventory] {
         Dictionary(
-            uniqueKeysWithValues: scrollViewsByPath.compactMap { path, scrollView in
+            uniqueKeysWithValues: scrollViewsByPath.keys.compactMap { path in
                 guard let inventory = ScrollInventory(
-                    totalElementCount: totalElementCount(in: scrollView),
+                    totalElementCount: reportedCountsByContainerPath[path]?.value,
                     visibleIndices: (visibleIndicesByContainerPath[path] ?? []).sorted()
                 ) else { return nil }
                 return (path, inventory)
             }
         )
-    }
-
-    private static func totalElementCount(in scrollView: UIScrollView) -> Int? {
-        let count = scrollView.accessibilityElementCount()
-        guard count != NSNotFound, count >= 0 else { return nil }
-        return count
     }
 
     private static func scrollIndex(of object: NSObject?, in scrollView: UIScrollView) -> Int? {
