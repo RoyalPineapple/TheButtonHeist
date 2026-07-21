@@ -189,7 +189,6 @@ extension TheTripwire {
             timestamp: now,
             layoutPending: scan.hasPendingLayout,
             fingerprint: fingerprint,
-            hasRelevantAnimations: scan.hasRelevantAnimations,
             topmostVC: vcId,
             tripwireSignal: tripwireSignal,
             windowCount: scan.windowCount,

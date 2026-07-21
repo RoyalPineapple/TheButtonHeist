@@ -6,7 +6,7 @@ import UIKit
 ///
 /// TheTripwire monitors UIKit signals via a persistent low-frequency pulse — a single
 /// CADisplayLink that samples all UI state on one clock. Every tick runs the
-/// full set of checks: layer scan (fingerprint, animations, layout), VC
+/// full set of checks: layer scan (presentation fingerprint and layout), VC
 /// identity, public navigation state, and ordered visible windows.
 ///
 /// The pulse answers three questions:
@@ -18,6 +18,7 @@ import UIKit
 final class TheTripwire {
 
     var pulsePhase: PulsePhase = .idle
+    let heistIdleTracker = HeistIdleTracker()
 
     var runningContext: RunningContext? {
         if case .running(let context) = pulsePhase { return context }
@@ -34,11 +35,6 @@ final class TheTripwire {
     nonisolated static let systemPassthroughWindowClassNames: Set<String> = [
         "UIRemoteKeyboardWindow",
         "UITextEffectsWindow",
-    ]
-
-    static let ignoredAnimationKeyPrefixes: [String] = [
-        "_UIParallaxMotionEffect",
-        "match-",
     ]
 
     static var pulseFrameRateRange: CAFrameRateRange {

@@ -99,11 +99,16 @@ internal final class SemanticObservationStream {
         self.tripwire = tripwire
         self.readTripwireSignal = { tripwire.tripwireSignal() }
         self.settleVisibleObservation = settleVisibleObservation ?? { vault, tripwire, demand, baseline, timeoutMs in
-            let policy: SettlePolicy = switch demand {
+            let settlementStartedAt = RuntimeElapsed.now
+            let policy: SettlePolicy
+            switch demand {
             case .active:
-                .quietWindow(milliseconds: Self.activeQuietWindowMs)
+                _ = await tripwire.heistIdleTracker.waitUntilIdle(
+                    timeout: .milliseconds(timeoutMs)
+                )
+                policy = .quietWindow(milliseconds: Self.activeQuietWindowMs)
             case .idle:
-                .consecutiveCycles(required: SettleSession.defaultCyclesRequired)
+                policy = .consecutiveCycles(required: SettleSession.defaultCyclesRequired)
             }
             return await SettleSession.live(
                 vault: vault,
@@ -111,7 +116,7 @@ internal final class SemanticObservationStream {
                 timeoutMs: timeoutMs,
                 policy: policy
             ).run(
-                start: RuntimeElapsed.now,
+                start: settlementStartedAt,
                 baselineTripwireSignal: baseline
             )
         }

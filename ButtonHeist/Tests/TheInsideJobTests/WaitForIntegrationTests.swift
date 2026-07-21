@@ -157,8 +157,10 @@ final class WaitForIntegrationTests: XCTestCase {
         animation.repeatCount = .infinity
         animatedLayer.add(animation, forKey: "semanticObservationRegressionMotion")
 
-        let scan = insideJob.tripwire.scanLayers()
-        XCTAssertTrue(scan.hasRelevantAnimations, "Regression setup must keep an unrelated CALayer animation active")
+        XCTAssertNotNil(
+            animatedLayer.animation(forKey: "semanticObservationRegressionMotion"),
+            "Regression setup must keep an unrelated CALayer animation active"
+        )
 
         insideJob.brains.vault.invalidateSettledObservationFromTripwire()
         let observation = await insideJob.brains.interactionCoordinator.settledEvidence(

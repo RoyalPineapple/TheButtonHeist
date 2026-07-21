@@ -10,7 +10,6 @@ extension TheTripwire {
 
         let layoutPending: Bool
         let fingerprint: PresentationFingerprint
-        let hasRelevantAnimations: Bool
         let topmostVC: ObjectIdentifier?
         let tripwireSignal: TripwireSignal
         let windowCount: Int
@@ -19,9 +18,8 @@ extension TheTripwire {
         let quietFrames: Int
 
         /// The UI is settled when no layout is pending and the presentation
-        /// geometry fingerprint has been stable for 2+ frames. Animation keys
-        /// remain diagnostic; layer churn that does not move or resize frames
-        /// must not block settle.
+        /// geometry fingerprint has been stable for 2+ frames. Layer churn
+        /// that does not move or resize frames must not block settle.
         var isSettled: Bool {
             !layoutPending && quietFrames >= 2
         }
@@ -56,7 +54,6 @@ extension TheTripwire {
         var frameWidthSum: CGFloat = 0
         var frameHeightSum: CGFloat = 0
         var layerCount: Int = 0
-        var hasRelevantAnimations = false
         var hasPendingLayout = false
         var windowCount: Int = 0
 
@@ -71,7 +68,7 @@ extension TheTripwire {
         }
     }
 
-    /// Walk every layer once, collecting fingerprint + animations + layout.
+    /// Walk every layer once, collecting presentation geometry and layout.
     func scanLayers() -> LayerScan {
         var scan = LayerScan()
         let windows = captureTraversableWindows()
@@ -90,12 +87,6 @@ extension TheTripwire {
 
                 if layer.needsLayout() {
                     scan.hasPendingLayout = true
-                }
-
-                if !scan.hasRelevantAnimations, let keys = layer.animationKeys() {
-                    scan.hasRelevantAnimations = keys.contains { key in
-                        !Self.ignoredAnimationKeyPrefixes.contains { key.hasPrefix($0) }
-                    }
                 }
 
                 if let sublayers = layer.sublayers {

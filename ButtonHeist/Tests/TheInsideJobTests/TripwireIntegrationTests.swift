@@ -295,7 +295,6 @@ final class TripwireIntegrationTests: XCTestCase {
             "pulseRunning=\(tripwire.isPulseRunning)",
             "tick=\(reading.tick)",
             "layoutPending=\(reading.layoutPending)",
-            "hasRelevantAnimations=\(reading.hasRelevantAnimations)",
             "quietFrames=\(reading.quietFrames)",
             "windowCount=\(reading.windowCount)",
             "topmostVC=\(String(describing: reading.topmostVC))",
