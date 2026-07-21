@@ -105,9 +105,6 @@ extension FenceResponse {
         if let expectations = report.summary.expectations {
             text += " [expectations: \(expectations.met)/\(expectations.checked) met]"
         }
-        if let breadcrumb = report.failure?.automaticTimeoutMismatchBreadcrumb {
-            text += "\n  \(breadcrumb)"
-        }
         return text
     }
 

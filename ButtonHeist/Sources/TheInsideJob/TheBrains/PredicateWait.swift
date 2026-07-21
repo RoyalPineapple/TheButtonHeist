@@ -220,8 +220,8 @@ where Evidence: Sendable & Equatable {
                     baseline: evidence.changeBaseline,
                     window: evidence.observationWindow,
                     observedSequence: evidence.observedSequence,
-                    timeoutMismatchBreadcrumb: outcome == .timedOut
-                        ? evidence.timeoutMismatchBreadcrumb
+                    timeoutMismatchMessage: outcome == .timedOut
+                        ? evidence.timeoutMismatchMessage
                         : nil
                 )
             }

@@ -76,8 +76,8 @@ extension PredicateWait {
             snapshot?.window
         }
 
-        internal var timeoutMismatchBreadcrumb: String? {
-            historicalDiagnostics.timeoutMismatchBreadcrumb
+        internal var timeoutMismatchMessage: String? {
+            historicalDiagnostics.timeoutMismatchMessage
         }
 
         internal func recording(_ reduction: PredicateObservationStreamReduction) -> LifecycleEvidence {

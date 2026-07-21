@@ -58,16 +58,16 @@ final class DogfoodFeatureFlowTests: XCTestCase {
             WaitFor(TransientFlowScreen.exactToastText, timeout: 0.5)
         }
         let exactReport = HeistReport.project(result: exactFailure.result)
-        let breadcrumb = try XCTUnwrap(exactReport.failure?.message)
+        let failureMessage = try XCTUnwrap(exactReport.failure?.message)
 
         XCTAssertEqual(exactReport.failure?.actionKind, .timeout)
         XCTAssertTrue(
-            breadcrumb.contains(#"observed accessibility candidate label="Ticket saved., Dismiss""#),
-            breadcrumb
+            failureMessage.contains(#"observed accessibility candidate label="Ticket saved., Dismiss""#),
+            failureMessage
         )
         XCTAssertFalse(
-            breadcrumb.contains(#"observed accessibility candidate label="Ticket saved." traits="#),
-            breadcrumb
+            failureMessage.contains(#"observed accessibility candidate label="Ticket saved." traits="#),
+            failureMessage
         )
 
         let standaloneFailure = try await expectHeistFailure(
