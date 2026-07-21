@@ -7,9 +7,6 @@ import os
 
 import TheScore
 
-/// Orchestrates client registration, admission, delivery, and disconnects.
-let muscleLogger = ButtonHeistLog.logger(.insideJob(.auth))
-
 private struct SessionReleaseTimer {
     private enum State {
         case idle(generation: UInt64)
@@ -63,6 +60,7 @@ private struct SessionReleaseTimer {
     }
 }
 
+/// Orchestrates client registration, admission, delivery, and disconnects.
 actor TheMuscle {
 
     private static let disconnectGracePeriod: Duration = .milliseconds(100)

@@ -1,6 +1,10 @@
 import Foundation
 import os
 
+import TheScore
+
+let muscleLogger = ButtonHeistLog.logger(.insideJob(.auth))
+
 /// Typed callback/delivery wiring for `TheMuscle`.
 enum ClientDelivery: Sendable {
     struct Generation: RawRepresentable, Comparable, Sendable {

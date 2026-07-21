@@ -326,6 +326,8 @@ The approved long-lived owners are:
   `SemanticObservationStream` is the sole visible-observation producer and
   waiter-delivery owner.
 - `TheMuscle`: auth, admission, and session state inside the app.
+- `ClientDelivery`: the newest admitted callback generation and its current
+  callbacks inside the app.
 - `TheHandoff`: external connection phase and discovery state outside the app.
 - `PendingRequestRegistry`: typed `RequestID` to continuation correlation,
   removed on resolve, timeout, or cancellation.
@@ -338,12 +340,24 @@ single capture and must not become stable identity. Transport registries and
 auth registries may share a client key, but they stay separate: transport does
 not own authentication semantics.
 
+`ClientDelivery` is the canonical callback-generation owner. A begin is
+admitted only when its generation is strictly newer than the retained latest
+generation. The idle phase retains that latest-generation tombstone, while the
+wiring and wired phases carry the current generation; only the wired phase
+carries callbacks. Stale begin, installation, invalidation or teardown, event,
+and delivery work cannot mutate current callbacks or produce client-visible
+delivery. Normal-order work for the exact current generation may install and
+invoke the current callbacks. `TheGetaway` issues generations before suspension
+and admits matching wiring and events, while `TheMuscle` routes callback effects
+through `ClientDelivery` for an exact-generation check at the delivery boundary.
+
 The implementation owners for the bounded coordination and projection
 pipelines are explicit:
 
 | Concept | Canonical owner | Thin projections or lifecycle callers |
 | --- | --- | --- |
 | UI request admission and cancellation | `InteractionRequestExecutor` in `TheBrains.swift` | `TheGetaway+Transport.swift`, `Heist.swift` |
+| Callback generation admission and delivery | `ClientDelivery.swift` | `TheGetaway` issues strictly increasing generations and admits matching wiring and events; `TheMuscle` routes generation-scoped callback effects through the owner |
 | Drainable callback work | `TaskTracker.swift` | Lifecycle, listener-generation, and delayed-disconnect owners |
 | Discovery callback delivery | `DeviceDiscoveryEventStream.swift` | `DeviceDiscovery.swift` |
 | Compiler process terminal outcome | `HeistCompilerProcess.Runner` in `HeistCompilerProcess.swift` | `HeistSwiftFileCompilation.swift`; diagnostic rendering lives in `HeistSwiftFileCompilationError.swift` |
