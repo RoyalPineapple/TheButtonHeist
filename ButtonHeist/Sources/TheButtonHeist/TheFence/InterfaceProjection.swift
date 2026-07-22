@@ -66,11 +66,13 @@ struct TabBarItemProjection: Sendable {
 
 struct InterfaceElementProjection: Sendable {
     let element: HeistElement
+    let detail: InterfaceDetail
     let order: Int?
 }
 
 struct InterfaceContainerProjection: Sendable {
     let container: AccessibilityContainer
+    let detail: InterfaceDetail
     let containerName: String?
     let scrollInventory: ScrollInventory?
     let observedElementCount: Int
@@ -95,6 +97,24 @@ struct InterfaceProjection: Sendable {
     let tree: [InterfaceNodeProjection]
     let elementCount: Int
 
+    init(
+        interface: Interface,
+        detail: InterfaceDetail,
+        visibleElementBudget: Int = ButtonHeistRuntimeKnobs.current.visibleElementBudget,
+        totalNodeBudget: Int = ButtonHeistRuntimeKnobs.current.totalNodeBudget
+    ) {
+        self.init(
+            interface: interface,
+            profile: ProjectionProfile(
+                kind: detail == .full ? .full : .summary,
+                limits: .current(
+                    visibleElementBudget: visibleElementBudget,
+                    totalNodeBudget: totalNodeBudget
+                )
+            )
+        )
+    }
+
     init(interface: Interface, profile: ProjectionProfile) {
         let projectedElementRecords = interface.projectedElementRecords
         let projectedElements = projectedElementRecords.map(\.element)
@@ -111,6 +131,7 @@ struct InterfaceProjection: Sendable {
 
         var reducer = InterfaceProjectionReducer(
             graph: interface.graph,
+            detail: detail,
             visibleElementBudget: profile.limits.visibleElementBudget,
             totalNodeBudget: profile.limits.totalNodeBudget
         )
@@ -125,6 +146,7 @@ struct InterfaceProjection: Sendable {
 
 private struct InterfaceProjectionReducer {
     private let graph: InterfaceGraph
+    private let detail: InterfaceDetail
     private let visibleElementBudget: Int
     private let measurements: InterfaceProjectionMeasurements
     private let inventoryAdmissionDecisions: [TreePath: InventoryProjectionAdmission.Decision]
@@ -135,8 +157,9 @@ private struct InterfaceProjectionReducer {
     private var suppressedSubtreePath: TreePath?
     private var elementOrder = 0
 
-    init(graph: InterfaceGraph, visibleElementBudget: Int, totalNodeBudget: Int) {
+    init(graph: InterfaceGraph, detail: InterfaceDetail, visibleElementBudget: Int, totalNodeBudget: Int) {
         self.graph = graph
+        self.detail = detail
         self.visibleElementBudget = visibleElementBudget
         measurements = InterfaceProjectionMeasurements(nodes: graph.nodesInPathOrder)
         inventoryAdmissionDecisions = InventoryProjectionAdmission.decisions(
@@ -195,6 +218,7 @@ private struct InterfaceProjectionReducer {
         accumulator.recordRenderedElement()
         append(.element(InterfaceElementProjection(
             element: record.projectedElement,
+            detail: detail,
             order: order
         )))
     }
@@ -256,6 +280,7 @@ private struct InterfaceProjectionReducer {
         )
         append(.container(InterfaceContainerProjection(
             container: frame.container,
+            detail: detail,
             containerName: frame.containerName,
             scrollInventory: frame.scrollInventory,
             observedElementCount: frame.observedElementCount,

@@ -5,9 +5,9 @@ import TheScore
 
 extension FenceResponse {
 
-    func compactHeistCatalog(_ catalog: HeistDiscoveryCatalog) -> String {
-        guard !catalog.heists.isEmpty else { return "heists: none" }
-        let lines = catalog.heists.flatMap { entry in
+    func compactHeistCatalog(_ catalog: [HeistCatalogEntry]) -> String {
+        guard !catalog.isEmpty else { return "heists: none" }
+        let lines = catalog.flatMap { entry in
             catalogLines(for: entry, indent: "  ")
         }
         return (["heists:"] + lines).joined(separator: "\n")
@@ -25,10 +25,10 @@ extension FenceResponse {
         return lines.joined(separator: "\n")
     }
 
-    func formatHeistCatalogHuman(_ catalog: HeistDiscoveryCatalog) -> String {
-        guard !catalog.heists.isEmpty else { return "No heists" }
+    func formatHeistCatalogHuman(_ catalog: [HeistCatalogEntry]) -> String {
+        guard !catalog.isEmpty else { return "No heists" }
         var lines = ["Heists:"]
-        lines.append(contentsOf: catalog.heists.flatMap { entry in
+        lines.append(contentsOf: catalog.flatMap { entry in
             catalogLines(for: entry, indent: "  ", paddedRole: true)
         })
         return lines.joined(separator: "\n")

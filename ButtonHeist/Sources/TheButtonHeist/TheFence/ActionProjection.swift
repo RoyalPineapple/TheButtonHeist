@@ -1,7 +1,7 @@
 import ThePlans
 import TheScore
 
-struct ExpectationProjection: Sendable {
+struct ExpectationProjection: Encodable, Sendable {
     let met: Bool
     let actual: String?
     let expected: AccessibilityPredicate?
@@ -48,7 +48,7 @@ struct ActionProjection: Sendable {
     private let surfacedExpectation: ExpectationResult?
     private let expectationHint: String?
     private let profile: ProjectionProfile
-    private let includesOmissions: Bool
+    let publicContext: PublicActionResultContext
 
     init(
         actionMethod: ActionMethodProjection,
@@ -56,14 +56,14 @@ struct ActionProjection: Sendable {
         expectation: ExpectationResult? = nil,
         expectationHint: String? = nil,
         profile: ProjectionProfile,
-        includeOmissions: Bool = false
+        publicContext: PublicActionResultContext = .standaloneAction
     ) {
         self.actionMethod = actionMethod
         self.result = result
         self.surfacedExpectation = result.outcome.isSuccess ? expectation : nil
         self.expectationHint = expectationHint
         self.profile = profile
-        self.includesOmissions = includeOmissions
+        self.publicContext = publicContext
     }
 
     var status: PublicResponseStatus {
@@ -143,11 +143,11 @@ struct ActionProjection: Sendable {
     var timing: ActionPerformanceTiming? { result.timing }
 
     var omitted: ActionResultOmissionsProjection? {
-        includesOmissions ? ActionResultOmissionsProjection(result: result) : nil
+        publicContext.includesOmissions ? ActionResultOmissionsProjection(result: result) : nil
     }
 }
 
-struct ActionResultOmissionsProjection: Sendable {
+struct ActionResultOmissionsProjection: Encodable, Sendable {
     let accessibilityTrace: ProjectionOmission?
     let subjectEvidence: ProjectionOmission?
 
@@ -173,8 +173,19 @@ struct ActionResultOmissionsProjection: Sendable {
     }
 }
 
-struct ProjectionOmission: Sendable {
+struct ProjectionOmission: Encodable, Sendable {
+    private enum CodingKeys: String, CodingKey {
+        case reason, projectedAs, omittedCount
+    }
+
     let reason: ProjectionOmissionReason
     let projectedAs: String?
     let omittedCount: Int?
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(reason.rawValue, forKey: .reason)
+        try container.encodeIfPresent(projectedAs, forKey: .projectedAs)
+        try container.encodeIfPresent(omittedCount, forKey: .omittedCount)
+    }
 }

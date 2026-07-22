@@ -176,15 +176,17 @@ struct HeistPlanSourceLexer {
 
     private mutating func lexUnicodeEscape() throws -> Character {
         advance()
-        var scalar = 0
+        var digits = ""
         for _ in 0..<4 {
-            guard let character = current, let value = character.hexDigitValue else {
+            guard let character = current,
+                  Int(String(character), radix: 16) != nil else {
                 throw error("unsupported unicode escape; expected four hexadecimal digits after \\u")
             }
-            scalar = scalar * 16 + value
+            digits.append(character)
             advance()
         }
-        guard let unicodeScalar = UnicodeScalar(scalar) else {
+        guard let scalar = Int(digits, radix: 16),
+              let unicodeScalar = UnicodeScalar(scalar) else {
             throw error("invalid unicode escape scalar")
         }
         return Character(unicodeScalar)
@@ -250,19 +252,5 @@ private extension Character {
 
     var isPlanSourceIdentifierPart: Bool {
         isPlanSourceIdentifierStart || isNumber
-    }
-
-    var hexDigitValue: Int? {
-        guard let scalar = unicodeScalars.first, unicodeScalars.count == 1 else { return nil }
-        switch scalar.value {
-        case 48...57:
-            return Int(scalar.value - 48)
-        case 65...70:
-            return Int(scalar.value - 55)
-        case 97...102:
-            return Int(scalar.value - 87)
-        default:
-            return nil
-        }
     }
 }

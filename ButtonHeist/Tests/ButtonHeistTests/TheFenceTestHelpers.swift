@@ -269,11 +269,25 @@ func publicJSONProbe(
 }
 
 func publicInterfaceJSONProbe(
-    _ interface: PublicInterface,
+    _ interface: InterfaceProjection,
     file: StaticString = #filePath,
     line: UInt = #line
 ) throws -> JSONProbe {
     try JSONProbe(data: try JSONEncoder().encode(interface))
+}
+
+func publicInterfaceProjection(
+    interface: Interface,
+    detail: InterfaceDetail,
+    visibleElementBudget: Int = ButtonHeistRuntimeKnobs.current.visibleElementBudget,
+    totalNodeBudget: Int = ButtonHeistRuntimeKnobs.current.totalNodeBudget
+) -> InterfaceProjection {
+    InterfaceProjection(
+        interface: interface,
+        detail: detail,
+        visibleElementBudget: visibleElementBudget,
+        totalNodeBudget: totalNodeBudget
+    )
 }
 
 private extension Array {

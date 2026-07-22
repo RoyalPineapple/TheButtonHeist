@@ -32,6 +32,49 @@ extension TheVault {
         from tree: InterfaceTree,
         timestamp: Date = Date()
     ) -> DiscoveryProjection {
+        InterfaceTreeProjection.discovery(from: tree, timestamp: timestamp).discoveryProjection
+    }
+
+    /// Convert the committed semantic screen into a trace-facing interface.
+    ///
+    /// Exploration commits the full targetable element set into
+    /// the full interface tree; the latest live capture remains viewport-local
+    /// evidence for action dispatch. Post-action traces compare semantic
+    /// captures, so known off-viewport elements must be present here even when
+    /// they are absent from the latest live parser hierarchy.
+    static func toSemanticInterface(
+        from tree: InterfaceTree,
+        timestamp: Date = Date()
+    ) -> Interface {
+        InterfaceTreeProjection.semantic(from: tree, timestamp: timestamp).interface
+    }
+
+    }
+}
+
+extension TheVault.WireConversion {
+    struct DiscoveryProjection {
+        let interface: Interface
+        let containerPathBySourcePath: [TreePath: TreePath]
+    }
+}
+
+@MainActor
+private struct InterfaceTreeProjection {
+    let interface: Interface
+    let containerPathBySourcePath: [TreePath: TreePath]
+
+    var discoveryProjection: TheVault.WireConversion.DiscoveryProjection {
+        TheVault.WireConversion.DiscoveryProjection(
+            interface: interface,
+            containerPathBySourcePath: containerPathBySourcePath
+        )
+    }
+
+    static func discovery(
+        from tree: InterfaceTree,
+        timestamp: Date
+    ) -> InterfaceTreeProjection {
         var elementAnnotations = elementAnnotations(from: tree)
         var containerAnnotations = containerAnnotations(from: tree)
         var containerPathBySourcePath = Dictionary(
@@ -111,51 +154,24 @@ extension TheVault {
                 descend: { path, childIndex in path.appending(childIndex) }
             )
         }
-        let elementAnnotationByPath = InterfaceAnnotations(elements: elementAnnotations).elementByPath
-        let containerAnnotationByPath = InterfaceAnnotations(containers: containerAnnotations).containerByPath
-        let interface = Interface(
-            timestamp: timestamp,
-            projecting: hierarchy,
-            elementMetadata: { path, _, _ in
-                guard let annotation = elementAnnotationByPath[path] else { return nil }
-                return InterfaceElementProjectionMetadata(
-                    actions: annotation.actions,
-                    traceIdentity: traceIdentitiesByPath[path]
-                )
-            },
-            containerMetadata: { path, _ in
-                guard let annotation = containerAnnotationByPath[path] else { return nil }
-                return InterfaceContainerProjectionMetadata(
-                    containerName: annotation.containerName,
-                    scrollInventory: annotation.scrollInventory
-                )
-            }
-        )
-        return DiscoveryProjection(
-            interface: interface,
+
+        return InterfaceTreeProjection(
+            interface: interface(
+                timestamp: timestamp,
+                hierarchy: hierarchy,
+                elementAnnotations: elementAnnotations,
+                containerAnnotations: containerAnnotations,
+                traceIdentitiesByPath: traceIdentitiesByPath
+            ),
             containerPathBySourcePath: containerPathBySourcePath
         )
     }
 
-    /// Convert the committed semantic screen into a trace-facing interface.
-    ///
-    /// Exploration commits the full targetable element set into
-    /// the full interface tree; the latest live capture remains viewport-local
-    /// evidence for action dispatch. Post-action traces compare semantic
-    /// captures, so known off-viewport elements must be present here even when
-    /// they are absent from the latest live parser hierarchy.
-    static func toSemanticInterface(
+    static func semantic(
         from tree: InterfaceTree,
-        timestamp: Date = Date()
-    ) -> Interface {
-        semanticInterface(entries: tree.orderedElements, tree: tree, timestamp: timestamp)
-    }
-
-    private static func semanticInterface(
-        entries: [InterfaceTree.Element],
-        tree: InterfaceTree,
         timestamp: Date
-    ) -> Interface {
+    ) -> InterfaceTreeProjection {
+        let entries = tree.orderedElements
         var pathAllocator = SemanticProjectionPathAllocator()
         let containerPlacements = semanticContainerPlacements(
             containersByPath: tree.containers,
@@ -187,7 +203,7 @@ extension TheVault {
         var traversalIndex = 0
         var elementAnnotations: [InterfaceElementAnnotation] = []
         var containerAnnotations: [InterfaceContainerAnnotation] = []
-        var traceIdentities: [TreePath: TraceElementIdentity] = [:]
+        var traceIdentitiesByPath: [TreePath: TraceElementIdentity] = [:]
 
         func buildNode(path: TreePath) -> AccessibilityHierarchy? {
             if let entry = elementsByPath[path] {
@@ -197,7 +213,7 @@ extension TheVault {
                     path: path,
                     actions: entry.element.projectedActionSet.orderedActions
                 ))
-                traceIdentities[path] = entry.heistId.traceElementIdentity
+                traceIdentitiesByPath[path] = entry.heistId.traceElementIdentity
                 return .element(entry.element, traversalIndex: traversalIndexByHeistId[entry.heistId] ?? index)
             }
             guard let entry = containersByProjectedPath[path] else { return nil }
@@ -211,16 +227,35 @@ extension TheVault {
         }
 
         let roots = (childPathsByParent[.root] ?? []).compactMap(buildNode)
+        return InterfaceTreeProjection(
+            interface: interface(
+                timestamp: timestamp,
+                hierarchy: roots,
+                elementAnnotations: elementAnnotations,
+                containerAnnotations: containerAnnotations,
+                traceIdentitiesByPath: traceIdentitiesByPath
+            ),
+            containerPathBySourcePath: projectedContainerPathByOriginalPath
+        )
+    }
+
+    private static func interface(
+        timestamp: Date,
+        hierarchy: [AccessibilityHierarchy],
+        elementAnnotations: [InterfaceElementAnnotation],
+        containerAnnotations: [InterfaceContainerAnnotation],
+        traceIdentitiesByPath: [TreePath: TraceElementIdentity]
+    ) -> Interface {
         let elementAnnotationByPath = InterfaceAnnotations(elements: elementAnnotations).elementByPath
         let containerAnnotationByPath = InterfaceAnnotations(containers: containerAnnotations).containerByPath
         return Interface(
             timestamp: timestamp,
-            projecting: roots,
+            projecting: hierarchy,
             elementMetadata: { path, _, _ in
                 guard let annotation = elementAnnotationByPath[path] else { return nil }
                 return InterfaceElementProjectionMetadata(
                     actions: annotation.actions,
-                    traceIdentity: traceIdentities[path]
+                    traceIdentity: traceIdentitiesByPath[path]
                 )
             },
             containerMetadata: { path, _ in
@@ -307,8 +342,6 @@ extension TheVault {
         return .root
     }
 
-    // MARK: - Private Helpers
-
     private static func elementAnnotations(from tree: InterfaceTree) -> [InterfaceElementAnnotation] {
         tree.viewportCapture.hierarchy.compactMapSubtrees { node, path in
             guard case .element(let element, _) = node else { return nil }
@@ -334,14 +367,6 @@ extension TheVault {
                 scrollInventory: tree.containers[path]?.scrollInventory
             )
         }
-    }
-    }
-}
-
-extension TheVault.WireConversion {
-    struct DiscoveryProjection {
-        let interface: Interface
-        let containerPathBySourcePath: [TreePath: TreePath]
     }
 }
 

@@ -281,8 +281,8 @@ public struct HeistDef<Input>: Sendable {
             guard content.diagnostics.isEmpty else {
                 return .failure(content.diagnostics.map { $0.withPath(renderedPath) })
             }
-            return .success(makeDefinition(
-                components: path.components[...],
+            return .success(nestedHeistDefinition(
+                path: path,
                 parameter: parameter,
                 definitions: content.definitions,
                 body: content.steps.map(HeistStepAdmissionCandidate.init)
@@ -294,36 +294,6 @@ public struct HeistDef<Input>: Sendable {
                 message: String(describing: error)
             )])
         }
-    }
-
-    private static func makeDefinition(
-        components: ArraySlice<HeistPlanName>,
-        parameter: HeistParameter,
-        definitions: [HeistPlanAdmissionCandidate],
-        body: [HeistStepAdmissionCandidate]
-    ) -> HeistPlanAdmissionCandidate {
-        guard let first = components.first else {
-            preconditionFailure("validated heist definition path must not be empty")
-        }
-        guard components.count > 1 else {
-            return HeistPlanAdmissionCandidate(
-                name: first,
-                parameter: parameter,
-                definitions: definitions,
-                body: body
-            )
-        }
-        let child = Self.makeDefinition(
-            components: components.dropFirst(),
-            parameter: parameter,
-            definitions: definitions,
-            body: body
-        )
-        return HeistPlanAdmissionCandidate(
-            name: first,
-            definitions: [child],
-            body: []
-        )
     }
 
     fileprivate func invocation(argument: HeistArgument) throws -> HeistInvocationContent {
@@ -341,7 +311,7 @@ public struct HeistDef<Input>: Sendable {
 public struct HeistInvocationContent {
     let invocation: HeistInvocationStep
     let definitions: [HeistPlanAdmissionCandidate]
-    let explicitExpectationTimeout: WaitTimeout?
+    let expectation: ComposedExpectation?
     let expectationValidationDiagnostics: [HeistBuildDiagnostic]
 
     var heistContent: HeistContent {
@@ -362,12 +332,14 @@ public struct HeistInvocationContent {
     init(
         invocation: HeistInvocationStep,
         definitions: [HeistPlanAdmissionCandidate],
-        explicitExpectationTimeout: WaitTimeout? = nil,
+        expectation: ComposedExpectation? = nil,
         expectationValidationDiagnostics: [HeistBuildDiagnostic] = []
     ) {
         self.invocation = invocation
         self.definitions = definitions
-        self.explicitExpectationTimeout = explicitExpectationTimeout
+        self.expectation = expectation ?? invocation.expectation.map {
+            ComposedExpectation(step: $0, explicitTimeout: nil)
+        }
         self.expectationValidationDiagnostics = expectationValidationDiagnostics
     }
 }
@@ -378,8 +350,7 @@ public extension HeistInvocationContent {
         timeout: WaitTimeout? = nil
     ) -> HeistInvocationContent {
         let composition = composeExpectation(
-            existing: invocation.expectation,
-            existingExplicit: explicitExpectationTimeout,
+            existing: expectation,
             nextPredicate: predicate,
             nextExplicit: timeout
         )
@@ -390,10 +361,10 @@ public extension HeistInvocationContent {
             invocation: HeistInvocationStep(
                 path: invocation.path,
                 argument: invocation.argument,
-                expectation: WaitStep(predicate: composition.predicate, timeout: composition.timeout)
+                expectation: composition.expectation.step
             ),
             definitions: definitions,
-            explicitExpectationTimeout: composition.explicitTimeout,
+            expectation: composition.expectation,
             expectationValidationDiagnostics: validationDiagnostics
         )
     }

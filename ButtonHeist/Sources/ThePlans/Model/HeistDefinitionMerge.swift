@@ -42,6 +42,51 @@ func mergeHeistDefinitions(
     }
 }
 
+func nestedHeistDefinition(
+    path: HeistDefinitionPath,
+    parameter: HeistParameter,
+    definitions: [HeistPlanAdmissionCandidate],
+    body: [HeistStepAdmissionCandidate]
+) -> HeistPlanAdmissionCandidate {
+    nestedHeistDefinition(
+        components: path.components[...],
+        parameter: parameter,
+        definitions: definitions,
+        body: body
+    )
+}
+
+private func nestedHeistDefinition(
+    components: ArraySlice<HeistPlanName>,
+    parameter: HeistParameter,
+    definitions: [HeistPlanAdmissionCandidate],
+    body: [HeistStepAdmissionCandidate]
+) -> HeistPlanAdmissionCandidate {
+    guard let first = components.first else {
+        preconditionFailure("validated heist definition path must not be empty")
+    }
+    guard components.count > 1 else {
+        return HeistPlanAdmissionCandidate(
+            name: first,
+            parameter: parameter,
+            definitions: definitions,
+            body: body
+        )
+    }
+    return HeistPlanAdmissionCandidate(
+        name: first,
+        definitions: [
+            nestedHeistDefinition(
+                components: components.dropFirst(),
+                parameter: parameter,
+                definitions: definitions,
+                body: body
+            ),
+        ],
+        body: []
+    )
+}
+
 private extension HeistPlanAdmissionCandidate {
     var isNamespaceFragment: Bool {
         parameter == .none && body.isEmpty && !definitions.isEmpty

@@ -172,14 +172,6 @@ public struct HeistCatalogEntry: Sendable, Equatable {
     }
 }
 
-public struct HeistDiscoveryCatalog: Sendable, Equatable {
-    public let heists: [HeistCatalogEntry]
-
-    public init(heists: [HeistCatalogEntry]) {
-        self.heists = heists
-    }
-}
-
 public struct HeistCatalogSource: Codable, Sendable, Equatable {
     public let url: URL
 
@@ -285,7 +277,7 @@ public struct HeistCatalogError: Error, Sendable, Equatable, CustomStringConvert
 }
 
 public extension HeistPlan {
-    func heistCatalog(detail: HeistCatalogDetail = .summary) throws -> HeistDiscoveryCatalog {
+    func heistCatalog(detail: HeistCatalogDetail = .summary) throws -> [HeistCatalogEntry] {
         return try uncheckedHeistCatalog(detail: detail)
     }
 
@@ -295,9 +287,9 @@ public extension HeistPlan {
 }
 
 private extension HeistPlan {
-    func uncheckedHeistCatalog(detail: HeistCatalogDetail = .summary) throws -> HeistDiscoveryCatalog {
+    func uncheckedHeistCatalog(detail: HeistCatalogDetail = .summary) throws -> [HeistCatalogEntry] {
         let resolved = try catalogResolvedHeists()
-        return HeistDiscoveryCatalog(heists: resolved.map { catalogEntry(for: $0, detail: detail) })
+        return resolved.map { catalogEntry(for: $0, detail: detail) }
     }
 
     func uncheckedDescribeHeist(at requestedPath: HeistDefinitionPath) throws -> HeistDescription {
@@ -349,55 +341,28 @@ private extension HeistPlan {
             ))
         }
 
-        HeistPlanTraversal(expandsInvocations: false).walk(self) { event in
-            switch event {
-            case .enterPlan(let plan, let context):
-                append(
-                    plan,
-                    identity: .entry(plan.name),
-                    definitionComponents: [],
-                    context: context
-                )
-            case .enterDefinition(let plan, let context):
-                guard let localName = plan.name else {
-                    preconditionFailure("admitted heist definitions must have names")
-                }
-                let nameComponents = context.definitionScope.pathPrefix + [localName]
-                guard let first = nameComponents.first else {
-                    preconditionFailure("definition catalog paths must not be empty")
-                }
-                let definitionPath = HeistDefinitionPath(first: first, remaining: Array(nameComponents.dropFirst()))
-                append(
-                    plan,
-                    identity: .capability(definitionPath),
-                    definitionComponents: nameComponents,
-                    context: context
-                )
-            case .leavePlan,
-                 .enterDefinitions,
-                 .leaveDefinitions,
-                 .leaveDefinition,
-                 .enterSteps,
-                 .leaveSteps,
-                 .enterStep,
-                 .leaveStep,
-                 .action,
-                 .wait,
-                 .conditional,
-                 .predicateCase,
-                 .elseBody,
-                 .forEachElement,
-                 .forEachString,
-                 .repeatUntil,
-                 .warn,
-                 .fail,
-                 .heist,
-                 .invoke:
-                break
-            }
+        HeistPlanTraversal().walkCatalogHeists(self) { projection in
+            append(
+                projection.plan,
+                identity: catalogIdentity(for: projection),
+                definitionComponents: projection.definitionComponents,
+                context: projection.context
+            )
         }
         try validateUniqueCatalogPaths(heists.map(\.entry.identity))
         return heists
+    }
+
+    func catalogIdentity(for projection: HeistPlanTraversal.CatalogHeistProjection) -> HeistCatalogIdentity {
+        switch projection.kind {
+        case .entry(let name):
+            return .entry(name)
+        case .capability(let nameComponents):
+            guard let first = nameComponents.first else {
+                preconditionFailure("definition catalog paths must not be empty")
+            }
+            return .capability(HeistDefinitionPath(first: first, remaining: Array(nameComponents.dropFirst())))
+        }
     }
 
     func validateUniqueCatalogPaths(_ identities: [HeistCatalogIdentity]) throws {
@@ -505,7 +470,7 @@ private struct HeistSemanticSurfaceCollector {
 
     static func surface(for resolved: ResolvedCatalogHeist) -> HeistSemanticSurface {
         var collector = Self()
-        HeistPlanTraversal().walk(
+        HeistPlanTraversal().walkSemanticSurfaceObservations(
             steps: resolved.plan.body,
             path: .root.child(.body),
             depth: 1,
@@ -513,8 +478,8 @@ private struct HeistSemanticSurfaceCollector {
             definitionScope: resolved.definitionScope,
             rootDefinitionScope: resolved.rootDefinitionScope,
             invocationStack: resolved.invocationStack
-        ) { event in
-            collector.collect(event)
+        ) { observation in
+            collector.collect(observation)
         }
         return collector.surface
     }
@@ -531,9 +496,9 @@ private struct HeistSemanticSurfaceCollector {
         )
     }
 
-    mutating func collect(_ event: HeistPlanTraversal.Event) {
-        switch event {
-        case .action(let action, _):
+    mutating func collect(_ observation: HeistPlanTraversal.SemanticSurfaceObservation) {
+        switch observation {
+        case .action(let action):
             actionCommands.appendIfMissing(action.command.wireType)
             collectTargets(from: action.command)
             if let expectation = action.expectationPolicy.expectedStep {
@@ -542,7 +507,7 @@ private struct HeistSemanticSurfaceCollector {
         case .wait(let wait, let context):
             guard !context.path.ends(in: .expectation) else { return }
             collectWait(wait.predicate)
-        case .forEachElement(let step, _):
+        case .forEachElement(let step):
             appendTargetPredicate(.predicate(step.matching))
         case .invoke(let invocation, let context):
             if let expectation = invocation.expectation {
@@ -550,25 +515,6 @@ private struct HeistSemanticSurfaceCollector {
             }
             guard let resolved = context.resolveInvocation(path: invocation.path) else { return }
             nestedRunHeists.appendIfMissing(resolved.invocationPath)
-        case .enterPlan,
-             .leavePlan,
-             .enterDefinitions,
-             .leaveDefinitions,
-             .enterDefinition,
-             .leaveDefinition,
-             .enterSteps,
-             .leaveSteps,
-             .enterStep,
-             .leaveStep,
-             .conditional,
-             .predicateCase,
-             .elseBody,
-             .forEachString,
-             .repeatUntil,
-             .warn,
-             .fail,
-             .heist:
-            break
         }
     }
 

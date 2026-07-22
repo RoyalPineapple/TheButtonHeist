@@ -25,20 +25,18 @@ struct HeistPlanRuntimeSafetyValidator {
     }
 
     mutating func inspect(_ plan: HeistPlan) {
-        HeistPlanTraversal().walk(plan) { event in
-            inspect(event)
+        HeistPlanTraversal().walkRuntimeValidationObservations(plan) { observation in
+            inspect(observation)
         }
     }
 
-    private mutating func inspect(_ event: HeistPlanTraversal.Event) {
-        switch event {
-        case .enterPlan(let plan, let context):
-            validatePlanHeader(plan, path: context.path, requiresName: false)
-        case .enterDefinitions(let definitions, let context):
+    private mutating func inspect(_ observation: HeistPlanTraversal.RuntimeValidationObservation) {
+        switch observation {
+        case .plan(let plan, let context, let requiresName):
+            validatePlanHeader(plan, path: context.path, requiresName: requiresName)
+        case .definitions(let definitions, let context):
             validateDefinitions(definitions, path: context.path)
-        case .enterDefinition(let plan, let context):
-            validatePlanHeader(plan, path: context.path, requiresName: true)
-        case .enterStep(let step, let context):
+        case .step(let step, let context):
             validateStep(step, context: context)
         case .action(let action, let context):
             validateResolvedStringLoopAction(action, context: context)
@@ -79,15 +77,6 @@ struct HeistPlanRuntimeSafetyValidator {
             validateInlineHeist(plan, context: context)
         case .invoke(let invocation, let context):
             validateInvocation(invocation, context: context)
-        case .leavePlan,
-             .leaveDefinitions,
-             .leaveDefinition,
-             .enterSteps,
-             .leaveSteps,
-             .leaveStep,
-             .conditional,
-             .elseBody:
-            break
         }
     }
 

@@ -16,7 +16,7 @@ extension TheFence {
     }
 
     struct ListHeistsRequest {
-        let catalog: HeistDiscoveryCatalog
+        let catalog: [HeistCatalogEntry]
     }
 
     struct DescribeHeistRequest {

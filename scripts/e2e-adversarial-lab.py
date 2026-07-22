@@ -14,21 +14,20 @@ import os
 import subprocess
 import sys
 import time
-import traceback
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any
 
 from e2e_runtime import (
+    DemoApp,
     boot_simulator,
-    free_port,
+    error_summary,
+    failure_kind,
     install_app,
-    launch_app,
-    launch_environment,
+    parse_jsonish,
     run,
-    terminate_app,
-    wait_port,
+    write_json_report,
 )
 
 CEILING_HIT_TOLERANCE_MS = 25
@@ -79,25 +78,6 @@ class IterationObservation:
     @property
     def requires_app_recovery(self) -> bool:
         return self.returncode != 0
-
-
-def parse_jsonish(text: str) -> Any | None:
-    text = text.strip()
-    if not text:
-        return None
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-    for line in text.splitlines():
-        line = line.strip()
-        if not line.startswith("{"):
-            continue
-        try:
-            return json.loads(line)
-        except json.JSONDecodeError:
-            continue
-    return None
 
 
 def ms(value: Any) -> int | None:
@@ -232,30 +212,6 @@ def gate_summary(scenarios: list[dict[str, Any]], ceiling_policy: CeilingPolicy)
 
 def gate_failed(summary: dict[str, Any]) -> bool:
     return summary["failed"] > 0 or summary["ceilingPolicyViolated"]
-
-
-class DemoApp:
-    def __init__(self, sim: str):
-        self.sim = sim
-        self.port = free_port()
-        self.token = f"adversarial-nightly-{self.port}"
-
-    @property
-    def device(self) -> str:
-        return f"127.0.0.1:{self.port}"
-
-    def launch(self) -> None:
-        terminate_app(self.sim)
-        result = launch_app(
-            self.sim,
-            launch_environment(self.port, self.token, self.token),
-        )
-        if result.returncode != 0:
-            raise RuntimeError(f"BHDemo launch failed: stdout={result.stdout!r} stderr={result.stderr!r}")
-        wait_port(self.port, timeout=45)
-
-    def terminate(self) -> None:
-        terminate_app(self.sim)
 
 
 OPEN_LAB = """
@@ -570,17 +526,8 @@ def execute_scenario(
             break
 
 
-def error_summary(error: BaseException) -> dict[str, Any]:
-    return {
-        "type": type(error).__name__,
-        "message": str(error),
-        "traceback": traceback.format_exception(type(error), error, error.__traceback__),
-    }
-
-
 def write_report(path: Path, report: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    write_json_report(path, report)
 
 
 def parse_args() -> argparse.Namespace:
@@ -670,7 +617,7 @@ def main() -> int:
         boot_simulator(args.sim_udid)
 
         install_app(args.sim_udid, app_path)
-        app = DemoApp(args.sim_udid)
+        app = DemoApp(args.sim_udid, token_prefix="adversarial-nightly")
         app.launch()
 
         report["status"] = "running"
@@ -722,10 +669,10 @@ def main() -> int:
         return 1 if failed else 0
     except Exception as error:
         report["status"] = "failed"
-        report["failureKind"] = (
-            "infrastructure-timeout"
-            if isinstance(error, (subprocess.TimeoutExpired, TimeoutError))
-            else "infrastructure-failure"
+        report["failureKind"] = failure_kind(
+            error,
+            scenario_started=False,
+            product_failure="product-scenario-failure",
         )
         report["error"] = error_summary(error)
         write_report(report_path, report)

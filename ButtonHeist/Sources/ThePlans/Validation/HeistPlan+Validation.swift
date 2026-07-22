@@ -35,9 +35,8 @@ public struct HeistPlanLintFinding: Sendable, Equatable {
 public extension HeistPlan {
     func lint(_ mode: HeistPlanLintMode) -> [HeistPlanLintFinding] {
         var linter = HeistPlanLinter(mode: mode)
-        let traversal = HeistPlanTraversal()
-        traversal.walk(self) { event in
-            linter.observe(event)
+        HeistPlanTraversal().walkLintObservations(self) { observation in
+            linter.observe(observation)
         }
         return linter.findings
     }
@@ -48,9 +47,9 @@ private struct HeistPlanLinter {
 
     var findings: [HeistPlanLintFinding] = []
 
-    mutating func observe(_ event: HeistPlanTraversal.Event) {
-        switch event {
-        case .enterStep(let step, let context):
+    mutating func observe(_ observation: HeistPlanTraversal.LintObservation) {
+        switch observation {
+        case .step(let step, let context):
             inspectStep(step, context: context)
         case .action(let action, let context):
             inspectAction(action, context: context)
@@ -58,25 +57,6 @@ private struct HeistPlanLinter {
             inspectPredicateCase(predicateCase, context: context)
         case .elseBody(let body, let context):
             inspectElseBody(body, context: context)
-        case .enterPlan,
-             .leavePlan,
-             .enterDefinitions,
-             .leaveDefinitions,
-             .enterDefinition,
-             .leaveDefinition,
-             .enterSteps,
-             .leaveSteps,
-             .leaveStep,
-             .wait,
-             .conditional,
-             .forEachElement,
-             .forEachString,
-             .repeatUntil,
-             .warn,
-             .fail,
-             .heist,
-             .invoke:
-            break
         }
     }
 

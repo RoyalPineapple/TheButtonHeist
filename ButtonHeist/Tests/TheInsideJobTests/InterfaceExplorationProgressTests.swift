@@ -67,7 +67,7 @@ final class InterfaceExplorationProgressTests: XCTestCase {
         XCTAssertEqual(progress.recordScrollAttempt(in: path), .discoveryScrollLimit)
 
         XCTAssertEqual(progress.scrollCount, 2)
-        XCTAssertTrue(progress.discoveryLimitHit)
+        XCTAssertEqual(progress.limitReasons, [.discoveryScrollLimit])
     }
 
     // MARK: - markExplored

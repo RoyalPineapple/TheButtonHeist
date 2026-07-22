@@ -96,6 +96,61 @@ struct HeistTraversalBindingSample {
 }
 
 struct HeistPlanTraversal {
+    struct CallGraphProjection {
+        let nodes: Set<HeistInvocationPath>
+        let edges: Set<HeistCallGraph.Edge>
+    }
+
+    enum CatalogHeistKind {
+        case entry(HeistPlanName?)
+        case capability([HeistPlanName])
+    }
+
+    struct CatalogHeistProjection {
+        let plan: HeistPlan
+        let kind: CatalogHeistKind
+        let context: HeistTraversalContext
+
+        var definitionComponents: [HeistPlanName] {
+            switch kind {
+            case .entry:
+                return []
+            case .capability(let components):
+                return components
+            }
+        }
+    }
+
+    enum LintObservation {
+        case step(HeistStep, context: HeistTraversalContext)
+        case action(ActionStep, context: HeistTraversalContext)
+        case predicateCase(PredicateCase, context: HeistTraversalContext)
+        case elseBody([HeistStep], context: HeistTraversalContext)
+    }
+
+    enum RuntimeValidationObservation {
+        case plan(HeistPlan, context: HeistTraversalContext, requiresName: Bool)
+        case definitions([HeistPlan], context: HeistTraversalContext)
+        case step(HeistStep, context: HeistTraversalContext)
+        case action(ActionStep, context: HeistTraversalContext)
+        case wait(WaitStep, context: HeistTraversalContext)
+        case predicateCase(PredicateCase, context: HeistTraversalContext)
+        case forEachElement(ForEachElementStep, context: HeistTraversalContext)
+        case forEachString(ForEachStringStep, context: HeistTraversalContext)
+        case repeatUntil(RepeatUntilStep, context: HeistTraversalContext)
+        case warn(WarnStep, context: HeistTraversalContext)
+        case fail(FailStep, context: HeistTraversalContext)
+        case heist(HeistPlan, context: HeistTraversalContext)
+        case invoke(HeistInvocationStep, context: HeistTraversalContext)
+    }
+
+    enum SemanticSurfaceObservation {
+        case action(ActionStep)
+        case wait(WaitStep, context: HeistTraversalContext)
+        case forEachElement(ForEachElementStep)
+        case invoke(HeistInvocationStep, context: HeistTraversalContext)
+    }
+
     enum Event {
         case enterPlan(HeistPlan, context: HeistTraversalContext)
         case leavePlan(HeistPlan, context: HeistTraversalContext)
@@ -195,6 +250,231 @@ struct HeistPlanTraversal {
             observe: observe
         )
         try observe(.leavePlan(plan, context: context))
+    }
+
+    func callGraphProjection(for plan: HeistPlan) -> CallGraphProjection {
+        var nodes: Set<HeistInvocationPath> = []
+        var edges: Set<HeistCallGraph.Edge> = []
+        HeistPlanTraversal(expandsInvocations: false).walk(plan) { event in
+            switch event {
+            case .enterDefinition(let plan, let context):
+                guard let name = plan.name else {
+                    preconditionFailure("admitted heist definitions must have names")
+                }
+                nodes.insert(HeistInvocationPath(namePath: context.definitionScope.pathPrefix + [name]))
+            case .invoke(let invocation, let context):
+                guard let caller = context.invocationStack.last,
+                      let resolved = context.resolveInvocation(path: invocation.path)
+                else { return }
+                let callee = resolved.invocationPath
+                nodes.insert(callee)
+                edges.insert(HeistCallGraph.Edge(caller: caller, callee: callee))
+            case .enterPlan,
+                 .leavePlan,
+                 .enterDefinitions,
+                 .leaveDefinitions,
+                 .leaveDefinition,
+                 .enterSteps,
+                 .leaveSteps,
+                 .enterStep,
+                 .leaveStep,
+                 .action,
+                 .wait,
+                 .conditional,
+                 .predicateCase,
+                 .elseBody,
+                 .forEachElement,
+                 .forEachString,
+                 .repeatUntil,
+                 .warn,
+                 .fail,
+                 .heist:
+                break
+            }
+        }
+        return CallGraphProjection(nodes: nodes, edges: edges)
+    }
+
+    func walkCatalogHeists(
+        _ plan: HeistPlan,
+        observe: (CatalogHeistProjection) throws -> Void
+    ) rethrows {
+        try HeistPlanTraversal(expandsInvocations: false).walk(plan) { event in
+            switch event {
+            case .enterPlan(let plan, let context):
+                try observe(CatalogHeistProjection(
+                    plan: plan,
+                    kind: .entry(plan.name),
+                    context: context
+                ))
+            case .enterDefinition(let plan, let context):
+                guard let localName = plan.name else {
+                    preconditionFailure("admitted heist definitions must have names")
+                }
+                let nameComponents = context.definitionScope.pathPrefix + [localName]
+                try observe(CatalogHeistProjection(
+                    plan: plan,
+                    kind: .capability(nameComponents),
+                    context: context
+                ))
+            case .leavePlan,
+                 .enterDefinitions,
+                 .leaveDefinitions,
+                 .leaveDefinition,
+                 .enterSteps,
+                 .leaveSteps,
+                 .enterStep,
+                 .leaveStep,
+                 .action,
+                 .wait,
+                 .conditional,
+                 .predicateCase,
+                 .elseBody,
+                 .forEachElement,
+                 .forEachString,
+                 .repeatUntil,
+                 .warn,
+                 .fail,
+                 .heist,
+                 .invoke:
+                break
+            }
+        }
+    }
+
+    func walkLintObservations(
+        _ plan: HeistPlan,
+        observe: (LintObservation) throws -> Void
+    ) rethrows {
+        try walk(plan) { event in
+            switch event {
+            case .enterStep(let step, let context):
+                try observe(.step(step, context: context))
+            case .action(let action, let context):
+                try observe(.action(action, context: context))
+            case .predicateCase(let predicateCase, let context):
+                try observe(.predicateCase(predicateCase, context: context))
+            case .elseBody(let body, let context):
+                try observe(.elseBody(body, context: context))
+            case .enterPlan,
+                 .leavePlan,
+                 .enterDefinitions,
+                 .leaveDefinitions,
+                 .enterDefinition,
+                 .leaveDefinition,
+                 .enterSteps,
+                 .leaveSteps,
+                 .leaveStep,
+                 .wait,
+                 .conditional,
+                 .forEachElement,
+                 .forEachString,
+                 .repeatUntil,
+                 .warn,
+                 .fail,
+                 .heist,
+                 .invoke:
+                break
+            }
+        }
+    }
+
+    func walkRuntimeValidationObservations(
+        _ plan: HeistPlan,
+        observe: (RuntimeValidationObservation) throws -> Void
+    ) rethrows {
+        try walk(plan) { event in
+            switch event {
+            case .enterPlan(let plan, let context):
+                try observe(.plan(plan, context: context, requiresName: false))
+            case .enterDefinitions(let definitions, let context):
+                try observe(.definitions(definitions, context: context))
+            case .enterDefinition(let plan, let context):
+                try observe(.plan(plan, context: context, requiresName: true))
+            case .enterStep(let step, let context):
+                try observe(.step(step, context: context))
+            case .action(let action, let context):
+                try observe(.action(action, context: context))
+            case .wait(let wait, let context):
+                try observe(.wait(wait, context: context))
+            case .predicateCase(let predicateCase, let context):
+                try observe(.predicateCase(predicateCase, context: context))
+            case .forEachElement(let step, let context):
+                try observe(.forEachElement(step, context: context))
+            case .forEachString(let step, let context):
+                try observe(.forEachString(step, context: context))
+            case .repeatUntil(let step, let context):
+                try observe(.repeatUntil(step, context: context))
+            case .warn(let warn, let context):
+                try observe(.warn(warn, context: context))
+            case .fail(let failStep, let context):
+                try observe(.fail(failStep, context: context))
+            case .heist(let plan, let context):
+                try observe(.heist(plan, context: context))
+            case .invoke(let invocation, let context):
+                try observe(.invoke(invocation, context: context))
+            case .leavePlan,
+                 .leaveDefinitions,
+                 .leaveDefinition,
+                 .enterSteps,
+                 .leaveSteps,
+                 .leaveStep,
+                 .conditional,
+                 .elseBody:
+                break
+            }
+        }
+    }
+
+    func walkSemanticSurfaceObservations(
+        steps: [HeistStep],
+        path: HeistPlanPath,
+        depth: Int,
+        referenceBindings: HeistReferenceBindingContext,
+        definitionScope: HeistDefinitionScope,
+        rootDefinitionScope: HeistDefinitionScope,
+        invocationStack: [HeistInvocationPath],
+        observe: (SemanticSurfaceObservation) throws -> Void
+    ) rethrows {
+        try walk(
+            steps: steps,
+            path: path,
+            depth: depth,
+            referenceBindings: referenceBindings,
+            definitionScope: definitionScope,
+            rootDefinitionScope: rootDefinitionScope,
+            invocationStack: invocationStack
+        ) { event in
+            switch event {
+            case .action(let action, _):
+                try observe(.action(action))
+            case .wait(let wait, let context):
+                try observe(.wait(wait, context: context))
+            case .forEachElement(let step, _):
+                try observe(.forEachElement(step))
+            case .invoke(let invocation, let context):
+                try observe(.invoke(invocation, context: context))
+            case .enterPlan,
+                 .leavePlan,
+                 .enterDefinitions,
+                 .leaveDefinitions,
+                 .enterDefinition,
+                 .leaveDefinition,
+                 .enterSteps,
+                 .leaveSteps,
+                 .enterStep,
+                 .leaveStep,
+                 .conditional,
+                 .predicateCase,
+                 .elseBody,
+                 .forEachString,
+                 .repeatUntil,
+                 .warn,
+                 .fail,
+                 .heist:
+                break
+            }
+        }
     }
 
     func walk(

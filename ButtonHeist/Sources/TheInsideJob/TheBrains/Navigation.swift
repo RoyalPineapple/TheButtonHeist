@@ -117,11 +117,7 @@ final class Navigation {
 
         var omittedScrollPathReasons: [TreePath: Set<InterfaceDiscoveryReasonCode>] = [:]
 
-        private(set) var discoveryLimitHit = false
-
-        private(set) var containerLimitHit = false
-
-        private(set) var leadingEdgeResetLimitHit = false
+        private(set) var limitReasons = Set<InterfaceDiscoveryReasonCode>()
 
         var explorationTime: TimeInterval = 0
 
@@ -149,12 +145,12 @@ final class Navigation {
             in containerPath: TreePath
         ) -> InterfaceDiscoveryReasonCode? {
             guard scrollCount < maxScrollsPerDiscovery else {
-                discoveryLimitHit = true
+                markLimitHit(.discoveryScrollLimit)
                 return .discoveryScrollLimit
             }
             let containerScrollCount = scrollCountByContainerPath[containerPath, default: 0]
             guard containerScrollCount < maxScrollsPerContainer else {
-                containerLimitHit = true
+                markLimitHit(.containerScrollLimit)
                 return .containerScrollLimit
             }
             scrollCountByContainerPath[containerPath] = containerScrollCount + 1
@@ -172,8 +168,9 @@ final class Navigation {
             pendingScrollPaths.removeAll()
         }
 
-        mutating func markDiscoveryLimitHit() {
-            discoveryLimitHit = true
+        mutating func markLimitHit(_ reason: InterfaceDiscoveryReasonCode) {
+            guard Self.limitReasonCodes.contains(reason) else { return }
+            limitReasons.insert(reason)
         }
 
         mutating func addPendingContainers(_ containers: [InterfaceTree.Container]) {
@@ -194,16 +191,7 @@ final class Navigation {
             pendingScrollPaths.remove(containerPath)
             exploredScrollPaths.remove(containerPath)
             omittedScrollPathReasons[containerPath, default: []].insert(reason)
-            switch reason {
-            case .discoveryScrollLimit:
-                discoveryLimitHit = true
-            case .containerScrollLimit:
-                containerLimitHit = true
-            case .leadingEdgeResetLimit:
-                leadingEdgeResetLimitHit = true
-            case .notExplored:
-                break
-            }
+            markLimitHit(reason)
         }
 
         func interfaceDiagnostics(
@@ -231,9 +219,7 @@ final class Navigation {
             _ omittedContainerDetails: [InterfaceDiscoveryOmittedContainer]
         ) -> [InterfaceDiscoveryReasonCode] {
             var reasons = Set(omittedContainerDetails.flatMap(\.reasonCodes))
-            if discoveryLimitHit { reasons.insert(.discoveryScrollLimit) }
-            if containerLimitHit { reasons.insert(.containerScrollLimit) }
-            if leadingEdgeResetLimitHit { reasons.insert(.leadingEdgeResetLimit) }
+            reasons.formUnion(limitReasons)
             return reasons.sorted()
         }
 
@@ -256,7 +242,9 @@ final class Navigation {
             in observation: InterfaceObservation
         ) -> [InterfaceDiscoveryOmittedContainer] {
             var containers = omittedScrollPathReasons
-            let pendingReason: InterfaceDiscoveryReasonCode = discoveryLimitHit ? .discoveryScrollLimit : .notExplored
+            let pendingReason: InterfaceDiscoveryReasonCode = limitReasons.contains(.discoveryScrollLimit)
+                ? .discoveryScrollLimit
+                : .notExplored
             for containerPath in pendingScrollPaths where !exploredScrollPaths.contains(containerPath) {
                 containers[containerPath, default: []].insert(pendingReason)
             }
@@ -323,6 +311,12 @@ final class Navigation {
                 contentHeight: contentHeight
             )
         }
+
+        private static let limitReasonCodes: Set<InterfaceDiscoveryReasonCode> = [
+            .discoveryScrollLimit,
+            .containerScrollLimit,
+            .leadingEdgeResetLimit,
+        ]
 
     }
 

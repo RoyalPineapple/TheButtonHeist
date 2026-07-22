@@ -131,37 +131,11 @@ extension HeistPlanSourceParser {
             ))
         }
         let body = try parseHeistClosureBody(parameter: parameter, allowDefinitions: true)
-        return makeDefinition(
-            components: definitionPath.components[...],
+        return nestedHeistDefinition(
+            path: definitionPath,
             parameter: parameter,
             definitions: mergeDefinitions(body.definitions),
             body: body.steps
-        )
-    }
-
-    func makeDefinition(
-        components: ArraySlice<HeistPlanName>,
-        parameter: HeistParameter,
-        definitions: [HeistPlanAdmissionCandidate],
-        body: [HeistStepAdmissionCandidate]
-    ) -> HeistPlanAdmissionCandidate {
-        guard let first = components.first else {
-            preconditionFailure("validated heist definition path must not be empty")
-        }
-        guard components.count > 1 else {
-            return HeistPlanAdmissionCandidate(name: first, parameter: parameter, definitions: definitions, body: body)
-        }
-        return HeistPlanAdmissionCandidate(
-            name: first,
-            definitions: [
-                makeDefinition(
-                    components: components.dropFirst(),
-                    parameter: parameter,
-                    definitions: definitions,
-                    body: body
-                ),
-            ],
-            body: []
         )
     }
 
