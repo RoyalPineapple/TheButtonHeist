@@ -343,6 +343,7 @@ extension ObjCRuntime.ObjectMethod where Arguments == ObjCRuntime.NoArguments {
     static let keyboardWaitUntilAllTasksAreFinished = ObjCRuntime.ObjectMethod<Arguments>(
         "waitUntilAllTasksAreFinished"
     )
+    static let keyboardDeleteFromInput = ObjCRuntime.ObjectMethod<Arguments>("deleteFromInput")
     static let eventClearTouches = ObjCRuntime.ObjectMethod<Arguments>("_clearTouches")
 }
 
