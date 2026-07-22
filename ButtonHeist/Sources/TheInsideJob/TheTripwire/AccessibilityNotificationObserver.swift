@@ -205,7 +205,12 @@ final class AccessibilityNotificationObserver {
         let subscribers = subscribers.values.compactMap(\.subscriber)
         guard !subscribers.isEmpty else { return }
 
-        latestSequence += 1
+        let subscriberSequence = subscribers.lazy
+            .map(\.latestSequence)
+            .max() ?? 0
+        let sequenceFloor = max(latestSequence, subscriberSequence)
+        precondition(sequenceFloor < UInt64.max, "Accessibility notification sequence overflowed")
+        latestSequence = sequenceFloor + 1
         let timestamp = Date()
         let notificationPayload = CapturedAccessibilityNotificationPayload(notificationData).pendingPayload
         let associatedElementPayload = CapturedAccessibilityNotificationPayload(associatedElement).pendingPayload

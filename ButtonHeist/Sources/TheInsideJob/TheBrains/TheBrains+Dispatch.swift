@@ -281,8 +281,18 @@ extension TheBrains {
         }
 
         var timing = ActionTiming()
+        let startsActiveObservationContext = !vault.semanticObservationStream.hasActiveObservationDemand
+        let demand = vault.semanticObservationStream.beginActiveObservationDemand()
+        defer { demand.cancel() }
+
         let beforeStart = RuntimeElapsed.now
-        guard let before = await interactionCoordinator.admittedBaseline(scope: beforeStateScope) else {
+        let before: ActionEvidenceProjector.Baseline?
+        if startsActiveObservationContext, beforeStateScope == .visible {
+            before = await interactionCoordinator.refreshedVisibleBaseline()
+        } else {
+            before = await interactionCoordinator.admittedBaseline(scope: beforeStateScope)
+        }
+        guard let before else {
             return RuntimeActionExecution(
                 result: treeUnavailableResult(payload: payload),
                 actionExpectationContext: nil
@@ -299,9 +309,6 @@ extension TheBrains {
                 announcementCursor: notificationWindow.cursor
             )
         }
-
-        let demand = vault.semanticObservationStream.beginActiveObservationDemand()
-        defer { demand.cancel() }
 
         let interactionStart = RuntimeElapsed.now
         let dispatchResult = await interaction(&timing)

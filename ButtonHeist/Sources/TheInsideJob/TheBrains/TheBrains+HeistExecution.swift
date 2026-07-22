@@ -5,6 +5,8 @@ import Foundation
 import ThePlans
 @_spi(ButtonHeistInternals) import TheScore
 
+// MARK: - Heist Execution
+
 extension TheBrains {
 
     internal struct HeistExecutionScope {
@@ -163,6 +165,13 @@ extension TheBrains {
     internal func executeHeistPlan(_ plan: HeistPlan, argument: HeistArgument = .none) async -> ActionResult {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(payload: .heist(nil))
+        }
+
+        let demand = vault.semanticObservationStream.beginActiveObservationDemand()
+        defer { demand.cancel() }
+        if tripwire.isPulseRunning,
+           await interactionCoordinator.refreshedVisibleBaseline() == nil {
+            return treeUnavailableResult(payload: .heist(nil))
         }
         return await executeHeistPlan(plan, argument: argument, runtime: .live(self))
     }

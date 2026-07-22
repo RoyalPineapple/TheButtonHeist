@@ -31,16 +31,16 @@ SUITES = {
     "ButtonHeistTests": {"platform": "macos"},
     "TheInsideJobTests": {
         "platform": "ios",
-        "animation_speed": 1_000,
+        "disable_animations": True,
     },
     "TheInsideJobIntegrationTests": {
         "platform": "ios",
-        "animation_speed": 1_000,
+        "disable_animations": True,
     },
     "HostedBehaviorTests": {
         "platform": "ios",
         "serial": True,
-        "animation_speed": 1_000,
+        "disable_animations": True,
     },
     "MacFrameworkTests": {"platform": "macos"},
 }
@@ -262,10 +262,10 @@ def test_command(
     else:
         test_destination = "platform=macOS"
     only_testing = [f"-only-testing:{identifier}" for identifier in only_tests]
-    animation_speed = suite.get("animation_speed")
+    disable_animations = suite.get("disable_animations", False)
     test_host_settings = (
-        [f"BUTTONHEIST_TEST_ANIMATION_SPEED={animation_speed}"]
-        if animation_speed is not None
+        ["BUTTONHEIST_TEST_DISABLE_ANIMATIONS=1"]
+        if disable_animations
         else []
     )
     if mode == "build-for-testing":

@@ -5,7 +5,10 @@ import os
 
 import ButtonHeistSupport
 
+/// Counts process-wide UIKit animation lifecycle edges and resolves idle waiters.
 final class AnimationIdleCounter: Sendable {
+    // MARK: - Nested Types
+
     struct Snapshot: Sendable, Equatable {
         let activeCount: Int
         let observedStartCount: Int
@@ -27,6 +30,8 @@ final class AnimationIdleCounter: Sendable {
         var waiters = WaiterStore<UUID, TimedOneShot<Bool>>()
     }
 
+    // MARK: - Properties
+
     private let state = OSAllocatedUnfairLock(initialState: State())
 
     var activeCount: Int {
@@ -47,6 +52,8 @@ final class AnimationIdleCounter: Sendable {
             )
         }
     }
+
+    // MARK: - Animation Observation
 
     func observeAnimationStarted() {
         state.withLock { state in
@@ -102,10 +109,14 @@ final class AnimationIdleCounter: Sendable {
         )
     }
 
+    // MARK: - Waiter Lifecycle
+
     func cancelAll() {
         let waiters = state.withLock { $0.waiters.removeAll() }
         waiters.forEach { $0.resolve(returning: false) }
     }
+
+    // MARK: - Private Helpers
 
     private func resolve(_ waiterID: UUID, returning value: Bool) {
         let waiter = state.withLock { $0.waiters.remove(waiterID) }

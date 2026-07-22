@@ -552,6 +552,10 @@ concise. `ServerError` likewise accepts `ServerErrorMessage` and an optional
 settlement durations before result construction without changing their JSON
 string and integer shapes.
 
+Successful action settlement may also report the optional typed `path` that
+proved the result: `semanticStability`, `uikitIdle`, or
+`accessibilityQuietWindow`. Timed-out settlement has no path.
+
 For `elementsChanged`, public responses include concrete semantic edits under
 `delta.edits.added`, `delta.edits.removed`, and `delta.edits.updated` when
 present. For `screenChanged`, public responses include the destination

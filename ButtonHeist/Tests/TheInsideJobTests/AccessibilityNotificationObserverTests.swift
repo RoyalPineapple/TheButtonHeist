@@ -449,6 +449,32 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(secondValue, firstValue)
     }
 
+    func testObserverAdvancesPastSubscriberSequenceFromAnotherIngressSource() throws {
+        var callback: AccessibilityNotificationCallback?
+        let observer = AccessibilityNotificationObserver(
+            installCallbackForTesting: { callback = $0 },
+            uninstallCallbackForTesting: {}
+        )
+        defer { observer.uninstall() }
+        let bus = AccessibilityNotificationBus()
+        observer.subscribe(bus)
+        bus.record(
+            sequence: 7,
+            rawCode: 1005,
+            timestamp: Date(timeIntervalSince1970: 0),
+            notificationData: .none,
+            associatedElement: .none
+        )
+
+        try XCTUnwrap(callback)(1001, nil, nil)
+
+        XCTAssertEqual(
+            bus.checkpoint(after: .origin, selection: .all).events.map(\.sequence),
+            [7, 8]
+        )
+        XCTAssertEqual(observer.latestSequence, 8)
+    }
+
     func testUnknownNotificationsPreserveRawCodesAtBoundary() {
         let bus = AccessibilityNotificationBus()
 

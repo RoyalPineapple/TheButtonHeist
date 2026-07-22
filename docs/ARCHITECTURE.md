@@ -167,28 +167,36 @@ The active Inside Job runtime owns one UIKit idle tracker. Its typed
 Objective-C swizzles remain installed from runtime activation until suspension
 or stop, call UIKit's original `UIViewAnimationState` start/stop methods first,
 and never need to mutate the process-global method table around each action.
-The outermost active-observation demand opens one operation counter; nested
-heists and actions share it, while animations that predate Button Heist work
-are ignored. A public `CFRunLoopObserver` publishes one-shot main-loop
-`beforeWaiting` edges. Active settlement requires the
-animation counter to reach zero and then observes a main-loop idle edge before
-capturing the AX tree, all within the same authored operation deadline. The
-parser confirms that first post-idle fingerprint once on the next real frame;
-it no longer waits an arbitrary quiet duration on the normal active path. It
-rechecks the animation count at the run-loop edge so a newly started animation
-repeats the gate. If private idle tracking is unavailable, its immediate
-failure selects the 60 ms AX quiet-window policy; both policies sample through
-Button Heist's one CADisplayLink heartbeat. The heartbeat runs at the configured
+One aggregate animation counter runs continuously for that lifecycle, so a
+heist can observe an animation that began before its own execution scope.
+Outermost active-observation demand only opens permission to wait on that
+counter; nested heists and actions share the permission and its one-shot idle
+waiters. A public `CFRunLoopObserver` publishes one-shot main-loop
+`beforeWaiting` edges. Active settlement starts parsing immediately and races
+two proofs within the same authored operation deadline. The UIKit proof waits
+for the aggregate animation count to reach zero, rechecks it at a main-loop
+idle edge, then admits the first parse from an explicitly registered future
+heartbeat only if the count is still zero on that heartbeat. The semantic
+proof admits a fingerprint that remains unchanged for
+60 ms, so a cosmetic infinite animation cannot pin the operation forever.
+Both proofs sample through Button Heist's one CADisplayLink heartbeat. The
+UIKit waiter is armed after the first heartbeat so UIKit has a chance to publish
+animation starts deferred until transaction commit. The heartbeat runs at the configured
 ambient rate and temporarily rises to the active screen's maximum refresh rate
 while an immediate one-shot waiter exists, then restores the ambient rate on
 observation, cancellation, timeout, or shutdown. No parser-owned timer or
-second display link exists. An idle wait that exhausts the authored deadline
-remains timed out. An already-zero counter completes its
-phase immediately, and an unmatched stop clamps at zero. Nested heists inherit
-the outermost demand and counter; they never install parallel hooks. Returning
-to idle demand discards the operation counter. Runtime release invalidates the
-observer and safely restores both methods unless a later swizzler superseded
-Button Heist's implementation.
+second display link exists. Tripwire generation changes invalidate both proofs
+and restart their evidence. If private idle tracking is unavailable, the
+semantic quiet-window proof remains sufficient. An already-zero counter
+completes its phase immediately, and an unmatched stop clamps at zero. Nested heists inherit
+the outermost demand; they never install parallel hooks. Returning to idle
+demand cancels pending waiters but preserves lifecycle animation truth. Before
+a live heist—or a standalone action without an enclosing active context—opens
+its notification attribution scope, it commits one fresh composite baseline.
+That boundary prevents pre-existing navigation work from being attributed to
+the first action. Runtime release invalidates the observer, cancels waiters,
+and safely restores both methods unless a later swizzler superseded Button
+Heist's implementation.
 
 That shared deadline is an operation bound, not a main-thread responsiveness
 probe. A true liveness probe must originate off the main actor, schedule a

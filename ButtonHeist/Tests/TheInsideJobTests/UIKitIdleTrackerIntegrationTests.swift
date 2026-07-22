@@ -39,8 +39,9 @@ final class UIKitIdleTrackerIntegrationTests: XCTestCase {
         let tracker = UIKitIdleTracker()
         try tracker.installIfNeeded()
         defer { tracker.uninstallIfNeeded() }
-        tracker.beginOperationIfAvailable()
-        defer { tracker.endOperationIfNeeded() }
+        let tripwire = TheTripwire()
+        tripwire.startPulse()
+        defer { tripwire.stopPulse() }
         var completionRan = false
 
         UIView.animate(withDuration: 0.05, animations: {
@@ -49,8 +50,18 @@ final class UIKitIdleTrackerIntegrationTests: XCTestCase {
             completionRan = true
         })
 
+        let heartbeat = await tripwire.waitForNextHeartbeat(
+            timeout: .seconds(1),
+            demand: .immediate
+        )
+        XCTAssertEqual(heartbeat, .observed)
+        XCTAssertGreaterThan(try XCTUnwrap(tracker.animationSnapshot).observedStartCount, 0)
+        tracker.beginOperationIfAvailable()
+        defer { tracker.endOperationIfNeeded() }
         let becameIdle = await tracker.waitUntilIdle(timeout: .seconds(1))
+        let remainsIdle = await tracker.waitUntilIdle(timeout: .zero)
         XCTAssertTrue(becameIdle)
+        XCTAssertTrue(remainsIdle)
         XCTAssertTrue(completionRan, "The original UIKit stop implementation must run before idle is published")
     }
 
@@ -75,7 +86,7 @@ final class UIKitIdleTrackerIntegrationTests: XCTestCase {
         XCTAssertFalse(tracker.isInstalled)
     }
 
-    func testRepeatingAnimationStartedInsideOperationUsesIdleTimeout() async throws {
+    func testRepeatingAnimationSettlesThroughAccessibilityQuietWindow() async throws {
         let window = UIWindow(windowScene: try requireForegroundWindowScene())
         window.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
         let viewController = UIViewController()
@@ -86,12 +97,15 @@ final class UIKitIdleTrackerIntegrationTests: XCTestCase {
         window.layer.speed = 1
         defer { window.isHidden = true }
 
-        let tracker = UIKitIdleTracker()
-        try tracker.installIfNeeded()
-        tracker.beginOperationIfAvailable()
+        let tripwire = TheTripwire()
+        tripwire.startPulse()
+        let vault = TheVault(tripwire: tripwire)
+        try tripwire.uikitIdleTracker.installIfNeeded()
+        tripwire.uikitIdleTracker.beginOperationIfAvailable()
         defer {
-            tracker.endOperationIfNeeded()
-            tracker.uninstallIfNeeded()
+            tripwire.uikitIdleTracker.endOperationIfNeeded()
+            tripwire.uikitIdleTracker.uninstallIfNeeded()
+            tripwire.stopPulse()
         }
 
         UIView.animate(
@@ -104,14 +118,25 @@ final class UIKitIdleTrackerIntegrationTests: XCTestCase {
         )
         defer { animatedView.layer.removeAllAnimations() }
 
-        let becameIdle = await tracker.waitUntilIdle(timeout: .milliseconds(100))
+        let settlement = await SettleSession.live(
+            vault: vault,
+            tripwire: tripwire,
+            timeoutMs: 500,
+            policy: .uikitIdleOrQuietWindow(milliseconds: 60)
+        ).run(
+            start: RuntimeElapsed.now,
+            baselineTripwireSignal: tripwire.tripwireSignal()
+        )
 
-        let snapshot = try XCTUnwrap(tracker.operationSnapshot)
-        XCTAssertFalse(becameIdle)
+        let snapshot = try XCTUnwrap(tripwire.uikitIdleTracker.animationSnapshot)
+        XCTAssertTrue(settlement.outcome.didSettleCleanly)
+        XCTAssertEqual(settlement.proof, .accessibilityQuietWindow)
         XCTAssertGreaterThan(snapshot.observedStartCount, 0)
         XCTAssertLessThan(snapshot.matchedStopCount, snapshot.observedStartCount)
         XCTAssertGreaterThan(snapshot.activeCount, 0)
-        XCTAssertTrue(tracker.isTrackingOperation)
+        XCTAssertTrue(tripwire.uikitIdleTracker.isTrackingOperation)
+        let repeatingAnimationIsIdle = await tripwire.uikitIdleTracker.waitUntilIdle(timeout: .zero)
+        XCTAssertFalse(repeatingAnimationIsIdle)
     }
 
     func testNestedActiveDemandsShareOutermostOperationScope() throws {
@@ -165,7 +190,8 @@ final class UIKitIdleTrackerIntegrationTests: XCTestCase {
         tripwire.uikitIdleTracker.beginOperationIfAvailable()
         defer { tripwire.uikitIdleTracker.endOperationIfNeeded() }
 
-        UIView.animate(withDuration: 0.05, animations: {
+        let settlementStart = RuntimeElapsed.now
+        UIView.animate(withDuration: 0.1, animations: {
             animatedView.frame.origin.x = 100
         }, completion: { _ in
             DispatchQueue.main.async {
@@ -173,26 +199,30 @@ final class UIKitIdleTrackerIntegrationTests: XCTestCase {
             }
         })
 
-        let becameIdle = await tripwire.uikitIdleTracker.waitUntilIdle(timeout: .seconds(1))
-        XCTAssertTrue(becameIdle)
-        XCTAssertEqual(animatedView.accessibilityLabel, "Ready")
         let settlement = await SettleSession.live(
             vault: vault,
             tripwire: tripwire,
             timeoutMs: 1_000,
-            policy: .postIdleConfirmation
+            policy: .uikitIdleOrQuietWindow(milliseconds: 500)
         ).run(
-            start: RuntimeElapsed.now,
+            start: settlementStart,
             baselineTripwireSignal: tripwire.tripwireSignal()
         )
         XCTAssertTrue(settlement.outcome.didSettleCleanly)
+        XCTAssertEqual(settlement.proof, .uikitIdle)
+        XCTAssertEqual(
+            animatedView.accessibilityLabel,
+            "Ready",
+            "Idle counter: \(String(describing: tripwire.uikitIdleTracker.animationSnapshot))"
+        )
         XCTAssertTrue(tripwire.runningContext?.heartbeatWaiters.isEmpty == true)
-        let labels = AccessibilityHierarchyParser()
-            .parseAccessibilityHierarchy(in: viewController.view, rotorResultLimit: 0)
-            .flattenToElements()
-            .compactMap(\.label)
-        XCTAssertTrue(labels.contains("Ready"))
-        XCTAssertFalse(labels.contains("Loading"))
+        let labels = try XCTUnwrap(settlement.finalObservation)
+            .tree.viewportCapture.hierarchy.sortedElements.compactMap(\.label)
+        XCTAssertTrue(
+            labels.contains("Ready"),
+            "Settled labels: \(labels); idle counter: \(String(describing: tripwire.uikitIdleTracker.animationSnapshot))"
+        )
+        XCTAssertFalse(labels.contains("Loading"), "Settled labels: \(labels)")
     }
 }
 #endif

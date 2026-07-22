@@ -5,25 +5,34 @@ import TheScore
 
 private let uikitIdleLogger = ButtonHeistLog.logger(.insideJob(.accessibility))
 
-/// Keeps UIKit's animation lifecycle hooks installed while The Inside Job is
-/// active and counts only animations started during active Button Heist work.
+/// Keeps UIKit's animation lifecycle hooks and one continuous animation count
+/// installed while The Inside Job is active.
 ///
 /// Installation is runtime-owned because Objective-C method replacement is
-/// process-global. Operation tracking is demand-owned so ambient animations
-/// that predate an action cannot pin that action's idle wait indefinitely.
+/// process-global. Active observation demand owns permission to wait, while the
+/// lifecycle count also retains animations that began before a heist started.
 @MainActor
 final class UIKitIdleTracker {
+    // MARK: - Nested Types
+
     private struct Installation {
         let runLoopIdleObserver: RunLoopIdleObserver
         let startSwizzle: ObjCRuntime.InstanceMethodSwizzle
         let stopSwizzle: ObjCRuntime.InstanceMethodSwizzle
     }
 
+    private struct InstalledState {
+        let installation: Installation
+        let counter: AnimationIdleCounter
+        var operationDepth: Int
+    }
+
     private enum Phase {
         case uninstalled
-        case installed(Installation)
-        case tracking(Installation, AnimationIdleCounter)
+        case installed(InstalledState)
     }
+
+    // MARK: - Properties
 
     private var phase: Phase = .uninstalled
 
@@ -33,14 +42,16 @@ final class UIKitIdleTracker {
     }
 
     var isTrackingOperation: Bool {
-        if case .tracking = phase { return true }
-        return false
+        guard case .installed(let state) = phase else { return false }
+        return state.operationDepth > 0
     }
 
-    var operationSnapshot: AnimationIdleCounter.Snapshot? {
-        guard case .tracking(_, let counter) = phase else { return nil }
-        return counter.snapshot
+    var animationSnapshot: AnimationIdleCounter.Snapshot? {
+        guard case .installed(let state) = phase else { return nil }
+        return state.counter.snapshot
     }
+
+    // MARK: - Runtime Lifecycle
 
     @discardableResult
     func installIfNeeded() throws -> Bool {
@@ -76,10 +87,14 @@ final class UIKitIdleTracker {
             throw error
         }
 
-        phase = .installed(Installation(
-            runLoopIdleObserver: runLoopIdleObserver,
-            startSwizzle: startSwizzle,
-            stopSwizzle: stopSwizzle
+        phase = .installed(InstalledState(
+            installation: Installation(
+                runLoopIdleObserver: runLoopIdleObserver,
+                startSwizzle: startSwizzle,
+                stopSwizzle: stopSwizzle
+            ),
+            counter: AnimationIdleCounter(),
+            operationDepth: 0
         ))
         return true
     }
@@ -96,67 +111,75 @@ final class UIKitIdleTracker {
 
     @discardableResult
     func uninstallIfNeeded() -> Bool {
-        let installation: Installation
+        let installedState: InstalledState
         switch phase {
         case .uninstalled:
             return false
-        case .installed(let currentInstallation):
-            installation = currentInstallation
-        case .tracking(let currentInstallation, let counter):
-            counter.cancelAll()
-            installation = currentInstallation
+        case .installed(let state):
+            installedState = state
         }
 
-        installation.runLoopIdleObserver.invalidate()
-        _ = installation.stopSwizzle.restore()
-        _ = installation.startSwizzle.restore()
+        installedState.counter.cancelAll()
+        installedState.installation.runLoopIdleObserver.invalidate()
+        _ = installedState.installation.stopSwizzle.restore()
+        _ = installedState.installation.startSwizzle.restore()
         phase = .uninstalled
         return true
     }
 
+    // MARK: - Active Observation
+
     func beginOperationIfAvailable() {
-        guard case .installed(let installation) = phase else { return }
-        phase = .tracking(installation, AnimationIdleCounter())
+        guard case .installed(var state) = phase else { return }
+        precondition(state.operationDepth < Int.max, "UIKit idle operation depth overflowed")
+        state.operationDepth += 1
+        phase = .installed(state)
     }
 
     func endOperationIfNeeded() {
-        guard case .tracking(let installation, let counter) = phase else { return }
-        counter.cancelAll()
-        phase = .installed(installation)
+        guard case .installed(var state) = phase, state.operationDepth > 0 else { return }
+        state.operationDepth -= 1
+        if state.operationDepth == 0 {
+            state.counter.cancelAll()
+        }
+        phase = .installed(state)
     }
 
     func waitUntilIdle(timeout: Duration) async -> Bool {
-        guard case .tracking(let installation, let counter) = phase else { return false }
+        guard case .installed(let state) = phase, state.operationDepth > 0 else { return false }
+        guard timeout > .zero else { return state.counter.activeCount == 0 }
         let deadline = ContinuousClock.now.advanced(by: timeout)
 
         while !Task.isCancelled {
             let animationBudget = ContinuousClock.now.duration(to: deadline)
             guard animationBudget > .zero,
-                  await counter.waitUntilIdle(timeout: animationBudget) else {
+                  await state.counter.waitUntilIdle(timeout: animationBudget) else {
                 return false
             }
 
             let runLoopBudget = ContinuousClock.now.duration(to: deadline)
             guard runLoopBudget > .zero,
-                  await installation.runLoopIdleObserver.waitForNextIdle(timeout: runLoopBudget) else {
+                  await state.installation.runLoopIdleObserver.waitForNextIdle(timeout: runLoopBudget) else {
                 return false
             }
 
-            if counter.activeCount == 0 {
+            if state.counter.activeCount == 0 {
                 return true
             }
         }
         return false
     }
 
+    // MARK: - Private Helpers
+
     private func observeAnimationStarted() {
-        guard case .tracking(_, let counter) = phase else { return }
-        counter.observeAnimationStarted()
+        guard case .installed(let state) = phase else { return }
+        state.counter.observeAnimationStarted()
     }
 
     private func observeAnimationStopped() {
-        guard case .tracking(_, let counter) = phase else { return }
-        if counter.observeAnimationStopped() == .unmatchedStop {
+        guard case .installed(let state) = phase else { return }
+        if state.counter.observeAnimationStopped() == .unmatchedStop {
             uikitIdleLogger.warning(
                 "UIViewAnimationState animationDidStop arrived without a matching animationDidStart; clamped active animation count to zero"
             )
