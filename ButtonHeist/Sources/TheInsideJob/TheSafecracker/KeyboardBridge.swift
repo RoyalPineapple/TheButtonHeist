@@ -100,11 +100,13 @@ final class UIKeyboardImplTextInjection {
 
     struct Runtime: Sendable {
         var addInputString: @Sendable (NSObject) -> ObjCRuntime.Message<NSObject, ObjCRuntime.ObjectUIntArguments<NSString>>?
+        var deleteFromInput: @Sendable (NSObject) -> ObjCRuntime.Message<NSObject, ObjCRuntime.NoArguments>?
         var taskQueue: @Sendable (NSObject) -> TaskQueueGetter?
         var waitUntilAllTasksAreFinished: @Sendable (NSObject) -> ObjCRuntime.Message<NSObject, ObjCRuntime.NoArguments>?
 
         static let live = Runtime(
             addInputString: { ObjCRuntime.message(.keyboardAddLiteralInputString, to: $0) },
+            deleteFromInput: { ObjCRuntime.message(.keyboardDeleteFromInput, to: $0) },
             taskQueue: { ObjCRuntime.resolve(.keyboardTaskQueue, from: $0) },
             waitUntilAllTasksAreFinished: {
                 ObjCRuntime.message(.keyboardWaitUntilAllTasksAreFinished, to: $0)
@@ -134,6 +136,18 @@ final class UIKeyboardImplTextInjection {
         }
         addInputString.send(text as NSString, flags: Self.literalInsertionFlags)
         return drainTaskQueue(character: text)
+    }
+
+    func deleteBackward() -> KeyboardTextInjectionOutcome {
+        guard let deleteFromInput = runtime.deleteFromInput(impl) else {
+            return .failed(.missingSelector(
+                KeyboardNoArgumentMethod.keyboardDeleteFromInput.rawValue,
+                strategy: Self.strategyName,
+                character: nil
+            ))
+        }
+        deleteFromInput.call()
+        return drainTaskQueue(character: nil)
     }
 
     func drainTaskQueue(character: String?) -> KeyboardTextInjectionOutcome {
@@ -220,12 +234,18 @@ final class UIKeyboardImplTextInjection {
         return true
     }
 
+    /// Delete backward through UIKeyboardImpl's own input processing.
+    ///
+    /// Deletes must route through the impl (`deleteFromInput`), not directly
+    /// via `UIKeyInput.deleteBackward()` on the delegate: a direct delete
+    /// leaves the impl's internal document state stale, and its next
+    /// `addInputString:` reconciles against that stale state — swallowing the
+    /// first typed character on fields that reformat their text on change.
     func deleteBackward() -> KeyboardTextInjectionOutcome {
-        guard let input = delegate as? UIKeyInput else {
+        guard hasActiveInput else {
             return .failed(.noActiveInput(strategy: UIKeyboardImplTextInjection.strategyName))
         }
-        input.deleteBackward()
-        return textInjection.drainTaskQueue(character: nil)
+        return textInjection.deleteBackward()
     }
 
 }

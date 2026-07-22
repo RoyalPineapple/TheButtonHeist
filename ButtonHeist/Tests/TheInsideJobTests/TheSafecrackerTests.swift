@@ -6,6 +6,7 @@ import ThePlans
 @MainActor
 final class KeyboardInjectionTextInputDelegate: NSObject, UIKeyInput {
     private(set) var insertedText: [String] = []
+    private(set) var directDeleteCount = 0
 
     var hasText: Bool { !insertedText.isEmpty }
 
@@ -13,7 +14,9 @@ final class KeyboardInjectionTextInputDelegate: NSObject, UIKeyInput {
         insertedText.append(text)
     }
 
-    func deleteBackward() {}
+    func deleteBackward() {
+        directDeleteCount += 1
+    }
 }
 
 @MainActor
@@ -36,6 +39,7 @@ final class KeyboardInjectionKeyboardImpl: NSObject {
     var taskQueueObject: KeyboardInjectionTaskQueue? = KeyboardInjectionTaskQueue()
     private(set) var inputStrings: [String] = []
     private(set) var inputFlags: [UInt] = []
+    private(set) var deleteFromInputCount = 0
 
     @objc(delegate)
     func delegate() -> AnyObject? {
@@ -46,6 +50,11 @@ final class KeyboardInjectionKeyboardImpl: NSObject {
     func addInputString(_ text: NSString, flags: UInt) {
         inputStrings.append(text as String)
         inputFlags.append(flags)
+    }
+
+    @objc(deleteFromInput)
+    func deleteFromInput() {
+        deleteFromInputCount += 1
     }
 
     @objc(taskQueue)
@@ -65,6 +74,10 @@ final class KeyboardInjectionKeyboardImpl: NSObject {
             addInputString: { target in
                 guard AddInputStringMethod.keyboardAddLiteralInputString.rawValue != selector else { return nil }
                 return ObjCRuntime.message(.keyboardAddLiteralInputString, to: target)
+            },
+            deleteFromInput: { target in
+                guard KeyboardNoArgumentMethod.keyboardDeleteFromInput.rawValue != selector else { return nil }
+                return ObjCRuntime.message(.keyboardDeleteFromInput, to: target)
             },
             taskQueue: { target in
                 guard KeyboardObjectGetter.keyboardTaskQueue.rawValue != selector else { return nil }
@@ -256,6 +269,35 @@ final class TheSafecrackerTests: XCTestCase {
             Array(repeating: UIKeyboardImplTextInjection.literalInsertionFlags, count: 3)
         )
         XCTAssertEqual(keyboardImpl.taskQueueObject?.waitCount, 3)
+    }
+
+    func testDeleteBackwardRoutesThroughKeyboardImplNotDelegate() {
+        let keyboardImpl = KeyboardInjectionKeyboardImpl()
+        let bridge = keyboardImpl.bridge()
+
+        let result = bridge.deleteBackward()
+
+        XCTAssertEqual(result, .dispatched)
+        XCTAssertEqual(keyboardImpl.deleteFromInputCount, 1)
+        XCTAssertEqual(keyboardImpl.inputDelegate.directDeleteCount, 0)
+        XCTAssertEqual(keyboardImpl.taskQueueObject?.waitCount, 1)
+    }
+
+    func testDeleteBackwardReportsMissingDeleteFromInputSelector() {
+        let keyboardImpl = KeyboardInjectionKeyboardImpl()
+        let bridge = keyboardImpl.bridge(missingSelector: "deleteFromInput")
+
+        let result = bridge.deleteBackward()
+
+        XCTAssertEqual(
+            result.diagnostic,
+            KeyboardTextInjectionDiagnostic.missingSelector(
+                "deleteFromInput",
+                strategy: UIKeyboardImplTextInjection.strategyName,
+                character: nil
+            )
+        )
+        XCTAssertEqual(keyboardImpl.deleteFromInputCount, 0)
     }
 
     func testTextInjectionReportsMissingDrainSelectorAfterDispatch() {

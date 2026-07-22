@@ -97,6 +97,11 @@ final class ActionTextInputKeyboardImpl: NSObject {
         inputDelegate.insertText(text as String)
     }
 
+    @objc(deleteFromInput)
+    func deleteFromInput() {
+        inputDelegate.deleteBackward()
+    }
+
     @objc(taskQueue)
     func taskQueue() -> AnyObject? {
         self
