@@ -55,54 +55,116 @@ struct HeistId: RawRepresentable, Hashable, Sendable, Codable, Comparable, Custo
 
 // MARK: - HeistId Assignment
 
-extension TheVault {
+/// Assigns deterministic heistIds to accessibility elements.
+/// Pure value-in, value-out — no mutable state.
+enum HeistIdAssignment {
 
-    /// Assigns deterministic heistIds to accessibility elements.
-    /// Pure value-in, value-out — no mutable state.
-    enum IdAssignment {
+    struct Input {
+        let element: AccessibilityElement
+        let duplicateOrder: DuplicateOrder?
+
+        init(
+            element: AccessibilityElement,
+            duplicateOrder: DuplicateOrder? = nil
+        ) {
+            self.element = element
+            self.duplicateOrder = duplicateOrder
+        }
+    }
+
+    struct DuplicateOrder: Comparable {
+        private let scrollContainerPath: TreePath
+        private let scrollIndex: Int
+
+        static func scrollMembership(containerPath: TreePath, index: Int) -> DuplicateOrder {
+            DuplicateOrder(scrollContainerPath: containerPath, scrollIndex: index)
+        }
+
+        static func < (lhs: DuplicateOrder, rhs: DuplicateOrder) -> Bool {
+            if lhs.scrollContainerPath != rhs.scrollContainerPath {
+                return lhs.scrollContainerPath < rhs.scrollContainerPath
+            }
+            return lhs.scrollIndex < rhs.scrollIndex
+        }
+    }
 
     /// Assign deterministic `heistId` to each AccessibilityElement.
     /// Stable developer-provided identifiers take priority — they become the heistId directly.
     /// Identifiers containing UUIDs (SwiftUI runtime artifacts) are skipped in favor of synthesis.
     /// Synthesized IDs use `{trait}_{slug}` with label for the slug (value excluded for stability).
-    /// Duplicates get `_1`, `_2` suffixes in traversal order — all instances, not just the second.
+    /// Duplicates get `_1`, `_2` suffixes in input order — all instances, not just the second.
     /// Returns the heistId array, parallel to the input elements array.
     static func assign(_ elements: [AccessibilityElement]) -> [HeistId] {
-        // Phase 1: generate base IDs
-        var heistIds = elements.map { element -> HeistId in
-            if let identifier = element.identifier, !identifier.isEmpty,
-               isStableIdentifier(identifier) {
-                return HeistId(rawValue: identifier)
-            }
-            return HeistId(rawValue: synthesizeBaseId(element))
-        }
+        assign(elements.map { Input(element: $0) })
+    }
 
-        // Phase 2: disambiguate duplicates
-        let counts = heistIds.reduce(into: [HeistId: Int]()) { $0[$1, default: 0] += 1 }
-
-        var seen: [HeistId: Int] = [:]
+    /// Assign deterministic `heistId` values while allowing the caller to provide
+    /// stable order evidence for duplicate elements. Scroll-backed
+    /// observations use scroll membership so a row keeps the same suffix when it
+    /// moves between offscreen inventory and the visible parser hierarchy.
+    static func assign(_ inputs: [Input]) -> [HeistId] {
+        let baseIds = inputs.map { baseId(for: $0.element) }
+        var heistIds = baseIds
+        let counts = baseIds.reduce(into: [HeistId: Int]()) { $0[$1, default: 0] += 1 }
         var usedIds = Set(counts.compactMap { id, count in count == 1 ? id : nil })
-        for index in heistIds.indices {
-            let base = heistIds[index]
-            if let count = counts[base], count > 1 {
-                var suffix = seen[base, default: 0] + 1
-                var candidate = HeistId(rawValue: "\(base.rawValue)_\(suffix)")
-                while usedIds.contains(candidate) {
+
+        let duplicateIndexGroups = Dictionary(grouping: baseIds.indices, by: { baseIds[$0] })
+            .values
+            .filter { $0.count > 1 }
+            .sorted { left, right in
+                guard let leftIndex = left.min(),
+                      let rightIndex = right.min()
+                else { return false }
+                return leftIndex < rightIndex
+            }
+
+        for indices in duplicateIndexGroups {
+            var suffix = 1
+            for index in orderedDuplicates(indices, inputs: inputs) {
+                var id = HeistId(rawValue: "\(baseIds[index].rawValue)_\(suffix)")
+                while usedIds.contains(id) {
                     suffix += 1
-                    candidate = HeistId(rawValue: "\(base.rawValue)_\(suffix)")
+                    id = HeistId(rawValue: "\(baseIds[index].rawValue)_\(suffix)")
                 }
-                seen[base] = suffix
-                usedIds.insert(candidate)
-                heistIds[index] = candidate
+                usedIds.insert(id)
+                heistIds[index] = id
+                suffix += 1
             }
         }
 
         return heistIds
     }
 
+    private static func orderedDuplicates(
+        _ indices: [Int],
+        inputs: [Input]
+    ) -> [Int] {
+        guard indices.allSatisfy({ inputs[$0].duplicateOrder != nil }) else {
+            return indices.sorted()
+        }
+        return indices.sorted { lhs, rhs in
+            guard let left = inputs[lhs].duplicateOrder,
+                  let right = inputs[rhs].duplicateOrder
+            else {
+                return lhs < rhs
+            }
+            return left == right ? lhs < rhs : left < right
+        }
+    }
+
+    private static func baseId(for element: AccessibilityElement) -> HeistId {
+        if let identifier = element.identifier, !identifier.isEmpty,
+           isStableIdentifier(identifier) {
+            return HeistId(rawValue: identifier)
+        }
+        return HeistId(rawValue: synthesizeBaseId(element))
+    }
+
     static func synthesizeBaseId(_ element: AccessibilityElement) -> String {
-        let traitSuffix = AccessibilityPolicy.synthesisPriorityWithMasks
-            .first { element.traits.contains($0.mask) }?.name
+        let traitSuffix = AccessibilityPolicy.synthesisPriorityMaskProjections
+            .first { element.traits.contains($0.mask) }?
+            .trait
+            .rawValue
             ?? (element.label != nil ? HeistTrait.staticText.rawValue : "element")
 
         // Value is intentionally excluded — it changes on interaction (toggles,
@@ -132,12 +194,12 @@ extension TheVault {
         let textWords = text.split(separator: " ", omittingEmptySubsequences: true)
         guard textWords.count > suffixWords.count else { return nil }
         for (suffixWord, textWord) in zip(suffixWords, textWords) {
-            guard textWord.lowercased() == suffixWord else { return nil }
+            guard textWord.lowercased() == suffixWord else {
+                return nil
+            }
         }
         let remainder = textWords.dropFirst(suffixWords.count).joined(separator: " ")
         return remainder.isEmpty ? nil : remainder
-    }
-
     }
 }
 

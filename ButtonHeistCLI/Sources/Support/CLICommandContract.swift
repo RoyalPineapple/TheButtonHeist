@@ -4,7 +4,7 @@ import Foundation
 import ThePlans
 import TheScore
 
-struct CommandArgumentEnvelopeBuilder {
+struct CommandArgumentFields {
     struct Field {
         let key: FenceParameterKey
         let value: HeistValue
@@ -29,17 +29,17 @@ struct CommandArgumentEnvelopeBuilder {
         self.values = values
     }
 
-    mutating func set(_ field: Field?) {
+    var envelope: TheFence.CommandArgumentEnvelope {
+        TheFence.CommandArgumentEnvelope(values: values)
+    }
+
+    mutating func insert(_ field: Field?) {
         guard let field else { return }
         values[field.key.rawValue] = field.value
     }
 
-    mutating func set(_ fields: [Field?]) {
-        fields.forEach { set($0) }
-    }
-
-    func build() -> TheFence.CommandArgumentEnvelope {
-        TheFence.CommandArgumentEnvelope(values: values)
+    mutating func insert(_ fields: [Field?]) {
+        fields.forEach { insert($0) }
     }
 
     static func value(_ key: FenceParameterKey, _ value: HeistValue) -> Field {
@@ -171,7 +171,7 @@ extension LocalOneShotCLICommand {
     var runnerExecutionMode: CLIRunner.ExecutionMode { .direct }
 }
 
-struct CLICommandAdapter {
+struct CLICommandEntry {
     let commandType: ParsableCommand.Type
     let fenceDescriptor: FenceCommandDescriptor?
 
@@ -187,8 +187,8 @@ struct CLICommandAdapter {
     }
 }
 
-enum CLICommandAdapterCatalog {
-    // MARK: - Pure Adapter Wiring
+enum CLICommandCatalog {
+    // MARK: - Pure CLI Wiring
     //
     // This table binds catalog-owned command identities to concrete
     // ArgumentParser adapter types. It must not carry product command
@@ -226,32 +226,32 @@ enum CLICommandAdapterCatalog {
 
     // MARK: - Catalog Projection
 
-    private static let cliOnlyAdapters: [CLICommandAdapter] = [
+    private static let cliOnlyCommands: [CLICommandEntry] = [
         .cliOnly(JSONLinesCommand.self),
     ]
 
-    static let adapters: [CLICommandAdapter] = {
+    static let entries: [CLICommandEntry] = {
         let directDescriptors = TheFence.Command.cliDirectCommandDescriptors
-        let directCommands = Set(directDescriptors.map(\.command))
+        let directCommandSet = Set(directDescriptors.map(\.command))
         precondition(
-            Set(commandTypesByFenceCommand.keys) == directCommands,
+            Set(commandTypesByFenceCommand.keys) == directCommandSet,
             """
-            CLI adapter command map must cover exactly the Fence descriptors marked directCommand. \
-            Update CLICommandAdapterCatalog.commandTypesByFenceCommand when descriptor CLI exposure changes.
+            CLI command map must cover exactly the Fence descriptors marked directCommand. \
+            Update CLICommandCatalog.commandTypesByFenceCommand when descriptor CLI exposure changes.
             """
         )
 
-        let directAdapters = directDescriptors.map { descriptor -> CLICommandAdapter in
+        let directEntries = directDescriptors.map { descriptor -> CLICommandEntry in
             guard let commandType = commandTypesByFenceCommand[descriptor.command] else {
-                preconditionFailure("Missing CLI adapter for direct Fence command \(descriptor.command.rawValue)")
+                preconditionFailure("Missing CLI command type for direct Fence command \(descriptor.command.rawValue)")
             }
             return .fence(commandType, descriptor: descriptor)
         }
-        return directAdapters + cliOnlyAdapters
+        return directEntries + cliOnlyCommands
     }()
 
     static var subcommands: [ParsableCommand.Type] {
-        adapters.map(\.commandType)
+        entries.map(\.commandType)
     }
 
     static func descriptor(for commandType: CLICommandContract.Type) -> FenceCommandDescriptor? {
@@ -260,9 +260,9 @@ enum CLICommandAdapterCatalog {
 
     private static let descriptorsByCommandType: [ObjectIdentifier: FenceCommandDescriptor] = {
         return Dictionary(
-            uniqueKeysWithValues: adapters.compactMap { adapter in
-                guard let commandType = adapter.commandType as? CLICommandContract.Type,
-                      let descriptor = adapter.fenceDescriptor else { return nil }
+            uniqueKeysWithValues: entries.compactMap { entry in
+                guard let commandType = entry.commandType as? CLICommandContract.Type,
+                      let descriptor = entry.fenceDescriptor else { return nil }
                 return (ObjectIdentifier(commandType), descriptor)
             }
         )
@@ -271,8 +271,8 @@ enum CLICommandAdapterCatalog {
 
 extension CLICommandContract {
     static var fenceDescriptor: FenceCommandDescriptor {
-        guard let descriptor = CLICommandAdapterCatalog.descriptor(for: Self.self) else {
-            fatalError("No Fence command descriptor registered for CLI adapter \(Self.self)")
+        guard let descriptor = CLICommandCatalog.descriptor(for: Self.self) else {
+            fatalError("No Fence command descriptor registered for CLI command \(Self.self)")
         }
         return descriptor
     }
@@ -287,15 +287,15 @@ extension CLICommandContract {
 
     static func fenceArguments(
         target: AccessibilityTarget? = nil,
-        _ fields: CommandArgumentEnvelopeBuilder.Field?...
+        _ fields: CommandArgumentFields.Field?...
     ) -> TheFence.CommandArgumentEnvelope {
-        var builder = CommandArgumentEnvelopeBuilder(fields)
-        builder.set(CommandArgumentEnvelopeBuilder.optionalEncoded(.target, target))
-        return builder.build()
+        var fields = CommandArgumentFields(fields)
+        fields.insert(CommandArgumentFields.optionalEncoded(.target, target))
+        return fields.envelope
     }
 
     static func fenceArguments<Payload: Encodable>(payload: Payload) -> TheFence.CommandArgumentEnvelope {
-        CommandArgumentEnvelopeBuilder(payload: payload).build()
+        CommandArgumentFields(payload: payload).envelope
     }
 
     static func catalogDefaultValue<Value>(for parameter: FenceParameter<Value>) -> Value {

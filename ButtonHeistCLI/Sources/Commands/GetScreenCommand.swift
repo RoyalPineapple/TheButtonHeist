@@ -20,7 +20,7 @@ struct GetScreenCommand: OneShotCLICommand {
     @ButtonHeistActor
     func runnerDescriptor() async throws -> CLIRunner.CommandDescriptor {
         let arguments: TheFence.CommandArgumentEnvelope = try requestArguments()
-        let result: CLIRunner.CommandResultMapper?
+        let result: CLIRunner.CommandResultProjection?
         if destination.inline {
             result = { _, response in
                 try Self.inlineCommandResult(for: response)
@@ -39,7 +39,7 @@ struct GetScreenCommand: OneShotCLICommand {
     }
 
     func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
-        CommandArgumentEnvelopeBuilder(try destination.argumentFields().map(Optional.some)).build()
+        CommandArgumentFields(try destination.argumentFields().map(Optional.some)).envelope
     }
 
     static func inlineCommandResult(for response: FenceResponse) throws -> CLIRunner.CommandResult {
@@ -67,20 +67,20 @@ struct ScreenDestinationInput: ParsableArguments {
         _ = try argumentFields()
     }
 
-    func argumentFields() throws -> [CommandArgumentEnvelopeBuilder.Field] {
+    func argumentFields() throws -> [CommandArgumentFields.Field] {
         switch (inline, output) {
         case (true, nil):
             return [
-                CommandArgumentEnvelopeBuilder.value(.inlineData, true),
-                CommandArgumentEnvelopeBuilder.optional(
+                CommandArgumentFields.value(.inlineData, true),
+                CommandArgumentFields.optional(
                     .mode,
                     accessibility ? ScreenCaptureMode.accessibility.rawValue : nil
                 ),
             ].compactMap { $0 }
         case (false, let output):
             return [
-                CommandArgumentEnvelopeBuilder.optional(.output, output),
-                CommandArgumentEnvelopeBuilder.optional(
+                CommandArgumentFields.optional(.output, output),
+                CommandArgumentFields.optional(
                     .mode,
                     accessibility ? ScreenCaptureMode.accessibility.rawValue : nil
                 ),

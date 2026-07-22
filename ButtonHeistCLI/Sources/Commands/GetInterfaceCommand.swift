@@ -20,12 +20,12 @@ struct GetInterfaceCommand: ConnectedOneShotCLICommand {
 
     func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
         return Self.fenceArguments(
-            CommandArgumentEnvelopeBuilder.optionalEncoded(.subtree, try subtree.parsedTarget()),
-            CommandArgumentEnvelopeBuilder.optional(
+            CommandArgumentFields.optionalEncoded(.subtree, try subtree.parsedTarget()),
+            CommandArgumentFields.optional(
                 .maxScrollsPerContainer,
                 discoveryLimits.maxScrollsPerContainer
             ),
-            CommandArgumentEnvelopeBuilder.optional(
+            CommandArgumentFields.optional(
                 .maxScrollsPerDiscovery,
                 discoveryLimits.maxScrollsPerDiscovery
             )

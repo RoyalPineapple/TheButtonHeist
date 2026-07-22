@@ -19,7 +19,7 @@ struct ButtonHeistApp: AsyncParsableCommand {
             Use `buttonheist json_lines` for canonical JSON commands on stdin, or read the generated command reference for the full command contract.
             """,
         version: buttonHeistVersion.description,
-        subcommands: CLICommandAdapterCatalog.subcommands
+        subcommands: CLICommandCatalog.subcommands
     )
 }
 

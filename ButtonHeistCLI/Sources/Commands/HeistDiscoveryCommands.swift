@@ -35,7 +35,7 @@ struct ListHeistsCommand: LocalOneShotCLICommand {
             entry: nil,
             commandName: Self.cliCommandName,
             additionalFields: detail ? [
-                CommandArgumentEnvelopeBuilder.value(FenceParameters.heistCatalogDetail, .detailed),
+                CommandArgumentFields.value(FenceParameters.heistCatalogDetail, .detailed),
             ] : []
         )
     }
@@ -72,7 +72,7 @@ struct DescribeHeistCommand: LocalOneShotCLICommand {
             path: path,
             entry: nil,
             commandName: Self.cliCommandName,
-            additionalFields: [CommandArgumentEnvelopeBuilder.value(.heist, name)]
+            additionalFields: [CommandArgumentFields.value(.heist, name)]
         )
     }
 }

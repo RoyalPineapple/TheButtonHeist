@@ -45,8 +45,8 @@ struct WaitCommand: ConnectedOneShotCLICommand {
 
     func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
         Self.fenceArguments(
-            CommandArgumentEnvelopeBuilder.value(.timeout, timeout),
-            CommandArgumentEnvelopeBuilder.value(.predicate, try predicateInput.predicateValue())
+            CommandArgumentFields.value(.timeout, timeout),
+            CommandArgumentFields.value(.predicate, try predicateInput.predicateValue())
         )
     }
 }

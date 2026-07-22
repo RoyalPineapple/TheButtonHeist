@@ -173,10 +173,15 @@ extension TheVault {
     ) -> [ObservationBuildEntry] {
         let candidates = indexedElements.map(ObservationElementCandidate.viewport)
             + offscreenScrollElements.map(ObservationElementCandidate.offscreenScrollInventory)
-        let heistIds = TheVault.IdAssignment.assign(candidates.map(\.element))
+        let heistIds = HeistIdAssignment.assign(candidates.map { candidate in
+            HeistIdAssignment.Input(
+                element: candidate.element,
+                duplicateOrder: candidate.duplicateOrder(facts: facts)
+            )
+        })
         precondition(
             heistIds.count == candidates.count,
-            "IdAssignment must return one HeistId for each screen-build element"
+            "HeistIdAssignment must return one HeistId for each screen-build element"
         )
         return candidates.indices.map { index in
             let candidate = candidates[index]
@@ -409,6 +414,22 @@ extension TheVault {
                 facts.focus.isFirstResponder(at: identity.path)
             case .offscreenScrollInventory:
                 false
+            }
+        }
+
+        func duplicateOrder(facts: BuildFacts) -> HeistIdAssignment.DuplicateOrder? {
+            switch self {
+            case .viewport(let identity):
+                if let membership = facts.scroll.element(at: identity.path)?.membership,
+                   let index = membership.index {
+                    return .scrollMembership(containerPath: membership.containerPath, index: index)
+                }
+                return nil
+            case .offscreenScrollInventory(let element):
+                return .scrollMembership(
+                    containerPath: element.scrollContainerPath,
+                    index: element.scrollIndex
+                )
             }
         }
     }

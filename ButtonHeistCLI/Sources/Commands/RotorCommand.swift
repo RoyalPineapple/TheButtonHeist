@@ -50,10 +50,10 @@ struct RotorCommand: ConnectedOneShotCLICommand {
 
         return Self.fenceArguments(
             target: target,
-            CommandArgumentEnvelopeBuilder.value(FenceParameters.rotorDirection, rotorDirection),
-            CommandArgumentEnvelopeBuilder.optional(.rotor, rotor),
-            CommandArgumentEnvelopeBuilder.optional(.rotorIndex, rotorIndex),
-            CommandArgumentEnvelopeBuilder.value(.timeout, timeoutOption.timeout)
+            CommandArgumentFields.value(FenceParameters.rotorDirection, rotorDirection),
+            CommandArgumentFields.optional(.rotor, rotor),
+            CommandArgumentFields.optional(.rotorIndex, rotorIndex),
+            CommandArgumentFields.value(.timeout, timeoutOption.timeout)
         )
     }
 }

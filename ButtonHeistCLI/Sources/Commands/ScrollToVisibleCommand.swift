@@ -36,7 +36,7 @@ struct ScrollToVisibleCommand: ConnectedOneShotCLICommand {
         let target = try element.requireTarget()
         return Self.fenceArguments(
             target: target,
-            CommandArgumentEnvelopeBuilder.value(.timeout, timeout)
+            CommandArgumentFields.value(.timeout, timeout)
         )
     }
 }

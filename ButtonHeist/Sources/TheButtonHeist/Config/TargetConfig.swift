@@ -209,7 +209,7 @@ enum TargetConfigResolver {
     static func resolveEffective(
         targetName: TargetName? = nil,
         config: ButtonHeistFileConfig? = nil,
-        environment: ButtonHeistEnvironment = ButtonHeistEnvironmentBridge.current()
+        environment: ButtonHeistEnvironment = .current
     ) -> TargetConfig? {
         let envDevice = environment.device
         let envToken = environment.token

@@ -410,7 +410,7 @@ private func isAllowedAnyBoundary(_ node: IdentifierTypeSyntax) -> Bool {
         return context.enclosingNominalNames.contains("HeistValuePayloadDecoder")
     }
     return context.enclosingFunctionName == "value"
-        && context.enclosingNominalNames.contains("FoundationInfoPlistBridge")
+        && context.enclosingNominalNames.contains("FoundationInfoPlistProjection")
 }
 
 private func isIsolationAttribute(_ name: String) -> Bool {

@@ -43,7 +43,7 @@ public enum AccessibilityPolicy {
     /// An element gaining or losing one of these between parses keeps the
     /// same heistId — these traits do not contribute to element identity.
     /// Consumed by:
-    /// - `TheVault.IdAssignment` duplicate-id disambiguation
+    /// - `HeistIdAssignment` duplicate-id disambiguation
     /// - `AccessibilityTrace.ChangeFact.between` (functional-move pairing)
     /// - `MinimumPredicateSelector` (matcher suggestion — adds state only
     ///   when semantic predicates remain ambiguous)
@@ -127,7 +127,7 @@ public enum AccessibilityPolicy {
     /// Trait priority for `heistId` synthesis — the first trait an element
     /// carries from this list becomes its heistId suffix.
     ///
-    /// Consumed by `TheVault.IdAssignment.synthesizeBaseId`. The ordering
+    /// Consumed by `HeistIdAssignment.synthesizeBaseId`. The ordering
     /// is locked by `SynthesisDeterminismTests` — changes to this list are
     /// wire-format breaks and require a coordinated release.
     ///

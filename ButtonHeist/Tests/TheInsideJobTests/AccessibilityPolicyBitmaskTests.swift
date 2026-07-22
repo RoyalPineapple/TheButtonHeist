@@ -48,22 +48,22 @@ final class AccessibilityPolicyBitmaskTests: XCTestCase {
                        "transientTraitNames must agree with transientTraits.map(\\.rawValue)")
     }
 
-    // MARK: - Synthesis priority pairs
+    // MARK: - Synthesis priority projections
 
-    func testSynthesisPriorityWithMasksMatchesOrdering() {
-        let masksNames = AccessibilityPolicy.synthesisPriorityWithMasks.map { $0.name }
+    func testSynthesisPriorityMaskProjectionsMatchOrdering() {
+        let projectionNames = AccessibilityPolicy.synthesisPriorityMaskProjections.map { $0.trait.rawValue }
         let traitNames = AccessibilityPolicy.synthesisPriority.map(\.rawValue)
-        XCTAssertEqual(masksNames, traitNames,
-                       "synthesisPriorityWithMasks must preserve synthesisPriority ordering")
+        XCTAssertEqual(projectionNames, traitNames,
+                       "synthesisPriorityMaskProjections must preserve synthesisPriority ordering")
     }
 
     func testSynthesisPriorityMasksResolveToNonEmptyBits() {
         // Every trait in the priority list must be a name the parser
         // recognises — otherwise `fromNames` returns `.none` and the
         // synthesiser silently skips that trait.
-        for pair in AccessibilityPolicy.synthesisPriorityWithMasks {
-            XCTAssertNotEqual(pair.mask, AccessibilityTraits(),
-                              "Synthesis priority entry \(pair.name) resolves to no bits — parser does not know this trait")
+        for projection in AccessibilityPolicy.synthesisPriorityMaskProjections {
+            XCTAssertNotEqual(projection.mask, AccessibilityTraits(),
+                              "Synthesis priority entry \(projection.trait.rawValue) resolves to no bits — parser does not know this trait")
         }
     }
 

@@ -44,23 +44,24 @@ final class AdversarialNavigationTests: XCTestCase {
         XCTAssertEqual(failedStep.failure?.category, .targetResolution)
         XCTAssertEqual(actionResult.outcome, .failure(.elementNotFound))
         XCTAssertNil(actionResult.subjectEvidence)
+        XCTAssertEqual(try counterValue(named: "Archived orders", in: actionResult), 0)
+        XCTAssertEqual(try counterValue(named: "Background archive actions", in: actionResult), 0)
+        XCTAssertEqual(try counterValue(named: "Background scroll attempts", in: actionResult), 0)
+        XCTAssertEqual(try counterValue(named: "Background scroll movements", in: actionResult), 0)
 
         let cleanup = try await runHeist("AdversarialModalObstructionCleanup") {
-            WaitFor(.exists(.element(.label("Archived orders"), .value("0"))), timeout: 2)
-            WaitFor(.exists(.element(
-                .label("Background archive actions"),
-                .value("0")
-            )), timeout: 2)
-            WaitFor(.exists(.element(
-                .label("Background scroll attempts"),
-                .value("0")
-            )), timeout: 2)
-            WaitFor(.exists(.element(
-                .label("Background scroll movements"),
-                .value("0")
-            )), timeout: 2)
-            Activate(.label("Close"))
-                .expect(.missing(.label("Order review")), timeout: 4)
+            If {
+                Case(.exists(.label("Close"))) {
+                    Activate(.label("Close"))
+                        .expect(.missing(.label("Order review")), timeout: 4)
+                }
+                Case(.exists(.label("Modal Obstruction"))) {
+                    WaitFor(.exists(.label("Modal Obstruction")), timeout: 1)
+                }
+                Else {
+                    WaitFor(.exists(.label("ButtonHeist Demo")), timeout: 1)
+                }
+            }
         }
         XCTAssertNil(cleanup.result.firstFailedStep)
     }

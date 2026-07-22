@@ -43,8 +43,8 @@ struct ActivateCommand: ConnectedOneShotCLICommand {
         let target = try element.requireTarget()
         return Self.fenceArguments(
             target: target,
-            CommandArgumentEnvelopeBuilder.optional(.action, action),
-            CommandArgumentEnvelopeBuilder.value(.timeout, timeoutOption.timeout)
+            CommandArgumentFields.optional(.action, action),
+            CommandArgumentFields.value(.timeout, timeoutOption.timeout)
         )
     }
 }

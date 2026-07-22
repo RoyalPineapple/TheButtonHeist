@@ -24,7 +24,7 @@ extension ActionResult {
         let settlement: ActionSettlementEvidence = settledObservation.settled
             ? .settled(
                 duration: duration,
-                path: settledObservation.settleProof?.actionSettlementPath
+                path: settledObservation.settleEvidence?.actionSettlementPath
             )
             : .timedOut(duration: duration)
         let observation = ActionResultObservationEvidence.settledTrace(
@@ -74,8 +74,8 @@ extension ActionEvidenceProjector.Result {
         settleResult.outcome.timeMs
     }
 
-    var settleProof: SettleProof? {
-        settleResult.proof
+    var settleEvidence: SettleEvidence? {
+        settleResult.evidence
     }
 
     private var settleResult: SettleSession.Result {
@@ -129,7 +129,7 @@ extension ActionEvidenceProjector.Result {
     }
 }
 
-private extension SettleProof {
+private extension SettleEvidence {
     var actionSettlementPath: ActionSettlementPath {
         switch self {
         case .semanticStability:

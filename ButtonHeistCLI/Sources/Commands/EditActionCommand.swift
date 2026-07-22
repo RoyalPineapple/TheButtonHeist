@@ -33,7 +33,7 @@ struct EditActionCommand: ConnectedOneShotCLICommand {
     func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
         let editAction = try Self.canonicalAction(action)
         return Self.fenceArguments(
-            CommandArgumentEnvelopeBuilder.value(FenceParameters.editAction, editAction)
+            CommandArgumentFields.value(FenceParameters.editAction, editAction)
         )
     }
 

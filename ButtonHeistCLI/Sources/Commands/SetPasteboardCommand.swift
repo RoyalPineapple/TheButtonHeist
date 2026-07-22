@@ -24,6 +24,6 @@ struct SetPasteboardCommand: ConnectedOneShotCLICommand {
     var runnerStatusMessage: String? { "Writing to pasteboard..." }
 
     func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
-        Self.fenceArguments(CommandArgumentEnvelopeBuilder.value(.text, text))
+        Self.fenceArguments(CommandArgumentFields.value(.text, text))
     }
 }

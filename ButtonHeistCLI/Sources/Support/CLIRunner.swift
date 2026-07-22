@@ -7,7 +7,7 @@ enum CLIRunner {
 
     // MARK: - Nested Types
 
-    typealias CommandResultMapper = @ButtonHeistActor (TheFence, FenceResponse) throws -> CommandResult
+    typealias CommandResultProjection = @ButtonHeistActor (TheFence, FenceResponse) throws -> CommandResult
 
     enum ExecutionMode: Equatable {
         case connected
@@ -23,7 +23,7 @@ enum CLIRunner {
         let statusMessage: String?
         let configuration: EnvironmentConfig?
         let cleanup: () -> Void
-        let result: CommandResultMapper?
+        let result: CommandResultProjection?
 
         init(
             fenceDescriptor: FenceCommandDescriptor,
@@ -34,7 +34,7 @@ enum CLIRunner {
             statusMessage: String? = nil,
             configuration: EnvironmentConfig? = nil,
             cleanup: @escaping () -> Void = {},
-            result: CommandResultMapper? = nil
+            result: CommandResultProjection? = nil
         ) {
             self.fenceDescriptor = fenceDescriptor
             self.connection = connection

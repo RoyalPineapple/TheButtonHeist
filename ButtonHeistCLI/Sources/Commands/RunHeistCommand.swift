@@ -61,9 +61,9 @@ struct RunHeistCommand: ConnectedOneShotCLICommand {
             )
             let heistPath = prepared.path
             let format = output.format ?? .auto
-            let result: CLIRunner.CommandResultMapper?
+            let result: CLIRunner.CommandResultProjection?
             if let junitPath = junit {
-                let junitResult: CLIRunner.CommandResultMapper = { fence, response in
+                let junitResult: CLIRunner.CommandResultProjection = { fence, response in
                     try Self.writeJUnit(
                         fence: fence,
                         response: response,
@@ -191,7 +191,7 @@ struct RunHeistCommand: ConnectedOneShotCLICommand {
         entry: String?,
         argument: String? = nil,
         commandName: String = Self.cliCommandName,
-        additionalFields: [CommandArgumentEnvelopeBuilder.Field] = []
+        additionalFields: [CommandArgumentFields.Field] = []
     ) throws -> TheFence.CommandArgumentEnvelope {
         let suppliedSources = [inline != nil, path != nil].filter { $0 }.count
         guard suppliedSources == 1 else {
@@ -213,12 +213,12 @@ struct RunHeistCommand: ConnectedOneShotCLICommand {
                 )
             }
             // Forward the artifact path; the fence reads the package into a HeistPlan.
-            var builder = CommandArgumentEnvelopeBuilder(
-                CommandArgumentEnvelopeBuilder.value(.path, path),
-                CommandArgumentEnvelopeBuilder.optional(.argument, try argument.map(parseRootArgument))
+            var fields = CommandArgumentFields(
+                CommandArgumentFields.value(.path, path),
+                CommandArgumentFields.optional(.argument, try argument.map(parseRootArgument))
             )
-            builder.set(additionalFields.map(Optional.some))
-            return builder.build()
+            fields.insert(additionalFields.map(Optional.some))
+            return fields.envelope
         }
 
         if entry != nil {
@@ -231,12 +231,12 @@ struct RunHeistCommand: ConnectedOneShotCLICommand {
         guard !inline.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw ValidationError("--plan must be ButtonHeist DSL source")
         }
-        var builder = CommandArgumentEnvelopeBuilder(
-            CommandArgumentEnvelopeBuilder.value(.plan, inline),
-            CommandArgumentEnvelopeBuilder.optional(.argument, try argument.map(parseRootArgument))
+        var fields = CommandArgumentFields(
+            CommandArgumentFields.value(.plan, inline),
+            CommandArgumentFields.optional(.argument, try argument.map(parseRootArgument))
         )
-        builder.set(additionalFields.map(Optional.some))
-        return builder.build()
+        fields.insert(additionalFields.map(Optional.some))
+        return fields.envelope
     }
 
     private static func parseRootArgument(_ rawValue: String) throws -> HeistValue {

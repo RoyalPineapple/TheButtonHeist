@@ -130,7 +130,7 @@ final class UIKitIdleTrackerIntegrationTests: XCTestCase {
 
         let snapshot = try XCTUnwrap(tripwire.uikitIdleTracker.animationSnapshot)
         XCTAssertTrue(settlement.outcome.didSettleCleanly)
-        XCTAssertEqual(settlement.proof, .accessibilityQuietWindow)
+        XCTAssertEqual(settlement.evidence, .accessibilityQuietWindow)
         XCTAssertGreaterThan(snapshot.observedStartCount, 0)
         XCTAssertLessThan(snapshot.matchedStopCount, snapshot.observedStartCount)
         XCTAssertGreaterThan(snapshot.activeCount, 0)
@@ -209,7 +209,7 @@ final class UIKitIdleTrackerIntegrationTests: XCTestCase {
             baselineTripwireSignal: tripwire.tripwireSignal()
         )
         XCTAssertTrue(settlement.outcome.didSettleCleanly)
-        XCTAssertEqual(settlement.proof, .uikitIdle)
+        XCTAssertEqual(settlement.evidence, .uikitIdle)
         XCTAssertEqual(
             animatedView.accessibilityLabel,
             "Ready",
