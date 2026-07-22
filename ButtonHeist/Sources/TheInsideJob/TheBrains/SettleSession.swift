@@ -82,9 +82,16 @@ enum SettleOutcome: Equatable, Sendable {
 enum SettlePolicy: Equatable, Sendable {
     case consecutiveCycles(required: Int)
     case quietWindow(milliseconds: Int)
-    /// The composite animation/run-loop idle edge supplies the timing proof;
-    /// the parser only confirms that its first post-idle snapshot repeats.
-    case postIdleConfirmation
+    /// Samples semantics while UIKit is active. Either a composite UIKit idle
+    /// edge or a quiet accessibility window can prove settlement.
+    case uikitIdleOrQuietWindow(milliseconds: Int)
+}
+
+/// Evidence that proved the final accessibility observation had settled.
+enum SettleProof: Equatable, Sendable {
+    case semanticStability
+    case uikitIdle
+    case accessibilityQuietWindow
 }
 
 struct SettleObservationSample: Equatable, Sendable {
@@ -94,7 +101,7 @@ struct SettleObservationSample: Equatable, Sendable {
 private enum SettleLoopStability: Equatable, Sendable {
     case consecutiveCycles(required: Int, completed: Int)
     case quietWindow(milliseconds: Int, startedAtMs: Int?)
-    case postIdleConfirmation
+    case uikitIdleOrQuietWindow(milliseconds: Int, startedAtMs: Int?, uikitIdleObserved: Bool)
 
     init(policy: SettlePolicy) {
         switch policy {
@@ -102,28 +109,57 @@ private enum SettleLoopStability: Equatable, Sendable {
             self = .consecutiveCycles(required: required, completed: 0)
         case .quietWindow(let milliseconds):
             self = .quietWindow(milliseconds: milliseconds, startedAtMs: nil)
-        case .postIdleConfirmation:
-            self = .postIdleConfirmation
+        case .uikitIdleOrQuietWindow(let milliseconds):
+            self = .uikitIdleOrQuietWindow(
+                milliseconds: milliseconds,
+                startedAtMs: nil,
+                uikitIdleObserved: false
+            )
         }
     }
 
-    mutating func observe(repeatedFingerprint: Bool, elapsedMs: Int) -> Bool {
+    mutating func observe(repeatedFingerprint: Bool, elapsedMs: Int) -> SettleProof? {
         switch self {
         case .consecutiveCycles(let required, let completed):
             let completed = repeatedFingerprint ? completed + 1 : 0
             self = .consecutiveCycles(required: required, completed: completed)
-            return completed >= required
+            return completed >= required ? .semanticStability : nil
 
         case .quietWindow(let milliseconds, var startedAtMs):
             if !repeatedFingerprint {
                 startedAtMs = elapsedMs
             }
             self = .quietWindow(milliseconds: milliseconds, startedAtMs: startedAtMs)
-            return startedAtMs.map { elapsedMs - $0 >= milliseconds } ?? false
+            return startedAtMs.map { elapsedMs - $0 >= milliseconds }
+                == true ? .semanticStability : nil
 
-        case .postIdleConfirmation:
-            return repeatedFingerprint
+        case .uikitIdleOrQuietWindow(let milliseconds, var startedAtMs, let uikitIdleObserved):
+            if uikitIdleObserved {
+                return .uikitIdle
+            }
+            if !repeatedFingerprint {
+                startedAtMs = elapsedMs
+            }
+            self = .uikitIdleOrQuietWindow(
+                milliseconds: milliseconds,
+                startedAtMs: startedAtMs,
+                uikitIdleObserved: false
+            )
+            return startedAtMs.map { elapsedMs - $0 >= milliseconds }
+                == true ? .accessibilityQuietWindow : nil
+
         }
+    }
+
+    mutating func observeUIKitIdle() {
+        guard case .uikitIdleOrQuietWindow(let milliseconds, let startedAtMs, _) = self else {
+            return
+        }
+        self = .uikitIdleOrQuietWindow(
+            milliseconds: milliseconds,
+            startedAtMs: startedAtMs,
+            uikitIdleObserved: true
+        )
     }
 
     mutating func reset() {
@@ -132,8 +168,12 @@ private enum SettleLoopStability: Equatable, Sendable {
             self = .consecutiveCycles(required: required, completed: 0)
         case .quietWindow(let milliseconds, _):
             self = .quietWindow(milliseconds: milliseconds, startedAtMs: nil)
-        case .postIdleConfirmation:
-            break
+        case .uikitIdleOrQuietWindow(let milliseconds, _, _):
+            self = .uikitIdleOrQuietWindow(
+                milliseconds: milliseconds,
+                startedAtMs: nil,
+                uikitIdleObserved: false
+            )
         }
     }
 }
@@ -144,12 +184,14 @@ struct SettleLoopMachine: Equatable {
         private(set) var events: [SettleEvent]
         private var stability: SettleLoopStability
         private var previousFingerprint: Int?
+        private(set) var settlementProof: SettleProof?
 
         init(policy: SettlePolicy, tripwireBaseline: TheTripwire.TripwireSignal) {
             self.tripwireBaseline = tripwireBaseline
             self.events = []
             self.stability = SettleLoopStability(policy: policy)
             self.previousFingerprint = nil
+            self.settlementProof = nil
         }
 
         fileprivate mutating func observe(
@@ -158,10 +200,11 @@ struct SettleLoopMachine: Equatable {
         ) -> Bool {
             let repeatedFingerprint = previousFingerprint == observation.fingerprint
             previousFingerprint = observation.fingerprint
-            return stability.observe(
+            settlementProof = stability.observe(
                 repeatedFingerprint: repeatedFingerprint,
                 elapsedMs: elapsedMs
             )
+            return settlementProof != nil
         }
 
         fileprivate mutating func observe(_ signal: TheTripwire.TripwireSignal) {
@@ -175,8 +218,13 @@ struct SettleLoopMachine: Equatable {
             resetStability()
         }
 
+        fileprivate mutating func observeUIKitIdle() {
+            stability.observeUIKitIdle()
+        }
+
         private mutating func resetStability() {
             previousFingerprint = nil
+            settlementProof = nil
             stability.reset()
         }
     }
@@ -184,6 +232,7 @@ struct SettleLoopMachine: Equatable {
     enum Event: Equatable, Sendable {
         case observation(SettleObservationSample, elapsedMs: Int)
         case tripwireSignal(TheTripwire.TripwireSignal)
+        case uikitIdle
     }
 
     enum Decision: Equatable, Sendable {
@@ -201,6 +250,9 @@ struct SettleLoopMachine: Equatable {
                 : .continuePolling
         case .tripwireSignal(let signal):
             state.observe(signal)
+            decision = .continuePolling
+        case .uikitIdle:
+            state.observeUIKitIdle()
             decision = .continuePolling
         }
         return SettleLoopTransition(state: state, decision: decision)
@@ -226,15 +278,15 @@ struct SettleSessionFinalObservation {
 /// Samples the parsed AX tree on the shared UI heartbeat. Returns `.settled` after
 /// `cyclesRequired` consecutive identical fingerprints — with elements
 /// carrying `UIAccessibilityTraits.updatesFrequently` masked out so spinners
-/// don't block settle. CALayer animations are *not* consulted: a UI is
-/// settled from a screen-reader user's perspective once the AX tree stops
-/// changing, regardless of ongoing visual motion (analog clocks, animated
-/// gradients, Lottie loops).
+/// don't block semantic settle. Active observations also race a UIKit
+/// animation/run-loop idle proof against a semantic quiet window, so finite
+/// transitions can finish immediately while cosmetic loops cannot block
+/// settlement forever.
 ///
 /// **Settle signal boundary.** SettleSession watches settled AX semantics for
 /// both passive observation and active heists. Its policy selects consecutive
-/// fingerprint cycles, a quiet wall-clock fallback, or one post-idle
-/// fingerprint confirmation; the reducer and runner are shared.
+/// fingerprint cycles, a quiet wall-clock window, a combined UIKit-idle and
+/// semantic-quiet race; the reducer and runner are shared.
 /// `TheTripwire.waitForAllClear`
 /// watches CALayers and is deliberately blind to the AX tree; "no layer
 /// motion" and "AX tree stable" disagree on every spinner-driven loading
@@ -298,11 +350,13 @@ struct SettleSessionFinalObservation {
     typealias TripwireSignalProvider = @MainActor () -> TheTripwire.TripwireSignal
     typealias Sleeper = @Sendable (UInt64) async -> Void
     typealias ObservationYield = @MainActor (Duration) async -> TheTripwire.HeartbeatWaitOutcome
+    typealias UIKitIdleWait = @MainActor (Duration) async -> Bool
     typealias Clock = @MainActor () -> RuntimeElapsed.Instant
 
     let parseProvider: ParseProvider
     let tripwireSignalProvider: TripwireSignalProvider
     let observationYield: ObservationYield
+    let uikitIdleWait: UIKitIdleWait?
     let policy: SettlePolicy
     let clock: Clock
     let timeoutMs: Int
@@ -311,6 +365,7 @@ struct SettleSessionFinalObservation {
         parseProvider: @escaping ParseProvider,
         tripwireSignalProvider: @escaping TripwireSignalProvider,
         observationYield: @escaping ObservationYield,
+        uikitIdleWait: UIKitIdleWait? = nil,
         policy: SettlePolicy,
         clock: @escaping Clock,
         timeoutMs: Int
@@ -318,6 +373,7 @@ struct SettleSessionFinalObservation {
         self.parseProvider = parseProvider
         self.tripwireSignalProvider = tripwireSignalProvider
         self.observationYield = observationYield
+        self.uikitIdleWait = uikitIdleWait
         self.policy = policy
         self.clock = clock
         self.timeoutMs = timeoutMs
@@ -338,6 +394,7 @@ struct SettleSessionFinalObservation {
                 await sleeper(UInt64(cycleIntervalMs) * 1_000_000)
                 return Task.isCancelled ? .cancelled : .observed
             },
+            uikitIdleWait: nil,
             policy: .consecutiveCycles(required: cyclesRequired),
             clock: { RuntimeElapsed.now },
             timeoutMs: timeoutMs
@@ -356,6 +413,7 @@ struct SettleSessionFinalObservation {
             parseProvider: parseProvider,
             tripwireSignalProvider: tripwireSignalProvider,
             observationYield: observationYield,
+            uikitIdleWait: nil,
             policy: .quietWindow(milliseconds: quietWindowMs),
             clock: clock,
             timeoutMs: timeoutMs
@@ -381,15 +439,24 @@ struct SettleSessionFinalObservation {
             { timeout in
                 await tripwire.waitForNextHeartbeat(timeout: timeout, demand: .immediate)
             }
-        case .postIdleConfirmation:
+        case .uikitIdleOrQuietWindow:
             { timeout in
                 await tripwire.waitForNextHeartbeat(timeout: timeout, demand: .immediate)
             }
+        }
+        let uikitIdleWait: UIKitIdleWait?
+        if policy.isUIKitIdleAware {
+            uikitIdleWait = { timeout in
+                await tripwire.uikitIdleTracker.waitUntilIdle(timeout: timeout)
+            }
+        } else {
+            uikitIdleWait = nil
         }
         return SettleSession(
             parseProvider: { vault.refreshLiveCapture() },
             tripwireSignalProvider: { tripwire.tripwireSignal() },
             observationYield: observationYield,
+            uikitIdleWait: uikitIdleWait,
             policy: policy,
             clock: { RuntimeElapsed.now },
             timeoutMs: timeoutMs
@@ -410,6 +477,7 @@ struct SettleSessionFinalObservation {
             observationYield: { timeout in
                 await tripwire.waitForNextHeartbeat(timeout: timeout, demand: .immediate)
             },
+            uikitIdleWait: nil,
             policy: .consecutiveCycles(required: 2),
             clock: { RuntimeElapsed.now },
             timeoutMs: timeoutMs
@@ -430,6 +498,7 @@ struct SettleSessionFinalObservation {
         let elementsByKey: [TimelineKey: AccessibilityElement]
         /// Full tripwire signal paired with the final observed generation.
         let tripwireSignal: TheTripwire.TripwireSignal
+        let proof: SettleProof?
         /// Compact explanation of the most recent semantic instability when
         /// the loop exits without a clean settle.
         let instabilityDescription: String?
@@ -440,6 +509,7 @@ struct SettleSessionFinalObservation {
             finalObservation: SettleSessionFinalObservation?,
             elementsByKey: [TimelineKey: AccessibilityElement],
             tripwireSignal: TheTripwire.TripwireSignal,
+            proof: SettleProof? = nil,
             instabilityDescription: String? = nil
         ) {
             precondition(
@@ -451,6 +521,7 @@ struct SettleSessionFinalObservation {
             self.finalObservation = finalObservation
             self.elementsByKey = elementsByKey
             self.tripwireSignal = tripwireSignal
+            self.proof = proof
             self.instabilityDescription = instabilityDescription
         }
     }
@@ -466,6 +537,7 @@ struct SettleSessionFinalObservation {
             parseProvider: parseProvider,
             tripwireSignalProvider: tripwireSignalProvider,
             observationYield: observationYield,
+            uikitIdleWait: uikitIdleWait,
             clock: clock,
             timeoutMs: timeoutMs,
             initial: SettleLoopMachine.State(
@@ -488,6 +560,7 @@ struct SettleSessionFinalObservation {
             },
             elementsByKey: observations.elementsByKey,
             tripwireSignal: state.tripwireBaseline,
+            proof: outcome.didSettleCleanly ? state.settlementProof : nil,
             instabilityDescription: outcome.didSettleCleanly
                 ? nil
                 : observations.latestChangeDescription
@@ -503,10 +576,18 @@ struct SettleSessionFinalObservation {
     }
 }
 
+private extension SettlePolicy {
+    var isUIKitIdleAware: Bool {
+        if case .uikitIdleOrQuietWindow = self { return true }
+        return false
+    }
+}
+
 private struct SettleLoopRunner {
     let parseProvider: SettleSession.ParseProvider
     let tripwireSignalProvider: SettleSession.TripwireSignalProvider
     let observationYield: SettleSession.ObservationYield
+    let uikitIdleWait: SettleSession.UIKitIdleWait?
     let clock: SettleSession.Clock
     let timeoutMs: Int
     let initial: SettleLoopMachine.State
@@ -548,41 +629,148 @@ private struct SettleLoopRunner {
             )
         }
 
-        if let initial = parseProvider() {
-            if let outcome = ingest(initial) {
-                return outcome
+        if let initial = parseProvider(), let outcome = ingest(initial) {
+            return outcome
+        }
+
+        guard deadline.hasTimeRemaining(at: clock()) else {
+            return result(.timedOut(timeMs: deadline.elapsedMilliseconds(at: clock())))
+        }
+
+        let source = SettleLoopEventSource()
+        requestHeartbeat(from: source, deadline: deadline)
+        var idleTask: Task<Void, Never>?
+        defer {
+            idleTask?.cancel()
+            source.cancel()
+        }
+
+        for await event in source.events {
+            switch event {
+            case .heartbeat(let heartbeat):
+                source.consumeHeartbeat()
+                if let outcome = evaluateHeartbeat(heartbeat, deadline: deadline) {
+                    return result(outcome)
+                }
+                if idleTask == nil {
+                    idleTask = startIdleTask(deadline: deadline, continuation: source.continuation)
+                }
+
+                if observeTripwire(machine: machine, state: &state, observations: &observations) {
+                    requestHeartbeat(from: source, deadline: deadline)
+                    continue
+                }
+
+                guard let parse = parseProvider() else {
+                    requestHeartbeat(from: source, deadline: deadline)
+                    continue
+                }
+                if let outcome = ingest(parse) {
+                    return outcome
+                }
+                requestHeartbeat(from: source, deadline: deadline)
+
+            case .uikitIdle:
+                idleTask = nil
+                source.cancelHeartbeat()
+                _ = observeTripwire(machine: machine, state: &state, observations: &observations)
+
+                let heartbeat = await observationYield(
+                    deadline.remainingDuration(at: clock())
+                )
+                if let outcome = evaluateHeartbeat(heartbeat, deadline: deadline) {
+                    return result(outcome)
+                }
+
+                if observeTripwire(machine: machine, state: &state, observations: &observations) {
+                    requestHeartbeat(from: source, deadline: deadline)
+                    continue
+                }
+                guard await uikitIdleWait?(.zero) == true else {
+                    idleTask = startIdleTask(deadline: deadline, continuation: source.continuation)
+                    requestHeartbeat(from: source, deadline: deadline)
+                    continue
+                }
+                _ = reduce(.uikitIdle)
+                guard let parse = parseProvider() else {
+                    requestHeartbeat(from: source, deadline: deadline)
+                    continue
+                }
+                if let outcome = ingest(parse) {
+                    return outcome
+                }
+                requestHeartbeat(from: source, deadline: deadline)
             }
         }
 
-        while deadline.hasTimeRemaining(at: clock()) {
-            let heartbeat = await observationYield(
-                deadline.remainingDuration(at: clock())
-            )
-            if heartbeat == .cancelled || Task.isCancelled {
-                return result(
-                    .cancelled(timeMs: deadline.elapsedMilliseconds(at: clock()))
-                )
-            }
-            guard heartbeat == .observed else {
-                return result(
-                    .timedOut(timeMs: deadline.elapsedMilliseconds(at: clock()))
-                )
-            }
+        return result(await evaluateCompletion(source: source, deadline: deadline))
+    }
 
-            let eventCount = state.events.count
-            _ = reduce(.tripwireSignal(tripwireSignalProvider()))
-            if state.events.count > eventCount {
-                observations.resetCurrentGeneration()
-                continue
-            }
+    @MainActor
+    private func observeTripwire(
+        machine: SettleLoopMachine,
+        state: inout SettleLoopMachine.State,
+        observations: inout SettleObservationLedger
+    ) -> Bool {
+        let eventCount = state.events.count
+        state = machine.reduce(
+            state,
+            event: .tripwireSignal(tripwireSignalProvider())
+        ).state
+        guard state.events.count > eventCount else { return false }
+        observations.resetCurrentGeneration()
+        return true
+    }
 
-            guard let parse = parseProvider() else { continue }
-            if let outcome = ingest(parse) {
-                return outcome
+    @MainActor
+    private func evaluateCompletion(
+        source: SettleLoopEventSource,
+        deadline: SemanticObservationDeadline
+    ) async -> SettleOutcome {
+        if Task.isCancelled {
+            await source.cancelHeartbeatAndWait()
+        }
+        let elapsedMs = deadline.elapsedMilliseconds(at: clock())
+        return Task.isCancelled ? .cancelled(timeMs: elapsedMs) : .timedOut(timeMs: elapsedMs)
+    }
+
+    @MainActor
+    private func evaluateHeartbeat(
+        _ heartbeat: TheTripwire.HeartbeatWaitOutcome,
+        deadline: SemanticObservationDeadline
+    ) -> SettleOutcome? {
+        let elapsedMs = deadline.elapsedMilliseconds(at: clock())
+        if heartbeat == .cancelled || Task.isCancelled {
+            return .cancelled(timeMs: elapsedMs)
+        }
+        return heartbeat == .observed ? nil : .timedOut(timeMs: elapsedMs)
+    }
+
+    @MainActor
+    private func requestHeartbeat(
+        from source: SettleLoopEventSource,
+        deadline: SemanticObservationDeadline
+    ) {
+        guard deadline.hasTimeRemaining(at: clock()) else {
+            source.continuation.yield(.heartbeat(.timedOut))
+            return
+        }
+        source.requestHeartbeat {
+            await observationYield(deadline.remainingDuration(at: clock()))
+        }
+    }
+
+    @MainActor
+    private func startIdleTask(
+        deadline: SemanticObservationDeadline,
+        continuation: AsyncStream<SettleLoopEvent>.Continuation
+    ) -> Task<Void, Never>? {
+        uikitIdleWait.map { waitForIdle in
+            Task { @MainActor in
+                guard await waitForIdle(deadline.remainingDuration(at: clock())) else { return }
+                continuation.yield(.uikitIdle)
             }
         }
-
-        return result(.timedOut(timeMs: deadline.elapsedMilliseconds(at: clock())))
     }
 }
 

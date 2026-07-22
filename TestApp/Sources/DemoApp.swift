@@ -1,6 +1,17 @@
 import SwiftUI
 import TheInsideJob
 
+private enum TestAnimationPolicy {
+    static let disablesAnimations =
+        ProcessInfo.processInfo.environment["BUTTONHEIST_TEST_DISABLE_ANIMATIONS"] == "1"
+
+    static func apply() {
+        if disablesAnimations {
+            UIView.setAnimationsEnabled(false)
+        }
+    }
+}
+
 @main
 struct DemoApp: App {
     @StateObject private var settings = AppSettings()
@@ -14,9 +25,7 @@ struct DemoApp: App {
                 .dynamicTypeSize(settings.textSize.dynamicTypeSize)
                 .onAppear {
                     UIApplication.shared.isIdleTimerDisabled = true
-                    if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
-                        UIView.setAnimationsEnabled(false)
-                    }
+                    TestAnimationPolicy.apply()
                 }
         }
     }

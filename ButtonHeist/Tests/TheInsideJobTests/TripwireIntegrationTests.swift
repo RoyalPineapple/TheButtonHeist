@@ -8,14 +8,26 @@ import XCTest
 @MainActor
 final class TripwireIntegrationTests: XCTestCase {
 
+    private struct WindowLayerSpeedBaseline {
+        let window: UIWindow
+        let speed: Float
+    }
+
     private var tripwire: TheTripwire!
+    private var windowLayerSpeedBaselines: [WindowLayerSpeedBaseline] = []
 
     override func setUp() async throws {
         tripwire = TheTripwire()
         tripwire.startPulse()
+        windowLayerSpeedBaselines = tripwire.captureTraversableWindows().map {
+            WindowLayerSpeedBaseline(window: $0.window, speed: $0.window.layer.speed)
+        }
+        windowLayerSpeedBaselines.forEach { $0.window.layer.speed = 1 }
     }
 
     override func tearDown() async throws {
+        windowLayerSpeedBaselines.forEach { $0.window.layer.speed = $0.speed }
+        windowLayerSpeedBaselines = []
         tripwire.stopPulse()
         tripwire = nil
     }

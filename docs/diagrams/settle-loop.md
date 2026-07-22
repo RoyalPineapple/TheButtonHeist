@@ -1,15 +1,16 @@
 # Settle Loop
 
-The tripwire and the settle loop as cooperating mechanisms: TheTripwire watches UIKit timing signals on a display-link pulse, while SettleSession proves the accessibility tree stable by fingerprinting consecutive parses. This diagram makes "settled evidence" concrete — it answers "what exactly does Button Heist mean when it says the screen settled?"
+The tripwire and the settle loop as cooperating mechanisms: TheTripwire watches UIKit timing signals on one display-link pulse, while SettleSession parses concurrently and accepts the first valid UIKit-idle or semantic-stability proof. This diagram makes "settled evidence" concrete — it answers "what exactly does Button Heist mean when it says the screen settled?"
 
 **Illustrates:** [ARCHITECTURE.md](../ARCHITECTURE.md), [ACCESSIBILITY-CONTRACT.md](../ACCESSIBILITY-CONTRACT.md), [SCOPE-AND-LIMITS.md](../SCOPE-AND-LIMITS.md)
-**Source of truth:** `ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/SettleTimeline.swift`, `ButtonHeist/Sources/TheInsideJob/TheTripwire/HeistIdleTracker.swift`, `ButtonHeist/Sources/TheInsideJob/TheTripwire/TheTripwire.swift`, `ButtonHeist/Sources/TheInsideJob/TheTripwire/TheTripwire+Pulse.swift`, `ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift`
+**Source of truth:** `ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/SettleTimeline.swift`, `ButtonHeist/Sources/TheInsideJob/TheTripwire/UIKitIdleTracker.swift`, `ButtonHeist/Sources/TheInsideJob/TheTripwire/TheTripwire.swift`, `ButtonHeist/Sources/TheInsideJob/TheTripwire/TheTripwire+Pulse.swift`, `ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift`
 
 ```mermaid
 stateDiagram-v2
     direction TB
     state "consecutiveCycles" as cycles
-    state "post-idle fingerprint" as postIdle
+    state "parse on every heartbeat" as parsing
+    state "60 ms AX quiet window" as semanticQuiet
     state "settled(timeMs:)" as settled
     state "timedOut(timeMs:)" as timedOut
     state "cancelled(timeMs:)" as cancelled
@@ -25,24 +26,27 @@ stateDiagram-v2
     state "main run loop BeforeWaiting" as runLoopIdle
     state "shared CADisplayLink heartbeat" as heartbeat
 
-    [*] --> animating : active heist settlement
+    [*] --> parsing : active heist settlement
+    parsing --> parsing : fingerprint changed
+    parsing --> semanticQuiet : fingerprint unchanged
+    semanticQuiet --> parsing : fingerprint or tripwireSignal changed
+    semanticQuiet --> settled : unchanged for 60 ms
+    parsing --> animating : animation start observed
     animating --> runLoopIdle : aggregate count reaches zero
-    [*] --> runLoopIdle : count already zero
+    parsing --> runLoopIdle : count already zero after first heartbeat
     runLoopIdle --> animating : animation started before idle edge
     runLoopIdle --> heartbeat : idle edge with count still zero
-    heartbeat --> postIdle : next native-rate tick
-    postIdle --> postIdle : fingerprint changed, replace baseline
-    postIdle --> settled : fingerprint repeats next frame
+    heartbeat --> settled : parse first future native-rate tick
 
     settled --> [*]
     timedOut --> [*]
     cancelled --> [*]
 ```
 
-`post-idle fingerprint` shares the same `timedOut` and `cancelled` edges as
+The active proof race shares the same `timedOut` and `cancelled` edges as
 `consecutiveCycles`; they are drawn once to keep the picture readable. If the
-private idle tracker is unavailable, active settlement falls back to the 60 ms
-AX quiet-window policy. Both policies use the single CADisplayLink heartbeat;
+private idle tracker is unavailable or a cosmetic animation repeats forever,
+the 60 ms AX quiet-window proof can still settle. Both proofs use the single CADisplayLink heartbeat;
 immediate demand boosts it from the ambient rate to the active screen maximum
 until the next tick. An idle wait that consumes the authored deadline stays timed out.
 
@@ -51,7 +55,7 @@ The two clocks:
 ```mermaid
 flowchart TD
     subgraph tripwire["TheTripwire — UIKit signals"]
-        ANIMATION["heist-scoped UIViewAnimationState hooks<br/>one aggregate start/stop counter"]
+        ANIMATION["runtime-installed UIViewAnimationState hooks<br/>lifecycle-wide aggregate counter"]
         ANIMATION_IDLE["animation idle edge<br/>count 1 → 0"]
         RUN_LOOP_IDLE["CFRunLoopObserver<br/>beforeWaiting"]
         PULSE["one CADisplayLink heartbeat<br/>ambient 10 Hz · immediate native maximum"]
@@ -60,11 +64,11 @@ flowchart TD
         PULSE --> SIGNAL
     end
     subgraph settle["SettleSession — AX tree"]
-        PARSE["parse on heartbeat<br/>ambient or immediate demand"]
+        PARSE["parse throughout animation<br/>on immediate heartbeat demand"]
         FP["fingerprint complete hierarchy:<br/>paths · ordering · semantic facts · containers<br/>heist ids · first responder · coarse geometry"]
         PARSE --> FP
     end
-    RUN_LOOP_IDLE -- "opens active AX parse;<br/>confirm once next frame" --> PARSE
+    RUN_LOOP_IDLE -- "admit first parse from an<br/>explicitly future heartbeat" --> PARSE
     PULSE --> PARSE
     SIGNAL -- "signal change resets<br/>the settle baseline" --> PARSE
 ```

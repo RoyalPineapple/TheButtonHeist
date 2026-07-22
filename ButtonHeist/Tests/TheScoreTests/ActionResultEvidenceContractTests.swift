@@ -86,7 +86,10 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         let traceEvidence = traceEvidence(trace, completeness: .incomplete)
         let result = ActionResult.activationSuccess(
             message: "done",
-            observation: .settledTrace(traceEvidence, .settled(duration: 125)),
+            observation: .settledTrace(
+                traceEvidence,
+                .settled(duration: 125, path: .uikitIdle)
+            ),
             subjectEvidence: try weakActivationSubjectEvidence(),
             activationTrace: ActivationTrace(.activationPointFallback(
                 axActivateReturned: false,
@@ -117,6 +120,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         XCTAssertNil(observation["announcement"])
         XCTAssertEqual(settlement["kind"] as? String, "settled")
         XCTAssertEqual(settlement["durationMs"] as? Int, 125)
+        XCTAssertEqual(settlement["path"] as? String, "uikitIdle")
         XCTAssertEqual(timing["actionDispatchMs"] as? Int, 4)
         XCTAssertNil(timing["settleMs"])
 
@@ -269,6 +273,15 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         XCTAssertThrowsError(try JSONDecoder().decode(
             ActionSettlementEvidence.self,
             from: Data(#"{"kind":"settled","durationMs":-1}"#.utf8)
+        ))
+    }
+
+    func testTimedOutSettlementRejectsSuccessfulSettlementPath() {
+        XCTAssertThrowsError(try JSONDecoder().decode(
+            ActionSettlementEvidence.self,
+            from: Data(
+                #"{"kind":"timedOut","durationMs":125,"path":"uikitIdle"}"#.utf8
+            )
         ))
     }
 

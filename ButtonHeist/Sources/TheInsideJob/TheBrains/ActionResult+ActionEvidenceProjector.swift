@@ -3,6 +3,8 @@
 import ThePlans
 import TheScore
 
+// MARK: - Action Evidence Projection
+
 extension ActionResult {
     @MainActor init(
         dispatchResult: TheSafecracker.ActionDispatchResult,
@@ -20,7 +22,10 @@ extension ActionResult {
         )
         let duration = RuntimeElapsed.admit(milliseconds: settledObservation.settleTimeMs)
         let settlement: ActionSettlementEvidence = settledObservation.settled
-            ? .settled(duration: duration)
+            ? .settled(
+                duration: duration,
+                path: settledObservation.settleProof?.actionSettlementPath
+            )
             : .timedOut(duration: duration)
         let observation = ActionResultObservationEvidence.settledTrace(
             settledObservation.traceEvidence,
@@ -67,6 +72,10 @@ extension ActionEvidenceProjector.Result {
 
     var settleTimeMs: Int {
         settleResult.outcome.timeMs
+    }
+
+    var settleProof: SettleProof? {
+        settleResult.proof
     }
 
     private var settleResult: SettleSession.Result {
@@ -117,6 +126,19 @@ extension ActionEvidenceProjector.Result {
             committedBaseline: finalBaseline,
             resolvedElementId: resolvedElementId
         )))
+    }
+}
+
+private extension SettleProof {
+    var actionSettlementPath: ActionSettlementPath {
+        switch self {
+        case .semanticStability:
+            return .semanticStability
+        case .uikitIdle:
+            return .uikitIdle
+        case .accessibilityQuietWindow:
+            return .accessibilityQuietWindow
+        }
     }
 }
 

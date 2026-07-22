@@ -94,10 +94,9 @@ internal final class SemanticObservationStream {
             let policy: SettlePolicy
             switch demand {
             case .active:
-                let idleReached = await tripwire.heistIdleTracker.waitUntilIdle(
-                    timeout: .milliseconds(timeoutMs)
+                policy = .uikitIdleOrQuietWindow(
+                    milliseconds: Self.activeFallbackQuietWindowMs
                 )
-                policy = Self.activeSettlePolicy(idleReached: idleReached)
             case .idle:
                 policy = .consecutiveCycles(required: SettleSession.defaultCyclesRequired)
             }
@@ -111,12 +110,6 @@ internal final class SemanticObservationStream {
                 baselineTripwireSignal: baseline
             )
         }
-    }
-
-    static func activeSettlePolicy(idleReached: Bool) -> SettlePolicy {
-        idleReached
-            ? .postIdleConfirmation
-            : .quietWindow(milliseconds: Self.activeFallbackQuietWindowMs)
     }
 
     internal func start(
@@ -158,12 +151,19 @@ internal final class SemanticObservationStream {
     }
 
     internal func beginActiveObservationDemand() -> SemanticObservationDemand {
+        let wasIdle = !scopePressure.hasActiveDemand
         let id = scopePressure.addActiveDemand()
+        if wasIdle {
+            tripwire.uikitIdleTracker.beginOperationIfAvailable()
+        }
         return SemanticObservationDemand(id: id, stream: self)
     }
 
     internal func removeActiveObservationDemand(_ id: UInt64) {
         scopePressure.removeActiveDemand(id)
+        if !scopePressure.hasActiveDemand {
+            tripwire.uikitIdleTracker.endOperationIfNeeded()
+        }
     }
 
     internal func subscribedObservationScope() -> SemanticObservationScope {

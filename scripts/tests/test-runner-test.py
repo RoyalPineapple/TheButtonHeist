@@ -223,6 +223,32 @@ class TestRunnerTests(unittest.TestCase):
         self.assertIn("--ios-sandbox", test)
         self.assertIn(str(paths["result_bundle"]), test)
 
+    def test_runner_disables_ambient_animations_for_every_hosted_suite(self) -> None:
+        unit_suite = SUITES["TheInsideJobTests"]
+        unit_paths = RUNNER["suite_paths"]("TheInsideJobTests")
+        unit_command = RUNNER["test_command"](
+            "run", "TheInsideJobTests", unit_suite, unit_paths, SIMULATOR, "full"
+        )
+        integration_suite = SUITES["TheInsideJobIntegrationTests"]
+        integration_paths = RUNNER["suite_paths"]("TheInsideJobIntegrationTests")
+        integration_command = RUNNER["test_command"](
+            "run",
+            "TheInsideJobIntegrationTests",
+            integration_suite,
+            integration_paths,
+            SIMULATOR,
+            "full",
+        )
+        hosted_suite = SUITES["HostedBehaviorTests"]
+        hosted_paths = RUNNER["suite_paths"]("HostedBehaviorTests")
+        hosted_command = RUNNER["test_command"](
+            "run", "HostedBehaviorTests", hosted_suite, hosted_paths, SIMULATOR, "full"
+        )
+
+        self.assertIn("BUTTONHEIST_TEST_DISABLE_ANIMATIONS=1", unit_command)
+        self.assertIn("BUTTONHEIST_TEST_DISABLE_ANIMATIONS=1", integration_command)
+        self.assertIn("BUTTONHEIST_TEST_DISABLE_ANIMATIONS=1", hosted_command)
+
     def test_macos_supports_prebuilt_focused_feedback(self) -> None:
         suite = SUITES["TheScoreTests"]
         paths = RUNNER["suite_paths"]("TheScoreTests")

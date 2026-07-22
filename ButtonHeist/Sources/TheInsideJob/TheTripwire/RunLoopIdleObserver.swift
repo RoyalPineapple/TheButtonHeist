@@ -4,16 +4,22 @@ import ButtonHeistSupport
 import CoreFoundation
 import Foundation
 
-/// Publishes one-shot main-run-loop idle edges for a single heist session.
+/// Publishes one-shot main-run-loop idle edges throughout the runtime lifecycle.
 @MainActor
 final class RunLoopIdleObserver {
+    // MARK: - Nested Types
+
     private enum Phase {
         case observing(CFRunLoopObserver)
         case invalidated
     }
 
+    // MARK: - Properties
+
     private var phase: Phase = .invalidated
     private var waiters = WaiterStore<UInt64, TimedOneShot<Bool>>()
+
+    // MARK: - Initialization
 
     init() {
         let observer = CFRunLoopObserverCreateWithHandler(
@@ -35,6 +41,8 @@ final class RunLoopIdleObserver {
         // would postpone that idle edge until the mode transition completes.
         CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
     }
+
+    // MARK: - Idle Observation
 
     func waitForNextIdle(timeout: Duration) async -> Bool {
         guard timeout > .zero, case .observing = phase else { return false }
@@ -62,6 +70,8 @@ final class RunLoopIdleObserver {
         phase = .invalidated
         waiters.removeAll().forEach { $0.resolve(returning: false) }
     }
+
+    // MARK: - Private Helpers
 
     private func observeBeforeWaiting() {
         let idleWaiters = waiters.removeAll()

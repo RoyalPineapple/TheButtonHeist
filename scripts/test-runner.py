@@ -29,11 +29,18 @@ IOS_DEVICE = "iPhone 16 Pro"
 SUITES = {
     "TheScoreTests": {"platform": "macos"},
     "ButtonHeistTests": {"platform": "macos"},
-    "TheInsideJobTests": {"platform": "ios"},
-    "TheInsideJobIntegrationTests": {"platform": "ios"},
+    "TheInsideJobTests": {
+        "platform": "ios",
+        "disable_animations": True,
+    },
+    "TheInsideJobIntegrationTests": {
+        "platform": "ios",
+        "disable_animations": True,
+    },
     "HostedBehaviorTests": {
         "platform": "ios",
         "serial": True,
+        "disable_animations": True,
     },
     "MacFrameworkTests": {"platform": "macos"},
 }
@@ -255,6 +262,12 @@ def test_command(
     else:
         test_destination = "platform=macOS"
     only_testing = [f"-only-testing:{identifier}" for identifier in only_tests]
+    disable_animations = suite.get("disable_animations", False)
+    test_host_settings = (
+        ["BUTTONHEIST_TEST_DISABLE_ANIMATIONS=1"]
+        if disable_animations
+        else []
+    )
     if mode == "build-for-testing":
         return [
             "xcodebuild",
@@ -267,6 +280,7 @@ def test_command(
             test_destination,
             "-derivedDataPath",
             str(paths["derived"]),
+            *test_host_settings,
             *only_testing,
         ]
 
@@ -286,6 +300,7 @@ def test_command(
             test_destination,
             "-derivedDataPath",
             str(paths["derived"]),
+            *test_host_settings,
             *test_options,
             *only_testing,
         ]
@@ -303,6 +318,7 @@ def test_command(
             str(paths["derived"]),
             "-resultBundlePath",
             str(paths["result_bundle"]),
+            *test_host_settings,
             *test_options,
             *only_testing,
         ]

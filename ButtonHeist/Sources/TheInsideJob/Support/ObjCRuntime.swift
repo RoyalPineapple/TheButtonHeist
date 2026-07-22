@@ -9,6 +9,7 @@ import UIKit
 /// Swift shape it was declared to accept. Raw Objective-C `id` dispatch,
 /// `perform`, and IMP casting stay isolated in `RawObjCMessageBridge`.
 enum ObjCRuntime {
+    // MARK: - Nested Types
 
     enum NoArguments {}
     enum IntArgument {}

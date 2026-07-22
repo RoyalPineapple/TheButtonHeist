@@ -43,6 +43,15 @@ final class InteractionCoordinator {
         }
     }
 
+    func refreshedVisibleBaseline(
+        timeout: Double? = InteractionCoordinator.defaultVisibleStateTimeout
+    ) async -> ActionEvidenceProjector.Baseline? {
+        guard let observation = await vault.semanticObservationStream.refreshedVisibleObservation(
+            timeout: timeout
+        ) else { return nil }
+        return actionEvidenceProjector.projectBaseline(from: observation)
+    }
+
     func settledCapture(
         scope: SemanticObservationScope?,
         timeout: Double = InteractionCoordinator.defaultVisibleStateTimeout

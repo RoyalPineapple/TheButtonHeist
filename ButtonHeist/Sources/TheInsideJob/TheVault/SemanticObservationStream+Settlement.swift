@@ -5,6 +5,8 @@ import ButtonHeistSupport
 
 import TheScore
 
+// MARK: - Settlement
+
 @MainActor
 extension SemanticObservationStream {
     internal func admittedVisibleObservation(timeout: Double?) async -> SemanticObservationStore.AdmittedObservation? {
@@ -20,6 +22,32 @@ extension SemanticObservationStream {
             if let observation = admittedObservation(scope: .visible, after: nil) {
                 return observation
             }
+            let settlement = await refreshVisibleObservation(
+                timeoutMs: max(1, Int((deadline.remainingSeconds() * 1_000).rounded(.up)))
+            )
+            if case .committed(let event) = settlement.commitOutcome,
+               let observation = admittedObservation(scope: .visible, after: nil),
+               observation.event.cursor == event.cursor {
+                return observation
+            }
+        }
+        return nil
+    }
+
+    /// Produces a new settled sample before admitting the visible baseline.
+    /// Use this at an execution boundary where work may have started before the
+    /// caller opened its notification or animation wait scopes.
+    internal func refreshedVisibleObservation(
+        timeout: Double?
+    ) async -> SemanticObservationStore.AdmittedObservation? {
+        let subscription = subscribe(scope: .visible)
+        defer { _ = subscription }
+
+        let deadline = SemanticObservationDeadline(
+            start: RuntimeElapsed.now,
+            timeoutMs: Self.timeoutMilliseconds(from: timeout)
+        )
+        while deadline.hasTimeRemaining(at: RuntimeElapsed.now) {
             let settlement = await refreshVisibleObservation(
                 timeoutMs: max(1, Int((deadline.remainingSeconds() * 1_000).rounded(.up)))
             )

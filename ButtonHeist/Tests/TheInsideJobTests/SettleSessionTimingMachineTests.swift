@@ -207,7 +207,7 @@ extension SettleSessionTests {
         XCTAssertEqual(step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
-    func testMachinePostIdleConfirmationRejectsOneSnapshotTransient() {
+    func testMachineUIKitIdleCommitsTheNextParsedObservation() {
         let loading = makeParseResult([
             makeElement(label: "Loading", traits: .staticText),
         ])
@@ -217,33 +217,45 @@ extension SettleSessionTests {
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
-            policy: .postIdleConfirmation,
+            policy: .uikitIdleOrQuietWindow(milliseconds: 60),
             tripwireBaseline: tripwireSignal(topmostVC: nil)
         )
 
         XCTAssertContinue(reduceObservation(loading, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
-        XCTAssertContinue(reduceObservation(ready, elapsedMs: 1_000, machine: machine, ledger: &ledger, state: &state))
-        let step = reduceObservation(ready, elapsedMs: 1_001, machine: machine, ledger: &ledger, state: &state)
+        XCTAssertContinue(reduce(.uikitIdle, machine: machine, ledger: &ledger, state: &state))
+        let step = reduceObservation(ready, elapsedMs: 20, machine: machine, ledger: &ledger, state: &state)
 
         guard case .terminal(.settled(let timeMs)) = step.decision else {
-            return XCTFail("Expected a repeated post-idle fingerprint, got \(step.decision)")
+            return XCTFail("Expected UIKit idle to settle the next parsed observation, got \(step.decision)")
         }
-        XCTAssertEqual(timeMs, 1_001)
+        XCTAssertEqual(timeMs, 20)
+        XCTAssertEqual(step.result?.proof, .uikitIdle)
         XCTAssertEqual(
             step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label,
             "Ready"
         )
     }
 
-    func testActiveSettlePolicyUsesIdleConfirmationWithQuietWindowFallback() {
-        XCTAssertEqual(
-            SemanticObservationStream.activeSettlePolicy(idleReached: true),
-            .postIdleConfirmation
+    func testMachineActivePolicyCanSettleThroughAccessibilityQuietWindow() {
+        let stable = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText),
+        ])
+        let machine = SettleLoopMachine()
+        var ledger = SettleObservationLedger()
+        var state = SettleLoopMachine.State(
+            policy: .uikitIdleOrQuietWindow(milliseconds: 60),
+            tripwireBaseline: tripwireSignal(topmostVC: nil)
         )
-        XCTAssertEqual(
-            SemanticObservationStream.activeSettlePolicy(idleReached: false),
-            .quietWindow(milliseconds: 60)
-        )
+
+        XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
+        XCTAssertContinue(reduceObservation(stable, elapsedMs: 30, machine: machine, ledger: &ledger, state: &state))
+        let step = reduceObservation(stable, elapsedMs: 60, machine: machine, ledger: &ledger, state: &state)
+
+        guard case .terminal(.settled(let timeMs)) = step.decision else {
+            return XCTFail("Expected accessibility quiet-window settlement, got \(step.decision)")
+        }
+        XCTAssertEqual(timeMs, 60)
+        XCTAssertEqual(step.result?.proof, .accessibilityQuietWindow)
     }
 
     func testMachineFingerprintChangeResetsStability() {
@@ -312,7 +324,7 @@ extension SettleSessionTests {
         for policy in [
             SettlePolicy.consecutiveCycles(required: 1),
             .quietWindow(milliseconds: 1),
-            .postIdleConfirmation,
+            .uikitIdleOrQuietWindow(milliseconds: 1),
         ] {
             let machine = SettleLoopMachine()
             var ledger = SettleObservationLedger()

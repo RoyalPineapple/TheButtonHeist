@@ -5,7 +5,17 @@ import os
 
 import ButtonHeistSupport
 
+/// Counts process-wide UIKit animation lifecycle edges and resolves idle waiters.
 final class AnimationIdleCounter: Sendable {
+    // MARK: - Nested Types
+
+    struct Snapshot: Sendable, Equatable {
+        let activeCount: Int
+        let observedStartCount: Int
+        let matchedStopCount: Int
+        let unmatchedStopCount: Int
+    }
+
     enum StopOutcome: Equatable {
         case active(remaining: Int)
         case becameIdle
@@ -14,8 +24,13 @@ final class AnimationIdleCounter: Sendable {
 
     private struct State: Sendable {
         var activeCount = 0
+        var observedStartCount = 0
+        var matchedStopCount = 0
+        var unmatchedStopCount = 0
         var waiters = WaiterStore<UUID, TimedOneShot<Bool>>()
     }
+
+    // MARK: - Properties
 
     private let state = OSAllocatedUnfairLock(initialState: State())
 
@@ -27,10 +42,24 @@ final class AnimationIdleCounter: Sendable {
         state.withLock { $0.waiters.count }
     }
 
+    var snapshot: Snapshot {
+        state.withLock {
+            Snapshot(
+                activeCount: $0.activeCount,
+                observedStartCount: $0.observedStartCount,
+                matchedStopCount: $0.matchedStopCount,
+                unmatchedStopCount: $0.unmatchedStopCount
+            )
+        }
+    }
+
+    // MARK: - Animation Observation
+
     func observeAnimationStarted() {
         state.withLock { state in
             precondition(state.activeCount < Int.max, "Animation idle count overflowed")
             state.activeCount += 1
+            state.observedStartCount += 1
         }
     }
 
@@ -38,9 +67,11 @@ final class AnimationIdleCounter: Sendable {
     func observeAnimationStopped() -> StopOutcome {
         let transition = state.withLock { state -> (StopOutcome, [TimedOneShot<Bool>]) in
             guard state.activeCount > 0 else {
+                state.unmatchedStopCount += 1
                 return (.unmatchedStop, [])
             }
             state.activeCount -= 1
+            state.matchedStopCount += 1
             guard state.activeCount == 0 else {
                 return (.active(remaining: state.activeCount), [])
             }
@@ -78,10 +109,14 @@ final class AnimationIdleCounter: Sendable {
         )
     }
 
+    // MARK: - Waiter Lifecycle
+
     func cancelAll() {
         let waiters = state.withLock { $0.waiters.removeAll() }
         waiters.forEach { $0.resolve(returning: false) }
     }
+
+    // MARK: - Private Helpers
 
     private func resolve(_ waiterID: UUID, returning value: Bool) {
         let waiter = state.withLock { $0.waiters.remove(waiterID) }

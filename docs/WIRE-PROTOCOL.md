@@ -421,7 +421,10 @@ evidence to that result without another intermediate result shape. Action
 evidence is required and bound to the wire result outcome. Its `observation`
 is exactly one tagged case: `none`, `announcement`, `trace`, or `settledTrace`.
 Only `settledTrace` owns the tagged settlement shape
-`{"kind":"settled|timedOut","durationMs":...}`.
+`{"kind":"settled|timedOut","durationMs":...,"path":"..."}`. Successful
+settlement may include `path` as `semanticStability`, `uikitIdle`, or
+`accessibilityQuietWindow`; the optional field preserves decoding of older
+receipts. Timed-out settlement cannot carry a path.
 The `trace` case cannot include `settlement`.
 `settledTrace` with `timedOut` may carry result-local action-settlement
 diagnostic captures, but those captures are not admitted to settled semantic

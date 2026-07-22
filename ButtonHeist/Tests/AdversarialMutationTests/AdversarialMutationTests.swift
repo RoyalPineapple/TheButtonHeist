@@ -42,7 +42,10 @@ final class AdversarialMutationTests: XCTestCase {
         XCTAssertEqual(silentObservation.method, .wait)
         XCTAssertEqual(silentEvidence.checkedExpectation?.predicate, destination)
         XCTAssertEqual(silentEvidence.checkedExpectation?.met, true)
-        XCTAssertFalse(silentEvidence.notificationKinds.contains(.screenChanged))
+        XCTAssertFalse(
+            silentEvidence.notificationKinds.contains(.screenChanged),
+            "Silent trace notifications: \(silentEvidence.notificationEvents)"
+        )
     }
 
     func testStaleLiveObjectReResolvesCurrentTarget() async throws {
@@ -93,12 +96,15 @@ final class AdversarialMutationTests: XCTestCase {
 }
 
 private extension HeistActionEvidence {
-    var notificationKinds: [AccessibilityNotificationKind] {
+    var notificationEvents: [AccessibilityNotificationEvidence] {
         [dispatchResult, expectationResult]
             .compactMap { $0?.accessibilityTrace }
             .flatMap(\.captures)
             .flatMap(\.transition.accessibilityNotifications)
-            .map(\.kind)
+    }
+
+    var notificationKinds: [AccessibilityNotificationKind] {
+        notificationEvents.map(\.kind)
     }
 }
 
