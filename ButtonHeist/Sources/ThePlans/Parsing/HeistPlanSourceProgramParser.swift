@@ -1,15 +1,5 @@
 import Foundation
 
-struct HeistDefinitionHeader {
-    let path: HeistDefinitionPath
-    let parameter: HeistParameter
-}
-
-struct HeistPlanHeader {
-    let name: HeistPlanName?
-    let parameter: HeistParameter
-}
-
 extension HeistPlanSourceParser {
     mutating func parseRootHeistPlan() throws -> HeistPlanAdmissionCandidate {
         let name = try parseCalleeName()
@@ -56,15 +46,7 @@ extension HeistPlanSourceParser {
         let callee = try parseCalleeName()
         switch callee {
         case ["HeistDef"]:
-            let parameterKind = try parseHeistDefGeneric()
-            let header = try parseHeistDefHeader(parameterKind: parameterKind)
-            let body = try parseHeistClosureBody(parameter: header.parameter, allowDefinitions: true)
-            return makeDefinition(
-                components: header.path.components[...],
-                parameter: header.parameter,
-                definitions: mergeDefinitions(body.definitions),
-                body: body.steps
-            )
+            return try parseHeistDef(parameterKind: try parseHeistDefGeneric())
         case ["Namespace"]:
             return try parseNamespaceDefinition()
         default:
@@ -89,7 +71,7 @@ extension HeistPlanSourceParser {
         )
     }
 
-    mutating func parseHeistDefGeneric() throws -> HeistDefinitionParameterKind {
+    mutating func parseHeistDefGeneric() throws -> HeistParameterKind {
         try expectSymbol("<")
         let type = try parseIdentifier()
         try expectSymbol(">")
@@ -105,9 +87,9 @@ extension HeistPlanSourceParser {
         }
     }
 
-    mutating func parseHeistDefHeader(
-        parameterKind: HeistDefinitionParameterKind
-    ) throws -> HeistDefinitionHeader {
+    fileprivate mutating func parseHeistDef(
+        parameterKind: HeistParameterKind
+    ) throws -> HeistPlanAdmissionCandidate {
         try expectSymbol("(")
         let pathToken = currentToken
         let path = try parseStringLiteral()
@@ -148,7 +130,13 @@ extension HeistPlanSourceParser {
                 sourceSpan: sourceSpan(for: pathToken)
             ))
         }
-        return HeistDefinitionHeader(path: definitionPath, parameter: parameter)
+        let body = try parseHeistClosureBody(parameter: parameter, allowDefinitions: true)
+        return makeDefinition(
+            components: definitionPath.components[...],
+            parameter: parameter,
+            definitions: mergeDefinitions(body.definitions),
+            body: body.steps
+        )
     }
 
     func makeDefinition(
@@ -178,7 +166,7 @@ extension HeistPlanSourceParser {
     }
 
     func mergeDefinitions(_ definitions: [HeistPlanAdmissionCandidate]) -> [HeistPlanAdmissionCandidate] {
-        HeistDefinitionMerger.merge(definitions, duplicatePolicy: .preserve)
+        mergeHeistDefinitions(definitions, duplicatePolicy: .preserve)
     }
 
     mutating func parseStatement() throws -> [HeistStepAdmissionCandidate] {
@@ -186,11 +174,11 @@ extension HeistPlanSourceParser {
         if let tryPrefix {
             if let correction = runHeistCorrectionAfterTryPrefix(startingAt: index) {
                 throw error(
-                    tryPrefix.token,
+                    tryPrefix,
                     "`try` is only allowed in Swift wrapper code, not inside ButtonHeist DSL bodies. Use \(correction)."
                 )
             }
-            throw error(tryPrefix.token, "`try` is only allowed in Swift wrapper code, not inside ButtonHeist DSL bodies")
+            throw error(tryPrefix, "`try` is only allowed in Swift wrapper code, not inside ButtonHeist DSL bodies")
         }
 
         let name = try parseCalleeName()
@@ -253,38 +241,33 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseHeistPlanAfterCallee(allowDefinitions: Bool) throws -> HeistPlanAdmissionCandidate {
-        let header = try parseHeistPlanHeader()
-        let body = try parseHeistClosureBody(parameter: header.parameter, allowDefinitions: allowDefinitions)
+        var name: HeistPlanName?
+        var parameter = HeistParameter.none
+        if consumeSymbol("(") {
+            if currentToken.isSymbol(")") {
+                throw error(currentToken, "empty HeistPlan parentheses are not canonical; use `HeistPlan { ... }`")
+            }
+
+            if lookaheadLabel("parameter") || lookaheadLabel("targetParameter") {
+                parameter = try parseRootHeistParameter()
+            } else {
+                let nameToken = currentToken
+                name = try parsePlanName(parseStringLiteral(), token: nameToken)
+                if consumeSymbol(",") {
+                    parameter = try parseRootHeistParameter()
+                }
+            }
+            try expectSymbol(")")
+        }
+
+        let body = try parseHeistClosureBody(parameter: parameter, allowDefinitions: allowDefinitions)
         return HeistPlanAdmissionCandidate(
             version: HeistPlan.currentVersion,
-            name: header.name,
-            parameter: header.parameter,
+            name: name,
+            parameter: parameter,
             definitions: mergeDefinitions(body.definitions),
             body: body.steps
         )
-    }
-
-    mutating func parseHeistPlanHeader() throws -> HeistPlanHeader {
-        var name: HeistPlanName?
-        var parameter = HeistParameter.none
-        guard consumeSymbol("(") else {
-            return HeistPlanHeader(name: nil, parameter: .none)
-        }
-        if currentToken.isSymbol(")") {
-            throw error(currentToken, "empty HeistPlan parentheses are not canonical; use `HeistPlan { ... }`")
-        }
-
-        if lookaheadLabel("parameter") || lookaheadLabel("targetParameter") {
-            parameter = try parseRootHeistParameter()
-        } else {
-            let nameToken = currentToken
-            name = try parsePlanName(parseStringLiteral(), token: nameToken)
-            if consumeSymbol(",") {
-                parameter = try parseRootHeistParameter()
-            }
-        }
-        try expectSymbol(")")
-        return HeistPlanHeader(name: name, parameter: parameter)
     }
 
     func parsePlanName(_ value: String, token: HeistPlanSourceToken) throws -> HeistPlanName {

@@ -146,6 +146,30 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         XCTAssertNil(decoded.evidence.timing)
     }
 
+    func testScreenActionHandlerIsSuccessEvidence() throws {
+        let result = ActionResult(
+            outcome: .success,
+            payload: .dismiss,
+            message: nil,
+            observation: .none,
+            subjectEvidence: nil,
+            activationTrace: nil,
+            screenActionHandler: "UINavigationController",
+            timing: nil
+        )
+
+        let encoded = try JSONEncoder().encode(result)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        let evidence = try XCTUnwrap(object["evidence"] as? [String: Any])
+
+        XCTAssertNil(object["message"])
+        XCTAssertEqual(evidence["screenActionHandler"] as? String, "UINavigationController")
+
+        let decoded = try JSONDecoder().decode(ActionResult.self, from: encoded)
+        XCTAssertEqual(decoded, result)
+        XCTAssertEqual(decoded.screenActionHandler, "UINavigationController")
+    }
+
     func testStandaloneAnnouncementIsTheOnlyAnnouncementFact() throws {
         let result = ActionResult.success(
             payload: .wait,

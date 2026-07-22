@@ -229,7 +229,7 @@ enum ObjCRuntime {
         }
     }
 
-    // MARK: - Factory
+    // MARK: - Message Resolution
 
     static func message<Target: NSObject, Arguments>(
         _ method: ObjectMethod<Arguments>,

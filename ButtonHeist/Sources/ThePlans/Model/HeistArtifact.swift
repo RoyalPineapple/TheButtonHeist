@@ -234,19 +234,25 @@ public enum HeistArtifactCodec {
         try requireHeistInputExtension(packageURL)
         try validateHeistPackageDirectory(packageURL)
 
-        let manifestMember = try readArtifactMemberData(
+        let manifestData = try readArtifactMember(
             manifestFileName,
             in: packageURL,
             maxBytes: manifestMemberSizeLimit
         )
-        let planMember = try readArtifactMemberData(
+        let planURL = try validateArtifactMember(
             planFileName,
             in: packageURL,
             maxBytes: planMemberSizeLimit
         )
+        let planData = try readBoundedFile(
+            planURL,
+            member: planFileName,
+            packageURL: packageURL,
+            maxBytes: planMemberSizeLimit
+        )
 
-        let manifestPayload = try readManifestPayload(from: manifestMember.data, packageURL: packageURL)
-        let planCandidate = try decodePlanCandidate(planMember.data, at: planMember.url)
+        let manifestPayload = try readManifestPayload(from: manifestData, packageURL: packageURL)
+        let planCandidate = try decodePlanCandidate(planData, at: planURL)
         try validateArtifactEnvelope(manifest: manifestPayload, packageURL: packageURL)
         guard manifestPayload.planVersion == planCandidate.version else {
             throw HeistArtifactCodecError.versionMismatch(
@@ -255,7 +261,7 @@ public enum HeistArtifactCodec {
                 planVersion: planCandidate.version
             )
         }
-        let plan = try admitPlan(planCandidate, at: planMember.url)
+        let plan = try admitPlan(planCandidate, at: planURL)
         let entry = try validateArtifactEntry(
             manifestEntry: manifestPayload.entry,
             plan: plan,
@@ -352,16 +358,13 @@ public enum HeistArtifactCodec {
         }
     }
 
-    private static func readArtifactMemberData(
+    private static func readArtifactMember(
         _ member: String,
         in packageURL: URL,
         maxBytes: Int
-    ) throws -> ArtifactMemberData {
+    ) throws -> Data {
         let url = try validateArtifactMember(member, in: packageURL, maxBytes: maxBytes)
-        return ArtifactMemberData(
-            url: url,
-            data: try readBoundedFile(url, member: member, packageURL: packageURL, maxBytes: maxBytes)
-        )
+        return try readBoundedFile(url, member: member, packageURL: packageURL, maxBytes: maxBytes)
     }
 
     private static func validateArtifactMember(
@@ -544,11 +547,6 @@ public enum HeistArtifactCodec {
         """
     }
 
-}
-
-private struct ArtifactMemberData {
-    let url: URL
-    let data: Data
 }
 
 private struct HeistArtifactManifestPayload: Decodable {

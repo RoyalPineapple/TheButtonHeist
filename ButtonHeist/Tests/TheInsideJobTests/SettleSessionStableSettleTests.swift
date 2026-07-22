@@ -203,18 +203,18 @@ extension SettleSessionTests {
             traits: .button,
             frame: CGRect(x: 651, y: 423, width: 94, height: 72)
         )
-        let hintChanged = AccessibilityElementBuilder(
+        let hintChanged = AccessibilityElementFixture(
             label: "$ 9 Cash",
             hint: "Double tap to pay",
             traits: .button,
             shape: first.shape
-        ).build()
-        let actionsChanged = AccessibilityElementBuilder(
+        ).element()
+        let actionsChanged = AccessibilityElementFixture(
             label: "$ 9 Cash",
             traits: .button,
             shape: first.shape,
             customActions: [.init(name: "Apply discount")]
-        ).build()
+        ).element()
 
         XCTAssertEqual(
             settleFingerprint([first]),

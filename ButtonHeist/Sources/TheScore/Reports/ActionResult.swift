@@ -175,6 +175,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public var subjectEvidence: ActionSubjectEvidence? { evidence.subjectEvidence }
     /// Semantic activation dispatch-path diagnostics, present for `activate`.
     public var activationTrace: ActivationTrace? { evidence.activationTrace }
+    public var screenActionHandler: ScreenActionHandlerName? { evidence.screenActionHandler }
     /// Optional measured durations for the local observed action pipeline.
     public var timing: ActionPerformanceTiming? { evidence.timing }
 
@@ -204,6 +205,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
             observation,
             subjectEvidence,
             activationTrace: activationTrace,
+            screenActionHandler: nil,
             timing: timing
         )
     }
@@ -247,6 +249,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         _ observation: ActionResultObservationEvidence,
         _ subjectEvidence: ActionSubjectEvidence?,
         activationTrace: ActivationTrace? = nil,
+        screenActionHandler: ScreenActionHandlerName? = nil,
         timing: ActionPerformanceTiming?
     ) -> ActionResult {
         let body = ActionResultEvidenceBody(
@@ -263,7 +266,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
                     method: payload.method,
                     subjectEvidence: subjectEvidence,
                     activationTrace: activationTrace
-                )
+                ),
+                screenActionHandler: screenActionHandler
             ))
         case .failure(let failureKind):
             ActionResultEvidence.failure(failureKind, ActionResultFailureEvidence(body: body))
@@ -278,9 +282,11 @@ public struct ActionResult: Codable, Sendable, Equatable {
         observation: ActionResultObservationEvidence,
         subjectEvidence: ActionSubjectEvidence?,
         activationTrace: ActivationTrace?,
+        screenActionHandler: ScreenActionHandlerName? = nil,
         timing: ActionPerformanceTiming?
     ) {
         precondition(activationTrace == nil || payload.method == .activate)
+        precondition(screenActionHandler == nil || payload.method.isScreenAction)
         self = Self.construct(
             payload,
             outcome,
@@ -288,6 +294,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
             observation,
             subjectEvidence,
             activationTrace: activationTrace,
+            screenActionHandler: screenActionHandler,
             timing: timing
         )
     }
@@ -334,6 +341,13 @@ public struct ActionResult: Codable, Sendable, Equatable {
                 forKey: .evidence,
                 in: container,
                 debugDescription: "activationTrace is only valid for activate ActionResult evidence"
+            )
+        }
+        if evidence.screenActionHandler != nil, !method.isScreenAction {
+            throw DecodingError.dataCorruptedError(
+                forKey: .evidence,
+                in: container,
+                debugDescription: "screenActionHandler is only valid for dismiss and magicTap ActionResult evidence"
             )
         }
         if case .success(let successEvidence) = evidence, let warning = successEvidence.warning {

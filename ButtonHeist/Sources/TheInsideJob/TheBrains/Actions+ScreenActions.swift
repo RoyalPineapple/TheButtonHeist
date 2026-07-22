@@ -49,7 +49,7 @@ extension Actions {
     ) -> TheSafecracker.ActionDispatchResult {
         switch outcome {
         case .succeeded(let handler):
-            return .success(payload: payload, message: "Handler: \(handler)")
+            return .success(payload: payload, screenActionHandler: handler)
         case .noHandler:
             return .failure(payload, message: missingHandlerMessage)
         }

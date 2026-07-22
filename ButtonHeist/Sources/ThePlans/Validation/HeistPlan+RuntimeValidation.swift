@@ -1,22 +1,18 @@
 import Foundation
 
-package struct HeistPlanSemanticValidator: Sendable {
-    package let limits: HeistPlanRuntimeSafetyLimits
-
-    package init(limits: HeistPlanRuntimeSafetyLimits = .standard) {
-        self.limits = limits
-    }
-
-    package func validate(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPlan {
+package extension HeistPlanAdmissionCandidate {
+    func validatedSemantics(
+        limits: HeistPlanRuntimeSafetyLimits = .standard
+    ) throws -> HeistPlan {
         var validator = HeistPlanRuntimeSafetyValidator(limits: limits)
-        return try validator.validate(raw)
+        return try validator.validate(self)
     }
 
-    package func validationResult(
-        _ raw: HeistPlanAdmissionCandidate
+    func semanticValidationResult(
+        limits: HeistPlanRuntimeSafetyLimits = .standard
     ) -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
         do {
-            return .success(try validate(raw), diagnostics: [])
+            return .success(try validatedSemantics(limits: limits), diagnostics: [])
         } catch let error as HeistPlanRuntimeSafetyError {
             return .failure(error.diagnostics)
         } catch {
@@ -26,20 +22,6 @@ package struct HeistPlanSemanticValidator: Sendable {
                 message: "ButtonHeist plan failed semantic validation: \(String(describing: error))"
             )])
         }
-    }
-}
-
-package extension HeistPlanAdmissionCandidate {
-    func validatedSemantics(
-        limits: HeistPlanRuntimeSafetyLimits = .standard
-    ) throws -> HeistPlan {
-        try HeistPlanSemanticValidator(limits: limits).validate(self)
-    }
-
-    func semanticValidationResult(
-        limits: HeistPlanRuntimeSafetyLimits = .standard
-    ) -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
-        HeistPlanSemanticValidator(limits: limits).validationResult(self)
     }
 
     func validatedForRuntimeSafety(

@@ -87,23 +87,22 @@ extension PublicJSONValueNode: Sendable where Value: Sendable {}
 
 /// Applies a shared recursive input policy to already-materialized JSON-like values.
 public enum PublicJSONValuePreflight {
-    public typealias ErrorFactory = @Sendable (PublicJSONInputViolation) -> Error
     public typealias NodeProvider<Value> = @Sendable (Value) -> PublicJSONValueNode<Value>
 
     public static func validateObject<Value>(
         _ object: [String: Value],
         policy: PublicJSONInputPolicy = PublicJSONInputPolicy(),
         context: String = "Public JSON input",
-        makeError: ErrorFactory? = nil,
+        mapViolation: (@Sendable (PublicJSONInputViolation) -> Error)? = nil,
         node: @escaping NodeProvider<Value>
     ) throws {
-        let errorFactory = makeError ?? publicJSONInputErrorFactory(context: context)
-        var traversal = PublicJSONValueTraversal(policy: policy, makeError: errorFactory, node: node)
+        let failure = mapViolation ?? publicJSONInputFailure(context: context)
+        var traversal = PublicJSONValueTraversal(policy: policy, mapViolation: failure, node: node)
         let byteCount = try traversal.jsonEncodedSize(of: object, depth: 1)
         try traversal.validateByteCount(byteCount)
     }
 
-    private static func publicJSONInputErrorFactory(context: String) -> ErrorFactory {
+    private static func publicJSONInputFailure(context: String) -> @Sendable (PublicJSONInputViolation) -> Error {
         { PublicJSONInputError($0.publicJSONInputMessage(context: context)) }
     }
 }
@@ -279,7 +278,7 @@ public enum PublicJSONInputPreflight {
         try PublicJSONInputTraversalState.validateByteCount(
             byteCount,
             policy: policy,
-            makeError: publicJSONInputErrorFactory(context: context)
+            mapViolation: publicJSONInputFailure(context: context)
         )
 
         try validateRootPrefix(data, root: root, context: context, rootMismatchMessage: rootMismatchMessage)
@@ -297,12 +296,12 @@ public enum PublicJSONInputPreflight {
 
         var traversal = PublicJSONParsedInputTraversal(
             policy: policy,
-            makeError: publicJSONInputErrorFactory(context: context)
+            mapViolation: publicJSONInputFailure(context: context)
         )
         try traversal.validate(value, depth: 1)
     }
 
-    private static func publicJSONInputErrorFactory(context: String) -> PublicJSONValuePreflight.ErrorFactory {
+    private static func publicJSONInputFailure(context: String) -> @Sendable (PublicJSONInputViolation) -> Error {
         { PublicJSONInputError($0.publicJSONInputMessage(context: context)) }
     }
 
@@ -340,23 +339,23 @@ public enum PublicJSONInputPreflight {
 
 private struct PublicJSONValueTraversal<Value> {
     private let policy: PublicJSONInputPolicy
-    private let makeError: PublicJSONValuePreflight.ErrorFactory
+    private let mapViolation: @Sendable (PublicJSONInputViolation) -> Error
     private let node: PublicJSONValuePreflight.NodeProvider<Value>
     private var state = PublicJSONInputTraversalState()
 
     init(
         policy: PublicJSONInputPolicy,
-        makeError: @escaping PublicJSONValuePreflight.ErrorFactory,
+        mapViolation: @escaping @Sendable (PublicJSONInputViolation) -> Error,
         node: @escaping PublicJSONValuePreflight.NodeProvider<Value>
     ) {
         self.policy = policy
-        self.makeError = makeError
+        self.mapViolation = mapViolation
         self.node = node
     }
 
     mutating func jsonEncodedSize(of object: [String: Value], depth: Int) throws -> Int {
-        try state.validateDepth(depth, policy: policy, makeError: makeError)
-        try state.countObjectKeys(object.count, policy: policy, makeError: makeError)
+        try state.validateDepth(depth, policy: policy, mapViolation: mapViolation)
+        try state.countObjectKeys(object.count, policy: policy, mapViolation: mapViolation)
 
         var size = 2
         for (index, entry) in object.enumerated() {
@@ -369,15 +368,15 @@ private struct PublicJSONValueTraversal<Value> {
     }
 
     mutating func validateByteCount(_ byteCount: Int) throws {
-        try PublicJSONInputTraversalState.validateByteCount(byteCount, policy: policy, makeError: makeError)
+        try PublicJSONInputTraversalState.validateByteCount(byteCount, policy: policy, mapViolation: mapViolation)
     }
 
     private mutating func jsonEncodedSize(of value: Value, depth: Int) throws -> Int {
-        try state.validateDepth(depth, policy: policy, makeError: makeError)
+        try state.validateDepth(depth, policy: policy, mapViolation: mapViolation)
 
         switch node(value) {
         case .null:
-            try state.validateNull(policy: policy, makeError: makeError)
+            try state.validateNull(policy: policy, mapViolation: mapViolation)
             return 4
         case .bool(let bool):
             return bool ? 4 : 5
@@ -385,7 +384,7 @@ private struct PublicJSONValueTraversal<Value> {
             return try bounded(String(int).utf8.count)
         case .double(let double):
             guard double.isFinite else {
-                throw makeError(.nonFiniteNumber(double))
+                throw mapViolation(.nonFiniteNumber(double))
             }
             return try bounded(String(double).utf8.count)
         case .string(let string):
@@ -409,7 +408,7 @@ private struct PublicJSONValueTraversal<Value> {
     }
 
     private func bounded(_ size: Int) throws -> Int {
-        try PublicJSONInputTraversalState.validateByteCount(size, policy: policy, makeError: makeError)
+        try PublicJSONInputTraversalState.validateByteCount(size, policy: policy, mapViolation: mapViolation)
         return size
     }
 
@@ -435,69 +434,69 @@ private struct PublicJSONInputTraversalState {
     static func validateByteCount(
         _ byteCount: Int,
         policy: PublicJSONInputPolicy,
-        makeError: PublicJSONValuePreflight.ErrorFactory
+        mapViolation: @Sendable (PublicJSONInputViolation) -> Error
     ) throws {
         guard byteCount <= policy.maxBytes else {
-            throw makeError(.bytes(max: policy.maxBytes, observed: byteCount))
+            throw mapViolation(.bytes(max: policy.maxBytes, observed: byteCount))
         }
     }
 
     mutating func countObjectKeys(
         _ count: Int,
         policy: PublicJSONInputPolicy,
-        makeError: PublicJSONValuePreflight.ErrorFactory
+        mapViolation: @Sendable (PublicJSONInputViolation) -> Error
     ) throws {
         totalObjectKeys += count
         guard totalObjectKeys <= policy.maxTotalObjectKeys else {
-            throw makeError(.objectKeyCount(max: policy.maxTotalObjectKeys, observed: totalObjectKeys))
+            throw mapViolation(.objectKeyCount(max: policy.maxTotalObjectKeys, observed: totalObjectKeys))
         }
     }
 
     func validateDepth(
         _ depth: Int,
         policy: PublicJSONInputPolicy,
-        makeError: PublicJSONValuePreflight.ErrorFactory
+        mapViolation: @Sendable (PublicJSONInputViolation) -> Error
     ) throws {
         guard depth <= policy.maxNestingDepth else {
-            throw makeError(.nestingDepth(max: policy.maxNestingDepth, observed: depth))
+            throw mapViolation(.nestingDepth(max: policy.maxNestingDepth, observed: depth))
         }
     }
 
     func validateNull(
         policy: PublicJSONInputPolicy,
-        makeError: PublicJSONValuePreflight.ErrorFactory
+        mapViolation: @Sendable (PublicJSONInputViolation) -> Error
     ) throws {
         guard case .rejected(let expected) = policy.nullHandling else {
             return
         }
-        throw makeError(.nullValue(expected: expected))
+        throw mapViolation(.nullValue(expected: expected))
     }
 }
 
 private struct PublicJSONParsedInputTraversal {
     private let policy: PublicJSONInputPolicy
-    private let makeError: PublicJSONValuePreflight.ErrorFactory
+    private let mapViolation: @Sendable (PublicJSONInputViolation) -> Error
     private var state = PublicJSONInputTraversalState()
 
     init(
         policy: PublicJSONInputPolicy,
-        makeError: @escaping PublicJSONValuePreflight.ErrorFactory
+        mapViolation: @escaping @Sendable (PublicJSONInputViolation) -> Error
     ) {
         self.policy = policy
-        self.makeError = makeError
+        self.mapViolation = mapViolation
     }
 
     mutating func validate(_ value: PublicJSONParsedValue, depth: Int) throws {
-        try state.validateDepth(depth, policy: policy, makeError: makeError)
+        try state.validateDepth(depth, policy: policy, mapViolation: mapViolation)
 
         switch value {
         case .null:
-            try state.validateNull(policy: policy, makeError: makeError)
+            try state.validateNull(policy: policy, mapViolation: mapViolation)
         case .bool:
             break
         case let .number(number):
             guard number.isFinite else {
-                throw makeError(.nonFiniteNumber(number))
+                throw mapViolation(.nonFiniteNumber(number))
             }
         case .string:
             break
@@ -506,7 +505,7 @@ private struct PublicJSONParsedInputTraversal {
                 try validate(element, depth: depth + 1)
             }
         case let .object(object):
-            try state.countObjectKeys(object.count, policy: policy, makeError: makeError)
+            try state.countObjectKeys(object.count, policy: policy, mapViolation: mapViolation)
             for nested in object.values {
                 try validate(nested, depth: depth + 1)
             }

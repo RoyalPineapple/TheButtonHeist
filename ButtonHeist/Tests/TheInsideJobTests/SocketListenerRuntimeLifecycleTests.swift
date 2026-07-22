@@ -11,7 +11,7 @@ final class SocketListenerRuntimeLifecycleTests: XCTestCase {
     func testRuntimeOwnsListenerLifecycle() async throws {
         let runtime = SocketListenerRuntime()
         let gate = ListenerRuntimeStartGate()
-        let listeners = TestSocketListenerFactory { _ in
+        let listeners = TestSocketListenerProvider { _ in
             await gate.enterAndWaitForRelease()
             return .ready(2468)
         }
@@ -38,7 +38,7 @@ final class SocketListenerRuntimeLifecycleTests: XCTestCase {
     func testRuntimeRejectsSecondStartWhileStarting() async throws {
         let runtime = SocketListenerRuntime()
         let gate = ListenerRuntimeStartGate()
-        let listeners = TestSocketListenerFactory { _ in
+        let listeners = TestSocketListenerProvider { _ in
             await gate.enterAndWaitForRelease()
             return .ready(2468)
         }
@@ -48,7 +48,7 @@ final class SocketListenerRuntimeLifecycleTests: XCTestCase {
         await gate.waitUntilEntered()
 
         do {
-            _ = try await Self.start(runtime, with: TestSocketListenerFactory(port: 9753))
+            _ = try await Self.start(runtime, with: TestSocketListenerProvider(port: 9753))
             XCTFail("Expected the runtime to reject a second start")
         } catch is CancellationError {
             // The runtime has one irreversible lifecycle.
@@ -64,7 +64,7 @@ final class SocketListenerRuntimeLifecycleTests: XCTestCase {
     func testStopDuringStartPreventsStaleListeningTransition() async {
         let runtime = SocketListenerRuntime()
         let gate = ListenerRuntimeStartGate()
-        let listeners = TestSocketListenerFactory { _ in
+        let listeners = TestSocketListenerProvider { _ in
             await gate.enterAndWaitForRelease()
             return .ready(2468)
         }
@@ -89,9 +89,9 @@ final class SocketListenerRuntimeLifecycleTests: XCTestCase {
     }
 
     func testStaleReadyCallbackCannotAttachToReplacementGeneration() async throws {
-        let listeners = TestSocketListenerFactory(port: 24_680)
+        let listeners = TestSocketListenerProvider(port: 24_680)
         let server = SimpleSocketServer(dependencies: .init(
-            listenerFactory: listeners.listenerFactory
+            listenerProvider: listeners.listenerProvider
         ))
 
         _ = try await server.startPlaintext(addressFamily: .ipv4)
@@ -121,13 +121,13 @@ final class SocketListenerRuntimeLifecycleTests: XCTestCase {
     }
 
     func testConcurrentReadyConnectionsCannotExceedCapacity() async throws {
-        let listeners = TestSocketListenerFactory(port: 24_680)
+        let listeners = TestSocketListenerProvider(port: 24_680)
         let server = SimpleSocketServer(dependencies: .init(
             sendContent: { _, _, completion in
                 guard case .contentProcessed(let handler) = completion else { return }
                 handler(nil)
             },
-            listenerFactory: listeners.listenerFactory
+            listenerProvider: listeners.listenerProvider
         ))
         _ = try await server.startPlaintext(addressFamily: .ipv4)
         let currentGeneration = await server.currentListener
@@ -165,7 +165,7 @@ final class SocketListenerRuntimeLifecycleTests: XCTestCase {
 
     func testPartialDualListenerStartupFailureCleansPendingCallbacksAndConnections() async {
         let failureGate = ListenerRuntimeFailureGate()
-        let listeners = TestSocketListenerFactory { invocation in
+        let listeners = TestSocketListenerProvider { invocation in
             guard invocation > 1 else { return .ready(24_680) }
             await failureGate.enterAndWaitForRelease()
             return .failed(.posix(.EADDRINUSE))
@@ -173,7 +173,7 @@ final class SocketListenerRuntimeLifecycleTests: XCTestCase {
         let pendingConnection = makeConnection()
         let admissionConnection = makeConnection()
         let server = SimpleSocketServer(dependencies: .init(
-            listenerFactory: listeners.listenerFactory
+            listenerProvider: listeners.listenerProvider
         ))
 
         let startTask = Task { @MainActor in
@@ -209,7 +209,7 @@ final class SocketListenerRuntimeLifecycleTests: XCTestCase {
 
     private static func start(
         _ runtime: SocketListenerRuntime,
-        with listeners: TestSocketListenerFactory
+        with listeners: TestSocketListenerProvider
     ) async throws -> UInt16 {
         try await runtime.start(
             port: 0,
@@ -217,7 +217,7 @@ final class SocketListenerRuntimeLifecycleTests: XCTestCase {
             addressFamily: .ipv4,
             parameters: .tcp,
             queue: DispatchQueue(label: "SocketListenerRuntimeLifecycleTests"),
-            listenerFactory: listeners.listenerFactory,
+            listenerProvider: listeners.listenerProvider,
             newConnectionHandler: { _ in }
         )
     }

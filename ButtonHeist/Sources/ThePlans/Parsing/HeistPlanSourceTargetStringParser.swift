@@ -1,10 +1,5 @@
 import Foundation
 
-struct StringMatchModeLabelToken {
-    let name: String
-    let token: HeistPlanSourceToken
-}
-
 private enum StringMatchEmptyLiteralPolicy {
     case reject
     case allowExact
@@ -403,8 +398,8 @@ extension HeistPlanSourceParser {
         if lookaheadExactStringMatchCall {
             throw error(currentToken, "exact \(field) matches use the literal form: .\(field)(\"...\")")
         }
-        if let label = stringMatchModeLabelTokenIfPresent() {
-            throw error(label.token, "StringMatch modes use enum-case syntax; use `.\(field)(.\(label.name)(\"...\"))`")
+        if let label = stringMatchModeLabelIfPresent() {
+            throw error(currentToken, "StringMatch modes use enum-case syntax; use `.\(field)(.\(label)(\"...\"))`")
         }
         if startsStringMatchDotCall {
             return try parseStringMatchDotCall(field: field)
@@ -427,8 +422,8 @@ extension HeistPlanSourceParser {
         if lookaheadExactStringMatchCall {
             throw error(currentToken, "exact \(field) matches use the literal form: \(field): \"...\"")
         }
-        if let label = stringMatchModeLabelTokenIfPresent() {
-            throw error(label.token, "StringMatch modes use enum-case syntax; use `\(field): .\(label.name)(\"...\")`")
+        if let label = stringMatchModeLabelIfPresent() {
+            throw error(currentToken, "StringMatch modes use enum-case syntax; use `\(field): .\(label)(\"...\")`")
         }
         if startsStringMatchDotCall {
             return try parseStringMatchDotCall(field: field, emptyLiteralPolicy: emptyLiteralPolicy)
@@ -466,9 +461,9 @@ extension HeistPlanSourceParser {
         )
     }
 
-    func stringMatchModeLabelTokenIfPresent() -> StringMatchModeLabelToken? {
+    func stringMatchModeLabelIfPresent() -> String? {
         for name in stringMatchModeNames where lookaheadLabel(name) {
-            return StringMatchModeLabelToken(name: name, token: currentToken)
+            return name
         }
         return nil
     }

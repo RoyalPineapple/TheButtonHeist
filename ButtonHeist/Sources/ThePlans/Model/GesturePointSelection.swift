@@ -97,32 +97,14 @@ public enum GestureProjectionError: Error, Sendable, Equatable, CustomStringConv
     }
 }
 
-struct GesturePayloadCandidate<Key: CodingKey, Selection> {
-    private let decodePayload: (KeyedDecodingContainer<Key>) throws -> Selection?
-
-    init<Payload: Decodable>(
-        _ key: Key,
-        as _: Payload.Type,
-        map: @escaping (Payload) -> Selection
-    ) {
-        self.decodePayload = { container in
-            try container.decodeIfPresent(Payload.self, forKey: key).map(map)
-        }
-    }
-
-    func decode(from container: KeyedDecodingContainer<Key>) throws -> Selection? {
-        try decodePayload(container)
-    }
-}
-
 extension KeyedDecodingContainer {
     func decodeExactlyOneGesturePayload<Selection>(
         kind: String,
         missing missingError: @autoclosure () -> Error,
-        candidates: [GesturePayloadCandidate<Key, Selection>]
+        decodePayloads: [(KeyedDecodingContainer<Key>) throws -> Selection?]
     ) throws -> Selection {
-        let selections = try candidates.compactMap { candidate in
-            try candidate.decode(from: self)
+        let selections = try decodePayloads.compactMap { decodePayload in
+            try decodePayload(self)
         }
 
         switch selections.count {

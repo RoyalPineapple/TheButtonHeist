@@ -32,13 +32,13 @@ final class ServerTransportTests: XCTestCase {
 
     @MainActor
     func testStartAfterStopRestartsTransport() async throws {
-        let listeners = TestSocketListenerFactory { invocation in
+        let listeners = TestSocketListenerProvider { invocation in
             .ready(UInt16(49_152 + invocation))
         }
         let transport = ServerTransport(
             token: "restart-token",
             serverDependencies: .init(
-                listenerFactory: listeners.listenerFactory
+                listenerProvider: listeners.listenerProvider
             )
         )
 
@@ -64,10 +64,10 @@ final class ServerTransportTests: XCTestCase {
 
     @MainActor
     func testStopDoesNotTerminateTransportEventStreamBeforeRestart() async throws {
-        let listeners = TestSocketListenerFactory(port: 49_152)
+        let listeners = TestSocketListenerProvider(port: 49_152)
         let transport = ServerTransport(
             token: "event-stream-restart-token",
-            serverDependencies: .init(listenerFactory: listeners.listenerFactory)
+            serverDependencies: .init(listenerProvider: listeners.listenerProvider)
         )
 
         _ = try await transport.start(port: 0, bindToLoopback: true, addressFamily: .ipv4)
@@ -92,13 +92,13 @@ final class ServerTransportTests: XCTestCase {
     @MainActor
     func testDuplicateStartWhileStartingIsRejected() async throws {
         let startGate = TransportStartGate()
-        let listeners = TestSocketListenerFactory { _ in
+        let listeners = TestSocketListenerProvider { _ in
             await startGate.enterAndWaitForRelease()
             return .ready(49_152)
         }
         let transport = ServerTransport(
             token: "starting-token",
-            serverDependencies: .init(listenerFactory: listeners.listenerFactory)
+            serverDependencies: .init(listenerProvider: listeners.listenerProvider)
         )
 
         let startTask = Task { @MainActor in
@@ -124,13 +124,13 @@ final class ServerTransportTests: XCTestCase {
     @MainActor
     func testStopWhileStartingRejectsStaleStartCompletion() async {
         let startGate = TransportStartGate()
-        let listeners = TestSocketListenerFactory { _ in
+        let listeners = TestSocketListenerProvider { _ in
             await startGate.enterAndWaitForRelease()
             return .ready(49_152)
         }
         let transport = ServerTransport(
             token: "starting-token",
-            serverDependencies: .init(listenerFactory: listeners.listenerFactory)
+            serverDependencies: .init(listenerProvider: listeners.listenerProvider)
         )
 
         let startTask = Task { @MainActor in
@@ -156,7 +156,7 @@ final class ServerTransportTests: XCTestCase {
     @MainActor
     func testRestartAfterStopDuringStartupWaitsForStaleCompletion() async throws {
         let startGate = TransportStartGate()
-        let listeners = TestSocketListenerFactory { invocation in
+        let listeners = TestSocketListenerProvider { invocation in
             guard invocation > 1 else {
                 await startGate.enterAndWaitForRelease()
                 return .ready(49_152)
@@ -165,7 +165,7 @@ final class ServerTransportTests: XCTestCase {
         }
         let transport = ServerTransport(
             token: "starting-token",
-            serverDependencies: .init(listenerFactory: listeners.listenerFactory)
+            serverDependencies: .init(listenerProvider: listeners.listenerProvider)
         )
 
         let staleStart = Task { @MainActor in

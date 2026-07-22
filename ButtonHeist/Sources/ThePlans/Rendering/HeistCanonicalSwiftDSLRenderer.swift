@@ -2,9 +2,7 @@ import Foundation
 
 struct HeistCanonicalSwiftDSLRenderer {
     func render(_ plan: HeistPlan) throws -> String {
-        var algebra = HeistCanonicalSwiftDSLRenderAlgebra(renderer: self)
-        HeistPlanTraversal(expandsInvocations: false).walk(plan, visitor: &algebra)
-        return try algebra.output()
+        try render(plan, callee: "HeistPlan", indent: 0, environment: RenderEnvironment(scope: .empty))
     }
 
     func renderHeistHeader(_ plan: HeistPlan, callee: String) throws -> String {
@@ -21,240 +19,156 @@ struct HeistCanonicalSwiftDSLRenderer {
             return "\(callee)(\(prefix)targetParameter: \(quote(parameter))) { \(parameter) in"
         }
     }
-}
 
-private struct HeistCanonicalSwiftDSLRenderAlgebra: HeistPlanTraversalVisitor {
-    private struct DefinitionFrame {
-        let fullPath: HeistDefinitionPath
-        let indent: Int
-        let isNamespace: Bool
+    private func render(
+        _ plan: HeistPlan,
+        callee: String,
+        indent: Int,
+        environment: RenderEnvironment
+    ) throws -> String {
+        let bodyEnvironment = try environment.binding(parameter: plan.parameter)
+        let content = try [
+            renderDefinitions(plan.definitions, parent: nil, indent: indent + 1),
+            renderBody(plan.body, indent: indent + 1, environment: bodyEnvironment)
+        ]
+        .filter { !$0.isEmpty }
+        .joined(separator: "\n\n")
+        let header = try renderHeistHeader(plan, callee: callee)
+        return """
+        \(line(header, indent))
+        \(content)
+        \(line("}", indent))
+        """
     }
 
-    let renderer: HeistCanonicalSwiftDSLRenderer
-    private var renderedSteps: [HeistPlanPath: String] = [:]
-    private var renderedBodies: [HeistPlanPath: String] = [:]
-    private var renderedDefinitions: [HeistPlanPath: String] = [:]
-    private var renderedDefinitionGroups: [HeistPlanPath: String] = [:]
-    private var bodyIndents: [HeistPlanPath: Int] = [:]
-    private var bodyEnvironments: [HeistPlanPath: RenderEnvironment] = [:]
-    private var stepIndents: [HeistPlanPath: Int] = [:]
-    private var stepEnvironments: [HeistPlanPath: RenderEnvironment] = [:]
-    private var activeBodyIndents: [Int] = []
-    private var activeBodyEnvironments: [RenderEnvironment] = []
-    private var definitionFrames: [DefinitionFrame] = []
-    private var renderedPlan: String?
-    private var failure: (any Error)?
-
-    init(renderer: HeistCanonicalSwiftDSLRenderer) {
-        self.renderer = renderer
+    private func renderDefinitions(
+        _ definitions: [HeistPlan],
+        parent: DefinitionFrame?,
+        indent: Int
+    ) throws -> String {
+        try definitions.map { definition in
+            try renderDefinition(definition, parent: parent, indent: indent)
+        }.joined(separator: "\n\n")
     }
 
-    mutating func visitPlan(_ plan: HeistPlan, context: HeistTraversalContext) {
-        bodyIndents[context.path.child(.body)] = 1
-    }
-
-    mutating func visitDefinition(_ plan: HeistPlan, context: HeistTraversalContext) {
-        guard let name = plan.name else {
+    private func renderDefinition(
+        _ definition: HeistPlan,
+        parent: DefinitionFrame?,
+        indent: Int
+    ) throws -> String {
+        guard let name = definition.name else {
             preconditionFailure("admitted heist definitions must have names")
         }
-        let parent = definitionFrames.last
-        let pathPrefix = parent?.isNamespace == true ? parent?.fullPath.components ?? [] : []
-        let indent = parent.map { $0.isNamespace ? $0.indent : $0.indent + 1 } ?? 1
-        let frame = DefinitionFrame(
-            fullPath: HeistDefinitionPath(first: pathPrefix.first ?? name, remaining: pathPrefix.isEmpty
-                ? []
-                : Array(pathPrefix.dropFirst()) + [name]),
-            indent: indent,
-            isNamespace: plan.body.isEmpty && !plan.definitions.isEmpty && plan.parameter == .none
+
+        let pathComponents = parent?.isNamespace == true ? parent?.path.components ?? [] : []
+        let path = HeistDefinitionPath(
+            first: pathComponents.first ?? name,
+            remaining: pathComponents.isEmpty ? [] : Array(pathComponents.dropFirst()) + [name]
         )
-        definitionFrames.append(frame)
-        bodyIndents[context.path.child(.body)] = indent + 1
-        bodyEnvironments[context.path.child(.body)] = RenderEnvironment(scope: context.scope)
-    }
+        let frame = DefinitionFrame(
+            path: path,
+            indent: parent.map { $0.isNamespace ? $0.indent : $0.indent + 1 } ?? indent,
+            isNamespace: definition.body.isEmpty && !definition.definitions.isEmpty && definition.parameter == .none
+        )
 
-    mutating func visitSteps(_ steps: [HeistStep], context: HeistTraversalContext) {
-        activeBodyIndents.append(bodyIndents[context.path] ?? context.depth)
-        activeBodyEnvironments.append(bodyEnvironments[context.path] ?? RenderEnvironment(scope: context.scope))
-    }
-
-    mutating func leaveSteps(_ steps: [HeistStep], context: HeistTraversalContext) {
-        _ = activeBodyIndents.popLast()
-        _ = activeBodyEnvironments.popLast()
-        guard failure == nil else { return }
-        let results = steps.indices.compactMap { renderedSteps[context.path.index($0)] }
-        precondition(results.count == steps.count, "canonical traversal did not reduce every heist step")
-        renderedBodies[context.path] = results.joined(separator: "\n\n")
-    }
-
-    mutating func visitStep(_ step: HeistStep, context: HeistTraversalContext) {
-        let indent = activeBodyIndents.last ?? context.depth
-        let environment = activeBodyEnvironments.last ?? RenderEnvironment(scope: context.scope)
-        stepIndents[context.path] = indent
-        stepEnvironments[context.path] = environment
-        let childIndent = indent + 1
-        switch step {
-        case .action, .warn, .fail, .invoke:
-            break
-        case .wait(let wait):
-            if wait.elseBody != nil {
-                bodyIndents[context.path.child(.wait).child(.elseBody)] = childIndent
-            }
-        case .conditional(let conditional):
-            for index in conditional.cases.indices {
-                bodyIndents[context.path.child(.conditional).child(.cases).index(index).child(.body)] = childIndent
-            }
-            if conditional.elseBody != nil {
-                bodyIndents[context.path.child(.conditional).child(.elseBody)] = childIndent
-            }
-        case .forEachElement:
-            bodyIndents[context.path.child(.forEachElement).child(.body)] = childIndent
-        case .forEachString:
-            bodyIndents[context.path.child(.forEachString).child(.body)] = childIndent
-        case .repeatUntil:
-            bodyIndents[context.path.child(.repeatUntil).child(.body)] = childIndent
-        case .heist(let plan):
-            let bodyPath = context.path.child(.heist).child(.body)
-            bodyIndents[bodyPath] = childIndent
-            bodyEnvironments[bodyPath] = try? environment.binding(parameter: plan.parameter)
+        if frame.isNamespace {
+            return try renderDefinitions(definition.definitions, parent: frame, indent: frame.indent)
         }
+
+        let bodyEnvironment = RenderEnvironment(
+            scope: HeistReferenceBindingContext.runtimeSafetyPlaceholder(for: definition.parameter).scope
+        )
+        let content = try [
+            renderDefinitions(definition.definitions, parent: frame, indent: frame.indent + 1),
+            renderBody(definition.body, indent: frame.indent + 1, environment: bodyEnvironment)
+        ]
+        .filter { !$0.isEmpty }
+        .joined(separator: "\n\n")
+        let type = try renderDefinitionType(definition.parameter)
+        let header = try renderDefinitionHeader(definition, type: type, path: frame.path)
+        return """
+        \(line(header, frame.indent))
+        \(content)
+        \(line("}", frame.indent))
+        """
     }
 
-    mutating func leaveStep(_ step: HeistStep, context: HeistTraversalContext) {
-        guard failure == nil else { return }
-        do {
-            let indent = stepIndents[context.path] ?? context.depth
-            let environment = stepEnvironments[context.path] ?? RenderEnvironment(scope: context.scope)
-            renderedSteps[context.path] = try render(
-                step,
-                path: context.path,
-                indent: indent,
-                environment: environment
-            )
-        } catch {
-            failure = error
-        }
-    }
-
-    mutating func leaveDefinition(_ plan: HeistPlan, context: HeistTraversalContext) {
-        let frame = definitionFrames.removeLast()
-        guard failure == nil else { return }
-        do {
-            if frame.isNamespace {
-                renderedDefinitions[context.path] = renderedDefinitionGroups[
-                    context.path.child(.definitions)
-                ] ?? ""
-                return
-            }
-            let nestedDefinitions = renderedDefinitionGroups[context.path.child(.definitions)] ?? ""
-            let body = renderedBodies[context.path.child(.body)] ?? ""
-            let content = [nestedDefinitions, body].filter { !$0.isEmpty }.joined(separator: "\n\n")
-            let type = try renderer.renderDefinitionType(plan.parameter)
-            let header = try renderer.renderDefinitionHeader(plan, type: type, path: frame.fullPath)
-            renderedDefinitions[context.path] = """
-            \(renderer.line(header, frame.indent))
-            \(content)
-            \(renderer.line("}", frame.indent))
-            """
-        } catch {
-            failure = error
-        }
-    }
-
-    mutating func leaveDefinitions(_ definitions: [HeistPlan], context: HeistTraversalContext) {
-        guard failure == nil else { return }
-        let results = definitions.indices.compactMap { renderedDefinitions[context.path.index($0)] }
-        precondition(results.count == definitions.count, "canonical traversal did not reduce every heist definition")
-        renderedDefinitionGroups[context.path] = results.joined(separator: "\n\n")
-    }
-
-    mutating func leavePlan(_ plan: HeistPlan, context: HeistTraversalContext) {
-        guard failure == nil else { return }
-        do {
-            let definitions = renderedDefinitionGroups[context.path.child(.definitions)] ?? ""
-            let body = renderedBodies[context.path.child(.body)] ?? ""
-            let content = [definitions, body].filter { !$0.isEmpty }.joined(separator: "\n\n")
-            let header = try renderer.renderHeistHeader(plan, callee: "HeistPlan")
-            renderedPlan = """
-            \(header)
-            \(content)
-            }
-            """
-        } catch {
-            failure = error
-        }
-    }
-
-    func output() throws -> String {
-        if let failure { throw failure }
-        guard let renderedPlan else {
-            preconditionFailure("canonical traversal did not reduce the heist plan")
-        }
-        return renderedPlan
+    private func renderBody(
+        _ steps: [HeistStep],
+        indent: Int,
+        environment: RenderEnvironment
+    ) throws -> String {
+        try steps.map { step in
+            try render(step, indent: indent, environment: environment)
+        }.joined(separator: "\n\n")
     }
 
     private func render(
         _ step: HeistStep,
-        path: HeistPlanPath,
         indent: Int,
         environment: RenderEnvironment
     ) throws -> String {
         switch step {
         case .action(let action):
-            return try renderer.render(action: action, indent: indent, environment: environment)
+            return try render(action: action, indent: indent, environment: environment)
         case .wait(let wait):
-            return try renderer.render(
+            return try render(
                 wait: wait,
-                renderedElseBody: renderedBodies[path.child(.wait).child(.elseBody)],
+                renderedElseBody: try wait.elseBody.map {
+                    try renderBody($0, indent: indent + 1, environment: environment)
+                },
                 indent: indent,
                 environment: environment
             )
         case .conditional(let conditional):
-            let conditionalPath = path.child(.conditional)
-            let bodies = conditional.cases.indices.map {
-                renderedBodies[conditionalPath.child(.cases).index($0).child(.body)] ?? ""
+            let bodies = try conditional.cases.map { predicateCase in
+                try renderBody(predicateCase.body, indent: indent + 1, environment: environment)
             }
-            return try renderer.renderConditional(
+            return try renderConditional(
                 conditional,
                 renderedBodies: bodies,
-                renderedElseBody: renderedBodies[conditionalPath.child(.elseBody)],
+                renderedElseBody: try conditional.elseBody.map {
+                    try renderBody($0, indent: indent + 1, environment: environment)
+                },
                 indent: indent,
                 environment: environment
             )
         case .forEachElement(let forEach):
-            return try renderer.renderForEachElement(
+            let bodyEnvironment = try environment.binding(parameter: .accessibilityTarget(name: forEach.parameter))
+            return try renderForEachElement(
                 forEach,
-                renderedBody: renderedBodies[path.child(.forEachElement).child(.body)] ?? "",
+                renderedBody: try renderBody(forEach.body, indent: indent + 1, environment: bodyEnvironment),
                 indent: indent,
                 environment: environment
             )
         case .forEachString(let forEach):
-            return try renderer.renderForEachString(
+            let bodyEnvironment = try environment.binding(parameter: .string(name: forEach.parameter))
+            return try renderForEachString(
                 forEach,
-                renderedBody: renderedBodies[path.child(.forEachString).child(.body)] ?? "",
+                renderedBody: try renderBody(forEach.body, indent: indent + 1, environment: bodyEnvironment),
                 indent: indent
             )
         case .repeatUntil(let repeatUntil):
-            let repeatPath = path.child(.repeatUntil)
-            return try renderer.renderRepeatUntil(
+            return try renderRepeatUntil(
                 repeatUntil,
-                renderedBody: renderedBodies[repeatPath.child(.body)] ?? "",
+                renderedBody: try renderBody(repeatUntil.body, indent: indent + 1, environment: environment),
                 indent: indent,
                 environment: environment
             )
         case .warn(let warn):
-            return renderer.line("Warn(\(renderer.quote(warn.message.rawValue)))", indent)
+            return line("Warn(\(quote(warn.message.rawValue)))", indent)
         case .fail(let fail):
-            return renderer.line("Fail(\(renderer.quote(fail.message.rawValue)))", indent)
+            return line("Fail(\(quote(fail.message.rawValue)))", indent)
         case .heist(let plan):
-            let body = renderedBodies[path.child(.heist).child(.body)] ?? ""
-            let header = try renderer.renderHeistHeader(plan, callee: "HeistPlan")
-            return """
-            \(renderer.line(header, indent))
-            \(body)
-            \(renderer.line("}", indent))
-            """
+            return try render(plan, callee: "HeistPlan", indent: indent, environment: environment)
         case .invoke(let invoke):
-            return try renderer.render(invoke: invoke, indent: indent, environment: environment)
+            return try render(invoke: invoke, indent: indent, environment: environment)
         }
     }
+}
+
+private struct DefinitionFrame {
+    let path: HeistDefinitionPath
+    let indent: Int
+    let isNamespace: Bool
 }

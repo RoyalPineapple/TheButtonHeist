@@ -377,7 +377,7 @@ extension TheFenceHandlerTests {
         )
     }
 
-    func testSchemaFailureUsesDiagnosticFailureMapper() throws {
+    func testSchemaFailureConstructsDiagnosticFailure() throws {
         let validationError = SchemaValidationError(
             field: "target",
             observed: "integer 7",

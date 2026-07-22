@@ -322,16 +322,16 @@ final class TheGetawayTransportWiringTests: XCTestCase {
     }
 
     func testRejectedTransportWiringDoesNotStartListener() async throws {
-        let listeners = TestSocketListenerFactory(port: 49_153)
+        let listeners = TestSocketListenerProvider(port: 49_153)
         let token: SessionAuthToken = "transport-wiring-token"
         let transport = ServerTransport(
             token: token,
-            serverDependencies: .init(listenerFactory: listeners.listenerFactory)
+            serverDependencies: .init(listenerProvider: listeners.listenerProvider)
         )
         let job = try TheInsideJob(
             token: token.description,
             addressFamily: .ipv4,
-            transportFactory: { _, _ in transport }
+            transportProvider: { _, _ in transport }
         )
         let enteredInstallation = CompletionSignal()
         let releaseInstallation = CompletionSignal()

@@ -40,7 +40,7 @@ extension TheFenceCompactFormattingContractTests {
             command: .perform,
             result: HeistResultFixture.actionResult(
                 payload: .dismiss,
-                message: "Handler: UINavigationController"
+                screenActionHandler: "UINavigationController"
             )
         )
 
@@ -48,7 +48,8 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertEqual(response.humanFormatted(), "✓ perform  Handler: UINavigationController")
 
         let json = try publicJSONProbe(response)
-        XCTAssertEqual(try json.string("message"), "Handler: UINavigationController")
+        XCTAssertNoThrow(try json.assertMissing("message"))
+        XCTAssertEqual(try json.string("screenActionHandler"), "UINavigationController")
     }
 
     func testExplicitOneFingerTapKeepsCanonicalResultIdentity() {

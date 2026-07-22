@@ -10,7 +10,7 @@ import TheScore
 /// The vault resolves live semantic targets; this type performs user intent on
 /// the resolved live object.
 @MainActor
-final class AccessibilityActionDispatcher {
+struct AccessibilityActionDispatcher {
 
     enum ActivateOutcome: Sendable {
         case success
@@ -26,7 +26,7 @@ final class AccessibilityActionDispatcher {
     }
 
     enum ScreenActionOutcome: Equatable, Sendable {
-        case succeeded(handler: String)
+        case succeeded(handler: ScreenActionHandlerName)
         case noHandler
     }
 
@@ -178,9 +178,10 @@ final class AccessibilityActionDispatcher {
         AXMethodOverrides.object(object, overrides: action.selector)
     }
 
-    private static func handlerName(_ object: NSObject) -> String {
-        NSStringFromClass(type(of: object)).split(separator: ".").last.map(String.init)
+    private static func handlerName(_ object: NSObject) -> ScreenActionHandlerName {
+        let name = NSStringFromClass(type(of: object)).split(separator: ".").last.map(String.init)
             ?? String(describing: type(of: object))
+        return (try? ScreenActionHandlerName(validating: name)) ?? "unknown"
     }
 
     private enum ResponderAction: CaseIterable {

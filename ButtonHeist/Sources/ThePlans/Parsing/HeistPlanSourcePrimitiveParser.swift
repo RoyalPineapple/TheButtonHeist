@@ -154,10 +154,10 @@ extension HeistPlanSourceParser {
         advance()
     }
 
-    mutating func parseTryPrefixIfPresent() throws -> HeistTryPrefix? {
+    mutating func parseTryPrefixIfPresent() throws -> HeistPlanSourceToken? {
         guard let token = consumeIdentifier("try") else { return nil }
-        let forced = consumeSymbol("!")
-        return HeistTryPrefix(token: token, forced: forced)
+        _ = consumeSymbol("!")
+        return token
     }
 
     @discardableResult

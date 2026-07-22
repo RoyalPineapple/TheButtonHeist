@@ -2,14 +2,12 @@ import Foundation
 
 struct HeistPlanSourceParser {
     let tokens: [HeistPlanSourceToken]
-    let sourceName: String
 
     var index: Int = 0
     var scope = HeistPlanSourceScope()
 
-    init(tokens: [HeistPlanSourceToken], sourceName: String) {
+    init(tokens: [HeistPlanSourceToken]) {
         self.tokens = tokens
-        self.sourceName = sourceName
     }
 
     mutating func parseProgram() throws -> HeistPlanAdmissionCandidate {

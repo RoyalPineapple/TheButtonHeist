@@ -73,24 +73,19 @@ extension HeistPlanSourceParser {
         _ token: HeistPlanSourceToken,
         _ message: String
     ) -> HeistSourceCompilationError {
-        HeistSourceCompilationError(
+        let span = token.sourceSpan
+        return HeistSourceCompilationError(
             message: message,
-            sourceName: sourceName,
-            offset: token.marker.offset,
-            line: token.marker.line,
-            column: token.marker.column,
-            length: token.marker.length
+            sourceName: span.sourceName,
+            offset: span.offset,
+            line: span.line,
+            column: span.column,
+            length: span.length
         )
     }
 
     func sourceSpan(for token: HeistPlanSourceToken) -> HeistBuildSourceSpan {
-        HeistBuildSourceSpan(
-            sourceName: sourceName,
-            offset: token.marker.offset,
-            line: token.marker.line,
-            column: token.marker.column,
-            length: token.marker.length
-        )
+        token.sourceSpan
     }
 
     func currentScope() -> HeistPlanSourceScope {
@@ -132,11 +127,6 @@ struct ParsedHeistBody {
     let steps: [HeistStepAdmissionCandidate]
 }
 
-struct HeistTryPrefix {
-    let token: HeistPlanSourceToken
-    let forced: Bool
-}
-
 struct HeistPlanSourceScope: Equatable {
     var stringRefs: [String: HeistReferenceName] = [:]
     var targetRefs: [String: HeistReferenceName] = [:]
@@ -161,10 +151,4 @@ struct HeistPlanSourceScope: Equatable {
 enum HeistPlanSourceBinding {
     case string
     case target
-}
-
-enum HeistDefinitionParameterKind {
-    case none
-    case string
-    case accessibilityTarget
 }

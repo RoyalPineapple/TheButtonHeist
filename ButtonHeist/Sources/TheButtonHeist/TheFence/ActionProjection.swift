@@ -76,6 +76,8 @@ struct ActionProjection: Sendable {
 
     var announcement: String? { result.announcement }
 
+    var screenActionHandler: ScreenActionHandlerName? { result.screenActionHandler }
+
     var payload: ActionPayloadProjection {
         switch result.payload {
         case .typeText(let value), .setPasteboard(let value), .getPasteboard(let value):

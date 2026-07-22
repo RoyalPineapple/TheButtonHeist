@@ -19,18 +19,18 @@ typealias SocketSendContent = @Sendable (
 actor SimpleSocketServer {
     struct Dependencies: Sendable {
         let sendContent: SocketSendContent
-        let listenerFactory: SocketListenerFactory
+        let listenerProvider: SocketListenerProvider
 
         init(
             sendContent: @escaping SocketSendContent = { connection, content, completion in
                 connection.send(content: content, completion: completion)
             },
-            listenerFactory: @escaping SocketListenerFactory = { parameters in
+            listenerProvider: @escaping SocketListenerProvider = { parameters in
                 try NetworkSocketListener(parameters: parameters)
             }
         ) {
             self.sendContent = sendContent
-            self.listenerFactory = listenerFactory
+            self.listenerProvider = listenerProvider
         }
     }
 
@@ -164,7 +164,7 @@ actor SimpleSocketServer {
             addressFamily: addressFamily,
             parameters: parameters,
             queue: queue,
-            listenerFactory: dependencies.listenerFactory
+            listenerProvider: dependencies.listenerProvider
         ) { [weak self, weak runtime, attemptID] connection in
             guard let runtime else {
                 connection.cancel()

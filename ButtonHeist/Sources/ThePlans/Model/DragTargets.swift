@@ -125,18 +125,22 @@ public struct DragTarget: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: DragTargetCodingKeys.self, typeName: "drag target")
         let container = try decoder.container(keyedBy: DragTargetCodingKeys.self)
-        let selectionPayloads: [GesturePayloadCandidate<DragTargetCodingKeys, DragGestureSelection>] = [
-            GesturePayloadCandidate(.elementToPoint, as: DragElementToPointPayload.self) {
-                .elementToPoint($0.element, start: $0.start, end: $0.end)
+        let decodePayloads: [(KeyedDecodingContainer<DragTargetCodingKeys>) throws -> DragGestureSelection?] = [
+            {
+                try $0.decodeIfPresent(DragElementToPointPayload.self, forKey: .elementToPoint).map {
+                    .elementToPoint($0.element, start: $0.start, end: $0.end)
+                }
             },
-            GesturePayloadCandidate(.pointToPoint, as: DragPointToPointPayload.self) {
-                .pointToPoint(start: $0.start, end: $0.end)
+            {
+                try $0.decodeIfPresent(DragPointToPointPayload.self, forKey: .pointToPoint).map {
+                    .pointToPoint(start: $0.start, end: $0.end)
+                }
             },
         ]
         self.selection = try container.decodeExactlyOneGesturePayload(
             kind: "drag",
             missing: GestureProjectionError.missingGesturePoint(field: "drag intent"),
-            candidates: selectionPayloads
+            decodePayloads: decodePayloads
         )
         self.duration = try container.decodeIfPresent(GestureDuration.self, forKey: .duration)
     }

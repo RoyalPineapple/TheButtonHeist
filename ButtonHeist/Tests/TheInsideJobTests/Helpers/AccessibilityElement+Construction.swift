@@ -5,7 +5,7 @@ import ThePlans
 @testable import TheInsideJob
 @testable import TheScore
 
-struct AccessibilityElementBuilder {
+struct AccessibilityElementFixture {
     var description: String?
     var label: String?
     var value: String?
@@ -53,7 +53,7 @@ struct AccessibilityElementBuilder {
         self.visibility = visibility
     }
 
-    func build() -> AccessibilityElement {
+    func element() -> AccessibilityElement {
         AccessibilityElement.make(
             description: description,
             label: label,

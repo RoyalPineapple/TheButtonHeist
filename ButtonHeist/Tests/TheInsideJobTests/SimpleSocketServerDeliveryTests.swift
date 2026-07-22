@@ -176,12 +176,12 @@ final class SimpleSocketServerDeliveryTests: XCTestCase {
             connection.send(content: content, completion: completion)
         }
     ) -> SimpleSocketServer {
-        let listeners = TestSocketListenerFactory(port: 49_152)
+        let listeners = TestSocketListenerProvider(port: 49_152)
         return SimpleSocketServer(
             callbacks: callbacks,
             dependencies: SimpleSocketServer.Dependencies(
                 sendContent: sendContent,
-                listenerFactory: listeners.listenerFactory
+                listenerProvider: listeners.listenerProvider
             )
         )
     }

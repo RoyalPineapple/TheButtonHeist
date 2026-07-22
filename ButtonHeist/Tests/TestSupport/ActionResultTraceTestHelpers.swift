@@ -24,6 +24,7 @@ package enum HeistResultFixture {
         traceEvidence: AccessibilityTraceEvidence? = nil,
         subjectEvidence: ActionSubjectEvidence? = nil,
         activationTrace: ActivationTrace? = nil,
+        screenActionHandler: ScreenActionHandlerName? = nil,
         timing: ActionPerformanceTiming? = nil
     ) -> ActionResult {
         let observation = traceEvidence.map(ActionResultObservationEvidence.trace) ?? .none
@@ -40,11 +41,14 @@ package enum HeistResultFixture {
                     timing: timing
                 )
             }
-            return .success(
+            return ActionResult(
+                outcome: .success,
                 payload: payload,
                 message: message,
                 observation: observation,
                 subjectEvidence: subjectEvidence,
+                activationTrace: nil,
+                screenActionHandler: screenActionHandler,
                 timing: timing
             )
         }

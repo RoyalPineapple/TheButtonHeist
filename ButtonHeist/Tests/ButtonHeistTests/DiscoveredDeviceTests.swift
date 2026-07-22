@@ -511,9 +511,9 @@ final class DiscoveredDeviceTests: XCTestCase {
         let mockConnection = MockConnection()
         mockConnection.emitTransportReadyOnConnect = true
 
-        let previousFactory = makeReachabilityConnection
+        let previousProvider = makeReachabilityConnection
         makeReachabilityConnection = { _ in mockConnection }
-        defer { makeReachabilityConnection = previousFactory }
+        defer { makeReachabilityConnection = previousProvider }
 
         let reachable = await [device].reachable(timeout: 0.2)
 
@@ -529,8 +529,8 @@ final class DiscoveredDeviceTests: XCTestCase {
             endpoint: DiscoveredDeviceEndpoint.hostPort(host: "::1", port: 1)
         )
 
-        let previousFactory = makeReachabilityConnection
-        defer { makeReachabilityConnection = previousFactory }
+        let previousProvider = makeReachabilityConnection
+        defer { makeReachabilityConnection = previousProvider }
 
         weak var weakProbe: ReachabilityProbeConnection?
         do {
@@ -542,7 +542,7 @@ final class DiscoveredDeviceTests: XCTestCase {
             XCTAssertEqual(reachable, [device])
         }
 
-        makeReachabilityConnection = previousFactory
+        makeReachabilityConnection = previousProvider
         for _ in 0..<10 {
             if weakProbe == nil { break }
             await Task.yield()

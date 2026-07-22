@@ -92,17 +92,17 @@ struct HeistPlanSourceLexer {
     }
 
     private mutating func lexIdentifier() -> HeistPlanSourceToken {
-        let start = marker()
+        let start = sourceSpan()
         var text = ""
         while let character = current, character.isPlanSourceIdentifierPart {
             text.append(character)
             advance()
         }
-        return HeistPlanSourceToken(kind: .identifier(text), sourceName: sourceName, marker: start)
+        return HeistPlanSourceToken(kind: .identifier(text), sourceSpan: start)
     }
 
     private mutating func lexNumber() -> HeistPlanSourceToken {
-        let start = marker()
+        let start = sourceSpan()
         var text = ""
         while let character = current, character.isNumber {
             text.append(character)
@@ -116,17 +116,17 @@ struct HeistPlanSourceLexer {
                 advance()
             }
         }
-        return HeistPlanSourceToken(kind: .number(text), sourceName: sourceName, marker: start)
+        return HeistPlanSourceToken(kind: .number(text), sourceSpan: start)
     }
 
     private mutating func lexString() throws -> HeistPlanSourceToken {
-        let start = marker()
+        let start = sourceSpan()
         advance()
         var text = ""
         while let character = current {
             if character == "\"" {
                 advance()
-                return HeistPlanSourceToken(kind: .string(text), sourceName: sourceName, marker: start)
+                return HeistPlanSourceToken(kind: .string(text), sourceSpan: start)
             }
             if character == "\\" {
                 advance()
@@ -191,11 +191,11 @@ struct HeistPlanSourceLexer {
     }
 
     private func token(_ kind: HeistPlanSourceTokenKind, length: Int) -> HeistPlanSourceToken {
-        HeistPlanSourceToken(kind: kind, sourceName: sourceName, marker: marker(length: length))
+        HeistPlanSourceToken(kind: kind, sourceSpan: sourceSpan(length: length))
     }
 
-    private func marker(length: Int = 1) -> HeistPlanSourceMarker {
-        HeistPlanSourceMarker(offset: offset, line: line, column: column, length: length)
+    private func sourceSpan(length: Int = 1) -> HeistBuildSourceSpan {
+        HeistBuildSourceSpan(sourceName: sourceName, offset: offset, line: line, column: column, length: length)
     }
 
     private func error(_ message: String) -> HeistSourceCompilationError {
@@ -211,8 +211,7 @@ struct HeistPlanSourceLexer {
 
 struct HeistPlanSourceToken: Equatable {
     let kind: HeistPlanSourceTokenKind
-    let sourceName: String
-    let marker: HeistPlanSourceMarker
+    let sourceSpan: HeistBuildSourceSpan
 
     func isSymbol(_ symbol: Character) -> Bool {
         kind == .symbol(symbol)
@@ -242,13 +241,6 @@ enum HeistPlanSourceTokenKind: Equatable, CustomStringConvertible {
             return "end of source"
         }
     }
-}
-
-struct HeistPlanSourceMarker: Equatable {
-    let offset: Int
-    let line: Int
-    let column: Int
-    let length: Int
 }
 
 private extension Character {

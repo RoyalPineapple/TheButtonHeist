@@ -109,13 +109,13 @@ struct InterfaceProjection: Sendable {
         navigation = InterfaceNavigationProjection(screenTitle: screenTitle, elements: projectedElements)
         elementCount = projectedElementRecords.count
 
-        var builder = InterfaceProjectionBuilder(
+        var reducer = InterfaceProjectionReducer(
             graph: interface.graph,
             visibleElementBudget: profile.limits.visibleElementBudget,
             totalNodeBudget: profile.limits.totalNodeBudget
         )
-        tree = builder.build()
-        rendering = builder.rendering(
+        tree = reducer.projectTree()
+        rendering = reducer.rendering(
             observedElementCount: elementCount,
             visibleElementBudget: profile.limits.visibleElementBudget,
             totalNodeBudget: profile.limits.totalNodeBudget
@@ -123,7 +123,7 @@ struct InterfaceProjection: Sendable {
     }
 }
 
-private struct InterfaceProjectionBuilder {
+private struct InterfaceProjectionReducer {
     private let graph: InterfaceGraph
     private let visibleElementBudget: Int
     private let measurements: InterfaceProjectionMeasurements
@@ -146,7 +146,7 @@ private struct InterfaceProjectionBuilder {
         accumulator = InterfaceProjectionAccumulator(totalNodeBudget: totalNodeBudget)
     }
 
-    mutating func build() -> [InterfaceNodeProjection] {
+    mutating func projectTree() -> [InterfaceNodeProjection] {
         for record in graph.nodesInPathOrder {
             closeContainers(outside: record.path)
 

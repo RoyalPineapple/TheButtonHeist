@@ -213,14 +213,10 @@ struct SettleLoopTransition: Equatable, Sendable {
 }
 
 @MainActor
-final class SettleSessionFinalObservation {
+struct SettleSessionFinalObservation {
     let observation: InterfaceObservation
 
     var tree: InterfaceTree { observation.tree }
-
-    init(observation: InterfaceObservation) {
-        self.observation = observation
-    }
 }
 
 // MARK: - SettleSession

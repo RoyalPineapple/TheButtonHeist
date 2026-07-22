@@ -1,15 +1,5 @@
 import Foundation
 
-struct ParsedPredicateBranches {
-    let cases: [HeistPredicateCaseAdmissionCandidate]
-    let elseBody: [HeistStepAdmissionCandidate]?
-}
-
-struct ParsedClosureParameterBlock {
-    let referenceName: HeistReferenceName
-    let body: [HeistStepAdmissionCandidate]
-}
-
 extension HeistPlanSourceParser {
     mutating func parseWaitFor() throws -> HeistStepAdmissionCandidate {
         try expectSymbol("(")
@@ -27,17 +17,9 @@ extension HeistPlanSourceParser {
         if consumeSymbol("(") {
             let predicate = try parseScreenAssertion()
             try expectSymbol(")")
-            let branches = try parseSinglePredicateBranches(predicate: predicate, chainContext: "If")
-            return .conditional(try HeistConditionalAdmissionCandidate(
-                cases: branches.cases,
-                elseBody: branches.elseBody
-            ))
+            return .conditional(try parseSinglePredicateBranches(predicate: predicate, chainContext: "If"))
         }
-        let branches = try parsePredicateBranches()
-        return .conditional(try HeistConditionalAdmissionCandidate(
-            cases: branches.cases,
-            elseBody: branches.elseBody
-        ))
+        return .conditional(try parsePredicateBranches())
     }
 
     mutating func parseForEach() throws -> HeistStepAdmissionCandidate {
@@ -51,12 +33,13 @@ extension HeistPlanSourceParser {
                 values.append(try parseStringLiteral())
             } while consumeSymbol(",")
             try expectSymbol(")")
-            let closure = try parseClosureParameterBlock(binding: .string)
-            return .forEachString(try HeistForEachStringAdmissionCandidate(
-                values: values,
-                parameter: closure.referenceName,
-                body: closure.body
-            ))
+            return try parseScopedClosure(binding: .string) { parameter, body in
+                .forEachString(try HeistForEachStringAdmissionCandidate(
+                    values: values,
+                    parameter: parameter,
+                    body: body
+                ))
+            }
         }
         let matching = try parseElementLoopPredicate()
         var limit = 20
@@ -69,13 +52,14 @@ extension HeistPlanSourceParser {
             }
         }
         try expectSymbol(")")
-        let closure = try parseClosureParameterBlock(binding: .target)
-        return .forEachElement(try HeistForEachElementAdmissionCandidate(
-            matching: matching,
-            limit: limit,
-            parameter: closure.referenceName,
-            body: closure.body
-        ))
+        return try parseScopedClosure(binding: .target) { parameter, body in
+            .forEachElement(try HeistForEachElementAdmissionCandidate(
+                matching: matching,
+                limit: limit,
+                parameter: parameter,
+                body: body
+            ))
+        }
     }
 
     mutating func parseRepeatUntil() throws -> HeistStepAdmissionCandidate {
@@ -142,23 +126,21 @@ extension HeistPlanSourceParser {
                     timeout = try parseTrailingTimeout(defaultValue: nil)
                 }
                 try expectSymbol(")")
-                let timeoutResult = composeExpectationTimeout(
+                let composition = composeExpectation(
                     existing: invocation.expectation,
                     existingExplicit: explicitExpectationTimeout,
+                    nextPredicate: predicate,
                     nextExplicit: timeout
                 )
-                let predicateResult = invocation.expectation.map {
-                    composeExpectationPredicates(existing: $0.predicate, next: predicate)
-                } ?? ExpectationPredicateComposition(predicate: predicate, diagnostics: [])
-                if let diagnostic = (predicateResult.diagnostics + timeoutResult.diagnostics).first {
+                if let diagnostic = composition.diagnostics.first {
                     throw error(chainToken, diagnostic.message)
                 }
                 invocation = HeistInvocationStep(
                     path: invocation.path,
                     argument: invocation.argument,
-                    expectation: WaitStep(predicate: predicateResult.predicate, timeout: timeoutResult.timeout)
+                    expectation: WaitStep(predicate: composition.predicate, timeout: composition.timeout)
                 )
-                explicitExpectationTimeout = timeoutResult.explicitTimeout
+                explicitExpectationTimeout = composition.explicitTimeout
             default:
                 throw error(chainToken, "unsupported RunHeist chain '.\(chain)'")
             }
@@ -197,7 +179,7 @@ extension HeistPlanSourceParser {
         }
     }
 
-    mutating func parsePredicateBranches() throws -> ParsedPredicateBranches {
+    mutating func parsePredicateBranches() throws -> HeistConditionalAdmissionCandidate {
         try expectSymbol("{")
         var cases: [HeistPredicateCaseAdmissionCandidate] = []
         var elseBody: [HeistStepAdmissionCandidate]?
@@ -226,16 +208,16 @@ extension HeistPlanSourceParser {
                 throw error(token, "branch blocks accept only Case(...) and Else")
             }
         }
-        return ParsedPredicateBranches(cases: cases, elseBody: elseBody)
+        return try HeistConditionalAdmissionCandidate(cases: cases, elseBody: elseBody)
     }
 
     mutating func parseSinglePredicateBranches(
         predicate: ChangeDeclaration.ScreenAssertion,
         chainContext: String
-    ) throws -> ParsedPredicateBranches {
+    ) throws -> HeistConditionalAdmissionCandidate {
         let body = try parseHeistBlock()
         let elseBody = try parseLowercaseElseChainIfPresent(chainContext: chainContext)
-        return ParsedPredicateBranches(
+        return try HeistConditionalAdmissionCandidate(
             cases: [HeistPredicateCaseAdmissionCandidate(predicate: predicate, body: body)],
             elseBody: elseBody
         )
@@ -259,9 +241,10 @@ extension HeistPlanSourceParser {
         return try parseHeistBlock()
     }
 
-    mutating func parseClosureParameterBlock(
-        binding: HeistPlanSourceBinding
-    ) throws -> ParsedClosureParameterBlock {
+    fileprivate mutating func parseScopedClosure<Value>(
+        binding: HeistPlanSourceBinding,
+        project: (HeistReferenceName, [HeistStepAdmissionCandidate]) throws -> Value
+    ) throws -> Value {
         try expectSymbol("{")
         let localName = try parseIdentifier()
         try expectIdentifier("in")
@@ -270,10 +253,7 @@ extension HeistPlanSourceParser {
         defer { restoreScope(previousScope) }
         bindScopedReference(binding, localName: localName, referenceName: referenceName)
         let body = try parseHeistBody(untilRightBrace: true, allowDefinitions: false)
-        return ParsedClosureParameterBlock(
-            referenceName: referenceName,
-            body: body.steps
-        )
+        return try project(referenceName, body.steps)
     }
 
 }

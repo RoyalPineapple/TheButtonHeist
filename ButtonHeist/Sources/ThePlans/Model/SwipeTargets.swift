@@ -200,24 +200,32 @@ public struct SwipeTarget: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: SwipeTargetCodingKeys.self, typeName: "swipe target")
         let container = try decoder.container(keyedBy: SwipeTargetCodingKeys.self)
         self.duration = try container.decodeIfPresent(GestureDuration.self, forKey: .duration)
-        let selectionPayloads: [GesturePayloadCandidate<SwipeTargetCodingKeys, SwipeGestureSelection>] = [
-            GesturePayloadCandidate(.elementDirection, as: SwipeElementDirectionPayload.self) {
-                .elementDirection($0.element, $0.direction)
+        let decodePayloads: [(KeyedDecodingContainer<SwipeTargetCodingKeys>) throws -> SwipeGestureSelection?] = [
+            {
+                try $0.decodeIfPresent(SwipeElementDirectionPayload.self, forKey: .elementDirection).map {
+                    .elementDirection($0.element, $0.direction)
+                }
             },
-            GesturePayloadCandidate(.elementUnitPoints, as: SwipeElementUnitPointsPayload.self) {
-                .unitElement($0.element, start: $0.start, end: $0.end)
+            {
+                try $0.decodeIfPresent(SwipeElementUnitPointsPayload.self, forKey: .elementUnitPoints).map {
+                    .unitElement($0.element, start: $0.start, end: $0.end)
+                }
             },
-            GesturePayloadCandidate(.pointToPoint, as: SwipePointToPointPayload.self) {
-                .pointToPoint(start: $0.start, end: $0.end)
+            {
+                try $0.decodeIfPresent(SwipePointToPointPayload.self, forKey: .pointToPoint).map {
+                    .pointToPoint(start: $0.start, end: $0.end)
+                }
             },
-            GesturePayloadCandidate(.pointDirection, as: SwipePointDirectionPayload.self) {
-                .pointDirection(start: $0.start, direction: $0.direction)
+            {
+                try $0.decodeIfPresent(SwipePointDirectionPayload.self, forKey: .pointDirection).map {
+                    .pointDirection(start: $0.start, direction: $0.direction)
+                }
             },
         ]
         self.selection = try container.decodeExactlyOneGesturePayload(
             kind: "swipe",
             missing: GestureProjectionError.missingSwipeIntent,
-            candidates: selectionPayloads
+            decodePayloads: decodePayloads
         )
     }
 

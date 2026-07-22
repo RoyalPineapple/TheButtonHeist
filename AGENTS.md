@@ -112,8 +112,14 @@ a parallel result wrapper, report graph, recording status, or wire-only semantic
 model when custom `Codable` can project the canonical type directly.
 
 Avoid `get`, `handle`, `process`, `make`, and `build` when a canonical verb
-states the operation precisely. Reserve `require` and precondition failures for
-unreachable programmer errors, never normal pipeline control flow.
+states the operation precisely. Avoid `Builder` and `Factory` type names for
+internal architecture; use the domain noun for what the type actually owns, such
+as `Collector`, `Accumulator`, `Projector`, `Renderer`, `Parser`, `Admission`,
+`Codec`, or `Resolver`. Swift result builders are the exception because
+`@resultBuilder` is the language feature name. Platform-boundary injection
+closures may describe the boundary they provide, but should still avoid
+spreading factory vocabulary into core logic. Reserve `require` and precondition
+failures for unreachable programmer errors, never normal pipeline control flow.
 
 ## Tuist Project Generation
 

@@ -1,4 +1,15 @@
 import Foundation
+import ThePlans
+
+public struct ScreenActionHandlerName: NonBlankStringValue {
+    private let value: String
+
+    public init(validating value: String) throws {
+        self.value = try validateNonBlank(value, kind: "screen action handler")
+    }
+
+    public var description: String { value }
+}
 
 struct ActionResultEvidenceBody: Codable, Sendable, Equatable {
     let observation: ActionResultObservationEvidence
@@ -45,15 +56,21 @@ struct ActionResultEvidenceBody: Codable, Sendable, Equatable {
 public struct ActionResultSuccessEvidence: Codable, Sendable, Equatable {
     let body: ActionResultEvidenceBody
     public let warning: HeistActionWarning?
+    public let screenActionHandler: ScreenActionHandlerName?
 
     public var observation: ActionResultObservationEvidence { body.observation }
     public var subjectEvidence: ActionSubjectEvidence? { body.subjectEvidence }
     public var activationTrace: ActivationTrace? { body.activationTrace }
     public var timing: ActionPerformanceTiming? { body.timing }
 
-    init(body: ActionResultEvidenceBody, warning: HeistActionWarning?) {
+    init(
+        body: ActionResultEvidenceBody,
+        warning: HeistActionWarning?,
+        screenActionHandler: ScreenActionHandlerName? = nil
+    ) {
         self.body = body
         self.warning = warning
+        self.screenActionHandler = screenActionHandler
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -62,6 +79,7 @@ public struct ActionResultSuccessEvidence: Codable, Sendable, Equatable {
         case activationTrace
         case timing
         case warning
+        case screenActionHandler
     }
 
     public init(from decoder: Decoder) throws {
@@ -69,7 +87,11 @@ public struct ActionResultSuccessEvidence: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             body: try ActionResultEvidenceBody(from: decoder),
-            warning: try container.decodeIfPresent(HeistActionWarning.self, forKey: .warning)
+            warning: try container.decodeIfPresent(HeistActionWarning.self, forKey: .warning),
+            screenActionHandler: try container.decodeIfPresent(
+                ScreenActionHandlerName.self,
+                forKey: .screenActionHandler
+            )
         )
     }
 
@@ -77,6 +99,7 @@ public struct ActionResultSuccessEvidence: Codable, Sendable, Equatable {
         try body.encode(to: encoder)
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(warning, forKey: .warning)
+        try container.encodeIfPresent(screenActionHandler, forKey: .screenActionHandler)
     }
 }
 
@@ -131,6 +154,10 @@ public enum ActionResultEvidence: Sendable, Equatable {
     public var subjectEvidence: ActionSubjectEvidence? { body.subjectEvidence }
     public var activationTrace: ActivationTrace? { body.activationTrace }
     public var timing: ActionPerformanceTiming? { body.timing }
+    public var screenActionHandler: ScreenActionHandlerName? {
+        guard case .success(let evidence) = self else { return nil }
+        return evidence.screenActionHandler
+    }
 
     public var warning: HeistActionWarning? {
         guard case .success(let evidence) = self else { return nil }
