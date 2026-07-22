@@ -542,8 +542,8 @@ final class WaitForIntegrationTests: XCTestCase {
             respondsToUserInteraction: false
         )
         let offViewportHeistId: HeistId = "wait_change_known_offviewport_button"
-        XCTAssertEqual(TheVault.IdAssignment.assign([visibleBefore]), [visibleHeistId])
-        XCTAssertEqual(TheVault.IdAssignment.assign([visibleAfter]), [visibleHeistId])
+        XCTAssertEqual(HeistIdAssignment.assign([visibleBefore]), [visibleHeistId])
+        XCTAssertEqual(HeistIdAssignment.assign([visibleAfter]), [visibleHeistId])
         XCTAssertNil(
             offViewportElement.identifier,
             "The pure-value off-viewport fixture deliberately keeps its synthetic known identity"

@@ -10,7 +10,7 @@ import XCTest
 /// accessibility elements into externally visible heistIds. These cases lock
 /// the current duplicate-disambiguation contract for scrollable content:
 /// duplicated synthesized ids get traversal-order `_N` suffixes through
-/// `IdAssignment.assign`, and `buildObservation` does not emit `_at_X_Y` content
+/// `HeistIdAssignment.assign`, and `buildObservation` does not emit `_at_X_Y` content
 /// position suffixes for these observable cases.
 @MainActor
 final class HeistIdDisambiguationTests: XCTestCase {

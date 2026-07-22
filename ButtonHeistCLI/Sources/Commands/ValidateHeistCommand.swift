@@ -40,7 +40,7 @@ struct ValidateHeistCommand: AsyncParsableCommand, CLICommandContract {
             argument: argument,
             commandName: Self.cliCommandName,
             additionalFields: [
-                CommandArgumentEnvelopeBuilder.value(FenceParameters.heistValidationLint, lint.value),
+                CommandArgumentFields.value(FenceParameters.heistValidationLint, lint.value),
             ]
         )
     }

@@ -59,17 +59,21 @@ enum StartupInfoPlistKey: String, CaseIterable, Sendable {
 }
 
 struct StartupInfoPlist: Equatable, Sendable {
+    static var main: StartupInfoPlist {
+        StartupInfoPlist(bundle: .main)
+    }
+
     private let values: [StartupInfoPlistKey: InfoPlistValue]
 
     init(bundle: Bundle) {
         self.init { key in
             guard let object = bundle.object(forInfoDictionaryKey: key) else { return nil }
-            return FoundationInfoPlistBridge.value(from: object)
+            return FoundationInfoPlistProjection.value(from: object)
         }
     }
 
     init(contentsOf url: URL) {
-        guard let dictionary = FoundationInfoPlistBridge.dictionary(contentsOf: url) else {
+        guard let dictionary = FoundationInfoPlistProjection.dictionary(contentsOf: url) else {
             self.init(values: [:])
             return
         }
@@ -95,12 +99,6 @@ struct StartupInfoPlist: Equatable, Sendable {
 
     subscript(key: StartupInfoPlistKey) -> InfoPlistValue? {
         values[key]
-    }
-}
-
-enum StartupInfoPlistBridge {
-    static func main() -> StartupInfoPlist {
-        StartupInfoPlist(bundle: .main)
     }
 }
 
@@ -182,8 +180,8 @@ private struct FoundationInfoPlistDictionary {
 }
 
 /// Foundation's Bundle and property-list APIs vend raw plist objects. Keep
-/// that `Any` bridge here and expose only typed `InfoPlistValue` to callers.
-private enum FoundationInfoPlistBridge {
+/// that `Any` projection here and expose only typed `InfoPlistValue` to callers.
+private enum FoundationInfoPlistProjection {
     static func dictionary(contentsOf url: URL) -> FoundationInfoPlistDictionary? {
         guard let data = try? Data(contentsOf: url),
               let propertyList = try? PropertyListSerialization.propertyList(
@@ -263,6 +261,9 @@ struct StartupEnvironmentKey: RawRepresentable, Hashable, Sendable {
 
 struct StartupEnvironment: Equatable, Sendable {
     static let empty = StartupEnvironment()
+    static var current: StartupEnvironment {
+        StartupEnvironment(rawValues: ProcessInfo.processInfo.environment)
+    }
 
     private let values: [StartupEnvironmentKey: String]
 
@@ -278,12 +279,6 @@ struct StartupEnvironment: Equatable, Sendable {
 
     subscript(key: StartupEnvironmentKey) -> String? {
         values[key]
-    }
-}
-
-enum StartupEnvironmentBridge {
-    static func current() -> StartupEnvironment {
-        StartupEnvironment(rawValues: ProcessInfo.processInfo.environment)
     }
 }
 
@@ -325,8 +320,8 @@ struct StartupConfiguration: Equatable, Sendable {
     }
 
     static func resolve(
-        env: StartupEnvironment = StartupEnvironmentBridge.current(),
-        infoPlist: StartupInfoPlist = StartupInfoPlistBridge.main()
+        env: StartupEnvironment = .current,
+        infoPlist: StartupInfoPlist = .main
     ) -> StartupConfiguration {
         var warnings: [StartupConfigurationWarning] = []
         let plist = infoPlist

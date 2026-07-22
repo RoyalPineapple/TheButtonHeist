@@ -341,7 +341,7 @@ final class CLICommandSyncTests: XCTestCase {
             path: nil,
             entry: nil,
             commandName: "describe_heist",
-            additionalFields: [CommandArgumentEnvelopeBuilder.value(.heist, "flow")]
+            additionalFields: [CommandArgumentFields.value(.heist, "flow")]
         )
 
         XCTAssertEqual(arguments.value(for: .heist), .string("flow"))
@@ -577,7 +577,7 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testCommandArgumentEnvelopeBuilderCarriesCanonicalTarget() throws {
+    func testCommandArgumentFieldsProjectCanonicalTargetEnvelope() throws {
         let expectedTarget = AccessibilityTarget.predicate(ElementPredicateTemplate(
                 [
                     .label("Rotor Host"),
@@ -588,9 +588,9 @@ final class CLICommandSyncTests: XCTestCase {
             ),
             ordinal: 1
         )
-        let arguments = CommandArgumentEnvelopeBuilder(
-            CommandArgumentEnvelopeBuilder.encoded(.target, expectedTarget)
-        ).build()
+        let arguments = CommandArgumentFields(
+            CommandArgumentFields.encoded(.target, expectedTarget)
+        ).envelope
 
         XCTAssertEqual(arguments.value(for: .target), .object([
             "checks": .array([

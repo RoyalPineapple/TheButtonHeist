@@ -22,7 +22,7 @@ struct AnyBoundaryRuleTests {
         let fixtures = [
             "private typealias FoundationFileAttributeDictionary = [String: Any]",
             "enum HeistValuePayloadDecoder { static func expectedDescription(for type: Any.Type) {} }",
-            "enum FoundationInfoPlistBridge { static func value(from object: Any) {} }",
+            "enum FoundationInfoPlistProjection { static func value(from object: Any) {} }",
         ]
 
         for (index, source) in fixtures.enumerated() {

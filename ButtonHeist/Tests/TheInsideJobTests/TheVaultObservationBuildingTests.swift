@@ -179,6 +179,85 @@ final class TheVaultObservationBuildingTests: XCTestCase {
         XCTAssertEqual(projectedOffscreen.visibility, .offscreen)
     }
 
+    func testScrollInventoryDuplicateIdsFollowScrollMembershipAcrossViewportReordering() throws {
+        let scrollContainerPath = TreePath([0])
+        let workHighObject = NSObject()
+        let workLowObject = NSObject()
+        let homeHighObject = NSObject()
+        let scrollView = ObservationInventoryScrollView(elements: [
+            workHighObject,
+            workLowObject,
+            homeHighObject,
+        ])
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+
+        let workHigh = duplicateReviewElement(category: "Work", priority: "High", value: "Active")
+        let workLow = duplicateReviewElement(category: "Work", priority: "Low", value: "Active")
+        let workLowOffscreen = duplicateReviewElement(
+            category: "Work",
+            priority: "Low",
+            value: "Active",
+            visibility: .offscreen
+        )
+        let homeHighOffscreen = duplicateReviewElement(
+            category: "Home",
+            priority: "High",
+            value: "Active",
+            visibility: .offscreen
+        )
+        let initialObservation = TheVault.buildObservation(from: TheVault.CaptureResult(
+            hierarchy: [
+                .container(makeScrollableContainer(), children: [
+                    .element(workHigh, traversalIndex: 0),
+                ]),
+            ],
+            objectsByPath: [scrollContainerPath.appending(0): workHighObject],
+            scrollViewsByPath: [scrollContainerPath: scrollView],
+            inventoryEnumeration: .init(offscreenElements: [
+                offscreenScrollElement(workLowOffscreen, containerPath: scrollContainerPath, index: 1),
+                offscreenScrollElement(homeHighOffscreen, containerPath: scrollContainerPath, index: 2),
+            ])
+        ))
+        let initialWorkHighId = try XCTUnwrap(reviewID(
+            in: initialObservation,
+            category: "Work",
+            priority: "High"
+        ))
+
+        let reorderedWorkLowPath = scrollContainerPath.appending(0)
+        let reorderedWorkHighPath = scrollContainerPath.appending(1)
+        let reorderedObservation = TheVault.buildObservation(from: TheVault.CaptureResult(
+            hierarchy: [
+                .container(makeScrollableContainer(), children: [
+                    .element(workLow, traversalIndex: 0),
+                    .element(workHigh, traversalIndex: 1),
+                ]),
+            ],
+            objectsByPath: [
+                reorderedWorkLowPath: workLowObject,
+                reorderedWorkHighPath: workHighObject,
+            ],
+            scrollViewsByPath: [scrollContainerPath: scrollView],
+            inventoryEnumeration: .init(offscreenElements: [
+                offscreenScrollElement(homeHighOffscreen, containerPath: scrollContainerPath, index: 2),
+            ])
+        ))
+
+        XCTAssertEqual(initialWorkHighId, "review_pr_button_1")
+        XCTAssertEqual(
+            reviewID(in: reorderedObservation, category: "Work", priority: "High"),
+            initialWorkHighId
+        )
+        XCTAssertEqual(
+            reorderedObservation.liveCapture.heistId(forPath: reorderedWorkHighPath),
+            initialWorkHighId
+        )
+        XCTAssertEqual(
+            reviewID(in: reorderedObservation, category: "Work", priority: "Low"),
+            "review_pr_button_2"
+        )
+    }
+
     // MARK: - InterfaceObservation name derivation
 
     func testScreenNameFromFirstHeader() {
@@ -673,6 +752,8 @@ final class TheVaultObservationBuildingTests: XCTestCase {
         traits: UIAccessibilityTraits = .none,
         frame: CGRect = .zero,
         activationPoint: CGPoint? = nil,
+        customActions: [AccessibilityElement.CustomAction] = [],
+        customContent: [AccessibilityElement.CustomContent] = [],
         visibility: AccessibilityVisibility = .onscreen
     ) -> AccessibilityElement {
         .make(
@@ -681,9 +762,60 @@ final class TheVaultObservationBuildingTests: XCTestCase {
             traits: traits,
             shape: .frame(AccessibilityRect(frame)),
             activationPoint: activationPoint,
+            customActions: customActions,
+            customContent: customContent,
             respondsToUserInteraction: false,
             visibility: visibility
         )
+    }
+
+    private func duplicateReviewElement(
+        category: String,
+        priority: String,
+        value: String,
+        visibility: AccessibilityVisibility = .onscreen
+    ) -> AccessibilityElement {
+        makeElement(
+            label: "Review PR",
+            value: value,
+            traits: .button,
+            customActions: [.init(name: "Toggle")],
+            customContent: [
+                .init(label: "Category", value: category, isImportant: true),
+                .init(label: "Priority", value: priority, isImportant: true),
+            ],
+            visibility: visibility
+        )
+    }
+
+    private func offscreenScrollElement(
+        _ element: AccessibilityElement,
+        containerPath: TreePath,
+        index: Int
+    ) -> TheVault.OffscreenScrollElement {
+        TheVault.OffscreenScrollElement(
+            path: containerPath.appending(1_000_000 + index),
+            scrollContainerPath: containerPath,
+            scrollIndex: index,
+            element: element,
+            observedScrollContentActivationPoint: nil
+        )
+    }
+
+    private func reviewID(
+        in observation: InterfaceObservation,
+        category: String,
+        priority: String
+    ) -> HeistId? {
+        observation.tree.elements.values.first { element in
+            guard element.element.label == "Review PR" else { return false }
+            let customContent = element.element.customContent
+            return customContent.contains {
+                $0.label == "Category" && $0.value == category
+            } && customContent.contains {
+                $0.label == "Priority" && $0.value == priority
+            }
+        }?.heistId
     }
 
     private func makeScrollableContainer(
@@ -700,10 +832,14 @@ final class TheVaultObservationBuildingTests: XCTestCase {
 
 @MainActor
 private final class ObservationInventoryScrollView: UIScrollView {
-    private let element: NSObject
+    private let elements: [NSObject]
 
-    init(element: NSObject) {
-        self.element = element
+    convenience init(element: NSObject) {
+        self.init(elements: [element])
+    }
+
+    init(elements: [NSObject]) {
+        self.elements = elements
         super.init(frame: .zero)
     }
 
@@ -713,11 +849,16 @@ private final class ObservationInventoryScrollView: UIScrollView {
     }
 
     override func accessibilityElementCount() -> Int {
-        1
+        elements.count
     }
 
     override func accessibilityElement(at index: Int) -> Any? {
-        index == 0 ? element : nil
+        elements.indices.contains(index) ? elements[index] : nil
+    }
+
+    override func index(ofAccessibilityElement element: Any) -> Int {
+        guard let object = element as? NSObject else { return NSNotFound }
+        return elements.firstIndex { $0 === object } ?? NSNotFound
     }
 }
 

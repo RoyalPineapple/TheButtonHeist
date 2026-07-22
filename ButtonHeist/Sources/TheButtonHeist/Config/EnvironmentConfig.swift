@@ -4,6 +4,9 @@ import TheScore
 /// Typed client environment projection used by configuration resolution.
 public struct ButtonHeistEnvironment: Equatable, Sendable {
     public static let empty = ButtonHeistEnvironment()
+    public static var current: ButtonHeistEnvironment {
+        ButtonHeistEnvironment(rawValues: ProcessInfo.processInfo.environment)
+    }
 
     private let values: [EnvironmentKey: String]
 
@@ -56,13 +59,6 @@ public struct ButtonHeistEnvironment: Equatable, Sendable {
     }
 }
 
-/// Foundation bridge for capturing the current process environment.
-public enum ButtonHeistEnvironmentBridge {
-    public static func current() -> ButtonHeistEnvironment {
-        ButtonHeistEnvironment(rawValues: ProcessInfo.processInfo.environment)
-    }
-}
-
 /// Resolved configuration from environment variables, config files, and explicit overrides.
 /// Use `resolve()` to build this from the current environment, then access `.fenceConfiguration`
 /// to create a `TheFence`.
@@ -100,7 +96,7 @@ public struct EnvironmentConfig: Sendable {
         sessionTimeout: TimeInterval? = nil,
         connectionTimeout: TimeInterval? = nil,
         autoReconnect: Bool = true,
-        environment: ButtonHeistEnvironment = ButtonHeistEnvironmentBridge.current()
+        environment: ButtonHeistEnvironment = .current
     ) throws -> EnvironmentConfig {
         try resolve(
             deviceFilter: deviceFilter,
@@ -122,7 +118,7 @@ public struct EnvironmentConfig: Sendable {
         connectionTimeout: TimeInterval? = nil,
         autoReconnect: Bool = true,
         configPath: String?,
-        environment: ButtonHeistEnvironment = ButtonHeistEnvironmentBridge.current()
+        environment: ButtonHeistEnvironment = .current
     ) throws -> EnvironmentConfig {
         guard let configPath else {
             return try resolve(
@@ -155,7 +151,7 @@ public struct EnvironmentConfig: Sendable {
         connectionTimeout: TimeInterval? = nil,
         autoReconnect: Bool = true,
         configPath: String,
-        environment: ButtonHeistEnvironment = ButtonHeistEnvironmentBridge.current()
+        environment: ButtonHeistEnvironment = .current
     ) throws -> EnvironmentConfig {
         let fileConfig = try TargetConfigResolver.loadConfig(from: configPath)
         return try resolve(

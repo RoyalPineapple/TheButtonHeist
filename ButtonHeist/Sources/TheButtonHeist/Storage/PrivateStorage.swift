@@ -7,6 +7,9 @@ enum StorageEnvironmentKey: String, Sendable {
 
 struct StorageEnvironment: Equatable, Sendable {
     static let empty = StorageEnvironment()
+    static var current: StorageEnvironment {
+        StorageEnvironment(rawValues: ProcessInfo.processInfo.environment)
+    }
 
     private let values: [StorageEnvironmentKey: String]
 
@@ -42,19 +45,13 @@ struct StorageEnvironment: Equatable, Sendable {
     }
 }
 
-enum StorageEnvironmentBridge {
-    static func current() -> StorageEnvironment {
-        StorageEnvironment(rawValues: ProcessInfo.processInfo.environment)
-    }
-}
-
 enum PrivateStorage {
     typealias ReplacementOperation = (URL, URL) throws -> Void
 
     // MARK: - Paths
 
     static func resolveBaseDirectory(
-        environment: StorageEnvironment = StorageEnvironmentBridge.current()
+        environment: StorageEnvironment = .current
     ) -> URL {
         if let override = environment.storageDirectory {
             return URL(fileURLWithPath: override)

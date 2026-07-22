@@ -229,7 +229,7 @@ extension SettleSessionTests {
             return XCTFail("Expected UIKit idle to settle the next parsed observation, got \(step.decision)")
         }
         XCTAssertEqual(timeMs, 20)
-        XCTAssertEqual(step.result?.proof, .uikitIdle)
+        XCTAssertEqual(step.result?.evidence, .uikitIdle)
         XCTAssertEqual(
             step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label,
             "Ready"
@@ -255,7 +255,7 @@ extension SettleSessionTests {
             return XCTFail("Expected accessibility quiet-window settlement, got \(step.decision)")
         }
         XCTAssertEqual(timeMs, 60)
-        XCTAssertEqual(step.result?.proof, .accessibilityQuietWindow)
+        XCTAssertEqual(step.result?.evidence, .accessibilityQuietWindow)
     }
 
     func testMachineFingerprintChangeResetsStability() {

@@ -5,7 +5,7 @@ import ThePlans
 @testable import TheInsideJob
 @testable import TheScore
 
-/// Property + regression tests for `TheVault.IdAssignment.synthesizeBaseId(_:)`.
+/// Property + regression tests for `HeistIdAssignment.synthesizeBaseId(_:)`.
 ///
 /// HeistId synthesis is wire-format. Changes to its output break recorded
 /// heists and the agent's predict-the-heistId pattern that benchmarks rely
@@ -15,8 +15,6 @@ import ThePlans
 /// 2. Regression: a handful of known inputs produce specific known outputs.
 @MainActor
 final class SynthesisDeterminismTests: XCTestCase {
-
-    private typealias IdAssignment = TheVault.IdAssignment
 
     // MARK: - Helpers
 
@@ -63,8 +61,8 @@ final class SynthesisDeterminismTests: XCTestCase {
                 traits: traitPool.first { AccessibilityTraits.fromNames($0.map(\.rawValue)) == element.traits } ?? []
             )
 
-            let first = IdAssignment.synthesizeBaseId(element)
-            let second = IdAssignment.synthesizeBaseId(copy)
+            let first = HeistIdAssignment.synthesizeBaseId(element)
+            let second = HeistIdAssignment.synthesizeBaseId(copy)
             let detail = "label=\(element.label ?? "nil") value=\(element.value ?? "nil") traits=\(element.traits.rawValue)"
             XCTAssertEqual(first, second,
                            "synthesizeBaseId must be content-deterministic: \(detail)")
@@ -100,7 +98,7 @@ final class SynthesisDeterminismTests: XCTestCase {
                 identifier: testCase.identifier,
                 traits: testCase.traits
             )
-            let actual = IdAssignment.synthesizeBaseId(element)
+            let actual = HeistIdAssignment.synthesizeBaseId(element)
             XCTAssertEqual(actual, testCase.expected,
                            "synthesizeBaseId wire-format regression: label=\(testCase.label ?? "nil") traits=\(testCase.traits.map(\.rawValue))")
         }
@@ -143,7 +141,7 @@ final class SynthesisDeterminismTests: XCTestCase {
         ]
 
         for testCase in cases {
-            let actual = IdAssignment.stripTraitSuffix(testCase.label, traitSuffix: testCase.traitSuffix)
+            let actual = HeistIdAssignment.stripTraitSuffix(testCase.label, traitSuffix: testCase.traitSuffix)
             XCTAssertEqual(
                 actual,
                 testCase.expected,

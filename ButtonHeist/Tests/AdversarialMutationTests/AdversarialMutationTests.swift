@@ -13,7 +13,7 @@ final class AdversarialMutationTests: XCTestCase {
     func testAsyncRevealNotificationAndSilentVariantsPass() async throws {
         let destination: AccessibilityPredicate = .exists(.label("Delayed code: 7429"))
         let notificationCommand = HeistActionCommand.activate(.label("Reveal with notification"))
-        try await AdversarialLabRoute.open(.asyncReveal)
+        try await openScenario(.asyncReveal, readyHeistPath: "AdversarialAsyncRevealNotificationReady")
         let notification = try await runHeist("AdversarialAsyncRevealNotificationPass") {
             Activate(.label("Reveal with notification"))
                 .expect(destination, timeout: 3)
@@ -29,7 +29,7 @@ final class AdversarialMutationTests: XCTestCase {
         XCTAssertTrue(notificationEvidence.notificationKinds.contains(.screenChanged))
 
         let silentCommand = HeistActionCommand.activate(.label("Reveal silently"))
-        try await AdversarialLabRoute.open(.asyncReveal)
+        try await openScenario(.asyncReveal, readyHeistPath: "AdversarialAsyncRevealSilentReady")
         let silent = try await runHeist("AdversarialAsyncRevealSilentPass") {
             Activate(.label("Reveal silently"))
                 .expect(destination, timeout: 3)
@@ -51,7 +51,7 @@ final class AdversarialMutationTests: XCTestCase {
     func testStaleLiveObjectReResolvesCurrentTarget() async throws {
         let beforeValue = "Generation 2, actions 0, generation 1 actions 0"
         let finalValue = "Generation 2, actions 1, generation 1 actions 0"
-        try await AdversarialLabRoute.open(.staleLiveObject)
+        try await openScenario(.staleLiveObject, readyHeistPath: "AdversarialStaleLiveObjectReady")
         let heist = try await runHeist("AdversarialStaleLiveObjectPass") {
             Activate(.label("Submit Order"))
                 .expect(.exists(.element(
@@ -77,6 +77,17 @@ final class AdversarialMutationTests: XCTestCase {
             evidence.expectationResult?.accessibilityTrace?.captures.last?.interface.projectedElements
         )
         XCTAssertEqual(finalElements.first { $0.label == "Submit Order" }?.value, finalValue)
+    }
+
+    private func openScenario(
+        _ scenario: AdversarialScenario,
+        readyHeistPath: HeistDefinitionPath
+    ) async throws {
+        try await AdversarialLabRoute.open(scenario)
+        let ready = try await runHeist(readyHeistPath) {
+            WaitFor(.exists(.label(scenario.title)), timeout: 3)
+        }
+        XCTAssertNil(ready.result.firstFailedStep)
     }
 
     private func actionEvidence(

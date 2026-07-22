@@ -2,6 +2,7 @@
 #if DEBUG
 import UIKit
 
+import ThePlans
 import TheScore
 
 import AccessibilitySnapshotParser
@@ -15,6 +16,11 @@ import AccessibilitySnapshotParser
 /// Consumers that work with parser traits read these directly instead of
 /// building their own.
 extension AccessibilityPolicy {
+
+    struct HeistTraitMaskProjection: Sendable, Equatable {
+        let trait: HeistTrait
+        let mask: AccessibilityTraits
+    }
 
     /// Bitmask form of `transientTraits`. Consumed by
     /// `TheVault.stableTraitNames`.
@@ -36,12 +42,15 @@ extension AccessibilityPolicy {
     static let staticOnlyTraitsBitmask: AccessibilityTraits =
         AccessibilityTraits.fromNames(staticOnlyTraits.map(\.rawValue))
 
-    /// Synthesis priority resolved to `(name, bitmask)` pairs in priority
-    /// order. Consumed by `TheVault.IdAssignment.synthesizeBaseId` to find
+    /// Synthesis priority resolved to trait/mask projections in priority
+    /// order. Consumed by `HeistIdAssignment.synthesizeBaseId` to find
     /// the first matching trait an element carries.
-    static let synthesisPriorityWithMasks: [(name: String, mask: AccessibilityTraits)] =
+    static let synthesisPriorityMaskProjections: [HeistTraitMaskProjection] =
         synthesisPriority.map { trait in
-            (name: trait.rawValue, mask: AccessibilityTraits.fromNames([trait.rawValue]))
+            HeistTraitMaskProjection(
+                trait: trait,
+                mask: AccessibilityTraits.fromNames([trait.rawValue])
+            )
         }
 }
 

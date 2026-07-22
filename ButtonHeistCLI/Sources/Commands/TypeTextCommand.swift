@@ -44,8 +44,8 @@ struct TypeTextCommand: ConnectedOneShotCLICommand {
         let target = try element.parsedTarget()
         return Self.fenceArguments(
             target: target,
-            CommandArgumentEnvelopeBuilder.value(.timeout, timeout),
-            CommandArgumentEnvelopeBuilder.value(.text, text)
+            CommandArgumentFields.value(.timeout, timeout),
+            CommandArgumentFields.value(.text, text)
         )
     }
 }

@@ -20,6 +20,9 @@ package struct RuntimeKnobEnvironmentKey: Hashable, Sendable {
 
 package struct RuntimeKnobEnvironment: Equatable, Sendable {
     package static let empty = RuntimeKnobEnvironment()
+    package static var current: RuntimeKnobEnvironment {
+        RuntimeKnobEnvironment(rawValues: ProcessInfo.processInfo.environment)
+    }
 
     private let values: [String: String]
 
@@ -33,12 +36,6 @@ package struct RuntimeKnobEnvironment: Equatable, Sendable {
 
     fileprivate subscript(key: RuntimeKnobEnvironmentKey) -> String? {
         values[key.rawValue]
-    }
-}
-
-package enum RuntimeKnobEnvironmentBridge {
-    package static func current() -> RuntimeKnobEnvironment {
-        RuntimeKnobEnvironment(rawValues: ProcessInfo.processInfo.environment)
     }
 }
 
@@ -64,7 +61,7 @@ package struct ButtonHeistRuntimeKnobs: Equatable, Sendable {
     }
 
     package static func resolve(
-        environment: RuntimeKnobEnvironment = RuntimeKnobEnvironmentBridge.current()
+        environment: RuntimeKnobEnvironment = .current
     ) -> ButtonHeistRuntimeKnobs {
         ButtonHeistRuntimeKnobs(
             tripwirePulseFramesPerSecond: intOverride(

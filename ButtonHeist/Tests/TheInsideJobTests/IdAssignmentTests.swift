@@ -6,9 +6,7 @@ import ThePlans
 @testable import TheScore
 
 @MainActor
-final class IdAssignerTests: XCTestCase {
-
-    private typealias IdAssignment = TheVault.IdAssignment
+final class HeistIdAssignmentTests: XCTestCase {
 
     // MARK: - Helpers
 
@@ -29,7 +27,7 @@ final class IdAssignerTests: XCTestCase {
     }
 
     private func assign(_ elements: [AccessibilityElement]) -> [HeistId] {
-        IdAssignment.assign(elements)
+        HeistIdAssignment.assign(elements)
     }
 
     // MARK: - Developer Identifier Passthrough

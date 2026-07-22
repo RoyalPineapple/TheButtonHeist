@@ -82,9 +82,9 @@ struct ScrollCommand: ConnectedOneShotCLICommand {
         let scrollSelection = try selection.scrollSelection()
         return Self.fenceArguments(
             target: scrollSelection.cliTarget,
-            CommandArgumentEnvelopeBuilder.value(FenceParameters.scrollDirection, scrollDirection),
-            CommandArgumentEnvelopeBuilder.value(.timeout, timeoutOption.timeout),
-            CommandArgumentEnvelopeBuilder.optional(.containerName, scrollSelection.cliContainerName?.rawValue)
+            CommandArgumentFields.value(FenceParameters.scrollDirection, scrollDirection),
+            CommandArgumentFields.value(.timeout, timeoutOption.timeout),
+            CommandArgumentFields.optional(.containerName, scrollSelection.cliContainerName?.rawValue)
         )
     }
 }
