@@ -43,7 +43,7 @@ private struct PredicateCaseSelectionEvidence: Sendable, Equatable {
 }
 
 @MainActor
-private final class PredicateCaseSelectionProjection {
+private struct PredicateCaseSelectionProjection {
     private let inputs: [ResolvedPredicateCaseRuntimeInput]
     private let timeout: Double
 

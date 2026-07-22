@@ -28,3 +28,9 @@ public enum ActionMethod: String, Codable, Sendable {
     case scrollToEdge
     case wait
 }
+
+extension ActionMethod {
+    package var isScreenAction: Bool {
+        self == .dismiss || self == .magicTap
+    }
+}

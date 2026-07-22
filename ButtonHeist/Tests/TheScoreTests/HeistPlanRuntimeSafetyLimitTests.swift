@@ -111,7 +111,7 @@ func runtimeSafetyRequiresForEachStringExplicitValuesUnderConfiguredMax() throws
 @Test
 func runtimeSafetyUsesTheAdmittedWaitTimeoutWithoutASecondRepeatUntilCap() throws {
     let configuredMaximum = WaitTimeout.maximumSeconds(environment: [
-        WaitTimeoutEnvironmentKey.maximum.rawValue: "120",
+        WaitTimeout.maximumSecondsEnvironmentKey: "120",
     ])
     let timeout = try WaitTimeout(
         validatingSeconds: configuredMaximum,

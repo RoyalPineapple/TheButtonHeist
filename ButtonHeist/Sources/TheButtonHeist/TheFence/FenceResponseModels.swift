@@ -127,66 +127,66 @@ public struct SessionStatePayload: Sendable, Equatable {
     public var lastFailure: SessionFailurePayload? { state.lastFailure }
 }
 
-enum DiagnosticFailureMapper {
-    static func map(_ error: Error) -> DiagnosticFailure {
+extension DiagnosticFailure {
+    init(_ error: Error) {
         switch error {
         case let fenceError as FenceError:
-            return map(fenceError)
+            self.init(fenceError)
         case let connectionError as HandoffConnectionError:
-            return map(FenceError(connectionError))
+            self.init(FenceError(connectionError))
         case let configError as TargetConfigLoadError:
-            return DiagnosticFailure(
+            self.init(
                 message: configError.displayMessage,
                 details: configError.failureDetails
             )
         case let validationError as SchemaValidationError:
-            return DiagnosticFailure(
+            self.init(
                 message: validationError.message,
                 details: FailureDetails(code: .requestValidationError)
             )
         case let inputError as PublicJSONInputError:
-            return DiagnosticFailure(
+            self.init(
                 message: inputError.message,
                 details: FailureDetails(code: .requestInvalid)
             )
         case let missingTarget as TheFence.MissingAccessibilityTarget:
-            return missingAccessibilityTargetFailure(command: missingTarget.command)
+            self.init(missingAccessibilityTargetCommand: missingTarget.command)
         case let containerTarget as TheFence.ContainerTargetRequiresElement:
-            return containerTargetRequiresElementFailure(command: containerTarget.command)
+            self.init(containerTargetRequiresElementCommand: containerTarget.command)
         case let routingError as FenceOperationRoutingError:
-            return DiagnosticFailure(message: routingError.message, details: routingError.details)
+            self.init(message: routingError.message, details: routingError.details)
         default:
-            return DiagnosticFailure(
+            self.init(
                 message: error.displayMessage,
                 details: FailureDetails(code: .clientUnknown)
             )
         }
     }
 
-    static func map(_ fenceError: FenceError) -> DiagnosticFailure {
-        DiagnosticFailure(
+    init(_ fenceError: FenceError) {
+        self.init(
             message: fenceError.coreMessage,
             details: fenceError.failureDetails,
             buildDiagnostics: fenceError.buildDiagnostics
         )
     }
 
-    static func map(failureKind: ActionFailure.Kind, message: String) -> DiagnosticFailure {
-        DiagnosticFailure(message: message, details: failureDetails(for: failureKind))
+    init(failureKind: ActionFailure.Kind, message: String) {
+        self.init(message: message, details: Self.failureDetails(for: failureKind))
     }
 
-    static func map(reportFailure: HeistFailureDetail, message: String? = nil) -> DiagnosticFailure {
-        DiagnosticFailure(
+    init(reportFailure: HeistFailureDetail, message: String? = nil) {
+        self.init(
             message: message ?? reportFailure.observed,
-            details: failureDetails(for: reportFailure)
+            details: Self.failureDetails(for: reportFailure)
         )
     }
 
-    static func failureDetails(for failureKind: ActionFailure.Kind) -> FailureDetails {
+    private static func failureDetails(for failureKind: ActionFailure.Kind) -> FailureDetails {
         failureKind.failureDetails
     }
 
-    static func failureDetails(for reportFailure: HeistFailureDetail) -> FailureDetails {
+    private static func failureDetails(for reportFailure: HeistFailureDetail) -> FailureDetails {
         switch reportFailure.category {
         case .internalInvariant:
             return FailureDetails(code: .requestActionFailed)
@@ -207,14 +207,14 @@ enum DiagnosticFailureMapper {
         }
     }
 
-    private static func missingAccessibilityTargetFailure(command: TheFence.Command) -> DiagnosticFailure {
+    private init(missingAccessibilityTargetCommand command: TheFence.Command) {
         let commandName = command.rawValue
         let contract = "requires target object with checks"
         let next = "get_interface()"
         let targetHint = "target.checks"
         let message = "\(commandName) request contract failed: missing target; \(contract). " +
             "Next: \(next) to inspect the current app accessibility state, then retry \(commandName) with \(targetHint)."
-        return DiagnosticFailure(
+        self.init(
             message: message,
             details: FailureDetails(
                 code: .requestMissingTarget,
@@ -223,8 +223,8 @@ enum DiagnosticFailureMapper {
         )
     }
 
-    private static func containerTargetRequiresElementFailure(command: TheFence.Command) -> DiagnosticFailure {
-        DiagnosticFailure(
+    private init(containerTargetRequiresElementCommand command: TheFence.Command) {
+        self.init(
             message: "Command \"\(command.rawValue)\" requires an accessibility element target; container-only targets are not valid",
             details: FailureDetails(code: .requestValidationError)
         )
@@ -269,7 +269,7 @@ public enum FenceResponse {
 
     /// Builds an error response with typed metadata when the error belongs to TheFence.
     public static func failure(_ error: Error) -> FenceResponse {
-        let failure = DiagnosticFailureMapper.map(error)
+        let failure = DiagnosticFailure(error)
         return .error(failure)
     }
 

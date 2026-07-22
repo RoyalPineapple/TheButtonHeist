@@ -34,6 +34,7 @@ extension ActionResult {
             observation: observation,
             subjectEvidence: dispatchResult.subjectEvidence,
             activationTrace: dispatchResult.activationTrace,
+            screenActionHandler: dispatchResult.screenActionHandler,
             timing: timing.freeze()
         )
     }

@@ -354,6 +354,7 @@ internal struct CommittableInterfaceObservation {
 }
 
 /// The settlement result available after an action observation attempt.
+@MainActor
 internal struct ObservationSettlement {
     internal enum CommitOutcome {
         case committed(SettledObservationEvent)

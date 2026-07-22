@@ -426,8 +426,8 @@ extension FenceResponse {
         if let activationTrace = projection.activationTrace {
             output += "  [activate: \(Self.compactActivationTrace(activationTrace))]"
         }
-        if let message = projection.message, message.hasPrefix("Handler: ") {
-            output += "  \(message)"
+        if let handler = projection.screenActionHandler {
+            output += "  Handler: \(handler)"
         }
         return output
     }

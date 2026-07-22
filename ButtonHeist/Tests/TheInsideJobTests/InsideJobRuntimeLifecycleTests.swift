@@ -256,10 +256,10 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
             token: token.description,
             allowedScopes: scopes,
             addressFamily: .ipv4,
-            transportFactory: { runtimeToken, runtimeScopes in
+            transportProvider: { runtimeToken, runtimeScopes in
                 XCTAssertEqual(runtimeToken, token, file: file, line: line)
                 XCTAssertEqual(runtimeScopes, scopes, file: file, line: line)
-                let listeners = TestSocketListenerFactory(
+                let listeners = TestSocketListenerProvider(
                     start: { _ in
                         harnessState.startCount += 1
                         if let listenerPort {
@@ -277,7 +277,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
                     token: token,
                     allowedScopes: scopes,
                     serverDependencies: .init(
-                        listenerFactory: listeners.listenerFactory
+                        listenerProvider: listeners.listenerProvider
                     )
                 )
                 harnessState.transports.append(transport)

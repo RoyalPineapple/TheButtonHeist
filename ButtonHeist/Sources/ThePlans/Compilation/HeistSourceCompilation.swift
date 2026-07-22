@@ -8,7 +8,7 @@ public enum HeistSourceCompilation {
         do {
             var lexer = HeistPlanSourceLexer(source: source, sourceName: sourceName)
             let tokens = try lexer.lex()
-            var parser = HeistPlanSourceParser(tokens: tokens, sourceName: sourceName)
+            var parser = HeistPlanSourceParser(tokens: tokens)
             let plan = try parser.parseProgram()
             return plan.semanticValidationResult()
         } catch let error as HeistSourceCompilationError {

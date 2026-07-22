@@ -80,8 +80,8 @@ extension TheFence {
 
     private static func diagnosticFailure(_ failure: HeistReport.Failure) -> DiagnosticFailure {
         failure.actionKind.map {
-            DiagnosticFailureMapper.map(failureKind: $0, message: failure.diagnosticMessage)
-        } ?? DiagnosticFailureMapper.map(
+            DiagnosticFailure(failureKind: $0, message: failure.diagnosticMessage)
+        } ?? DiagnosticFailure(
             reportFailure: failure.detail,
             message: failure.diagnosticMessage
         )

@@ -36,23 +36,57 @@ public extension HeistPlan {
     func lint(_ mode: HeistPlanLintMode) -> [HeistPlanLintFinding] {
         var linter = HeistPlanLinter(mode: mode)
         let traversal = HeistPlanTraversal()
-        traversal.walk(self, visitor: &linter)
+        traversal.walk(self) { event in
+            linter.observe(event)
+        }
         return linter.findings
     }
 }
 
-private struct HeistPlanLinter: HeistPlanTraversalVisitor {
+private struct HeistPlanLinter {
     let mode: HeistPlanLintMode
 
     var findings: [HeistPlanLintFinding] = []
 
-    mutating func visitStep(_ step: HeistStep, context: HeistTraversalContext) {
-        if isScrollSetup(step), context.nextStep?.isSemanticActionStep == true {
+    mutating func observe(_ event: HeistPlanTraversal.Event) {
+        switch event {
+        case .enterStep(let step, let context):
+            inspectStep(step, context: context)
+        case .action(let action, let context):
+            inspectAction(action, context: context)
+        case .predicateCase(let predicateCase, let context):
+            inspectPredicateCase(predicateCase, context: context)
+        case .elseBody(let body, let context):
+            inspectElseBody(body, context: context)
+        case .enterPlan,
+             .leavePlan,
+             .enterDefinitions,
+             .leaveDefinitions,
+             .enterDefinition,
+             .leaveDefinition,
+             .enterSteps,
+             .leaveSteps,
+             .leaveStep,
+             .wait,
+             .conditional,
+             .forEachElement,
+             .forEachString,
+             .repeatUntil,
+             .warn,
+             .fail,
+             .heist,
+             .invoke:
+            break
+        }
+    }
+
+    private mutating func inspectStep(_ step: HeistStep, context: HeistTraversalContext) {
+        if step.isScrollSetup, context.nextStep?.isSemanticActionStep == true {
             findings.append(scrollBeforeSemanticActionFinding(path: context.path))
         }
     }
 
-    mutating func visitAction(_ action: ActionStep, context: HeistTraversalContext) {
+    private mutating func inspectAction(_ action: ActionStep, context: HeistTraversalContext) {
         switch action.command.authoringLintKind {
         case .semantic:
             if action.expectationPolicy.requiresAuthoredExpectation, mode.requiresExpectationFinding {
@@ -79,13 +113,13 @@ private struct HeistPlanLinter: HeistPlanTraversalVisitor {
         }
     }
 
-    mutating func visitPredicateCase(_ predicateCase: PredicateCase, context: HeistTraversalContext) {
+    private mutating func inspectPredicateCase(_ predicateCase: PredicateCase, context: HeistTraversalContext) {
         if predicateCase.body.isEmpty {
             findings.append(emptyBranchFinding(path: context.path))
         }
     }
 
-    mutating func visitElseBody(_ body: [HeistStep], context: HeistTraversalContext) {
+    private mutating func inspectElseBody(_ body: [HeistStep], context: HeistTraversalContext) {
         if body.isEmpty {
             findings.append(emptyBranchFinding(path: context.path))
         }
@@ -154,11 +188,6 @@ private struct HeistPlanLinter: HeistPlanTraversalVisitor {
         )
     }
 
-    private func isScrollSetup(_ step: HeistStep) -> Bool {
-        guard case .action(let action) = step else { return false }
-        return action.command.authoringLintKind == .scroll
-    }
-
 }
 
 private enum HeistCommandAuthoringLintKind: Equatable {
@@ -190,6 +219,11 @@ private extension HeistActionCommand {
 }
 
 private extension HeistStep {
+    var isScrollSetup: Bool {
+        guard case .action(let action) = self else { return false }
+        return action.command.authoringLintKind == .scroll
+    }
+
     var isSemanticActionStep: Bool {
         guard case .action(let action) = self else { return false }
         return action.command.authoringLintKind == .semantic

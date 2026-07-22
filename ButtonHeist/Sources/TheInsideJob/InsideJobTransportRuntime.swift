@@ -9,7 +9,7 @@ import TheScore
 extension TheInsideJob {
     func makeRuntimeTransport() -> ServerTransport {
         insideJobLogger.info("TLS PSK material ready")
-        return transportFactory(runtimeConfiguration.token.value, runtimeConfiguration.allowedScopes.value)
+        return transportProvider(runtimeConfiguration.token.value, runtimeConfiguration.allowedScopes.value)
     }
 
     func stopRuntime() async -> InsideJobStopOutcome {

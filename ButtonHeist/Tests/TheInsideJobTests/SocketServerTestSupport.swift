@@ -10,7 +10,7 @@ enum TestSocketListenerOutcome: Sendable {
     case failed(NWError)
 }
 
-final class TestSocketListenerFactory: Sendable {
+final class TestSocketListenerProvider: Sendable {
     typealias Start = @MainActor @Sendable (_ invocation: Int) async -> TestSocketListenerOutcome
 
     private struct State {
@@ -42,7 +42,7 @@ final class TestSocketListenerFactory: Sendable {
         state.withLock { $0.cancellationCount }
     }
 
-    var listenerFactory: SocketListenerFactory {
+    var listenerProvider: SocketListenerProvider {
         { [self] _ in
             let invocation = state.withLock { state in
                 state.invocationCount += 1

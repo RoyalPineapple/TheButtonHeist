@@ -158,7 +158,7 @@ extension SemanticObservationStream {
 
     internal func refreshVisibleObservation(timeoutMs: Int) async -> ObservationSettlement {
         if let session = visibleRefreshSession {
-            return await finishVisibleRefresh(session).settlement
+            return await finishVisibleRefresh(session)
         }
         return await startVisibleRefresh(
             baselineTripwireSignal: currentTripwireSignal(),
@@ -184,22 +184,22 @@ extension SemanticObservationStream {
             observationStore.invalidateIfSignalChanged(to: baselineTripwireSignal)
         }
         let task = Task { @MainActor in
-            VisibleRefreshCompletion(await self.produceVisibleSettlement(
+            await self.produceVisibleSettlement(
                 baselineTripwireSignal: baselineTripwireSignal,
                 timeoutMs: timeoutMs,
                 commitScope: commitScope,
                 providedResult: providedResult,
                 notificationWindow: notificationWindow
-            ))
+            )
         }
         let session = VisibleRefreshSession(task: task)
         visibleRefreshSession = session
-        return await finishVisibleRefresh(session).settlement
+        return await finishVisibleRefresh(session)
     }
 
     private func finishVisibleRefresh(
         _ session: VisibleRefreshSession
-    ) async -> VisibleRefreshCompletion {
+    ) async -> ObservationSettlement {
         let completion = await session.task.value
         if visibleRefreshSession === session {
             visibleRefreshSession = nil

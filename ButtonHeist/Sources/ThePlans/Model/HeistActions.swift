@@ -32,23 +32,22 @@ public struct Action {
         _ predicate: AccessibilityPredicate,
         timeout: WaitTimeout? = nil
     ) -> Action {
-        let existingExpectation = expectationPolicy.expectedStep
-        let timeoutResult = composeExpectationTimeout(
-            existing: existingExpectation,
+        let composition = composeExpectation(
+            existing: expectationPolicy.expectedStep,
             existingExplicit: explicitExpectationTimeout,
+            nextPredicate: predicate,
             nextExplicit: timeout
         )
-        let predicateResult = existingExpectation.map {
-            composeExpectationPredicates(existing: $0.predicate, next: predicate)
-        } ?? ExpectationPredicateComposition(predicate: predicate, diagnostics: [])
         let validationDiagnostics = expectationValidationDiagnostics
-            + predicateResult.diagnostics
-            + timeoutResult.diagnostics
+            + composition.diagnostics
 
         return Action(
             command: command,
-            expectationPolicy: .expect(ActionExpectation(predicate: predicateResult.predicate, timeout: timeoutResult.timeout)),
-            explicitExpectationTimeout: timeoutResult.explicitTimeout,
+            expectationPolicy: .expect(ActionExpectation(
+                predicate: composition.predicate,
+                timeout: composition.timeout
+            )),
+            explicitExpectationTimeout: composition.explicitTimeout,
             expectationValidationDiagnostics: validationDiagnostics.map {
                 $0.withPath(command.wireType.rawValue)
             }
@@ -255,69 +254,78 @@ public func drag(from start: ScreenPoint, to end: ScreenPoint) -> Action {
     Action(command: .drag(DragTarget(start: .coordinate(start), end: end)))
 }
 
-struct ExpectationTimeoutComposition {
+struct ExpectationComposition {
+    let predicate: AccessibilityPredicate
     let timeout: WaitTimeout
     let explicitTimeout: WaitTimeout?
     let diagnostics: [HeistBuildDiagnostic]
 }
 
-func composeExpectationTimeout(
+func composeExpectation(
     existing: WaitStep?,
     existingExplicit: WaitTimeout?,
+    nextPredicate: AccessibilityPredicate,
     nextExplicit: WaitTimeout?
-) -> ExpectationTimeoutComposition {
+) -> ExpectationComposition {
+    var diagnostics: [HeistBuildDiagnostic] = []
+    let predicate: AccessibilityPredicate
+    if let existing {
+        if let composed = composeScreenDeltaAndCurrentTree(existing.predicate, nextPredicate)
+            ?? composeScreenDeltaAndCurrentTree(nextPredicate, existing.predicate) {
+            predicate = composed
+        } else {
+            predicate = existing.predicate
+            diagnostics.append(.dslBuild(
+                code: .dslInvalidActionExpectation,
+                message: "unsupported expectation composition: \(existing.predicate) + \(nextPredicate)",
+                hint: "Use one canonical predicate per expectation, or add current-tree assertions inside .changed(.screen(...))."
+            ))
+        }
+    } else {
+        predicate = nextPredicate
+    }
+
+    let timeout: WaitTimeout
+    let explicitTimeout: WaitTimeout?
     guard let existing else {
-        return ExpectationTimeoutComposition(
+        return ExpectationComposition(
+            predicate: predicate,
             timeout: nextExplicit ?? defaultActionExpectationTimeout,
             explicitTimeout: nextExplicit,
-            diagnostics: []
+            diagnostics: diagnostics
         )
     }
 
     switch (existingExplicit, nextExplicit) {
     case (nil, nil):
-        return ExpectationTimeoutComposition(timeout: existing.timeout, explicitTimeout: nil, diagnostics: [])
-    case (nil, .some(let timeout)):
-        return ExpectationTimeoutComposition(timeout: timeout, explicitTimeout: timeout, diagnostics: [])
-    case (.some(let timeout), nil):
-        return ExpectationTimeoutComposition(timeout: existing.timeout, explicitTimeout: timeout, diagnostics: [])
+        timeout = existing.timeout
+        explicitTimeout = nil
+    case (nil, .some(let requestedTimeout)):
+        timeout = requestedTimeout
+        explicitTimeout = requestedTimeout
+    case (.some(let requestedTimeout), nil):
+        timeout = existing.timeout
+        explicitTimeout = requestedTimeout
     case (.some(let existingTimeout), .some(let nextTimeout)):
-        guard existingTimeout == nextTimeout else {
-            return ExpectationTimeoutComposition(
-                timeout: existing.timeout,
-                explicitTimeout: existingTimeout,
-                diagnostics: [.dslBuild(
-                    code: .dslInvalidActionExpectation,
-                    message: "multiple explicit expectation timeouts in one chain: \(existingTimeout) and \(nextTimeout)",
-                    hint: "Use one explicit timeout for the composed expectation."
-                )]
-            )
+        if existingTimeout == nextTimeout {
+            timeout = nextTimeout
+            explicitTimeout = nextTimeout
+        } else {
+            timeout = existing.timeout
+            explicitTimeout = existingTimeout
+            diagnostics.append(.dslBuild(
+                code: .dslInvalidActionExpectation,
+                message: "multiple explicit expectation timeouts in one chain: \(existingTimeout) and \(nextTimeout)",
+                hint: "Use one explicit timeout for the composed expectation."
+            ))
         }
-        return ExpectationTimeoutComposition(timeout: nextTimeout, explicitTimeout: nextTimeout, diagnostics: [])
-    }
-}
-
-struct ExpectationPredicateComposition {
-    let predicate: AccessibilityPredicate
-    let diagnostics: [HeistBuildDiagnostic]
-}
-
-func composeExpectationPredicates(
-    existing: AccessibilityPredicate,
-    next: AccessibilityPredicate
-) -> ExpectationPredicateComposition {
-    if let composed = composeScreenDeltaAndCurrentTree(existing, next)
-        ?? composeScreenDeltaAndCurrentTree(next, existing) {
-        return ExpectationPredicateComposition(predicate: composed, diagnostics: [])
     }
 
-    return ExpectationPredicateComposition(
-        predicate: existing,
-        diagnostics: [.dslBuild(
-            code: .dslInvalidActionExpectation,
-            message: "unsupported expectation composition: \(existing) + \(next)",
-            hint: "Use one canonical predicate per expectation, or add current-tree assertions inside .changed(.screen(...))."
-        )]
+    return ExpectationComposition(
+        predicate: predicate,
+        timeout: timeout,
+        explicitTimeout: explicitTimeout,
+        diagnostics: diagnostics
     )
 }
 

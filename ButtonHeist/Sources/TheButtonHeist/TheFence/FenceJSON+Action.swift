@@ -8,6 +8,7 @@ private enum PublicActionResultCodingKey: String, CodingKey {
     case status
     case method
     case message
+    case screenActionHandler
     case warning
     case announcement
     case value
@@ -85,6 +86,7 @@ struct PublicActionResultOutput: Encodable {
         try container.encode(projection.status, forKey: .status)
         try container.encode(projection.actionMethod.rawValue, forKey: .method)
         try container.encodeIfPresent(projection.message, forKey: .message)
+        try container.encodeIfPresent(projection.screenActionHandler, forKey: .screenActionHandler)
         try container.encodeIfPresent(projection.warning, forKey: .warning)
         try container.encodeIfPresent(projection.announcement, forKey: .announcement)
         try encodePayload(to: &container)
@@ -171,7 +173,7 @@ extension ActionResult {
         return ActionFailureProjection(
             message: message ?? fallbackMessage,
             errorClass: resolvedErrorKind.rawValue,
-            diagnosticFailure: DiagnosticFailureMapper.map(
+            diagnosticFailure: DiagnosticFailure(
                 failureKind: resolvedErrorKind,
                 message: message ?? fallbackMessage
             )

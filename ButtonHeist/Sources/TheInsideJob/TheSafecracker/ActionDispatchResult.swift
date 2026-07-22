@@ -17,6 +17,7 @@ extension TheSafecracker {
         let message: String?
         let subjectEvidence: ActionSubjectEvidence?
         let activationTrace: ActivationTrace?
+        let screenActionHandler: ScreenActionHandlerName?
         let outcome: ActionDispatchOutcome
 
         var success: Bool {
@@ -39,12 +40,14 @@ extension TheSafecracker {
             message: String?,
             subjectEvidence: ActionSubjectEvidence?,
             activationTrace: ActivationTrace?,
+            screenActionHandler: ScreenActionHandlerName?,
             outcome: ActionDispatchOutcome
         ) {
             self.payload = payload
             self.message = message
             self.subjectEvidence = subjectEvidence
             self.activationTrace = activationTrace
+            self.screenActionHandler = screenActionHandler
             self.outcome = outcome
         }
 
@@ -53,13 +56,15 @@ extension TheSafecracker {
             message: String? = nil,
             subjectEvidence: ActionSubjectEvidence? = nil,
             resolvedElementId: HeistId? = nil,
-            activationTrace: ActivationTrace? = nil
+            activationTrace: ActivationTrace? = nil,
+            screenActionHandler: ScreenActionHandlerName? = nil
         ) -> ActionDispatchResult {
             ActionDispatchResult(
                 payload: payload,
                 message: message,
                 subjectEvidence: subjectEvidence,
                 activationTrace: activationTrace,
+                screenActionHandler: screenActionHandler,
                 outcome: .success(resolvedElementId: resolvedElementId)
             )
         }
@@ -76,6 +81,7 @@ extension TheSafecracker {
                 message: message,
                 subjectEvidence: subjectEvidence,
                 activationTrace: activationTrace,
+                screenActionHandler: nil,
                 outcome: .failure(failureKind)
             )
         }
@@ -87,6 +93,7 @@ extension TheSafecracker {
                 message: message,
                 subjectEvidence: evidence,
                 activationTrace: activationTrace,
+                screenActionHandler: screenActionHandler,
                 outcome: outcome
             )
         }
@@ -98,6 +105,7 @@ extension TheSafecracker {
                 message: message,
                 subjectEvidence: subjectEvidence,
                 activationTrace: activationTrace,
+                screenActionHandler: screenActionHandler,
                 outcome: .success(resolvedElementId: heistId)
             )
         }
@@ -109,6 +117,7 @@ extension TheSafecracker {
                 message: message,
                 subjectEvidence: subjectEvidence,
                 activationTrace: trace,
+                screenActionHandler: screenActionHandler,
                 outcome: outcome
             )
         }

@@ -2,7 +2,7 @@
 #if DEBUG
 
 @MainActor
-final class Actions {
+struct Actions {
 
     let vault: TheVault
     let safecracker: TheSafecracker

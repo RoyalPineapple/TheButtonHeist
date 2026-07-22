@@ -35,7 +35,7 @@ enum CommandArgumentEnvelopeLimits {
                 maxNestingDepth: maxDepth,
                 maxTotalObjectKeys: maxObjectKeys
             ),
-            makeError: { schemaValidationError(field: field, violation: $0) },
+            mapViolation: { schemaValidationError(field: field, violation: $0) },
             node: jsonValueNode
         )
     }

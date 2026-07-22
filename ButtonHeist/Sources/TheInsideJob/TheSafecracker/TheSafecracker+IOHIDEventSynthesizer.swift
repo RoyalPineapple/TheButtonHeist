@@ -44,7 +44,7 @@ extension TheSafecracker {
                 insideJobLogger.error("UIEvent doesn't respond to _addTouch:forDelayedDelivery:")
                 return nil
             }
-            guard let hidEvent = SafecrackerIOHIDEventBuilder.createEvent(for: touches) else {
+            guard let hidEvent = SafecrackerIOHIDEventSynthesizer.event(for: touches) else {
                 insideJobLogger.error("Failed to create IOHIDEvent for synthetic touches")
                 return nil
             }
@@ -72,16 +72,16 @@ extension TheSafecracker {
     }
 }
 
-// MARK: - IOHIDEvent Construction
+// MARK: - IOHIDEvent Synthesis
 
 /// Creates IOHIDEvent structures for touch injection (IOKit, dlsym).
 /// Private to keep raw HID construction behind `TheSafecracker.TouchEvent`.
 @MainActor
-private final class SafecrackerIOHIDEventBuilder {
+private enum SafecrackerIOHIDEventSynthesizer {
 
     private static let functions = SafecrackerIOHIDFunctions.load()
 
-    static func createEvent(for fingers: [TheSafecracker.SyntheticTouch]) -> TheSafecracker.HIDEvent? {
+    static func event(for fingers: [TheSafecracker.SyntheticTouch]) -> TheSafecracker.HIDEvent? {
         guard let functions else { return nil }
         let timestamp = mach_absolute_time()
         let anyTouching = fingers.contains { $0.phase != .ended && $0.phase != .cancelled }
@@ -142,7 +142,7 @@ private final class SafecrackerIOHIDEventBuilder {
     }
 }
 
-// MARK: - IOHIDEvent Constants (file-private, same file as SafecrackerIOHIDEventBuilder)
+// MARK: - IOHIDEvent Constants (file-private, same file as SafecrackerIOHIDEventSynthesizer)
 
 private let kIOHIDDigitizerTransducerTypeHand: Int = 3
 private let kIOHIDDigitizerEventRange: UInt32 = 1 << 0
@@ -153,7 +153,7 @@ private let kIOHIDEventFieldDigitizerIsDisplayIntegrated: Int = 0x00050001
 // MARK: - Dynamic Loading of IOKit Functions
 
 @MainActor
-private final class SafecrackerIOHIDFunctions {
+private struct SafecrackerIOHIDFunctions {
     let createDigitizerEvent: ButtonHeistPrivateSPI.IOHIDEventCreateDigitizerEventFunction
     let createDigitizerFingerEventWithQuality:
         ButtonHeistPrivateSPI.IOHIDEventCreateDigitizerFingerEventWithQualityFunction

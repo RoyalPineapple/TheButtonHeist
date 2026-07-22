@@ -224,7 +224,7 @@ public enum HeistBuilder {
     private static func mergeDefinitions(
         _ definitions: [HeistPlanAdmissionCandidate]
     ) -> [HeistPlanAdmissionCandidate] {
-        HeistDefinitionMerger.merge(definitions, duplicatePolicy: .discardIdentical)
+        mergeHeistDefinitions(definitions, duplicatePolicy: .discardIdentical)
     }
 }
 
@@ -327,7 +327,7 @@ public struct HeistDef<Input>: Sendable {
     }
 
     fileprivate func invocation(argument: HeistArgument) throws -> HeistInvocationContent {
-        let definition = try definitionResult.get(orThrow: HeistDefinitionBuildError.init(diagnostics:))
+        let definition = try definitionResult.get(orThrow: HeistPlanBuildError.init(diagnostics:))
         return HeistInvocationContent(
             invocation: HeistInvocationStep(
                 path: HeistInvocationPath(definitionPath: path),
@@ -377,38 +377,27 @@ public extension HeistInvocationContent {
         _ predicate: AccessibilityPredicate,
         timeout: WaitTimeout? = nil
     ) -> HeistInvocationContent {
-        let timeoutResult = composeExpectationTimeout(
+        let composition = composeExpectation(
             existing: invocation.expectation,
             existingExplicit: explicitExpectationTimeout,
+            nextPredicate: predicate,
             nextExplicit: timeout
         )
-        let predicateResult = invocation.expectation.map {
-            composeExpectationPredicates(existing: $0.predicate, next: predicate)
-        } ?? ExpectationPredicateComposition(predicate: predicate, diagnostics: [])
         let validationDiagnostics = expectationValidationDiagnostics
-            + predicateResult.diagnostics
-            + timeoutResult.diagnostics
+            + composition.diagnostics
 
         return HeistInvocationContent(
             invocation: HeistInvocationStep(
                 path: invocation.path,
                 argument: invocation.argument,
-                expectation: WaitStep(predicate: predicateResult.predicate, timeout: timeoutResult.timeout)
+                expectation: WaitStep(predicate: composition.predicate, timeout: composition.timeout)
             ),
             definitions: definitions,
-            explicitExpectationTimeout: timeoutResult.explicitTimeout,
+            explicitExpectationTimeout: composition.explicitTimeout,
             expectationValidationDiagnostics: validationDiagnostics
         )
     }
 
-}
-
-private struct HeistDefinitionBuildError: Error, Sendable, CustomStringConvertible {
-    let diagnostics: [HeistBuildDiagnostic]
-
-    var description: String {
-        "heist definition build failed: \(diagnostics.renderedMessages)"
-    }
 }
 
 public extension HeistDef where Input == Void {

@@ -111,7 +111,7 @@ public final class TheInsideJob {
     let getaway: TheGetaway
 
     let runtimeConfiguration: InsideJobRuntimeConfiguration
-    let transportFactory: @MainActor (SessionAuthToken, Set<ConnectionScope>) -> ServerTransport
+    let transportProvider: @MainActor (SessionAuthToken, Set<ConnectionScope>) -> ServerTransport
     let lifecycleBoundaryTasks = LifecycleBoundaryTasks()
 
     // MARK: - Computed State
@@ -195,7 +195,7 @@ public final class TheInsideJob {
             addressFamily: addressFamily,
             fingerprintsEnabled: fingerprintsEnabled,
             authenticationPolicy: authenticationPolicy,
-            transportFactory: { ServerTransport(token: $0, allowedScopes: $1) }
+            transportProvider: { ServerTransport(token: $0, allowedScopes: $1) }
         )
     }
 
@@ -208,7 +208,7 @@ public final class TheInsideJob {
         fingerprintsEnabled: Bool? = nil,
         authenticationPolicy: InsideJobAuthenticationPolicy = .default,
         visibleObservationSource: @escaping TheVault.VisibleObservationSource = TheVault.captureVisibleObservation,
-        transportFactory: @escaping @MainActor (SessionAuthToken, Set<ConnectionScope>) -> ServerTransport = {
+        transportProvider: @escaping @MainActor (SessionAuthToken, Set<ConnectionScope>) -> ServerTransport = {
             ServerTransport(token: $0, allowedScopes: $1)
         }
     ) throws(InsideJobConfigurationError) {
@@ -224,7 +224,7 @@ public final class TheInsideJob {
                 authenticationPolicy: authenticationPolicy
             ),
             visibleObservationSource: visibleObservationSource,
-            transportFactory: transportFactory
+            transportProvider: transportProvider
         )
     }
 
@@ -237,12 +237,12 @@ public final class TheInsideJob {
     init(
         runtimeConfiguration: InsideJobRuntimeConfiguration,
         visibleObservationSource: @escaping TheVault.VisibleObservationSource = TheVault.captureVisibleObservation,
-        transportFactory: @escaping @MainActor (SessionAuthToken, Set<ConnectionScope>) -> ServerTransport = {
+        transportProvider: @escaping @MainActor (SessionAuthToken, Set<ConnectionScope>) -> ServerTransport = {
             ServerTransport(token: $0, allowedScopes: $1)
         }
     ) {
         self.runtimeConfiguration = runtimeConfiguration
-        self.transportFactory = transportFactory
+        self.transportProvider = transportProvider
         self.muscle = TheMuscle(
             sessionToken: runtimeConfiguration.token.value,
             sessionReleaseTimeout: runtimeConfiguration.sessionReleaseTimeout.value,

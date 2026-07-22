@@ -198,13 +198,10 @@ extension EditActionTarget: CustomStringConvertible {
     }
 }
 
-package enum WaitTimeoutEnvironmentKey: String, Sendable {
-    case maximum = "BUTTONHEIST_MAX_WAIT_TIMEOUT"
-}
-
 public struct WaitTimeout: Codable, Sendable, Equatable, Comparable, CustomStringConvertible,
     ExpressibleByFloatLiteral, ExpressibleByIntegerLiteral {
     public static let defaultMaximumSeconds: Double = 60
+    public static let maximumSecondsEnvironmentKey = "BUTTONHEIST_MAX_WAIT_TIMEOUT"
 
     public static var maximumSeconds: Double {
         maximumSeconds(environment: ProcessInfo.processInfo.environment)
@@ -232,7 +229,7 @@ public struct WaitTimeout: Codable, Sendable, Equatable, Comparable, CustomStrin
 
     package static func maximumSeconds(environment: [String: String]) -> Double {
         guard
-            let rawValue = environment[WaitTimeoutEnvironmentKey.maximum.rawValue],
+            let rawValue = environment[maximumSecondsEnvironmentKey],
             let configured = Double(rawValue),
             configured.isFinite,
             configured >= 30

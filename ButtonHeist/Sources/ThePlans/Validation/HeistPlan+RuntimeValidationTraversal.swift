@@ -5,7 +5,7 @@ import Foundation
 /// Totality rests on three bounds: (a) acyclic call graph
 /// [HeistCallGraph] - structural; (b) bounded ForEach; (c) timeout-floored
 /// RepeatUntil/WaitFor - runtime floors.
-struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
+struct HeistPlanRuntimeSafetyValidator {
     private static let nestedCollectionLoopContract = "collection loops must not be nested"
     private static let nestedCollectionLoopCorrection =
         "Flatten this heist so ForEach bodies contain only non-collection steps."
@@ -25,22 +25,73 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
     }
 
     mutating func inspect(_ plan: HeistPlan) {
-        HeistPlanTraversal().walk(plan, visitor: &self)
+        HeistPlanTraversal().walk(plan) { event in
+            inspect(event)
+        }
     }
 
-    mutating func visitPlan(_ plan: HeistPlan, context: HeistTraversalContext) {
-        validatePlanHeader(plan, path: context.path, requiresName: false)
+    private mutating func inspect(_ event: HeistPlanTraversal.Event) {
+        switch event {
+        case .enterPlan(let plan, let context):
+            validatePlanHeader(plan, path: context.path, requiresName: false)
+        case .enterDefinitions(let definitions, let context):
+            validateDefinitions(definitions, path: context.path)
+        case .enterDefinition(let plan, let context):
+            validatePlanHeader(plan, path: context.path, requiresName: true)
+        case .enterStep(let step, let context):
+            validateStep(step, context: context)
+        case .action(let action, let context):
+            validateResolvedStringLoopAction(action, context: context)
+            validateAction(
+                action,
+                path: context.path,
+                scope: context.scope,
+                environment: context.environment
+            )
+        case .wait(let wait, let context):
+            validateResolvedStringLoopWait(wait, context: context)
+            validateWait(
+                wait,
+                path: context.path,
+                scope: context.scope,
+                environment: context.environment
+            )
+        case .predicateCase(let predicateCase, let context):
+            validatePredicateCase(
+                predicateCase,
+                path: context.path,
+                scope: context.scope,
+                environment: context.environment
+            )
+        case .forEachElement(let step, let context):
+            validateCollectionLoopNesting(kind: "for_each_element", path: context.path)
+            validateForEachElement(step, path: context.path, scope: context.scope)
+        case .forEachString(let step, let context):
+            validateCollectionLoopNesting(kind: "for_each_string", path: context.path)
+            validateForEachString(step, path: context.path)
+        case .repeatUntil(let step, let context):
+            validateRepeatUntil(step, path: context.path)
+        case .warn(let warn, let context):
+            addString(warn.message.rawValue, path: context.path.child(.message), role: "warn message")
+        case .fail(let failStep, let context):
+            addString(failStep.message.rawValue, path: context.path.child(.message), role: "fail message")
+        case .heist(let plan, let context):
+            validateInlineHeist(plan, context: context)
+        case .invoke(let invocation, let context):
+            validateInvocation(invocation, context: context)
+        case .leavePlan,
+             .leaveDefinitions,
+             .leaveDefinition,
+             .enterSteps,
+             .leaveSteps,
+             .leaveStep,
+             .conditional,
+             .elseBody:
+            break
+        }
     }
 
-    mutating func visitDefinitions(_ definitions: [HeistPlan], context: HeistTraversalContext) {
-        validateDefinitions(definitions, path: context.path)
-    }
-
-    mutating func visitDefinition(_ plan: HeistPlan, context: HeistTraversalContext) {
-        validatePlanHeader(plan, path: context.path, requiresName: true)
-    }
-
-    mutating func visitStep(_ step: HeistStep, context: HeistTraversalContext) {
+    private mutating func validateStep(_ step: HeistStep, context: HeistTraversalContext) {
         stepCount += 1
         if stepCount > limits.maxTotalSteps, !reportedStepLimit {
             reportedStepLimit = true
@@ -61,58 +112,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
         }
     }
 
-    mutating func visitAction(_ action: ActionStep, context: HeistTraversalContext) {
-        validateResolvedStringLoopAction(action, context: context)
-        validateAction(
-            action,
-            path: context.path,
-            scope: context.scope,
-            environment: context.environment
-        )
-    }
-
-    mutating func visitWait(_ wait: WaitStep, context: HeistTraversalContext) {
-        validateResolvedStringLoopWait(wait, context: context)
-        validateWait(
-            wait,
-            path: context.path,
-            scope: context.scope,
-            environment: context.environment
-        )
-    }
-
-    mutating func visitPredicateCase(_ predicateCase: PredicateCase, context: HeistTraversalContext) {
-        validatePredicateCase(
-            predicateCase,
-            path: context.path,
-            scope: context.scope,
-            environment: context.environment
-        )
-    }
-
-    mutating func visitForEachElement(_ step: ForEachElementStep, context: HeistTraversalContext) {
-        validateCollectionLoopNesting(kind: "for_each_element", path: context.path)
-        validateForEachElement(step, path: context.path, scope: context.scope)
-    }
-
-    mutating func visitForEachString(_ step: ForEachStringStep, context: HeistTraversalContext) {
-        validateCollectionLoopNesting(kind: "for_each_string", path: context.path)
-        validateForEachString(step, path: context.path)
-    }
-
-    mutating func visitRepeatUntil(_ step: RepeatUntilStep, context: HeistTraversalContext) {
-        validateRepeatUntil(step, path: context.path)
-    }
-
-    mutating func visitWarn(_ warn: WarnStep, context: HeistTraversalContext) {
-        addString(warn.message.rawValue, path: context.path.child(.message), role: "warn message")
-    }
-
-    mutating func visitFail(_ failStep: FailStep, context: HeistTraversalContext) {
-        addString(failStep.message.rawValue, path: context.path.child(.message), role: "fail message")
-    }
-
-    mutating func visitHeist(_ plan: HeistPlan, context: HeistTraversalContext) {
+    private mutating func validateInlineHeist(_ plan: HeistPlan, context: HeistTraversalContext) {
         validatePlanHeader(plan, path: context.path, requiresName: false)
         if plan.parameter != .none {
             fail(
@@ -122,10 +122,6 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
                 correction: "Use RunHeist with a named capability when a heist needs an argument."
             )
         }
-    }
-
-    mutating func visitInvoke(_ invocation: HeistInvocationStep, context: HeistTraversalContext) {
-        validateInvocation(invocation, context: context)
     }
 
     mutating func validatePlanHeader(

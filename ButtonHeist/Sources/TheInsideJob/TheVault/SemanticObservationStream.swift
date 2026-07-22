@@ -21,19 +21,10 @@ internal final class SemanticObservationStream {
     ) async -> SettleSession.Result
 
     @MainActor
-    final class VisibleRefreshCompletion {
-        let settlement: ObservationSettlement
-
-        init(_ settlement: ObservationSettlement) {
-            self.settlement = settlement
-        }
-    }
-
-    @MainActor
     final class VisibleRefreshSession {
-        let task: Task<VisibleRefreshCompletion, Never>
+        let task: Task<ObservationSettlement, Never>
 
-        init(task: Task<VisibleRefreshCompletion, Never>) {
+        init(task: Task<ObservationSettlement, Never>) {
             self.task = task
         }
     }

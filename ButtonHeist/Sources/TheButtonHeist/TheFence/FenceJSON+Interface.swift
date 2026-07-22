@@ -37,7 +37,6 @@ struct PublicInterface: Encodable {
         visibleElementBudget: Int = ButtonHeistRuntimeKnobs.current.visibleElementBudget,
         totalNodeBudget: Int = ButtonHeistRuntimeKnobs.current.totalNodeBudget
     ) {
-        let formatter = ISO8601DateFormatter()
         let profile = ProjectionProfile(
             kind: detail == .full ? .full : .summary,
             limits: .current(
@@ -45,16 +44,7 @@ struct PublicInterface: Encodable {
                 totalNodeBudget: totalNodeBudget
             )
         )
-        let projection = InterfaceProjection(interface: interface, profile: profile)
-        self.timestamp = formatter.string(from: projection.timestamp)
-        self.screenDescription = projection.screenDescription
-        self.screenId = projection.screenId
-        let screenActions = projection.screenActions.map(\.rawValue)
-        self.screenActions = screenActions.isEmpty ? nil : screenActions
-        self.diagnostics = projection.diagnostics
-        self.navigation = PublicNavigation(projection: projection.navigation)
-        self.tree = projection.tree.map { PublicTreeNode(projection: $0, detail: projection.detail) }
-        self.rendering = PublicInterfaceRendering(projection: projection.rendering)
+        self.init(projection: InterfaceProjection(interface: interface, profile: profile))
     }
 
     init(projection: InterfaceProjection) {

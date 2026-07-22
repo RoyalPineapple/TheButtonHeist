@@ -256,20 +256,20 @@ private extension HeistReport {
         var firstFailedStep: HeistExecutionStepResult?
         var firstFailure: Failure?
         var warnings: [HeistExecutionWarning] = []
-        var metricBuilder: MetricBuilder
+        var metricAccumulator: MetricAccumulator
 
         init(durationMs: ElapsedMilliseconds) {
             self.durationMs = durationMs
-            var metricBuilder = MetricBuilder()
-            metricBuilder.append(.heistDurationMs, valueMs: durationMs)
-            self.metricBuilder = metricBuilder
+            var metricAccumulator = MetricAccumulator()
+            metricAccumulator.append(.heistDurationMs, valueMs: durationMs)
+            self.metricAccumulator = metricAccumulator
         }
 
         mutating func enter(_ step: HeistExecutionStepResult) {
             frames.append(Frame(sequence: outputNodes.count, step: step))
             outputNodes.append(nil)
             executedNodeCount += step.status == .skipped ? 0 : 1
-            metricBuilder.appendMetrics(for: step)
+            metricAccumulator.appendMetrics(for: step)
             if let screenId = step.reportActionResult?.accessibilityTrace?.endpointScreenId {
                 finalScreenId = screenId
             }
@@ -314,8 +314,8 @@ private extension HeistReport {
                     finalScreenId: finalScreenId
                 ),
                 metrics: Metrics(
-                    measurements: metricBuilder.measurements,
-                    ceilings: metricBuilder.ceilings
+                    measurements: metricAccumulator.measurements,
+                    ceilings: metricAccumulator.ceilings
                 ),
                 nodes: roots,
                 outputNodes: outputNodes.compactMap { $0 },
@@ -358,7 +358,7 @@ private extension HeistReport.AccessibilityChange {
     }
 }
 
-private struct MetricBuilder {
+private struct MetricAccumulator {
     var measurements: [HeistReport.Measurement] = []
     var ceilings: [HeistReport.CeilingMetric] = []
 

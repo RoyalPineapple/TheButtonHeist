@@ -1,5 +1,10 @@
 import Foundation
 
+private struct PointCoordinates {
+    let x: FiniteCoordinate
+    let y: FiniteCoordinate
+}
+
 extension HeistPlanSourceParser {
     mutating func parseElementTargetAction(
         _ actionName: String,
@@ -292,14 +297,14 @@ extension HeistPlanSourceParser {
         return .drag(DragTarget(selection: selection))
     }
 
-    mutating func parsePointCoordinates() throws -> (x: FiniteCoordinate, y: FiniteCoordinate) {
+    fileprivate mutating func parsePointCoordinates() throws -> PointCoordinates {
         try expectIdentifier("x")
         try expectSymbol(":")
         let x = try parseFiniteCoordinate()
         try expectSymbol(",")
         try expectIdentifier("y")
         try expectSymbol(":")
-        return (x, try parseFiniteCoordinate())
+        return PointCoordinates(x: x, y: try parseFiniteCoordinate())
     }
 
     mutating func parseFiniteCoordinate() throws -> FiniteCoordinate {

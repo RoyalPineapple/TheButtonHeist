@@ -54,6 +54,12 @@ public struct HeistInvocationPath: Sendable, Equatable, Hashable, CustomStringCo
     package init(first: HeistPlanName, remaining: [HeistPlanName] = []) {
         value = HeistPathValue(first: first, remaining: remaining)
     }
+    package init(namePath: [HeistPlanName]) {
+        guard let first = namePath.first else {
+            preconditionFailure("heist invocation paths require at least one component")
+        }
+        value = HeistPathValue(first: first, remaining: Array(namePath.dropFirst()))
+    }
 }
 
 /// A zero-argument Swift function selected as a heist compiler entry point.

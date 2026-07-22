@@ -21,18 +21,15 @@ private struct EncodedInvocationStepContract: Decodable {
     #expect(try graph.requireTopologicalOrder() == ["A"])
 }
 
-@Test func `typed node storage backs public node names`() throws {
+@Test func `call graph stores canonical nodes and edges`() throws {
     let graph = callGraph(edges: [("A", "C"), ("B", "C")])
 
     #expect(graph.nodes == ["A", "B", "C"])
-    #expect(graph.typedNodes == Set(["A", "B", "C"].map { HeistCallGraph.Node(typedPath($0)) }))
-    #expect(graph.typedEdges == Set([
-        HeistCallGraph.NodeEdge(caller: HeistCallGraph.Node("A"), callee: HeistCallGraph.Node("C")),
-        HeistCallGraph.NodeEdge(caller: HeistCallGraph.Node("B"), callee: HeistCallGraph.Node("C")),
+    #expect(graph.edges == Set([
+        HeistCallGraph.Edge(caller: "A", callee: "C"),
+        HeistCallGraph.Edge(caller: "B", callee: "C"),
     ]))
-    let typedOrder = try graph.requireTopologicalNodeOrder().map(\.path)
     let publicOrder = try graph.requireTopologicalOrder()
-    #expect(typedOrder == publicOrder)
     #expect(publicOrder == ["A", "B", "C"])
 }
 
@@ -61,13 +58,10 @@ private struct EncodedInvocationStepContract: Decodable {
 
 @Test func `two node cycle reports witnessed cycle`() throws {
     let graph = callGraph(edges: [("A", "B"), ("B", "A")])
-    let typedCycle = graph.requireNodeCycle()
 
     #expect(!graph.isAcyclic)
     #expect(graph.requireCycle().path == ["A", "B", "A"])
-    #expect(typedCycle.path.map(\.path) == ["A", "B", "A"])
-    #expect(typedCycle.displayPath == "A -> B -> A")
-    #expect(graph.requireCycle().displayPath == typedCycle.displayPath)
+    #expect(graph.requireCycle().displayPath == "A -> B -> A")
 }
 
 @Test func `longer cycle reports witnessed cycle`() throws {
@@ -84,16 +78,16 @@ private struct EncodedInvocationStepContract: Decodable {
     #expect(graph.requireCycle().path == ["C", "D", "C"])
 }
 
-@Test func `typed cycle api accepts typed node stacks`() throws {
-    let node = HeistCallGraph.Node("A")
+@Test func `cycle api accepts invocation path stacks`() throws {
+    let node: HeistInvocationPath = "A"
     let graph = callGraph(edges: [("A", "A")])
     let graphCycle = try #require(graph.nodeCycle(closing: node, in: [node]))
     let stackCycle = try #require(HeistCallGraph.nodeCycle(closing: node, in: [node]))
 
     #expect(graphCycle.path == [node, node])
     #expect(stackCycle.path == [node, node])
-    #expect(HeistCallGraph.Cycle(graphCycle).path == ["A", "A"])
-    #expect(HeistCallGraph.Cycle(stackCycle).displayPath == "A -> A")
+    #expect(graphCycle.path == ["A", "A"])
+    #expect(stackCycle.displayPath == "A -> A")
 }
 
 @Test func `plan call graph resolves invocations in their definition scope`() throws {
@@ -318,12 +312,12 @@ private struct RuntimeAdmissionCallGraphCase {
 }
 
 private func callGraph(edges: [(String, String)]) -> HeistCallGraph {
-    let typedEdges = edges.map { caller, callee in
+    let graphEdges = edges.map { caller, callee in
         HeistCallGraph.Edge(caller: typedPath(caller), callee: typedPath(callee))
     }
     return HeistCallGraph(
-        nodes: Set(typedEdges.flatMap { [$0.caller, $0.callee] }),
-        edges: Set(typedEdges)
+        nodes: Set(graphEdges.flatMap { [$0.caller, $0.callee] }),
+        edges: Set(graphEdges)
     )
 }
 
@@ -498,31 +492,11 @@ private extension HeistCallGraph {
         }
     }
 
-    func requireTopologicalNodeOrder() throws -> [HeistCallGraph.Node] {
-        switch topologicalNodeOrder() {
-        case .success(let order):
-            return order
-        case .failure(let cycle):
-            Issue.record("Expected topological order, got cycle \(cycle.displayPath)")
-            return []
-        }
-    }
-
     func requireCycle() -> HeistCallGraph.Cycle {
         switch topologicalOrder() {
         case .success(let order):
             Issue.record("Expected cycle, got order \(order)")
             return HeistCallGraph.Cycle(path: [])
-        case .failure(let cycle):
-            return cycle
-        }
-    }
-
-    func requireNodeCycle() -> HeistCallGraph.NodeCycle {
-        switch topologicalNodeOrder() {
-        case .success(let order):
-            Issue.record("Expected cycle, got order \(order.map(\.path))")
-            return HeistCallGraph.NodeCycle(path: [])
         case .failure(let cycle):
             return cycle
         }

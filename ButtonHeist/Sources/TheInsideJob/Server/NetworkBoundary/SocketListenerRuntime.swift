@@ -50,7 +50,7 @@ final class NetworkSocketListener: SocketListening, @unchecked Sendable {
     }
 }
 
-typealias SocketListenerFactory = @Sendable (NWParameters) throws -> any SocketListening
+typealias SocketListenerProvider = @Sendable (NWParameters) throws -> any SocketListening
 
 struct SocketListenerGeneration: Equatable, Sendable {
     let attemptID: UUID
@@ -202,7 +202,7 @@ actor SocketListenerRuntime: Equatable {
         addressFamily: ListenerAddressFamily,
         parameters: NWParameters,
         queue: DispatchQueue,
-        listenerFactory: SocketListenerFactory,
+        listenerProvider: SocketListenerProvider,
         newConnectionHandler: @escaping @Sendable (NWConnection) -> Void
     ) async throws -> UInt16 {
         try beginStarting()
@@ -217,7 +217,7 @@ actor SocketListenerRuntime: Equatable {
                     port: requestedPort,
                     parameters: parameters,
                     allowEndpointReuse: hosts.count > 1,
-                    listenerFactory: listenerFactory,
+                    listenerProvider: listenerProvider,
                     newConnectionHandler: newConnectionHandler
                 )
                 try append(listener)
@@ -269,7 +269,7 @@ actor SocketListenerRuntime: Equatable {
         port: UInt16,
         parameters: NWParameters,
         allowEndpointReuse: Bool,
-        listenerFactory: SocketListenerFactory,
+        listenerProvider: SocketListenerProvider,
         newConnectionHandler: @escaping @Sendable (NWConnection) -> Void
     ) throws -> any SocketListening {
         let listenerParameters = parameters.copy()
@@ -278,7 +278,7 @@ actor SocketListenerRuntime: Equatable {
             host: host,
             port: NWEndpoint.Port(rawValue: port) ?? .any
         )
-        let listener = try listenerFactory(listenerParameters)
+        let listener = try listenerProvider(listenerParameters)
         listener.newConnectionHandler = newConnectionHandler
         return listener
     }

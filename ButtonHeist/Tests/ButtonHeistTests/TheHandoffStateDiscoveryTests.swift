@@ -294,7 +294,7 @@ final class TheHandoffStateDiscoveryTests: XCTestCase {
         mockDiscovery.discoveredDevices = [reachableDevice]
         handoff.makeDiscovery = { mockDiscovery }
 
-        let previousFactory = makeReachabilityConnection
+        let previousProvider = makeReachabilityConnection
         makeReachabilityConnection = { device in
             let connection = MockConnection()
             connection.emitTransportReadyOnConnect = true
@@ -321,7 +321,7 @@ final class TheHandoffStateDiscoveryTests: XCTestCase {
             }
             return connection
         }
-        defer { makeReachabilityConnection = previousFactory }
+        defer { makeReachabilityConnection = previousProvider }
 
         handoff.startDiscovery()
         XCTAssertTrue(handoff.discoveryLifecycle.isDiscovering)
@@ -405,12 +405,12 @@ final class TheHandoffStateDiscoveryTests: XCTestCase {
             return connection
         }
 
-        let previousFactory = makeReachabilityConnection
+        let previousProvider = makeReachabilityConnection
         makeReachabilityConnection = { _ in
             XCTFail("connectWithDiscovery target resolution should not probe reachability")
             return MockConnection()
         }
-        defer { makeReachabilityConnection = previousFactory }
+        defer { makeReachabilityConnection = previousProvider }
 
         try await handoff.connectWithDiscovery(filter: nil, timeout: 0.5)
 

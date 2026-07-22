@@ -285,7 +285,7 @@ import Testing
 
 @Test func `wait timeout maximum has one external override`() throws {
     let configuredMaximum = WaitTimeout.maximumSeconds(environment: [
-        WaitTimeoutEnvironmentKey.maximum.rawValue: "120",
+        WaitTimeout.maximumSecondsEnvironmentKey: "120",
     ])
 
     #expect(WaitTimeout.maximumSeconds(environment: [:]) == 60)
@@ -293,7 +293,7 @@ import Testing
     for invalidValue in ["", "not-a-number", "0", "29", "-1", "nan", "infinity"] {
         #expect(
             WaitTimeout.maximumSeconds(environment: [
-                WaitTimeoutEnvironmentKey.maximum.rawValue: invalidValue,
+                WaitTimeout.maximumSecondsEnvironmentKey: invalidValue,
             ]) == 60,
             "invalid override: \(invalidValue)"
         )
