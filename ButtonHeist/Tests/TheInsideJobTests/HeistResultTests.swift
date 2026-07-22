@@ -401,61 +401,6 @@ final class HeistResultTests: XCTestCase {
         ])
     }
 
-    func testOutermostHeistOwnsOneIdleLeaseAcrossNestedHeists() async throws {
-        enum Library {
-            static let child = HeistDef<Void>("AnimationIdle.child") {
-                Warn("nested")
-            }
-        }
-
-        let job = try TheInsideJob(token: "animation-idle-heist-scope-test")
-        var lifecycle: [String] = []
-        let runtime = TheBrains.HeistExecutionRuntime(
-            beginIdleTracking: {
-                lifecycle.append("begin")
-                return HeistIdleTrackingLease {
-                    lifecycle.append("cancel")
-                }
-            },
-            execute: { _, _ in
-                XCTFail("Warning-only heist must not execute an action")
-                return RuntimeActionExecution(
-                    result: .success(payload: .activate),
-                    actionExpectationContext: nil
-                )
-            },
-            wait: { _ in
-                XCTFail("Warning-only heist must not wait")
-                return .failed(
-                    failureKind: .actionFailed,
-                    message: "unexpected wait",
-                    traceEvidence: nil,
-                    expectation: .init(
-                        predicate: .exists(.label("unexpected")),
-                        actual: "unexpected wait"
-                    )
-                )
-            },
-            selectPredicateCase: { _, _ in
-                XCTFail("Warning-only heist must not select a predicate case")
-                return .selectingFirstMatch(cases: [], ifNone: .noMatch, elapsedMs: 0)
-            },
-            settledEvidence: { _, _, _ in
-                XCTFail("Warning-only heist must not settle evidence")
-                return nil
-            }
-        )
-        let plan = try HeistPlan {
-            try Library.child()
-        }
-
-        let result = await job.brains.executeHeistPlanForTest(plan, runtime: runtime)
-
-        XCTAssertTrue(result.outcome.isSuccess)
-        XCTAssertEqual(lifecycle, ["begin", "cancel"])
-        XCTAssertEqual(result.resultPayload?.steps.first?.children.first?.reportMessage, "nested")
-    }
-
     func testFailedHeistThrowsFailureWithInspectableResult() async throws {
         do {
             _ = try await runHeist("failedHeist") {

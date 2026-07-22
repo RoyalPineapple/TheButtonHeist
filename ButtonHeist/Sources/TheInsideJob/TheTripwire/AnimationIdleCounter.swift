@@ -6,6 +6,13 @@ import os
 import ButtonHeistSupport
 
 final class AnimationIdleCounter: Sendable {
+    struct Snapshot: Sendable, Equatable {
+        let activeCount: Int
+        let observedStartCount: Int
+        let matchedStopCount: Int
+        let unmatchedStopCount: Int
+    }
+
     enum StopOutcome: Equatable {
         case active(remaining: Int)
         case becameIdle
@@ -14,6 +21,9 @@ final class AnimationIdleCounter: Sendable {
 
     private struct State: Sendable {
         var activeCount = 0
+        var observedStartCount = 0
+        var matchedStopCount = 0
+        var unmatchedStopCount = 0
         var waiters = WaiterStore<UUID, TimedOneShot<Bool>>()
     }
 
@@ -27,10 +37,22 @@ final class AnimationIdleCounter: Sendable {
         state.withLock { $0.waiters.count }
     }
 
+    var snapshot: Snapshot {
+        state.withLock {
+            Snapshot(
+                activeCount: $0.activeCount,
+                observedStartCount: $0.observedStartCount,
+                matchedStopCount: $0.matchedStopCount,
+                unmatchedStopCount: $0.unmatchedStopCount
+            )
+        }
+    }
+
     func observeAnimationStarted() {
         state.withLock { state in
             precondition(state.activeCount < Int.max, "Animation idle count overflowed")
             state.activeCount += 1
+            state.observedStartCount += 1
         }
     }
 
@@ -38,9 +60,11 @@ final class AnimationIdleCounter: Sendable {
     func observeAnimationStopped() -> StopOutcome {
         let transition = state.withLock { state -> (StopOutcome, [TimedOneShot<Bool>]) in
             guard state.activeCount > 0 else {
+                state.unmatchedStopCount += 1
                 return (.unmatchedStop, [])
             }
             state.activeCount -= 1
+            state.matchedStopCount += 1
             guard state.activeCount == 0 else {
                 return (.active(remaining: state.activeCount), [])
             }

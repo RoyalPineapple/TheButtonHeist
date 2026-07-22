@@ -3,7 +3,7 @@
 The tripwire and the settle loop as cooperating mechanisms: TheTripwire watches UIKit timing signals on a display-link pulse, while SettleSession proves the accessibility tree stable by fingerprinting consecutive parses. This diagram makes "settled evidence" concrete — it answers "what exactly does Button Heist mean when it says the screen settled?"
 
 **Illustrates:** [ARCHITECTURE.md](../ARCHITECTURE.md), [ACCESSIBILITY-CONTRACT.md](../ACCESSIBILITY-CONTRACT.md), [SCOPE-AND-LIMITS.md](../SCOPE-AND-LIMITS.md)
-**Source of truth:** `ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/SettleTimeline.swift`, `ButtonHeist/Sources/TheInsideJob/TheTripwire/HeistIdleTracker.swift`, `ButtonHeist/Sources/TheInsideJob/TheTripwire/TheTripwire.swift`, `ButtonHeist/Sources/TheInsideJob/TheTripwire/TheTripwire+Pulse.swift`, `ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift`
+**Source of truth:** `ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/SettleTimeline.swift`, `ButtonHeist/Sources/TheInsideJob/TheTripwire/UIKitIdleTracker.swift`, `ButtonHeist/Sources/TheInsideJob/TheTripwire/TheTripwire.swift`, `ButtonHeist/Sources/TheInsideJob/TheTripwire/TheTripwire+Pulse.swift`, `ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift`
 
 ```mermaid
 stateDiagram-v2
@@ -51,7 +51,7 @@ The two clocks:
 ```mermaid
 flowchart TD
     subgraph tripwire["TheTripwire — UIKit signals"]
-        ANIMATION["heist-scoped UIViewAnimationState hooks<br/>one aggregate start/stop counter"]
+        ANIMATION["runtime-installed UIViewAnimationState hooks<br/>operation-scoped aggregate counter"]
         ANIMATION_IDLE["animation idle edge<br/>count 1 → 0"]
         RUN_LOOP_IDLE["CFRunLoopObserver<br/>beforeWaiting"]
         PULSE["one CADisplayLink heartbeat<br/>ambient 10 Hz · immediate native maximum"]

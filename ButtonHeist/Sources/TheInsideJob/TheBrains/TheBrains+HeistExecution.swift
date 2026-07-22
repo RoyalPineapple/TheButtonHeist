@@ -108,7 +108,6 @@ extension TheBrains {
     }
 
     internal struct HeistExecutionRuntime {
-        internal let beginIdleTracking: @MainActor () -> HeistIdleTrackingLease?
         internal let execute: @MainActor (
             ResolvedHeistActionCommand,
             SemanticObservationScope?
@@ -118,7 +117,6 @@ extension TheBrains {
         internal let settledEvidence: @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> SettledObservationEvidence?
 
         internal init(
-            beginIdleTracking: @escaping @MainActor () -> HeistIdleTrackingLease? = { nil },
             execute: @escaping @MainActor (
                 ResolvedHeistActionCommand,
                 SemanticObservationScope?
@@ -127,7 +125,6 @@ extension TheBrains {
             selectPredicateCase: @escaping @MainActor ([ResolvedPredicateCaseRuntimeInput], Double) async -> HeistCaseSelectionResult,
             settledEvidence: @escaping @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> SettledObservationEvidence?
         ) {
-            self.beginIdleTracking = beginIdleTracking
             self.execute = execute
             self.wait = wait
             self.selectPredicateCase = selectPredicateCase
@@ -137,9 +134,6 @@ extension TheBrains {
         @MainActor
         internal static func live(_ brains: TheBrains) -> HeistExecutionRuntime {
             HeistExecutionRuntime(
-                beginIdleTracking: {
-                    brains.tripwire.heistIdleTracker.beginTrackingIfAvailable()
-                },
                 execute: { command, expectationContextScope in
                     await brains.executeRuntimeActionForHeist(
                         command,
@@ -186,9 +180,6 @@ extension TheBrains {
         argument: HeistArgument,
         runtime: HeistExecutionRuntime
     ) async -> ActionResult {
-        let animationIdleTracking = runtime.beginIdleTracking()
-        defer { animationIdleTracking?.cancel() }
-
         let notificationScope = vault.accessibilityNotifications.beginHeistScope()
         defer { notificationScope.cancel() }
 

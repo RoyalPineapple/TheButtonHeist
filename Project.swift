@@ -56,6 +56,24 @@ func testScheme(name: String) -> Scheme {
     )
 }
 
+func hostedTestScheme(name: String) -> Scheme {
+    .scheme(
+        name: name,
+        buildAction: .buildAction(targets: [
+            .target(name),
+        ]),
+        testAction: .targets(
+            [
+                .testableTarget(target: .target(name)),
+            ],
+            arguments: .arguments(environmentVariables: [
+                "BUTTONHEIST_TEST_ANIMATION_SPEED": "$(BUTTONHEIST_TEST_ANIMATION_SPEED)",
+            ]),
+            expandVariableFromTarget: .target(name)
+        )
+    )
+}
+
 struct HostedTestDescriptor {
     let name: String
     let bundleId: String
@@ -67,7 +85,7 @@ struct HostedTestDescriptor {
     }
 
     var scheme: Scheme {
-        testScheme(name: name)
+        hostedTestScheme(name: name)
     }
 }
 
@@ -436,7 +454,11 @@ let project = Project(
             testAction: .targets(
                 behaviorTestDescriptors.map {
                     .testableTarget(target: .target($0.name), parallelization: .disabled)
-                }
+                },
+                arguments: .arguments(environmentVariables: [
+                    "BUTTONHEIST_TEST_ANIMATION_SPEED": "$(BUTTONHEIST_TEST_ANIMATION_SPEED)",
+                ]),
+                expandVariableFromTarget: .target("DogfoodFeatureFlowTests")
             )
         ),
     ]

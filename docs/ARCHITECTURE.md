@@ -163,10 +163,14 @@ Settling itself has one AX reducer, `SettleLoopMachine`, and one async runner,
 cadence for that pair; it does not create another settle pipeline. UIKit and
 ObjC signals may trigger or reset sampling, but they never classify the AX tree.
 
-The outermost heist also owns one idle-tracking lease. Its typed Objective-C
-swizzles call UIKit's original `UIViewAnimationState` start/stop methods first,
-then update one aggregate counter. A public `CFRunLoopObserver` publishes
-one-shot main-loop `beforeWaiting` edges. Active settlement requires the
+The active Inside Job runtime owns one UIKit idle tracker. Its typed
+Objective-C swizzles remain installed from runtime activation until suspension
+or stop, call UIKit's original `UIViewAnimationState` start/stop methods first,
+and never need to mutate the process-global method table around each action.
+The outermost active-observation demand opens one operation counter; nested
+heists and actions share it, while animations that predate Button Heist work
+are ignored. A public `CFRunLoopObserver` publishes one-shot main-loop
+`beforeWaiting` edges. Active settlement requires the
 animation counter to reach zero and then observes a main-loop idle edge before
 capturing the AX tree, all within the same authored operation deadline. The
 parser confirms that first post-idle fingerprint once on the next real frame;
@@ -181,9 +185,10 @@ observation, cancellation, timeout, or shutdown. No parser-owned timer or
 second display link exists. An idle wait that exhausts the authored deadline
 remains timed out. An already-zero counter completes its
 phase immediately, and an unmatched stop clamps at zero. Nested heists inherit
-the root lease and counter; they never install parallel hooks. The root heist
-invalidates the observer and restores both methods with `defer` only after
-nested execution and terminal evidence capture finish.
+the outermost demand and counter; they never install parallel hooks. Returning
+to idle demand discards the operation counter. Runtime release invalidates the
+observer and safely restores both methods unless a later swizzler superseded
+Button Heist's implementation.
 
 That shared deadline is an operation bound, not a main-thread responsiveness
 probe. A true liveness probe must originate off the main actor, schedule a

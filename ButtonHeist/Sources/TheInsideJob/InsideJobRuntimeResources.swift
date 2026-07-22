@@ -10,6 +10,7 @@ extension TheInsideJob {
         installLifecycleObservationIfNeeded()
         engageIdleTimerProtection(baseline: resources.idleTimerBaseline)
 
+        tripwire.uikitIdleTracker.installIfAvailable()
         tripwire.startPulse()
         brains.startSemanticObservation()
         brains.safecracker.startKeyboardObservation()
@@ -26,6 +27,7 @@ extension TheInsideJob {
 
         brains.stopSemanticObservation()
         tripwire.stopPulse()
+        tripwire.uikitIdleTracker.uninstallIfNeeded()
         brains.safecracker.stopKeyboardObservation()
     }
 

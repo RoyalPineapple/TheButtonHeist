@@ -19,7 +19,7 @@ import UIKit
 final class TheTripwire {
 
     var pulsePhase: PulsePhase = .idle
-    let heistIdleTracker = HeistIdleTracker()
+    let uikitIdleTracker = UIKitIdleTracker()
 
     var runningContext: RunningContext? {
         if case .running(let context) = pulsePhase { return context }
