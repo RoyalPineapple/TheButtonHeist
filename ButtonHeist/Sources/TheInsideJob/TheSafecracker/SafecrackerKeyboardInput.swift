@@ -67,26 +67,33 @@ final class SafecrackerKeyboardInput {
             return .failed(.noActiveInput(strategy: UIKeyboardImplTextInjection.strategyName))
         }
 
+        // Prefer per-character backspaces over select-all-and-delete:
+        // collapsing a full selection leaves formatter-driven fields (fields
+        // that rewrite their text on every change) with stale caret state
+        // that swallows the next inserted character. Backspaces keep the
+        // field's edit pipeline in the same state a hardware delete key
+        // would. Select-all remains only for fields whose current value is
+        // unobservable.
+        if let existingValue {
+            let deleteCount = existingValue.count
+            for index in 0..<deleteCount {
+                let result = keyboard.deleteBackward()
+                if case .failed = result { return result }
+                let isLastCharacter = index == deleteCount - 1
+                if !isLastCharacter {
+                    guard await Task.cancellableSleep(nanoseconds: interKeyDelay) else {
+                        return .failed(.cancelled(strategy: UIKeyboardImplTextInjection.strategyName))
+                    }
+                }
+            }
+            return .dispatched
+        }
+
         if keyboard.selectAllTextIfPossible() {
             return keyboard.deleteBackward()
         }
 
-        guard let existingValue else {
-            return .failed(.unavailableClearTextValue(strategy: UIKeyboardImplTextInjection.strategyName))
-        }
-
-        let deleteCount = existingValue.count
-        for index in 0..<deleteCount {
-            let result = keyboard.deleteBackward()
-            if case .failed = result { return result }
-            let isLastCharacter = index == deleteCount - 1
-            if !isLastCharacter {
-                guard await Task.cancellableSleep(nanoseconds: interKeyDelay) else {
-                    return .failed(.cancelled(strategy: UIKeyboardImplTextInjection.strategyName))
-                }
-            }
-        }
-        return .dispatched
+        return .failed(.unavailableClearTextValue(strategy: UIKeyboardImplTextInjection.strategyName))
     }
 
     @objc private func keyboardFrameDidChange(_ notification: Notification) {
