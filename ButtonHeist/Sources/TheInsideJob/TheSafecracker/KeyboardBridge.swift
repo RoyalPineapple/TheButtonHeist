@@ -222,6 +222,23 @@ final class UIKeyboardImplTextInjection {
         textInjection.type(character)
     }
 
+    /// The focused input's full document text, when the delegate exposes it.
+    ///
+    /// Reads the document directly instead of the accessibility value: an
+    /// empty field echoes its placeholder as the accessibility value, and
+    /// formatted fields can present a value that differs from the editable
+    /// text, so only the document itself gives an exact character count.
+    var currentText: String? {
+        guard let textInput = delegate as? UITextInput,
+              let range = textInput.textRange(
+                from: textInput.beginningOfDocument,
+                to: textInput.endOfDocument
+              ) else {
+            return nil
+        }
+        return textInput.text(in: range)
+    }
+
     func selectAllTextIfPossible() -> Bool {
         guard let textInput = delegate as? UITextInput,
               let range = textInput.textRange(

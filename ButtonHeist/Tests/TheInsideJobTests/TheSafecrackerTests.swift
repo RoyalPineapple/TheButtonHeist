@@ -36,6 +36,7 @@ final class KeyboardInjectionKeyboardImpl: NSObject {
     private typealias KeyboardNoArgumentMethod = ObjCRuntime.ObjectMethod<ObjCRuntime.NoArguments>
 
     let inputDelegate = KeyboardInjectionTextInputDelegate()
+    var delegateOverride: NSObject?
     var taskQueueObject: KeyboardInjectionTaskQueue? = KeyboardInjectionTaskQueue()
     private(set) var inputStrings: [String] = []
     private(set) var inputFlags: [UInt] = []
@@ -43,7 +44,7 @@ final class KeyboardInjectionKeyboardImpl: NSObject {
 
     @objc(delegate)
     func delegate() -> AnyObject? {
-        inputDelegate
+        delegateOverride ?? inputDelegate
     }
 
     @objc(addInputString:withFlags:)
@@ -281,6 +282,38 @@ final class TheSafecrackerTests: XCTestCase {
         XCTAssertEqual(keyboardImpl.deleteFromInputCount, 1)
         XCTAssertEqual(keyboardImpl.inputDelegate.directDeleteCount, 0)
         XCTAssertEqual(keyboardImpl.taskQueueObject?.waitCount, 1)
+    }
+
+    func testClearTextCountsBackspacesFromDocumentText() async {
+        let keyboardImpl = KeyboardInjectionKeyboardImpl()
+        let textField = UITextField()
+        textField.text = "15%"
+        keyboardImpl.delegateOverride = textField
+        let input = SafecrackerKeyboardInput(
+            keyboardBridgeProvider: { keyboardImpl.bridge() }
+        )
+
+        let result = await input.clearText(existingValue: nil, interKeyDelay: 0)
+
+        XCTAssertEqual(result, .dispatched)
+        XCTAssertEqual(keyboardImpl.deleteFromInputCount, 3)
+    }
+
+    func testClearTextOnEmptyDocumentDispatchesWithoutDeletes() async {
+        let keyboardImpl = KeyboardInjectionKeyboardImpl()
+        let textField = UITextField()
+        textField.text = ""
+        keyboardImpl.delegateOverride = textField
+        let input = SafecrackerKeyboardInput(
+            keyboardBridgeProvider: { keyboardImpl.bridge() }
+        )
+
+        // The accessibility value of an empty field echoes its placeholder;
+        // the document text must win so an empty field sends zero deletes.
+        let result = await input.clearText(existingValue: "Placeholder", interKeyDelay: 0)
+
+        XCTAssertEqual(result, .dispatched)
+        XCTAssertEqual(keyboardImpl.deleteFromInputCount, 0)
     }
 
     func testDeleteBackwardReportsMissingDeleteFromInputSelector() {

@@ -67,15 +67,19 @@ final class SafecrackerKeyboardInput {
             return .failed(.noActiveInput(strategy: UIKeyboardImplTextInjection.strategyName))
         }
 
-        // Prefer per-character backspaces over select-all-and-delete:
-        // collapsing a full selection leaves formatter-driven fields (fields
-        // that rewrite their text on every change) with stale caret state
-        // that swallows the next inserted character. Backspaces keep the
-        // field's edit pipeline in the same state a hardware delete key
-        // would. Select-all remains only for fields whose current value is
-        // unobservable.
-        if let existingValue {
-            let deleteCount = existingValue.count
+        // Prefer per-character backspaces over select-all-and-delete: a
+        // programmatic full-document selection desyncs UIKeyboardImpl's
+        // internal document state, and the first impl-routed insertion
+        // afterwards reconciles against that stale state and drops the
+        // character (verified live on formatter-driven fields: replacing
+        // "15%" with "35" settles "5%"). Backspaces never touch the
+        // selection, so the impl stays in sync. The delete count comes from
+        // the focused input's own document text when readable — the
+        // accessibility value echoes the placeholder on empty fields and can
+        // differ from the editable text on formatted fields. Select-all
+        // remains only for inputs whose text is unobservable both ways.
+        if let observableText = keyboard.currentText ?? existingValue {
+            let deleteCount = observableText.count
             for index in 0..<deleteCount {
                 let result = keyboard.deleteBackward()
                 if case .failed = result { return result }
