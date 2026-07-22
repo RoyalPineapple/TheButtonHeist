@@ -223,7 +223,7 @@ private extension HeistSwiftCompiler {
 
             do {
                 let catalog = try plan.heistCatalog()
-                for entry in catalog.heists {
+                for entry in catalog {
                     guard let lookupPath = entry.identity.lookupPath else { continue }
                     if let previous = seen[lookupPath] {
                         diagnostics.append(diagnostic(

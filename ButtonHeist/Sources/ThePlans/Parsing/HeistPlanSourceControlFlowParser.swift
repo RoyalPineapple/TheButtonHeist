@@ -106,11 +106,7 @@ extension HeistPlanSourceParser {
             argument = try parseHeistArgument()
         }
         try expectSymbol(")")
-        var invocation = HeistInvocationStep(
-            path: invocationPath,
-            argument: argument
-        )
-        var explicitExpectationTimeout: WaitTimeout?
+        var expectation: ComposedExpectation?
         while consumeSymbol(".") {
             let chainToken = currentToken
             let chain = try parseIdentifier()
@@ -127,25 +123,23 @@ extension HeistPlanSourceParser {
                 }
                 try expectSymbol(")")
                 let composition = composeExpectation(
-                    existing: invocation.expectation,
-                    existingExplicit: explicitExpectationTimeout,
+                    existing: expectation,
                     nextPredicate: predicate,
                     nextExplicit: timeout
                 )
                 if let diagnostic = composition.diagnostics.first {
                     throw error(chainToken, diagnostic.message)
                 }
-                invocation = HeistInvocationStep(
-                    path: invocation.path,
-                    argument: invocation.argument,
-                    expectation: WaitStep(predicate: composition.predicate, timeout: composition.timeout)
-                )
-                explicitExpectationTimeout = composition.explicitTimeout
+                expectation = composition.expectation
             default:
                 throw error(chainToken, "unsupported RunHeist chain '.\(chain)'")
             }
         }
-        return .invoke(invocation)
+        return .invoke(HeistInvocationStep(
+            path: invocationPath,
+            argument: argument,
+            expectation: expectation?.step
+        ))
     }
 
     mutating func parseHeistArgument() throws -> HeistArgument {

@@ -1,7 +1,28 @@
 import Foundation
 
 package enum CanonicalValueDescription {
+    package enum QuotedStringStyle: Equatable, Sendable {
+        case json
+        case singleLineJSON
+        case plain
+    }
+
     package static func quoted(_ value: String) -> String {
+        quoted(value, style: .json)
+    }
+
+    package static func quoted(_ value: String, style: QuotedStringStyle) -> String {
+        switch style {
+        case .json:
+            return jsonQuoted(value)
+        case .singleLineJSON:
+            return jsonQuoted(value.replacingOccurrences(of: "\n", with: " "))
+        case .plain:
+            return "\"\(value)\""
+        }
+    }
+
+    private static func jsonQuoted(_ value: String) -> String {
         // Boundary try?: display-only JSON string escaping, with a local
         // deterministic escape path when Foundation encoding cannot help.
         if let data = try? JSONEncoder().encode(value),

@@ -119,65 +119,101 @@ struct PlanLanguageBoundaryRuleTests {
             public func parenthesized(_ value: (Int)) -> (String) { String(value) }
             """
         )
-        let invalidPath: RelativeFilePath = "ButtonHeist/Sources/TheScore/ExportedTuples.swift"
-        let invalid = try evaluateButtonHeistRules(
-            path: invalidPath,
-            component: .score,
-            source: """
-            public func explicitFunction(
-                _ input: (left: Int, right: Int)
-            ) -> Int {
-                input.left
-            }
-
-            package func nestedReturn() -> Result<(value: Int, ordinal: Int), Never> {
-                .success((1, 0))
-            }
-
-            public let explicitProperty: (value: Int, ordinal: Int) = (1, 0)
-
-            public struct ExplicitSubscript {
-                public subscript(
-                    key: (section: Int, row: Int)
-                ) -> String {
-                    String(key.section) + ":" + String(key.row)
-                }
-            }
-
-            public protocol PublicContract {
-                func requirement() -> (value: Int, ordinal: Int)
-                var property: (value: Int, ordinal: Int) { get }
-                subscript(index: Int) -> (value: Int, ordinal: Int) { get }
-            }
-
-            package protocol PackageContract {
-                func requirement(_ input: (value: Int, ordinal: Int))
-            }
-
-            public struct ExtensionTarget {}
-
-            public extension ExtensionTarget {
-                func inheritedFunction() -> (value: Int, ordinal: Int) { (1, 0) }
-                var inheritedProperty: (value: Int, ordinal: Int) { (1, 0) }
-                subscript(index: Int) -> (value: Int, ordinal: Int) { (index, 0) }
-            }
-
-            package extension ExtensionTarget {
-                func inheritedPackageFunction() -> (value: Int, ordinal: Int) { (1, 0) }
-            }
-            """
-        )
-
         #expect(valid.violations.isEmpty)
-        #expect(invalid.violations.count == 12)
-        #expect(invalid.violations.allSatisfy { violation in
-            violation.rule.id == "buttonheist.exported_tuple_return"
-                && violation.location != nil
-                && violation.evidence?.observed.contains("(") == true
-        })
-        #expect(invalid.contains(ViolationMatcher(
-            id: "buttonheist.exported_tuple_return",
-            path: invalidPath
-        )))
+
+        let invalidCases: [(name: String, source: String)] = [
+            (
+                "function-parameter",
+                "public func explicitFunction(_ input: (left: Int, right: Int)) -> Int { input.left }"
+            ),
+            (
+                "nested-return",
+                "package func nestedReturn() -> Result<(value: Int, ordinal: Int), Never> { .success((1, 0)) }"
+            ),
+            (
+                "property",
+                "public let explicitProperty: (value: Int, ordinal: Int) = (1, 0)"
+            ),
+            (
+                "subscript-parameter",
+                """
+                public struct ExplicitSubscript {
+                    public subscript(key: (section: Int, row: Int)) -> String { "" }
+                }
+                """
+            ),
+            (
+                "protocol-function",
+                "public protocol PublicContract { func requirement() -> (value: Int, ordinal: Int) }"
+            ),
+            (
+                "protocol-property",
+                "public protocol PublicContract { var property: (value: Int, ordinal: Int) { get } }"
+            ),
+            (
+                "protocol-subscript",
+                "public protocol PublicContract { subscript(index: Int) -> (value: Int, ordinal: Int) { get } }"
+            ),
+            (
+                "package-protocol-parameter",
+                "package protocol PackageContract { func requirement(_ input: (value: Int, ordinal: Int)) }"
+            ),
+            (
+                "extension-function",
+                """
+                public struct ExtensionTarget {}
+                public extension ExtensionTarget {
+                    func inheritedFunction() -> (value: Int, ordinal: Int) { (1, 0) }
+                }
+                """
+            ),
+            (
+                "extension-property",
+                """
+                public struct ExtensionTarget {}
+                public extension ExtensionTarget {
+                    var inheritedProperty: (value: Int, ordinal: Int) { (1, 0) }
+                }
+                """
+            ),
+            (
+                "extension-subscript",
+                """
+                public struct ExtensionTarget {}
+                public extension ExtensionTarget {
+                    subscript(index: Int) -> (value: Int, ordinal: Int) { (index, 0) }
+                }
+                """
+            ),
+            (
+                "package-extension-function",
+                """
+                public struct ExtensionTarget {}
+                package extension ExtensionTarget {
+                    func inheritedPackageFunction() -> (value: Int, ordinal: Int) { (1, 0) }
+                }
+                """
+            ),
+        ]
+
+        for invalidCase in invalidCases {
+            let path = try RelativeFilePath(
+                "ButtonHeist/Sources/TheScore/ExportedTuples-\(invalidCase.name).swift"
+            )
+            let invalid = try evaluateButtonHeistRules(
+                path: path,
+                component: .score,
+                source: invalidCase.source
+            )
+
+            #expect(invalid.violations.count == 1, "Expected one violation for \(invalidCase.name)")
+            #expect(invalid.contains(ViolationMatcher(
+                id: "buttonheist.exported_tuple_return",
+                path: path
+            )))
+            #expect(invalid.violations.allSatisfy { violation in
+                violation.location != nil && violation.evidence?.observed.contains("(") == true
+            })
+        }
     }
 }

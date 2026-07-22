@@ -5,6 +5,93 @@ import TheScore
 @_spi(ButtonHeistInternals) @testable import ButtonHeist
 import XCTest
 
+enum PublicHeistJSONFixtureValue {
+    static func object(_ fields: [String: JSONValue]) -> JSONValue {
+        .object(fields)
+    }
+
+    static func array(_ values: [JSONValue]) -> JSONValue {
+        .array(values)
+    }
+
+    static func string(_ value: String) -> JSONValue {
+        .string(value)
+    }
+
+    static func int(_ value: Int) -> JSONValue {
+        .int(value)
+    }
+
+    static func double(_ value: Double) -> JSONValue {
+        .double(value)
+    }
+
+    static func bool(_ value: Bool) -> JSONValue {
+        .bool(value)
+    }
+
+    static func actionResult(
+        status: String = "ok",
+        method: String,
+        message: String
+    ) -> JSONValue {
+        object([
+            "status": string(status),
+            "method": string(method),
+            "message": string(message),
+        ])
+    }
+
+    static func labelCheck(_ value: String) -> JSONValue {
+        object([
+            "kind": string("label"),
+            "match": object([
+                "mode": string("exact"),
+                "value": string(value),
+            ]),
+        ])
+    }
+
+    static func target(label: String) -> JSONValue {
+        object([
+            "checks": array([labelCheck(label)]),
+        ])
+    }
+
+    static func existsPredicate(label: String) -> JSONValue {
+        object([
+            "type": string("exists"),
+            "target": target(label: label),
+        ])
+    }
+
+    static func expectation(label: String, actual: String) -> JSONValue {
+        object([
+            "met": bool(true),
+            "actual": string(actual),
+            "expected": existsPredicate(label: label),
+        ])
+    }
+
+    static let doneExpectation = expectation(label: "Done", actual: "Done visible")
+
+    static let readyCase = object([
+        "predicate": existsPredicate(label: "Ready"),
+        "met": bool(true),
+        "actual": string("Ready visible"),
+    ])
+
+    static let waitResult = actionResult(method: "wait", message: "waited")
+
+    static let matchedWaitEvidence = object([
+        "outcome": string("matched"),
+        "result": waitResult,
+        "expectation": doneExpectation,
+        "baselineSummary": string("Loading"),
+        "finalSummary": string("Done visible"),
+    ])
+}
+
 enum PublicHeistExecutionJSONContractFixture {
     static let donePredicate = AccessibilityPredicate.exists(.label("Done"))
 
@@ -271,14 +358,13 @@ func publicHeistExecutionNodeJSON(
 
 func assertPublicHeistJSONContract(
     _ actual: JSONProbe,
-    equals fixture: String,
+    equals fixture: JSONValue,
     file: StaticString = #filePath,
     line: UInt = #line
 ) throws {
-    let expected = try JSONProbe(data: Data(fixture.utf8))
     XCTAssertEqual(
         try actual.decode(JSONValue.self),
-        try expected.decode(JSONValue.self),
+        fixture,
         file: file,
         line: line
     )

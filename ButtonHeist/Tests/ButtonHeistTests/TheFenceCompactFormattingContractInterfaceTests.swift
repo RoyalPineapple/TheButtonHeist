@@ -54,7 +54,7 @@ extension TheFenceCompactFormattingContractTests {
     func testInterfaceRendersScreenActionsInCompactAndJSON() throws {
         let interface = formattingFixtureInterface().withScreenActions([.dismiss, .magicTap])
         let compact = FenceResponse.compactInterface(interface, detail: .summary)
-        let json = try publicInterfaceJSONProbe(PublicInterface(interface: interface, detail: .summary))
+        let json = try publicInterfaceJSONProbe(publicInterfaceProjection(interface: interface, detail: .summary))
 
         XCTAssertTrue(compact.hasPrefix("Actions: dismiss, magicTap\n4 elements"), compact)
         XCTAssertEqual(try json.strings("screenActions"), ["dismiss", "magicTap"])
@@ -158,7 +158,7 @@ extension TheFenceCompactFormattingContractTests {
             visibleElementBudget: 100,
             totalNodeBudget: 100
         )
-        let json = try publicInterfaceJSONProbe(PublicInterface(
+        let json = try publicInterfaceJSONProbe(publicInterfaceProjection(
             interface: interface,
             detail: .summary,
             visibleElementBudget: 100,
@@ -220,7 +220,7 @@ extension TheFenceCompactFormattingContractTests {
             .element(makeTestHeistElement(label: "After")),
         ])
 
-        let elementLimited = PublicInterface(
+        let elementLimited = publicInterfaceProjection(
             interface: interface,
             detail: .summary,
             visibleElementBudget: 2,
@@ -233,7 +233,7 @@ extension TheFenceCompactFormattingContractTests {
             return XCTFail("Expected nested scroll projection followed by the trailing element")
         }
 
-        XCTAssertEqual(elementLimited.rendering.reasonCode, "scroll-subtree-element-budget")
+        XCTAssertEqual(elementLimited.rendering.reason?.rawValue, "scroll-subtree-element-budget")
         XCTAssertEqual(elementLimited.rendering.observedElementCount, 6)
         XCTAssertEqual(elementLimited.rendering.renderedElementCount, 3)
         XCTAssertEqual(elementLimited.rendering.omittedElementCount, 3)
@@ -241,7 +241,7 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertEqual(elementInner.truncation?.omittedElementCount, 2)
         XCTAssertEqual(after.order, 5)
 
-        let nodeLimited = PublicInterface(
+        let nodeLimited = publicInterfaceProjection(
             interface: interface,
             detail: .summary,
             visibleElementBudget: 2,
@@ -253,7 +253,7 @@ extension TheFenceCompactFormattingContractTests {
             return XCTFail("Expected both nested containers within the node budget")
         }
 
-        XCTAssertEqual(nodeLimited.rendering.reasonCode, "total-node-budget")
+        XCTAssertEqual(nodeLimited.rendering.reason?.rawValue, "total-node-budget")
         XCTAssertEqual(nodeLimited.rendering.renderedElementCount, 1)
         XCTAssertEqual(nodeLimited.rendering.omittedElementCount, 5)
         XCTAssertNil(nodeLimited.rendering.visibleElementBudget)
@@ -328,7 +328,7 @@ extension TheFenceCompactFormattingContractTests {
         ]).withDiagnostics(diagnostics)
 
         let compact = FenceResponse.compactInterface(interface, detail: .summary)
-        let json = try publicInterfaceJSONProbe(PublicInterface(interface: interface, detail: .summary))
+        let json = try publicInterfaceJSONProbe(publicInterfaceProjection(interface: interface, detail: .summary))
         let discovery = try json.object("diagnostics").object("discovery")
         let omittedContainers = try discovery.array("omittedContainers")
         let omitted = try XCTUnwrap(omittedContainers.first)
@@ -455,7 +455,7 @@ extension TheFenceCompactFormattingContractTests {
         let interface = makeTestInterface(nodes: rows)
 
         let json = try publicInterfaceJSONProbe(
-            PublicInterface(
+            publicInterfaceProjection(
                 interface: interface,
                 detail: .summary,
                 visibleElementBudget: 10,
@@ -495,7 +495,7 @@ extension TheFenceCompactFormattingContractTests {
                 totalElementCount: testCase.totalElementCount,
                 materializedElementCount: testCase.materializedElementCount
             )
-            let publicInterface = PublicInterface(
+            let publicInterface = publicInterfaceProjection(
                 interface: interface,
                 detail: .summary,
                 visibleElementBudget: testCase.visibleElementBudget
@@ -562,7 +562,7 @@ extension TheFenceCompactFormattingContractTests {
             totalElementCount: 2,
             materializedElementCounts: [2, 1]
         )
-        let json = try publicInterfaceJSONProbe(PublicInterface(
+        let json = try publicInterfaceJSONProbe(publicInterfaceProjection(
             interface: interface,
             detail: .summary,
             visibleElementBudget: 3
@@ -631,7 +631,7 @@ extension TheFenceCompactFormattingContractTests {
             ])
         )
 
-        let json = try publicInterfaceJSONProbe(PublicInterface(
+        let json = try publicInterfaceJSONProbe(publicInterfaceProjection(
             interface: interface,
             detail: .summary,
             visibleElementBudget: 10
@@ -782,7 +782,7 @@ private func publicInterfaceContractDTO(
     _ interface: Interface,
     detail: InterfaceDetail = .summary
 ) throws -> PublicInterfaceContractDTO {
-    let data = try JSONEncoder().encode(PublicInterface(interface: interface, detail: detail))
+    let data = try JSONEncoder().encode(publicInterfaceProjection(interface: interface, detail: detail))
     return try JSONDecoder().decode(PublicInterfaceContractDTO.self, from: data)
 }
 

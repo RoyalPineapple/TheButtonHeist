@@ -95,7 +95,7 @@ struct RenderResponseTests {
 
     @Test("summary heist catalog render stays a compact menu")
     func summaryHeistCatalogRenderStaysCompactMenu() {
-        let response = FenceResponse.heistCatalog(HeistDiscoveryCatalog(heists: [
+        let response = FenceResponse.heistCatalog([
             HeistCatalogEntry(
                 identity: .capability("checkout"),
                 parameterKind: .string,
@@ -103,7 +103,7 @@ struct RenderResponseTests {
                 summary: "Reusable heist capability requiring string argument",
                 tags: [.capability, .parameterized, .semanticAction]
             ),
-        ]))
+        ])
 
         let result = ButtonHeistMCPServer.renderResponse(response)
 
@@ -122,7 +122,7 @@ struct RenderResponseTests {
 
     @Test("detailed heist catalog render includes safe derived fields")
     func detailedHeistCatalogRenderIncludesSafeDerivedFields() throws {
-        let response = FenceResponse.heistCatalog(HeistDiscoveryCatalog(heists: [
+        let response = FenceResponse.heistCatalog([
             HeistCatalogEntry(
                 identity: .capability("checkout"),
                 parameterKind: .none,
@@ -140,7 +140,7 @@ struct RenderResponseTests {
                 ],
                 validationStatus: .validated
             ),
-        ]))
+        ])
 
         let result = ButtonHeistMCPServer.renderResponse(response)
 

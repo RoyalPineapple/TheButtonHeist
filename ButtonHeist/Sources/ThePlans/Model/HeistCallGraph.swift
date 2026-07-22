@@ -45,9 +45,8 @@ public struct HeistCallGraph: Sendable, Equatable {
     // MARK: - Init
 
     public init(plan: HeistPlan) {
-        var collector = HeistCallGraphCollector()
-        collector.collect(plan: plan)
-        self.init(nodes: collector.nodes, edges: collector.edges)
+        let projection = HeistPlanTraversal().callGraphProjection(for: plan)
+        self.init(nodes: projection.nodes, edges: projection.edges)
     }
 
     public init(nodes: Set<HeistInvocationPath>, edges: Set<Edge>) {
@@ -148,57 +147,5 @@ public struct HeistCallGraph: Sendable, Equatable {
 
     private static func sorted<S: Sequence>(_ paths: S) -> [HeistInvocationPath] where S.Element == HeistInvocationPath {
         paths.sorted { $0.description < $1.description }
-    }
-}
-
-// MARK: - Graph Collection
-
-private struct HeistCallGraphCollector {
-    var nodes: Set<HeistInvocationPath> = []
-    var edges: Set<HeistCallGraph.Edge> = []
-
-    mutating func collect(plan: HeistPlan) {
-        let traversal = HeistPlanTraversal(expandsInvocations: false)
-        traversal.walk(plan) { event in
-            collect(event)
-        }
-    }
-
-    private mutating func collect(_ event: HeistPlanTraversal.Event) {
-        switch event {
-        case .enterDefinition(let plan, let context):
-            guard let name = plan.name else {
-                preconditionFailure("admitted heist definitions must have names")
-            }
-            nodes.insert(HeistInvocationPath(namePath: context.definitionScope.pathPrefix + [name]))
-        case .invoke(let invocation, let context):
-            guard let caller = context.invocationStack.last,
-                  let resolved = context.resolveInvocation(path: invocation.path)
-            else { return }
-            let callee = resolved.invocationPath
-            nodes.insert(callee)
-            edges.insert(HeistCallGraph.Edge(caller: caller, callee: callee))
-        case .enterPlan,
-             .leavePlan,
-             .enterDefinitions,
-             .leaveDefinitions,
-             .leaveDefinition,
-             .enterSteps,
-             .leaveSteps,
-             .enterStep,
-             .leaveStep,
-             .action,
-             .wait,
-             .conditional,
-             .predicateCase,
-             .elseBody,
-             .forEachElement,
-             .forEachString,
-             .repeatUntil,
-             .warn,
-             .fail,
-             .heist:
-            break
-        }
     }
 }

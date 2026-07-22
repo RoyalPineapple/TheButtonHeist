@@ -256,7 +256,7 @@ public enum FenceResponse {
         report: HeistReport
     )
     case heistValidation(HeistValidation.Report)
-    case heistCatalog(HeistDiscoveryCatalog)
+    case heistCatalog([HeistCatalogEntry])
     case heistDescription(HeistDescription)
     case sessionState(payload: SessionStatePayload)
     case targets([TargetName: TargetConfig], defaultTarget: TargetName?)

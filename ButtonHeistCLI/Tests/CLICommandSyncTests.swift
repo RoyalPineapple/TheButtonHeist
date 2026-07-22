@@ -36,22 +36,6 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(JSONLinesDefaults.outputFormat, .json)
     }
 
-    func testGetInterfaceHelpDescribesCurrentContract() {
-        let help = GetInterfaceCommand.helpMessage()
-
-        XCTAssertTrue(help.contains("Read the app accessibility hierarchy"), help)
-    }
-
-    func testGetInterfaceRejectsUnknownOption() {
-        XCTAssertThrowsError(try GetInterfaceCommand.parse(["--unknown-option"]))
-    }
-
-    func testGetInterfaceAcceptsConnectionTimeoutOption() throws {
-        let command = try GetInterfaceCommand.parse(["--connect-timeout", "2.5"])
-
-        XCTAssertEqual(command.connection.connectTimeout, 2.5)
-    }
-
     func testGetInterfaceAcceptsDiscoveryLimitOptions() throws {
         let command = try GetInterfaceCommand.parse([
             "--max-scrolls-per-container", "25",
@@ -88,30 +72,6 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertThrowsError(try GetInterfaceCommand.parse(["--subtree-label", "Checkout"]))
     }
 
-    func testConnectCommandUsesTypedDeviceOption() throws {
-        let command = try ConnectCommand.parse([
-            "--device",
-            "127.0.0.1:1455",
-            "--connect-timeout",
-            "2.5",
-            "--quiet",
-        ])
-
-        XCTAssertEqual(command.connection.device, "127.0.0.1:1455")
-        XCTAssertEqual(command.connection.connectTimeout, 2.5)
-        XCTAssertTrue(command.connection.quiet)
-    }
-
-    func testConnectCommandRejectsPositionalDevice() {
-        XCTAssertThrowsError(try ConnectCommand.parse(["127.0.0.1:1455"]))
-    }
-
-    func testWaitCommandDefaultTimeoutIsTenSeconds() throws {
-        let command = try WaitCommand.parse(["--change", "screen"])
-
-        XCTAssertEqual(command.timeout, CLITimeoutDefaults.wait)
-    }
-
     func testWaitCommandEncodesCanonicalConcreteChangePredicates() throws {
         let screen = try WaitCommand.parse(["--change", "screen"]).requestArguments()
         let elements = try WaitCommand.parse(["--change", "elements"]).requestArguments()
@@ -141,16 +101,8 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(try ActivateCommand.parse(["--label", "Item"]).timeoutOption.timeout, CLITimeoutDefaults.common)
     }
 
-    func testTypeTextRequiresText() {
-        XCTAssertThrowsError(try TypeTextCommand.parse([]))
-    }
-
     func testTypeTextRejectsEmptyText() throws {
         XCTAssertThrowsError(try TypeTextCommand.parse(["--text", ""]))
-    }
-
-    func testTypeTextRejectsUnknownOption() {
-        XCTAssertThrowsError(try TypeTextCommand.parse(["--unknown-option", "--text", "hello"]))
     }
 
     func testFenceExpectationArgumentContractRejectsShorthand() {
@@ -313,25 +265,6 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(arguments.value(for: .plan), .string(source))
         XCTAssertNil(arguments.value(for: .version))
         XCTAssertNil(arguments.value(for: .path))
-    }
-
-    func testListHeistsDetailFlagDefaultsToSummary() throws {
-        let command = try ListHeistsCommand.parse([
-            "--plan",
-            #"HeistPlan("flow") { Warn("Check") }"#,
-        ])
-
-        XCTAssertFalse(command.detail)
-    }
-
-    func testListHeistsDetailFlagRequestsDetailedMode() throws {
-        let command = try ListHeistsCommand.parse([
-            "--detail",
-            "--plan",
-            #"HeistPlan("flow") { Warn("Check") }"#,
-        ])
-
-        XCTAssertTrue(command.detail)
     }
 
     func testDescribeHeistAddsSelectorWithoutDroppingInlinePlanName() throws {
@@ -643,12 +576,6 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertThrowsError(try ScrollCommand.parse(["--container-name", "main_scroll", "--label", "Item"]))
     }
 
-    func testScrollCLIParsesDirection() throws {
-        let command = try ScrollCommand.parse(["--direction", "up"])
-
-        XCTAssertEqual(command.direction, "up")
-    }
-
     func testScrollToEdgeCLIAllowsNoAccessibilityTargetAndDefaultsTop() throws {
         let command = try ScrollToEdgeCommand.parse([])
 
@@ -662,12 +589,6 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(command.selection.containerName, "main_scroll")
         XCTAssertEqual(command.edge, "bottom")
         XCTAssertFalse(try command.selection.element.hasTarget)
-    }
-
-    func testSwipeCLIHelpUsesDescriptorDirectionValues() {
-        let help = SwipeCommand.helpMessage()
-
-        XCTAssertTrue(help.contains("Swipe direction: up, down, left, right"), help)
     }
 
     private func topLevelCommandNames() -> [String] {

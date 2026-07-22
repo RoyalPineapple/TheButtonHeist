@@ -433,15 +433,11 @@ package extension ElementDiagnosticSummary {
         package func renderString(_ value: String) -> String {
             switch stringStyle {
             case .actionCapability:
-                let escaped = value
-                    .replacingOccurrences(of: "\\", with: "\\\\")
-                    .replacingOccurrences(of: "\"", with: "\\\"")
-                    .replacingOccurrences(of: "\n", with: " ")
-                return "\"\(escaped)\""
+                return CanonicalValueDescription.quoted(value, style: .singleLineJSON)
             case .json:
                 return CanonicalValueDescription.quoted(value)
             case .plainQuoted:
-                return "\"\(value)\""
+                return CanonicalValueDescription.quoted(value, style: .plain)
             }
         }
 

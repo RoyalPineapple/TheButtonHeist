@@ -5,66 +5,62 @@ import TheScore
 
 import AccessibilitySnapshotModel
 
-struct PublicContainer: Encodable {
-    let type: AccessibilityContainerKind
-    let label: String?
-    let value: String?
-    let identifier: String?
-    let rowCount: Int?
-    let columnCount: Int?
-    let actions: [String]?
-    let contentWidth: Double?
-    let contentHeight: Double?
-    let scrollAxis: String?
-    let pageScrollsX: Int?
-    let pageScrollsY: Int?
-    let observedElementCount: Int?
-    let truncation: PublicSubtreeTruncation?
-    let isModalBoundary: Bool?
-    let containerName: String?
-    let frameX: Double?
-    let frameY: Double?
-    let frameWidth: Double?
-    let frameHeight: Double?
-    let children: [PublicTreeNode]
+extension InterfaceContainerProjection: Encodable {
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case label
+        case value
+        case identifier
+        case rowCount
+        case columnCount
+        case actions
+        case contentWidth
+        case contentHeight
+        case scrollAxis
+        case pageScrollsX
+        case pageScrollsY
+        case observedElementCount
+        case truncation
+        case isModalBoundary
+        case containerName
+        case frameX
+        case frameY
+        case frameWidth
+        case frameHeight
+        case children
+    }
 
-    init(projection: InterfaceContainerProjection, detail: InterfaceDetail) {
-        let children = projection.children.map { PublicTreeNode(projection: $0, detail: detail) }
+    func encode(to encoder: Encoder) throws {
         let fields = Self.fields(
-            for: projection.container,
+            for: self.container,
             children: children,
-            observedElementCount: projection.observedElementCount,
-            scrollInventory: projection.scrollInventory
+            observedElementCount: observedElementCount,
+            scrollInventory: scrollInventory
         )
-        self.type = fields.type
-        self.label = fields.label
-        self.value = fields.value
-        self.identifier = fields.identifier
-        self.rowCount = fields.rowCount
-        self.columnCount = fields.columnCount
-        self.actions = Self.actionNames(projection.container)
-        self.contentWidth = fields.contentWidth
-        self.contentHeight = fields.contentHeight
-        self.scrollAxis = fields.scrollAxis
-        self.pageScrollsX = fields.pageScrollsX
-        self.pageScrollsY = fields.pageScrollsY
-        self.observedElementCount = fields.observedElementCount
-        self.truncation = projection.truncation.map(PublicSubtreeTruncation.init(projection:))
-        self.isModalBoundary = projection.container.isModalBoundary ? true : nil
-        self.containerName = projection.containerName
-        self.children = children
-        guard detail == .full else {
-            self.frameX = nil
-            self.frameY = nil
-            self.frameWidth = nil
-            self.frameHeight = nil
-            return
-        }
-        let frame = ScreenFrameEvidence(projection.container.frame).rect
-        self.frameX = frame?.x.value
-        self.frameY = frame?.y.value
-        self.frameWidth = frame?.width.value
-        self.frameHeight = frame?.height.value
+        let frame = detail == .full ? ScreenFrameEvidence(container.frame).rect : nil
+
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(fields.type, forKey: .type)
+        try container.encodeIfPresent(fields.label, forKey: .label)
+        try container.encodeIfPresent(fields.value, forKey: .value)
+        try container.encodeIfPresent(fields.identifier, forKey: .identifier)
+        try container.encodeIfPresent(fields.rowCount, forKey: .rowCount)
+        try container.encodeIfPresent(fields.columnCount, forKey: .columnCount)
+        try container.encodeIfPresent(Self.actionNames(self.container), forKey: .actions)
+        try container.encodeIfPresent(fields.contentWidth, forKey: .contentWidth)
+        try container.encodeIfPresent(fields.contentHeight, forKey: .contentHeight)
+        try container.encodeIfPresent(fields.scrollAxis, forKey: .scrollAxis)
+        try container.encodeIfPresent(fields.pageScrollsX, forKey: .pageScrollsX)
+        try container.encodeIfPresent(fields.pageScrollsY, forKey: .pageScrollsY)
+        try container.encodeIfPresent(fields.observedElementCount, forKey: .observedElementCount)
+        try container.encodeIfPresent(truncation, forKey: .truncation)
+        try container.encodeIfPresent(self.container.isModalBoundary ? true : nil, forKey: .isModalBoundary)
+        try container.encodeIfPresent(containerName, forKey: .containerName)
+        try container.encodeIfPresent(frame?.x.value, forKey: .frameX)
+        try container.encodeIfPresent(frame?.y.value, forKey: .frameY)
+        try container.encodeIfPresent(frame?.width.value, forKey: .frameWidth)
+        try container.encodeIfPresent(frame?.height.value, forKey: .frameHeight)
+        try container.encode(children, forKey: .children)
     }
 
     private static func actionNames(_ container: AccessibilityContainer) -> [String]? {
@@ -74,7 +70,7 @@ struct PublicContainer: Encodable {
 
     private static func fields(
         for container: AccessibilityContainer,
-        children: [PublicTreeNode],
+        children: [InterfaceNodeProjection],
         observedElementCount: Int?,
         scrollInventory: ScrollInventory?
     ) -> Fields {
@@ -154,7 +150,7 @@ struct PublicContainer: Encodable {
         mutating func addScrollFields(
             contentSize: AccessibilitySize,
             frame: AccessibilityRect,
-            children: [PublicTreeNode],
+            children: [InterfaceNodeProjection],
             observedElementCount: Int?,
             scrollInventory: ScrollInventory?
         ) {
@@ -181,18 +177,23 @@ struct PublicContainer: Encodable {
     }
 }
 
-struct PublicSubtreeTruncation: Encodable {
-    let state = "truncated"
-    let reasonCode = "scroll-subtree-element-budget"
-    let observedElementCount: Int
-    let renderedElementCount: Int
-    let omittedElementCount: Int
-    let visibleElementBudget: Int
+extension InterfaceSubtreeTruncationProjection: Encodable {
+    private enum CodingKeys: String, CodingKey {
+        case state
+        case reasonCode
+        case observedElementCount
+        case renderedElementCount
+        case omittedElementCount
+        case visibleElementBudget
+    }
 
-    init(projection: InterfaceSubtreeTruncationProjection) {
-        self.observedElementCount = projection.observedElementCount
-        self.renderedElementCount = projection.renderedElementCount
-        self.omittedElementCount = projection.omittedElementCount
-        self.visibleElementBudget = projection.visibleElementBudget
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode("truncated", forKey: .state)
+        try container.encode("scroll-subtree-element-budget", forKey: .reasonCode)
+        try container.encode(observedElementCount, forKey: .observedElementCount)
+        try container.encode(renderedElementCount, forKey: .renderedElementCount)
+        try container.encode(omittedElementCount, forKey: .omittedElementCount)
+        try container.encode(visibleElementBudget, forKey: .visibleElementBudget)
     }
 }

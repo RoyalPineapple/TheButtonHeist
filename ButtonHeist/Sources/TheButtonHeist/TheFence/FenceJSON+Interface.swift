@@ -5,93 +5,78 @@ import TheScore
 struct PublicInterfaceResponse: Encodable {
     let status = PublicResponseStatus.ok
     let detail: String
-    let interface: PublicInterface
+    let interface: InterfaceProjection
 
     init(interface: Interface, detail: InterfaceDetail, profile: ProjectionProfile = .summary) {
-        let projectionProfile = ProjectionProfile(
-            kind: detail == .full ? .full : profile.kind,
-            limits: profile.limits
-        )
-        self.init(projection: InterfaceProjection(interface: interface, profile: projectionProfile))
+        self.init(projection: InterfaceProjection(
+            interface: interface,
+            profile: ProjectionProfile(
+                kind: detail == .full ? .full : profile.kind,
+                limits: profile.limits
+            )
+        ))
     }
 
     init(projection: InterfaceProjection) {
         self.detail = projection.detail.rawValue
-        self.interface = PublicInterface(projection: projection)
+        self.interface = projection
     }
 }
 
-struct PublicInterface: Encodable {
-    let timestamp: String
-    let screenDescription: String
-    let screenId: String?
-    let screenActions: [String]?
-    let rendering: PublicInterfaceRendering
-    let diagnostics: InterfaceDiagnostics?
-    let navigation: PublicNavigation
-    let tree: [PublicTreeNode]
-
-    init(
-        interface: Interface,
-        detail: InterfaceDetail,
-        visibleElementBudget: Int = ButtonHeistRuntimeKnobs.current.visibleElementBudget,
-        totalNodeBudget: Int = ButtonHeistRuntimeKnobs.current.totalNodeBudget
-    ) {
-        let profile = ProjectionProfile(
-            kind: detail == .full ? .full : .summary,
-            limits: .current(
-                visibleElementBudget: visibleElementBudget,
-                totalNodeBudget: totalNodeBudget
-            )
-        )
-        self.init(projection: InterfaceProjection(interface: interface, profile: profile))
+extension InterfaceProjection: Encodable {
+    private enum CodingKeys: String, CodingKey {
+        case timestamp, screenDescription, screenId, screenActions, rendering, diagnostics, navigation, tree
     }
 
-    init(projection: InterfaceProjection) {
+    func encode(to encoder: Encoder) throws {
         let formatter = ISO8601DateFormatter()
-        self.timestamp = formatter.string(from: projection.timestamp)
-        self.screenDescription = projection.screenDescription
-        self.screenId = projection.screenId
-        let screenActions = projection.screenActions.map(\.rawValue)
-        self.screenActions = screenActions.isEmpty ? nil : screenActions
-        self.rendering = PublicInterfaceRendering(projection: projection.rendering)
-        self.diagnostics = projection.diagnostics
-        self.navigation = PublicNavigation(projection: projection.navigation)
-        self.tree = projection.tree.map { PublicTreeNode(projection: $0, detail: projection.detail) }
+        let actionNames = screenActions.map(\.rawValue)
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(formatter.string(from: timestamp), forKey: .timestamp)
+        try container.encode(screenDescription, forKey: .screenDescription)
+        try container.encodeIfPresent(screenId, forKey: .screenId)
+        try container.encodeIfPresent(actionNames.isEmpty ? nil : actionNames, forKey: .screenActions)
+        try container.encode(rendering, forKey: .rendering)
+        try container.encodeIfPresent(diagnostics, forKey: .diagnostics)
+        try container.encode(navigation, forKey: .navigation)
+        try container.encode(tree, forKey: .tree)
     }
 }
 
-struct PublicNavigation: Encodable {
-    let screenTitle: String?
-    let backButton: PublicNavigationItem?
-    let tabBarItems: [PublicTabBarItem]?
+extension InterfaceNavigationProjection: Encodable {
+    private enum CodingKeys: String, CodingKey {
+        case screenTitle, backButton, tabBarItems
+    }
 
-    init(projection: InterfaceNavigationProjection) {
-        self.screenTitle = projection.screenTitle
-        self.backButton = projection.backButton.map(PublicNavigationItem.init(projection:))
-        let tabBarItems = projection.tabBarItems.map(PublicTabBarItem.init(projection:))
-        self.tabBarItems = tabBarItems.isEmpty ? nil : tabBarItems
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(screenTitle, forKey: .screenTitle)
+        try container.encodeIfPresent(backButton, forKey: .backButton)
+        try container.encodeIfPresent(tabBarItems.isEmpty ? nil : tabBarItems, forKey: .tabBarItems)
     }
 }
 
-struct PublicNavigationItem: Encodable {
-    let label: String?
-    let value: String?
+extension NavigationItemProjection: Encodable {
+    private enum CodingKeys: String, CodingKey {
+        case label, value
+    }
 
-    init(projection: NavigationItemProjection) {
-        self.label = projection.label
-        self.value = projection.value
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(label, forKey: .label)
+        try container.encodeIfPresent(value, forKey: .value)
     }
 }
 
-struct PublicTabBarItem: Encodable {
-    let label: String?
-    let value: String?
-    let selected: Bool?
+extension TabBarItemProjection: Encodable {
+    private enum CodingKeys: String, CodingKey {
+        case label, value, selected
+    }
 
-    init(projection: TabBarItemProjection) {
-        self.label = projection.label
-        self.value = projection.value
-        self.selected = projection.selected ? true : nil
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(label, forKey: .label)
+        try container.encodeIfPresent(value, forKey: .value)
+        try container.encodeIfPresent(selected ? true : nil, forKey: .selected)
     }
 }

@@ -7,13 +7,13 @@ struct PublicScreenshotResponse: Encodable {
     let width: Double
     let height: Double
     let pngData: String?
-    let interface: PublicInterface?
+    let interface: InterfaceProjection?
     let path: String?
 
     init(projection: ScreenshotProjection) {
         self.width = projection.width
         self.height = projection.height
-        self.interface = projection.interface.map(PublicInterface.init(projection:))
+        self.interface = projection.interface
         switch projection.storage {
         case .artifact(let path):
             self.pngData = nil

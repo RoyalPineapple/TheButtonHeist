@@ -171,8 +171,8 @@ extension SemanticObservationStream {
         settleResult providedResult: SettleSession.Result? = nil,
         notificationWindow: AccessibilityNotificationScopeLease? = nil
     ) async -> ObservationSettlement {
-        if let session = visibleRefreshSession {
-            _ = await finishVisibleRefresh(session)
+        if let refresh = visibleRefreshPhase.task {
+            _ = await finishVisibleRefresh(refresh)
         }
         return await startVisibleRefresh(
             baselineTripwireSignal: baselineTripwireSignal,
@@ -185,8 +185,8 @@ extension SemanticObservationStream {
     }
 
     internal func refreshVisibleObservation(timeoutMs: Int) async -> ObservationSettlement {
-        if let session = visibleRefreshSession {
-            return await finishVisibleRefresh(session)
+        if let refresh = visibleRefreshPhase.task {
+            return await finishVisibleRefresh(refresh)
         }
         return await startVisibleRefresh(
             baselineTripwireSignal: currentTripwireSignal(),
@@ -220,19 +220,28 @@ extension SemanticObservationStream {
                 notificationWindow: notificationWindow
             )
         }
-        let session = VisibleRefreshSession(task: task)
-        visibleRefreshSession = session
-        return await finishVisibleRefresh(session)
+        let refresh = VisibleRefreshTask(
+            token: nextVisibleRefreshTokenValue(),
+            task: task
+        )
+        visibleRefreshPhase = .refreshing(refresh)
+        return await finishVisibleRefresh(refresh)
     }
 
     private func finishVisibleRefresh(
-        _ session: VisibleRefreshSession
+        _ refresh: VisibleRefreshTask
     ) async -> ObservationSettlement {
-        let completion = await session.task.value
-        if visibleRefreshSession === session {
-            visibleRefreshSession = nil
+        let completion = await refresh.task.value
+        if visibleRefreshPhase.task?.token == refresh.token {
+            visibleRefreshPhase = .idle
         }
         return completion
+    }
+
+    private func nextVisibleRefreshTokenValue() -> VisibleRefreshToken {
+        let token = VisibleRefreshToken(rawValue: nextVisibleRefreshToken)
+        nextVisibleRefreshToken += 1
+        return token
     }
 
     private func produceVisibleSettlement(

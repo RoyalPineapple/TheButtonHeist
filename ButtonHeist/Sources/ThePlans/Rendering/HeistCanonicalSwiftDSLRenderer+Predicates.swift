@@ -24,7 +24,7 @@ extension HeistCanonicalSwiftDSLRenderer {
             return try render(presenceCore: presence, environment: environment)
         case .announcement(let announcement):
             guard let match = announcement.match else { return ".announcement" }
-            return try ".announcement(\(renderCallArgument(match.core, environment: environment)))"
+            return try ".announcement(\(renderStringArgument(match.core, environment: environment)))"
         case .changed(let declaration):
             return try ".changed(\(render(changeCore: declaration, environment: environment)))"
         case .noChange:
@@ -172,11 +172,11 @@ extension HeistCanonicalSwiftDSLRenderer {
         environment: RenderEnvironment
     ) throws -> String {
         if name == "value", before == nil, let after {
-            return try ".value(\(renderCallArgument(after, environment: environment)))"
+            return try ".value(\(renderStringArgument(after, environment: environment)))"
         }
         let fields = try [
-            before.map { "before: \(try renderFieldArgument($0, environment: environment))" },
-            after.map { "after: \(try renderFieldArgument($0, environment: environment))" },
+            before.map { "before: \(try renderStringArgument($0, environment: environment))" },
+            after.map { "after: \(try renderStringArgument($0, environment: environment))" },
         ].compactMap { $0 }
         return ".\(name)(\(fields.joined(separator: ", ")))"
     }
@@ -228,8 +228,8 @@ extension HeistCanonicalSwiftDSLRenderer {
         environment: RenderEnvironment
     ) throws -> String {
         let fields = try renderCustomContentFields(
-            label: match.label.map { try renderFieldArgument($0, environment: environment) },
-            value: match.value.map { try renderFieldArgument($0, environment: environment) },
+            label: match.label.map { try renderStringArgument($0, environment: environment) },
+            value: match.value.map { try renderStringArgument($0, environment: environment) },
             isImportant: match.isImportant
         )
         return ".init(\(fields))"
@@ -300,7 +300,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         environment: RenderEnvironment
     ) throws -> String {
         let rendered = try matches.map {
-            try renderFieldArgument($0, environment: environment)
+            try renderStringArgument($0, environment: environment)
         }
         return "[\(rendered.joined(separator: ", "))]"
     }

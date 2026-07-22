@@ -31,19 +31,19 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
         body: [.warn(WarnStep(message: "ready"))]
     ).heistCatalog()
 
-    #expect(catalog.heists.map { $0.identity.displayName } == ["checkout"])
-    #expect(catalog.heists[0].role == .entry)
-    #expect(catalog.heists[0].parameterKind == .none)
-    #expect(catalog.heists[0].requiresArgument == false)
-    #expect(catalog.heists[0].summary == "Root entry heist")
-    #expect(catalog.heists[0].tags == [.entry])
-    #expect(catalog.heists[0].parameterName == nil)
-    #expect(catalog.heists[0].nestedRunHeists == nil)
-    #expect(catalog.heists[0].actionCommands == nil)
-    #expect(catalog.heists[0].waitCount == nil)
-    #expect(catalog.heists[0].expectationCount == nil)
-    #expect(catalog.heists[0].semanticSurfaces == nil)
-    #expect(catalog.heists[0].validationStatus == nil)
+    #expect(catalog.map { $0.identity.displayName } == ["checkout"])
+    #expect(catalog[0].role == .entry)
+    #expect(catalog[0].parameterKind == .none)
+    #expect(catalog[0].requiresArgument == false)
+    #expect(catalog[0].summary == "Root entry heist")
+    #expect(catalog[0].tags == [.entry])
+    #expect(catalog[0].parameterName == nil)
+    #expect(catalog[0].nestedRunHeists == nil)
+    #expect(catalog[0].actionCommands == nil)
+    #expect(catalog[0].waitCount == nil)
+    #expect(catalog[0].expectationCount == nil)
+    #expect(catalog[0].semanticSurfaces == nil)
+    #expect(catalog[0].validationStatus == nil)
 }
 
 @Test func `list heists includes unparameterized definition`() throws {
@@ -55,14 +55,14 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
         body: [.warn(WarnStep(message: "ready"))]
     ).heistCatalog()
 
-    #expect(catalog.heists.map { $0.identity.displayName } == ["root", "openCart"])
-    #expect(catalog.heists[0].role == .entry)
-    #expect(catalog.heists[1].role == .capability)
-    #expect(catalog.heists[1].parameterKind == .none)
-    #expect(catalog.heists[1].requiresArgument == false)
-    #expect(catalog.heists[1].summary == "Reusable heist capability")
-    #expect(catalog.heists[1].tags == [.capability])
-    #expect(catalog.heists[1].parameterName == nil)
+    #expect(catalog.map { $0.identity.displayName } == ["root", "openCart"])
+    #expect(catalog[0].role == .entry)
+    #expect(catalog[1].role == .capability)
+    #expect(catalog[1].parameterKind == .none)
+    #expect(catalog[1].requiresArgument == false)
+    #expect(catalog[1].summary == "Reusable heist capability")
+    #expect(catalog[1].tags == [.capability])
+    #expect(catalog[1].parameterName == nil)
 }
 
 @Test func `list heists includes string definition`() throws {
@@ -82,13 +82,13 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
         body: [.warn(WarnStep(message: "ready"))]
     )).heistCatalog()
 
-    #expect(catalog.heists[1].identity.displayName == "addToCart")
-    #expect(catalog.heists[1].role == .capability)
-    #expect(catalog.heists[1].parameterKind == .string)
-    #expect(catalog.heists[1].requiresArgument == true)
-    #expect(catalog.heists[1].summary == "Reusable heist capability requiring string argument")
-    #expect(catalog.heists[1].tags == [.capability, .parameterized, .semanticAction])
-    #expect(catalog.heists[1].parameterName == nil)
+    #expect(catalog[1].identity.displayName == "addToCart")
+    #expect(catalog[1].role == .capability)
+    #expect(catalog[1].parameterKind == .string)
+    #expect(catalog[1].requiresArgument == true)
+    #expect(catalog[1].summary == "Reusable heist capability requiring string argument")
+    #expect(catalog[1].tags == [.capability, .parameterized, .semanticAction])
+    #expect(catalog[1].parameterName == nil)
 }
 
 @Test func `list heists includes element target definition`() throws {
@@ -106,18 +106,18 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
         body: [.warn(WarnStep(message: "ready"))]
     )).heistCatalog()
 
-    #expect(catalog.heists[1].identity.displayName == "tapRow")
-    #expect(catalog.heists[1].role == .capability)
-    #expect(catalog.heists[1].parameterKind == .accessibilityTarget)
-    #expect(catalog.heists[1].requiresArgument == true)
-    #expect(catalog.heists[1].summary == "Reusable heist capability requiring accessibility_target argument")
-    #expect(catalog.heists[1].tags == [.capability, .parameterized, .semanticAction])
-    #expect(catalog.heists[1].parameterName == nil)
+    #expect(catalog[1].identity.displayName == "tapRow")
+    #expect(catalog[1].role == .capability)
+    #expect(catalog[1].parameterKind == .accessibilityTarget)
+    #expect(catalog[1].requiresArgument == true)
+    #expect(catalog[1].summary == "Reusable heist capability requiring accessibility_target argument")
+    #expect(catalog[1].tags == [.capability, .parameterized, .semanticAction])
+    #expect(catalog[1].parameterName == nil)
 }
 
 @Test func `list heists summary mode omits detailed structure`() throws {
     let catalog = try detailedSurfacePlan().heistCatalog()
-    let checkout = try #require(catalog.heists.first { $0.identity.displayName == "checkout" })
+    let checkout = try #require(catalog.first { $0.identity.displayName == "checkout" })
 
     #expect(checkout.summary == "Reusable heist capability")
     #expect(checkout.tags == [.capability, .composed, .assertion, .semanticAction])
@@ -132,7 +132,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
 
 @Test func `list heists detailed mode includes derived non raw fields`() throws {
     let catalog = try detailedSurfacePlan().heistCatalog(detail: .detailed)
-    let checkout = try #require(catalog.heists.first { $0.identity.displayName == "checkout" })
+    let checkout = try #require(catalog.first { $0.identity.displayName == "checkout" })
 
     #expect(checkout.parameterName == nil)
     #expect(checkout.nestedRunHeists == [invocation("checkout.confirm")])
@@ -164,7 +164,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
         body: [.warn(WarnStep(message: "ready"))]
     )).heistCatalog(detail: .detailed)
 
-    let tapRow = try #require(catalog.heists.first { $0.identity.displayName == "tapRow" })
+    let tapRow = try #require(catalog.first { $0.identity.displayName == "tapRow" })
     #expect(tapRow.parameterName == "row")
     #expect(tapRow.parameterKind == .accessibilityTarget)
     #expect(tapRow.requiresArgument)
@@ -186,7 +186,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
         ]
     ).heistCatalog(detail: .detailed)
 
-    let pay = try #require(catalog.heists.first)
+    let pay = try #require(catalog.first)
     #expect(pay.actionCommands == [.activate])
     #expect(pay.semanticSurfaces == [
         .label(exactSemanticString("Pay")),
@@ -261,7 +261,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
         ]
     )).heistCatalog()
 
-    let root = try #require(catalog.heists.first)
+    let root = try #require(catalog.first)
     #expect(root.identity.displayName == "root")
     #expect(root.role == .entry)
     #expect(root.parameterKind == .string)

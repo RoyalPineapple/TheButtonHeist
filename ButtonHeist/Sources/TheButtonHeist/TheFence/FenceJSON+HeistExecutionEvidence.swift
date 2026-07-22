@@ -223,14 +223,14 @@ private enum PublicHeistOutput {
     static func actionResult(
         _ result: ActionResult,
         profile: ProjectionProfile
-    ) -> PublicActionResultOutput {
+    ) -> ActionProjection {
         action(result, method: .result(result.method), profile: profile)
     }
 
     static func actionResult(
         _ result: ActionResult?,
         profile: ProjectionProfile
-    ) -> PublicActionResultOutput? {
+    ) -> ActionProjection? {
         result.map { actionResult($0, profile: profile) }
     }
 
@@ -238,23 +238,20 @@ private enum PublicHeistOutput {
         _ result: ActionResult,
         method: ActionMethodProjection,
         profile: ProjectionProfile
-    ) -> PublicActionResultOutput {
-        PublicActionResultOutput(
-            projection: ActionProjection(
-                actionMethod: method,
-                result: result,
-                profile: profile,
-                includeOmissions: true
-            ),
-            context: .heistReportEvidence
+    ) -> ActionProjection {
+        ActionProjection(
+            actionMethod: method,
+            result: result,
+            profile: profile,
+            publicContext: .heistReportEvidence
         )
     }
 
-    static func expectation(_ result: ExpectationResult) -> PublicExpectationResult {
-        PublicExpectationResult(projection: ExpectationProjection(result: result))
+    static func expectation(_ result: ExpectationResult) -> ExpectationProjection {
+        ExpectationProjection(result: result)
     }
 
-    static func expectation(_ result: ExpectationResult?) -> PublicExpectationResult? {
+    static func expectation(_ result: ExpectationResult?) -> ExpectationProjection? {
         result.map(expectation)
     }
 }

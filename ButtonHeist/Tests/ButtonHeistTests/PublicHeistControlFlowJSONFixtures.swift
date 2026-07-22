@@ -1,110 +1,55 @@
+import ButtonHeistTestSupport
+
+private typealias FixtureJSON = PublicHeistJSONFixtureValue
+
 enum PublicHeistControlFlowJSONFixture {
-    static let caseSelection = #"""
-    {
-      "caseSelection": {
-        "outcome": {
-          "kind": "matched_case",
-          "index": 0
-        },
-        "elapsedMs": 4,
-        "timeout": 0.25,
-        "lastObservedSummary": "Ready visible",
-        "caseCount": 2,
-        "cases": [
-          {
-            "predicate": {
-              "type": "exists",
-              "target": {
-                "checks": [
-                  {
-                    "kind": "label",
-                    "match": { "mode": "exact", "value": "Ready" }
-                  }
-                ]
-              }
-            },
-            "met": true,
-            "actual": "Ready visible"
-          }
-        ],
-        "omittedCaseCount": 1
-      }
-    }
-    """#
+    static let caseSelection = FixtureJSON.object([
+        "caseSelection": FixtureJSON.object([
+            "outcome": FixtureJSON.object([
+                "kind": FixtureJSON.string("matched_case"),
+                "index": FixtureJSON.int(0),
+            ]),
+            "elapsedMs": FixtureJSON.int(4),
+            "timeout": FixtureJSON.double(0.25),
+            "lastObservedSummary": FixtureJSON.string("Ready visible"),
+            "caseCount": FixtureJSON.int(2),
+            "cases": FixtureJSON.array([FixtureJSON.readyCase]),
+            "omittedCaseCount": FixtureJSON.int(1),
+        ]),
+    ])
 
-    static let forEachString = #"""
-    {
-      "forEachString": {
-        "parameter": "item",
-        "count": 2,
-        "iterationCount": 1,
-        "iterationOrdinal": 0,
-        "value": "Milk"
-      }
-    }
-    """#
+    static let forEachString = FixtureJSON.object([
+        "forEachString": FixtureJSON.object([
+            "parameter": FixtureJSON.string("item"),
+            "count": FixtureJSON.int(2),
+            "iterationCount": FixtureJSON.int(1),
+            "iterationOrdinal": FixtureJSON.int(0),
+            "value": FixtureJSON.string("Milk"),
+        ]),
+    ])
 
-    static let forEachElement = #"""
-    {
-      "forEachElement": {
-        "parameter": "row",
-        "matching": {
-          "checks": [
-            {
-              "kind": "label",
-              "match": { "mode": "exact", "value": "Row" }
-            }
-          ]
-        },
-        "limit": 3,
-        "matchedCount": 2,
-        "iterationCount": 1,
-        "iterationOrdinal": 0,
-        "targetOrdinal": 1,
-        "targetSummary": "Row 2"
-      }
-    }
-    """#
+    static let forEachElement = FixtureJSON.object([
+        "forEachElement": FixtureJSON.object([
+            "parameter": FixtureJSON.string("row"),
+            "matching": FixtureJSON.target(label: "Row"),
+            "limit": FixtureJSON.int(3),
+            "matchedCount": FixtureJSON.int(2),
+            "iterationCount": FixtureJSON.int(1),
+            "iterationOrdinal": FixtureJSON.int(0),
+            "targetOrdinal": FixtureJSON.int(1),
+            "targetSummary": FixtureJSON.string("Row 2"),
+        ]),
+    ])
 
-    static let repeatUntil = #"""
-    {
-      "repeatUntil": {
-        "outcome": "matched",
-        "predicate": {
-          "type": "exists",
-          "target": {
-            "checks": [
-              {
-                "kind": "label",
-                "match": { "mode": "exact", "value": "Done" }
-              }
-            ]
-          }
-        },
-        "timeout": 0.5,
-        "iterationCount": 2,
-        "expectation": {
-          "met": true,
-          "actual": "Done visible",
-          "expected": {
-            "type": "exists",
-            "target": {
-              "checks": [
-                {
-                  "kind": "label",
-                  "match": { "mode": "exact", "value": "Done" }
-                }
-              ]
-            }
-          }
-        },
-        "result": {
-          "status": "ok",
-          "method": "wait",
-          "message": "repeat matched"
-        },
-        "lastObservedSummary": "Done visible"
-      }
-    }
-    """#
+    static let repeatUntil = FixtureJSON.object([
+        "repeatUntil": FixtureJSON.object([
+            "outcome": FixtureJSON.string("matched"),
+            "predicate": FixtureJSON.existsPredicate(label: "Done"),
+            "timeout": FixtureJSON.double(0.5),
+            "iterationCount": FixtureJSON.int(2),
+            "expectation": FixtureJSON.doneExpectation,
+            "result": FixtureJSON.actionResult(method: "wait", message: "repeat matched"),
+            "lastObservedSummary": FixtureJSON.string("Done visible"),
+        ]),
+    ])
 }

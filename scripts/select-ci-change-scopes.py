@@ -26,7 +26,6 @@ DOCUMENTATION_PREFIXES = ("docs/",)
 BUMPER_RULE_PATHS = {
     "BumperBowling.swift",
     "docs/BUMPER-RULES.md",
-    "scripts/check-bumper-rule-documentation.sh",
     "scripts/check-source-shape.sh",
 }
 BUMPER_RULE_PREFIXES = (".bumper/",)
@@ -90,6 +89,10 @@ def has_prefix(path: str, prefixes: tuple[str, ...]) -> bool:
     return any(path.startswith(prefix) for prefix in prefixes)
 
 
+def matches(path: str, paths: set[str], prefixes: tuple[str, ...] = ()) -> bool:
+    return path in paths or has_prefix(path, prefixes)
+
+
 def is_documentation(path: str) -> bool:
     return (
         path in DOCUMENTATION_FILES
@@ -100,19 +103,19 @@ def is_documentation(path: str) -> bool:
 
 def scopes_for_path(path: str) -> set[str]:
     """Return scopes affected by one path, failing open for unknown paths."""
-    if path in BUMPER_RULE_PATHS or has_prefix(path, BUMPER_RULE_PREFIXES):
+    if matches(path, BUMPER_RULE_PATHS, BUMPER_RULE_PREFIXES):
         return {BUMPER_RULE_TESTS}
 
     if is_documentation(path):
         return set()
 
-    if path in PACKAGE_CONTRACT_PATHS or has_prefix(path, PACKAGE_CONTRACT_PREFIXES):
+    if matches(path, PACKAGE_CONTRACT_PATHS, PACKAGE_CONTRACT_PREFIXES):
         return {PACKAGE_API, CLI_TOOLS}
 
-    if path in CLI_TOOL_PATHS or has_prefix(path, CLI_TOOL_PREFIXES):
+    if matches(path, CLI_TOOL_PATHS, CLI_TOOL_PREFIXES):
         return {CLI_TOOLS}
 
-    if path in IOS_AUTOMATION_PATHS or has_prefix(path, IOS_OR_FRAMEWORK_TEST_PREFIXES):
+    if matches(path, IOS_AUTOMATION_PATHS, IOS_OR_FRAMEWORK_TEST_PREFIXES):
         return set()
 
     # Workflow, toolchain, project-generation, and unclassified changes run every

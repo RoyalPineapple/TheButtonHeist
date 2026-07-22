@@ -149,31 +149,48 @@ extension HeistJUnitReport {
     /// element with step-level diagnostics in the body.
     public func junitXML() -> String {
         let totalTime = String(format: "%.3f", totalTimeSeconds)
-        let failed = allPassed ? 0 : 1
+        let failed = allPassed ? "0" : "1"
 
         var xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-        xml += "<testsuites name=\"heist\" tests=\"1\""
-        xml += " failures=\"\(failed)\" time=\"\(totalTime)\">\n"
+        xml += JUnitXML.startElement("testsuites", attributes: [
+            JUnitXML.Attribute("name", "heist"),
+            JUnitXML.Attribute("tests", "1"),
+            JUnitXML.Attribute("failures", failed),
+            JUnitXML.Attribute("time", totalTime),
+        ])
+        xml += JUnitXML.startElement("testsuite", attributes: [
+            JUnitXML.Attribute("name", heistName),
+            JUnitXML.Attribute("tests", "1"),
+            JUnitXML.Attribute("failures", failed),
+            JUnitXML.Attribute("time", totalTime),
+        ], indentation: "  ")
 
-        xml += "  <testsuite name=\"\(xmlEscape(heistName))\""
-        xml += " tests=\"1\" failures=\"\(failed)\""
-        xml += " time=\"\(totalTime)\">\n"
-
-        xml += "    <testcase name=\"\(xmlEscape(heistName))\""
-        xml += " classname=\"\(xmlEscape(app))\""
-        xml += " time=\"\(totalTime)\""
+        let testcaseAttributes = [
+            JUnitXML.Attribute("name", heistName),
+            JUnitXML.Attribute("classname", app),
+            JUnitXML.Attribute("time", totalTime),
+        ]
 
         if let failedStep = steps.first(where: \.failed) {
-            xml += ">\n"
+            xml += JUnitXML.startElement("testcase", attributes: testcaseAttributes, indentation: "    ")
             let message = failedStep.outcome.failureMessage ?? "heist failed"
             let failureType = failedStep.outcome.failureType?.typeName ?? "heistFailure"
-            xml += "      <failure message=\"\(xmlEscape(message))\""
-            xml += " type=\"\(xmlEscape(failureType))\">"
-            xml += xmlEscape(failureBody(failedStep: failedStep))
-            xml += "</failure>\n"
+            xml += JUnitXML.textElement(
+                "failure",
+                attributes: [
+                    JUnitXML.Attribute("message", message),
+                    JUnitXML.Attribute("type", failureType),
+                ],
+                text: failureBody(failedStep: failedStep),
+                indentation: "      "
+            )
             xml += "    </testcase>\n"
         } else {
-            xml += "/>\n"
+            xml += JUnitXML.selfClosingElement(
+                "testcase",
+                attributes: testcaseAttributes,
+                indentation: "    "
+            )
         }
 
         xml += "  </testsuite>\n"
@@ -201,12 +218,55 @@ extension HeistJUnitReport {
     }
 }
 
-/// Escape special XML characters in text content and attribute values.
-private func xmlEscape(_ string: String) -> String {
-    string
-        .replacingOccurrences(of: "&", with: "&amp;")
-        .replacingOccurrences(of: "<", with: "&lt;")
-        .replacingOccurrences(of: ">", with: "&gt;")
-        .replacingOccurrences(of: "\"", with: "&quot;")
-        .replacingOccurrences(of: "'", with: "&apos;")
+private enum JUnitXML {
+    struct Attribute {
+        let name: String
+        let value: String
+
+        init(_ name: String, _ value: String) {
+            self.name = name
+            self.value = value
+        }
+    }
+
+    static func startElement(
+        _ name: String,
+        attributes: [Attribute],
+        indentation: String = ""
+    ) -> String {
+        "\(indentation)<\(name)\(renderedAttributes(attributes))>\n"
+    }
+
+    static func selfClosingElement(
+        _ name: String,
+        attributes: [Attribute],
+        indentation: String = ""
+    ) -> String {
+        "\(indentation)<\(name)\(renderedAttributes(attributes))/>\n"
+    }
+
+    static func textElement(
+        _ name: String,
+        attributes: [Attribute],
+        text: String,
+        indentation: String = ""
+    ) -> String {
+        "\(indentation)<\(name)\(renderedAttributes(attributes))>\(escape(text))</\(name)>\n"
+    }
+
+    private static func renderedAttributes(_ attributes: [Attribute]) -> String {
+        attributes.map { attribute in
+            " \(attribute.name)=\"\(escape(attribute.value))\""
+        }.joined()
+    }
+
+    /// Escape special XML characters in text content and attribute values.
+    private static func escape(_ string: String) -> String {
+        string
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&apos;")
+    }
 }

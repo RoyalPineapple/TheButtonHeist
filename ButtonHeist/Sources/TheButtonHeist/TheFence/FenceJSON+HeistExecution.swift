@@ -8,6 +8,27 @@ private enum PublicHeistExecutionResponseKey: String, CodingKey {
     case status, report
 }
 
+private enum PublicHeistReportCodingKey: String, CodingKey {
+    case summary, metrics, nodes, netDelta
+}
+
+private enum PublicHeistReportSummaryCodingKey: String, CodingKey {
+    case executedTopLevelStepCount, executedNodeCount, outputNodeCount, abortedAtPath, durationMs, expectations
+}
+
+private enum PublicHeistExpectationSummaryCodingKey: String, CodingKey {
+    case checked, met, allMet
+}
+
+private enum PublicHeistReportNodeCodingKey: String, CodingKey {
+    case path, kind, capability, status, message, durationMs, evidence, failure
+    case abortedAtChildPath, expectation, children
+}
+
+private enum PublicHeistReportFailureCodingKey: String, CodingKey {
+    case category, contract, observed, expected, code, kind, phase, retryable, hint
+}
+
 /// The sole public JSON projection of the canonical `HeistReport`.
 struct PublicHeistExecutionResponse: Encodable {
     private let report: HeistReport
@@ -21,26 +42,17 @@ struct PublicHeistExecutionResponse: Encodable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: PublicHeistExecutionResponseKey.self)
         try container.encode(report.failure == nil ? PublicResponseStatus.ok : .partial, forKey: .status)
-        try container.encode(PublicHeistReportJSON(report: report, profile: profile), forKey: .report)
-    }
-}
-
-private struct PublicHeistReportJSON: Encodable {
-    private enum CodingKeys: String, CodingKey {
-        case summary, metrics, nodes, netDelta
+        try encodeReport(to: container.superEncoder(forKey: .report))
     }
 
-    let report: HeistReport
-    let profile: ProjectionProfile
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(PublicHeistReportSummaryJSON(summary: report.summary), forKey: .summary)
+    private func encodeReport(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: PublicHeistReportCodingKey.self)
+        try encode(report.summary, to: container.superEncoder(forKey: .summary))
         try container.encode(report.metrics, forKey: .metrics)
-        try container.encode(
-            report.nodes.map { PublicHeistReportNodeJSON(node: $0, profile: profile) },
-            forKey: .nodes
-        )
+        var nodes = container.nestedUnkeyedContainer(forKey: .nodes)
+        for node in report.nodes {
+            try encode(node, to: nodes.superEncoder())
+        }
         guard case .changed(let trace) = report.accessibilityChange,
               let delta = DeltaProjection(
                   trace: trace,
@@ -53,52 +65,28 @@ private struct PublicHeistReportJSON: Encodable {
             forKey: .netDelta
         )
     }
-}
 
-private struct PublicHeistReportSummaryJSON: Encodable {
-    private enum CodingKeys: String, CodingKey {
-        case executedTopLevelStepCount, executedNodeCount, outputNodeCount, abortedAtPath, durationMs, expectations
-    }
-
-    let summary: HeistReport.Summary
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
+    private func encode(_ summary: HeistReport.Summary, to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: PublicHeistReportSummaryCodingKey.self)
         try container.encode(summary.executedTopLevelStepCount, forKey: .executedTopLevelStepCount)
         try container.encode(summary.executedNodeCount, forKey: .executedNodeCount)
         try container.encode(summary.outputNodeCount, forKey: .outputNodeCount)
         try container.encodeIfPresent(summary.abortedAtPath?.description, forKey: .abortedAtPath)
         try container.encode(summary.durationMs, forKey: .durationMs)
-        try container.encodeIfPresent(
-            summary.expectations.map(PublicHeistExpectationSummaryJSON.init),
-            forKey: .expectations
-        )
-    }
-}
-
-private struct PublicHeistExpectationSummaryJSON: Encodable {
-    let checked: Int
-    let met: Int
-    let allMet: Bool
-
-    init(_ summary: HeistReport.Expectations) {
-        self.checked = summary.checked
-        self.met = summary.met
-        self.allMet = summary.allMet
-    }
-}
-
-private struct PublicHeistReportNodeJSON: Encodable {
-    private enum CodingKeys: String, CodingKey {
-        case path, kind, capability, status, message, durationMs, evidence, failure
-        case abortedAtChildPath, expectation, children
+        if let expectations = summary.expectations {
+            try encode(expectations, to: container.superEncoder(forKey: .expectations))
+        }
     }
 
-    let node: HeistReport.Node
-    let profile: ProjectionProfile
+    private func encode(_ summary: HeistReport.Expectations, to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: PublicHeistExpectationSummaryCodingKey.self)
+        try container.encode(summary.checked, forKey: .checked)
+        try container.encode(summary.met, forKey: .met)
+        try container.encode(summary.allMet, forKey: .allMet)
+    }
 
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
+    private func encode(_ node: HeistReport.Node, to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: PublicHeistReportNodeCodingKey.self)
         try container.encode(node.path.description, forKey: .path)
         try container.encode(node.kind.rawValue, forKey: .kind)
         try container.encodeIfPresent(node.capability?.description, forKey: .capability)
@@ -109,35 +97,27 @@ private struct PublicHeistReportNodeJSON: Encodable {
             try container.encode(PublicHeistReportEvidenceJSON(evidence: evidence, profile: profile), forKey: .evidence)
         }
         if let failure = node.failure {
-            try container.encode(PublicHeistReportFailureJSON(failure: failure), forKey: .failure)
+            try encode(failure, to: container.superEncoder(forKey: .failure))
         }
         try container.encodeIfPresent(node.abortedAtChildPath?.description, forKey: .abortedAtChildPath)
         try container.encodeIfPresent(
-            node.expectation.map { PublicExpectationResult(projection: ExpectationProjection(result: $0)) },
+            node.expectation.map { ExpectationProjection(result: $0) },
             forKey: .expectation
         )
-        try container.encode(
-            node.children.map { PublicHeistReportNodeJSON(node: $0, profile: profile) },
-            forKey: .children
-        )
-    }
-}
-
-private struct PublicHeistReportFailureJSON: Encodable {
-    private enum CodingKeys: String, CodingKey {
-        case category, contract, observed, expected, code, kind, phase, retryable, hint
+        var children = container.nestedUnkeyedContainer(forKey: .children)
+        for child in node.children {
+            try encode(child, to: children.superEncoder())
+        }
     }
 
-    let failure: HeistReport.Failure
-
-    func encode(to encoder: Encoder) throws {
+    private func encode(_ failure: HeistReport.Failure, to encoder: Encoder) throws {
         let diagnostic = failure.actionKind.map {
             DiagnosticFailure(failureKind: $0, message: failure.diagnosticMessage)
         } ?? DiagnosticFailure(
             reportFailure: failure.detail,
             message: failure.diagnosticMessage
         )
-        var container = encoder.container(keyedBy: CodingKeys.self)
+        var container = encoder.container(keyedBy: PublicHeistReportFailureCodingKey.self)
         try container.encode(failure.detail.category, forKey: .category)
         try container.encode(failure.detail.contract, forKey: .contract)
         try container.encode(failure.detail.observed, forKey: .observed)
@@ -147,32 +127,6 @@ private struct PublicHeistReportFailureJSON: Encodable {
         try container.encode(diagnostic.phase.rawValue, forKey: .phase)
         try container.encode(diagnostic.retryable, forKey: .retryable)
         try container.encodeIfPresent(diagnostic.hint, forKey: .hint)
-    }
-}
-
-struct PublicHeistActionResultOmissions: Encodable {
-    let accessibilityTrace: PublicProjectionOmission?
-    let subjectEvidence: PublicProjectionOmission?
-
-    var isEmpty: Bool {
-        accessibilityTrace == nil && subjectEvidence == nil
-    }
-
-    init(projection: ActionResultOmissionsProjection) {
-        self.accessibilityTrace = projection.accessibilityTrace.map { PublicProjectionOmission(projection: $0) }
-        self.subjectEvidence = projection.subjectEvidence.map { PublicProjectionOmission(projection: $0) }
-    }
-}
-
-struct PublicProjectionOmission: Encodable {
-    let reason: String
-    let projectedAs: String?
-    let omittedCount: Int?
-
-    init(projection: ProjectionOmission) {
-        self.reason = projection.reason.rawValue
-        self.projectedAs = projection.projectedAs
-        self.omittedCount = projection.omittedCount
     }
 }
 

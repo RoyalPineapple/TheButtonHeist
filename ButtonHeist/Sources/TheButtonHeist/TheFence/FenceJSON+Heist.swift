@@ -7,8 +7,8 @@ struct PublicHeistCatalogResponse: Encodable {
     let status = PublicResponseStatus.ok
     private let heists: [PublicHeistCatalogEntry]
 
-    init(catalog: HeistDiscoveryCatalog) {
-        heists = catalog.heists.map(PublicHeistCatalogEntry.init)
+    init(catalog: [HeistCatalogEntry]) {
+        heists = catalog.map(PublicHeistCatalogEntry.init)
     }
 }
 

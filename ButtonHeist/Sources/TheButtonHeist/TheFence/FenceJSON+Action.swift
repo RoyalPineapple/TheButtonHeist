@@ -50,7 +50,7 @@ struct PublicActionResponse: Encodable {
     }
 
     func encode(to encoder: Encoder) throws {
-        try PublicActionResultOutput(projection: projection, context: .standaloneAction).encode(to: encoder)
+        try projection.encode(to: encoder)
     }
 
 }
@@ -77,45 +77,34 @@ enum PublicActionResultContext: Sendable, Equatable {
     }
 }
 
-struct PublicActionResultOutput: Encodable {
-    let projection: ActionProjection
-    let context: PublicActionResultContext
-
+extension ActionProjection: Encodable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: PublicActionResultCodingKey.self)
-        try container.encode(projection.status, forKey: .status)
-        try container.encode(projection.actionMethod.rawValue, forKey: .method)
-        try container.encodeIfPresent(projection.message, forKey: .message)
-        try container.encodeIfPresent(projection.screenActionHandler, forKey: .screenActionHandler)
-        try container.encodeIfPresent(projection.warning, forKey: .warning)
-        try container.encodeIfPresent(projection.announcement, forKey: .announcement)
+        try container.encode(status, forKey: .status)
+        try container.encode(actionMethod.rawValue, forKey: .method)
+        try container.encodeIfPresent(message, forKey: .message)
+        try container.encodeIfPresent(screenActionHandler, forKey: .screenActionHandler)
+        try container.encodeIfPresent(warning, forKey: .warning)
+        try container.encodeIfPresent(announcement, forKey: .announcement)
         try encodePayload(to: &container)
         try container.encodeIfPresent(
-            projection.delta.map { PublicDelta(projection: $0, screenPolicy: context.deltaScreenPolicy) },
+            delta.map { PublicDelta(projection: $0, screenPolicy: publicContext.deltaScreenPolicy) },
             forKey: .delta
         )
-        try container.encodeIfPresent(projection.screenName, forKey: .screenName)
-        try container.encodeIfPresent(projection.screenId, forKey: .screenId)
+        try container.encodeIfPresent(screenName, forKey: .screenName)
+        try container.encodeIfPresent(screenId, forKey: .screenId)
         try encodeFailure(to: &container)
-        if context.includesExpectation {
-            try container.encodeIfPresent(
-                projection.expectation.map { PublicExpectationResult(projection: $0) },
-                forKey: .expectation
-            )
-        }
-        try container.encodeIfPresent(projection.activationTrace, forKey: .activationTrace)
-        try container.encodeIfPresent(projection.timing, forKey: .timing)
-        if context.includesOmissions {
-            let omitted = projection.omitted.flatMap {
-                let omissions = PublicHeistActionResultOmissions(projection: $0)
-                return omissions.isEmpty ? nil : omissions
-            }
+        try container.encodeIfPresent(expectation, forKey: .expectation)
+        try container.encodeIfPresent(activationTrace, forKey: .activationTrace)
+        try container.encodeIfPresent(timing, forKey: .timing)
+        if publicContext.includesOmissions {
+            let omitted = omitted.flatMap { $0.isEmpty ? nil : $0 }
             try container.encodeIfPresent(omitted, forKey: .omitted)
         }
     }
 
     private func encodePayload(to container: inout KeyedEncodingContainer<PublicActionResultCodingKey>) throws {
-        switch projection.payload {
+        switch payload {
         case .value(let value):
             try container.encode(value, forKey: .value)
         case .rotor(let rotor):
@@ -130,7 +119,7 @@ struct PublicActionResultOutput: Encodable {
     }
 
     private func encodeFailure(to container: inout KeyedEncodingContainer<PublicActionResultCodingKey>) throws {
-        guard let failure = projection.failure else { return }
+        guard let failure else { return }
         try container.encode(failure.errorClass, forKey: .errorClass)
         try container.encode(failure.code, forKey: .code)
         try container.encode(failure.kind, forKey: .kind)
@@ -222,20 +211,6 @@ struct PublicRotorTextRange: Encodable {
     }
 }
 
-struct PublicExpectationResult: Encodable {
-    let met: Bool
-    let actual: String?
-    let expected: AccessibilityPredicate?
-    let hint: String?
-
-    init(projection: ExpectationProjection) {
-        self.met = projection.met
-        self.actual = projection.actual
-        self.expected = projection.expected
-        self.hint = projection.hint
-    }
-}
-
 enum PublicDeltaScreenPolicy: Sendable {
     case newInterface
     case screenSummary
@@ -276,7 +251,7 @@ struct PublicDelta: Encodable {
             switch screenPolicy {
             case .newInterface:
                 try container.encodeIfPresent(
-                    delta.screen.interface.map(PublicInterface.init(projection:)),
+                    delta.screen.interface,
                     forKey: .newInterface
                 )
             case .screenSummary:

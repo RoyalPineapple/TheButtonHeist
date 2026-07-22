@@ -265,18 +265,18 @@ extension TheFenceHandlerTests {
         guard case .heistCatalog(let catalog) = response else {
             return XCTFail("Expected heistCatalog response, got \(response)")
         }
-        XCTAssertEqual(catalog.heists.map(\.identity.displayName), ["shop", "addToCart"])
-        XCTAssertEqual(catalog.heists[1].parameterKind, .string)
-        XCTAssertTrue(catalog.heists[1].requiresArgument)
-        XCTAssertEqual(catalog.heists[1].summary, "Reusable heist capability requiring string argument")
-        XCTAssertEqual(catalog.heists[1].tags, [.capability, .parameterized, .semanticAction])
-        XCTAssertNil(catalog.heists[1].parameterName)
-        XCTAssertNil(catalog.heists[1].actionCommands)
-        XCTAssertNil(catalog.heists[1].nestedRunHeists)
-        XCTAssertNil(catalog.heists[1].waitCount)
-        XCTAssertNil(catalog.heists[1].expectationCount)
-        XCTAssertNil(catalog.heists[1].semanticSurfaces)
-        XCTAssertNil(catalog.heists[1].validationStatus)
+        XCTAssertEqual(catalog.map(\.identity.displayName), ["shop", "addToCart"])
+        XCTAssertEqual(catalog[1].parameterKind, .string)
+        XCTAssertTrue(catalog[1].requiresArgument)
+        XCTAssertEqual(catalog[1].summary, "Reusable heist capability requiring string argument")
+        XCTAssertEqual(catalog[1].tags, [.capability, .parameterized, .semanticAction])
+        XCTAssertNil(catalog[1].parameterName)
+        XCTAssertNil(catalog[1].actionCommands)
+        XCTAssertNil(catalog[1].nestedRunHeists)
+        XCTAssertNil(catalog[1].waitCount)
+        XCTAssertNil(catalog[1].expectationCount)
+        XCTAssertNil(catalog[1].semanticSurfaces)
+        XCTAssertNil(catalog[1].validationStatus)
     }
 
     @ButtonHeistActor
@@ -300,9 +300,9 @@ extension TheFenceHandlerTests {
         guard case .heistCatalog(let catalog) = response else {
             return XCTFail("Expected heistCatalog response, got \(response)")
         }
-        XCTAssertEqual(catalog.heists.map(\.identity.displayName), ["shop", "addToCart"])
-        XCTAssertEqual(catalog.heists[1].parameterKind, .string)
-        XCTAssertTrue(catalog.heists[1].requiresArgument)
+        XCTAssertEqual(catalog.map(\.identity.displayName), ["shop", "addToCart"])
+        XCTAssertEqual(catalog[1].parameterKind, .string)
+        XCTAssertTrue(catalog[1].requiresArgument)
     }
 
     @ButtonHeistActor
@@ -318,8 +318,8 @@ extension TheFenceHandlerTests {
         guard case .heistCatalog(let catalog) = listResponse else {
             return XCTFail("Expected heistCatalog response, got \(listResponse)")
         }
-        XCTAssertEqual(catalog.heists.map(\.identity.displayName), ["agentFlow", "Cart", "Cart.addItem"])
-        let addItem = try XCTUnwrap(catalog.heists.first { $0.identity.displayName == "Cart.addItem" })
+        XCTAssertEqual(catalog.map(\.identity.displayName), ["agentFlow", "Cart", "Cart.addItem"])
+        let addItem = try XCTUnwrap(catalog.first { $0.identity.displayName == "Cart.addItem" })
         XCTAssertEqual(addItem.parameterKind, .string)
         XCTAssertEqual(addItem.actionCommands, [.activate])
         XCTAssertEqual(addItem.validationStatus, .validated)
@@ -399,7 +399,7 @@ extension TheFenceHandlerTests {
         guard case .heistCatalog(let catalog) = response else {
             return XCTFail("Expected heistCatalog response, got \(response)")
         }
-        let checkout = try XCTUnwrap(catalog.heists.first { $0.identity.displayName == "checkout" })
+        let checkout = try XCTUnwrap(catalog.first { $0.identity.displayName == "checkout" })
         XCTAssertEqual(checkout.nestedRunHeists, [invocationPath("checkout.confirm")])
         XCTAssertEqual(checkout.actionCommands, [.activate])
         XCTAssertEqual(checkout.waitCount, 1)

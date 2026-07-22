@@ -14,13 +14,11 @@ import json
 import os
 import queue
 import random
-import re
 import shutil
 import subprocess
 import sys
 import threading
 import time
-import traceback
 from pathlib import Path
 from typing import Any
 
@@ -29,57 +27,31 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from e2e_runtime import (  # noqa: E402
+    DemoApp,
     boot_simulator,
+    error_summary,
+    failure_kind,
     free_port,
     install_app,
-    launch_app,
-    launch_environment,
+    parse_jsonish,
     run,
-    terminate_app,
-    wait_port,
+    write_json_report,
 )
 
 DEFAULT_REPORT = Path(os.environ.get("TMPDIR", "/tmp")) / "buttonheist-lifecycle-report.json"
 
 
 def write_report(path: Path, report: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    write_json_report(path, report)
 
 
-def error_summary(error: BaseException) -> dict[str, Any]:
-    return {
-        "type": type(error).__name__,
-        "message": str(error),
-        "traceback": traceback.format_exception(type(error), error, error.__traceback__),
-    }
-
-
-def failure_kind(error: BaseException, *, scenario_started: bool) -> str:
-    if scenario_started:
-        return "product-lifecycle-failure"
-    if isinstance(error, (TimeoutError, subprocess.TimeoutExpired)):
-        return "infrastructure-timeout"
-    return "infrastructure-setup-failure"
-
-
-def parse_jsonish(text: str | None) -> Any | None:
-    text = (text or "").strip()
-    if not text:
-        return None
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-    for line in text.splitlines():
-        line = line.strip()
-        if not line.startswith("{"):
-            continue
-        try:
-            return json.loads(line)
-        except json.JSONDecodeError:
-            continue
-    return None
+def lifecycle_failure_kind(error: BaseException, *, scenario_started: bool) -> str:
+    return failure_kind(
+        error,
+        scenario_started=scenario_started,
+        product_failure="product-lifecycle-failure",
+        setup_failure="infrastructure-setup-failure",
+    )
 
 
 def contains_text(obj: Any | None, needle: str) -> bool:
@@ -130,79 +102,6 @@ def prepare_app(sim: str, app_path: str | None, demo_zip: str | None, work_dir: 
 
     install_app(sim, app)
     return app
-
-
-class DemoApp:
-    def __init__(self, sim: str, port: int, token: str, *, server_timeout: float, app_id: str | None = None):
-        self.sim = sim
-        self.port = port
-        self.token = token
-        self.server_timeout = server_timeout
-        self.app_id = app_id or token
-        self.pid: int | None = None
-
-    @property
-    def device(self) -> str:
-        return f"127.0.0.1:{self.port}"
-
-    def launch(self) -> int | None:
-        env = launch_environment(
-            self.port,
-            self.token,
-            self.app_id,
-            session_timeout=self.server_timeout,
-        )
-        failures: list[dict[str, Any]] = []
-        for attempt in range(1, 4):
-            if attempt > 1:
-                terminate_app(self.sim)
-                time.sleep(attempt)
-
-            result = launch_app(self.sim, env)
-            match = re.search(r":\s*(\d+)\s*$", result.stdout.strip())
-            self.pid = int(match.group(1)) if match else None
-
-            if result.returncode != 0:
-                failures.append(
-                    {
-                        "attempt": attempt,
-                        "returncode": result.returncode,
-                        "stdout": result.stdout.strip(),
-                        "stderr": result.stderr.strip(),
-                    }
-                )
-                continue
-
-            try:
-                wait_port(self.port, open_expected=True, timeout=45)
-                return self.pid
-            except TimeoutError as error:
-                failures.append(
-                    {
-                        "attempt": attempt,
-                        "pid": self.pid,
-                        "returncode": result.returncode,
-                        "stdout": result.stdout.strip(),
-                        "stderr": result.stderr.strip(),
-                        "error": str(error),
-                    }
-                )
-
-        raise TimeoutError(f"BHDemo did not open port {self.port} after launch attempts: {failures}")
-
-    def terminate(self, *, require_stopped: bool = False) -> bool:
-        result = terminate_app(self.sim)
-        try:
-            wait_port(self.port, open_expected=False, timeout=8)
-            return True
-        except TimeoutError:
-            if require_stopped:
-                raise AssertionError(
-                    "terminate did not stop BHDemo or close the InsideJob port: "
-                    + f"port={self.port} returncode={result.returncode} "
-                    + f"stdout={result.stdout.strip()!r} stderr={result.stderr.strip()!r}"
-                )
-            return False
 
 
 class PersistentJSONLines:
@@ -378,9 +277,9 @@ def wait_one_shot_success(
 def start_app(sim: str, label: str, timeout: float) -> tuple[DemoApp, int | None]:
     port = free_port()
     token = f"lifecycle-{label}-{random.randint(1000, 9999)}"
-    app = DemoApp(sim, port, token, server_timeout=timeout)
+    app = DemoApp(sim, port=port, token=token, session_timeout=timeout)
     app.terminate()
-    return app, app.launch()
+    return app, app.launch(attempts=3)
 
 
 def scenario_session_lock(cli: Path, sim: str, connect_timeout: float) -> dict[str, Any]:
@@ -398,7 +297,9 @@ def scenario_session_lock(cli: Path, sim: str, connect_timeout: float) -> dict[s
         draining_driver = cli_once(cli, app, "driver-b", "get_interface", connect_timeout=connect_timeout)
         if draining_driver["returncode"] == 0 or not contains_text(draining_driver["json"], "session.locked"):
             raise AssertionError(f"different driver should remain locked during drain: {draining_driver}")
-        time.sleep(app.server_timeout + 1.25)
+        if app.session_timeout is None:
+            raise AssertionError("session lock scenario requires a server timeout")
+        time.sleep(app.session_timeout + 1.25)
         released_driver = cli_once(cli, app, "driver-b", "get_interface", connect_timeout=connect_timeout)
         one_shot_success(released_driver, "different driver after lock timeout")
         return {
@@ -548,7 +449,7 @@ def main() -> None:
                 report["scenarios"][name] = run_scenario()
             except Exception as exc:
                 report["status"] = "failed"
-                report["failureKind"] = failure_kind(exc, scenario_started=True)
+                report["failureKind"] = lifecycle_failure_kind(exc, scenario_started=True)
                 report["failed_scenario"] = name
                 report["scenarios"][name] = {
                     "status": "failed",
@@ -567,7 +468,7 @@ def main() -> None:
         report["status"] = "failed"
         report.setdefault(
             "failureKind",
-            failure_kind(exc, scenario_started="current_scenario" in report),
+            lifecycle_failure_kind(exc, scenario_started="current_scenario" in report),
         )
         report["error"] = error_summary(exc)
         write_report(report_path, report)

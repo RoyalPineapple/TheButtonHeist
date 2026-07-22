@@ -68,7 +68,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .type(.series):
             return ".type(.series)"
         case .identifier(let match):
-            return try ".identifier(\(renderCallArgument(match, environment: environment)))"
+            return try ".identifier(\(renderStringArgument(match, environment: environment)))"
         case .semantic(let predicate):
             return try renderSemanticContainerPredicate(predicate, environment: environment)
         case .scrollable(true):
@@ -121,7 +121,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .type(let type):
             return ".type(.\(type.rawValue))"
         case .identifier(let match):
-            return try ".identifier(\(renderCallArgument(match, environment: environment)))"
+            return try ".identifier(\(renderStringArgument(match, environment: environment)))"
         case .semantic(let predicate):
             return try ".semantic(\(renderSemanticContainerPredicate(predicate, environment: environment)))"
         case .rowCount(let count):
@@ -143,9 +143,9 @@ extension HeistCanonicalSwiftDSLRenderer {
     ) throws -> String {
         switch predicate {
         case .label(let match):
-            return try ".label(\(renderCallArgument(match, environment: environment)))"
+            return try ".label(\(renderStringArgument(match, environment: environment)))"
         case .value(let match):
-            return try ".value(\(renderCallArgument(match, environment: environment)))"
+            return try ".value(\(renderStringArgument(match, environment: environment)))"
         }
     }
 
@@ -175,13 +175,13 @@ extension HeistCanonicalSwiftDSLRenderer {
         guard checks.count == 1 else { return nil }
         switch checks[0] {
         case .label(let match):
-            return try ".label(\(renderCallArgument(match, environment: environment)))"
+            return try ".label(\(renderStringArgument(match, environment: environment)))"
         case .identifier(let match):
-            return try ".identifier(\(renderCallArgument(match, environment: environment)))"
+            return try ".identifier(\(renderStringArgument(match, environment: environment)))"
         case .value(let match):
-            return try ".value(\(renderCallArgument(match, environment: environment)))"
+            return try ".value(\(renderStringArgument(match, environment: environment)))"
         case .hint(let match):
-            return try ".hint(\(renderCallArgument(match, environment: environment)))"
+            return try ".hint(\(renderStringArgument(match, environment: environment)))"
         case .actions(let actions):
             return ".actions(\(renderActionArray(actions)))"
         case .customContent(let match):
@@ -201,13 +201,13 @@ extension HeistCanonicalSwiftDSLRenderer {
     ) throws -> String {
         switch check {
         case .label(let match):
-            return try ".label(\(renderCallArgument(match, environment: environment)))"
+            return try ".label(\(renderStringArgument(match, environment: environment)))"
         case .identifier(let match):
-            return try ".identifier(\(renderCallArgument(match, environment: environment)))"
+            return try ".identifier(\(renderStringArgument(match, environment: environment)))"
         case .value(let match):
-            return try ".value(\(renderCallArgument(match, environment: environment)))"
+            return try ".value(\(renderStringArgument(match, environment: environment)))"
         case .hint(let match):
-            return try ".hint(\(renderCallArgument(match, environment: environment)))"
+            return try ".hint(\(renderStringArgument(match, environment: environment)))"
         case .traits(let traits):
             return ".traits(\(renderTraitArray(traits)))"
         case .actions(let actions):
@@ -225,14 +225,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         "[\(traits.canonicalHeistTraitArray.map { ".\($0.rawValue)" }.joined(separator: ", "))]"
     }
 
-    func renderCallArgument(
-        _ match: StringMatchCore<Expr<String>>,
-        environment: RenderEnvironment
-    ) throws -> String {
-        try renderStringMatch(match, environment: environment)
-    }
-
-    func renderFieldArgument(
+    func renderStringArgument(
         _ match: StringMatchCore<Expr<String>>,
         environment: RenderEnvironment
     ) throws -> String {

@@ -2,19 +2,16 @@ public let defaultActionExpectationTimeout: WaitTimeout = 1
 
 public struct Action {
     let command: HeistActionCommand
-    let expectationPolicy: ActionExpectationPolicy
-    let explicitExpectationTimeout: WaitTimeout?
+    let expectation: AuthoredActionExpectation
     let expectationValidationDiagnostics: [HeistBuildDiagnostic]
 
     init(
         command: HeistActionCommand,
-        expectationPolicy: ActionExpectationPolicy = .default,
-        explicitExpectationTimeout: WaitTimeout? = nil,
+        expectation: AuthoredActionExpectation = .default,
         expectationValidationDiagnostics: [HeistBuildDiagnostic] = []
     ) {
         self.command = command
-        self.expectationPolicy = expectationPolicy
-        self.explicitExpectationTimeout = explicitExpectationTimeout
+        self.expectation = expectation
         self.expectationValidationDiagnostics = expectationValidationDiagnostics
     }
 
@@ -24,7 +21,7 @@ public struct Action {
         }
         return HeistContent([.action(ActionStep(
             command: command,
-            expectationPolicy: expectationPolicy
+            expectationPolicy: expectation.policy
         ))])
     }
 
@@ -33,8 +30,7 @@ public struct Action {
         timeout: WaitTimeout? = nil
     ) -> Action {
         let composition = composeExpectation(
-            existing: expectationPolicy.expectedStep,
-            existingExplicit: explicitExpectationTimeout,
+            existing: expectation.composition,
             nextPredicate: predicate,
             nextExplicit: timeout
         )
@@ -43,11 +39,7 @@ public struct Action {
 
         return Action(
             command: command,
-            expectationPolicy: .expect(ActionExpectation(
-                predicate: composition.predicate,
-                timeout: composition.timeout
-            )),
-            explicitExpectationTimeout: composition.explicitTimeout,
+            expectation: .expect(composition.expectation),
             expectationValidationDiagnostics: validationDiagnostics.map {
                 $0.withPath(command.wireType.rawValue)
             }
@@ -57,8 +49,7 @@ public struct Action {
     public func withoutExpectation(_ waiver: ActionExpectationWaiver) -> Action {
         Action(
             command: command,
-            expectationPolicy: .waived(waiver),
-            explicitExpectationTimeout: nil,
+            expectation: .waived(waiver),
             expectationValidationDiagnostics: []
         )
     }
@@ -76,7 +67,7 @@ public struct Action {
     ) -> Repeated {
         Repeated(
             command: command,
-            expectationPolicy: expectationPolicy,
+            expectationPolicy: expectation.policy,
             expectationValidationDiagnostics: expectationValidationDiagnostics,
             predicate: predicate,
             timeout: timeout
@@ -100,6 +91,28 @@ public struct Action {
                 firstBodyStep: .action(ActionStep(command: command, expectationPolicy: expectationPolicy))
             ))])
         }
+    }
+}
+
+enum AuthoredActionExpectation: Sendable, Equatable {
+    case `default`
+    case expect(ComposedExpectation)
+    case waived(ActionExpectationWaiver)
+
+    var policy: ActionExpectationPolicy {
+        switch self {
+        case .default:
+            return .default
+        case .expect(let composition):
+            return .expect(composition.actionExpectation)
+        case .waived(let waiver):
+            return .waived(waiver)
+        }
+    }
+
+    var composition: ComposedExpectation? {
+        guard case .expect(let composition) = self else { return nil }
+        return composition
     }
 }
 
@@ -254,30 +267,36 @@ public func drag(from start: ScreenPoint, to end: ScreenPoint) -> Action {
     Action(command: .drag(DragTarget(start: .coordinate(start), end: end)))
 }
 
-struct ExpectationComposition {
-    let predicate: AccessibilityPredicate
-    let timeout: WaitTimeout
+struct ComposedExpectation: Sendable, Equatable {
+    let step: WaitStep
     let explicitTimeout: WaitTimeout?
+
+    var actionExpectation: ActionExpectation {
+        ActionExpectation(predicate: step.predicate, timeout: step.timeout)
+    }
+}
+
+struct ExpectationComposition {
+    let expectation: ComposedExpectation
     let diagnostics: [HeistBuildDiagnostic]
 }
 
 func composeExpectation(
-    existing: WaitStep?,
-    existingExplicit: WaitTimeout?,
+    existing: ComposedExpectation?,
     nextPredicate: AccessibilityPredicate,
     nextExplicit: WaitTimeout?
 ) -> ExpectationComposition {
     var diagnostics: [HeistBuildDiagnostic] = []
     let predicate: AccessibilityPredicate
     if let existing {
-        if let composed = composeScreenDeltaAndCurrentTree(existing.predicate, nextPredicate)
-            ?? composeScreenDeltaAndCurrentTree(nextPredicate, existing.predicate) {
+        if let composed = composeScreenDeltaAndCurrentTree(existing.step.predicate, nextPredicate)
+            ?? composeScreenDeltaAndCurrentTree(nextPredicate, existing.step.predicate) {
             predicate = composed
         } else {
-            predicate = existing.predicate
+            predicate = existing.step.predicate
             diagnostics.append(.dslBuild(
                 code: .dslInvalidActionExpectation,
-                message: "unsupported expectation composition: \(existing.predicate) + \(nextPredicate)",
+                message: "unsupported expectation composition: \(existing.step.predicate) + \(nextPredicate)",
                 hint: "Use one canonical predicate per expectation, or add current-tree assertions inside .changed(.screen(...))."
             ))
         }
@@ -289,29 +308,33 @@ func composeExpectation(
     let explicitTimeout: WaitTimeout?
     guard let existing else {
         return ExpectationComposition(
-            predicate: predicate,
-            timeout: nextExplicit ?? defaultActionExpectationTimeout,
-            explicitTimeout: nextExplicit,
+            expectation: ComposedExpectation(
+                step: WaitStep(
+                    predicate: predicate,
+                    timeout: nextExplicit ?? defaultActionExpectationTimeout
+                ),
+                explicitTimeout: nextExplicit
+            ),
             diagnostics: diagnostics
         )
     }
 
-    switch (existingExplicit, nextExplicit) {
+    switch (existing.explicitTimeout, nextExplicit) {
     case (nil, nil):
-        timeout = existing.timeout
+        timeout = existing.step.timeout
         explicitTimeout = nil
     case (nil, .some(let requestedTimeout)):
         timeout = requestedTimeout
         explicitTimeout = requestedTimeout
     case (.some(let requestedTimeout), nil):
-        timeout = existing.timeout
+        timeout = existing.step.timeout
         explicitTimeout = requestedTimeout
     case (.some(let existingTimeout), .some(let nextTimeout)):
         if existingTimeout == nextTimeout {
             timeout = nextTimeout
             explicitTimeout = nextTimeout
         } else {
-            timeout = existing.timeout
+            timeout = existing.step.timeout
             explicitTimeout = existingTimeout
             diagnostics.append(.dslBuild(
                 code: .dslInvalidActionExpectation,
@@ -322,9 +345,10 @@ func composeExpectation(
     }
 
     return ExpectationComposition(
-        predicate: predicate,
-        timeout: timeout,
-        explicitTimeout: explicitTimeout,
+        expectation: ComposedExpectation(
+            step: WaitStep(predicate: predicate, timeout: timeout),
+            explicitTimeout: explicitTimeout
+        ),
         diagnostics: diagnostics
     )
 }

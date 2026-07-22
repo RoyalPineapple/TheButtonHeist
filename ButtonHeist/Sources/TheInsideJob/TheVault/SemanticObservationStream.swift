@@ -20,18 +20,38 @@ internal final class SemanticObservationStream {
         Int
     ) async -> SettleSession.Result
 
-    @MainActor
-    final class VisibleRefreshSession {
-        let task: Task<ObservationSettlement, Never>
+    struct VisibleRefreshToken: Equatable {
+        let rawValue: UInt64
+    }
 
-        init(task: Task<ObservationSettlement, Never>) {
-            self.task = task
+    struct VisibleRefreshTask {
+        let token: VisibleRefreshToken
+        let task: Task<ObservationSettlement, Never>
+    }
+
+    enum VisibleRefreshPhase {
+        case idle
+        case refreshing(VisibleRefreshTask)
+
+        var task: VisibleRefreshTask? {
+            switch self {
+            case .idle:
+                nil
+            case .refreshing(let task):
+                task
+            }
+        }
+
+        mutating func cancel() {
+            task?.task.cancel()
+            self = .idle
         }
     }
 
     weak var vault: TheVault?
     let tripwire: TheTripwire
-    var visibleRefreshSession: VisibleRefreshSession?
+    var visibleRefreshPhase = VisibleRefreshPhase.idle
+    var nextVisibleRefreshToken: UInt64 = 0
     var settleVisibleObservation: VisibleObservationSettler
     var readTripwireSignal: @MainActor () -> TheTripwire.TripwireSignal
     private var lastPassiveDiscoveryStartedAt: RuntimeElapsed.Instant?
@@ -133,8 +153,7 @@ internal final class SemanticObservationStream {
     internal func stop() {
         lifecycle.stop()?.cancel()
         lastPassiveDiscoveryStartedAt = nil
-        visibleRefreshSession?.task.cancel()
-        visibleRefreshSession = nil
+        visibleRefreshPhase.cancel()
         cancelObservationWaiters()
         if let vault {
             AccessibilityNotificationObserver.shared.unsubscribe(vault.accessibilityNotifications)
