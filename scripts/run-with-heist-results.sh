@@ -115,8 +115,6 @@ if [[ "$IOS_SANDBOX" == true ]]; then
         xcrun simctl spawn "$SIM_UDID" launchctl setenv BUTTONHEIST_RESULTS_DIR "$RESULTS_DIR"
         xcrun simctl spawn "$SIM_UDID" launchctl setenv BUTTONHEIST_RESULTS_MODE "$RESULTS_MODE"
         SIMCTL_LAUNCHD_ENV_APPLIED=true
-    else
-        echo "Warning: --ios-sandbox set without SIM_UDID; relying on SIMCTL_CHILD_* env only" >&2
     fi
 fi
 

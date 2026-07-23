@@ -86,5 +86,3 @@ fi
     fi
     echo "createdAt=$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 } > "$MANIFEST"
-
-echo "Wrote heist result manifest to $MANIFEST ($result_count result files, $result_bytes bytes)"

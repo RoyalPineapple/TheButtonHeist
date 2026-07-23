@@ -76,14 +76,6 @@ if [[ -z "$TAG_SHA" ]]; then
     TAG_SHA=$(git ls-remote "$PARSER_REPO_URL" "refs/tags/$PACKAGE_TAG" | awk '{print $1}')
 fi
 
-echo "AccessibilitySnapshotBH contract:"
-echo "  Root Package.swift tag:  $PACKAGE_TAG"
-echo "  Tagged commit:           ${TAG_SHA:-<missing>}"
-echo "  Submodule pin:           $SUBMODULE_SHA"
-echo "  Main branch tip:         $BRANCH_TIP"
-echo "  Package.swift files:     ${#MANIFEST_FILES[@]}"
-echo "  Package.resolved files:  ${#LOCKFILES[@]}"
-
 FAILED=0
 
 if [[ -z "$TAG_SHA" ]]; then
@@ -168,5 +160,3 @@ fi
 if [[ "$FAILED" -ne 0 ]]; then
     exit "$FAILED"
 fi
-
-echo "Parser dependency contract verified for AccessibilitySnapshotBH $PACKAGE_TAG"
