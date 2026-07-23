@@ -193,11 +193,11 @@ extension TheBrains {
     ) async -> InvocationExpectationOutcome {
         guard case .passed = childExecution, let context else { return .notEvaluated }
         let result: HeistWaitResult
-        if let observedSequence = context.baseline.observedSequence {
+        if let observationMoment = context.baseline.observationMoment {
             result = await runtime.wait(.afterObservation(
                 context.input,
                 baselineTrace: context.baseline.outcome.actionResult.accessibilityTrace,
-                sequence: observedSequence
+                moment: observationMoment
             ))
         } else {
             result = await runtime.wait(.baselineTraceOnly(

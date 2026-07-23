@@ -694,7 +694,7 @@ extension TheBrainsPipelineTests {
         XCTAssertEqual(predicateResult.actual, "observation history incomplete")
     }
 
-    func testAfterObservationWithUnavailableSequenceNeverUsesPredicateWait() async throws {
+    func testAfterObservationWithUnavailableMomentNeverUsesPredicateWait() async throws {
         var scheduledLegacyEffects: [PredicateWait.ScheduledEffect] = []
         brains.interactionCoordinator.observePredicateWaitScheduledEffects {
             scheduledLegacyEffects.append($0)
@@ -703,12 +703,16 @@ extension TheBrainsPipelineTests {
             predicate: .changed(.elements()),
             timeout: .milliseconds(1)
         ))
+        let unrelatedBrains = TheBrains(tripwire: TheTripwire())
+        let unavailableMoment = await unrelatedBrains.vault.semanticObservationStream
+            .commitVisibleObservationForTesting(.makeForTests())
+            .moment
 
         let result = await TheBrains.HeistExecutionRuntime.live(brains).wait(
             .afterObservation(
                 step,
                 baselineTrace: nil,
-                sequence: SettledObservationSequence(UInt64.max)
+                moment: unavailableMoment
             )
         )
 

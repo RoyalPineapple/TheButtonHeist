@@ -777,6 +777,7 @@ observation: .settledTrace(
 
         XCTAssertTrue(result.outcome.actionResult.outcome.isSuccess)
         XCTAssertTrue(result.outcome.expectation.met)
+        XCTAssertEqual(result.observationMoment, actionEndpoint.moment)
         XCTAssertEqual(result.observedSequence, actionEndpoint.sequence)
     }
 

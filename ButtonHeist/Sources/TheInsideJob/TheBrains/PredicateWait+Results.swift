@@ -174,7 +174,7 @@ extension PredicateWait {
         success: Bool,
         baseline: Observation.Moment? = nil,
         eventsSinceBaseline: Observation.EventsSince? = nil,
-        observedSequence: SettledObservationSequence? = nil,
+        observationMoment: Observation.Moment? = nil,
         timeoutMismatchMessage: String? = nil
     ) async -> HeistWaitResult {
         let elapsed = Self.elapsedSeconds(since: start)
@@ -191,7 +191,7 @@ extension PredicateWait {
         }
         let settledDiagnostics = success ? nil : SettledWaitDiagnostics(
             baseline: baseline,
-            observedSequence: observedSequence,
+            observationMoment: observationMoment,
             last: latest.map(SettledEventSummary.init(event:)),
             lastChangeFact: trace?.changeFacts.last ?? latest?.trace.changeFacts.last,
             settleFailure: await latestSettleFailure()
@@ -205,7 +205,7 @@ extension PredicateWait {
             success: success,
             presenceTimeoutMessage: presenceMessage,
             settledDiagnostics: settledDiagnostics,
-            observedSequence: observedSequence,
+            observationMoment: observationMoment,
             timeoutMismatchMessage: timeoutMismatchMessage
         )
     }
@@ -226,7 +226,7 @@ extension PredicateWait {
         success: Bool,
         presenceTimeoutMessage: String? = nil,
         settledDiagnostics: SettledWaitDiagnostics? = nil,
-        observedSequence: SettledObservationSequence? = nil,
+        observationMoment: Observation.Moment? = nil,
         timeoutMismatchMessage: String? = nil
     ) -> HeistWaitResult {
         let message = success
@@ -248,7 +248,7 @@ extension PredicateWait {
                 message: message,
                 traceEvidence: traceEvidence,
                 expectation: expectation,
-                observedSequence: observedSequence,
+                observationMoment: observationMoment,
                 observationSummary: observationSummary
             )
         case (false, .unmet(let expectation)):
@@ -256,7 +256,7 @@ extension PredicateWait {
                 message: message,
                 traceEvidence: traceEvidence,
                 expectation: expectation,
-                observedSequence: observedSequence,
+                observationMoment: observationMoment,
                 observationSummary: observationSummary
             )
         case (true, .unmet):
@@ -444,20 +444,20 @@ extension PredicateWait {
 
     private struct SettledWaitDiagnostics {
         fileprivate let baselineCapture: Observation.Moment?
-        fileprivate let observedSequence: SettledObservationSequence?
+        fileprivate let observationMoment: Observation.Moment?
         fileprivate let last: SettledEventSummary?
         fileprivate let lastChangeFact: AccessibilityTrace.ChangeFact?
         fileprivate let settleFailure: String?
 
         fileprivate init(
             baseline: Observation.Moment?,
-            observedSequence: SettledObservationSequence?,
+            observationMoment: Observation.Moment?,
             last: SettledEventSummary?,
             lastChangeFact: AccessibilityTrace.ChangeFact?,
             settleFailure: String?
         ) {
             self.baselineCapture = baseline
-            self.observedSequence = observedSequence
+            self.observationMoment = observationMoment
             self.last = last
             self.lastChangeFact = lastChangeFact
             self.settleFailure = settleFailure
@@ -468,8 +468,9 @@ extension PredicateWait {
         }
 
         fileprivate var observedChangeAfterBaseline: Bool {
-            guard let baselineCapture, let observedSequence else { return false }
-            return observedSequence > baselineCapture.sequence
+            guard let baselineCapture, let observationMoment else { return false }
+            return observationMoment != baselineCapture
+                && observationMoment.isSameOrAfter(baselineCapture)
         }
     }
 }

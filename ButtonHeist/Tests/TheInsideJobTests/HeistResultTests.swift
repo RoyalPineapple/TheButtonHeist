@@ -650,7 +650,7 @@ private final class WaitResultScript {
                 message: expectation.actual,
                 traceEvidence: traceEvidence,
                 expectation: expectation,
-                observedSequence: observation.event.sequence,
+                observationMoment: observation.event.moment,
                 observationSummary: "interface: \(state.interface.projectedElements.count) elements"
             )
         case .unmet(let expectation):
@@ -658,7 +658,7 @@ private final class WaitResultScript {
                 message: expectation.actual,
                 traceEvidence: traceEvidence,
                 expectation: expectation,
-                observedSequence: observation.event.sequence,
+                observationMoment: observation.event.moment,
                 observationSummary: "interface: \(state.interface.projectedElements.count) elements"
             )
         }

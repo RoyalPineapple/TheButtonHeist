@@ -219,68 +219,45 @@ extension TheBrainsActionTests {
         XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, true)
     }
 
-    func testHeistRepeatUntilUsesActionTraceProgressBeforePostBodyWait() async throws {
+    func testHeistRepeatUntilChainsExactObservationMomentsAcrossPostBodyWaits() async throws {
         let predicate = AccessibilityPredicate.exists(.element(.identifier("quantity"), .value("2")))
-        let resolved = try resolvedPredicate(predicate)
         let initialState = await observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")])
         let firstMutation = await observedState(elements: [(makeElement(value: "1", identifier: "quantity"), "quantity")])
         let secondMutation = await observedState(elements: [(makeElement(value: "2", identifier: "quantity"), "quantity")])
         let states = [initialState, firstMutation, secondMutation]
+        let moments = observationMoments(for: states)
         var incrementCount = 0
+        var nextObservationIndex = 1
+        var postBodyBaselines: [Observation.Moment] = []
         let runtime = repeatUntilWaitRuntime(
             observations: [initialState],
             execute: { command in
-                guard case .increment = command else {
-                    return ActionResult.success(payload: .activate)
+                if case .increment = command {
+                    incrementCount += 1
                 }
-                let before = states[incrementCount]
-                incrementCount += 1
-                let after = states[incrementCount]
-                let actionTrace = AccessibilityTrace(capture: before.capture).appending(
-                    after.capture.interface,
-                    context: after.capture.context,
-                    transition: after.capture.transition
-                )
-                return ActionResult.success(
-                    payload: .increment,
-                    observation: .settledTrace(
-                        makeTestTraceEvidence(
-                            actionTrace,
-                            completeness: .incomplete
-                        ),
-                        .settled(duration: 0)
-                    )
-                )
+                return ActionResult.success(payload: command.resultPayload)
             },
             wait: { request in
                 switch request {
-                case .immediate:
-                    let initialTrace = AccessibilityTrace(capture: initialState.capture)
-                    let expectation = PredicateEvaluation.evaluate(
-                        resolved,
-                        expression: predicate,
-                        in: initialTrace,
-                        completeness: .incomplete
-                    )
-                    return .timedOut(
-                        message: expectation.actual,
-                        traceEvidence: makeTestTraceEvidence(initialTrace, completeness: .incomplete),
-                        expectation: self.unmetExpectation(expectation),
-                        observedSequence: 1,
+                case .afterObservation(_, _, let baseline):
+                    postBodyBaselines.append(baseline)
+                    let state = states[nextObservationIndex]
+                    let moment = moments[nextObservationIndex]
+                    nextObservationIndex += 1
+                    return .matched(
+                        message: "observed change",
+                        traceEvidence: makeTestTraceEvidence(
+                            AccessibilityTrace(capture: state.capture),
+                            completeness: .incomplete
+                        ),
+                        expectation: ExpectationResult.Met(
+                            predicate: .changed(.elements()),
+                            actual: "observed change"
+                        ),
+                        observationMoment: moment,
                         observationSummary: "interface: 1 elements"
                     )
-                case .afterObservation:
-                    XCTFail("repeat_until should use action trace progress before post-body wait")
-                    return .failed(
-                        failureKind: .actionFailed,
-                        message: "unexpected post-body wait",
-                        traceEvidence: nil,
-                        expectation: ExpectationResult.Unmet(
-                            predicate: predicate,
-                            actual: "unexpected post-body wait"
-                        )
-                    )
-                case .standalone, .actionEndpoint, .baselineTraceOnly:
+                case .standalone, .actionEndpoint, .immediate, .baselineTraceOnly:
                     XCTFail("repeat_until should not issue \(request)")
                     return .failed(
                         failureKind: .actionFailed,
@@ -313,6 +290,8 @@ extension TheBrainsActionTests {
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "repeat_until failed")
         XCTAssertEqual(incrementCount, 2)
+        XCTAssertEqual(postBodyBaselines.count, 2)
+        XCTAssertEqual(postBodyBaselines[1], moments[1])
         XCTAssertEqual(step.repeatUntilEvidence?.iterationCount, 2)
         XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, true)
         XCTAssertEqual(
@@ -468,11 +447,12 @@ extension TheBrainsActionTests {
         XCTAssertEqual(step.children.map(\.kind), [.repeatUntilIteration])
     }
 
-    func testHeistRepeatUntilPostBodyMatchedWaitWithoutObservedSequenceDoesNotReusePreviousSequence() async throws {
+    func testHeistRepeatUntilPostBodyMatchedWaitWithoutObservedMomentDoesNotReusePreviousMoment() async throws {
         let predicate = AccessibilityPredicate.exists(.element(.identifier("quantity"), .value("2")))
         let resolved = try resolvedPredicate(predicate)
         let initialState = await observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")])
         let matchedState = await observedState(elements: [(makeElement(value: "2", identifier: "quantity"), "quantity")])
+        let initialMoment = observationMoments(for: [initialState])[0]
         let initialTrace = AccessibilityTrace(interface: initialState.interface)
         let matchedTrace = AccessibilityTrace(interface: matchedState.interface)
         var afterObservationCount = 0
@@ -491,7 +471,7 @@ extension TheBrainsActionTests {
                         message: expectation.actual,
                         traceEvidence: makeTestTraceEvidence(initialTrace, completeness: .incomplete),
                         expectation: self.unmetExpectation(expectation),
-                        observedSequence: 1,
+                        observationMoment: initialMoment,
                         observationSummary: "interface: 1 elements"
                     )
                 case .afterObservation:
@@ -546,10 +526,11 @@ extension TheBrainsActionTests {
         XCTAssertNil(step.repeatUntilEvidence?.lastObservedSummary)
     }
 
-    func testHeistRepeatUntilPostBodyNilTraceWithNewSequenceDoesNotReuseStaleTraceOrSummary() async throws {
+    func testHeistRepeatUntilPostBodyNilTraceWithNewMomentDoesNotReuseStaleTraceOrSummary() async throws {
         let predicate = AccessibilityPredicate.exists(.element(.identifier("quantity"), .value("2")))
         let resolved = try resolvedPredicate(predicate)
         let initialState = await observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")])
+        let moments = observationMoments(for: [initialState, initialState])
         let initialTrace = AccessibilityTrace(interface: initialState.interface)
         let runtime = repeatUntilWaitRuntime(
             observations: [initialState],
@@ -566,7 +547,7 @@ extension TheBrainsActionTests {
                         message: expectation.actual,
                         traceEvidence: makeTestTraceEvidence(initialTrace, completeness: .incomplete),
                         expectation: self.unmetExpectation(expectation),
-                        observedSequence: 1,
+                        observationMoment: moments[0],
                         observationSummary: "interface: 1 elements"
                     )
                 case .afterObservation:
@@ -577,7 +558,7 @@ extension TheBrainsActionTests {
                             predicate: .changed(.elements()),
                             actual: "no observed accessibility trace"
                         ),
-                        observedSequence: 2,
+                        observationMoment: moments[1],
                         observationSummary: nil
                     )
                 case .standalone, .actionEndpoint, .baselineTraceOnly:

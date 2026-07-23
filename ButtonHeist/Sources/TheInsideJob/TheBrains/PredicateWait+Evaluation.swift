@@ -64,8 +64,8 @@ extension PredicateWait {
             snapshot?.observation.summary
         }
 
-        internal var observedSequence: SettledObservationSequence? {
-            snapshot?.observation.sequence
+        internal var observedMoment: Observation.Moment? {
+            snapshot?.observation.moment
         }
 
         internal var changeBaseline: Observation.Moment? {
@@ -100,7 +100,7 @@ extension PredicateWait {
             observation = WaitObservation(
                 trace: reduction.trace,
                 summary: reduction.observation.summary,
-                sequence: reduction.observation.event.sequence
+                moment: reduction.observation.event.moment
             )
             expectation = reduction.expectation
             baseline = reduction.changeBaseline
@@ -111,7 +111,7 @@ extension PredicateWait {
     internal struct WaitObservation: Sendable, Equatable {
         internal let trace: AccessibilityTrace?
         internal let summary: String
-        internal let sequence: SettledObservationSequence
+        internal let moment: Observation.Moment
     }
 }
 

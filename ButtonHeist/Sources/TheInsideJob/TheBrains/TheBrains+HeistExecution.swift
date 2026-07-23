@@ -39,7 +39,7 @@ extension TheBrains {
         case afterObservation(
             ResolvedWaitRuntimeInput,
             baselineTrace: AccessibilityTrace?,
-            sequence: SettledObservationSequence
+            moment: Observation.Moment
         )
         case baselineTraceOnly(ResolvedWaitRuntimeInput, trace: AccessibilityTrace?)
 
@@ -86,8 +86,8 @@ extension TheBrains {
                 return nil
             case .actionEndpoint(_, _, let context):
                 return context?.preActionMoment.sequence
-            case .afterObservation(_, _, let sequence):
-                return sequence
+            case .afterObservation(_, _, let moment):
+                return moment.sequence
             }
         }
 
@@ -146,17 +146,10 @@ extension TheBrains {
                     switch request {
                     case .standalone(let step, let startedAt):
                         return await brains.executeStandaloneWait(step, startedAt: startedAt)
-                    case .afterObservation(let step, _, let sequence):
-                        let moment = await brains.vault.semanticObservationStream.moment(
-                            scope: step.predicate.observationScope,
-                            at: sequence
-                        )
-                        let baseline: Settlement.Baseline = moment.map {
-                            .supplied(.init(moment: $0))
-                        } ?? .unavailable(.unavailable)
+                    case .afterObservation(let step, _, let moment):
                         return await brains.executeSettlementWait(
                             step,
-                            baseline: baseline
+                            baseline: .supplied(.init(moment: moment))
                         )
                     case .actionEndpoint, .immediate, .baselineTraceOnly:
                         return await brains.interactionCoordinator.waitForPredicate(

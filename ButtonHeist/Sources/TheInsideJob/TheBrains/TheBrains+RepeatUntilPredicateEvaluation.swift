@@ -7,16 +7,16 @@ import TheScore
 
 extension TheBrains.RepeatUntil {
     internal struct Observation {
-        internal let sequence: SettledObservationSequence
+        internal let boundary: Settlement.EvidenceBoundary
         internal let traceEvidence: AccessibilityTraceEvidence?
         internal let summary: String?
 
         internal init(
-            sequence: SettledObservationSequence,
+            boundary: Settlement.EvidenceBoundary,
             traceEvidence: AccessibilityTraceEvidence?,
             summary: String?
         ) {
-            self.sequence = sequence
+            self.boundary = boundary
             self.traceEvidence = traceEvidence
             self.summary = summary
         }
@@ -24,14 +24,14 @@ extension TheBrains.RepeatUntil {
         internal var trace: AccessibilityTrace? { traceEvidence?.trace }
 
         internal init?(_ result: HeistWaitResult) {
-            guard let sequence = result.observedSequence else { return nil }
-            self.sequence = sequence
+            guard let moment = result.observationMoment else { return nil }
+            boundary = Settlement.EvidenceBoundary(moment: moment)
             traceEvidence = result.outcome.actionResult.traceEvidence
             summary = result.observationSummary
         }
 
         internal init(_ observation: SettledObservationEvidence) {
-            sequence = observation.event.sequence
+            boundary = Settlement.EvidenceBoundary(moment: observation.event.moment)
             traceEvidence = AccessibilityTraceEvidence(
                 trace: observation.accessibilityTrace,
                 completeness: .incomplete
@@ -152,18 +152,9 @@ extension TheBrains {
         context: RepeatUntil.Context,
         step: ResolvedRepeatUntilStep,
         observation: RepeatUntil.Observation?,
-        iterationResults: HeistPassingChildren,
+        iterationResults _: HeistPassingChildren,
         deadline: SemanticObservationDeadline
     ) async -> RepeatUntil.PostBodyCheck {
-        if let observation,
-           let actionTraceCheck = repeatUntilActionTracePostBodyCheck(
-            step: step,
-            observation: observation,
-            iterationResults: iterationResults.values
-        ) {
-            return actionTraceCheck
-        }
-
         let remaining = deadline.remainingSeconds()
         guard remaining > 0 else {
             return .deadlineElapsed(ExpectationResult.Unmet(
@@ -188,7 +179,7 @@ extension TheBrains {
             result = await context.runtime.wait(.afterObservation(
                 .changedElements(timeout: progressTimeout),
                 baselineTrace: observation.trace,
-                sequence: observation.sequence
+                moment: observation.boundary.moment
             ))
         } else {
             result = await context.runtime.wait(.baselineTraceOnly(
@@ -212,7 +203,7 @@ extension TheBrains {
             case .met(let metExpectation):
                 noProgressExpectation = ExpectationResult.Unmet(
                     predicate: step.predicateExpression,
-                    actual: result.observedSequence == nil
+                    actual: result.observationMoment == nil
                         ? "repeat_until post-body check matched without settled observation"
                         : (metExpectation.result.actual ?? "repeat_until post-body check made no progress")
                 )
@@ -238,86 +229,6 @@ extension TheBrains {
             }
             return .unmet(check)
         }
-    }
-
-    private func repeatUntilActionTracePostBodyCheck(
-        step: ResolvedRepeatUntilStep,
-        observation: RepeatUntil.Observation,
-        iterationResults: [HeistExecutionStepResult]
-    ) -> RepeatUntil.PostBodyCheck? {
-        guard let result = iterationResults
-            .compactMap(\.actionEvidence?.dispatchResult)
-            .last(where: repeatUntilActionResultCarriesSettledChange)
-        else { return nil }
-
-        guard let traceEvidence = result.traceEvidence else { return nil }
-        let trace = traceEvidence.trace
-        let stopExpectation = repeatUntilStopExpectation(
-            authored: step.predicateExpression,
-            resolved: step.predicate,
-            evidence: traceEvidence,
-            fallback: result.message
-        )
-        let sequence = repeatUntilObservedSequence(after: observation, result: result)
-        let actionObservation = RepeatUntil.Observation(
-            sequence: sequence,
-            traceEvidence: traceEvidence,
-            summary: repeatUntilObservationSummary(trace)
-        )
-        switch stopExpectation {
-        case .met(let expectation):
-            let result = HeistWaitResult.matched(
-                message: expectation.actual,
-                traceEvidence: traceEvidence,
-                expectation: expectation,
-                observedSequence: sequence,
-                observationSummary: actionObservation.summary
-            )
-            return .met(RepeatUntil.MetCheck(
-                observation: actionObservation,
-                expectation: expectation,
-                result: result
-            ))
-        case .unmet(let expectation):
-            let result = HeistWaitResult.timedOut(
-                message: expectation.actual,
-                traceEvidence: traceEvidence,
-                expectation: expectation,
-                observedSequence: sequence,
-                observationSummary: actionObservation.summary
-            )
-            return .unmet(RepeatUntil.UnmetCheck(
-                observation: actionObservation,
-                expectation: expectation,
-                result: result
-            ))
-        }
-    }
-
-    private func repeatUntilActionResultCarriesSettledChange(_ result: ActionResult) -> Bool {
-        guard result.outcome.isSuccess,
-              result.settled == true,
-              let evidence = result.traceEvidence
-        else { return false }
-        return !evidence.trace.changeFacts.isEmpty
-    }
-
-    private func repeatUntilObservedSequence(
-        after observation: RepeatUntil.Observation,
-        result: ActionResult
-    ) -> SettledObservationSequence {
-        let nextSequence = observation.sequence + 1
-        guard let subjectSequence = result.subjectEvidence?.settledObservationSequence else {
-            return nextSequence
-        }
-        return max(nextSequence, subjectSequence + 1)
-    }
-
-    private func repeatUntilObservationSummary(_ trace: AccessibilityTrace) -> String? {
-        guard let elementCount = trace.captures.last?.interface.projectedElements.count else {
-            return nil
-        }
-        return "interface: \(elementCount) elements"
     }
 
     private func repeatUntilStopExpectation(

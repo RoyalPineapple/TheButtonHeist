@@ -141,7 +141,7 @@ extension TheBrains {
         let evidence = Settlement.ResultProjector.projectWait(settlement)
         return HeistWaitResult.projected(
             evidence,
-            observedSequence: settlement.evidence.handoff.event?.sequence
+            observationMoment: settlement.evidence.handoff.event?.moment
         )
     }
 
@@ -185,16 +185,20 @@ struct HeistWaitResult {
     }
 
     let outcome: Outcome
-    let observedSequence: SettledObservationSequence?
+    let observationMoment: Observation.Moment?
     let observationSummary: String?
+
+    var observedSequence: SettledObservationSequence? {
+        observationMoment?.sequence
+    }
 
     private init(
         outcome: Outcome,
-        observedSequence: SettledObservationSequence?,
+        observationMoment: Observation.Moment?,
         observationSummary: String?
     ) {
         self.outcome = outcome
-        self.observedSequence = observedSequence
+        self.observationMoment = observationMoment
         self.observationSummary = observationSummary
     }
 
@@ -202,7 +206,7 @@ struct HeistWaitResult {
         message: String?,
         traceEvidence: AccessibilityTraceEvidence?,
         expectation: ExpectationResult.Met,
-        observedSequence: SettledObservationSequence? = nil,
+        observationMoment: Observation.Moment? = nil,
         observationSummary: String? = nil,
         announcement: ActionAnnouncementText? = nil
     ) -> HeistWaitResult {
@@ -216,7 +220,7 @@ struct HeistWaitResult {
                 ),
                 expectation
             ),
-            observedSequence: observedSequence,
+            observationMoment: observationMoment,
             observationSummary: observationSummary
         )
     }
@@ -225,7 +229,7 @@ struct HeistWaitResult {
         message: String?,
         traceEvidence: AccessibilityTraceEvidence?,
         expectation: ExpectationResult.Unmet,
-        observedSequence: SettledObservationSequence? = nil,
+        observationMoment: Observation.Moment? = nil,
         observationSummary: String? = nil
     ) -> HeistWaitResult {
         HeistWaitResult(
@@ -238,7 +242,7 @@ struct HeistWaitResult {
                 ),
                 expectation
             ),
-            observedSequence: observedSequence,
+            observationMoment: observationMoment,
             observationSummary: observationSummary
         )
     }
@@ -260,14 +264,14 @@ struct HeistWaitResult {
                 ),
                 expectation
             ),
-            observedSequence: nil,
+            observationMoment: nil,
             observationSummary: nil
         )
     }
 
     static func projected(
         _ evidence: HeistWaitEvidence,
-        observedSequence: SettledObservationSequence?
+        observationMoment: Observation.Moment?
     ) -> HeistWaitResult {
         let outcome: Outcome = switch evidence.expectation {
         case .met(let expectation):
@@ -277,7 +281,7 @@ struct HeistWaitResult {
         }
         return HeistWaitResult(
             outcome: outcome,
-            observedSequence: observedSequence,
+            observationMoment: observationMoment,
             observationSummary: evidence.finalSummary
         )
     }

@@ -105,7 +105,7 @@ where Evidence: Sendable & Equatable {
                     success: true,
                     baseline: reduction.changeBaseline,
                     eventsSinceBaseline: reduction.eventsSinceBaseline,
-                    observedSequence: reduction.observation.event.sequence
+                    observationMoment: reduction.observation.event.moment
                 )
             case .unmatched(let evidence):
                 replayedEvidence = evidence
@@ -219,7 +219,7 @@ where Evidence: Sendable & Equatable {
                     success: outcome == .matched,
                     baseline: evidence.changeBaseline,
                     eventsSinceBaseline: evidence.eventsSinceBaseline,
-                    observedSequence: evidence.observedSequence,
+                    observationMoment: evidence.observedMoment,
                     timeoutMismatchMessage: outcome == .timedOut
                         ? evidence.timeoutMismatchMessage
                         : nil

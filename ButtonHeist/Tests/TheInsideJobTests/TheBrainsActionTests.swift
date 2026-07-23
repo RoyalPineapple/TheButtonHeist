@@ -478,6 +478,41 @@ final class TheBrainsActionTests: XCTestCase {
         )
     }
 
+    func observationMoments(
+        for states: [ActionEvidenceProjector.Baseline]
+    ) -> [Observation.Moment] {
+        var log = Observation.Log(retentionLimit: Observation.Store.defaultRetentionLimit)
+        var previousCapture: AccessibilityTrace.Capture?
+        var moments: [Observation.Moment] = []
+
+        for (index, state) in states.enumerated() {
+            let trace = previousCapture.map {
+                AccessibilityTrace(capture: $0).appending(
+                    state.capture.interface,
+                    context: state.capture.context,
+                    transition: state.capture.transition
+                )
+            } ?? AccessibilityTrace(capture: state.capture)
+            let snapshot = Observation.Snapshot(
+                sequence: SettledObservationSequence(UInt64(index + 1)),
+                generation: .initial,
+                sourceScope: .visible,
+                observation: state.observation,
+                semanticSignal: .empty,
+                notificationSequence: UInt64(index + 1),
+                trace: trace
+            )
+            do {
+                let event = try log.record(snapshot: snapshot, continuity: .sameGeneration)
+                moments.append(event.moment)
+            } catch {
+                preconditionFailure("Test moment fixture produced an invalid observation transition: \(error)")
+            }
+            previousCapture = trace.captures.last
+        }
+        return moments
+    }
+
     func heistRuntime(
         observations: [ActionEvidenceProjector.Baseline],
         actionExpectationContext: ActionExpectationContext? = nil,
@@ -675,7 +710,7 @@ final class TheBrainsActionTests: XCTestCase {
                 message: result.message,
                 traceEvidence: result.traceEvidence,
                 expectation: expectation,
-                observedSequence: observation.event.sequence,
+                observationMoment: observation.event.moment,
                 observationSummary: observation.summary
             )
         case .unmet(let expectation):
@@ -683,7 +718,7 @@ final class TheBrainsActionTests: XCTestCase {
                 message: result.message,
                 traceEvidence: result.traceEvidence,
                 expectation: expectation,
-                observedSequence: observation.event.sequence,
+                observationMoment: observation.event.moment,
                 observationSummary: observation.summary
             )
         }
