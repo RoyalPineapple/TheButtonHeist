@@ -723,11 +723,9 @@ private extension Settlement.State {
     var session: Settlement.Session? {
         switch self {
         case .armed(let session),
-             .dispatching(let session),
-             .observing(let session),
-             .needHandoff(let session):
+             .active(let session):
             session
-        case .awaitingBaseline, .completed, .failed, .timedOut, .cancelled:
+        case .awaitingBaseline, .terminal:
             nil
         }
     }
@@ -735,14 +733,9 @@ private extension Settlement.State {
     var concludesFinalSemanticEvidence: Bool {
         let handoff: Settlement.Handoff.Evidence? = switch self {
         case .armed(let session),
-             .dispatching(let session),
-             .observing(let session),
-             .needHandoff(let session):
+             .active(let session):
             session.handoff
-        case .completed(let result),
-             .failed(let result),
-             .timedOut(let result),
-             .cancelled(let result):
+        case .terminal(let result):
             result.evidence.handoff
         case .awaitingBaseline:
             nil
@@ -761,23 +754,11 @@ private extension Settlement.State {
         case .armed(var session):
             session.timing.merge(timing)
             return .armed(session)
-        case .dispatching(var session):
+        case .active(var session):
             session.timing.merge(timing)
-            return .dispatching(session)
-        case .observing(var session):
-            session.timing.merge(timing)
-            return .observing(session)
-        case .needHandoff(var session):
-            session.timing.merge(timing)
-            return .needHandoff(session)
-        case .completed(let result):
-            return .completed(result.recording(timing))
-        case .failed(let result):
-            return .failed(result.recording(timing))
-        case .timedOut(let result):
-            return .timedOut(result.recording(timing))
-        case .cancelled(let result):
-            return .cancelled(result.recording(timing))
+            return .active(session)
+        case .terminal(let result):
+            return .terminal(result.recording(timing))
         case .awaitingBaseline:
             preconditionFailure("Final semantic evidence cannot precede baseline admission")
         }
