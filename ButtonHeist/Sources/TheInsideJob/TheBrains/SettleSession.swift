@@ -83,7 +83,7 @@ enum SettlePolicy: Equatable, Sendable {
     case consecutiveCycles(required: Int)
     case quietWindow(milliseconds: Int)
     /// Samples semantics while UIKit is active. Either a composite UIKit idle
-    /// edge or a quiet accessibility window can prove settlement.
+    /// edge or presentation-safe accessibility quiet can prove settlement.
     case uikitIdleOrQuietWindow(milliseconds: Int)
 }
 
@@ -134,17 +134,17 @@ private enum SettleLoopStability: Equatable, Sendable {
                 == true ? .semanticStability : nil
 
         case .uikitIdleOrQuietWindow(let milliseconds, var startedAtMs, let uikitIdleObserved):
-            if uikitIdleObserved {
-                return .uikitIdle
-            }
             if !repeatedFingerprint {
                 startedAtMs = elapsedMs
             }
             self = .uikitIdleOrQuietWindow(
                 milliseconds: milliseconds,
                 startedAtMs: startedAtMs,
-                uikitIdleObserved: false
+                uikitIdleObserved: uikitIdleObserved
             )
+            if uikitIdleObserved, repeatedFingerprint {
+                return .uikitIdle
+            }
             return startedAtMs.map { elapsedMs - $0 >= milliseconds }
                 == true ? .accessibilityQuietWindow : nil
 
@@ -331,6 +331,11 @@ struct SettleSessionFinalObservation {
         defaultCyclesRequired * defaultCycleIntervalMs
     ) / 1_000
 
+    /// Semantic quiet may outlive a cosmetic geometry animation. Give ordinary
+    /// presentation transitions time to finish, then let semantic evidence win
+    /// so an indefinite animation cannot wedge settlement.
+    static let presentationSettleGraceMs = 500
+
     /// Hard ceiling on how long the settle loop will wait for the AX tree
     /// to quiesce before giving up with `.timedOut`. 5 s is the longest
     /// any well-behaved iOS transition (push, modal, alert, tab switch)
@@ -351,12 +356,14 @@ struct SettleSessionFinalObservation {
     typealias Sleeper = @Sendable (UInt64) async -> Void
     typealias ObservationYield = @MainActor (Duration) async -> TheTripwire.HeartbeatWaitOutcome
     typealias UIKitIdleWait = @MainActor (Duration) async -> Bool
+    typealias PresentationSettled = @MainActor () -> Bool
     typealias Clock = @MainActor () -> RuntimeElapsed.Instant
 
     let parseProvider: ParseProvider
     let tripwireSignalProvider: TripwireSignalProvider
     let observationYield: ObservationYield
     let uikitIdleWait: UIKitIdleWait?
+    let presentationIsSettled: PresentationSettled
     let policy: SettlePolicy
     let clock: Clock
     let timeoutMs: Int
@@ -366,6 +373,7 @@ struct SettleSessionFinalObservation {
         tripwireSignalProvider: @escaping TripwireSignalProvider,
         observationYield: @escaping ObservationYield,
         uikitIdleWait: UIKitIdleWait? = nil,
+        presentationIsSettled: @escaping PresentationSettled = { true },
         policy: SettlePolicy,
         clock: @escaping Clock,
         timeoutMs: Int
@@ -374,6 +382,7 @@ struct SettleSessionFinalObservation {
         self.tripwireSignalProvider = tripwireSignalProvider
         self.observationYield = observationYield
         self.uikitIdleWait = uikitIdleWait
+        self.presentationIsSettled = presentationIsSettled
         self.policy = policy
         self.clock = clock
         self.timeoutMs = timeoutMs
@@ -457,6 +466,7 @@ struct SettleSessionFinalObservation {
             tripwireSignalProvider: { tripwire.tripwireSignal() },
             observationYield: observationYield,
             uikitIdleWait: uikitIdleWait,
+            presentationIsSettled: { tripwire.allClear() },
             policy: policy,
             clock: { RuntimeElapsed.now },
             timeoutMs: timeoutMs
@@ -538,6 +548,7 @@ struct SettleSessionFinalObservation {
             tripwireSignalProvider: tripwireSignalProvider,
             observationYield: observationYield,
             uikitIdleWait: uikitIdleWait,
+            presentationIsSettled: presentationIsSettled,
             clock: clock,
             timeoutMs: timeoutMs,
             initial: SettleLoopMachine.State(

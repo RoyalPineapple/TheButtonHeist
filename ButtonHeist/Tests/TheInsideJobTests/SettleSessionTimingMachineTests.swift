@@ -207,7 +207,7 @@ extension SettleSessionTests {
         XCTAssertEqual(step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
-    func testMachineUIKitIdleCommitsTheNextParsedObservation() {
+    func testMachineUIKitIdleRequiresARepeatedPostIdleObservation() {
         let loading = makeParseResult([
             makeElement(label: "Loading", traits: .staticText),
         ])
@@ -223,12 +223,13 @@ extension SettleSessionTests {
 
         XCTAssertContinue(reduceObservation(loading, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
         XCTAssertContinue(reduce(.uikitIdle, machine: machine, ledger: &ledger, state: &state))
-        let step = reduceObservation(ready, elapsedMs: 20, machine: machine, ledger: &ledger, state: &state)
+        XCTAssertContinue(reduceObservation(ready, elapsedMs: 20, machine: machine, ledger: &ledger, state: &state))
+        let step = reduceObservation(ready, elapsedMs: 21, machine: machine, ledger: &ledger, state: &state)
 
         guard case .terminal(.settled(let timeMs)) = step.decision else {
-            return XCTFail("Expected UIKit idle to settle the next parsed observation, got \(step.decision)")
+            return XCTFail("Expected UIKit idle to settle repeated post-idle semantics, got \(step.decision)")
         }
-        XCTAssertEqual(timeMs, 20)
+        XCTAssertEqual(timeMs, 21)
         XCTAssertEqual(step.result?.evidence, .uikitIdle)
         XCTAssertEqual(
             step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label,

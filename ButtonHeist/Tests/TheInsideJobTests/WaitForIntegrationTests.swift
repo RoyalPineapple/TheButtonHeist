@@ -108,6 +108,16 @@ final class WaitForIntegrationTests: XCTestCase {
         return label
     }
 
+    private func addButton(_ title: String, y: CGFloat = 100) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setTitle(title, for: .normal)
+        button.accessibilityLabel = title
+        button.frame = CGRect(x: 10, y: y, width: 200, height: 44)
+        button.addAction(UIAction { _ in }, for: .primaryActionTriggered)
+        hostView.addSubview(button)
+        return button
+    }
+
     private func waitFor(
         target: AccessibilityTarget,
         absent: Bool = false,
@@ -221,6 +231,47 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(result.message?.hasPrefix("matched") == true)
         XCTAssertNil(result.outcome.failureKind)
         try assertSuccessfulWaitSettlement(result)
+    }
+
+    func testActionUsesSettledObservationWhileAnimationRemainsActive() async throws {
+        let button = addButton("Action-RepeatingAnimation")
+        defer { button.removeFromSuperview() }
+
+        let baseline = await insideJob.brains.interactionCoordinator.settledEvidence(
+            scope: .visible,
+            after: nil,
+            timeout: 1
+        )
+        XCTAssertNotNil(baseline, "The action fixture must be observable before animation begins")
+
+        UIView.animate(
+            withDuration: 0.01,
+            delay: 0,
+            options: [.autoreverse, .repeat],
+            animations: {
+                button.alpha = 0.5
+            }
+        )
+        defer { button.layer.removeAllAnimations() }
+
+        let command = try HeistActionCommand.activate(
+            .label("Action-RepeatingAnimation")
+        ).resolve(in: .empty)
+        let expectation = try resolvedWait(WaitStep(
+            predicate: .exists(.label("Action-RepeatingAnimation")),
+            timeout: .seconds(1)
+        ))
+        let execution = await insideJob.brains.executeRuntimeActionForHeist(
+            command,
+            expectation: expectation
+        )
+        let result = execution.result
+
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "action failed")
+        XCTAssertEqual(result.evidence.settlement?.path, .accessibilityQuietWindow)
+        try assertSuccessfulWaitSettlement(result)
+        let animationIsIdle = await insideJob.tripwire.uikitIdleTracker.waitUntilIdle(timeout: .zero)
+        XCTAssertFalse(animationIsIdle)
     }
 
     func testWaitForAppearTimeoutNamesExpectedMatcherAndInterfaceCount() async throws {
