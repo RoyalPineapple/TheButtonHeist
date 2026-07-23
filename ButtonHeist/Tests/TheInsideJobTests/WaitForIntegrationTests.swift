@@ -223,6 +223,40 @@ final class WaitForIntegrationTests: XCTestCase {
         try assertSuccessfulWaitSettlement(result)
     }
 
+    func testWaitForSettlesThroughSemanticStabilityDuringRepeatingCosmeticAnimation() async throws {
+        let label = addLabel("WaitFor-RepeatingCosmeticAnimation")
+        defer { label.removeFromSuperview() }
+        let animationsWereEnabled = UIView.areAnimationsEnabled
+        UIView.setAnimationsEnabled(true)
+        insideJob.tripwire.uikitIdleTracker.beginOperationIfAvailable()
+        defer {
+            insideJob.tripwire.uikitIdleTracker.endOperationIfNeeded()
+            UIView.setAnimationsEnabled(animationsWereEnabled)
+        }
+
+        UIView.animate(
+            withDuration: 0.01,
+            delay: 0,
+            options: [.autoreverse, .repeat],
+            animations: {
+                label.alpha = 0.5
+            }
+        )
+        defer { label.layer.removeAllAnimations() }
+
+        let response = try await waitFor(
+            target: .label("WaitFor-RepeatingCosmeticAnimation"),
+            timeout: 1.0
+        )
+        let result = try XCTUnwrap(response)
+
+        XCTAssertTrue(result.outcome.isSuccess)
+        XCTAssertEqual(result.evidence.settlement?.path, .semanticStability)
+        try assertSuccessfulWaitSettlement(result)
+        let animationIsIdle = await insideJob.tripwire.uikitIdleTracker.waitUntilIdle(timeout: .zero)
+        XCTAssertFalse(animationIsIdle)
+    }
+
     func testWaitForAppearTimeoutNamesExpectedMatcherAndInterfaceCount() async throws {
         let label = addLabel("WaitFor-Known-Anchor")
         defer { label.removeFromSuperview() }

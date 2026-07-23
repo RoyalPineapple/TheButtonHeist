@@ -11,6 +11,7 @@ extension Observation {
 internal final class Stream {
     private static let passiveSettleTimeoutMs = 1_000
     private static let activeFallbackQuietWindowMs = 60
+    private static let visibleObservationCadence: Duration = .milliseconds(100)
     private static let passiveDiscoveryCadence: Duration = .seconds(1)
 
     weak var vault: TheVault?
@@ -199,9 +200,11 @@ internal final class Stream {
         publicationWaiters.removeValue(forKey: token)?.resume(returning: outcome)
     }
 
-    internal func beginActiveObservationDemand() -> SemanticObservationDemand {
+    internal func beginActiveObservationDemand(
+        for purpose: SemanticObservationDemand.Purpose
+    ) -> SemanticObservationDemand {
         let wasIdle = !scopePressure.hasActiveDemand
-        let id = scopePressure.addActiveDemand()
+        let id = scopePressure.addActiveDemand(for: purpose)
         if wasIdle {
             tripwire.uikitIdleTracker.beginOperationIfAvailable()
         }
@@ -274,8 +277,17 @@ internal final class Stream {
 
     private func observeVisibleSemanticState() async -> Bool {
         if await admittedObservation(scope: .visible, after: nil) != nil {
-            _ = await Task.cancellableSleep(for: .milliseconds(100))
+            guard await Task.cancellableSleep(for: Self.visibleObservationCadence) else {
+                return false
+            }
             await invalidateDeliveryIfSignalChanged(to: currentTripwireSignal())
+            guard activeObservationDemandState.samplesSemantics else {
+                return !Task.isCancelled
+            }
+
+            _ = await refreshVisibleObservation(
+                timeoutMs: Self.passiveSettleTimeoutMs
+            )
             return !Task.isCancelled
         }
 

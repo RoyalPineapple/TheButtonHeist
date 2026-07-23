@@ -14,7 +14,9 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
         let lifecycle = LiveSettlementLifecycle()
         let probe = DispatchReadinessProbe()
         lifecycle.begin(
-            demand: vault.semanticObservationStream.beginActiveObservationDemand(),
+            demand: vault.semanticObservationStream.beginActiveObservationDemand(
+                for: .readinessOnly
+            ),
             notificationWindow: vault.accessibilityNotifications.beginActionWindow()
         )
 
@@ -41,7 +43,9 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
     func testDeferredActionDeadlineStartsAtDispatchCompletionForEveryWaiter() async {
         let lifecycle = LiveSettlementLifecycle()
         lifecycle.begin(
-            demand: vault.semanticObservationStream.beginActiveObservationDemand(),
+            demand: vault.semanticObservationStream.beginActiveObservationDemand(
+                for: .readinessOnly
+            ),
             notificationWindow: vault.accessibilityNotifications.beginActionWindow()
         )
         let timeout = Duration.milliseconds(250)
@@ -66,7 +70,9 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
         let lifecycle = LiveSettlementLifecycle()
         let notifications = AccessibilityNotificationBus()
         lifecycle.begin(
-            demand: vault.semanticObservationStream.beginActiveObservationDemand(),
+            demand: vault.semanticObservationStream.beginActiveObservationDemand(
+                for: .readinessOnly
+            ),
             notificationWindow: notifications.beginActionWindow()
         )
         let child = notifications.beginActionWindow()

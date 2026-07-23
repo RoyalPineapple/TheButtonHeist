@@ -835,6 +835,13 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
     private let lifecycle: LiveSettlementLifecycle
     private let startedAt = RuntimeElapsed.now
 
+    private var observationDemandPurpose: SemanticObservationDemand.Purpose {
+        guard let semantics = command.predicate?.semantics else {
+            return .readinessOnly
+        }
+        return semantics == .announcement ? .readinessOnly : .observation
+    }
+
     @MainActor
     internal init(
         command: Settlement.Command,
@@ -912,7 +919,9 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
             at: arming.boundary.moment
         )
         lifecycle.begin(
-            demand: vault.semanticObservationStream.beginActiveObservationDemand(),
+            demand: vault.semanticObservationStream.beginActiveObservationDemand(
+                for: observationDemandPurpose
+            ),
             notificationWindow: vault.accessibilityNotifications.beginActionWindow()
         )
     }
@@ -967,21 +976,132 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
             startAfterDispatch: !command.trigger.isObservation,
             operation: { [tripwire, vault] in
                 guard let deadline = await lifecycle.resolveDeadline(arming.deadline) else { return }
-                let timeout = ContinuousClock.now.duration(to: deadline)
-                guard timeout > .zero,
-                      await tripwire.uikitIdleTracker.waitUntilIdle(timeout: timeout) else { return }
-                let latest = await vault.semanticObservationStream.latestCommittedObservationMoment(
-                    scope: arming.observationScope
-                )
-                let boundary = Settlement.Readiness.ObservationBoundary.after(
-                    latest ?? arming.boundary.moment
-                )
-                sink.observeReadiness(.established(
-                    path: .uikitIdle,
-                    observationBoundary: boundary
-                ))
+                let signal = await withTaskGroup(
+                    of: Settlement.Readiness.Signal?.self,
+                    returning: Settlement.Readiness.Signal?.self
+                ) { group in
+                    group.addTask {
+                        await Self.uikitReadinessSignal(
+                            arming: arming,
+                            deadline: deadline,
+                            tripwire: tripwire,
+                            vault: vault
+                        )
+                    }
+                    group.addTask {
+                        await Self.semanticReadinessSignal(
+                            arming: arming,
+                            deadline: deadline,
+                            tripwire: tripwire,
+                            vault: vault
+                        )
+                    }
+
+                    while let candidate = await group.next() {
+                        if let candidate {
+                            group.cancelAll()
+                            return candidate
+                        }
+                    }
+                    return nil
+                }
+                guard let signal else { return }
+                sink.observeReadiness(signal)
             }
         )
+    }
+
+    @MainActor
+    private static func uikitReadinessSignal(
+        arming: Settlement.Arming,
+        deadline: ContinuousClock.Instant,
+        tripwire: TheTripwire,
+        vault: TheVault
+    ) async -> Settlement.Readiness.Signal? {
+        let timeout = ContinuousClock.now.duration(to: deadline)
+        guard timeout > .zero,
+              await tripwire.waitForUIKitReadiness(timeout: timeout) else {
+            return nil
+        }
+        let latest = await vault.semanticObservationStream.latestCommittedObservationMoment(
+            scope: arming.observationScope
+        )
+        return .established(
+            path: .uikitIdle,
+            observationBoundary: .after(latest ?? arming.boundary.moment)
+        )
+    }
+
+    @MainActor
+    private static func semanticReadinessSignal(
+        arming: Settlement.Arming,
+        deadline: ContinuousClock.Instant,
+        tripwire: TheTripwire,
+        vault: TheVault
+    ) async -> Settlement.Readiness.Signal? {
+        guard await semanticFallbackIsEligible(
+            deadline: deadline,
+            tripwire: tripwire
+        ) else {
+            return nil
+        }
+        let presentationTimeout = ContinuousClock.now.duration(to: deadline)
+        guard presentationTimeout > .zero,
+              await tripwire.waitForSettle(
+                  timeout: presentationTimeout / .seconds(1),
+                  requiredQuietFrames: 2
+              ) else {
+            return nil
+        }
+
+        let observationTimeout = ContinuousClock.now.duration(to: deadline)
+        guard observationTimeout > .zero else { return nil }
+        let timeout = observationTimeout / .seconds(1)
+        let observation: Observation.SnapshotEvent?
+        switch arming.observationScope {
+        case .visible:
+            observation = await vault.semanticObservationStream.refreshedVisibleObservation(
+                timeout: timeout
+            )?.event
+        case .discovery:
+            let latest = await vault.semanticObservationStream
+                .latestCommittedObservationMoment(scope: .discovery)
+            observation = await vault.semanticObservationStream.settledEvent(
+                scope: .discovery,
+                after: (latest ?? arming.boundary.moment).sequence,
+                timeout: timeout
+            )
+        }
+        guard let observation else {
+            return nil
+        }
+        return .established(
+            path: .semanticStability,
+            observationBoundary: .including(observation.moment)
+        )
+    }
+
+    @MainActor
+    private static func semanticFallbackIsEligible(
+        deadline: ContinuousClock.Instant,
+        tripwire: TheTripwire
+    ) async -> Bool {
+        guard tripwire.uikitIdleTracker.isInstalled else { return true }
+
+        while !Task.isCancelled {
+            if tripwire.uikitIdleTracker.animationSnapshot?.activeCount ?? 0 > 0 {
+                return true
+            }
+            let timeout = ContinuousClock.now.duration(to: deadline)
+            guard timeout > .zero,
+                  await tripwire.waitForNextHeartbeat(
+                      timeout: timeout,
+                      demand: .immediate
+                  ) == .observed else {
+                return false
+            }
+        }
+        return false
     }
 
     @MainActor

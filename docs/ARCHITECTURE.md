@@ -170,25 +170,38 @@ heist can observe an animation that began before its own execution scope.
 Outermost active-observation demand only opens permission to wait on that
 counter; nested heists and actions share the permission and its one-shot idle
 waiters. A public `CFRunLoopObserver` publishes one-shot main-loop
-`beforeWaiting` edges. Active settlement starts parsing immediately and races
-two proofs within the same authored operation deadline. The UIKit proof waits
-for the aggregate animation count to reach zero, rechecks it at a main-loop
-idle edge, then admits the first parse from an explicitly registered future
-heartbeat only if the count is still zero on that heartbeat. The semantic
-proof admits a fingerprint that remains unchanged for
-60 ms, so a cosmetic infinite animation cannot pin the operation forever.
+`beforeWaiting` edges. Active settlement arms semantic observation before
+dispatch and races two proofs within the same authored operation deadline. The
+UIKit proof waits
+for one post-dispatch heartbeat, the aggregate animation count to reach zero,
+and a main-loop idle edge. It then requires one more presentation heartbeat
+whose fingerprint matches the previous reading and admits readiness only if
+the count is still zero. The semantic proof becomes eligible after observing
+an active animation count (or when private tracking is unavailable), requires
+two stable presentation readings, and commits a fresh settled semantic
+observation. A cosmetic infinite animation therefore cannot pin the operation
+forever, while the fallback cannot outrun a deferred animation start.
+Settlement demand has two explicit purposes. `readinessOnly` keeps ordinary
+actions on the UIKit proof plus final handoff path. `observation` additionally
+samples visible semantics every 100 ms while a semantic predicate is waiting.
+Cheap UIKit and accessibility signals can wake it sooner, but they are not
+required: unannounced SwiftUI state changes still become committed Log events
+and reach waiting predicates. Passive observation and readiness-only work do
+not pay that sampling cost. Nested demand selects the stronger purpose without
+installing another idle tracker.
 Both proofs sample through Button Heist's one CADisplayLink heartbeat. The
-UIKit waiter is armed after the first heartbeat so UIKit has a chance to publish
-animation starts deferred until transaction commit. The heartbeat runs at the configured
-ambient rate and temporarily rises to the active screen's maximum refresh rate
-while an immediate one-shot waiter exists, then restores the ambient rate on
-observation, cancellation, timeout, or shutdown. No parser-owned timer or
-second display link exists. Tripwire generation changes invalidate both proofs
-and restart their evidence. If private idle tracking is unavailable, the
-semantic quiet-window proof remains sufficient. An already-zero counter
-completes its phase immediately, and an unmatched stop clamps at zero. Nested heists inherit
-the outermost demand; they never install parallel hooks. Returning to idle
-demand cancels pending waiters but preserves lifecycle animation truth. Before
+first heartbeat gives UIKit a chance to publish animation starts deferred until
+transaction commit. The heartbeat runs at the configured ambient rate and
+temporarily rises to the active screen's maximum refresh rate while an
+immediate heartbeat or presentation-settle waiter exists, then restores the
+ambient rate on observation, cancellation, timeout, or shutdown. No
+parser-owned timer or second display link exists. Tripwire generation changes
+invalidate both proofs and restart their evidence. If private idle tracking is
+unavailable, the semantic proof remains sufficient. An already-zero counter
+completes its phase immediately, and an unmatched stop clamps at zero. Nested
+heists inherit the outermost demand; they never install parallel hooks.
+Returning to idle demand cancels pending waiters but preserves lifecycle
+animation truth. Before
 a live heist—or a standalone action without an enclosing active context—opens
 its notification attribution scope, it commits one fresh composite baseline.
 That boundary prevents pre-existing navigation work from being attributed to

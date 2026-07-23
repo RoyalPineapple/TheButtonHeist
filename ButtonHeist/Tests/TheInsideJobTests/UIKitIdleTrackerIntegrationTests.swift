@@ -65,6 +65,58 @@ final class UIKitIdleTrackerIntegrationTests: XCTestCase {
         XCTAssertTrue(completionRan, "The original UIKit stop implementation must run before idle is published")
     }
 
+    func testUIKitReadinessRejectsIdleObservedBeforeDeferredAnimationStarts() async throws {
+        let previousKeyWindow = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 640))
+        let viewController = UIViewController()
+        let animatedView = UIView(frame: CGRect(x: 0, y: 0, width: 20, height: 20))
+        viewController.view.addSubview(animatedView)
+        window.rootViewController = viewController
+        window.makeKeyAndVisible()
+        window.layer.speed = 1
+        defer {
+            window.isHidden = true
+            previousKeyWindow?.makeKey()
+        }
+
+        let tripwire = TheTripwire()
+        tripwire.startPulse()
+        defer { tripwire.stopPulse() }
+        try tripwire.uikitIdleTracker.installIfNeeded()
+        defer { tripwire.uikitIdleTracker.uninstallIfNeeded() }
+        tripwire.uikitIdleTracker.beginOperationIfAvailable()
+        defer { tripwire.uikitIdleTracker.endOperationIfNeeded() }
+        var completionRan = false
+
+        let deferredAnimation = Task { @MainActor in
+            let heartbeat = await tripwire.waitForNextHeartbeat(
+                timeout: .seconds(1),
+                demand: .immediate
+            )
+            XCTAssertEqual(heartbeat, .observed)
+            UIView.animate(withDuration: 0.05, animations: {
+                animatedView.frame.origin.x = 100
+            }, completion: { _ in
+                completionRan = true
+            })
+        }
+        for _ in 0..<20 where tripwire.runningContext?.heartbeatWaiters.isEmpty == true {
+            await Task.yield()
+        }
+
+        let becameReady = await tripwire.waitForUIKitReadiness(timeout: .seconds(1))
+        await deferredAnimation.value
+
+        XCTAssertTrue(becameReady)
+        XCTAssertTrue(
+            completionRan,
+            "An idle edge observed before deferred animation work starts cannot prove readiness"
+        )
+    }
+
     func testRuntimeInstallationSurvivesConsecutiveOperationScopes() throws {
         let tracker = UIKitIdleTracker()
         XCTAssertTrue(try tracker.installIfNeeded())
@@ -145,9 +197,13 @@ final class UIKitIdleTrackerIntegrationTests: XCTestCase {
         defer { tripwire.uikitIdleTracker.uninstallIfNeeded() }
         let vault = TheVault(tripwire: tripwire)
 
-        let outerDemand = vault.semanticObservationStream.beginActiveObservationDemand()
+        let outerDemand = vault.semanticObservationStream.beginActiveObservationDemand(
+            for: .readinessOnly
+        )
         XCTAssertTrue(tripwire.uikitIdleTracker.isTrackingOperation)
-        let nestedDemand = vault.semanticObservationStream.beginActiveObservationDemand()
+        let nestedDemand = vault.semanticObservationStream.beginActiveObservationDemand(
+            for: .readinessOnly
+        )
         XCTAssertTrue(tripwire.uikitIdleTracker.isTrackingOperation)
 
         nestedDemand.cancel()

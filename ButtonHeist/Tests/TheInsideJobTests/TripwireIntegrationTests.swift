@@ -212,6 +212,29 @@ final class TripwireIntegrationTests: XCTestCase {
         testLayer.removeFromSuperlayer()
     }
 
+    func testSettleWaiterUsesScreenMaximumAndRestoresAmbientRate() async throws {
+        let context = try XCTUnwrap(tripwire.runningContext)
+        let ambientRate = context.link.preferredFrameRateRange
+        context.link.isPaused = true
+        defer { context.link.isPaused = false }
+        let task = Task { @MainActor in
+            await self.tripwire.waitForSettle(timeout: 1, requiredQuietFrames: 1_000)
+        }
+
+        for _ in 0..<20 where context.settleWaiters.isEmpty {
+            await Task.yield()
+        }
+        XCTAssertEqual(context.settleWaiters.count, 1)
+        XCTAssertNotEqual(context.link.preferredFrameRateRange, ambientRate)
+
+        task.cancel()
+        let settled = await task.value
+
+        XCTAssertFalse(settled)
+        XCTAssertTrue(context.settleWaiters.isEmpty)
+        XCTAssertEqual(context.link.preferredFrameRateRange, ambientRate)
+    }
+
     // MARK: - Heartbeat waiters
 
     func testNextHeartbeatIsUnavailableWithoutRuntimePulse() async {

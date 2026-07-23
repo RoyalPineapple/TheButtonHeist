@@ -61,6 +61,15 @@ final class SemanticObservationSubscription {
 
 @MainActor
 final class SemanticObservationDemand {
+    enum Purpose: Int, Comparable, Sendable {
+        case readinessOnly
+        case observation
+
+        static func < (lhs: Purpose, rhs: Purpose) -> Bool {
+            lhs.rawValue < rhs.rawValue
+        }
+    }
+
     let id: UInt64
     private weak var stream: Observation.Stream?
     private var isCancelled = false
