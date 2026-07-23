@@ -3,8 +3,6 @@ import os
 
 import TheScore
 
-private let logger = ButtonHeistLog.logger(.handoff(.transport))
-
 /// Ordered transport delivery with one reserved terminal-overflow slot.
 extension ServerTransport {
     struct EventIterator: AsyncIteratorProtocol {
@@ -77,7 +75,6 @@ final class EventStream: Sendable {
     private func yield(_ event: TransportEvent) {
         guard buffer.reserve() else {
             guard buffer.beginOverflow() else { return }
-            logger.error("Transport event backlog exceeded \(self.bufferLimit), stopping server")
             _ = continuation.yield(.backlogOverflow(maxEvents: self.bufferLimit))
             continuation.finish()
             return

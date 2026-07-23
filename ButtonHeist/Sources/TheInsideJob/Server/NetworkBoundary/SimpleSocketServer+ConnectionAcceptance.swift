@@ -23,7 +23,6 @@ extension SimpleSocketServer {
         let scopeFilter = allowedScopes != ConnectionScope.all ? allowedScopes : nil
         if let scopeFilter {
             guard let host = Self.extractRemoteHost(from: connection) else {
-                connectionLogger.warning("Cannot classify connection endpoint, rejecting (scope filter active)")
                 rejectStartedConnectionWithServerError(
                     connection,
                     generation: generation,
@@ -34,10 +33,7 @@ extension SimpleSocketServer {
             }
             let interfaceNameList = (connection.currentPath?.availableInterfaces ?? []).map { $0.name }
             let scope = ConnectionScope.classify(host: host, interfaceNames: interfaceNameList)
-            let hostDescription = "\(host)"
-            let interfaceNames = interfaceNameList.joined(separator: ", ")
             if !scopeFilter.contains(scope) {
-                connectionLogger.warning("Rejecting \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
                 let message: ServerErrorMessage
                 do {
                     message = try ServerErrorMessage(
@@ -58,7 +54,6 @@ extension SimpleSocketServer {
                 )
                 return .rejected
             }
-            connectionLogger.info("Accepted \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
         }
 
         guard await isCurrentListeningGeneration(generation) else {
@@ -92,7 +87,6 @@ extension SimpleSocketServer {
             return .rejected
         }
         let remoteAddress = Self.extractRemoteHost(from: connection).map { "\($0)" }
-        connectionLogger.info("Client \(clientId) connected")
         callbacks.onClientConnected?(clientId, remoteAddress)
         startReceiving(clientId: clientId, connection: connection, generation: generation)
         return .registered(clientId: clientId)

@@ -61,7 +61,6 @@ final class BonjourAdvertisement: NSObject {
         netService = service
         netService?.delegate = self
         netService?.publish()
-        logger.info("Advertising as '\(serviceName)' on port \(port)")
     }
 
     @MainActor

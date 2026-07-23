@@ -103,7 +103,7 @@ final class UIKitIdleTracker {
         do {
             _ = try installIfNeeded()
         } catch {
-            uikitIdleLogger.info(
+            uikitIdleLogger.warning(
                 "UIKit idle tracker is unavailable: \(String(describing: error), privacy: .public)"
             )
         }
@@ -180,7 +180,7 @@ final class UIKitIdleTracker {
     private func observeAnimationStopped() {
         guard case .installed(let state) = phase else { return }
         if state.counter.observeAnimationStopped() == .unmatchedStop {
-            uikitIdleLogger.warning(
+            uikitIdleLogger.debug(
                 "UIViewAnimationState animationDidStop arrived without a matching animationDidStart; clamped active animation count to zero"
             )
         }

@@ -1,10 +1,7 @@
 import Foundation
 import ButtonHeistSupport
-import os
 
 import TheScore
-
-private let clientStateLogger = ButtonHeistLog.logger(.handoff(.server))
 
 extension SimpleSocketServer {
     func removeClient(_ clientId: Int) {

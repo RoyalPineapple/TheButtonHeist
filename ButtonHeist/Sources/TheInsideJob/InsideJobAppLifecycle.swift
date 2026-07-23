@@ -68,7 +68,6 @@ extension TheInsideJob {
     }
 
     @objc private func appWillTerminate() {
-        insideJobLogger.info("App will terminate, stopping server")
         let change = applyLifecycleEvent(.terminationNotification)
         performLifecycleSchedulingEffects(change.effects)
     }
@@ -105,7 +104,6 @@ extension TheInsideJob {
         let finishChange = applyLifecycleEvent(.suspendFinished(suspension.id))
         await performLifecycleEffects(finishChange.effects)
 
-        insideJobLogger.info("Server suspended")
     }
 
     func resume() async {
@@ -115,8 +113,6 @@ extension TheInsideJob {
 
     func resumeAfterLifecycleBoundary() async {
         guard case .suspended(let suspendedRuntime) = serverPhase else { return }
-
-        insideJobLogger.info("Resuming server...")
 
         let resumeID = UUID()
         let task = Task { @MainActor [weak self] in
@@ -155,14 +151,11 @@ extension TheInsideJob {
                 await self.performLifecycleEffects(finishChange.effects)
 
                 insideJobLogger.info("Server resumed on port \(resources.actualPort)")
-
-                insideJobLogger.info("Server resume complete")
             } catch is CancellationError {
                 await self.cleanupFailedTransportStartup(startedTransport)
                 startedTransport = nil
                 let failureChange = self.applyLifecycleEvent(.resumeFailed(resumeID))
                 await self.performLifecycleEffects(failureChange.effects)
-                insideJobLogger.info("Server resume cancelled")
             } catch {
                 insideJobLogger.error("Failed to resume server: \(error)")
                 await self.cleanupFailedTransportStartup(startedTransport)

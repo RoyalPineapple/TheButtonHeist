@@ -36,11 +36,7 @@ private let autoStartTask = OSAllocatedUnfairLock<Task<Void, Never>?>(initialSta
 /// - INSIDEJOB_FINGERPRINTS / InsideJobFingerprintsEnabled: Visual fingerprints overlay
 @_cdecl("TheInsideJob_autoStartFromLoad")
 func theInsideJobAutoStartFromLoad() {
-    autoStartLogger.info("========== AUTO-START BEGIN ==========")
-    autoStartLogger.info("Bundle ID: \(Bundle.main.bundleIdentifier ?? "unknown")")
-
     if isRunningUnderXCTest() {
-        autoStartLogger.info("Auto-start disabled under XCTest")
         return
     }
 
@@ -55,16 +51,12 @@ func theInsideJobAutoStartFromLoad() {
     }
 
     let task = Task { @MainActor in
-        autoStartLogger.debug("MainActor task executing...")
-        autoStartLogger.info("Device: \(UIDevice.current.name)")
-        autoStartLogger.info("System: \(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
         armApplicationAccessibility()
         do {
             try TheInsideJob.configure(startupConfiguration: configuration)
             try await TheInsideJob.shared.start()
-            autoStartLogger.info("========== AUTO-START SUCCESS ==========")
         } catch {
-            autoStartLogger.error("========== AUTO-START FAILED: \(error) ==========")
+            autoStartLogger.error("Auto-start failed: \(error)")
         }
     }
     autoStartTask.withLock { $0 = task }

@@ -270,12 +270,7 @@ public final class TheInsideJob {
     public func start() async throws {
         await awaitPendingLifecycleTasks()
 
-        guard case .stopped = serverPhase else {
-            insideJobLogger.info("start() called while already running — ignoring")
-            return
-        }
-
-        insideJobLogger.info("Starting TheInsideJob with ServerTransport...")
+        guard case .stopped = serverPhase else { return }
 
         let attemptID = UUID()
         let request = InsideJobTransportStartRequest(
@@ -285,10 +280,7 @@ public final class TheInsideJob {
             idleTimerBaseline: UIApplication.shared.isIdleTimerDisabled
         )
         let startChange = applyLifecycleEvent(.startRequested(request))
-        guard case .changed = startChange else {
-            insideJobLogger.info("start() called while already running — ignoring")
-            return
-        }
+        guard case .changed = startChange else { return }
 
         do {
             let resources = try await startRuntimeResources(for: request)
@@ -313,16 +305,12 @@ public final class TheInsideJob {
             throw CancellationError()
         }
 
-        insideJobLogger.info("Server started successfully")
     }
 
     @discardableResult
     public func stop() async -> InsideJobStopOutcome {
         let outcome = await stopRuntime()
-        switch outcome {
-        case .stopped:
-            insideJobLogger.info("Server stopped")
-        case .teardownTimedOut:
+        if case .teardownTimedOut = outcome {
             insideJobLogger.error("Server teardown timed out")
         }
         return outcome

@@ -146,8 +146,6 @@ final class TheGetaway {
         let requestId = envelope.requestId
         let message = envelope.message
 
-        insideJobLogger.debug("Received from client \(clientId): \(String(describing: message).prefix(40))")
-
         switch message {
         case .clientHello, .authenticate:
             insideJobLogger.fault("Protocol message reached app dispatch after admission")
@@ -161,7 +159,6 @@ final class TheGetaway {
                 generation: generation
             )
         case .requestInterface(let query):
-            insideJobLogger.debug("Interface requested by client \(clientId)")
             await sendInterface(
                 query: query,
                 requestId: requestId,
@@ -314,7 +311,6 @@ final class TheGetaway {
     ) async {
         switch await brains.observeInterface(query) {
         case .success(let interface):
-            insideJobLogger.info("Interface: \(interface.projectedElements.count) elements")
             await sendMessage(
                 .interface(interface),
                 requestId: requestId,
@@ -346,8 +342,6 @@ final class TheGetaway {
         respond: @escaping SocketResponseHandler,
         generation: ClientDelivery.Generation
     ) async {
-        insideJobLogger.debug("InterfaceObservation requested")
-
         switch await brains.captureScreenPayload(mode: mode) {
         case .success(let payload, context: _):
             await sendMessage(
@@ -355,9 +349,6 @@ final class TheGetaway {
                 requestId: requestId,
                 respond: respond,
                 generation: generation
-            )
-            insideJobLogger.debug(
-                "InterfaceObservation sent: \(payload.pngData.count) base64 characters"
             )
         case .failure(let failure):
             let message: ServerErrorMessage
