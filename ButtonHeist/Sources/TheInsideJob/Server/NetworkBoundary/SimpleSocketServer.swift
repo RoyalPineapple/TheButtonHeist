@@ -78,7 +78,6 @@ actor SimpleSocketServer {
         addressFamily: ListenerAddressFamily = .dualStack,
         tlsParameters: NWParameters
     ) async throws -> UInt16 {
-        logger.info("TLS configured for server")
         return try await startListening(
             port: port,
             bindToLoopback: bindToLoopback,
@@ -192,7 +191,6 @@ actor SimpleSocketServer {
         if currentListener == generation {
             currentListener = nil
         }
-        logger.info("Server stopped")
     }
 
     private func clearListenerGenerationResources(_ generation: SocketListenerGeneration) async {

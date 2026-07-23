@@ -1,10 +1,7 @@
 import Foundation
 import ButtonHeistSupport
-import os
 
 import TheScore
-
-private let reachabilityLogger = ButtonHeistLog.logger(.handoff(.reachability))
 
 extension Array where Element == DiscoveredDevice {
     /// Probe all devices in parallel and return only those that are reachable.
@@ -53,7 +50,6 @@ extension DiscoveredDevice {
     @ButtonHeistActor
     func reachability(token: SessionAuthToken? = nil, timeout: TimeInterval = 1.5) async -> DeviceReachability {
         let connection = makeReachabilityConnection?(self) ?? DeviceConnection(device: self, token: token)
-        let deviceName = name
         let resolver = ReachabilityResolver()
 
         // Wire the connection callbacks to resolve the probe:
@@ -62,7 +58,6 @@ extension DiscoveredDevice {
         // The resolver is one-shot so a subsequent `.disconnected` after a
         // successful socket-ready signal is a no-op.
         connection.onTransportReady = {
-            reachabilityLogger.debug("Transport reachable: \(deviceName, privacy: .public)")
             resolver.resolve(.reachable)
         }
         connection.onEvent = { event in
@@ -88,9 +83,6 @@ extension DiscoveredDevice {
 
         let reachability = await resolver.value
         connection.disconnect()
-        if !reachability.isReachable {
-            reachabilityLogger.debug("Transport probe miss: \(deviceName, privacy: .public)")
-        }
         return reachability
     }
 

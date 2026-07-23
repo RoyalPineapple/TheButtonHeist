@@ -21,7 +21,85 @@ internal struct SemanticObservationWaiter: Sendable {
 }
 
 @MainActor
+internal final class ObservationReplayRelay {
+    private enum Phase {
+        case buffering([Observation.Event])
+        case live
+    }
+
+    private let receiveEvent: (Observation.Event) -> Void
+    private let receiveUnavailable: (Observation.EventsSince) -> Void
+    private var phase = Phase.buffering([])
+
+    internal init(
+        receiveEvent: @escaping (Observation.Event) -> Void,
+        receiveUnavailable: @escaping (Observation.EventsSince) -> Void
+    ) {
+        self.receiveEvent = receiveEvent
+        self.receiveUnavailable = receiveUnavailable
+    }
+
+    internal func receive(_ event: Observation.Event) {
+        switch phase {
+        case .buffering(var events):
+            events.append(event)
+            phase = .buffering(events)
+        case .live:
+            receiveEvent(event)
+        }
+    }
+
+    internal func replay(_ history: Observation.EventsSince) {
+        let buffered: [Observation.Event]
+        switch phase {
+        case .buffering(let events):
+            buffered = events
+        case .live:
+            preconditionFailure("Observation history may be replayed only once")
+        }
+        phase = .live
+
+        let replayedEvents: [Observation.Event]
+        switch history {
+        case .events(let events):
+            replayedEvents = events
+            events.forEach(receiveEvent)
+        case .expired, .unavailable:
+            replayedEvents = []
+            receiveUnavailable(history)
+        }
+        buffered.lazy
+            .filter { !replayedEvents.contains($0) }
+            .forEach(receiveEvent)
+    }
+}
+
+@MainActor
 extension Observation.Stream {
+    internal func events(
+        since moment: Observation.Moment,
+        scope: SemanticObservationScope
+    ) async -> Observation.EventsSince {
+        await storeOwner.readLog {
+            $0.events(since: moment).projected(for: scope)
+        }
+    }
+
+    internal func subscribe(
+        scope: SemanticObservationScope,
+        replayingAfter moment: Observation.Moment,
+        receive: @escaping @MainActor (Observation.Event) -> Void,
+        historyUnavailable: @escaping @MainActor (Observation.EventsSince) -> Void
+    ) async -> SemanticObservationSubscription {
+        let relay = ObservationReplayRelay(
+            receiveEvent: receive,
+            receiveUnavailable: historyUnavailable
+        )
+        let subscription = subscribe(scope: scope, receive: relay.receive)
+        relay.replay(await events(since: moment, scope: scope))
+        return subscription
+    }
+
     internal func waitForObservation(
         since moment: Observation.Moment?,
         scope: SemanticObservationScope,
@@ -65,13 +143,6 @@ extension Observation.Stream {
         scope: SemanticObservationScope
     ) async -> Observation.Moment? {
         await storeOwner.latestMoment(scope: scope)
-    }
-
-    internal func moment(
-        scope: SemanticObservationScope,
-        at sequence: SettledObservationSequence
-    ) async -> Observation.Moment? {
-        await storeOwner.moment(scope: scope, at: sequence)
     }
 
     internal func settledEvent(

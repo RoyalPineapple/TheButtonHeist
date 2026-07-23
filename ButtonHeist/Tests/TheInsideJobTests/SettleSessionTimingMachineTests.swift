@@ -37,17 +37,17 @@ extension SettleSessionTests {
         ledger: inout SettleObservationLedger,
         state: inout SettleLoopMachine.State
     ) -> MachineStep {
-        let eventCount = state.events.count
         let transition = machine.reduce(state, event: event)
         state = transition.state
-        if state.events.count > eventCount {
-            ledger.resetCurrentGeneration()
-        }
-        let result: SettleSession.Result? = switch transition.decision {
+        let result: SettleSession.Result?
+        switch transition.decision {
         case .continuePolling:
-            nil
+            result = nil
+        case .baselineReset:
+            ledger.resetCurrentGeneration()
+            result = nil
         case .terminal(let outcome):
-            SettleSession.result(
+            result = SettleSession.result(
                 outcome: outcome,
                 state: transition.state,
                 observations: ledger
@@ -71,6 +71,16 @@ extension SettleSessionTests {
     ) {
         guard case .continuePolling = step.decision else {
             return XCTFail("Expected continuePolling, got \(step.decision)", file: file, line: line)
+        }
+    }
+
+    private func XCTAssertBaselineReset(
+        _ step: MachineStep,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        guard case .baselineReset = step.decision else {
+            return XCTFail("Expected baselineReset, got \(step.decision)", file: file, line: line)
         }
     }
 
@@ -301,7 +311,7 @@ extension SettleSessionTests {
         )
 
         XCTAssertContinue(reduceObservation(stale, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
-        XCTAssertContinue(reduce(.tripwireSignal(changed), machine: machine, ledger: &ledger, state: &state))
+        XCTAssertBaselineReset(reduce(.tripwireSignal(changed), machine: machine, ledger: &ledger, state: &state))
         let result = SettleSession.result(
             outcome: .timedOut(timeMs: 10),
             state: state,
@@ -310,7 +320,6 @@ extension SettleSessionTests {
 
         XCTAssertEqual(result.outcome, .timedOut(timeMs: 10))
         XCTAssertNil(result.finalObservation)
-        XCTAssertEqual(result.events, [.tripwireSignalChanged(from: baseline, to: changed)])
         _ = changedObject
     }
 
@@ -335,7 +344,7 @@ extension SettleSessionTests {
             )
 
             XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
-            XCTAssertContinue(reduce(.tripwireSignal(changed), machine: machine, ledger: &ledger, state: &state))
+            XCTAssertBaselineReset(reduce(.tripwireSignal(changed), machine: machine, ledger: &ledger, state: &state))
             XCTAssertContinue(reduceObservation(stable, elapsedMs: 1, machine: machine, ledger: &ledger, state: &state))
             let step = reduceObservation(stable, elapsedMs: 2, machine: machine, ledger: &ledger, state: &state)
 
@@ -343,7 +352,6 @@ extension SettleSessionTests {
                 return XCTFail("Expected post-reset settle for \(policy), got \(step.decision)")
             }
             XCTAssertEqual(timeMs, 2)
-            XCTAssertEqual(step.result?.events, [.tripwireSignalChanged(from: baseline, to: changed)])
         }
         _ = changedObject
     }
@@ -370,7 +378,6 @@ extension SettleSessionTests {
         }
         XCTAssertEqual(timeMs, 1)
         XCTAssertEqual(step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Stable")
-        XCTAssertTrue(state.events.isEmpty)
     }
 
     func testResultProjectsCancelledOutcomeFromCurrentSettleState() {

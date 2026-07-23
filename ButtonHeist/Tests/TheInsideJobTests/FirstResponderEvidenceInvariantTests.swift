@@ -210,7 +210,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
         )
     }
 
-    func testSemanticAndPostActionContextsShareCanonicalFirstResponderTarget() async throws {
+    func testSemanticObservationUsesCanonicalFirstResponderTarget() async throws {
         let brains = TheBrains(tripwire: TheTripwire())
         let screen = InterfaceObservation.makeForTests(
             elements: [
@@ -222,11 +222,6 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
         let expectedAuthoredTarget = AccessibilityTarget.label("Email")
         let expectedResolvedTarget = literalTarget(ElementPredicate.label("Email"))
 
-        let postAction = brains.actionEvidenceProjector.projectBaseline(
-            from: screen,
-            tripwireSignal: .empty,
-            settledObservationSequence: nil
-        )
         let semantic = await brains.vault.semanticObservationStream
             .commitVisibleObservationForTesting(screen)
         let authoredTarget = try XCTUnwrap(brains.vault.firstResponderTarget(in: screen.tree))
@@ -234,8 +229,8 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
 
         XCTAssertEqual(authoredTarget, expectedAuthoredTarget)
         XCTAssertEqual(resolvedTarget, expectedResolvedTarget)
-        XCTAssertEqual(postAction.capture.context.firstResponder, authoredTarget)
         XCTAssertEqual(semantic.trace.captures.last?.context.firstResponder, authoredTarget)
+        XCTAssertEqual(semantic.trace.captures.last?.context.keyboardVisible, false)
     }
 
     func testAmbiguousLiveResponderEvidenceIsNotGuessed() async {

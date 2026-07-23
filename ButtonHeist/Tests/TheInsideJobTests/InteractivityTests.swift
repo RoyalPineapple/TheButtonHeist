@@ -117,76 +117,23 @@ final class InteractivityTests: XCTestCase {
         XCTAssertFalse(TheVault.Interactivity.isInteractive(element: element))
     }
 
-    // MARK: - checkInteractivity
+    // MARK: - Disabled State
 
     func testDisabledElementIsBlocked() {
         let element = makeElement(traits: .notEnabled)
-        let result = TheVault.Interactivity.checkInteractivity(element)
-        switch result {
-        case .blocked(let reason):
-            XCTAssertTrue(reason.contains("disabled"))
-        case .interactive:
-            XCTFail("Expected blocked for notEnabled trait")
-        }
+        XCTAssertTrue(
+            TheVault.Interactivity.blockedReason(element)?.contains("disabled") == true
+        )
     }
 
     func testEnabledButtonIsInteractive() {
         let element = makeElement(traits: .button)
-        let result = TheVault.Interactivity.checkInteractivity(element)
-        switch result {
-        case .interactive:
-            break
-        case .blocked(let reason):
-            XCTFail("Expected interactive, got blocked: \(reason)")
-        }
-    }
-
-    func testStaticOnlyElementStillReturnsInteractive() throws {
-        let element = makeElement(traits: .staticText)
-        let result = TheVault.Interactivity.checkInteractivity(element)
-        switch result {
-        case .interactive(let warning):
-            let warningText = try XCTUnwrap(warning, "Static-only element should surface an advisory warning")
-            XCTAssertTrue(warningText.contains("proceeding as VoiceOver would"))
-        case .blocked(let reason):
-            XCTFail("Expected interactive (with warning), got blocked: \(reason)")
-        }
-    }
-
-    func testActivationOverrideDoesNotEmitStaticWarning() {
-        let element = makeElement(label: "Plain")
-        let object = ActivationOverrideView()
-
-        let result = TheVault.Interactivity.checkInteractivity(element, object: object)
-
-        switch result {
-        case .interactive(let warning):
-            XCTAssertNil(warning, "Default activation support should be treated as a real interaction signal")
-        case .blocked(let reason):
-            XCTFail("Expected interactive, got blocked: \(reason)")
-        }
-    }
-
-    func testInteractiveElementHasNoWarning() {
-        let element = makeElement(traits: .button)
-        let result = TheVault.Interactivity.checkInteractivity(element)
-        switch result {
-        case .interactive(let warning):
-            XCTAssertNil(warning, "Fully interactive element should not carry a warning")
-        case .blocked(let reason):
-            XCTFail("Expected interactive, got blocked: \(reason)")
-        }
+        XCTAssertNil(TheVault.Interactivity.blockedReason(element))
     }
 
     func testNotEnabledTakesPrecedence() {
         let element = makeElement(traits: [.button, .notEnabled])
-        let result = TheVault.Interactivity.checkInteractivity(element)
-        switch result {
-        case .blocked:
-            break
-        case .interactive:
-            XCTFail("Expected blocked — notEnabled should override button trait")
-        }
+        XCTAssertNotNil(TheVault.Interactivity.blockedReason(element))
     }
 }
 

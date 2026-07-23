@@ -64,15 +64,11 @@ extension Actions {
     ) -> TheSafecracker.ActionDispatchResult? {
         guard requireInteractive else { return nil }
         let treeElement = context.treeElement
-        let liveTarget = context.liveTarget
-        switch TheVault.Interactivity.checkInteractivity(treeElement.element, object: liveTarget.object) {
-        case .blocked(let reason):
+        if let reason = TheVault.Interactivity.blockedReason(treeElement.element) {
             // Deliberate VoiceOver divergence: VoiceOver permits the double-tap
             // and lets the app ignore it, while `notEnabled` is explicit
             // accessibility state saying that Button Heist should not dispatch.
             return .failure(payload, message: reason)
-        case .interactive(let warning):
-            if let warning { insideJobLogger.warning("\(warning)") }
         }
         // VoiceOver calls accessibilityActivate() for any target, then dispatches
         // at its activation point when it declines. Let expectations arbitrate

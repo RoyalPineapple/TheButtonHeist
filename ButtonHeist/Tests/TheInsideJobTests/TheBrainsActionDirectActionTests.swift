@@ -10,30 +10,13 @@ import XCTest
 @MainActor
 extension TheBrainsActionTests {
 
-    func testActionEvidenceProjectorCaptureReturnsEmptySnapshotWhenRegistryEmpty() async {
-        let before = await brains.actionEvidenceProjector.projectBaseline()
-        XCTAssertTrue(before.elements.isEmpty,
-                      "Elements should be empty when no hierarchy set")
-    }
-
-    func testActionEvidenceProjectorCaptureIncludesRegisteredElements() async {
-        let element = makeElement(label: "Title", traits: .header)
-        let heistId: HeistId = "header_title"
-        await installScreen(elements: [(element, heistId)])
-
-        let before = await brains.actionEvidenceProjector.projectBaseline()
-        XCTAssertEqual(before.observation.tree.orderedElements.count, 1)
-        XCTAssertEqual(before.observation.tree.orderedElements.first?.heistId, heistId)
-        XCTAssertEqual(before.elements.count, 1)
-    }
-
-    func testInteractionCoordinatorBeforeStateDoesNotReuseInvalidatedSettledObservation() async {
+    func testInteractionCoordinatorDoesNotReuseInvalidatedSettledObservation() async {
         await installScreen(elements: [(makeElement(label: "Title", traits: .header), "header_title")])
         await brains.vault.invalidateSettledObservationFromTripwire()
         visibleObservationSource.observation = nil
 
         let current = await withNoTraversableWindows {
-            await brains.interactionCoordinator.admittedBaseline(timeout: 0.001)
+            await brains.interactionCoordinator.admittedVisibleObservation(timeout: 0.001)
         }
 
         XCTAssertNil(

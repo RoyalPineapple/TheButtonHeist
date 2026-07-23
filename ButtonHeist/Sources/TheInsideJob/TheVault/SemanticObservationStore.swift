@@ -145,8 +145,8 @@ extension Observation {
         }
 
         internal mutating func settlementDidArm(at moment: Moment) {
-            guard case .events = log.events(since: moment) else {
-                preconditionFailure("Settlement cannot arm from unavailable observation history")
+            if case .unavailable = log.events(since: moment) {
+                preconditionFailure("Settlement boundary belongs to a different observation log")
             }
             precondition(
                 !activeSettlementBoundaries.contains(moment),
@@ -205,8 +205,7 @@ extension Observation {
             let previousCapture = log.latestSnapshotEvent?.trace.captures.last
             let capture = Self.capture(
                 tree: nextTree,
-                timestamp: admission.timestamp,
-                semanticSignal: admission.tripwireSignal.semanticValue,
+                admission: admission,
                 sequence: (previousCapture?.sequence ?? 0) + 1,
                 parentHash: previousCapture?.hash,
                 generation: generation,
@@ -247,8 +246,7 @@ extension Observation {
             return CommittedObservation(
                 tree: nextTree,
                 captureID: admission.captureID,
-                event: event,
-                fallbackReasons: capture.transition.fallbackReason.map { [$0] } ?? []
+                event: event
             )
         }
 
@@ -276,14 +274,14 @@ extension Observation {
 
         private static func capture(
             tree: InterfaceTree,
-            timestamp: Date,
-            semanticSignal: TheTripwire.SemanticSignal,
+            admission: Observation.Admission,
             sequence: Int,
             parentHash: String?,
             generation: ScreenGeneration,
             notifications: Observation.Notifications,
             fallbackReason: AccessibilityObservationFallbackReason?
         ) -> AccessibilityTrace.Capture {
+            let semanticSignal = admission.tripwireSignal.semanticValue
             let windows = semanticSignal.windows.enumerated().map { index, window in
                 AccessibilityTrace.WindowContext(
                     index: index,
@@ -293,10 +291,14 @@ extension Observation {
             }
             return AccessibilityTrace.Capture(
                 sequence: sequence,
-                interface: TheVault.WireConversion.toSemanticInterface(from: tree, timestamp: timestamp),
+                interface: TheVault.WireConversion.toSemanticInterface(
+                    from: tree,
+                    timestamp: admission.timestamp
+                ),
                 parentHash: parentHash,
                 context: AccessibilityTrace.Context(
                     firstResponder: tree.firstResponderTarget,
+                    keyboardVisible: admission.keyboardVisible,
                     screenId: tree.id,
                     observationGeneration: generation.rawValue,
                     windowStack: windows
@@ -321,7 +323,6 @@ extension Observation.Store {
         internal let tree: InterfaceTree
         internal let captureID: InterfaceCaptureID
         internal let event: Observation.SnapshotEvent
-        internal let fallbackReasons: [AccessibilityObservationFallbackReason]
     }
 
     private enum Availability: Sendable, Equatable {

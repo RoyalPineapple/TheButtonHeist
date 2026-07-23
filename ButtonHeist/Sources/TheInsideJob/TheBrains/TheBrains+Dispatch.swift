@@ -126,22 +126,21 @@ extension TheBrains {
         let timeoutMilliseconds = expectation.map {
             Int64(($0.timeout.seconds * 1_000).rounded(.up))
         } ?? Int64(SettleSession.defaultTimeoutMs)
-        let settlementCommand = Settlement.Command(
-            trigger: .action(command),
+        let settlementCommand = Settlement.Command.action(
+            command,
             predicate: predicate,
             deadline: Settlement.Deadline(
                 afterActionDispatch: .milliseconds(timeoutMilliseconds)
-            )
+            ),
+            baseline: .capture
         )
-        let result = await executeSettlement(settlementCommand) { command in
-            await self.dispatchRuntimeAction(command)
-        }
+        let result = await executeSettlementCommand(settlementCommand)
         return RuntimeActionExecution(
             evidence: Settlement.ResultProjector.projectAction(result)
         )
     }
 
-    private func dispatchRuntimeAction(
+    func dispatchRuntimeAction(
         _ command: ResolvedHeistActionCommand
     ) async -> TheSafecracker.ActionDispatchResult {
         clearRotorCursorBeforeNonRotorAction(command)
@@ -230,8 +229,8 @@ extension TheBrains {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(payload: .wait)
         }
-        let result = await executeStandaloneWait(step)
-        return result.outcome.actionResult
+        let result = await executeSettlementCommand(Settlement.Command(observing: step))
+        return Settlement.ResultProjector.projectWait(result).actionResult
     }
 
     nonisolated static func actionFailureKind(

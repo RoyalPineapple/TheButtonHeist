@@ -325,7 +325,6 @@ extension Observation.Stream {
     struct PendingDelivery {
         let delivery: Observation.StoreOwner.CommittedDelivery
         let sourceObservation: InterfaceObservation
-        let fallbackReasons: [AccessibilityObservationFallbackReason]
     }
 
     struct ReadyDelivery {
@@ -408,17 +407,6 @@ extension Observation.Stream {
         mutating func cancel() {
             task?.task.cancel()
             self = .idle
-        }
-    }
-}
-
-private extension Observation.Event {
-    func canFulfill(_ scope: SemanticObservationScope) -> Bool {
-        switch self {
-        case .snapshot(let event):
-            event.scope.canFulfill(scope)
-        case .announcement:
-            true
         }
     }
 }

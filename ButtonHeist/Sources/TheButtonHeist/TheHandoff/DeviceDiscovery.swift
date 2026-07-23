@@ -121,11 +121,7 @@ final class DeviceDiscovery: DeviceDiscovering {
     }
 
     func start() {
-        guard case .idle = discoveryPhase else {
-            logger.info("Bonjour discovery is already active")
-            return
-        }
-        logger.info("Starting Bonjour discovery for type: \(buttonHeistServiceType)")
+        guard case .idle = discoveryPhase else { return }
 
         let sessionID = UUID()
         let browser = makeBrowser()
@@ -167,7 +163,6 @@ final class DeviceDiscovery: DeviceDiscovering {
                 receiveBrowserEvent(.stateChanged(state))
             }
         )
-        logger.info("Browser started")
     }
 
     func stop() {
@@ -179,11 +174,9 @@ final class DeviceDiscovery: DeviceDiscovering {
 
     private func handleBrowserEvent(_ event: DeviceDiscoveryBrowserEvent) {
         switch event {
-        case .resultsChanged(let results, let changes):
-            logger.info("Results changed: \(results.count) results, \(changes.count) changes")
-            handleResults(results, changes: changes)
+        case .resultsChanged(_, let changes):
+            handleResults(changes)
         case .stateChanged(let state):
-            logger.info("Browser state: \(String(describing: state))")
             handleStateUpdate(state)
         }
     }
@@ -221,9 +214,6 @@ final class DeviceDiscovery: DeviceDiscovering {
     private func handleEventStreamOverflow(sessionID: UUID) {
         guard case .active(let activeDiscovery) = discoveryPhase,
               activeDiscovery.id == sessionID else { return }
-        logger.error(
-            "Bonjour discovery event backlog exceeded \(DeviceDiscoveryEventStream.bufferLimit), stopping discovery"
-        )
         finishTerminalBrowserState(
             activeDiscovery,
             failure: .discoveryBacklogOverflow(capacity: DeviceDiscoveryEventStream.bufferLimit),
@@ -244,23 +234,17 @@ final class DeviceDiscovery: DeviceDiscovering {
         onEvent?(.failed(failure))
     }
 
-    private func handleResults(
-        _ results: Set<NWBrowser.Result>,
-        changes: Set<NWBrowser.Result.Change>
-    ) {
+    private func handleResults(_ changes: Set<NWBrowser.Result.Change>) {
         guard case .active(var activeDiscovery) = discoveryPhase else { return }
         for change in changes {
             switch change {
             case .added(let result):
-                logger.info("Service added: \(String(describing: result.endpoint))")
                 if let device = makeDevice(from: result) {
-                    logger.info("Device found: \(device.name)")
                     let mutations = activeDiscovery.registry.recordFound(device)
                     discoveryPhase = .active(activeDiscovery)
                     apply(mutations)
                 }
             case .removed(let result):
-                logger.info("Service removed: \(String(describing: result.endpoint))")
                 if case let .service(name, _, _, _) = result.endpoint,
                    let deviceID = try? DiscoveryDeviceID(validating: name) {
                     let mutations = activeDiscovery.registry.recordLost(deviceID)
@@ -268,7 +252,6 @@ final class DeviceDiscovery: DeviceDiscovering {
                     apply(mutations)
                 }
             case .changed(let old, let new, _):
-                logger.info("Service changed: \(String(describing: old.endpoint)) -> \(String(describing: new.endpoint))")
                 if case let .service(oldName, _, _, _) = old.endpoint,
                    case let .service(newName, _, _, _) = new.endpoint,
                    oldName != newName,
@@ -296,7 +279,6 @@ final class DeviceDiscovery: DeviceDiscovering {
             case .found(let device):
                 onEvent?(.found(device))
             case .lost(let device):
-                logger.info("Device lost: \(device.name)")
                 onEvent?(.lost(device))
             }
         }
@@ -347,7 +329,6 @@ final class DeviceDiscovery: DeviceDiscovering {
             return
         }
         for deviceID in unreachableDeviceIDs {
-            logger.info("Evicting unreachable device advertisement: \(deviceID)")
             let mutations = activeDiscovery.registry.recordLost(deviceID)
             discoveryPhase = .active(activeDiscovery)
             apply(mutations)

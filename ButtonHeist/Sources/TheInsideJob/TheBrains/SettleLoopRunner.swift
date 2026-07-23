@@ -143,12 +143,12 @@ struct SettleLoopRunner {
         state: inout SettleLoopMachine.State,
         observations: inout SettleObservationLedger
     ) -> Bool {
-        let eventCount = state.events.count
-        state = machine.reduce(
+        let transition = machine.reduce(
             state,
             event: .tripwireSignal(tripwireSignalProvider())
-        ).state
-        guard state.events.count > eventCount else { return false }
+        )
+        state = transition.state
+        guard transition.decision == .baselineReset else { return false }
         observations.resetCurrentGeneration()
         return true
     }

@@ -1,9 +1,10 @@
 # Settlement Loop
 
-Actions and waits use one reducer-driven settlement engine. The command is a
-two-axis product: its trigger is either an action or observation, and it may
-carry one resolved predicate. Readiness and an admitted observation handoff are
-required for every successful result.
+Actions, waits, and heist control flow use one reducer-driven settlement engine.
+The command algebra admits exactly three operations: capture current state,
+observe until a predicate is satisfied, or dispatch one action with an optional
+expectation. Timed commands require readiness and an admitted observation
+handoff; current-state inspection returns its one admitted capture directly.
 
 **Illustrates:** [ARCHITECTURE.md](../ARCHITECTURE.md), [API.md](../API.md),
 [WIRE-PROTOCOL.md](../WIRE-PROTOCOL.md)
@@ -15,18 +16,20 @@ required for every successful result.
 `ButtonHeist/Sources/TheInsideJob/TheBrains/Settlement+ResultProjection.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheTripwire/UIKitIdleTracker.swift`
 
-## Four commands, one lifecycle
+## Three commands, one owner
 
-| Trigger | Predicate | Meaning | Dispatches |
+| Command | Predicate | Meaning | Dispatches |
 | --- | --- | --- | --- |
-| action | absent | perform an action and return when its UI is ready | once |
-| action | present | perform an action while evaluating its attached expectation | once |
-| observation | present | `waitFor` | never |
-| observation | absent | observe and settle current UI | never |
+| `currentState` | absent | capture one exact settled snapshot | never |
+| `observation` | present | `waitFor` | never |
+| `action` | optional | perform one action, optionally evaluating its expectation | once |
 
 ```mermaid
 stateDiagram-v2
-    [*] --> AwaitingBaseline
+    [*] --> AwaitingBaseline : capture baseline
+    [*] --> Armed : supplied baseline
+    [*] --> Failed : required baseline unavailable
+    AwaitingBaseline --> Completed : currentState capture admitted
     AwaitingBaseline --> Armed : baseline Moment committed
     AwaitingBaseline --> Failed : baseline unavailable
     Armed --> Dispatching : action trigger
@@ -61,8 +64,17 @@ sequenceDiagram
     participant Reducer as Settlement.Reducer
 
     Caller->>Executor: execute typed Command
-    Executor->>Store: capture and commit baseline
-    Store-->>Executor: Moment
+    alt currentState command
+        Executor->>Store: capture and admit once
+        Store-->>Executor: exact current Moment
+        Executor-->>Caller: Settlement.Result
+    else timed command captures its baseline
+        Executor->>Store: capture and commit baseline
+        Store-->>Executor: Moment
+    else command supplies an exact Moment
+        Executor->>Store: subscribe with replay after Moment
+        Store-->>Executor: retained Events, then live delivery
+    end
     Executor->>Channels: arm after baseline
     Channels-->>Reducer: channelsArmed
     alt action trigger
@@ -91,7 +103,8 @@ predicate evaluation, and handoff; no phase receives a fresh timeout.
 
 ## Completion evidence
 
-A successful result is constructible only when all applicable evidence agrees:
+A successful timed result is constructible only when all applicable evidence
+agrees:
 
 1. The trigger completed successfully. Observation triggers satisfy this
    structurally; action triggers require one successful dispatch.
@@ -99,6 +112,10 @@ A successful result is constructible only when all applicable evidence agrees:
    returned handoff. Positive transitions and announcements may remain latched.
 3. UIKit readiness is established for the current readiness generation.
 4. The returned observation was admitted at or after that readiness boundary.
+
+A successful `currentState` result instead requires exactly one admitted
+capture, represented as both its boundary and handoff. It arms no channels and
+cannot dispatch or evaluate a predicate.
 
 Readiness that arrives after the latest observation requests exactly one
 handoff capture. If a qualifying observation was already admitted after the

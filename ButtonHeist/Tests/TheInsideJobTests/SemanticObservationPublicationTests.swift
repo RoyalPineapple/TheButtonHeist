@@ -617,9 +617,7 @@ final class SemanticObservationPublicationTests: SemanticObservationStreamTestCa
         stream.settleVisibleObservation = { _, _, _, signal, _ in
             SettleSession.Result(
                 outcome: .cancelled(timeMs: 0),
-                events: [],
                 finalObservation: nil,
-                elementsByKey: [:],
                 tripwireSignal: signal
             )
         }

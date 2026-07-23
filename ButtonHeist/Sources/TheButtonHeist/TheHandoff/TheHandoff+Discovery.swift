@@ -1,25 +1,17 @@
 import Foundation
-import os.log
 
 import TheScore
-
-private let handoffDiscoveryLogger = ButtonHeistLog.logger(.handoff(.discovery))
 
 @ButtonHeistActor
 extension TheHandoff {
     func startDiscovery() {
-        handoffDiscoveryLogger.info("startDiscovery called, hasSession=\(self.discoveryLifecycle.hasDiscoverySession)")
-        guard !discoveryLifecycle.hasDiscoverySession else {
-            handoffDiscoveryLogger.info("Already discovering, skipping")
-            return
-        }
+        guard !discoveryLifecycle.hasDiscoverySession else { return }
 
         discoveryLifecycle.start(
             makeDiscovery: makeDiscovery,
             onDeviceFound: { [weak self] device in self?.onDeviceFound?(device) },
             onDeviceLost: { [weak self] device in self?.onDeviceLost?(device) }
         )
-        handoffDiscoveryLogger.info("Discovery started")
     }
 
     func stopDiscovery() {

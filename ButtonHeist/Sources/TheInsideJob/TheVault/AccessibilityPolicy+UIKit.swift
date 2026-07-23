@@ -37,8 +37,7 @@ extension AccessibilityPolicy {
     static let interactiveTraitsBitmask: AccessibilityTraits =
         AccessibilityTraits.fromNames(interactiveTraits.map(\.rawValue))
 
-    /// Bitmask form of `staticOnlyTraits`. Consumed by
-    /// `TheVault.Interactivity.checkInteractivity` for subset checks.
+    /// Bitmask form of `staticOnlyTraits`.
     static let staticOnlyTraitsBitmask: AccessibilityTraits =
         AccessibilityTraits.fromNames(staticOnlyTraits.map(\.rawValue))
 

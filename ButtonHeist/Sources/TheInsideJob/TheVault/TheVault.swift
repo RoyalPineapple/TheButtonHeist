@@ -16,13 +16,16 @@ import AccessibilitySnapshotParser
 final class TheVault {
 
     typealias VisibleObservationSource = @MainActor (TheVault) -> InterfaceObservation?
+    typealias KeyboardVisibilitySource = @MainActor () -> Bool?
 
     init(
         tripwire: TheTripwire,
-        visibleObservationSource: @escaping VisibleObservationSource = TheVault.captureVisibleObservation
+        visibleObservationSource: @escaping VisibleObservationSource = TheVault.captureVisibleObservation,
+        keyboardVisibilitySource: @escaping KeyboardVisibilitySource = { nil }
     ) {
         self.tripwire = tripwire
         self.visibleObservationSource = visibleObservationSource
+        self.keyboardVisibilitySource = keyboardVisibilitySource
     }
 
     /// TheTripwire handles window access and animation detection.
@@ -37,6 +40,11 @@ final class TheVault {
     /// The only source used for explicit viewport refreshes. Production parses
     /// UIKit; tests may replace the source only while constructing the vault.
     private let visibleObservationSource: VisibleObservationSource
+    private let keyboardVisibilitySource: KeyboardVisibilitySource
+
+    var keyboardVisible: Bool? {
+        keyboardVisibilitySource()
+    }
 
     // MARK: - Interface State
 

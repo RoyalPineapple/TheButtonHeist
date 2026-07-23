@@ -7,7 +7,7 @@ public enum HeistPredicateEvidenceOutcome: String, Codable, Sendable, Equatable 
     case failed
 }
 
-public struct HeistWaitEvidence: Codable, Sendable, Equatable {
+public struct HeistSettlementEvidence: Codable, Sendable, Equatable {
     private let storage: Storage
     public let baselineSummary: String?
     public let finalSummary: String?
@@ -93,8 +93,8 @@ public struct HeistWaitEvidence: Codable, Sendable, Equatable {
         _ check: MatchedCheck,
         baselineSummary: String? = nil,
         finalSummary: String? = nil
-    ) -> HeistWaitEvidence {
-        return HeistWaitEvidence(
+    ) -> HeistSettlementEvidence {
+        return HeistSettlementEvidence(
             storage: .matched(check),
             baselineSummary: baselineSummary,
             finalSummary: finalSummary
@@ -105,8 +105,8 @@ public struct HeistWaitEvidence: Codable, Sendable, Equatable {
         _ check: UnmatchedCheck,
         baselineSummary: String? = nil,
         finalSummary: String? = nil
-    ) -> HeistWaitEvidence {
-        return HeistWaitEvidence(
+    ) -> HeistSettlementEvidence {
+        return HeistSettlementEvidence(
             storage: .handledElse(check),
             baselineSummary: baselineSummary,
             finalSummary: finalSummary
@@ -117,8 +117,8 @@ public struct HeistWaitEvidence: Codable, Sendable, Equatable {
         _ check: UnmatchedCheck,
         baselineSummary: String? = nil,
         finalSummary: String? = nil
-    ) -> HeistWaitEvidence {
-        return HeistWaitEvidence(
+    ) -> HeistSettlementEvidence {
+        return HeistSettlementEvidence(
             storage: .failed(check),
             baselineSummary: baselineSummary,
             finalSummary: finalSummary

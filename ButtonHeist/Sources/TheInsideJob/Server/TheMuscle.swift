@@ -170,7 +170,7 @@ actor TheMuscle {
         address: ClientNetworkAddress,
         generation: ClientDelivery.Generation
     ) async {
-        guard admitsCurrentGeneration(generation, operation: .clientConnection) else { return }
+        guard admitsCurrentGeneration(generation) else { return }
         await executeAdmissionEffects(
             admission.registerClientAddress(clientId, address: address),
             generation: generation
@@ -228,7 +228,7 @@ actor TheMuscle {
         respond: @escaping SocketResponseHandler,
         generation: ClientDelivery.Generation
     ) async -> ClientAdmission {
-        guard admitsCurrentGeneration(generation, operation: .clientRequest) else {
+        guard admitsCurrentGeneration(generation) else {
             return .handled
         }
         return await resolve(admission.admit(
@@ -242,7 +242,7 @@ actor TheMuscle {
         _ clientId: Int,
         generation: ClientDelivery.Generation
     ) async {
-        guard admitsCurrentGeneration(generation, operation: .clientDisconnection) else { return }
+        guard admitsCurrentGeneration(generation) else { return }
         await executeAdmissionEffects(admission.removeClient(clientId), generation: generation)
         applySessionEffects(session.removeConnection(clientId, at: Date()))
     }
@@ -310,7 +310,7 @@ actor TheMuscle {
     ) async {
         for effect in effects {
             if let generation,
-               !admitsCurrentGeneration(generation, operation: .admissionEffect) {
+               !admitsCurrentGeneration(generation) {
                 return
             }
             switch effect {
@@ -360,23 +360,23 @@ actor TheMuscle {
     private func recordAdmissionLog(_ event: ClientAdmission.Log) {
         switch event {
         case .clientAuthenticatedWithToken(let clientId):
-            muscleLogger.info("Client \(clientId) authenticated with token")
+            muscleLogger.debug("Client \(clientId) authenticated with token")
         case .sessionLockRejected(let clientId, let message):
-            muscleLogger.warning("Client \(clientId) rejected - \(message, privacy: .public)")
-        case .rateLimited(let clientId):
-            muscleLogger.warning("Client \(clientId) rate limited, handling message")
+            muscleLogger.debug("Client \(clientId) rejected - \(message, privacy: .public)")
+        case .rateLimited:
+            break
         case .undecodableUnauthenticatedMessage(let clientId):
-            muscleLogger.warning("Client \(clientId) sent unparsable message before authenticating")
+            muscleLogger.debug("Client \(clientId) sent unparsable message before authenticating")
         case .undecodableAuthenticatedMessage(let clientId):
-            muscleLogger.warning("Authenticated client \(clientId) sent unparsable message")
+            muscleLogger.debug("Authenticated client \(clientId) sent unparsable message")
         case .authenticatedProtocolMessage(let clientId, let wireType):
-            muscleLogger.warning(
+            muscleLogger.debug(
                 "Authenticated client \(clientId) sent protocol message \(wireType.rawValue, privacy: .public) after admission"
             )
         case .unauthenticatedMessage(let clientId, let message):
-            muscleLogger.warning("Client \(clientId) rejected before auth: \(message, privacy: .public)")
+            muscleLogger.debug("Client \(clientId) rejected before auth: \(message, privacy: .public)")
         case .authenticationTimeout(let clientId, let timeoutSeconds):
-            muscleLogger.warning("Client \(clientId) did not authenticate within \(timeoutSeconds)s deadline")
+            muscleLogger.debug("Client \(clientId) did not authenticate within \(timeoutSeconds)s deadline")
         case .versionMismatch(let clientId, let serverVersion, let clientVersion):
             muscleLogger.warning(
                 "Client \(clientId) buttonHeistVersion mismatch: server=\(serverVersion), client=\(clientVersion)"
@@ -384,9 +384,9 @@ actor TheMuscle {
         case .missingRegisteredAddress(let clientId):
             muscleLogger.warning("Client \(clientId) has no registered address, rejecting auth")
         case .lockedOut(let clientId, let address):
-            muscleLogger.warning("Client \(clientId) locked out (address: \(address)), rejecting")
-        case .invalidToken(let clientId, let attempts):
-            muscleLogger.warning("Client \(clientId) sent invalid token, rejected (attempt \(attempts))")
+            muscleLogger.debug("Client \(clientId) locked out (address: \(address)), rejecting")
+        case .invalidToken:
+            break
         case .lockoutStarted(let address, let attempts):
             muscleLogger.warning("Address \(address) locked out after \(attempts) failed attempts")
         }
@@ -410,7 +410,7 @@ actor TheMuscle {
         _ clientId: Int,
         generation: ClientDelivery.Generation
     ) async {
-        guard admitsCurrentGeneration(generation, operation: .authenticationTimeout) else { return }
+        guard admitsCurrentGeneration(generation) else { return }
         await executeAdmissionEffects(
             admission.authenticationTimeout(
                 clientId,
@@ -449,11 +449,11 @@ actor TheMuscle {
         case .sessionClaimed(let clientId):
             muscleLogger.info("Session claimed by client \(clientId)")
         case .clientRejoinedDuringGracePeriod(let clientId):
-            muscleLogger.info("Client \(clientId) rejoined session during grace period")
+            muscleLogger.debug("Client \(clientId) rejoined session during grace period")
         case .sessionReleased:
             muscleLogger.info("Session released")
         case .releaseTimerStarted(let timeout):
-            muscleLogger.info("All session connections gone, starting \(timeout)s release timer")
+            muscleLogger.debug("All session connections gone, starting \(timeout)s release timer")
         }
     }
 
@@ -490,7 +490,6 @@ actor TheMuscle {
     ) async -> ResponseDeliveryOutcome {
         switch encodeEnvelope(message, requestId: requestId) {
         case .success(let data):
-            muscleLogger.debug("Sending \(data.count) bytes")
             let sendOutcome: ServerSendOutcome
             switch destination {
             case .response(let respond):
@@ -534,26 +533,8 @@ actor TheMuscle {
         }
     }
 
-    private enum GenerationOperation: String {
-        case admissionEffect
-        case authenticationTimeout
-        case clientConnection
-        case clientDisconnection
-        case clientRequest
-    }
-
-    private func admitsCurrentGeneration(
-        _ candidate: ClientDelivery.Generation,
-        operation: GenerationOperation
-    ) -> Bool {
-        guard delivery.isWired(generation: candidate) else {
-            let current = delivery.generation.map { String($0.rawValue) } ?? "none"
-            muscleLogger.debug(
-                "Rejected callback \(operation.rawValue, privacy: .public): candidate=\(candidate.rawValue) current=\(current, privacy: .public)"
-            )
-            return false
-        }
-        return true
+    private func admitsCurrentGeneration(_ candidate: ClientDelivery.Generation) -> Bool {
+        delivery.isWired(generation: candidate)
     }
 }
 #endif // DEBUG

@@ -55,6 +55,43 @@ package extension AccessibilityPredicateCore {
             false
         }
     }
+
+    var singularTarget: Phase.Target? {
+        switch self {
+        case .presence(let presence):
+            return presence.target
+        case .changed(.screen(let assertions)):
+            guard assertions.count == 1,
+                  case .presence(let presence) = assertions[0]
+            else { return nil }
+            return presence.target
+        case .changed(.elements(let assertions)):
+            guard assertions.count == 1 else { return nil }
+            return assertions[0].target
+        case .announcement, .noChange:
+            return nil
+        }
+    }
+}
+
+package extension PresencePredicateCore {
+    var target: Phase.Target {
+        switch self {
+        case .exists(let target), .missing(let target):
+            target
+        }
+    }
+}
+
+package extension ElementAssertionCore {
+    var target: Phase.Target {
+        switch self {
+        case .presence(let presence):
+            presence.target
+        case .appeared(let target), .disappeared(let target), .updated(let target, _):
+            target
+        }
+    }
 }
 
 package extension PresencePredicateCore where Phase == AuthoredAccessibilityPredicatePhase {
@@ -248,6 +285,7 @@ package struct ResolvedAccessibilityPredicate: Sendable, Equatable {
     }
 
     package var requiresChangeBaseline: Bool { core.requiresChangeBaseline }
+    package var singularTarget: ResolvedAccessibilityTarget? { core.singularTarget }
 }
 
 package struct ResolvedScreenAssertion: Sendable, Equatable {

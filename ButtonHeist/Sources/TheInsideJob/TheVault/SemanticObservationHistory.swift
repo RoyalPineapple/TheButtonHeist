@@ -64,6 +64,11 @@ extension Observation {
         internal var notificationSequence: UInt64 { snapshot.notificationSequence }
         internal var trace: AccessibilityTrace { snapshot.trace }
         internal var previousMoment: Moment? { transition.previousMoment }
+        internal var summary: String {
+            let interfaceSummary = "interface: \(moment.capture.interface.projectedElements.count) elements"
+            guard let screenID = moment.capture.context.screenId else { return interfaceSummary }
+            return "screen: \(screenID); \(interfaceSummary)"
+        }
 
         internal var latestCaptureRef: AccessibilityTrace.CaptureRef? {
             trace.captures.last.map(AccessibilityTrace.CaptureRef.init(capture:))
@@ -328,6 +333,28 @@ extension Observation.Log {
 
         fileprivate func belongs(toSameLogAs other: Index) -> Bool {
             logID == other.logID
+        }
+    }
+}
+
+extension Observation.Event {
+    internal func canFulfill(_ scope: SemanticObservationScope) -> Bool {
+        switch self {
+        case .snapshot(let event):
+            event.scope.canFulfill(scope)
+        case .announcement:
+            true
+        }
+    }
+}
+
+extension Observation.EventsSince {
+    internal func projected(for scope: SemanticObservationScope) -> Self {
+        switch self {
+        case .events(let events):
+            .events(events.filter { $0.canFulfill(scope) })
+        case .expired, .unavailable:
+            self
         }
     }
 }

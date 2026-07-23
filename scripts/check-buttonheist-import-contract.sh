@@ -106,14 +106,14 @@ cleanup() {
 trap cleanup EXIT
 
 build_fixture() {
-    local label="$1"
-    local fixture_dir="$2"
-    shift 2
-    local scratch_dir="$SCRATCH_PATH/$(basename "$fixture_dir")"
+    local fixture_dir="$1"
+    shift
+    local scratch_dir
+    scratch_dir="$SCRATCH_PATH/$(basename "$fixture_dir")"
 
-    echo "Compiling $label"
     CLANG_MODULE_CACHE_PATH="$SWIFT_CACHE_PATH/clang" \
         swift build \
+        --quiet \
         --disable-sandbox \
         --cache-path "$SWIFT_CACHE_PATH/swiftpm" \
         --package-path "$fixture_dir" \
@@ -121,11 +121,10 @@ build_fixture() {
         "$@"
 }
 
-build_fixture "external ButtonHeist import contract fixture" "$FIXTURE_DIR"
-build_fixture "external ThePlans authoring import contract fixture" "$AUTHORING_FIXTURE_DIR"
-build_fixture "external public Swift product import contract fixture" "$PUBLIC_PRODUCTS_FIXTURE_DIR"
+build_fixture "$FIXTURE_DIR"
+build_fixture "$AUTHORING_FIXTURE_DIR"
+build_fixture "$PUBLIC_PRODUCTS_FIXTURE_DIR"
 build_fixture \
-    "iOS DEBUG public products import contract fixture" \
     "$IOS_PUBLIC_PRODUCTS_FIXTURE_DIR" \
     --triple "$IOS_SIMULATOR_TRIPLE" \
     --sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" \
@@ -217,32 +216,39 @@ print("TheScore must not be importable through ThePlans")
 EOF
 
 negative_probe() {
-    local label="$1"
-    local probe_dir="$2"
-    local target="$3"
+    local probe_dir="$1"
+    local target="$2"
+    local expected_diagnostic="$3"
     local failure="$4"
-    if build_fixture "$label" "$probe_dir" --target "$target"; then
+    local output
+
+    if output="$(build_fixture "$probe_dir" --target "$target" 2>&1)"; then
+        [[ -z "$output" ]] || printf '%s\n' "$output" >&2
         fail "$failure"
+    fi
+    if ! grep -Fq "$expected_diagnostic" <<< "$output"; then
+        printf '%s\n' "$output" >&2
+        fail "$target failed without the expected diagnostic: $expected_diagnostic"
     fi
 }
 
 negative_probe \
-    "negative ButtonHeist -> TheInsideJob import probe" \
     "$NEGATIVE_BUTTONHEIST_PROBE_DIR" \
     "ButtonHeistNegativeTheInsideJobImportProbe" \
+    "no such module 'TheInsideJob'" \
     "ButtonHeist exposed disallowed import TheInsideJob"
 negative_probe \
-    "negative ButtonHeist -> ButtonHeistTesting import probe" \
     "$NEGATIVE_BUTTONHEIST_PROBE_DIR" \
     "ButtonHeistNegativeTestingImportProbe" \
+    "no such module 'ButtonHeistTesting'" \
     "ButtonHeist exposed disallowed import ButtonHeistTesting"
 negative_probe \
-    "negative ButtonHeist -> TheScore symbol probe" \
     "$NEGATIVE_BUTTONHEIST_PROBE_DIR" \
     "ButtonHeistNegativeTheScoreSymbolProbe" \
+    "cannot find type 'HeistValue' in scope" \
     "ButtonHeist re-exported TheScore symbols"
 negative_probe \
-    "negative ThePlans -> TheScore import probe" \
     "$NEGATIVE_THEPLANS_PROBE_DIR" \
     "ThePlansNegativeTheScoreImportProbe" \
+    "no such module 'TheScore'" \
     "ThePlans exposed disallowed import TheScore"

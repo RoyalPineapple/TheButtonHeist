@@ -592,35 +592,6 @@ extension TheVaultResolutionTests {
         XCTAssertNil(try XCTUnwrap(bagman.liveInterfaceElement(heistId: "row")).scrollMembership)
     }
 
-    func testCancelledNoScreenSettleDoesNotPublishSettledTruth() async {
-        let settled = InterfaceObservation.makeForTests(elements: [(element(label: "Settled"), "settled")])
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(settled)
-        let sequence = await bagman.semanticObservationStream.latestCommittedSnapshot()?.sequence
-
-        let settleResult = SettleSession.Result(
-            outcome: .cancelled(timeMs: 1),
-            events: [],
-            finalObservation: nil,
-            elementsByKey: [:],
-            tripwireSignal: bagman.tripwire.tripwireSignal()
-        )
-        let result = await bagman.semanticObservationStream.settleActionObservation(
-            baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
-            settleResult: settleResult
-        )
-
-        XCTAssertEqual(result.settleResult.outcome, .cancelled(timeMs: 1))
-        guard case .unavailable = result.commitOutcome else {
-            return XCTFail("Expected cancelled settle to return unavailable evidence")
-        }
-        let retainedSequence = await bagman.semanticObservationStream.latestCommittedSnapshot()?.sequence
-        let invalidated = await bagman.semanticObservationStream.latestSettledObservationInvalidated()
-        XCTAssertEqual(retainedSequence, sequence)
-        XCTAssertEqual(bagman.interfaceTree.orderedElements.first?.element.label, "Settled")
-        XCTAssertNil(bagman.latestFailedSettleDiagnosticEvidence)
-        XCTAssertTrue(invalidated)
-    }
-
 }
 
 private func containsLiveTripwireIdentity(_ value: Any) -> Bool {

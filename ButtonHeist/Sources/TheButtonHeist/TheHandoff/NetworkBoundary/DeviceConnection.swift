@@ -105,7 +105,6 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
     }
 
     func connect() {
-        deviceConnectionLogger.info("Connecting to \(self.device.name)...")
         transitionToDisconnected(.local)
 
         guard let token else {
@@ -115,7 +114,6 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
         }
 
         let parameters = ButtonHeistTLSPreSharedKey.networkParameters(from: token.description)
-        deviceConnectionLogger.info("TLS enabled with token-derived PSK")
 
         let conn = NWConnection(to: device.endpoint.nwEndpoint, using: parameters)
         let sessionID = UUID()
@@ -249,7 +247,6 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
         case .ready:
             guard case .connecting(let session) = runtimePhase else { return }
             if let connection, session.connection !== connection { return }
-            deviceConnectionLogger.info("Connected")
             setRuntimePhase(.connected(session))
             onTransportReady?()
             startReceiving()
@@ -257,7 +254,6 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
             deviceConnectionLogger.error("Connection failed: \(error)")
             transitionToDisconnected(.observed(.networkError(NetworkTransportFailure(error))))
         case .cancelled:
-            deviceConnectionLogger.info("Connection cancelled")
             // Client-initiated teardown paths (disconnect(), .failed, buffer overflow,
             // protocol/auth rejection) all set the runtime phase to disconnected before
             // the cancel callback reaches the actor, so wasActive is false and we stay

@@ -40,7 +40,6 @@ extension TheVault {
             facts: facts,
             offscreenScrollElements: result.inventoryEnumeration.offscreenElements
         )
-        logObservationBuildEvents(projection.logEvents)
         return try admitObservation(
             from: projection,
             result: result
@@ -90,24 +89,7 @@ extension TheVault {
             facts: facts
         )
 
-        var logEvents: [ObservationBuildLogEvent] = []
-        for entry in entries {
-            if let observedScrollContentActivationPoint = entry.treeElement.observedScrollContentActivationPoint {
-                logEvents.append(
-                    .capturedObservedScrollContentActivationPoint(
-                        heistId: entry.heistId,
-                        containerPath: observedScrollContentActivationPoint.ownerPath,
-                        index: entry.treeElement.scrollMembership?.index,
-                        point: observedScrollContentActivationPoint.point.cgPoint
-                    )
-                )
-            }
-        }
-
         let firstResponders = entries.filter(\.isFirstResponder)
-        if firstResponders.count > 1 {
-            logEvents.append(.multipleFirstResponders(firstResponders.map(\.heistId)))
-        }
         let firstResponderHeistId = firstResponders.count == 1
             ? firstResponders.first?.heistId
             : nil
@@ -126,8 +108,7 @@ extension TheVault {
         )
         return ObservationBuildProjection(
             tree: tree,
-            entries: entries,
-            logEvents: logEvents
+            entries: entries
         )
     }
 
@@ -246,30 +227,6 @@ extension TheVault {
         }
         return result.hierarchy.enumerated().map { rootIndex, root in
             translated(root, at: TreePath([rootIndex]), inherited: .zero)
-        }
-    }
-
-    private static func logObservationBuildEvents(_ events: [ObservationBuildLogEvent]) {
-        for event in events {
-            switch event {
-            case .capturedObservedScrollContentActivationPoint(let heistId, let containerPath, let index, let point):
-                let containerPathDescription = containerPath.indices.map(String.init).joined(separator: ".")
-                let indexDescription = index.map(String.init) ?? "nil"
-                insideJobLogger.debug(
-                    """
-                    Captured observed scroll-content activation point \
-                    heistId=\(heistId.rawValue, privacy: .public) \
-                    containerPath=\(containerPathDescription, privacy: .public) \
-                    index=\(indexDescription, privacy: .public) \
-                    point=(\(Double(point.x), privacy: .public), \(Double(point.y), privacy: .public))
-                    """
-                )
-
-            case .multipleFirstResponders(let heistIds):
-                insideJobLogger.warning(
-                    "Multiple first responders detected: \(heistIds.map { $0.description }.joined(separator: ", "))"
-                )
-            }
         }
     }
 
@@ -505,17 +462,6 @@ extension TheVault {
     private struct ObservationBuildProjection {
         let tree: InterfaceTree
         let entries: [ObservationBuildEntry]
-        let logEvents: [ObservationBuildLogEvent]
-    }
-
-    private enum ObservationBuildLogEvent: Equatable {
-        case capturedObservedScrollContentActivationPoint(
-            heistId: HeistId,
-            containerPath: TreePath,
-            index: Int?,
-            point: CGPoint
-        )
-        case multipleFirstResponders([HeistId])
     }
 
 }

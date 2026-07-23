@@ -418,7 +418,7 @@ final class TheBrainsActionTests: XCTestCase {
         labels: [String],
         screenId: String? = nil,
         screenChanged: Bool = false
-    ) async -> ActionEvidenceProjector.Baseline {
+    ) async -> Observation.SnapshotEvent {
         await observedState(elements: labels.enumerated().map { index, label in
             (makeElement(label: label), HeistId(rawValue: "element_\(index)"))
         }, screenId: screenId, screenChanged: screenChanged)
@@ -442,21 +442,24 @@ final class TheBrainsActionTests: XCTestCase {
         elements: [(AccessibilityElement, HeistId)],
         screenId: String? = nil,
         screenChanged: Bool = false
-    ) async -> ActionEvidenceProjector.Baseline {
-        await brains.vault.installObservationForTesting(.makeForTests(elements: elements))
-        let state = await brains.actionEvidenceProjector.projectBaseline()
-        guard let screenId else { return state }
+    ) async -> Observation.SnapshotEvent {
+        let event = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            .makeForTests(elements: elements)
+        )
+        guard let screenId else { return event }
+        let state = event.moment.capture
 
         let context = AccessibilityTrace.Context(
-            firstResponder: state.capture.context.firstResponder,
-            keyboardVisible: state.capture.context.keyboardVisible,
+            firstResponder: state.context.firstResponder,
+            keyboardVisible: state.context.keyboardVisible,
             screenId: screenId,
-            windowStack: state.capture.context.windowStack
+            observationGeneration: state.context.observationGeneration,
+            windowStack: state.context.windowStack
         )
         let capture = AccessibilityTrace.Capture(
-            sequence: state.capture.sequence,
-            interface: state.capture.interface,
-            parentHash: state.capture.parentHash,
+            sequence: state.sequence,
+            interface: state.interface,
+            parentHash: state.parentHash,
             context: context,
             transition: screenChanged
                 ? AccessibilityTrace.Transition(accessibilityNotifications: [
@@ -468,23 +471,68 @@ final class TheBrainsActionTests: XCTestCase {
                         associatedElement: .none
                     ),
                 ])
-                : state.capture.transition
+                : state.transition
         )
-        return ActionEvidenceProjector.Baseline(
-            observation: state.observation,
-            capture: capture,
-            tripwireSignal: state.tripwireSignal,
-            settledObservationSequence: state.settledObservationSequence
+        let snapshot = Observation.Snapshot(
+            sequence: event.sequence,
+            generation: event.generation,
+            sourceScope: event.scope,
+            observation: event.snapshot.observation,
+            semanticSignal: event.snapshot.semanticSignal,
+            notificationSequence: event.notificationSequence,
+            trace: AccessibilityTrace(capture: capture)
         )
+        var log = Observation.Log(retentionLimit: 1)
+        do {
+            return try log.record(snapshot: snapshot, continuity: .sameGeneration)
+        } catch {
+            preconditionFailure("Test observation fixture produced an invalid transition: \(error)")
+        }
+    }
+
+    func observationEvents(
+        for events: [Observation.SnapshotEvent]
+    ) -> [Observation.SnapshotEvent] {
+        var log = Observation.Log(retentionLimit: Observation.Store.defaultRetentionLimit)
+        var previousCapture: AccessibilityTrace.Capture?
+        var recordedEvents: [Observation.SnapshotEvent] = []
+
+        for (index, event) in events.enumerated() {
+            let capture = event.moment.capture
+            let trace = previousCapture.map {
+                AccessibilityTrace(capture: $0).appending(
+                    capture.interface,
+                    context: capture.context,
+                    transition: capture.transition
+                )
+            } ?? AccessibilityTrace(capture: capture)
+            let snapshot = Observation.Snapshot(
+                sequence: SettledObservationSequence(UInt64(index + 1)),
+                generation: .initial,
+                sourceScope: .visible,
+                observation: event.snapshot.observation,
+                semanticSignal: .empty,
+                notificationSequence: UInt64(index + 1),
+                trace: trace
+            )
+            do {
+                let event = try log.record(snapshot: snapshot, continuity: .sameGeneration)
+                recordedEvents.append(event)
+            } catch {
+                preconditionFailure("Test moment fixture produced an invalid observation transition: \(error)")
+            }
+            previousCapture = trace.captures.last
+        }
+        return recordedEvents
     }
 
     func heistRuntime(
-        observations: [ActionEvidenceProjector.Baseline],
-        actionExpectationContext: ActionExpectationContext? = nil,
+        observations: [Observation.SnapshotEvent],
         execute: (@MainActor (ResolvedHeistActionCommand) async -> ActionResult)? = nil,
-        wait: (@MainActor (TheBrains.HeistRuntimeWaitRequest) async -> ActionResult)? = nil,
+        settle: (@MainActor (Settlement.Command) async -> Settlement.Result)? = nil,
         observedScopes: (@MainActor (SemanticObservationScope) -> Void)? = nil,
         observedTimeouts: (@MainActor (Double?) -> Void)? = nil,
+        observedSettlementCommands: (@MainActor (Settlement.Command) -> Void)? = nil,
         expectationContextScopes: (@MainActor (SemanticObservationScope?) -> Void)? = nil,
         unavailableObservationCount: Int = 0,
         file: StaticString = #filePath,
@@ -498,8 +546,6 @@ final class TheBrainsActionTests: XCTestCase {
             file: file,
             line: line
         )
-        let caseBrains = TheBrains(tripwire: TheTripwire())
-
         return TheBrains.HeistExecutionRuntime(
             execute: { command, expectation in
                 expectationContextScopes?(expectation?.predicate.observationScope)
@@ -517,70 +563,33 @@ final class TheBrainsActionTests: XCTestCase {
                         actionExpectationContext: nil
                     )
                 }
-                let waitResult = await self.heistRuntimeWaitResult(
-                    for: .actionEndpoint(
-                        expectation,
-                        trace: result.settled == true ? result.accessibilityTrace : nil,
-                        context: actionExpectationContext
-                    ),
-                    wait: wait,
+                let settlement = await self.scriptedSettlement(
+                    Settlement.Command(observing: expectation),
+                    settle: settle,
                     observationSource: observationSource
                 )
-                let evidence: HeistActionEvidence
-                switch waitResult.outcome {
-                case .matched(let expectationResult, let checkedExpectation):
-                    evidence = .expectation(
-                        dispatchResult: result,
-                        expectationResult: expectationResult,
-                        expectation: checkedExpectation.result
-                    )
-                case .unmatched(let expectationResult, let checkedExpectation):
-                    evidence = .expectation(
-                        dispatchResult: result,
-                        expectationResult: expectationResult,
-                        expectation: checkedExpectation.result
-                    )
-                }
-                return RuntimeActionExecution(
-                    evidence: evidence
-                )
+                let settlementEvidence = Settlement.ResultProjector.projectWait(settlement)
+                return RuntimeActionExecution(evidence: .expectation(
+                    dispatchResult: result,
+                    expectationResult: settlementEvidence.actionResult,
+                    expectation: settlementEvidence.expectation
+                ))
             },
-            wait: { request in
-                await self.heistRuntimeWaitResult(
-                    for: request,
-                    wait: wait,
+            settle: { command in
+                observedSettlementCommands?(command)
+                return await self.scriptedSettlement(
+                    command,
+                    settle: settle,
                     observationSource: observationSource
                 )
-            },
-            selectPredicateCase: { cases, timeout in
-                await observationSource.prepareCaseSelection(
-                    in: caseBrains.vault,
-                    timeout: timeout
-                )
-                return await caseBrains.interactionCoordinator.waitForPredicateCases(
-                    cases,
-                    timeout: timeout
-                )
-            },
-            settledEvidence: { scope, _, timeout in
-                observationSource.next(scope: scope, timeout: timeout)
             }
         )
     }
 
-    func repeatUntilWaitRuntime(
-        observations: [ActionEvidenceProjector.Baseline],
+    func repeatUntilSettlementRuntime(
         execute: (@MainActor (ResolvedHeistActionCommand) async -> ActionResult)? = nil,
-        wait: @escaping @MainActor (TheBrains.HeistRuntimeWaitRequest) async -> HeistWaitResult
+        settle: @escaping @MainActor (Settlement.Command) async -> Settlement.Result
     ) -> TheBrains.HeistExecutionRuntime {
-        let observationSource = ScriptedHeistObservationSource(
-            observations: observations,
-            unavailableObservationCount: 0,
-            observedScopes: nil,
-            observedTimeouts: nil,
-            file: #filePath,
-            line: #line
-        )
         return TheBrains.HeistExecutionRuntime(
             execute: { command, _ in
                 let result: ActionResult
@@ -593,148 +602,29 @@ final class TheBrainsActionTests: XCTestCase {
                 }
                 return RuntimeActionExecution(result: result, actionExpectationContext: nil)
             },
-            wait: wait,
-            selectPredicateCase: { _, _ in
-                .selectingFirstMatch(cases: [], ifNone: .noMatch, elapsedMs: 0)
-            },
-            settledEvidence: { scope, _, timeout in
-                observationSource.next(scope: scope, timeout: timeout)
-            }
+            settle: settle
         )
     }
 
-    private func heistRuntimeWaitResult(
-        for request: TheBrains.HeistRuntimeWaitRequest,
-        wait: (@MainActor (TheBrains.HeistRuntimeWaitRequest) async -> ActionResult)?,
+    private func scriptedSettlement(
+        _ command: Settlement.Command,
+        settle: (@MainActor (Settlement.Command) async -> Settlement.Result)?,
         observationSource: ScriptedHeistObservationSource
-    ) async -> HeistWaitResult {
-        let waitStep = request.step
-        let initialTrace = request.initialTrace
-        let afterSequence = request.afterSequence
-        let observationScope = SemanticObservationScope.visible
-        if let wait {
-            return heistWaitResult(for: waitStep, result: await wait(request))
+    ) async -> Settlement.Result {
+        if let settle {
+            return await settle(command)
         }
-        if waitStep.predicate.requiresChangeBaseline,
-           let initialTrace,
-           afterSequence == nil {
-            let expectation = PredicateEvaluation.evaluate(
-                waitStep.predicate,
-                expression: waitStep.predicateExpression,
-                in: initialTrace,
-                completeness: .incomplete
-            )
-            if expectation.met {
-                let result = makeWaitActionResult(
-                    met: expectation.met,
-                    message: expectation.actual,
-                    traceEvidence: makeTestTraceEvidence(initialTrace, completeness: .incomplete)
-                )
-                return heistWaitResult(for: waitStep, result: result, expectation: expectation)
+        if let baseline = command.baseline,
+           case .unavailable = baseline {
+            return TheInsideJobTests.scriptedSettlement(command, observation: nil)
+        }
+        let observation = observationSource.next(
+            scope: command.observationScope,
+            timeout: command.deadline.map {
+                $0.remainingDuration(at: RuntimeElapsed.now) / .seconds(1)
             }
-        }
-        guard let observation = observationSource.next(
-            scope: observationScope,
-            timeout: waitStep.timeout.seconds
-        ) else {
-            let expectation = ExpectationResult(
-                met: false,
-                predicate: waitStep.predicateExpression,
-                actual: "no settled semantic observation available"
-            )
-            let result = ActionResult.failure(
-                payload: .wait,
-                failureKind: .timeout,
-                message: expectation.actual,
-            )
-            return heistWaitResult(for: waitStep, result: result, expectation: expectation)
-        }
-        return heistWaitResult(for: waitStep, observation: observation)
-    }
-
-    private func heistWaitResult(
-        for step: ResolvedWaitRuntimeInput,
-        observation: SettledObservationEvidence
-    ) -> HeistWaitResult {
-        let expectation = PredicateEvaluation.evaluate(
-            step.predicate,
-            expression: step.predicateExpression,
-            in: observation
         )
-        let result = makeWaitActionResult(
-            met: expectation.met,
-            message: expectation.actual,
-            traceEvidence: makeTestTraceEvidence(
-                observation.accessibilityTrace,
-                completeness: .incomplete
-            )
-        )
-        switch expectation {
-        case .met(let expectation):
-            return .matched(
-                message: result.message,
-                traceEvidence: result.traceEvidence,
-                expectation: expectation,
-                observedSequence: observation.event.sequence,
-                observationSummary: observation.summary
-            )
-        case .unmet(let expectation):
-            return .timedOut(
-                message: result.message,
-                traceEvidence: result.traceEvidence,
-                expectation: expectation,
-                observedSequence: observation.event.sequence,
-                observationSummary: observation.summary
-            )
-        }
-    }
-
-    private func heistWaitResult(
-        for step: ResolvedWaitRuntimeInput,
-        result: ActionResult
-    ) -> HeistWaitResult {
-        let expectation: ExpectationResult
-        if result.outcome.isSuccess {
-            expectation = step.predicate.validate(against: result).expectation(for: step.predicateExpression)
-        } else {
-            expectation = ExpectationResult(
-                met: false,
-                predicate: step.predicateExpression,
-                actual: result.message ?? "failed"
-            )
-        }
-        return heistWaitResult(for: step, result: result, expectation: expectation)
-    }
-
-    private func heistWaitResult(
-        for _: ResolvedWaitRuntimeInput,
-        result: ActionResult,
-        expectation: ExpectationResult
-    ) -> HeistWaitResult {
-        if result.outcome.isSuccess, case .met(let expectation) = expectation {
-            return .matched(
-                message: result.message,
-                traceEvidence: result.traceEvidence,
-                expectation: expectation
-            )
-        }
-        let unmet = ExpectationResult.Unmet(expectation) ?? ExpectationResult.Unmet(
-            predicate: expectation.predicate,
-            actual: result.message ?? expectation.actual
-        )
-        if result.outcome.failureKind == .timeout || result.outcome.isSuccess {
-            return .timedOut(
-                message: result.message,
-                traceEvidence: result.traceEvidence,
-                expectation: unmet
-            )
-        }
-        return .failed(
-                failureKind: result.outcome.failureKind ?? .actionFailed,
-                message: result.message,
-                traceEvidence: result.traceEvidence,
-                expectation: unmet
-            )
+        return TheInsideJobTests.scriptedSettlement(command, observation: observation)
     }
 
     func metExpectation(
@@ -821,7 +711,7 @@ extension ResolvedHeistActionCommand {
 
 @MainActor
 private final class ScriptedHeistObservationSource {
-    private var remainingObservations: [ActionEvidenceProjector.Baseline]
+    private var remainingObservations: [Observation.SnapshotEvent]
     private var remainingUnavailableObservations: Int
     private var previousCapture: AccessibilityTrace.Capture?
     private var nextObservationSequence: SettledObservationSequence = 0
@@ -832,7 +722,7 @@ private final class ScriptedHeistObservationSource {
     private let line: UInt
 
     init(
-        observations: [ActionEvidenceProjector.Baseline],
+        observations: [Observation.SnapshotEvent],
         unavailableObservationCount: Int,
         observedScopes: (@MainActor (SemanticObservationScope) -> Void)?,
         observedTimeouts: (@MainActor (Double?) -> Void)?,
@@ -847,21 +737,10 @@ private final class ScriptedHeistObservationSource {
         self.line = line
     }
 
-    func prepareCaseSelection(
-        in vault: TheVault,
-        timeout: Double
-    ) async {
-        await vault.semanticObservationStream.invalidateLatestSettledObservation()
-        guard let observation = next(scope: .visible, timeout: timeout) else { return }
-        await vault.semanticObservationStream.commitVisibleObservationForTesting(
-            observation.baseline.observation
-        )
-    }
-
     func next(
         scope: SemanticObservationScope,
         timeout: Double?
-    ) -> SettledObservationEvidence? {
+    ) -> Observation.SnapshotEvent? {
         observedScopes?(scope)
         observedTimeouts?(timeout)
         if remainingUnavailableObservations > 0 {
@@ -872,52 +751,46 @@ private final class ScriptedHeistObservationSource {
             XCTFail("Expected scripted heist case observation", file: file, line: line)
             return nil
         }
-        let state = remainingObservations.removeFirst()
+        let sourceEvent = remainingObservations.removeFirst()
         nextObservationSequence += 1
-        let observation = observation(
-            from: state,
+        let event = event(
+            from: sourceEvent,
             scope: scope,
             sequence: nextObservationSequence
         )
-        previousCapture = observation.accessibilityTrace.captures.last
-        return observation
+        previousCapture = event.trace.captures.last
+        return event
     }
 
-    private func observation(
-        from state: ActionEvidenceProjector.Baseline,
+    private func event(
+        from sourceEvent: Observation.SnapshotEvent,
         scope: SemanticObservationScope,
         sequence: SettledObservationSequence
-    ) -> SettledObservationEvidence {
+    ) -> Observation.SnapshotEvent {
+        let capture = sourceEvent.moment.capture
         let trace = if let previousCapture {
             AccessibilityTrace(capture: previousCapture).appending(
-                state.capture.interface,
-                context: state.capture.context,
-                transition: state.capture.transition
+                capture.interface,
+                context: capture.context,
+                transition: capture.transition
             )
         } else {
-            AccessibilityTrace(capture: state.capture)
+            AccessibilityTrace(capture: capture)
         }
         let snapshot = Observation.Snapshot(
             sequence: sequence,
             generation: .initial,
             sourceScope: scope,
-            observation: .empty,
+            observation: sourceEvent.snapshot.observation,
             semanticSignal: .empty,
             notificationSequence: 0,
             trace: trace
         )
-        let event: Observation.SnapshotEvent
         do {
-            event = try log.record(snapshot: snapshot, continuity: .sameGeneration)
+            return try log.record(snapshot: snapshot, continuity: .sameGeneration)
         } catch {
             preconditionFailure("Scripted heist produced an invalid observation transition: \(error)")
         }
-        return SettledObservationEvidence(
-            event: event,
-            baseline: state,
-            accessibilityTrace: trace,
-            summary: "interface: \(state.interface.projectedElements.count) elements"
-        )
     }
 }
 

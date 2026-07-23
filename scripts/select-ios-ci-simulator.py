@@ -181,8 +181,9 @@ def main() -> None:
         boot = run(["xcrun", "simctl", "boot", selected["udid"]], check=False)
         if boot.returncode != 0:
             message = (boot.stderr or boot.stdout).strip()
-            if message:
-                print(f"simctl boot returned {boot.returncode}: {message}")
+            already_booted = "current state: booted" in message.lower() or "already booted" in message.lower()
+            if message and not already_booted:
+                print(f"simctl boot returned {boot.returncode}: {message}", file=sys.stderr)
         if args.wait:
             run(["xcrun", "simctl", "bootstatus", selected["udid"], "-b"])
 

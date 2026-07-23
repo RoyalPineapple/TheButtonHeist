@@ -30,19 +30,15 @@ extension SimpleSocketServer {
         case .rejected(let rejection):
             switch rejection {
             case .payloadTooLarge:
-                sendLogger.warning("Client \(clientId) send payload exceeds cap (\(byteCount) bytes), failing the originating request")
                 await sendOversizedResponseError(clientId: clientId, originalData: data, byteCount: byteCount)
-            case .bufferFull(let pendingBytes, _, _):
-                sendLogger.warning("Client \(clientId) send buffer full (\(pendingBytes) bytes pending), dropping \(byteCount) bytes")
+            case .bufferFull:
+                break
             }
             return .failed(rejection.sendFailure)
         }
 
         return await withCheckedContinuation { continuation in
             dependencies.sendContent(reservation.connection, dataToSend, .contentProcessed { [weak self] error in
-                if let error {
-                    sendLogger.error("Send error to client \(clientId): \(error)")
-                }
                 guard let self else {
                     continuation.resume(returning: .failed(.transportUnavailable))
                     return

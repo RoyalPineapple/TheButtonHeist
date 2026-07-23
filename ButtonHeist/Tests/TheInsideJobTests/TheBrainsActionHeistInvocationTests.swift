@@ -81,18 +81,26 @@ extension TheBrainsActionTests {
 
     func testHeistInvocationExpectationReturnsEvidenceOnInvokeNode() async throws {
         var executedCommands: [ResolvedHeistActionCommand] = []
+        var settlementCommands: [Settlement.Command] = []
+        let initialState = await observedState(labels: ["Search"])
+        let finalState = await observedState(labels: ["Search", "subtotal"])
+        let events = observationEvents(for: [initialState, finalState])
+        var nextObservationIndex = 0
         let expectation = WaitStep(
             predicate: .changed(.elements([.appeared(.label("subtotal"))])),
             timeout: defaultActionExpectationTimeout
         )
         let runtime = heistRuntime(
-            observations: [
-                await observedState(labels: ["Search"]),
-                await observedState(labels: ["Search", "subtotal"]),
-            ],
+            observations: [],
             execute: { command in
                 executedCommands.append(command)
                 return ActionResult.success(payload: .activate)
+            },
+            settle: { command in
+                settlementCommands.append(command)
+                let event = events[nextObservationIndex]
+                nextObservationIndex += 1
+                return scriptedSettlement(command, observation: event)
             }
         )
         let plan = try HeistPlan(
@@ -132,6 +140,12 @@ extension TheBrainsActionTests {
             executedCommands,
             [try HeistActionCommand.activate(.label("Milk")).resolve(in: .empty)]
         )
+        XCTAssertEqual(settlementCommands.count, 2)
+        XCTAssertEqual(
+            settlementCommands[0],
+            .currentState(scope: settlementCommands[1].observationScope)
+        )
+        XCTAssertEqual(settlementCommands[1].baseline, .supplied(.init(moment: events[0].moment)))
         XCTAssertEqual(report.summary.expectationsChecked, 1)
         XCTAssertEqual(report.summary.expectationsMet, 1)
         XCTAssertEqual(step.kind, .invoke)

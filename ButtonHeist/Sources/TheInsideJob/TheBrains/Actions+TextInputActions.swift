@@ -170,15 +170,6 @@ extension Actions {
         )
     }
 
-    func typeTextPayload(
-        resolvedElementId: HeistId,
-        in baseline: ActionEvidenceProjector.Baseline
-    ) -> String? {
-        guard let element = baseline.observation.tree.findElement(heistId: resolvedElementId),
-              let value = element.element.value else { return nil }
-        return value
-    }
-
     private func typeTextInjectionFailureMessage(
         for diagnostic: KeyboardTextInjectionDiagnostic,
         operation: String

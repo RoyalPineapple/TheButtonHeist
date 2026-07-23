@@ -204,5 +204,3 @@ assert_rendered_url_checksum_pair "MCP" "$(buttonheist_release_url "$CANONICAL_V
 if grep -Fq 'PLACEHOLDER' "$TMP_FORMULA"; then
     fail "rendered formula still contains checksum placeholder"
 fi
-
-echo "Release contract verified for $CANONICAL_VERSION"

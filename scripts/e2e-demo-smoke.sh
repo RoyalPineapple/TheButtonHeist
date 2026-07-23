@@ -54,10 +54,6 @@ loaded MCP host session.
 EOF
 }
 
-log() {
-    printf '==> %s\n' "$*"
-}
-
 fail() {
     printf 'Error: %s\n' "$*" >&2
     exit 1
@@ -134,7 +130,6 @@ delete_simulators_named() {
     local udid
     simulators_named "$name" | while IFS= read -r udid; do
         [[ -z "$udid" ]] && continue
-        log "Deleting stale simulator $name ($udid)"
         xcrun simctl shutdown "$udid" >/dev/null 2>&1 || true
         xcrun simctl delete "$udid" >/dev/null 2>&1 || true
     done
@@ -326,11 +321,10 @@ cleanup() {
         xcrun simctl terminate "$SIM_UDID" com.buttonheist.testapp >/dev/null 2>&1 || true
     fi
     if [[ -n "$SIM_UDID" && "$OWNS_SIMULATOR" == true && "$KEEP_SIMULATOR" == false ]]; then
-        log "Deleting simulator $SIM_NAME ($SIM_UDID)"
         xcrun simctl shutdown "$SIM_UDID" >/dev/null 2>&1 || true
         xcrun simctl delete "$SIM_UDID" >/dev/null 2>&1 || true
     elif [[ -n "$SIM_UDID" && "$OWNS_SIMULATOR" == true ]]; then
-        log "Keeping simulator $SIM_NAME ($SIM_UDID)"
+        printf 'Kept simulator %s (%s).\n' "$SIM_NAME" "$SIM_UDID"
     fi
     rm -rf "$DERIVED_DATA"
     rm -f "$BUILD_LOG"
@@ -365,7 +359,6 @@ run_cli_json() {
         fi
 
         if (( attempt < attempts )) && grep -q '"message":"Action failed: Could not access root view"' <<< "$output"; then
-            printf "==> Transient root view unavailable for '%s'; retrying (%s/%s)\\n" "$*" "$attempt" "$attempts" >&2
             attempt=$((attempt + 1))
             sleep 1
             continue
@@ -380,7 +373,7 @@ if port_is_open "$PORT"; then
     fail "port $PORT is already in use; pass --port to choose a deterministic alternate"
 fi
 
-log "Configuration"
+printf 'Demo smoke configuration:\n'
 printf '    worktree: %s\n' "$REPO_ROOT"
 printf '    simulator: %s\n' "$SIM_NAME"
 printf '    endpoint: %s\n' "$DEVICE_ENDPOINT"
@@ -396,21 +389,17 @@ if [[ "$SKIP_HEIST_PLAYBACK" == false ]]; then
     [[ -e "$HEIST_PATH" ]] || fail "heist fixture not found at $HEIST_PATH"
 fi
 
-log "Preparing dependencies"
 if [[ "$SKIP_GENERATE" == false ]]; then
     ./scripts/generate-project.sh
 fi
 
 if [[ "$SKIP_CLI_BUILD" == false ]]; then
-    log "Building ButtonHeistCLI"
     (cd ButtonHeistCLI && swift build -c "$CLI_CONFIGURATION" --quiet)
 elif [[ ! -x "$BUTTONHEIST_BIN" ]]; then
     fail "prebuilt ButtonHeistCLI binary not found at $BUTTONHEIST_BIN"
 fi
 
-log "Preparing simulator"
 if [[ -n "$SIM_UDID" ]]; then
-    log "Using existing simulator $SIM_UDID"
     xcrun simctl boot "$SIM_UDID" >/dev/null 2>&1 || true
 else
     delete_simulators_named "$SIM_NAME"
@@ -422,7 +411,6 @@ fi
 xcrun simctl bootstatus "$SIM_UDID" -b
 
 if [[ -z "$APP" ]]; then
-    log "Building BH Demo"
     rm -rf "$DERIVED_DATA"
     if ! xcodebuild \
         -workspace ButtonHeist.xcworkspace \
@@ -434,12 +422,9 @@ if [[ -z "$APP" ]]; then
         fail "BH Demo build failed"
     fi
     APP="$DERIVED_DATA/Build/Products/Debug-iphonesimulator/BHDemo.app"
-else
-    log "Using prebuilt BH Demo"
 fi
 [[ -d "$APP" ]] || fail "built app not found at $APP"
 
-log "Installing and launching BH Demo"
 xcrun simctl install "$SIM_UDID" "$APP"
 SIMCTL_CHILD_INSIDEJOB_PORT="$PORT" \
 SIMCTL_CHILD_INSIDEJOB_TOKEN="$TOKEN" \
@@ -448,17 +433,14 @@ xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp >/dev/null
 APP_LAUNCHED=true
 wait_for_port "$PORT"
 
-log "Verifying CLI connection"
 SESSION_JSON="$(run_cli_json get_session_state)"
 printf '%s' "$SESSION_JSON" | json_expect_ok "get_session_state"
 printf '%s' "$SESSION_JSON" | json_expect_connected
 
-log "Verifying root interface"
 ROOT_JSON="$(run_cli_json get_interface)"
 printf '%s' "$ROOT_JSON" | json_expect_ok "root get_interface"
 printf '%s' "$ROOT_JSON" | expect_root_top
 
-log "Verifying one semantic mutation"
 CONTROLS_ACTION_JSON="$(run_cli_json activate --label "Controls Demo" --traits button --timeout 15)"
 printf '%s' "$CONTROLS_ACTION_JSON" | json_expect_ok "activate Controls Demo"
 CONTROLS_JSON="$(run_cli_json get_interface)"
@@ -466,14 +448,12 @@ printf '%s' "$CONTROLS_JSON" | json_expect_ok "Controls Demo get_interface"
 printf '%s' "$CONTROLS_JSON" | expect_screen_title "Controls Demo"
 
 if [[ "$SKIP_HEIST_PLAYBACK" == false ]]; then
-    log "Returning to root for heist playback"
     ROOT_BACK_JSON="$(run_cli_json activate --label "ButtonHeist Demo" --traits backButton --timeout 15)"
     printf '%s' "$ROOT_BACK_JSON" | json_expect_ok "activate back to ButtonHeist Demo"
     PLAYBACK_ROOT_JSON="$(run_cli_json get_interface)"
     printf '%s' "$PLAYBACK_ROOT_JSON" | json_expect_ok "playback root get_interface"
     printf '%s' "$PLAYBACK_ROOT_JSON" | expect_root_top
 
-    log "Replaying heist fixture"
     PLAYBACK_JSON="$(run_cli_json run_heist --path "$HEIST_PATH")"
     printf '%s' "$PLAYBACK_JSON" | json_expect_ok "run_heist"
     PLAYBACK_FINAL_JSON="$(run_cli_json get_interface)"
@@ -481,4 +461,4 @@ if [[ "$SKIP_HEIST_PLAYBACK" == false ]]; then
     printf '%s' "$PLAYBACK_FINAL_JSON" | expect_screen_title "Display"
 fi
 
-log "Demo smoke test passed"
+printf 'Demo smoke test passed.\n'

@@ -77,10 +77,7 @@ enum ClientDelivery: Sendable {
 
     @discardableResult
     mutating func begin(_ generation: Generation) -> BeginOutcome {
-        guard latestGeneration.map({ generation > $0 }) ?? true else {
-            logRejection(.begin, candidate: generation)
-            return .rejected
-        }
+        guard latestGeneration.map({ generation > $0 }) ?? true else { return .rejected }
         self = .wiring(generation)
         return .admitted
     }
@@ -88,10 +85,7 @@ enum ClientDelivery: Sendable {
     mutating func install(_ callbacks: Callbacks, for generation: Generation) -> InstallOutcome {
         guard case .wiring(let currentGeneration) = self,
               currentGeneration == generation
-        else {
-            logRejection(.install, candidate: generation)
-            return .rejected
-        }
+        else { return .rejected }
         self = .wired(generation, callbacks)
         return .installed
     }
@@ -104,7 +98,6 @@ enum ClientDelivery: Sendable {
             self = .idle(latest: generation)
             return .invalidated
         default:
-            logRejection(.invalidate, candidate: generation)
             return .rejected
         }
     }
@@ -118,10 +111,7 @@ enum ClientDelivery: Sendable {
         toClient clientId: Int,
         generation: Generation
     ) async -> ServerSendOutcome {
-        guard case .admitted(let callbacks) = deliveryDecision(
-            for: generation,
-            operation: .send
-        ) else {
+        guard case .admitted(let callbacks) = deliveryDecision(for: generation) else {
             return .failed(.transportUnavailable)
         }
         return await callbacks.sendToClient(data, clientId)
@@ -132,10 +122,7 @@ enum ClientDelivery: Sendable {
         using respond: @escaping SocketResponseHandler,
         generation: Generation
     ) async -> ServerSendOutcome {
-        guard case .admitted = deliveryDecision(
-            for: generation,
-            operation: .respond
-        ) else {
+        guard case .admitted = deliveryDecision(for: generation) else {
             return .failed(.transportUnavailable)
         }
         return await respond(data)
@@ -143,7 +130,7 @@ enum ClientDelivery: Sendable {
 
     @discardableResult
     func disconnect(_ clientId: Int, generation: Generation) async -> DeliveryOutcome {
-        switch deliveryDecision(for: generation, operation: .disconnect) {
+        switch deliveryDecision(for: generation) {
         case .admitted(let callbacks):
             await callbacks.disconnectClient(clientId)
             return .delivered
@@ -160,7 +147,7 @@ enum ClientDelivery: Sendable {
         respond: @escaping SocketResponseHandler,
         generation: Generation
     ) async -> DeliveryOutcome {
-        switch deliveryDecision(for: generation, operation: .clientAuthenticated) {
+        switch deliveryDecision(for: generation) {
         case .admitted(let callbacks):
             await callbacks.onClientAuthenticated(clientId, respond)
             return .delivered
@@ -176,26 +163,13 @@ enum ClientDelivery: Sendable {
         return currentGeneration == generation
     }
 
-    private enum Operation: String {
-        case begin
-        case clientAuthenticated
-        case disconnect
-        case install
-        case invalidate
-        case respond
-        case send
-    }
-
     private enum DeliveryDecision {
         case admitted(Callbacks)
         case rejected
         case callbacksUnavailable
     }
 
-    private func deliveryDecision(
-        for candidate: Generation,
-        operation: Operation
-    ) -> DeliveryDecision {
+    private func deliveryDecision(for candidate: Generation) -> DeliveryDecision {
         switch self {
         case .wired(let current, let callbacks) where current == candidate:
             return .admitted(callbacks)
@@ -205,15 +179,7 @@ enum ClientDelivery: Sendable {
         case .idle(latest: nil):
             return .callbacksUnavailable
         case .idle, .wiring, .wired:
-            logRejection(operation, candidate: candidate)
             return .rejected
         }
-    }
-
-    private func logRejection(_ operation: Operation, candidate: Generation) {
-        let current = latestGeneration.map { String($0.rawValue) } ?? "none"
-        muscleLogger.debug(
-            "Rejected callback \(operation.rawValue, privacy: .public): candidate=\(candidate.rawValue) current=\(current, privacy: .public)"
-        )
     }
 }

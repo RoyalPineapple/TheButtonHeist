@@ -1,9 +1,6 @@
 import Foundation
-import os.log
 
 import TheScore
-
-private let serverMessageLogger = ButtonHeistLog.logger(.handoff(.serverMessage))
 
 struct HandoffServerMessageRouter {
     var admission = HandoffAdmission()
@@ -33,8 +30,7 @@ struct HandoffServerMessageRouter {
                 return .forward(message, requestId)
             }
             return .serverFailure(serverError)
-        case .status(let payload):
-            serverMessageLogger.info("Received status payload: appName=\(payload.identity.appName, privacy: .public)")
+        case .status:
             return .handled
         case .pong(let payload):
             return .pong(payload, requestId: requestId)

@@ -4,7 +4,7 @@ import Testing
 import ThePlans
 import TheScore
 
-@Suite struct HeistWaitEvidenceFactoryTests {
+@Suite struct HeistSettlementEvidenceTests {
     @Test func `wait evidence factories bind outcome to result polarity`() throws {
         let predicate = AccessibilityPredicate.exists(.label("Done"))
         let met = ExpectationResult.Met(predicate: predicate)
@@ -12,17 +12,20 @@ import TheScore
         let success = ActionResult.success(payload: .wait)
         let timeout = ActionResult.failure(payload: .wait, failureKind: .timeout)
 
-        let matchedCheck = try #require(HeistWaitEvidence.MatchedCheck(actionResult: success, expectation: met))
-        let matched = HeistWaitEvidence.matched(matchedCheck)
+        let matchedCheck = try #require(HeistSettlementEvidence.MatchedCheck(
+            actionResult: success,
+            expectation: met
+        ))
+        let matched = HeistSettlementEvidence.matched(matchedCheck)
         #expect(matched.outcome == .matched)
         #expect(matched.actionResult.outcome.isSuccess)
         #expect(matched.expectation.met)
 
-        let failedCheck = try #require(HeistWaitEvidence.UnmatchedCheck(
+        let failedCheck = try #require(HeistSettlementEvidence.UnmatchedCheck(
             actionResult: success,
             expectation: .unmet(unmet)
         ))
-        let failed = HeistWaitEvidence.failed(
+        let failed = HeistSettlementEvidence.failed(
             failedCheck,
             finalSummary: "not found"
         )
@@ -31,22 +34,22 @@ import TheScore
         #expect(!failed.expectation.met)
         #expect(failed.finalSummary == "not found")
 
-        let handledElseCheck = try #require(HeistWaitEvidence.UnmatchedCheck(
+        let handledElseCheck = try #require(HeistSettlementEvidence.UnmatchedCheck(
             actionResult: timeout,
             expectation: .unmet(unmet)
         ))
-        let handledElse = HeistWaitEvidence.handledElse(handledElseCheck)
+        let handledElse = HeistSettlementEvidence.handledElse(handledElseCheck)
         #expect(handledElse.outcome == .handledElse)
         #expect(!handledElse.actionResult.outcome.isSuccess)
     }
 
     @Test func `decode rejects invalid wait evidence polarity at boundary`() throws {
         let predicate = AccessibilityPredicate.exists(.label("Done"))
-        let check = try #require(HeistWaitEvidence.MatchedCheck(
+        let check = try #require(HeistSettlementEvidence.MatchedCheck(
             actionResult: .success(payload: .wait),
             expectation: ExpectationResult.Met(predicate: predicate)
         ))
-        let evidence = HeistWaitEvidence.matched(check)
+        let evidence = HeistSettlementEvidence.matched(check)
         let invalidExpectation = ExpectationResult(
             met: false,
             predicate: evidence.expectation.predicate,
@@ -57,7 +60,7 @@ import TheScore
         }
 
         #expect(throws: DecodingError.self) {
-            _ = try JSONDecoder().decode(HeistWaitEvidence.self, from: invalidData)
+            _ = try JSONDecoder().decode(HeistSettlementEvidence.self, from: invalidData)
         }
     }
 

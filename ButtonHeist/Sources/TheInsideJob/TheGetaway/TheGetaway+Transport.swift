@@ -38,7 +38,6 @@ extension TheGetaway {
         guard beginOutcome == .admitted,
               transportWiring.admits(attempt)
         else {
-            logRejectedTransportWiring(.begin, attempt: attempt)
             if transportWiring.admits(attempt) {
                 transportWiring = .unwired
             }
@@ -75,7 +74,6 @@ extension TheGetaway {
         guard installOutcome == .installed,
               transportWiring.admits(attempt)
         else {
-            logRejectedTransportWiring(.install, attempt: attempt)
             if transportWiring.admits(attempt) {
                 transportWiring = .unwired
             }
@@ -105,13 +103,9 @@ extension TheGetaway {
         generation: ClientDelivery.Generation,
         onBacklogOverflow: @MainActor @Sendable (Int) async -> Void
     ) async {
-        guard transportWiring.admitsEvent(generation: generation) else {
-            logRejectedTransportEvent(generation: generation)
-            return
-        }
+        guard transportWiring.admitsEvent(generation: generation) else { return }
         switch event {
         case .clientConnected(let clientId, let remoteAddress):
-            insideJobLogger.info("Client \(clientId) connected from \(remoteAddress ?? "unknown"), awaiting hello")
             replaceClientRequestPipeline(clientId: clientId)
             if let remoteAddress {
                 await muscle.registerClientAddress(
@@ -123,7 +117,6 @@ extension TheGetaway {
             await muscle.sendServerHello(clientId: clientId, generation: generation)
 
         case .clientDisconnected(let clientId):
-            insideJobLogger.info("Client \(clientId) disconnected")
             stopClientRequestPipeline(clientId: clientId)
             await observeClientDisconnection(clientId: clientId, generation: generation)
 
@@ -170,25 +163,6 @@ extension TheGetaway {
         await muscle.handleClientDisconnected(clientId, generation: generation)
     }
 
-    private func logRejectedTransportWiring(
-        _ operation: TransportWiringOperation,
-        attempt: TransportWiringAttempt
-    ) {
-        let currentGeneration = transportWiring.deliveryGeneration
-            .map { String($0.rawValue) } ?? "none"
-        insideJobLogger.debug(
-            "Rejected transport callback \(operation.rawValue): candidate=\(attempt.deliveryGeneration.rawValue) current=\(currentGeneration)"
-        )
-    }
-
-    private func logRejectedTransportEvent(generation: ClientDelivery.Generation) {
-        let currentGeneration = transportWiring.deliveryGeneration
-            .map { String($0.rawValue) } ?? "none"
-        insideJobLogger.debug(
-            "Rejected transport callback event: candidate=\(generation.rawValue) current=\(currentGeneration)"
-        )
-    }
-
     private func replaceClientRequestPipeline(clientId: Int) {
         brains.cancelTransportRequests(clientId: clientId)
         clientRequestPipelines.removeValue(forKey: clientId)?.stop()
@@ -208,14 +182,8 @@ extension TheGetaway {
         respond: @escaping SocketResponseHandler,
         generation: ClientDelivery.Generation
     ) async {
-        guard transportWiring.admitsEvent(generation: generation) else {
-            logRejectedTransportEvent(generation: generation)
-            return
-        }
-        guard let pipeline = clientRequestPipelines[clientId] else {
-            insideJobLogger.error("Dropping request for disconnected client \(clientId)")
-            return
-        }
+        guard transportWiring.admitsEvent(generation: generation) else { return }
+        guard let pipeline = clientRequestPipelines[clientId] else { return }
 
         let request = ClientTransportRequest(
             clientId: clientId,
@@ -227,7 +195,7 @@ extension TheGetaway {
         case .enqueued:
             break
         case .stopped:
-            insideJobLogger.error("Dropping request for stopped client \(clientId)")
+            break
         case .overflowed:
             insideJobLogger.error(
                 "Client \(clientId) request backlog exceeded \(ClientRequestPipeline.maximumQueuedRequests), disconnecting"
@@ -239,10 +207,7 @@ extension TheGetaway {
 
     private func executeClientRequest(_ request: ClientTransportRequest) async {
         defer { observeClientRequestCompletionForTesting?(request.generation) }
-        guard transportWiring.admitsEvent(generation: request.generation) else {
-            logRejectedTransportEvent(generation: request.generation)
-            return
-        }
+        guard transportWiring.admitsEvent(generation: request.generation) else { return }
         let admission = await muscle.admitClientMessage(
             request.clientId,
             data: request.data,
@@ -253,10 +218,7 @@ extension TheGetaway {
             await pauseAfterClientRequestAdmissionForTesting(request.generation)
         }
         guard !Task.isCancelled else { return }
-        guard transportWiring.admitsEvent(generation: request.generation) else {
-            logRejectedTransportEvent(generation: request.generation)
-            return
-        }
+        guard transportWiring.admitsEvent(generation: request.generation) else { return }
 
         switch admission {
         case .admitted(let message):
@@ -268,10 +230,7 @@ extension TheGetaway {
                     generation: request.generation
                 )
             case .userInterface:
-                guard transportWiring.admitsEvent(generation: request.generation) else {
-                    logRejectedTransportEvent(generation: request.generation)
-                    return
-                }
+                guard transportWiring.admitsEvent(generation: request.generation) else { return }
                 let submission = brains.submitTransportRequest(clientId: request.clientId) { [weak self] in
                     guard !Task.isCancelled,
                           let self,
@@ -284,10 +243,7 @@ extension TheGetaway {
                     )
                 }
                 if case .rejected(let rejection) = submission {
-                    guard transportWiring.admitsEvent(generation: request.generation) else {
-                        logRejectedTransportEvent(generation: request.generation)
-                        return
-                    }
+                    guard transportWiring.admitsEvent(generation: request.generation) else { return }
                     insideJobLogger.error(
                         "Client \(request.clientId) interaction submission rejected: \(String(describing: rejection))"
                     )
@@ -302,11 +258,6 @@ extension TheGetaway {
             break
         }
     }
-}
-
-private enum TransportWiringOperation: String {
-    case begin
-    case install
 }
 
 private enum ClientRequestExecutionLane: Equatable {

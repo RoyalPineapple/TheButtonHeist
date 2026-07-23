@@ -58,7 +58,7 @@ extension SimpleSocketServer {
             try SocketReceiveBufferPolicy.validate(receiveFramer, appending: content)
             messageFrames = receiveFramer.append(content ?? Data())
         } catch {
-            receiveLogger.error("Client \(clientId) exceeded max buffer size, disconnecting")
+            receiveLogger.warning("Client \(clientId) exceeded max buffer size, disconnecting")
             rejectClientWithServerError(
                 clientId,
                 kind: .validationError,

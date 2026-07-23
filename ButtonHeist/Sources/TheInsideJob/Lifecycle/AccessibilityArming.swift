@@ -53,7 +53,6 @@ private func setAccessibilityFlag(
         return
     }
     setEnabled(1)
-    accessibilityArmingLogger.info("Armed accessibility via \(function.description, privacy: .public)")
 }
 
 #endif // DEBUG

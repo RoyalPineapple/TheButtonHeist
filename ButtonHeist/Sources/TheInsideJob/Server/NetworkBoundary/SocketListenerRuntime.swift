@@ -5,8 +5,6 @@ import os
 import ButtonHeistSupport
 import TheScore
 
-private let listenerLogger = ButtonHeistLog.logger(.handoff(.server))
-
 protocol SocketListening: AnyObject, Sendable {
     var stateUpdateHandler: (@Sendable (NWListener.State) -> Void)? { get set }
     var newConnectionHandler: (@Sendable (NWConnection) -> Void)? { get set }
@@ -299,7 +297,6 @@ actor SocketListenerRuntime: Equatable {
                     }
                     guard shouldResume else { return }
                     if let port = listener.port?.rawValue {
-                        listenerLogger.info("Listening on port \(port)")
                         continuation.resume(returning: port)
                     } else {
                         continuation.resume(throwing: SimpleSocketServer.StartupError.failedToBindPort)
@@ -311,7 +308,6 @@ actor SocketListenerRuntime: Equatable {
                         return true
                     }
                     guard shouldResume else { return }
-                    listenerLogger.error("Listener failed: \(error)")
                     listener.cancel()
                     continuation.resume(throwing: error)
                 case .cancelled:

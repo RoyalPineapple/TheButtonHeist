@@ -92,7 +92,6 @@ final class HandoffDiscoveryLifecycle {
             discoveryLogger.info("Device lost: \(device.name)")
             onDeviceLost(device)
         case .stateChanged(let isReady):
-            discoveryLogger.info("Discovery state changed: isReady=\(isReady)")
             replaceReadiness(isReady)
         case .failed(let failure):
             discoveryLogger.error("Discovery failed: \(failure.localizedDescription)")

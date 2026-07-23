@@ -26,6 +26,24 @@ final class USBDeviceDiscovery: DeviceDiscovering {
         let id: UUID
         let task: Task<Void, Never>
         var knownDevices: [DiscoveryDeviceID: DiscoveredDevice] = [:]
+        var deviceMultiplicity: DeviceMultiplicity = .none
+    }
+
+    private enum DeviceMultiplicity: Equatable {
+        case none
+        case one
+        case ambiguous
+
+        init(deviceCount: Int) {
+            switch deviceCount {
+            case 0:
+                self = .none
+            case 1:
+                self = .one
+            default:
+                self = .ambiguous
+            }
+        }
     }
 
     private enum RuntimePhase {
@@ -67,7 +85,6 @@ final class USBDeviceDiscovery: DeviceDiscovering {
 
     func start() {
         guard case .stopped = runtimePhase else { return }
-        logger.info("Starting USB device discovery (port \(self.port))")
         startPolling()
         onEvent?(.stateChanged(isReady: true))
     }
@@ -102,6 +119,7 @@ final class USBDeviceDiscovery: DeviceDiscovering {
         }
 
         guard let ipv6Address else {
+            session.deviceMultiplicity = .none
             for (id, device) in session.knownDevices {
                 session.knownDevices.removeValue(forKey: id)
                 onEvent?(.lost(device))
@@ -110,8 +128,11 @@ final class USBDeviceDiscovery: DeviceDiscovering {
             return
         }
 
-        guard connectedDevices.count == 1 else {
-            if connectedDevices.count > 1 {
+        let previousMultiplicity = session.deviceMultiplicity
+        session.deviceMultiplicity = DeviceMultiplicity(deviceCount: connectedDevices.count)
+        guard session.deviceMultiplicity == .one else {
+            if session.deviceMultiplicity == .ambiguous,
+               previousMultiplicity != .ambiguous {
                 logger.warning("Multiple USB devices are connected; CoreDevice tunnel correlation is ambiguous, so USB discovery is disabled")
             }
             for (id, device) in session.knownDevices {
@@ -137,14 +158,12 @@ final class USBDeviceDiscovery: DeviceDiscovering {
                     connectionType: .usb
                 )
                 session.knownDevices[deviceID] = device
-                logger.info("USB device found: \(connectedDevice.name) at \(ipv6Address):\(self.port)")
                 onEvent?(.found(device))
             }
         }
 
         for (id, device) in session.knownDevices where !currentIDs.contains(id) {
             session.knownDevices.removeValue(forKey: id)
-            logger.info("USB device lost: \(device.name)")
             onEvent?(.lost(device))
         }
         runtimePhase = .polling(session)
@@ -155,6 +174,10 @@ final class USBDeviceDiscovery: DeviceDiscovering {
 // MARK: - Subprocess Utilities
 
 nonisolated extension USBDeviceDiscovery {
+
+    private static let ipv6TunnelRegex = try? NSRegularExpression(
+        pattern: #"\[(fd[0-9a-f:]+)::[12]\]"#
+    )
 
     struct ConnectedUSBDevice: Equatable {
         let name: String
@@ -216,15 +239,7 @@ nonisolated extension USBDeviceDiscovery {
             return nil
         }
 
-        let pattern = #"\[(fd[0-9a-f:]+)::[12]\]"#
-        let regex: NSRegularExpression
-        do {
-            regex = try NSRegularExpression(pattern: pattern)
-        } catch {
-            logger.error("Invalid IPv6 tunnel regex: \(error.localizedDescription)")
-            return nil
-        }
-
+        guard let regex = ipv6TunnelRegex else { return nil }
         guard let match = regex.firstMatch(in: output, range: NSRange(output.startIndex..., in: output)),
               let prefixRange = Range(match.range(at: 1), in: output) else {
             return nil

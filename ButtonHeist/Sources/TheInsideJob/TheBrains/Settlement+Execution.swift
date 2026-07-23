@@ -79,6 +79,7 @@ extension Settlement {
 
     fileprivate enum ExecutionInput: Sendable {
         case observation(Observation.Event)
+        case observationHistoryUnavailable(Observation.EventsSince)
         case announcement(Observation.AnnouncementEvent)
         case announcementHistoryUnavailable(AccessibilityNotificationGap)
         case readiness(Readiness.Signal)
@@ -107,7 +108,6 @@ internal protocol SettlementExecutionBoundary: Sendable {
         for request: Settlement.Capture.Request
     ) async -> Settlement.CaptureAdmissionOutcome
 
-    func announcementCursor() async -> AccessibilityNotificationCursor
     func events(since moment: Observation.Moment) async -> Observation.EventsSince
     @MainActor
     func beginSettlement(_ arming: Settlement.Arming) async
@@ -169,6 +169,10 @@ extension Settlement {
             _ gap: AccessibilityNotificationGap
         ) {
             record(.announcementHistoryUnavailable(gap))
+        }
+
+        internal func observeHistoryUnavailable(_ history: Observation.EventsSince) {
+            record(.observationHistoryUnavailable(history))
         }
 
         internal func observeReadiness(_ signal: Readiness.Signal) {
@@ -305,6 +309,7 @@ private extension Settlement.ExecutionInput {
         case .readiness(.invalidated):
             .readinessInvalidated
         case .observation,
+             .observationHistoryUnavailable,
              .announcement,
              .announcementHistoryUnavailable,
              .deadlineReached,
@@ -341,7 +346,9 @@ extension Settlement {
         private let diagnosisSink: Settlement.DiagnosisSink
 
         internal init(boundary: Boundary) {
-            self.init(boundary: boundary, diagnosisSink: SettlementDiagnosisLogger.record)
+            self.init(boundary: boundary) {
+                insideJobLogger.debug("\($0.description, privacy: .public)")
+            }
         }
 
         internal init(
@@ -521,11 +528,28 @@ extension Settlement {
                 finalSemanticEvidence.begin()
             }
             var decision = await reduce(state, fact: fact)
+            decision = await resolvePredicateEvaluation(decision)
             if decision.state.concludesFinalSemanticEvidence
                 || fact.endsFinalSemanticEvidenceAttempt {
                 if let timing = finalSemanticEvidence.complete() {
                     decision = decision.recording(timing)
                 }
+            }
+            return decision
+        }
+
+        private func resolvePredicateEvaluation(_ initial: Decision) async -> Decision {
+            var decision = initial
+            while decision.effects.count == 1,
+                  case .evaluatePredicate(let request) = decision.effects[0] {
+                let result = await boundary.evaluate(request)
+                decision = await reduce(
+                    decision.state,
+                    fact: .predicateEvaluated(.init(
+                        target: request.target,
+                        result: result
+                    ))
+                )
             }
             return decision
         }
@@ -590,13 +614,9 @@ extension Settlement {
             let startedAt = RuntimeElapsed.now
             switch await capture(request) {
             case .admitted(let event):
-                let cursor = await boundary.announcementCursor()
                 return await reduce(
                     state,
-                    fact: .baselineAdmitted(.init(
-                        moment: event.moment,
-                        announcementCursor: cursor
-                    )),
+                    fact: .baselineAdmitted(event),
                     timing: ExecutionTiming(
                         beforeObservationMs: RuntimeElapsed.milliseconds(since: startedAt)
                     )
@@ -636,6 +656,8 @@ extension Settlement {
                     event: event,
                     history: await boundary.events(since: baseline)
                 ))
+            case .observationHistoryUnavailable(let history):
+                return .observationHistoryUnavailable(history)
             case .observation(.announcement(let event)), .announcement(let event):
                 return .announcementObserved(event)
             case .announcementHistoryUnavailable(let gap):
@@ -896,14 +918,11 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
         .admitted(capture)
     }
 
-    internal func announcementCursor() async -> AccessibilityNotificationCursor {
-        vault.accessibilityNotifications.cursor()
-    }
-
     internal func events(since moment: Observation.Moment) async -> Observation.EventsSince {
-        await vault.semanticObservationStream.storeOwner.readLog {
-            $0.events(since: moment)
-        }
+        await vault.semanticObservationStream.events(
+            since: moment,
+            scope: command.observationScope
+        )
     }
 
     @MainActor
@@ -922,9 +941,11 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
         _ arming: Settlement.Arming,
         sink: Settlement.ExecutionSink
     ) async {
-        let subscription = vault.semanticObservationStream.subscribe(
+        let subscription = await vault.semanticObservationStream.subscribe(
             scope: arming.observationScope,
-            receive: sink.observe
+            replayingAfter: arming.boundary.moment,
+            receive: sink.observe,
+            historyUnavailable: sink.observeHistoryUnavailable
         )
         lifecycle.retain(subscription)
     }
@@ -963,7 +984,7 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
         _ arming: Settlement.Arming,
         sink: Settlement.ExecutionSink
     ) async {
-        if command.trigger.isObservation || arming.observationScope == .discovery {
+        if command.waitsForObservation || arming.observationScope == .discovery {
             lifecycle.armReadiness(
                 startAfterDispatch: false,
                 operation: { [tripwire, vault] in
@@ -1038,7 +1059,7 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
 
     @MainActor
     internal func armObservationEffects(_: Settlement.Arming) async {
-        guard command.trigger.isObservation else { return }
+        guard command.waitsForObservation else { return }
         let control = Settlement.ObservationEffectControl()
         let task = Task {
             await publishObservationEffects(control)
@@ -1077,7 +1098,7 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
     internal func evaluate(
         _ request: Settlement.Predicate.EvaluationRequest
     ) async -> PredicateEvaluationResult {
-        SettlementPredicateEvaluator.evaluate(request)
+        Settlement.PredicateEvaluation.evaluate(request)
     }
 
     internal func elapsed() async -> ElapsedMilliseconds {
@@ -1290,83 +1311,38 @@ internal final class LiveSettlementLifecycle {
     }
 }
 
-private enum SettlementPredicateEvaluator {
-    static func evaluate(
-        _ request: Settlement.Predicate.EvaluationRequest
-    ) -> PredicateEvaluationResult {
-        switch request.evidence {
-        case .currentState(let event):
-            return evaluate(request.predicate, trace: event.trace, completeness: .incomplete)
-        case .positiveTransition(let event):
-            return evaluate(request.predicate, trace: event.trace, completeness: .complete)
-        case .announcement(let event):
-            guard case .announcement(let announcement) = request.predicate.resolved.core else {
-                preconditionFailure("Announcement evidence requires an announcement predicate")
-            }
-            return PredicateEvaluationResult(
-                met: announcement.matches(event.announcement.text),
-                actual: event.announcement.text
-            )
-        case .completeHistory(let evidence):
-            return evaluateCompleteHistory(request.predicate, evidence: evidence)
-        }
-    }
-
-    private static func evaluate(
-        _ predicate: Settlement.Predicate,
-        trace: AccessibilityTrace,
-        completeness: AccessibilityTraceEvidence.Completeness
-    ) -> PredicateEvaluationResult {
-        guard let evidence = AccessibilityTraceEvidence(
-            trace: trace,
-            completeness: completeness
-        ) else {
-            return PredicateEvaluationResult(met: false, actual: "no observed accessibility trace")
-        }
-        return predicate.resolved.evaluate(in: evidence)
-    }
-
-    private static func evaluateCompleteHistory(
-        _ predicate: Settlement.Predicate,
-        evidence: Settlement.Predicate.CompleteHistoryEvidence
-    ) -> PredicateEvaluationResult {
-        guard case .events(let events) = evidence.history else {
-            return PredicateEvaluationResult(met: false, actual: "observation history unavailable")
-        }
-        let captures = events.compactMap { event -> AccessibilityTrace.Capture? in
-            guard case .snapshot(let snapshot) = event else { return nil }
-            return snapshot.trace.captures.last
-        }
-        let trace = captures.isEmpty ? evidence.handoff.trace : AccessibilityTrace(captures: captures)
-        return evaluate(predicate, trace: trace, completeness: .complete)
-    }
-}
-
-private extension Settlement.Trigger {
-    var isObservation: Bool {
-        if case .observation = self { return true }
-        return false
-    }
-}
-
-private enum SettlementDiagnosisLogger {
-    static func record(_ diagnosis: Settlement.Diagnosis) {
-        insideJobLogger.info("\(diagnosis.description, privacy: .public)")
-    }
-}
-
 @MainActor
 extension TheBrains {
-    internal func executeSettlement(
-        _ command: Settlement.Command,
-        observationEffects: @escaping LiveSettlementExecutionBoundary.ObservationEffects = { _ in },
-        dispatch: @escaping LiveSettlementExecutionBoundary.ActionDispatch
+    internal func executeSettlementCommand(
+        _ command: Settlement.Command
     ) async -> Settlement.Result {
-        await Settlement.Executor(boundary: LiveSettlementExecutionBoundary(
+        let observationEffects: LiveSettlementExecutionBoundary.ObservationEffects
+        switch command {
+        case .observation(let predicate, let deadline, _):
+            let start = RuntimeElapsed.now
+            let discoveryDeadline = SemanticObservationDeadline(
+                start: start,
+                timeoutSeconds: deadline.remainingDuration(at: start) / .seconds(1)
+            )
+            observationEffects = { control in
+                if case .announcement = predicate.resolved.core { return }
+                await self.navigation.exploreForWait(
+                    target: predicate.resolved.singularTarget,
+                    deadline: discoveryDeadline,
+                    stopWhen: { control.stopRequested }
+                )
+            }
+        case .currentState, .action:
+            observationEffects = { _ in }
+        }
+
+        return await Settlement.Executor(boundary: LiveSettlementExecutionBoundary(
             command: command,
             vault: vault,
             tripwire: tripwire,
-            dispatch: dispatch,
+            dispatch: { command in
+                await self.dispatchRuntimeAction(command)
+            },
             observationEffects: observationEffects
         )).execute(command)
     }

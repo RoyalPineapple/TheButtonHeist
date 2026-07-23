@@ -6,13 +6,10 @@ import ThePlans
 import TheScore
 
 extension TheBrains {
-    /// Changed-predicate wait entry point. It subscribes to the same settled
-    /// observation event stream as every other wait and evaluates only event
-    /// deltas, never command-local baseline state.
+    /// Internal changed-wait entry point through the canonical Settlement path.
     func executeChangedWait(
         timeout: TimeInterval,
-        expectation: AccessibilityPredicate?,
-        onReadyToPoll: PredicateWait.ReadyToPoll? = nil
+        expectation: AccessibilityPredicate?
     ) async -> ActionResult {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(payload: .wait)
@@ -43,11 +40,8 @@ extension TheBrains {
                 message: "could not resolve changed wait predicate: \(error)"
             )
         }
-        let result = await interactionCoordinator.waitForPredicate(
-            step,
-            onReadyToPoll: onReadyToPoll
-        )
-        return result.outcome.actionResult
+        let result = await executeSettlementCommand(Settlement.Command(observing: step))
+        return Settlement.ResultProjector.projectWait(result).actionResult
     }
 }
 

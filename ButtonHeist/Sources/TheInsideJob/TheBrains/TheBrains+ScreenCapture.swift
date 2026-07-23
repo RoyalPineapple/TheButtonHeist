@@ -63,16 +63,10 @@ extension TheBrains {
         guard semanticObservationIsActive else {
             return .failure(.inactiveRuntime)
         }
-        guard let observation = await interactionCoordinator.admittedVisibleBaseline(timeout: 1.0) else {
+        guard let observation = await interactionCoordinator.admittedVisibleObservation(timeout: 1.0) else {
             return .failure(.accessibilityTreeUnavailable)
         }
-        guard let sequence = observation.settledObservationSequence,
-              let moment = await vault.semanticObservationStream.moment(
-                scope: .visible,
-                at: sequence
-              ) else {
-            preconditionFailure("admitted screenshot baseline must retain its settled capture")
-        }
+        let moment = observation.event.moment
 
         let notificationWindow: AccessibilityNotificationScopeLease?
         let actionExpectationContext: ActionExpectationContext?

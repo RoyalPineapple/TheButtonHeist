@@ -30,19 +30,9 @@ package extension AccessibilityElement {
 
 extension TheVault {
 
-    /// Interactivity classification and runtime activation diagnostics.
-    enum InteractivityCheck {
-        case interactive(warning: String?)
-        case blocked(reason: String)
-    }
-
     /// Caseless namespace enum for MainActor-bound static helpers that read
     /// UIKit responder / window state. No instances are constructed.
     @MainActor enum Interactivity {
-
-    private static func hasInteractiveTraits(_ element: AccessibilityElement) -> Bool {
-        !element.traits.isDisjoint(with: AccessibilityPolicy.interactiveTraitsBitmask)
-    }
 
     /// Runtime implementation introspection for activation diagnostics.
     ///
@@ -73,27 +63,12 @@ extension TheVault {
         element.projectedActionSet.actions.contains(.activate)
     }
 
-    /// Enforce advertised disabled state and derive advisory diagnostics. Runtime
-    /// implementation introspection can suppress a weak-target warning, but can
-    /// never block dispatch.
-    static func checkInteractivity(_ element: AccessibilityElement, object: NSObject? = nil) -> InteractivityCheck {
-        if element.traits.contains(.notEnabled) {
-            return .blocked(reason: "Element is disabled (has 'notEnabled' trait)")
-        }
-
-        let implementsActivation = implementsAccessibilityActivation(object)
-        let staticTraitsOnly = element.traits.isSubset(of: AccessibilityPolicy.staticOnlyTraitsBitmask)
-        let warning: String? = (
-            staticTraitsOnly
-                && !implementsActivation
-                && !hasInteractiveTraits(element)
-                && element.customActions.isEmpty
-        )
-            ? "Target advertised no interactivity and implements no activation; "
-                + "proceeding as VoiceOver would"
+    /// Explicit disabled state is the only semantic condition that prevents
+    /// VoiceOver-style activation dispatch.
+    static func blockedReason(_ element: AccessibilityElement) -> String? {
+        element.traits.contains(.notEnabled)
+            ? "Element is disabled (has 'notEnabled' trait)"
             : nil
-
-        return .interactive(warning: warning)
     }
 
     }

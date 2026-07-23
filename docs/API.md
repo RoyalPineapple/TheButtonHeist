@@ -267,11 +267,14 @@ boundaries protect required entries from pruning; an expired or unavailable
 read is typed incomplete evidence. Callers cannot manipulate indices or retain
 a second temporal window.
 
-Actions and waits use one internal `Settlement.Command`. Its trigger is either
-a resolved action or observation; its optional predicate supplies current-state,
-positive-transition, announcement, or complete-history semantics. The executor
-captures a baseline Moment and announcement position, arms all event channels,
-and only then dispatches an action. An observation trigger performs no dispatch.
+Actions, waits, and heist control flow use one internal `Settlement.Command`
+algebra. `currentState` captures one exact settled snapshot. `observation`
+evaluates a predicate without dispatch. `action` dispatches one resolved action
+with an optional expectation. Timed commands capture or derive a baseline Moment
+and announcement position, arm all event channels, and only then dispatch or
+observe. Invocation and repeat commands derive their temporal baseline from a
+prior `currentState` result; the same executor replays retained events after
+that boundary before continuing with live delivery.
 
 Current-state predicates such as `exists` and `missing` must hold in the exact
 post-readiness handoff snapshot returned by settlement. Positive transitions

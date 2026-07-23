@@ -127,6 +127,7 @@ extension Observation {
         internal let lineageEvidence: ScreenLineageEvidence?
         internal let scope: SemanticObservationScope
         internal let notificationAdmission: NotificationAdmission
+        internal let keyboardVisible: Bool?
         internal let timestamp: Date
     }
 
@@ -246,8 +247,7 @@ internal struct CommittableInterfaceObservation {
     internal struct ObservationSettlement {
     internal enum CommitOutcome {
         case committed(Observation.SnapshotEvent)
-        case observedUnsettled(InterfaceObservation, notificationBatch: AccessibilityNotificationBatch?)
-        case unavailable(notificationBatch: AccessibilityNotificationBatch?)
+        case unavailable
     }
 
     internal let settleResult: SettleSession.Result

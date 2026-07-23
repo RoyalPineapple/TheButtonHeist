@@ -51,13 +51,11 @@ DIAGNOSTICS="$DEST_DIR/collection-diagnostics.txt"
 
 if [[ ! -d "$DEVICE_DATA" ]]; then
     echo "result=device-data-missing" >> "$DIAGNOSTICS"
-    echo "No simulator data directory found for $SIM_UDID"
     exit 0
 fi
 
 if [[ ! -d "$SEARCH_ROOT" ]]; then
     echo "result=container-data-missing" >> "$DIAGNOSTICS"
-    echo "No simulator container data directory found for $SIM_UDID"
     exit 0
 fi
 
@@ -82,12 +80,10 @@ done < <(
 if [[ "$FOUND" == true ]]; then
     echo "result=collected" >> "$DIAGNOSTICS"
     echo "resultFileCount=$COUNT" >> "$DIAGNOSTICS"
-    echo "Collected $COUNT simulator heist result file(s) into $DEST_DIR"
 else
     echo "result=no-results-found" >> "$DIAGNOSTICS"
     echo "resultFileCount=0" >> "$DIAGNOSTICS"
     if [[ -z "$CONTAINER" || ! -d "$CONTAINER" ]]; then
         echo "note=No app data container found for $BUNDLE_ID; searched simulator data containers anyway." >> "$DIAGNOSTICS"
     fi
-    echo "No simulator heist results found below $SEARCH_ROOT"
 fi

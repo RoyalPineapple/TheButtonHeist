@@ -3,7 +3,8 @@
 import TheScore
 
 extension Settlement {
-    internal enum DiagnosisTrigger: Sendable, Equatable {
+    internal enum DiagnosisCommand: Sendable, Equatable {
+        case currentState
         case action
         case observation
     }
@@ -88,7 +89,7 @@ extension Settlement {
 
     internal struct Diagnosis: Sendable, Equatable, CustomStringConvertible {
 
-        internal let trigger: DiagnosisTrigger
+        internal let command: DiagnosisCommand
         internal let dispatch: DiagnosisDispatch
         internal let predicate: DiagnosisPredicate
         internal let boundary: DiagnosisBoundary
@@ -102,7 +103,7 @@ extension Settlement {
 
         internal static func project(_ result: Settlement.Result) -> Diagnosis {
             Diagnosis(
-                trigger: trigger(from: result.evidence.command.trigger),
+                command: command(from: result.evidence.command),
                 dispatch: dispatch(from: result.evidence.trigger),
                 predicate: predicate(from: result.evidence.predicate),
                 boundary: boundary(from: result.evidence.boundary),
@@ -119,7 +120,7 @@ extension Settlement {
         internal var description: String {
             [
                 "settlement terminal",
-                "trigger=\(trigger.rendered)",
+                "command=\(command.rendered)",
                 "predicateSemantics=\(predicate.semantics.rendered)",
                 "predicate=\(predicate.status.rendered)",
                 "observations=\(observationMoments.rendered)",
@@ -131,15 +132,17 @@ extension Settlement {
                 "outcome=\(outcome.rendered)",
                 "elapsedMs=\(deadline.elapsed)",
                 "deadlineReached=\(deadline.reached)",
-                "deadline=\(deadline.deadline.diagnosisDescription)",
+                "deadline=\(deadline.renderedDeadline)",
             ].joined(separator: " ")
         }
     }
 }
 
 private extension Settlement.Diagnosis {
-    static func trigger(from trigger: Settlement.Trigger) -> Settlement.DiagnosisTrigger {
-        switch trigger {
+    static func command(from command: Settlement.Command) -> Settlement.DiagnosisCommand {
+        switch command {
+        case .currentState:
+            .currentState
         case .action:
             .action
         case .observation:
@@ -373,11 +376,23 @@ private extension Settlement.Predicate.Unavailability {
     }
 }
 
-private extension Settlement.DiagnosisTrigger {
+private extension Settlement.DiagnosisCommand {
     var rendered: String {
         switch self {
+        case .currentState: "currentState"
         case .action: "action"
         case .observation: "observation"
+        }
+    }
+}
+
+private extension Settlement.DeadlineEvidence {
+    var renderedDeadline: String {
+        switch self {
+        case .notApplicable:
+            "none"
+        case .bounded(let deadline, _, _):
+            deadline.diagnosisDescription
         }
     }
 }
@@ -469,6 +484,7 @@ private extension Settlement.DiagnosisReadiness {
 private extension Settlement.Readiness.Path {
     var rendered: String {
         switch self {
+        case .currentStateCapture: "currentStateCapture"
         case .uikitIdle: "uikitIdle"
         case .semanticStability: "semanticStability"
         case .accessibilityQuietWindow: "accessibilityQuietWindow"

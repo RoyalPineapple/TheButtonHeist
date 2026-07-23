@@ -8,7 +8,6 @@ import TheScore
 @MainActor
 extension TheInsideJob {
     func makeRuntimeTransport() -> ServerTransport {
-        insideJobLogger.info("TLS PSK material ready")
         return transportProvider(runtimeConfiguration.token.value, runtimeConfiguration.allowedScopes.value)
     }
 

@@ -22,8 +22,6 @@ MCP_TIMEOUT="${BUTTONHEIST_MCP_SMOKE_TIMEOUT:-5}"
 REQUIRE_INSTALLED=false
 EXPLICIT_PREFIX=false
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 TMP_DIR=""
 RUN_TMP=""
 PREFIX_CANDIDATES=()
@@ -47,14 +45,6 @@ Options:
 Without --prefix or archives, the script looks for a Homebrew install first,
 then falls back to Button Heist tools on PATH.
 EOF
-}
-
-log() {
-    printf '==> %s\n' "$*"
-}
-
-ok() {
-    printf '[ok] %s\n' "$*"
 }
 
 fail() {
@@ -277,7 +267,7 @@ run_checked() {
 
     local output
     if output="$(run_with_timeout "$timeout" "$@" 2>&1)"; then
-        ok "$label"
+        return 0
     else
         local status=$?
         printf '%s\n' "$output" >&2
@@ -510,8 +500,6 @@ if [[ "${#missing[@]}" -gt 0 ]]; then
     skip "Button Heist installed tools are incomplete under $PREFIX"
 fi
 
-log "Smoking installed artifacts under $PREFIX"
-
 RUN_TMP="$(mktemp -d "${TMPDIR:-/tmp}/buttonheist-installed-smoke-run.XXXXXX")"
 SMOKE_HOME="$RUN_TMP/home"
 PLAN_TMP="$RUN_TMP/plan"
@@ -525,10 +513,8 @@ version="$(printf '%s\n' "$version_output" | sed -n '1p' | tr -d '[:space:]')"
 if [[ -n "$EXPECTED_VERSION" && "$version" != "$EXPECTED_VERSION" ]]; then
     fail "buttonheist --version printed $version, expected $EXPECTED_VERSION"
 fi
-ok "buttonheist --version ($version)"
-
 if output="$(smoke_mcp_tools "$MCP_TIMEOUT" "$BUTTONHEIST_MCP" "$SMOKE_HOME" "$RUN_TMP/storage" 2>&1)"; then
-    ok "$output"
+    :
 else
     status=$?
     printf '%s\n' "$output" >&2
@@ -549,8 +535,6 @@ fi
 if ! find "$THEPLANS_BUILD_DIR/ThePlans.build" -type f -name '*.swift.o' -print -quit | grep -q .; then
     fail "missing ThePlans Swift object files under $THEPLANS_BUILD_DIR/ThePlans.build"
 fi
-ok "installed ThePlans swiftinterface and compiler artifacts"
-
 SOURCE="$PLAN_TMP/Plan.swift"
 OUTPUT="$PLAN_TMP/installed-smoke.heist"
 
@@ -594,6 +578,4 @@ fi
 [[ -d "$OUTPUT" ]] || fail "heist-plan compile did not create .heist package: $OUTPUT"
 require_file "$OUTPUT/manifest.json"
 require_file "$OUTPUT/plan.json"
-ok "heist-plan compile"
-
-log "Installed artifact smoke passed"
+printf 'Installed artifact smoke passed.\n'

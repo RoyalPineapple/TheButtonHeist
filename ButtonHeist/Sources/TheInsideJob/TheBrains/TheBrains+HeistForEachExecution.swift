@@ -117,7 +117,8 @@ extension TheBrains {
                 error: error
             )
         }
-        guard let observation = await runtime.settledEvidence(.discovery, nil, nil) else {
+        let currentState = await runtime.settle(.currentState(scope: .discovery))
+        guard let event = currentState.evidence.handoff.event else {
             return forEachUnavailableResult(
                 index: index,
                 path: path,
@@ -128,7 +129,7 @@ extension TheBrains {
 
         let matchSignature = ForEachMatchSignature(
             matching: resolvedMatching,
-            elements: observation.baseline.interface.projectedElements
+            elements: event.moment.capture.interface.projectedElements
         )
         let matchedCount = matchSignature.count
         if matchedCount > step.limit {
@@ -143,7 +144,6 @@ extension TheBrains {
 
         var currentSignature = matchSignature
         var nextOrdinal = 0
-        var observedSequence = observation.event.sequence
         let outcome = await runForEachLoop(
             context: ForEachLoopContext(
                 totalCount: matchedCount,
@@ -156,17 +156,13 @@ extension TheBrains {
             ),
             nextItem: { iterationIndex in
                 if iterationIndex > 0 {
-                    guard let afterObservation = await runtime.settledEvidence(
-                        .discovery,
-                        observedSequence,
-                        nil
-                    ) else {
+                    let nextState = await runtime.settle(.currentState(scope: .discovery))
+                    guard let nextEvent = nextState.evidence.handoff.event else {
                         return .postObservationUnavailable(iterationIndex: iterationIndex - 1)
                     }
-                    observedSequence = afterObservation.event.sequence
                     let nextSignature = ForEachMatchSignature(
                         matching: resolvedMatching,
-                        elements: afterObservation.baseline.interface.projectedElements
+                        elements: nextEvent.moment.capture.interface.projectedElements
                     )
                     if nextSignature == currentSignature {
                         nextOrdinal += 1
