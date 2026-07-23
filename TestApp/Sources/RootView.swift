@@ -131,25 +131,21 @@ struct RootView: View {
             }
             .navigationTitle("ButtonHeist Demo")
             .listRowInsets(settings.compactMode ? EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16) : nil)
-            .navigationDestination(isPresented: Binding(
-                get: { adversarialRoute != nil },
-                set: { isPresented in
-                    if !isPresented {
-                        adversarialRoute = nil
-                    }
-                }
-            )) {
-                if let route = adversarialRoute {
+        }
+        .accessibilityHidden(adversarialRoute != nil)
+        .overlay {
+            if let route = adversarialRoute {
+                NavigationStack {
                     AdversarialScenarioView(scenario: route.scenario)
                         .id(route.id)
-                        .task {
-                            await Task.yield()
+                        .onAppear {
                             AdversarialLabRoute.observePresented(route.id)
                         }
                         .onDisappear {
                             AdversarialLabRoute.observeDismissed(route.id)
                         }
                 }
+                .background(Color(uiColor: .systemBackground))
             }
         }
         .onOpenURL(perform: openDemoRoute)
