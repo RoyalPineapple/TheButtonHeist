@@ -291,7 +291,15 @@ BUTTONHEIST_DEVICE="127.0.0.1:$INSIDEJOB_PORT" BUTTONHEIST_TOKEN="$TASK_SLUG" bu
 
 ### 6. Teardown
 
-When the task is complete, clean up the simulator:
+The canonical test runner deletes every dedicated simulator it selects. Split
+workflows may pass `--retain-simulator` only while a later step still uses that
+simulator, and must finish with:
+
+```bash
+scripts/test-runner.py cleanup --simulator-name "$TASK_SLUG"
+```
+
+For manually created demo simulators, clean up when the task is complete:
 
 ```bash
 xcrun simctl shutdown "$SIM_UDID"

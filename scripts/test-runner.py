@@ -396,6 +396,58 @@ def clear_simulator_results(simulator: dict[str, str] | None) -> None:
         shutil.rmtree(directory)
 
 
+def delete_simulator(simulator: dict[str, str]) -> bool:
+    subprocess.run(
+        ["xcrun", "simctl", "shutdown", simulator["udid"]],
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    deletion = subprocess.run(
+        ["xcrun", "simctl", "delete", simulator["udid"]],
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    if deletion.returncode == 0:
+        return True
+    detail = (deletion.stderr or deletion.stdout).strip()
+    suffix = f": {detail}" if detail else ""
+    print(
+        f"Error: could not delete simulator {simulator['name']} "
+        f"({simulator['udid']}){suffix}",
+        file=sys.stderr,
+    )
+    return False
+
+
+def simulators_named(name: str) -> list[dict[str, str]]:
+    completed = subprocess.run(
+        ["xcrun", "simctl", "list", "devices", "--json"],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    devices = json.loads(completed.stdout).get("devices", {})
+    return [
+        {"udid": str(device["udid"]), "name": name}
+        for runtime_devices in devices.values()
+        for device in runtime_devices
+        if device.get("name") == name
+    ]
+
+
+def delete_simulators(simulators: Sequence[dict[str, str]]) -> bool:
+    deleted = True
+    seen: set[str] = set()
+    for simulator in simulators:
+        if simulator["udid"] in seen:
+            continue
+        seen.add(simulator["udid"])
+        deleted = delete_simulator(simulator) and deleted
+    return deleted
+
+
 def require_executed_tests(result_bundle: Path) -> int:
     summary = subprocess.run(
         [
@@ -423,6 +475,7 @@ def execute(
     args: argparse.Namespace,
     name: str,
     only_tests: Sequence[str] = (),
+    selected_simulators: list[dict[str, str]] | None = None,
 ) -> int:
     suite = SUITES[name]
     paths = suite_paths(name)
@@ -431,6 +484,8 @@ def execute(
         collect(suite, paths, include_diagnostics=True)
         return 0
     simulator = select_simulator(args.mode, suite, args.simulator_name)
+    if simulator is not None and selected_simulators is not None:
+        selected_simulators.append(simulator)
     publish(paths, simulator)
 
     for key in ("result_bundle", "heist_results", "diagnostics"):
@@ -507,12 +562,20 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "mode",
-        choices=("run", "build-for-testing", "test-without-building", "collect", "catalog"),
+        choices=(
+            "run",
+            "build-for-testing",
+            "test-without-building",
+            "collect",
+            "cleanup",
+            "catalog",
+        ),
     )
     parser.add_argument("suites", nargs="*", choices=tuple(SUITES))
     parser.add_argument("--focus", action="append", choices=tuple(FOCUSES), default=[])
     parser.add_argument("--selection", choices=("selective", "full"), default="selective")
     parser.add_argument("--simulator-name")
+    parser.add_argument("--retain-simulator", action="store_true")
     parser.add_argument("--timeout-seconds", type=float, default=1_800)
     parser.add_argument("--install-dependencies", action="store_true")
     args = parser.parse_args(argv)
@@ -520,8 +583,25 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         if args.suites or args.focus:
             raise ValueError("catalog does not accept suites or focuses")
         return args
+    if args.mode == "cleanup":
+        if args.suites or args.focus:
+            raise ValueError("cleanup does not accept suites or focuses")
+        if args.retain_simulator:
+            raise ValueError("cleanup does not accept --retain-simulator")
+        return args
     if bool(args.suites) == bool(args.focus):
         raise ValueError("select suites or focuses, but not both")
+    simulator_modes = ("run", "build-for-testing", "test-without-building")
+    if args.retain_simulator and args.mode not in simulator_modes:
+        raise ValueError(
+            "--retain-simulator requires a simulator-using test mode"
+        )
+    selected_suites = args.suites or tuple(focus_runs(args.focus))
+    if args.retain_simulator and not any(
+        SUITES[name]["platform"] == "ios"
+        for name in selected_suites
+    ):
+        raise ValueError("--retain-simulator requires an iOS suite")
     if not math.isfinite(args.timeout_seconds) or args.timeout_seconds <= 0:
         raise ValueError("--timeout-seconds must be finite and positive")
     return args
@@ -532,6 +612,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.mode == "catalog":
         print(json.dumps(catalog_manifest(), indent=2, sort_keys=False))
         return 0
+    if args.mode == "cleanup":
+        name = (
+            args.simulator_name
+            or os.environ.get("BUTTONHEIST_TEST_SIMULATOR_NAME")
+            or os.environ.get("SIM_NAME")
+        )
+        if not name:
+            raise ValueError(
+                "cleanup requires --simulator-name or a simulator name environment value"
+            )
+        return 0 if delete_simulators(simulators_named(name)) else 3
     if args.mode != "run" and args.install_dependencies:
         raise ValueError("--install-dependencies requires run mode")
     if args.install_dependencies:
@@ -539,11 +630,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     runs = focus_runs(args.focus) if args.focus else {
         name: () for name in args.suites
     }
-    for name, only_tests in runs.items():
-        status = execute(args, name, only_tests)
-        if status:
-            return status
-    return 0
+    selected_simulators: list[dict[str, str]] = []
+    status = 0
+    cleanup_succeeded = True
+    try:
+        for name, only_tests in runs.items():
+            status = execute(args, name, only_tests, selected_simulators)
+            if status:
+                break
+    finally:
+        if not args.retain_simulator:
+            cleanup_succeeded = delete_simulators(selected_simulators)
+    if status == 0 and not cleanup_succeeded:
+        return 3
+    return status
 
 
 if __name__ == "__main__":

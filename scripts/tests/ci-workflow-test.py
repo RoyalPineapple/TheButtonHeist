@@ -120,6 +120,27 @@ class CIWorkflowTests(unittest.TestCase):
         self.assertNotIn("IOS_TEST_RESULT_BUNDLE", WORKFLOW)
         self.assertNotIn("-destination", WORKFLOW)
 
+    def test_ios_jobs_retain_only_until_unconditional_runner_cleanup(self) -> None:
+        blocks = job_blocks()
+        jobs = {
+            "ios-tests": "TheInsideJobTests",
+            "ios-demo-gates": "HostedBehaviorTests",
+            "main-integration": "TheInsideJobIntegrationTests",
+        }
+        for name, suite in jobs.items():
+            with self.subTest(job=name):
+                block = blocks[name]
+                self.assertIn(
+                    f"build-for-testing {suite} --retain-simulator",
+                    block,
+                )
+                self.assertIn(
+                    f"test-without-building {suite} --retain-simulator",
+                    block,
+                )
+                self.assertIn("if: always()", block)
+                self.assertIn("run: scripts/test-runner.py cleanup", block)
+
     def test_swift_test_owns_cli_and_mcp_builds(self) -> None:
         macos = job_blocks()["macos-tests"]
         self.assertIn("scripts/swift-test-gate.sh ButtonHeistCLI", macos)
