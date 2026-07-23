@@ -24,12 +24,10 @@ extension TheBrains {
             return caseResolutionFailure(index: index, path: path, start: start, error: error)
         }
 
-        let event = await runtime.settledEvent(
-            resolvedCases.observationScope,
-            nil,
-            0
+        let currentState = await runtime.settle(
+            .currentState(scope: resolvedCases.observationScope)
         )
-        let selection = evaluatePredicateCases(resolvedCases, in: event)
+        let selection = evaluatePredicateCases(resolvedCases, in: currentState)
         return await dispatchPredicateCases(
             PredicateCaseDispatch(
                 selection: selection,

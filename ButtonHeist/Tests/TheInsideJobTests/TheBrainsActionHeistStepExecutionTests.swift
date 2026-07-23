@@ -14,14 +14,14 @@ extension TheBrainsActionTests {
         let observedReady = await observedState(labels: ["Ready"])
         let target = AccessibilityTarget.identifier("target")
         var dispatchedCommands: [ResolvedHeistActionCommand] = []
-        var waitCommands: [Settlement.Command] = []
+        var settlementCommands: [Settlement.Command] = []
         let runtime = heistRuntime(
             observations: [observedReady],
             execute: { command in
                 dispatchedCommands.append(command)
                 return ActionResult.success(payload: .activate)
             },
-            observedWaitCommands: { waitCommands.append($0) }
+            observedSettlementCommands: { settlementCommands.append($0) }
         )
         let plan = try HeistPlan(body: [
             .action(ActionStep(command: .activate(target))),
@@ -38,13 +38,16 @@ extension TheBrainsActionTests {
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "heist failed")
         XCTAssertEqual(dispatchedCommands, [.activate(try target.resolve(in: .empty))])
-        XCTAssertEqual(waitCommands.count, 1)
+        XCTAssertEqual(settlementCommands.count, 1)
+        guard let settlementCommand = settlementCommands.first,
+              case .observation(let predicate, _, let baseline) = settlementCommand else {
+            return XCTFail("Wait step must execute an observation settlement")
+        }
         XCTAssertEqual(
-            waitCommands.first?.predicate?.resolved,
+            predicate.resolved,
             try resolvedPredicate(.exists(.label("Ready")))
         )
-        XCTAssertEqual(waitCommands.first?.trigger, .observation)
-        XCTAssertEqual(waitCommands.first?.baseline, .capture)
+        XCTAssertEqual(baseline, .capture)
         XCTAssertEqual(heistResult.steps.map(\.kind), [HeistExecutionStepKind.action, .wait])
         XCTAssertNotNil(actionStep.actionEvidence)
         XCTAssertNil(actionStep.waitEvidence)

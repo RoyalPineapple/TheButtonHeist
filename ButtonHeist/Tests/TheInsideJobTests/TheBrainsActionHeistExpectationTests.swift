@@ -123,7 +123,7 @@ extension TheBrainsActionTests {
         let runtime = heistRuntime(
             observations: [],
             execute: { _ in ActionResult.success(payload: .activate) },
-            wait: { command in
+            settle: { command in
                 let settlement = scriptedSettlement(command, observation: observed)
                 projectedActual = Settlement.ResultProjector.projectWait(settlement).expectation.actual
                 return settlement
@@ -300,11 +300,10 @@ extension TheBrainsActionTests {
                 let result = ActionResult.success(payload: command.resultPayload)
                 return RuntimeActionExecution(result: result, actionExpectationContext: nil)
             },
-            wait: { _ in preconditionFailure("State-dependent heist must use settled evidence") },
-            settledEvent: { scope, _, _ in
-                XCTAssertEqual(scope, .visible)
+            settle: { command in
+                XCTAssertEqual(command.observationScope, .visible)
                 demandDuringSettledEvidence = self.brains.vault.semanticObservationStream.hasActiveObservationDemand
-                return event
+                return scriptedSettlement(command, observation: event)
             }
         )
         let plan = try HeistPlan(body: [
@@ -360,12 +359,12 @@ extension TheBrainsActionTests {
             execute: { _, _ in
                 preconditionFailure("Conditional heist must not dispatch an action")
             },
-            wait: { _ in
-                preconditionFailure("Conditional heist must not execute a wait")
-            },
-            settledEvent: { _, _, _ in
+            settle: { command in
                 defer { observationCount += 1 }
-                return observations[observationCount]
+                return scriptedSettlement(
+                    command,
+                    observation: observations[observationCount]
+                )
             }
         )
         let plan = try HeistPlan(body: [

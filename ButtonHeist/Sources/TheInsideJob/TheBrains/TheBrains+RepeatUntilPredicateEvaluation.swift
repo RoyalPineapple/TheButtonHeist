@@ -7,29 +7,14 @@ import TheScore
 
 extension TheBrains.RepeatUntil {
     internal struct ObservedState {
-        internal let boundary: Settlement.EvidenceBoundary
-        internal let summary: String?
+        internal let settlement: Settlement.Result
 
-        internal init(
-            boundary: Settlement.EvidenceBoundary,
-            summary: String?
-        ) {
-            self.boundary = boundary
-            self.summary = summary
+        internal var summary: String? {
+            settlement.evidence.handoff.event?.summary
         }
 
-        internal init?(
-            settlement: Settlement.Result,
-            evidence: HeistSettlementEvidence
-        ) {
-            guard let moment = settlement.evidence.handoff.event?.moment else { return nil }
-            boundary = Settlement.EvidenceBoundary(moment: moment)
-            summary = evidence.finalSummary
-        }
-
-        internal init(_ event: Observation.SnapshotEvent) {
-            boundary = Settlement.EvidenceBoundary(moment: event.moment)
-            summary = event.summary
+        internal init(_ settlement: Settlement.Result) {
+            self.settlement = settlement
         }
     }
 
@@ -151,37 +136,26 @@ extension TheBrains {
             ))
         }
         let waitInput: ResolvedWaitRuntimeInput
-        let baseline: Settlement.Baseline
+        let command: Settlement.Command
         if let observation {
             waitInput = .changedElements(timeout: progressTimeout)
-            baseline = .supplied(observation.boundary)
+            command = Settlement.Command(
+                observing: waitInput,
+                after: observation.settlement
+            )
         } else {
             waitInput = ResolvedWaitRuntimeInput(repeatUntil: step, timeout: progressTimeout)
-            baseline = Settlement.Baseline.beforeTrigger(
-                observationMoment: nil,
-                predicate: waitInput.predicate
-            )
+            command = Settlement.Command(observing: waitInput)
         }
-        let settlement = await context.runtime.wait(Settlement.Command(
-            observing: waitInput,
-            baseline: baseline
-        ))
+        let settlement = await context.runtime.settle(command)
         let evidence = Settlement.ResultProjector.projectWait(settlement)
-        let expectation = repeatUntilStopExpectation(
-            authored: step.predicateExpression,
-            resolved: step.predicate,
-            evidence: evidence.actionResult.traceEvidence,
-            fallback: evidence.actionResult.message ?? evidence.expectation.actual
+        let stopCheck = Settlement.PredicateEvaluation.evaluate(
+            step.predicate,
+            expression: step.predicateExpression,
+            in: settlement
         )
-        let stopCheck = expectation
-        let observation = RepeatUntil.ObservedState(
-            settlement: settlement,
-            evidence: evidence
-        )
-        let observedCheck = observation.map {
-            RepeatUntil.ObservedCheck(observation: $0, check: stopCheck)
-        }
-        guard let check = observedCheck else {
+        let observation = RepeatUntil.ObservedState(settlement)
+        guard settlement.evidence.handoff.event != nil else {
             let noProgressExpectation: ExpectationResult.Unmet
             switch stopCheck {
             case .met(let metExpectation):
@@ -194,10 +168,14 @@ extension TheBrains {
                 noProgressExpectation = unmetExpectation
             }
             return .noProgress(
-                observation: nil,
+                observation: observation,
                 expectation: noProgressExpectation
             )
         }
+        let check = RepeatUntil.ObservedCheck(
+            observation: observation,
+            check: stopCheck
+        )
         switch check {
         case .met(let check):
             return .met(check)
@@ -212,21 +190,6 @@ extension TheBrains {
         }
     }
 
-    private func repeatUntilStopExpectation(
-        authored predicate: AccessibilityPredicate,
-        resolved: ResolvedAccessibilityPredicate,
-        evidence: AccessibilityTraceEvidence?,
-        fallback: String?
-    ) -> ExpectationResult {
-        guard let evidence else {
-            return ExpectationResult(
-                met: false,
-                predicate: predicate,
-                actual: fallback ?? "no observed accessibility trace"
-            )
-        }
-        return ExpectationResult(resolved.evaluate(in: evidence), predicate: predicate)
-    }
 }
 
 #endif // DEBUG

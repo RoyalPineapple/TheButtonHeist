@@ -12,16 +12,13 @@ extension TheBrainsActionTests {
 
     func testHeistConditionalSelectsFirstMatchingCaseOnce() async throws {
         var observationTimeouts: [Double?] = []
-        var waitCount = 0
+        var settlementCommands: [Settlement.Command] = []
         let runtime = heistRuntime(
             observations: [
                 await observedState(labels: ["Home", "Login"]),
             ],
-            wait: { _ in
-                waitCount += 1
-                preconditionFailure("conditional scheduled a wait")
-            },
-            observedTimeouts: { observationTimeouts.append($0) }
+            observedTimeouts: { observationTimeouts.append($0) },
+            observedSettlementCommands: { settlementCommands.append($0) }
         )
         let plan = try HeistPlan(body: [
             .conditional(try ConditionalStep(cases: [
@@ -44,8 +41,8 @@ extension TheBrainsActionTests {
         XCTAssertEqual(step.kind, .conditional)
         XCTAssertEqual(step.caseSelectionEvidence?.selection.outcome, HeistCaseSelectionOutcome.matchedCase(index: 0))
         XCTAssertEqual(step.children.map(\.kind), [.warn])
-        XCTAssertEqual(observationTimeouts, [0])
-        XCTAssertEqual(waitCount, 0)
+        XCTAssertEqual(observationTimeouts, [nil])
+        XCTAssertEqual(settlementCommands, [.currentState(scope: .visible)])
     }
 
     func testHeistConditionalUnmatchedWithoutElseContinues() async throws {
@@ -218,14 +215,14 @@ extension TheBrainsActionTests {
         XCTAssertEqual(step.repeatUntilEvidence?.iterationCount, 1)
         XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, true)
         XCTAssertEqual(observedTimeouts.count, 2)
-        XCTAssertEqual(observedTimeouts[0], 0)
+        XCTAssertNil(observedTimeouts[0])
         let observedTimeout = try XCTUnwrap(observedTimeouts[1])
         XCTAssertEqual(observedTimeout, defaultActionExpectationTimeout.seconds, accuracy: 0.1)
     }
 
-    func testHeistRepeatUntilExecutesBodyWhenBaselineObservationIsUnavailable() async throws {
+    func testHeistRepeatUntilDoesNotGuessWhenInitialObservationIsUnavailable() async throws {
         var incrementCount = 0
-        var waitBaselines: [Settlement.Baseline] = []
+        var settlementCommands: [Settlement.Command] = []
         let runtime = heistRuntime(
             observations: [
                 await observedState(elements: [(makeElement(value: "1", identifier: "quantity"), "quantity")]),
@@ -236,7 +233,7 @@ extension TheBrainsActionTests {
                 }
                 return ActionResult.success(payload: .increment)
             },
-            observedWaitCommands: { waitBaselines.append($0.baseline) },
+            observedSettlementCommands: { settlementCommands.append($0) },
             unavailableObservationCount: 1
         )
         let plan = try HeistPlan(body: [
@@ -253,11 +250,13 @@ extension TheBrainsActionTests {
         let heistResult = try XCTUnwrap(result.resultPayload)
         let step = try XCTUnwrap(heistResult.steps.first)
 
-        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "repeat_until failed")
+        XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(incrementCount, 1)
         XCTAssertEqual(step.repeatUntilEvidence?.iterationCount, 1)
-        XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, true)
-        XCTAssertEqual(waitBaselines, [.capture])
+        XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, false)
+        XCTAssertEqual(settlementCommands.count, 2)
+        XCTAssertEqual(settlementCommands[0], .currentState(scope: .visible))
+        XCTAssertEqual(settlementCommands[1].baseline, .unavailable(.unavailable))
     }
 
     func testHeistRepeatUntilChainsExactObservationMomentsAcrossPostBodyWaits() async throws {
@@ -267,24 +266,29 @@ extension TheBrainsActionTests {
         let secondMutation = await observedState(elements: [(makeElement(value: "2", identifier: "quantity"), "quantity")])
         let events = observationEvents(for: [initialState, firstMutation, secondMutation])
         var incrementCount = 0
-        var nextObservationIndex = 1
+        var nextObservationIndex = 0
+        var settlementCommands: [Settlement.Command] = []
         var postBodyBaselines: [Observation.Moment] = []
-        let runtime = repeatUntilWaitRuntime(
-            observations: [initialState],
+        let runtime = repeatUntilSettlementRuntime(
             execute: { command in
                 if case .increment = command {
                     incrementCount += 1
                 }
                 return ActionResult.success(payload: command.resultPayload)
             },
-            wait: { command in
-                guard case .supplied(let boundary) = command.baseline else {
+            settle: { command in
+                settlementCommands.append(command)
+                let event = events[nextObservationIndex]
+                nextObservationIndex += 1
+                if case .currentState = command {
+                    return scriptedSettlement(command, observation: event)
+                }
+                guard let baseline = command.baseline,
+                      case .supplied(let boundary) = baseline else {
                     XCTFail("repeat_until should supply its exact observation boundary")
                     return scriptedSettlement(command, observation: nil)
                 }
                 postBodyBaselines.append(boundary.moment)
-                let event = events[nextObservationIndex]
-                nextObservationIndex += 1
                 return scriptedSettlement(command, observation: event)
             }
         )
@@ -307,8 +311,10 @@ extension TheBrainsActionTests {
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "repeat_until failed")
         XCTAssertEqual(incrementCount, 2)
+        XCTAssertEqual(settlementCommands.count, 3)
+        XCTAssertEqual(settlementCommands[0], .currentState(scope: .visible))
         XCTAssertEqual(postBodyBaselines.count, 2)
-        XCTAssertEqual(postBodyBaselines[0].capture, initialState.moment.capture)
+        XCTAssertEqual(postBodyBaselines[0], events[0].moment)
         XCTAssertEqual(postBodyBaselines[1], events[1].moment)
         XCTAssertEqual(step.repeatUntilEvidence?.iterationCount, 2)
         XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, true)

@@ -33,7 +33,7 @@ extension TheBrains {
             )
         }
 
-        let settlement = await runtime.wait(Settlement.Command(
+        let settlement = await runtime.settle(Settlement.Command(
             observing: resolvedWait,
             baseline: .capture,
             startedAt: start
@@ -99,14 +99,13 @@ extension TheBrains {
     func executeSettlementWait(
         _ command: Settlement.Command
     ) async -> Settlement.Result {
-        guard command.trigger == .observation,
-              let predicate = command.predicate else {
+        guard case .observation(let predicate, let deadline, _) = command else {
             preconditionFailure("Observation wait requires an observation settlement command")
         }
         let start = RuntimeElapsed.now
         let discoveryDeadline = SemanticObservationDeadline(
             start: start,
-            timeoutSeconds: command.deadline.remainingDuration(at: start) / .seconds(1)
+            timeoutSeconds: deadline.remainingDuration(at: start) / .seconds(1)
         )
         return await executeSettlement(
             command,

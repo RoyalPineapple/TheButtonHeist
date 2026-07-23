@@ -529,10 +529,10 @@ final class TheBrainsActionTests: XCTestCase {
     func heistRuntime(
         observations: [Observation.SnapshotEvent],
         execute: (@MainActor (ResolvedHeistActionCommand) async -> ActionResult)? = nil,
-        wait: (@MainActor (Settlement.Command) async -> Settlement.Result)? = nil,
+        settle: (@MainActor (Settlement.Command) async -> Settlement.Result)? = nil,
         observedScopes: (@MainActor (SemanticObservationScope) -> Void)? = nil,
         observedTimeouts: (@MainActor (Double?) -> Void)? = nil,
-        observedWaitCommands: (@MainActor (Settlement.Command) -> Void)? = nil,
+        observedSettlementCommands: (@MainActor (Settlement.Command) -> Void)? = nil,
         expectationContextScopes: (@MainActor (SemanticObservationScope?) -> Void)? = nil,
         unavailableObservationCount: Int = 0,
         file: StaticString = #filePath,
@@ -565,7 +565,7 @@ final class TheBrainsActionTests: XCTestCase {
                 }
                 let settlement = await self.scriptedSettlement(
                     Settlement.Command(observing: expectation),
-                    wait: wait,
+                    settle: settle,
                     observationSource: observationSource
                 )
                 let settlementEvidence = Settlement.ResultProjector.projectWait(settlement)
@@ -575,33 +575,21 @@ final class TheBrainsActionTests: XCTestCase {
                     expectation: settlementEvidence.expectation
                 ))
             },
-            wait: { command in
-                observedWaitCommands?(command)
+            settle: { command in
+                observedSettlementCommands?(command)
                 return await self.scriptedSettlement(
                     command,
-                    wait: wait,
+                    settle: settle,
                     observationSource: observationSource
                 )
-            },
-            settledEvent: { scope, _, timeout in
-                observationSource.next(scope: scope, timeout: timeout)
             }
         )
     }
 
-    func repeatUntilWaitRuntime(
-        observations: [Observation.SnapshotEvent],
+    func repeatUntilSettlementRuntime(
         execute: (@MainActor (ResolvedHeistActionCommand) async -> ActionResult)? = nil,
-        wait: @escaping @MainActor (Settlement.Command) async -> Settlement.Result
+        settle: @escaping @MainActor (Settlement.Command) async -> Settlement.Result
     ) -> TheBrains.HeistExecutionRuntime {
-        let observationSource = ScriptedHeistObservationSource(
-            observations: observations,
-            unavailableObservationCount: 0,
-            observedScopes: nil,
-            observedTimeouts: nil,
-            file: #filePath,
-            line: #line
-        )
         return TheBrains.HeistExecutionRuntime(
             execute: { command, _ in
                 let result: ActionResult
@@ -614,25 +602,27 @@ final class TheBrainsActionTests: XCTestCase {
                 }
                 return RuntimeActionExecution(result: result, actionExpectationContext: nil)
             },
-            wait: wait,
-            settledEvent: { scope, _, timeout in
-                observationSource.next(scope: scope, timeout: timeout)
-            }
+            settle: settle
         )
     }
 
     private func scriptedSettlement(
         _ command: Settlement.Command,
-        wait: (@MainActor (Settlement.Command) async -> Settlement.Result)?,
+        settle: (@MainActor (Settlement.Command) async -> Settlement.Result)?,
         observationSource: ScriptedHeistObservationSource
     ) async -> Settlement.Result {
-        if let wait {
-            return await wait(command)
+        if let settle {
+            return await settle(command)
         }
-        let now = RuntimeElapsed.now
+        if let baseline = command.baseline,
+           case .unavailable = baseline {
+            return TheInsideJobTests.scriptedSettlement(command, observation: nil)
+        }
         let observation = observationSource.next(
             scope: command.observationScope,
-            timeout: command.deadline.remainingDuration(at: now) / .seconds(1)
+            timeout: command.deadline.map {
+                $0.remainingDuration(at: RuntimeElapsed.now) / .seconds(1)
+            }
         )
         return TheInsideJobTests.scriptedSettlement(command, observation: observation)
     }

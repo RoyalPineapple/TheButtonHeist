@@ -130,6 +130,7 @@ extension TheBrainsActionTests {
     func testHeistForEachCallsBodyWithOrdinalTargetForEachInitialMatchWithoutMutatingPlan() async throws {
         let matching = ElementPredicateTemplate.label("Delete")
         var executedCommands: [ResolvedHeistActionCommand] = []
+        var settlementCommands: [Settlement.Command] = []
         let initialState = await observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
             (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
@@ -140,7 +141,8 @@ extension TheBrainsActionTests {
             execute: { command in
                 executedCommands.append(command)
                 return ActionResult.success(payload: .activate)
-            }
+            },
+            observedSettlementCommands: { settlementCommands.append($0) }
         )
         let plan = try HeistPlan(body: [
             .forEachElement(try ForEachElementStep(
@@ -164,6 +166,10 @@ extension TheBrainsActionTests {
             try HeistActionCommand.activate(.target(matching, ordinal: $0)).resolve(in: .empty)
         }
         XCTAssertEqual(executedCommands, expectedCommands)
+        XCTAssertEqual(
+            settlementCommands,
+            Array(repeating: .currentState(scope: .discovery), count: 3)
+        )
         XCTAssertEqual(step.children.map(\.kind), [.forEachIteration, .forEachIteration, .forEachIteration])
         XCTAssertEqual(step.children.flatMap(\.children).map(\.kind), [.action, .action, .action])
         XCTAssertEqual(plan.body, originalBody)
@@ -399,7 +405,7 @@ extension TheBrainsActionTests {
                     ))
                 )
             },
-            wait: { command in
+            settle: { command in
                 if let predicate = command.predicate {
                     waitedPredicates.append(predicate)
                 }

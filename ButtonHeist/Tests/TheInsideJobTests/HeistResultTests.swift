@@ -286,12 +286,12 @@ final class HeistResultTests: XCTestCase {
 
     func testRepeatUntilSuccessResultDoesNotSynthesizeWaitActionResult() async throws {
         let job = try TheInsideJob(token: "in-app-repeat-until-success-result-test")
-        let waitScript = WaitResultScript(states: [
+        let settlementScript = SettlementResultScript(states: [
             await observedQuantityState(job: job, value: "0"),
             await observedQuantityState(job: job, value: "2"),
         ])
         var incrementCount = 0
-        let runtime = repeatUntilRuntime(job: job, waitScript: waitScript) { command in
+        let runtime = repeatUntilRuntime(job: job, settlementScript: settlementScript) { command in
             if case .increment = command {
                 incrementCount += 1
             }
@@ -324,11 +324,11 @@ final class HeistResultTests: XCTestCase {
 
     func testRepeatUntilTimeoutResultDoesNotSynthesizeWaitActionResult() async throws {
         let job = try TheInsideJob(token: "in-app-repeat-until-timeout-result-test")
-        let waitScript = WaitResultScript(states: [
+        let settlementScript = SettlementResultScript(states: [
             await observedQuantityState(job: job, value: "0"),
         ])
         var incrementCount = 0
-        let runtime = repeatUntilRuntime(job: job, waitScript: waitScript) { command in
+        let runtime = repeatUntilRuntime(job: job, settlementScript: settlementScript) { command in
             if case .increment = command {
                 incrementCount += 1
             }
@@ -534,7 +534,7 @@ private final class RuntimeCapture {
 }
 
 @MainActor
-private final class WaitResultScript {
+private final class SettlementResultScript {
     private var events: [Observation.SnapshotEvent]
     private var previousCapture: AccessibilityTrace.Capture?
     private var nextSequence: SettledObservationSequence = 0
@@ -598,7 +598,7 @@ private func observedQuantityState(
 @MainActor
 private func repeatUntilRuntime(
     job _: TheInsideJob,
-    waitScript: WaitResultScript,
+    settlementScript: SettlementResultScript,
     execute: @escaping @MainActor (ResolvedHeistActionCommand) async -> ActionResult
 ) -> TheBrains.HeistExecutionRuntime {
     TheBrains.HeistExecutionRuntime(
@@ -608,11 +608,8 @@ private func repeatUntilRuntime(
                 actionExpectationContext: nil
             )
         },
-        wait: { command in
-            waitScript.result(for: command)
-        },
-        settledEvent: { scope, _, _ in
-            waitScript.event(scope: scope)
+        settle: { command in
+            settlementScript.result(for: command)
         }
     )
 }

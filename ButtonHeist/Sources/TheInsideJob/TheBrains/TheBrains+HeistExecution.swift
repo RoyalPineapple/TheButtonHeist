@@ -33,20 +33,17 @@ extension TheBrains {
             ResolvedHeistActionCommand,
             ResolvedWaitRuntimeInput?
         ) async -> RuntimeActionExecution
-        internal let wait: @MainActor (Settlement.Command) async -> Settlement.Result
-        internal let settledEvent: @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> Observation.SnapshotEvent?
+        internal let settle: @MainActor (Settlement.Command) async -> Settlement.Result
 
         internal init(
             execute: @escaping @MainActor (
                 ResolvedHeistActionCommand,
                 ResolvedWaitRuntimeInput?
             ) async -> RuntimeActionExecution,
-            wait: @escaping @MainActor (Settlement.Command) async -> Settlement.Result,
-            settledEvent: @escaping @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> Observation.SnapshotEvent?
+            settle: @escaping @MainActor (Settlement.Command) async -> Settlement.Result
         ) {
             self.execute = execute
-            self.wait = wait
-            self.settledEvent = settledEvent
+            self.settle = settle
         }
 
         @MainActor
@@ -58,11 +55,8 @@ extension TheBrains {
                         expectation: expectation
                     )
                 },
-                wait: { command in
+                settle: { command in
                     await brains.executeSettlementWait(command)
-                },
-                settledEvent: { scope, sequence, timeout in
-                    await brains.interactionCoordinator.settledEvent(scope: scope, after: sequence, timeout: timeout)
                 }
             )
         }

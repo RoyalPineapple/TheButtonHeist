@@ -167,7 +167,12 @@ func scriptedSettlement(
     _ command: Settlement.Command,
     observation event: Observation.SnapshotEvent?
 ) -> Settlement.Result {
-    guard let predicate = command.predicate else {
+    if case .currentState = command {
+        return scriptedCurrentStateSettlement(command, event: event)
+    }
+    guard let predicate = command.predicate,
+          let baseline = command.baseline,
+          let deadline = command.deadline else {
         preconditionFailure("Scripted observation settlement requires a predicate")
     }
     var predicateEvidence = Settlement.Predicate.Evidence(predicate: predicate)
@@ -176,17 +181,17 @@ func scriptedSettlement(
             outcome: .timedOut,
             evidence: Settlement.Evidence(
                 command: command,
-                boundary: scriptedBoundary(command.baseline, fallback: nil),
+                boundary: scriptedBoundary(baseline, fallback: nil),
                 trigger: .observation,
                 predicate: predicateEvidence,
                 readiness: .pending(.initial),
                 handoff: .pending(.initial),
                 observationHistory: nil,
-                deadline: .init(deadline: command.deadline, elapsed: 1, reached: true)
+                deadline: .bounded(deadline: deadline, elapsed: 1, reached: true)
             )
         )
     }
-    let expectation = PredicateEvaluation.evaluate(
+    let expectation = Settlement.PredicateEvaluation.evaluate(
         predicate.resolved,
         expression: predicate.authored,
         in: event
@@ -237,17 +242,56 @@ func scriptedSettlement(
         outcome: expectation.met ? .settled : .timedOut,
         evidence: Settlement.Evidence(
             command: command,
-            boundary: scriptedBoundary(command.baseline, fallback: event.moment),
+            boundary: scriptedBoundary(baseline, fallback: event.moment),
             trigger: .observation,
             predicate: predicateEvidence,
             readiness: .established(readiness),
             handoff: .admitted(handoff),
             observationHistory: history,
-            deadline: .init(
-                deadline: command.deadline,
+            deadline: .bounded(
+                deadline: deadline,
                 elapsed: 1,
                 reached: !expectation.met
             )
+        )
+    )
+}
+
+private func scriptedCurrentStateSettlement(
+    _ command: Settlement.Command,
+    event: Observation.SnapshotEvent?
+) -> Settlement.Result {
+    guard let event else {
+        return Settlement.Result(
+            outcome: .baselineUnavailable,
+            evidence: Settlement.Evidence(
+                command: command,
+                boundary: .unavailable(.unavailable),
+                trigger: .observation,
+                predicate: Settlement.Predicate.Evidence(predicate: nil),
+                readiness: .pending(.initial),
+                handoff: .pending(.initial),
+                observationHistory: nil,
+                deadline: .notApplicable(elapsed: 0)
+            )
+        )
+    }
+    let readiness = Settlement.Readiness.Establishment(
+        generation: .initial,
+        path: .currentStateCapture,
+        observationBoundary: .including(event.moment)
+    )
+    return Settlement.Result(
+        outcome: .settled,
+        evidence: Settlement.Evidence(
+            command: command,
+            boundary: .established(.init(moment: event.moment)),
+            trigger: .observation,
+            predicate: Settlement.Predicate.Evidence(predicate: nil),
+            readiness: .established(readiness),
+            handoff: .admitted(.currentState(event)),
+            observationHistory: .events([]),
+            deadline: .notApplicable(elapsed: 0)
         )
     )
 }

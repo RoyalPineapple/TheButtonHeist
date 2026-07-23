@@ -117,7 +117,8 @@ extension TheBrains {
                 error: error
             )
         }
-        guard let event = await runtime.settledEvent(.discovery, nil, nil) else {
+        let currentState = await runtime.settle(.currentState(scope: .discovery))
+        guard let event = currentState.evidence.handoff.event else {
             return forEachUnavailableResult(
                 index: index,
                 path: path,
@@ -143,7 +144,6 @@ extension TheBrains {
 
         var currentSignature = matchSignature
         var nextOrdinal = 0
-        var observedSequence = event.sequence
         let outcome = await runForEachLoop(
             context: ForEachLoopContext(
                 totalCount: matchedCount,
@@ -156,14 +156,10 @@ extension TheBrains {
             ),
             nextItem: { iterationIndex in
                 if iterationIndex > 0 {
-                    guard let nextEvent = await runtime.settledEvent(
-                        .discovery,
-                        observedSequence,
-                        nil
-                    ) else {
+                    let nextState = await runtime.settle(.currentState(scope: .discovery))
+                    guard let nextEvent = nextState.evidence.handoff.event else {
                         return .postObservationUnavailable(iterationIndex: iterationIndex - 1)
                     }
-                    observedSequence = nextEvent.sequence
                     let nextSignature = ForEachMatchSignature(
                         matching: resolvedMatching,
                         elements: nextEvent.moment.capture.interface.projectedElements

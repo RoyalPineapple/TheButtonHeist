@@ -39,7 +39,7 @@ extension TheBrains {
 
     internal struct InvocationExpectationContext {
         internal let input: ResolvedWaitRuntimeInput
-        internal let baseline: Settlement.Baseline
+        internal let currentState: Settlement.Result
     }
 
     private enum InvocationExpectationPreparation {
@@ -176,18 +176,12 @@ extension TheBrains {
                 error: error
             ))
         }
-        let event = await runtime.settledEvent(
-            input.predicate.observationScope,
-            nil,
-            0
-        )
-        let baseline = Settlement.Baseline.beforeTrigger(
-            observationMoment: event?.moment,
-            predicate: input.predicate
+        let currentState = await runtime.settle(
+            .currentState(scope: input.predicate.observationScope)
         )
         return .prepared(InvocationExpectationContext(
             input: input,
-            baseline: baseline
+            currentState: currentState
         ))
     }
 
@@ -197,9 +191,9 @@ extension TheBrains {
         childExecution: HeistExecutedChildren
     ) async -> InvocationExpectationOutcome {
         guard case .passed = childExecution, let context else { return .notEvaluated }
-        let settlement = await runtime.wait(Settlement.Command(
+        let settlement = await runtime.settle(Settlement.Command(
             observing: context.input,
-            baseline: context.baseline
+            after: context.currentState
         ))
         let evidence = Settlement.ResultProjector.projectWait(settlement)
         guard let failure = invocationExpectationFailure(

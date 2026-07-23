@@ -6,24 +6,16 @@ import TheScore
 @MainActor
 func evaluatePredicateCases(
     _ cases: [ResolvedPredicateCaseRuntimeInput],
-    in event: Observation.SnapshotEvent?
+    in settlement: Settlement.Result
 ) -> HeistCaseSelectionResult {
     let results = cases.map {
-        if let event {
-            PredicateEvaluation.caseMatch($0, in: event)
-        } else {
-            HeistCaseMatchResult(
-                predicate: $0.predicateExpression.rootPredicate,
-                met: false,
-                actual: "no settled accessibility state observed"
-            )
-        }
+        Settlement.PredicateEvaluation.caseMatch($0, in: settlement)
     }
     return .selectingFirstMatch(
         cases: results,
         ifNone: .noMatch,
         elapsedMs: 0,
-        lastObservedSummary: event?.summary
+        lastObservedSummary: settlement.evidence.handoff.event?.summary
     )
 }
 

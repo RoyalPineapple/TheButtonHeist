@@ -29,14 +29,12 @@ extension TheBrains {
             return repeatUntilResolutionFailure(step, path: path, start: start, error: error)
         }
 
-        let initialEvent = await runtime.settledEvent(
-            .visible,
-            nil,
-            0
+        let initialState = await runtime.settle(
+            .currentState(scope: resolved.predicate.observationScope)
         )
         let state = RepeatUntil.LoopState.running(
             RepeatUntil.RunningState(
-                currentObservation: initialEvent.map(RepeatUntil.ObservedState.init)
+                currentObservation: RepeatUntil.ObservedState(initialState)
             )
         )
         return await repeatUntilLoopResult(
