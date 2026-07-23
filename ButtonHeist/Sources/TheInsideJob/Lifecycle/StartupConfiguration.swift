@@ -68,12 +68,12 @@ struct StartupInfoPlist: Equatable, Sendable {
     init(bundle: Bundle) {
         self.init { key in
             guard let object = bundle.object(forInfoDictionaryKey: key) else { return nil }
-            return FoundationInfoPlistProjection.value(from: object)
+            return decodeFoundationInfoPlistValue(object)
         }
     }
 
     init(contentsOf url: URL) {
-        guard let dictionary = FoundationInfoPlistProjection.dictionary(contentsOf: url) else {
+        guard let dictionary = decodeInfoPlistValues(contentsOf: url) else {
             self.init(values: [:])
             return
         }
@@ -167,58 +167,44 @@ enum InfoPlistValue: Equatable, Sendable, CustomStringConvertible {
     }
 }
 
-private struct FoundationInfoPlistDictionary {
-    private let values: [String: InfoPlistValue]
-
-    init(values: [String: InfoPlistValue]) {
-        self.values = values
+/// Foundation's Bundle and property-list APIs vend raw plist objects. Keep
+/// that `Any` decoding here and expose only typed `InfoPlistValue` to callers.
+private func decodeInfoPlistValues(contentsOf url: URL) -> [String: InfoPlistValue]? {
+    guard let data = try? Data(contentsOf: url),
+          let propertyList = try? PropertyListSerialization.propertyList(
+              from: data,
+              options: [],
+              format: nil
+          ),
+          let dictionary = propertyList as? NSDictionary else {
+        return nil
     }
 
-    subscript(key: String) -> InfoPlistValue? {
-        values[key]
+    var values: [String: InfoPlistValue] = [:]
+    for (key, object) in dictionary {
+        guard let key = key as? String else { continue }
+        values[key] = decodeFoundationInfoPlistValue(object)
     }
+    return values
 }
 
-/// Foundation's Bundle and property-list APIs vend raw plist objects. Keep
-/// that `Any` projection here and expose only typed `InfoPlistValue` to callers.
-private enum FoundationInfoPlistProjection {
-    static func dictionary(contentsOf url: URL) -> FoundationInfoPlistDictionary? {
-        guard let data = try? Data(contentsOf: url),
-              let propertyList = try? PropertyListSerialization.propertyList(
-                from: data,
-                options: [],
-                format: nil
-              ),
-              let dictionary = propertyList as? NSDictionary else {
-            return nil
-        }
-
-        var values: [String: InfoPlistValue] = [:]
-        for (key, object) in dictionary {
-            guard let key = key as? String else { continue }
-            values[key] = value(from: object)
-        }
-        return FoundationInfoPlistDictionary(values: values)
+private func decodeFoundationInfoPlistValue(_ object: Any) -> InfoPlistValue {
+    if let string = object as? String {
+        return .string(string)
     }
-
-    static func value(from object: Any) -> InfoPlistValue {
-        if let string = object as? String {
-            return .string(string)
-        }
-        if let strings = object as? [String] {
-            return .stringArray(strings)
-        }
-        if let number = object as? NSNumber {
-            if number.isBooleanPropertyListValue {
-                return .bool(number.boolValue)
-            }
-            if CFNumberIsFloatType(number as CFNumber) {
-                return .double(number.doubleValue)
-            }
-            return .integer(Int(truncating: number))
-        }
-        return .unsupported(String(describing: object))
+    if let strings = object as? [String] {
+        return .stringArray(strings)
     }
+    if let number = object as? NSNumber {
+        if number.isBooleanPropertyListValue {
+            return .bool(number.boolValue)
+        }
+        if CFNumberIsFloatType(number as CFNumber) {
+            return .double(number.doubleValue)
+        }
+        return .integer(Int(truncating: number))
+    }
+    return .unsupported(String(describing: object))
 }
 
 private extension NSNumber {

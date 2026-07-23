@@ -75,7 +75,7 @@ public struct HeistResultRecording: Sendable, Equatable {
     public let fingerprint: String
 }
 
-public enum HeistResultRecorder {
+extension HeistResultRecording {
     @TaskLocal package static var environmentRecordingEnabled = true
 
     package static func withEnvironmentRecording<Value>(

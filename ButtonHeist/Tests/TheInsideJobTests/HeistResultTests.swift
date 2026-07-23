@@ -158,7 +158,7 @@ final class HeistResultTests: XCTestCase {
 
     func testRunHeistTestingFacadeDottedStringArgumentBuildsValidatedInvocation() async throws {
         let input: HeistReferenceName = "input"
-        let request = try makeRunHeistRequest("Cart.addItem", argument: "Milk") { _ in
+        let request = try HeistRunCommand("Cart.addItem", argument: "Milk") { _ in
             Warn("adding")
         }
 
@@ -172,7 +172,7 @@ final class HeistResultTests: XCTestCase {
 
     func testRunHeistTestingFacadeDottedAccessibilityTargetArgumentBuildsValidatedInvocation() async throws {
         let input: HeistReferenceName = "input"
-        let request = try makeRunHeistRequest("Rows.activate", argument: AccessibilityTarget.label("Milk")) { _ in
+        let request = try HeistRunCommand("Rows.activate", argument: AccessibilityTarget.label("Milk")) { _ in
             Warn("activating")
         }
 
@@ -260,7 +260,7 @@ final class HeistResultTests: XCTestCase {
         let heist = try await runHeist("addToCart", argument: "Milk") { _ in
             Warn("adding")
         }
-        let request = try makeRunHeistRequest("addToCart", argument: "Milk") { _ in
+        let request = try HeistRunCommand("addToCart", argument: "Milk") { _ in
             Warn("adding")
         }
 
@@ -273,7 +273,7 @@ final class HeistResultTests: XCTestCase {
     }
 
     func testRunHeistTestingFacadeNoArgumentUsesCanonicalInvocationTopology() async throws {
-        let request = try makeRunHeistRequest("CheckoutPay") {
+        let request = try HeistRunCommand("CheckoutPay") {
             Warn("paying")
         }
 
@@ -285,7 +285,7 @@ final class HeistResultTests: XCTestCase {
     }
 
     func testRunHeistTestingFacadeStringArgumentUsesCanonicalInvocationTopology() async throws {
-        let request = try makeRunHeistRequest("CartAddItem", argument: "Milk") { _ in
+        let request = try HeistRunCommand("CartAddItem", argument: "Milk") { _ in
             Warn("adding")
         }
 
@@ -298,7 +298,7 @@ final class HeistResultTests: XCTestCase {
     }
 
     func testRunHeistTestingFacadeAccessibilityTargetArgumentUsesCanonicalInvocationTopology() async throws {
-        let request = try makeRunHeistRequest(
+        let request = try HeistRunCommand(
             "RowsActivate",
             argument: AccessibilityTarget.label("Milk")
         ) { _ in
@@ -423,7 +423,7 @@ final class HeistResultTests: XCTestCase {
 
     func testFailedHeistThrowsFailureWithInspectableResult() async throws {
         do {
-            _ = try await HeistResultRecorder.withEnvironmentRecording(false) {
+            _ = try await HeistResultRecording.withEnvironmentRecording(false) {
                 try await runHeist("failedHeist") {
                     Fail("stop")
                 }
@@ -505,7 +505,7 @@ final class HeistResultTests: XCTestCase {
         let job = try TheInsideJob(token: "in-app-heist-abort-test")
 
         do {
-            _ = try await HeistResultRecorder.withEnvironmentRecording(false) {
+            _ = try await HeistResultRecording.withEnvironmentRecording(false) {
                 try await Heist(runtime: .insideJob(job)) {
                     Warn("before")
                     Fail("abort")

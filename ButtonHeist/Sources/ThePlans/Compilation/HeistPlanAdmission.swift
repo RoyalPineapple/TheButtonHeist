@@ -41,22 +41,6 @@ public enum HeistPlanSourceAdmissionPolicy: Sendable, Equatable {
     }
 }
 
-public struct HeistPlanSourceAdmissionRequest: Sendable, Equatable {
-    public let commandName: String
-    public let source: HeistPlanSource
-    public let sourcePolicy: HeistPlanSourceAdmissionPolicy
-
-    public init(
-        commandName: String,
-        source: HeistPlanSource,
-        sourcePolicy: HeistPlanSourceAdmissionPolicy = .artifactOrInlineDSL
-    ) {
-        self.commandName = commandName
-        self.source = source
-        self.sourcePolicy = sourcePolicy
-    }
-}
-
 package enum HeistAdmissionFailure: Error, Sendable, Equatable, CustomStringConvertible {
     case missingPlanSource(commandName: String)
     case multiplePlanSources(commandName: String)

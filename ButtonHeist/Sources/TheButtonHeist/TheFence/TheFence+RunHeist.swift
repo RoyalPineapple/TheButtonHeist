@@ -40,7 +40,7 @@ extension TheFence {
             argument: argument,
             timeout: timeout
         )
-        HeistResultRecorder.recordIfEnabled(result, plan: plan)
+        HeistResultRecording.recordIfEnabled(result, plan: plan)
         return .heistExecution(
             plan: plan,
             report: HeistReport.project(result: result)

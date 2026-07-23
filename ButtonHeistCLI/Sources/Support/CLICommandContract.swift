@@ -107,13 +107,7 @@ struct CommandArgumentFields {
     }
 }
 
-/// Marker for CLI commands backed by the Fence command catalog.
-///
-/// Command identity is intentionally not a protocol requirement: concrete CLI
-/// command types should not own or override Fence command identity.
-protocol CLICommandContract: ParsableCommand {}
-
-protocol OneShotCLICommand: AsyncParsableCommand, CLICommandContract {
+protocol OneShotCLICommand: AsyncParsableCommand {
     var runnerConnection: ConnectionOptions { get }
     var runnerFormat: OutputFormat? { get }
     var runnerExecutionMode: CLIRunner.ExecutionMode { get }
@@ -171,22 +165,6 @@ extension LocalOneShotCLICommand {
     var runnerExecutionMode: CLIRunner.ExecutionMode { .direct }
 }
 
-struct CLICommandEntry {
-    let commandType: ParsableCommand.Type
-    let fenceDescriptor: FenceCommandDescriptor?
-
-    static func fence(_ commandType: CLICommandContract.Type, descriptor: FenceCommandDescriptor) -> Self {
-        Self(
-            commandType: commandType,
-            fenceDescriptor: descriptor
-        )
-    }
-
-    static func cliOnly(_ commandType: ParsableCommand.Type) -> Self {
-        Self(commandType: commandType, fenceDescriptor: nil)
-    }
-}
-
 enum CLICommandCatalog {
     // MARK: - Pure CLI Wiring
     //
@@ -194,7 +172,7 @@ enum CLICommandCatalog {
     // ArgumentParser adapter types. It must not carry product command
     // semantics: public names, defaults, parameters, and help all
     // project from FenceCommandDescriptor/FenceParameterSpec below.
-    private static let commandTypesByFenceCommand: [TheFence.Command: CLICommandContract.Type] = [
+    private static let commandTypesByFenceCommand: [TheFence.Command: OneShotCLICommand.Type] = [
         .ping: PingCommand.self,
         .listDevices: ListDevicesCommand.self,
         .getInterface: GetInterfaceCommand.self,
@@ -224,13 +202,7 @@ enum CLICommandCatalog {
         .listTargets: ListTargetsCommand.self,
     ]
 
-    // MARK: - Catalog Projection
-
-    private static let cliOnlyCommands: [CLICommandEntry] = [
-        .cliOnly(JSONLinesCommand.self),
-    ]
-
-    static let entries: [CLICommandEntry] = {
+    static let subcommands: [ParsableCommand.Type] = {
         let directDescriptors = TheFence.Command.cliDirectCommandDescriptors
         let directCommandSet = Set(directDescriptors.map(\.command))
         precondition(
@@ -241,35 +213,23 @@ enum CLICommandCatalog {
             """
         )
 
-        let directEntries = directDescriptors.map { descriptor -> CLICommandEntry in
+        let directCommands = directDescriptors.map { descriptor -> ParsableCommand.Type in
             guard let commandType = commandTypesByFenceCommand[descriptor.command] else {
                 preconditionFailure("Missing CLI command type for direct Fence command \(descriptor.command.rawValue)")
             }
-            return .fence(commandType, descriptor: descriptor)
+            return commandType
         }
-        return directEntries + cliOnlyCommands
+        return directCommands + [JSONLinesCommand.self]
     }()
 
-    static var subcommands: [ParsableCommand.Type] {
-        entries.map(\.commandType)
+    static func descriptor(for commandType: OneShotCLICommand.Type) -> FenceCommandDescriptor? {
+        commandTypesByFenceCommand.first {
+            ObjectIdentifier($0.value) == ObjectIdentifier(commandType)
+        }?.key.descriptor
     }
-
-    static func descriptor(for commandType: CLICommandContract.Type) -> FenceCommandDescriptor? {
-        descriptorsByCommandType[ObjectIdentifier(commandType)]
-    }
-
-    private static let descriptorsByCommandType: [ObjectIdentifier: FenceCommandDescriptor] = {
-        return Dictionary(
-            uniqueKeysWithValues: entries.compactMap { entry in
-                guard let commandType = entry.commandType as? CLICommandContract.Type,
-                      let descriptor = entry.fenceDescriptor else { return nil }
-                return (ObjectIdentifier(commandType), descriptor)
-            }
-        )
-    }()
 }
 
-extension CLICommandContract {
+extension OneShotCLICommand {
     static var fenceDescriptor: FenceCommandDescriptor {
         guard let descriptor = CLICommandCatalog.descriptor(for: Self.self) else {
             fatalError("No Fence command descriptor registered for CLI command \(Self.self)")

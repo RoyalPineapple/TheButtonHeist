@@ -12,55 +12,30 @@ public enum HeistPlanSourceAdmission {
         ).diagnostic])
     }
 
-    public static func admittedSource(
+    public static func admit(
         commandName: String,
         path: String?,
-        inlineDSL: String?
-    ) -> ValidationResult<HeistPlanSource, HeistBuildDiagnostic> {
+        inlineDSL: String?,
+        sourcePolicy: HeistPlanSourceAdmissionPolicy = .artifactOrInlineDSL
+    ) -> ValidationResult<HeistPlanLoadRequest, HeistBuildDiagnostic> {
         switch (path, inlineDSL) {
         case (.some, .some):
             return .failure([HeistAdmissionFailure.multiplePlanSources(commandName: commandName).diagnostic])
         case (.none, .none):
             return .failure([HeistAdmissionFailure.missingPlanSource(commandName: commandName).diagnostic])
         case (.some(let path), .none):
-            return .success(.artifactPath(path), diagnostics: [])
-        case (.none, .some(let source)):
-            return .success(.inlineDSL(source), diagnostics: [])
-        }
-    }
-
-    public static func request(
-        commandName: String,
-        path: String?,
-        inlineDSL: String?,
-        sourcePolicy: HeistPlanSourceAdmissionPolicy = .artifactOrInlineDSL
-    ) -> ValidationResult<HeistPlanSourceAdmissionRequest, HeistBuildDiagnostic> {
-        admittedSource(commandName: commandName, path: path, inlineDSL: inlineDSL).map {
-            HeistPlanSourceAdmissionRequest(
-                commandName: commandName,
-                source: $0,
-                sourcePolicy: sourcePolicy
-            )
-        }
-    }
-
-    public static func admit(
-        from request: HeistPlanSourceAdmissionRequest
-    ) -> ValidationResult<HeistPlanLoadRequest, HeistBuildDiagnostic> {
-        switch request.source {
-        case .artifactPath(let path):
             return .success(
-                HeistPlanLoadRequest(commandName: request.commandName, source: .artifactPath(path)),
+                HeistPlanLoadRequest(commandName: commandName, source: .artifactPath(path)),
                 diagnostics: []
             )
-        case .inlineDSL(let source):
-            guard request.sourcePolicy.acceptsInlineDSL else {
+        case (.none, .some(let source)):
+            guard sourcePolicy.acceptsInlineDSL else {
                 return .failure([
-                    HeistAdmissionFailure.inlineSourceNotAccepted(commandName: request.commandName).diagnostic,
+                    HeistAdmissionFailure.inlineSourceNotAccepted(commandName: commandName).diagnostic,
                 ])
             }
             return .success(
-                HeistPlanLoadRequest(commandName: request.commandName, source: .inlineDSL(source)),
+                HeistPlanLoadRequest(commandName: commandName, source: .inlineDSL(source)),
                 diagnostics: []
             )
         }
@@ -68,13 +43,6 @@ public enum HeistPlanSourceAdmission {
 }
 
 public enum HeistPlanLoading {
-    public static func loadValidated(
-        from request: HeistPlanSourceAdmissionRequest
-    ) -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
-        HeistPlanSourceAdmission.admit(from: request)
-            .flatMap { loadValidated(from: $0) }
-    }
-
     public static func loadValidated(
         from request: HeistPlanLoadRequest
     ) -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {

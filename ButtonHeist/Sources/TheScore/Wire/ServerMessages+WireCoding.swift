@@ -34,11 +34,12 @@ extension ResponseEnvelope {
         var container = encoder.container(keyedBy: ResponseEnvelopeCodingKeys.self)
         try container.encode(buttonHeistVersion, forKey: .buttonHeistVersion)
         try container.encodeIfPresent(requestId, forKey: .requestId)
-        let wire = serverMessageWireRepresentation(message)
-        try container.encode(wire.type, forKey: .type)
-        if let payload = wire.payload {
-            try payload.encode(to: container.superEncoder(forKey: .payload))
-        }
+        try encodeServerMessage(
+            message,
+            to: &container,
+            typeKey: .type,
+            payloadKey: .payload
+        )
     }
 
 }
@@ -58,54 +59,61 @@ extension ServerMessage {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: ServerMessageCodingKeys.self)
-        let wire = serverMessageWireRepresentation(self)
-        try container.encode(wire.type, forKey: .type)
-        if let payload = wire.payload {
-            try payload.encode(to: container.superEncoder(forKey: .payload))
-        }
+        try encodeServerMessage(
+            self,
+            to: &container,
+            typeKey: .type,
+            payloadKey: .payload
+        )
     }
 
 }
 
 // MARK: - Helpers
 
-/// Single source of truth mapping each `ServerMessage` case to its wire type
-/// tag and optional payload value. Adding a new case requires extending this
-/// switch; Swift's exhaustivity check is the drift detector.
-private func serverMessageWireRepresentation(
-    _ message: ServerMessage
-) -> ServerMessageWireRepresentation {
+/// Encodes each `ServerMessage` case directly to its wire tag and payload.
+private func encodeServerMessage<Key: CodingKey>(
+    _ message: ServerMessage,
+    to container: inout KeyedEncodingContainer<Key>,
+    typeKey: Key,
+    payloadKey: Key
+) throws {
     switch message {
     case .serverHello:
-        return ServerMessageWireRepresentation(type: .serverHello, payload: nil)
+        try container.encode(ServerWireMessageType.serverHello, forKey: typeKey)
     case .authRequired:
-        return ServerMessageWireRepresentation(type: .authRequired, payload: nil)
+        try container.encode(ServerWireMessageType.authRequired, forKey: typeKey)
     case .pong(let payload):
-        return ServerMessageWireRepresentation(type: .pong, payload: .pong(payload))
+        try container.encode(ServerWireMessageType.pong, forKey: typeKey)
+        try payload.encode(to: container.superEncoder(forKey: payloadKey))
     case .protocolMismatch(let payload):
-        return ServerMessageWireRepresentation(type: .protocolMismatch, payload: .protocolMismatch(payload))
+        try container.encode(ServerWireMessageType.protocolMismatch, forKey: typeKey)
+        try payload.encode(to: container.superEncoder(forKey: payloadKey))
     case .error(let payload):
-        return ServerMessageWireRepresentation(type: .error, payload: .error(payload))
+        try container.encode(ServerWireMessageType.error, forKey: typeKey)
+        try payload.encode(to: container.superEncoder(forKey: payloadKey))
     case .sessionLocked(let payload):
-        return ServerMessageWireRepresentation(type: .sessionLocked, payload: .sessionLocked(payload))
+        try container.encode(ServerWireMessageType.sessionLocked, forKey: typeKey)
+        try payload.encode(to: container.superEncoder(forKey: payloadKey))
     case .info(let payload):
-        return ServerMessageWireRepresentation(type: .info, payload: .info(payload))
+        try container.encode(ServerWireMessageType.info, forKey: typeKey)
+        try payload.encode(to: container.superEncoder(forKey: payloadKey))
     case .interface(let payload):
-        return ServerMessageWireRepresentation(type: .interface, payload: .interface(payload))
+        try container.encode(ServerWireMessageType.interface, forKey: typeKey)
+        try payload.encode(to: container.superEncoder(forKey: payloadKey))
     case .actionResult(let payload):
-        return ServerMessageWireRepresentation(type: .actionResult, payload: .actionResult(payload))
+        try container.encode(ServerWireMessageType.actionResult, forKey: typeKey)
+        try payload.encode(to: container.superEncoder(forKey: payloadKey))
     case .screen(let payload):
-        return ServerMessageWireRepresentation(type: .screen, payload: .screen(payload))
+        try container.encode(ServerWireMessageType.screen, forKey: typeKey)
+        try payload.encode(to: container.superEncoder(forKey: payloadKey))
     case .announcements(let payload):
-        return ServerMessageWireRepresentation(type: .announcements, payload: .announcements(payload))
+        try container.encode(ServerWireMessageType.announcements, forKey: typeKey)
+        try payload.encode(to: container.superEncoder(forKey: payloadKey))
     case .status(let payload):
-        return ServerMessageWireRepresentation(type: .status, payload: .status(payload))
+        try container.encode(ServerWireMessageType.status, forKey: typeKey)
+        try payload.encode(to: container.superEncoder(forKey: payloadKey))
     }
-}
-
-private struct ServerMessageWireRepresentation {
-    let type: ServerWireMessageType
-    let payload: ServerMessageWirePayload?
 }
 
 private func decodeServerMessage(from payloadDecoder: Decoder?, type: ServerWireMessageType) throws -> ServerMessage {
@@ -145,44 +153,6 @@ private func decodeServerMessage(from payloadDecoder: Decoder?, type: ServerWire
         return .announcements(try AnnouncementListPayload(from: try payload()))
     case .status:
         return .status(try StatusPayload(from: try payload()))
-    }
-}
-
-private enum ServerMessageWirePayload {
-    case pong(PongPayload)
-    case protocolMismatch(ProtocolMismatchPayload)
-    case error(ServerError)
-    case sessionLocked(SessionLockedPayload)
-    case info(ServerInfo)
-    case interface(Interface)
-    case actionResult(ActionResult)
-    case screen(ScreenPayload)
-    case announcements(AnnouncementListPayload)
-    case status(StatusPayload)
-
-    func encode(to encoder: Encoder) throws {
-        switch self {
-        case .pong(let payload):
-            try payload.encode(to: encoder)
-        case .protocolMismatch(let payload):
-            try payload.encode(to: encoder)
-        case .error(let payload):
-            try payload.encode(to: encoder)
-        case .sessionLocked(let payload):
-            try payload.encode(to: encoder)
-        case .info(let payload):
-            try payload.encode(to: encoder)
-        case .interface(let payload):
-            try payload.encode(to: encoder)
-        case .actionResult(let payload):
-            try payload.encode(to: encoder)
-        case .screen(let payload):
-            try payload.encode(to: encoder)
-        case .announcements(let payload):
-            try payload.encode(to: encoder)
-        case .status(let payload):
-            try payload.encode(to: encoder)
-        }
     }
 }
 

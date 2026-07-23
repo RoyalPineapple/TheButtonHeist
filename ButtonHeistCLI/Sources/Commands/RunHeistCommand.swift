@@ -102,11 +102,11 @@ struct RunHeistCommand: ConnectedOneShotCLICommand {
         if case .heistExecution(_, let report) = response {
             let name = heistPath
                 .map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent } ?? "heist"
-            let junitReport = fence.junitReport(
+            let junitXML = fence.junitXML(
                 for: report,
                 heistName: name
             )
-            try junitReport.junitXML().write(
+            try junitXML.write(
                 to: URL(fileURLWithPath: junitPath),
                 atomically: true,
                 encoding: String.Encoding.utf8

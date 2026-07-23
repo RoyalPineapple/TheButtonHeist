@@ -127,6 +127,7 @@ jobs:
           scripts/swift-test-gate.sh HeistPlanTests --disable-xctest
           scripts/swift-test-gate.sh ButtonHeistCLI
           scripts/swift-test-gate.sh ButtonHeistMCP
+          scripts/heist-doctor-demo.sh --work-dir "$RUNNER_TEMP/heist-doctor-demo"
 
       - name: Collect macOS failure evidence
         if: failure()

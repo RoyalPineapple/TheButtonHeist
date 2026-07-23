@@ -417,7 +417,7 @@ pipelines are explicit:
 | Result private storage codec | `HeistExecutionStepNode.swift` and `HeistExecutionStepNode+Codable.swift` | External result JSON projection only |
 | Action semantic and wire payload | `ActionResult.Payload` with `ActionResult` custom `Codable` | Runtime construction and wire encoding/decoding |
 | Result interpretation | `HeistReport.project(result:)` in `HeistResult+Report.swift` | JSON, compact, human, JUnit, doctor, and metric renderers |
-| Result recording decision | `HeistResult.Outcome` and `HeistResultRecordingMode` | `HeistResultRecorder` filesystem boundary |
+| Result recording decision | `HeistResult.Outcome` and `HeistResultRecordingMode` | `HeistResultRecording` filesystem boundary |
 | Offline validation algebra | `HeistValidation.Result<Value>` composed by `HeistValidation.Report` | Public JSON and text projections |
 | Settlement lifecycle | `Settlement.State`, `Settlement.Reducer`, and `Settlement.Executor` | Actions and observation-only waits provide typed commands; boundaries perform effects |
 | Semantic observation scheduling | `Observation.Stream` in `SemanticObservationStream.swift` | Capture scheduling, publication, and observation demand |

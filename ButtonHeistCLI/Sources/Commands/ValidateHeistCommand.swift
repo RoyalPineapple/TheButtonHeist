@@ -1,7 +1,7 @@
 import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
 
-struct ValidateHeistCommand: AsyncParsableCommand, CLICommandContract {
+struct ValidateHeistCommand: LocalOneShotCLICommand {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Validate a Button Heist plan without connecting to an app",
@@ -45,16 +45,6 @@ struct ValidateHeistCommand: AsyncParsableCommand, CLICommandContract {
         )
     }
 
-    @ButtonHeistActor
-    mutating func run() async throws {
-        try await CLIRunner.run(CLIRunner.CommandDescriptor(
-            fenceDescriptor: Self.fenceDescriptor,
-            connection: ConnectionOptions(),
-            format: output.format,
-            arguments: try requestArguments(),
-            executionMode: .direct
-        ))
-    }
 }
 
 enum ValidateHeistLintArgument: String, CaseIterable, ExpressibleByArgument {

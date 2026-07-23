@@ -4,21 +4,21 @@ import ThePlans
 import Testing
 @testable import TheScore
 
-@Suite(.serialized) struct HeistResultRecorderTests {
+@Suite(.serialized) struct HeistResultRecordingTests {
 
     @Test func `record failing result as gzip artifact`() throws {
         try withTemporaryDirectory(prefix: "heist-result-recorder") { directory in
             let plan = try samplePlan()
             let result = failedResult()
 
-            let recording = try #require(try HeistResultRecorder.write(
+            let recording = try #require(try HeistResultRecording.write(
                 result,
                 plan: plan,
                 configuration: HeistResultRecordingConfiguration(rootDirectory: directory, mode: .failures)
             ))
 
             #expect(recording.heistName == "Checkout_Flow")
-            #expect(recording.fingerprint == (try HeistResultRecorder.heistFingerprint(for: plan)))
+            #expect(recording.fingerprint == (try HeistResultRecording.heistFingerprint(for: plan)))
             #expect(recording.url.pathExtension == "gz")
             #expect(recording.url.lastPathComponent.hasSuffix("-failed.json.gz"))
             #expect(recording.url.deletingLastPathComponent().lastPathComponent.hasPrefix("checkout-flow-"))
@@ -31,12 +31,12 @@ import Testing
             let plan = try samplePlan()
             let result = passedResult()
 
-            let skipped = try HeistResultRecorder.write(
+            let skipped = try HeistResultRecording.write(
                 result,
                 plan: plan,
                 configuration: HeistResultRecordingConfiguration(rootDirectory: directory, mode: .failures)
             )
-            let recording = try #require(try HeistResultRecorder.write(
+            let recording = try #require(try HeistResultRecording.write(
                 result,
                 plan: plan,
                 configuration: HeistResultRecordingConfiguration(rootDirectory: directory, mode: .all)
@@ -74,14 +74,14 @@ import Testing
                 setEnvironment(EnvironmentKey.buttonheistResultsMode.rawValue, previousMode)
             }
 
-            let before = HeistResultRecorder.recordIfEnabled(
+            let before = HeistResultRecording.recordIfEnabled(
                 failedResult(),
                 plan: try samplePlan()
             )
-            let skipped = try await HeistResultRecorder.withEnvironmentRecording(false) {
-                HeistResultRecorder.recordIfEnabled(failedResult(), plan: try samplePlan())
+            let skipped = try await HeistResultRecording.withEnvironmentRecording(false) {
+                HeistResultRecording.recordIfEnabled(failedResult(), plan: try samplePlan())
             }
-            let after = HeistResultRecorder.recordIfEnabled(
+            let after = HeistResultRecording.recordIfEnabled(
                 failedResult(),
                 plan: try samplePlan()
             )

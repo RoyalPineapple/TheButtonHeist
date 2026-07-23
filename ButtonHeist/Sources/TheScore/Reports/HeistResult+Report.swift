@@ -60,7 +60,7 @@ public struct HeistReport: Sendable, Equatable {
             path = step.path
             kind = step.kind
             capability = step.invocation?.path
-            invocationDisplayName = step.reportInvocationDisplayName
+            invocationDisplayName = step.invocation?.runHeistSummary
             command = step.actionCommand?.wireType
             target = step.reportTarget
             status = step.status
@@ -335,7 +335,9 @@ private extension HeistReport {
 
 private extension HeistReport.AccessibilityChange {
     init(result: HeistResult) {
-        let dispatchedActions = result.dispatchedActionResults
+        let dispatchedActions = result.steps.compactMapInResultOrder {
+            $0.actionEvidence?.dispatchResult
+        }
         guard !dispatchedActions.isEmpty else {
             self = .notApplicable
             return
@@ -345,7 +347,7 @@ private extension HeistReport.AccessibilityChange {
             return
         }
 
-        let traceResults = result.traceResultsInExecutionOrder
+        let traceResults = result.steps.compactMapInResultOrder(\.reportActionResult)
         guard traceResults.allSatisfy({ $0.traceEvidence?.isComplete == true }) else {
             self = .incomplete
             return
@@ -478,28 +480,8 @@ private struct MetricAccumulator {
 }
 
 public extension HeistExecutionStepResult {
-    /// Number of executed result nodes in this subtree, including this node.
-    var executedNodeCount: Int {
-        [self].compactMapInResultOrder { $0.status == .skipped ? nil : $0 }.count
-    }
-
     var isFailure: Bool { firstFailedStepInResultOrder != nil }
     var firstFailedStep: HeistExecutionStepResult? { firstFailedStepInResultOrder }
-
-    /// Number of expectations evaluated in this subtree.
-    var expectationsChecked: Int {
-        [self].compactMapInResultOrder(\.reportExpectation).count
-    }
-
-    /// Number of evaluated expectations that were met in this subtree.
-    var expectationsMet: Int {
-        [self].compactMapInResultOrder(\.reportExpectation).count(where: \.met)
-    }
-
-    /// Trace-contributing results in execution order across this subtree.
-    var traceResultsInExecutionOrder: [ActionResult] {
-        [self].compactMapInResultOrder(\.reportActionResult)
-    }
 }
 
 public extension Array where Element == HeistExecutionStepResult {
@@ -518,22 +500,20 @@ public extension HeistResult {
     var failedStepPath: HeistExecutionPath? { firstFailedStep?.path }
     var failedStepKind: HeistExecutionStepKind? { firstFailedStep?.kind }
 
-    var dispatchedActionResults: [ActionResult] {
-        steps.compactMapInResultOrder { $0.actionEvidence?.dispatchResult }
-    }
-
-    var reportedActionResults: [ActionResult] {
-        steps.compactMapInResultOrder { $0.actionEvidence?.reportedResult }
-    }
-
-    var traceResultsInExecutionOrder: [ActionResult] {
-        steps.compactMapInResultOrder(\.reportActionResult)
-    }
-
     var outputNodes: [HeistExecutionStepResult] {
         steps.compactMapInResultOrder { Optional($0) }
     }
 
+}
+
+package extension HeistReport {
+    var failedNode: Node? {
+        if let abortedAtPath = summary.abortedAtPath,
+           let node = outputNodes.first(where: { $0.path == abortedAtPath }) {
+            return node
+        }
+        return outputNodes.first(where: { $0.status == .failed })
+    }
 }
 
 package extension HeistResult {

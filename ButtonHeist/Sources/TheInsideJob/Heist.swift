@@ -118,7 +118,7 @@ public struct Heist: Sendable {
         guard case .heist(let result?) = actionResult.payload else {
             throw RuntimeError(actionResult: actionResult)
         }
-        HeistResultRecorder.recordIfEnabled(result, plan: plan)
+        HeistResultRecording.recordIfEnabled(result, plan: plan)
         guard !result.isFailure else {
             throw Failure(result)
         }
