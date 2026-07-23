@@ -30,6 +30,8 @@ final class DogfoodRuntimeContractTests: XCTestCase {
     func testAdvancedActionCrossesPublicControlFlowBoundary() async throws {
         try await runHeist("DogfoodAdvancedActionControlFlow") {
             try DogfoodHome.openScreen("Custom Rotors")
+            // The navigation title settles before SwiftUI lazily mounts this visible UIKit row.
+            WaitFor(.exists(.label("Rotor Host")), timeout: 2)
 
             If {
                 Case(.exists(.label("Rotor Host"))) {
