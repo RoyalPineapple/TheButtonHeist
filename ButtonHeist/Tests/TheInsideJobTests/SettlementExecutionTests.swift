@@ -121,12 +121,13 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
         )
         let executor = Settlement.Executor(boundary: boundary)
 
-        let result = await executor.execute(Settlement.Command(
-            trigger: .action(.dismiss),
+        let result = await executor.execute(.action(
+            .dismiss,
             predicate: predicate,
             deadline: Settlement.Deadline(
                 instant: ContinuousClock.now.advanced(by: .seconds(1))
-            )
+            ),
+            baseline: .capture
         ))
 
         XCTAssertEqual(result.outcome, .settled)
@@ -152,28 +153,24 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
         ])
     }
 
-    func testObservationCommandNeverDispatches() async {
+    func testCurrentStateCapturesExactlyOnceWithoutArming() async {
         let baseline = await commit(label: "Baseline")
         let changed = await commit(label: "Changed")
         let boundary = ScriptedSettlementBoundary(
             baseline: baseline,
             changed: changed,
-            history: .events([.snapshot(changed)]),
-            observationOnlyEvidence: true
+            history: .events([.snapshot(changed)])
         )
         let executor = Settlement.Executor(boundary: boundary)
 
-        let result = await executor.execute(Settlement.Command(
-            trigger: .observation,
-            predicate: nil,
-            deadline: Settlement.Deadline(
-                instant: ContinuousClock.now.advanced(by: .seconds(1))
-            )
-        ))
+        let result = await executor.execute(.currentState(scope: .visible))
 
         XCTAssertEqual(result.outcome, .settled)
         XCTAssertFalse(boundary.operations.contains(.dispatch))
-        XCTAssertEqual(result.evidence.handoff.event?.moment, changed.moment)
+        XCTAssertEqual(result.evidence.handoff.event?.moment, baseline.moment)
+        XCTAssertEqual(result.evidence.observationHistory, .events([]))
+        XCTAssertEqual(boundary.totalCaptureCount, 1)
+        XCTAssertEqual(boundary.operations, [.captureBaseline, .admitBaseline])
     }
 
     func testObservationCommandLatchesAnnouncementWithoutDispatch() async throws {
@@ -198,10 +195,10 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
             observationOnlyEvidence: true
         )
 
-        let result = await Settlement.Executor(boundary: boundary).execute(Settlement.Command(
-            trigger: .observation,
+        let result = await Settlement.Executor(boundary: boundary).execute(.observation(
             predicate: predicate,
-            deadline: .init(instant: ContinuousClock.now.advanced(by: .seconds(1)))
+            deadline: .init(instant: ContinuousClock.now.advanced(by: .seconds(1))),
+            baseline: .capture
         ))
 
         XCTAssertEqual(result.outcome, .settled)
@@ -303,10 +300,11 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
         )
 
         let result = await Settlement.Executor(boundary: boundary).execute(
-            Settlement.Command(
-                trigger: .action(.dismiss),
+            .action(
+                .dismiss,
                 predicate: nil,
-                deadline: Settlement.Deadline(instant: ContinuousClock.now)
+                deadline: Settlement.Deadline(instant: ContinuousClock.now),
+                baseline: .capture
             )
         )
 
@@ -551,8 +549,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
             authored: authored,
             resolved: try authored.resolve(in: HeistExecutionEnvironment())
         )
-        let command = Settlement.Command(
-            trigger: .observation,
+        let command = Settlement.Command.observation(
             predicate: predicate,
             deadline: .init(instant: ContinuousClock.now.advanced(by: .seconds(1))),
             baseline: .supplied(.init(moment: baseline.moment))
@@ -585,18 +582,22 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
     }
 
     private func observationCommand() -> Settlement.Command {
-        Settlement.Command(
-            trigger: .observation,
-            predicate: nil,
-            deadline: .init(instant: ContinuousClock.now.advanced(by: .seconds(1)))
+        .observation(
+            predicate: Settlement.Predicate(
+                authored: .changed(.elements()),
+                resolved: ResolvedAccessibilityPredicate(core: .changed(.elements([])))
+            ),
+            deadline: .init(instant: ContinuousClock.now.advanced(by: .seconds(1))),
+            baseline: .capture
         )
     }
 
     private func actionCommand() -> Settlement.Command {
-        Settlement.Command(
-            trigger: .action(.dismiss),
+        .action(
+            .dismiss,
             predicate: nil,
-            deadline: .init(instant: ContinuousClock.now.advanced(by: .seconds(1)))
+            deadline: .init(instant: ContinuousClock.now.advanced(by: .seconds(1))),
+            baseline: .capture
         )
     }
 
@@ -625,10 +626,13 @@ final class SettlementExecutionPerformanceTests: SemanticObservationStreamTestCa
             history: .events([.snapshot(stale), .snapshot(current)]),
             captureScenario: .coalescedBurst(current: current, duplicateCount: 64)
         )
-        let command = Settlement.Command(
-            trigger: .observation,
-            predicate: nil,
-            deadline: .init(instant: ContinuousClock.now.advanced(by: .seconds(1)))
+        let command = Settlement.Command.observation(
+            predicate: Settlement.Predicate(
+                authored: .changed(.elements()),
+                resolved: ResolvedAccessibilityPredicate(core: .changed(.elements([])))
+            ),
+            deadline: .init(instant: ContinuousClock.now.advanced(by: .seconds(1))),
+            baseline: .capture
         )
 
         let result = await Settlement.Executor(boundary: boundary).execute(command)
@@ -1106,7 +1110,7 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         if let liveObservationBoundary {
             return await liveObservationBoundary.evaluate(request)
         }
-        return PredicateEvaluationResult(met: false)
+        return PredicateEvaluationResult(met: true)
     }
 
     func elapsed() async -> ElapsedMilliseconds {

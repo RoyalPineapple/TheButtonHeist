@@ -11,27 +11,46 @@ import ButtonHeistTestSupport
 
 @MainActor
 final class SettlementReducerTests: SemanticObservationStreamTestCase {
-    func testTwoByTwoProductRequiresReadinessAndHandoff() async throws {
+    func testTimedCommandsRequireReadinessAndHandoff() async throws {
+        let predicate = transitionPredicate()
         let rows = [
-            ProductRow(trigger: .action(.dismiss), hasPredicate: false, dispatchCount: 1),
-            ProductRow(trigger: .action(.dismiss), hasPredicate: true, dispatchCount: 1),
-            ProductRow(trigger: .observation, hasPredicate: false, dispatchCount: 0),
-            ProductRow(trigger: .observation, hasPredicate: true, dispatchCount: 0),
+            ProductRow(
+                command: .action(
+                    .dismiss,
+                    predicate: nil,
+                    deadline: deadline,
+                    baseline: .capture
+                ),
+                dispatchCount: 1
+            ),
+            ProductRow(
+                command: .action(
+                    .dismiss,
+                    predicate: predicate,
+                    deadline: deadline,
+                    baseline: .capture
+                ),
+                dispatchCount: 1
+            ),
+            ProductRow(
+                command: .observation(
+                    predicate: predicate,
+                    deadline: deadline,
+                    baseline: .capture
+                ),
+                dispatchCount: 0
+            ),
         ]
 
         for row in rows {
             let baseline = await commit(label: "Baseline")
-            let command = Settlement.Command(
-                trigger: row.trigger,
-                predicate: row.hasPredicate ? transitionPredicate() : nil,
-                deadline: deadline
-            )
+            let command = row.command
             var decision = Settlement.Reducer.begin(command)
             var dispatchCount = 0
 
             decision = reduce(
                 decision,
-                .baselineAdmitted(.init(moment: baseline.moment))
+                .baselineAdmitted(baseline)
             )
             XCTAssertEqual(decision.effects.count, 1)
             guard case .arm = decision.effects.first else {
@@ -82,6 +101,39 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         }
     }
 
+    func testCurrentStateCaptureCompletesWithExactEventWithoutArming() async throws {
+        let current = await commit(label: "Current")
+        var decision = Settlement.Reducer.begin(.currentState(scope: .visible))
+
+        XCTAssertEqual(decision.effects.filter(\.capturesBaseline).count, 1)
+        decision = reduce(decision, .baselineAdmitted(current))
+
+        guard case .completed(let result) = decision.state else {
+            return XCTFail("Expected one current-state capture to complete")
+        }
+        XCTAssertEqual(result.outcome, .settled)
+        XCTAssertEqual(result.evidence.boundary, .established(.init(moment: current.moment)))
+        XCTAssertEqual(result.evidence.handoff.event, current)
+        let wait = try resolvedWait(WaitStep(
+            predicate: .changed(.elements()),
+            timeout: 1
+        ))
+        XCTAssertEqual(
+            Settlement.Command(observing: wait, after: result).baseline,
+            .supplied(.init(moment: current.moment))
+        )
+        XCTAssertEqual(
+            result.evidence.readiness,
+            .established(.init(
+                generation: .initial,
+                path: .currentStateCapture,
+                observationBoundary: .including(current.moment)
+            ))
+        )
+        XCTAssertFalse(decision.effects.contains(where: \.armsChannels))
+        XCTAssertEqual(decision.effects.filter(\.isFinish).count, 1)
+    }
+
     func testPredicateSemanticsAreDerivedFromResolvedCore() async throws {
         let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save"))
         let authored = [
@@ -110,8 +162,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
     func testSuppliedBaselineArmsWithoutCapturingAnotherBaseline() async {
         let baseline = await commit(label: "Baseline")
         let boundary = Settlement.EvidenceBoundary(moment: baseline.moment)
-        let command = Settlement.Command(
-            trigger: .observation,
+        let command = Settlement.Command.observation(
             predicate: transitionPredicate(),
             deadline: deadline,
             baseline: .supplied(boundary)
@@ -128,8 +179,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
     }
 
     func testUnavailableSuppliedBaselineTerminatesWithoutArmingOrCapture() {
-        let command = Settlement.Command(
-            trigger: .observation,
+        let command = Settlement.Command.observation(
             predicate: transitionPredicate(),
             deadline: deadline,
             baseline: .unavailable(.unavailable)
@@ -147,26 +197,35 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         XCTAssertEqual(decision.effects.filter(\.isFinish).count, 1)
     }
 
-    func testMissingPreTriggerMomentRecapturesOnlyCurrentStatePredicates() throws {
+    func testUnavailableCurrentStateRecapturesOnlyPresencePredicates() throws {
+        var decision = Settlement.Reducer.begin(.currentState(scope: .visible))
+        decision = reduce(decision, .baselineUnavailable(.unavailable))
+        guard let currentStateResult = decision.state.result else {
+            return XCTFail("Expected typed current-state capture failure")
+        }
+        let presence = try resolvedWait(WaitStep(
+            predicate: .exists(.label("Save")),
+            timeout: 1
+        ))
+        let transition = try resolvedWait(WaitStep(
+            predicate: .changed(.elements()),
+            timeout: 1
+        ))
+        let announcement = try resolvedWait(WaitStep(
+            predicate: .announcement("Saved"),
+            timeout: 1
+        ))
+
         XCTAssertEqual(
-            Settlement.Baseline.beforeTrigger(
-                observationMoment: nil,
-                predicate: try currentStatePredicate().resolved
-            ),
+            Settlement.Command(observing: presence, after: currentStateResult).baseline,
             .capture
         )
         XCTAssertEqual(
-            Settlement.Baseline.beforeTrigger(
-                observationMoment: nil,
-                predicate: transitionPredicate().resolved
-            ),
+            Settlement.Command(observing: transition, after: currentStateResult).baseline,
             .unavailable(.unavailable)
         )
         XCTAssertEqual(
-            Settlement.Baseline.beforeTrigger(
-                observationMoment: nil,
-                predicate: try announcementPredicate().resolved
-            ),
+            Settlement.Command(observing: announcement, after: currentStateResult).baseline,
             .unavailable(.unavailable)
         )
     }
@@ -458,7 +517,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
 
     func testTerminalStateEmitsNoFurtherEffects() async {
         let baseline = await commit(label: "Baseline")
-        var decision = armedObservationDecision(baseline: baseline, predicate: nil)
+        var decision = armedPredicateFreeActionDecision(baseline: baseline)
         let ready = await commit(label: "Ready")
         decision = reduce(decision, .observationAdmitted(await admission(ready, after: baseline)))
         decision = reduce(
@@ -600,7 +659,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
 
     func testStaleGenerationHandoffAdmissionCannotCompleteSettlement() async throws {
         let baseline = await commit(label: "Baseline")
-        var decision = armedObservationDecision(baseline: baseline, predicate: nil)
+        var decision = armedPredicateFreeActionDecision(baseline: baseline)
         decision = reduce(
             decision,
             .readinessEstablished(.init(
@@ -650,10 +709,11 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
 
     func testDispatchFailureCannotEvaluatePredicateAndPreservesReadyHandoff() async throws {
         let baseline = await commit(label: "Baseline")
-        let command = Settlement.Command(
-            trigger: .action(.dismiss),
+        let command = Settlement.Command.action(
+            .dismiss,
             predicate: transitionPredicate(),
-            deadline: deadline
+            deadline: deadline,
+            baseline: .capture
         )
         var decision = armedDecision(command: command, baseline: baseline)
         decision = reduce(
@@ -785,7 +845,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
 
     func testHandoffCaptureFailureRemainsDistinctFromReadiness() async {
         let baseline = await commit(label: "Baseline")
-        var decision = armedObservationDecision(baseline: baseline, predicate: nil)
+        var decision = armedPredicateFreeActionDecision(baseline: baseline)
         decision = reduce(
             decision,
             .readinessEstablished(.init(
@@ -932,16 +992,16 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
 
     private func armedObservationDecision(
         baseline: Observation.SnapshotEvent,
-        predicate: Settlement.Predicate?
+        predicate: Settlement.Predicate
     ) -> Settlement.Decision {
-        var decision = Settlement.Reducer.begin(Settlement.Command(
-            trigger: .observation,
+        var decision = Settlement.Reducer.begin(.observation(
             predicate: predicate,
-            deadline: deadline
+            deadline: deadline,
+            baseline: .capture
         ))
         decision = reduce(
             decision,
-            .baselineAdmitted(.init(moment: baseline.moment))
+            .baselineAdmitted(baseline)
         )
         return reduce(decision, .channelsArmed)
     }
@@ -953,9 +1013,28 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         var decision = Settlement.Reducer.begin(command)
         decision = reduce(
             decision,
-            .baselineAdmitted(.init(moment: baseline.moment))
+            .baselineAdmitted(baseline)
         )
         return reduce(decision, .channelsArmed)
+    }
+
+    private func armedPredicateFreeActionDecision(
+        baseline: Observation.SnapshotEvent
+    ) -> Settlement.Decision {
+        var decision = armedDecision(
+            command: .action(
+                .dismiss,
+                predicate: nil,
+                deadline: deadline,
+                baseline: .capture
+            ),
+            baseline: baseline
+        )
+        decision = reduce(
+            decision,
+            .dispatchCompleted(.success(payload: .dismiss))
+        )
+        return decision
     }
 
     private func admission(
@@ -1039,10 +1118,10 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         case .announcement:
             preconditionFailure("Truth matrix does not synthesize announcement evidence")
         }
-        let command = Settlement.Command(
-            trigger: .observation,
+        let command = Settlement.Command.observation(
             predicate: predicate,
-            deadline: .init(instant: ContinuousClock.now.advanced(by: .seconds(1)))
+            deadline: .init(instant: ContinuousClock.now.advanced(by: .seconds(1))),
+            baseline: .capture
         )
         let boundary = LiveSettlementExecutionBoundary(
             command: command,
@@ -1081,12 +1160,11 @@ private enum TimedOutResultError: Error {
 }
 
 private struct ProductRow: CustomStringConvertible {
-    let trigger: Settlement.Trigger
-    let hasPredicate: Bool
+    let command: Settlement.Command
     let dispatchCount: Int
 
     var description: String {
-        "trigger=\(trigger), predicate=\(hasPredicate)"
+        String(describing: command)
     }
 }
 

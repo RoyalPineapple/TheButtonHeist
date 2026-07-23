@@ -597,7 +597,7 @@ extension Settlement {
             case .admitted(let event):
                 return await reduce(
                     state,
-                    fact: .baselineAdmitted(.init(moment: event.moment)),
+                    fact: .baselineAdmitted(event),
                     timing: ExecutionTiming(
                         beforeObservationMs: RuntimeElapsed.milliseconds(since: startedAt)
                     )
@@ -965,7 +965,7 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
         _ arming: Settlement.Arming,
         sink: Settlement.ExecutionSink
     ) async {
-        if command.trigger.isObservation || arming.observationScope == .discovery {
+        if command.waitsForObservation || arming.observationScope == .discovery {
             lifecycle.armReadiness(
                 startAfterDispatch: false,
                 operation: { [tripwire, vault] in
@@ -1040,7 +1040,7 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
 
     @MainActor
     internal func armObservationEffects(_: Settlement.Arming) async {
-        guard command.trigger.isObservation else { return }
+        guard command.waitsForObservation else { return }
         let control = Settlement.ObservationEffectControl()
         let task = Task {
             await publishObservationEffects(control)
@@ -1079,7 +1079,7 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
     internal func evaluate(
         _ request: Settlement.Predicate.EvaluationRequest
     ) async -> PredicateEvaluationResult {
-        SettlementPredicateEvaluator.evaluate(request)
+        Settlement.PredicateEvaluation.evaluate(request)
     }
 
     internal func elapsed() async -> ElapsedMilliseconds {
@@ -1289,65 +1289,6 @@ internal final class LiveSettlementLifecycle {
         resources.demand.cancel()
         phase = .finalized
         return true
-    }
-}
-
-private enum SettlementPredicateEvaluator {
-    static func evaluate(
-        _ request: Settlement.Predicate.EvaluationRequest
-    ) -> PredicateEvaluationResult {
-        switch request.evidence {
-        case .currentState(let event):
-            return evaluate(request.predicate, trace: event.trace, completeness: .incomplete)
-        case .positiveTransition(let event):
-            return evaluate(request.predicate, trace: event.trace, completeness: .complete)
-        case .announcement(let event):
-            guard case .announcement(let announcement) = request.predicate.resolved.core else {
-                preconditionFailure("Announcement evidence requires an announcement predicate")
-            }
-            return PredicateEvaluationResult(
-                met: announcement.matches(event.announcement.text),
-                actual: event.announcement.text
-            )
-        case .completeHistory(let evidence):
-            return evaluateCompleteHistory(request.predicate, evidence: evidence)
-        }
-    }
-
-    private static func evaluate(
-        _ predicate: Settlement.Predicate,
-        trace: AccessibilityTrace,
-        completeness: AccessibilityTraceEvidence.Completeness
-    ) -> PredicateEvaluationResult {
-        guard let evidence = AccessibilityTraceEvidence(
-            trace: trace,
-            completeness: completeness
-        ) else {
-            return PredicateEvaluationResult(met: false, actual: "no observed accessibility trace")
-        }
-        return predicate.resolved.evaluate(in: evidence)
-    }
-
-    private static func evaluateCompleteHistory(
-        _ predicate: Settlement.Predicate,
-        evidence: Settlement.Predicate.CompleteHistoryEvidence
-    ) -> PredicateEvaluationResult {
-        guard case .events(let events) = evidence.history else {
-            return PredicateEvaluationResult(met: false, actual: "observation history unavailable")
-        }
-        let captures = events.compactMap { event -> AccessibilityTrace.Capture? in
-            guard case .snapshot(let snapshot) = event else { return nil }
-            return snapshot.trace.captures.last
-        }
-        let trace = captures.isEmpty ? evidence.handoff.trace : AccessibilityTrace(captures: captures)
-        return evaluate(predicate, trace: trace, completeness: .complete)
-    }
-}
-
-private extension Settlement.Trigger {
-    var isObservation: Bool {
-        if case .observation = self { return true }
-        return false
     }
 }
 
