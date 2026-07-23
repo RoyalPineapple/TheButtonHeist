@@ -656,7 +656,9 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertEqual(result.outcome.failureKind, .timeout)
         XCTAssertTrue(result.message?.contains("expected: changed(elements(*))") == true)
         let settlement = try XCTUnwrap(result.evidence.settlement)
-        XCTAssertFalse(settlement.settled)
+        XCTAssertTrue(settlement.settled)
+        XCTAssertTrue(settlement.readinessEstablished)
+        XCTAssertTrue(settlement.observationHandoffCompleted)
     }
 
     func testChangedWaitCancellationReturnsCanonicalFailureAndReleasesLease() async throws {

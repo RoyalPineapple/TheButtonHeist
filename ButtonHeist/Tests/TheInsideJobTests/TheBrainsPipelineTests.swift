@@ -43,7 +43,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let predicate = AccessibilityPredicate.exists(.container(.identifier("OffscreenGroup")))
         let resolved = try resolvedPredicate(predicate)
         XCTAssertEqual(
-            PredicateEvaluation.evaluate(resolved, expression: predicate, in: event),
+            Settlement.PredicateEvaluation.evaluate(resolved, expression: predicate, in: event),
             ExpectationResult(met: true, predicate: predicate)
         )
     }

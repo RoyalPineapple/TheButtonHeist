@@ -393,8 +393,9 @@ extension TheBrainsActionTests {
             (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
         ])
         let waitObservedState = await observedState(labels: ["Done"])
+        var currentStates = observationEvents(for: [initialState, stillPresentState])
         let runtime = heistRuntime(
-            observations: [initialState, stillPresentState],
+            observations: [],
             execute: { command in
                 executedCommands.append(command)
                 return ActionResult.success(
@@ -406,6 +407,12 @@ extension TheBrainsActionTests {
                 )
             },
             settle: { command in
+                if case .currentState = command {
+                    return scriptedSettlement(
+                        command,
+                        observation: currentStates.removeFirst()
+                    )
+                }
                 if let predicate = command.predicate {
                     waitedPredicates.append(predicate)
                 }

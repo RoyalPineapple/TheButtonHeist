@@ -95,34 +95,6 @@ extension TheBrains {
         }
     }
 
-    /// Executes a wait through the canonical settlement state machine.
-    func executeSettlementWait(
-        _ command: Settlement.Command
-    ) async -> Settlement.Result {
-        guard case .observation(let predicate, let deadline, _) = command else {
-            preconditionFailure("Observation wait requires an observation settlement command")
-        }
-        let start = RuntimeElapsed.now
-        let discoveryDeadline = SemanticObservationDeadline(
-            start: start,
-            timeoutSeconds: deadline.remainingDuration(at: start) / .seconds(1)
-        )
-        return await executeSettlement(
-            command,
-            observationEffects: { control in
-                if case .announcement = predicate.resolved.core { return }
-                await self.navigation.exploreForWait(
-                    target: predicate.resolved.singularTarget,
-                    deadline: discoveryDeadline,
-                    stopWhen: { control.stopRequested }
-                )
-            },
-            dispatch: { _ in
-                preconditionFailure("Observation settlement cannot dispatch an action")
-            }
-        )
-    }
-
     private func waitStepResult(
         step: WaitStep,
         completion: HeistWaitCompletion,

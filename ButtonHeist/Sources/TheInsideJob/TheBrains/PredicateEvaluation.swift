@@ -27,8 +27,7 @@ extension Settlement.PredicateEvaluation {
         _ predicate: Settlement.Predicate,
         in result: Settlement.Result
     ) -> PredicateEvaluationResult {
-        guard result.outcome == .settled,
-              let event = result.evidence.handoff.event else {
+        guard let event = result.evidence.handoff.event else {
             return PredicateEvaluationResult(
                 met: false,
                 actual: "settlement did not produce a current observation"

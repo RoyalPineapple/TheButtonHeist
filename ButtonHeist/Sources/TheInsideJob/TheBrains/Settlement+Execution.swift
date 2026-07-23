@@ -526,11 +526,28 @@ extension Settlement {
                 finalSemanticEvidence.begin()
             }
             var decision = await reduce(state, fact: fact)
+            decision = await resolvePredicateEvaluation(decision)
             if decision.state.concludesFinalSemanticEvidence
                 || fact.endsFinalSemanticEvidenceAttempt {
                 if let timing = finalSemanticEvidence.complete() {
                     decision = decision.recording(timing)
                 }
+            }
+            return decision
+        }
+
+        private func resolvePredicateEvaluation(_ initial: Decision) async -> Decision {
+            var decision = initial
+            while decision.effects.count == 1,
+                  case .evaluatePredicate(let request) = decision.effects[0] {
+                let result = await boundary.evaluate(request)
+                decision = await reduce(
+                    decision.state,
+                    fact: .predicateEvaluated(.init(
+                        target: request.target,
+                        result: result
+                    ))
+                )
             }
             return decision
         }
@@ -1300,16 +1317,36 @@ private enum SettlementDiagnosisLogger {
 
 @MainActor
 extension TheBrains {
-    internal func executeSettlement(
-        _ command: Settlement.Command,
-        observationEffects: @escaping LiveSettlementExecutionBoundary.ObservationEffects = { _ in },
-        dispatch: @escaping LiveSettlementExecutionBoundary.ActionDispatch
+    internal func executeSettlementCommand(
+        _ command: Settlement.Command
     ) async -> Settlement.Result {
-        await Settlement.Executor(boundary: LiveSettlementExecutionBoundary(
+        let observationEffects: LiveSettlementExecutionBoundary.ObservationEffects
+        switch command {
+        case .observation(let predicate, let deadline, _):
+            let start = RuntimeElapsed.now
+            let discoveryDeadline = SemanticObservationDeadline(
+                start: start,
+                timeoutSeconds: deadline.remainingDuration(at: start) / .seconds(1)
+            )
+            observationEffects = { control in
+                if case .announcement = predicate.resolved.core { return }
+                await self.navigation.exploreForWait(
+                    target: predicate.resolved.singularTarget,
+                    deadline: discoveryDeadline,
+                    stopWhen: { control.stopRequested }
+                )
+            }
+        case .currentState, .action:
+            observationEffects = { _ in }
+        }
+
+        return await Settlement.Executor(boundary: LiveSettlementExecutionBoundary(
             command: command,
             vault: vault,
             tripwire: tripwire,
-            dispatch: dispatch,
+            dispatch: { command in
+                await self.dispatchRuntimeAction(command)
+            },
             observationEffects: observationEffects
         )).execute(command)
     }

@@ -355,8 +355,12 @@ private extension Settlement.ResultProjector {
                 "last result: \(reason)",
                 "Next: get_interface() to inspect current elements, then retry wait with an exact predicate.",
             ]
-        case (.announcement, _, _), (.changed, _, _), (.noChange, _, _),
-             (.presence, _, _):
+        case (.announcement, _, _), (.changed, _, _), (.noChange, _, _):
+            parts.append("expected: \(predicate.authored.description)")
+            if let actual = expectation(from: result)?.actual {
+                parts.append("last observed: \(actual)")
+            }
+        case (.presence, _, _):
             break
         }
         if case .unmet = result.evidence.predicate.status {

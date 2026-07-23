@@ -56,7 +56,7 @@ extension TheBrains {
                     )
                 },
                 settle: { command in
-                    await brains.executeSettlementWait(command)
+                    await brains.executeSettlementCommand(command)
                 }
             )
         }

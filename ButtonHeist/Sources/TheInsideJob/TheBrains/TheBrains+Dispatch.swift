@@ -134,15 +134,13 @@ extension TheBrains {
             ),
             baseline: .capture
         )
-        let result = await executeSettlement(settlementCommand) { command in
-            await self.dispatchRuntimeAction(command)
-        }
+        let result = await executeSettlementCommand(settlementCommand)
         return RuntimeActionExecution(
             evidence: Settlement.ResultProjector.projectAction(result)
         )
     }
 
-    private func dispatchRuntimeAction(
+    func dispatchRuntimeAction(
         _ command: ResolvedHeistActionCommand
     ) async -> TheSafecracker.ActionDispatchResult {
         clearRotorCursorBeforeNonRotorAction(command)
@@ -231,7 +229,7 @@ extension TheBrains {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(payload: .wait)
         }
-        let result = await executeSettlementWait(Settlement.Command(observing: step))
+        let result = await executeSettlementCommand(Settlement.Command(observing: step))
         return Settlement.ResultProjector.projectWait(result).actionResult
     }
 
