@@ -207,6 +207,39 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
         XCTAssertFalse(message.contains("did not match"), message)
     }
 
+    func testWaitTimeoutKeepsEightMostRecentCandidatesInObservationOrder() async throws {
+        let baseline = await commit(label: "Baseline")
+        var observed = baseline
+        for index in 0..<10 {
+            observed = await commit(label: "Candidate \(index)")
+        }
+        let authored = AccessibilityPredicate.exists(.label("Missing"))
+        let predicate = Settlement.Predicate(
+            authored: authored,
+            resolved: try authored.resolve(in: HeistExecutionEnvironment())
+        )
+        let settlement = await result(
+            baseline: baseline,
+            observed: observed,
+            predicate: predicate,
+            predicateMet: false,
+            readiness: .established(readiness(at: observed)),
+            handoff: await admittedHandoff(observed, baseline: baseline),
+            outcome: .timedOut
+        )
+
+        let message = try XCTUnwrap(
+            Settlement.ResultProjector.projectWait(settlement).actionResult.message
+        )
+
+        XCTAssertFalse(message.contains(#"label="Candidate 0""#), message)
+        XCTAssertFalse(message.contains(#"label="Candidate 1""#), message)
+        let positions = try (2..<10).map { index in
+            try XCTUnwrap(message.range(of: #"label="Candidate \#(index)""#)?.lowerBound)
+        }
+        XCTAssertEqual(positions, positions.sorted(), message)
+    }
+
     func testSuccessfulExistsWaitProjectsMatchedMessageAndKeepsActualEvidence() async throws {
         let projection = try await successfulWaitProjection(
             predicate: .exists(.label("Ready")),

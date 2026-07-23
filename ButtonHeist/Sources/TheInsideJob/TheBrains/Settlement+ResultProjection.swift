@@ -291,10 +291,7 @@ private extension Settlement.ResultProjector {
     static func waitFailureMessage(from result: Settlement.Result) -> String {
         switch result.outcome {
         case .timedOut:
-            renderTimeoutMessage(
-                elapsed: result.evidence.deadline.elapsed,
-                report: timeoutReport(from: result)
-            )
+            renderTimeoutMessage(from: result)
         case .baselineUnavailable:
             TheBrains.treeUnavailableMessage
         case .dispatchFailed:
@@ -306,74 +303,55 @@ private extension Settlement.ResultProjector {
         }
     }
 
-    static func timeoutReport(
-        from result: Settlement.Result
-    ) -> PredicateWaitHistoricalDiagnostics.TimeoutReport? {
-        guard let predicate = result.evidence.command.predicate else { return nil }
-        var diagnostics = PredicateWaitHistoricalDiagnostics(
-            target: predicate.resolved.waitTarget,
-            predicate: predicate.authored
-        )
-        if let trace = traceEvidence(from: result)?.trace {
-            diagnostics = diagnostics.recording(trace)
-        }
-        let predicateStatus: PredicateWaitHistoricalDiagnostics.TerminalPredicateStatus
-        switch result.evidence.predicate.status {
-        case .satisfied:
-            predicateStatus = .satisfied
-        case .unmet:
-            predicateStatus = .unmet
-        case .pending, .unavailable, .notEvaluated, .notRequired:
-            predicateStatus = .unavailable
-        }
-        return diagnostics.timeoutReport(terminal: .init(
-            predicateStatus: predicateStatus,
-            readinessEstablished: result.evidence.readiness.isEstablished,
-            handoffCompleted: result.evidence.handoff.admission != nil
-        ))
-    }
-
     static func renderTimeoutMessage(
-        elapsed: ElapsedMilliseconds,
-        report: PredicateWaitHistoricalDiagnostics.TimeoutReport?
+        from result: Settlement.Result
     ) -> String {
-        let headline = "settlement timed out after \(elapsed)ms"
-        guard let report else { return headline }
-        if report.predicateStatus == .satisfied {
-            let incompleteAxis = switch report.incompleteAxis {
-            case .readiness:
+        let headline = "settlement timed out after \(result.evidence.deadline.elapsed)ms"
+        guard let predicate = result.evidence.command.predicate else { return headline }
+        if case .satisfied = result.evidence.predicate.status {
+            let incompleteAxis = if !result.evidence.readiness.isEstablished {
                 "interface readiness did not complete"
-            case .handoff:
+            } else if result.evidence.handoff.admission == nil {
                 "settled observation handoff did not complete"
-            case nil:
+            } else {
                 "settlement completion evidence was unavailable"
             }
             return "\(headline); predicate was satisfied but \(incompleteAxis)"
         }
 
         var parts = [headline]
-        if let presence = report.presence {
+        let target = predicate.resolved.timeoutDiagnosticTarget
+        let traceProjection = traceEvidence(from: result).map {
+            TimeoutTraceProjection(trace: $0.trace, target: target)
+        }
+        switch (predicate.resolved.core, target, traceProjection?.interfaceElementCount) {
+        case (.presence(let presence), let target?, let count?):
             let expectation: String
             let reason: String
-            switch presence.expectation {
-            case .appear:
+            switch presence {
+            case .exists:
                 expectation = "element to appear"
                 reason = "element not found"
-            case .disappear:
+            case .missing:
                 expectation = "element to disappear"
                 reason = "element still present"
             }
             parts[0] += " waiting for \(expectation)"
             parts += [
-                "expected: \(renderExpectedTarget(presence.target))",
-                "interface: \(presence.interfaceElementCount) elements",
+                "expected: \(renderExpectedTarget(target))",
+                "interface: \(count) elements",
                 "last result: \(reason)",
                 "Next: get_interface() to inspect current elements, then retry wait with an exact predicate.",
             ]
+        case (.announcement, _, _), (.changed, _, _), (.noChange, _, _),
+             (.presence, _, _):
+            break
         }
-        parts += report.candidates.map {
-            "observed accessibility candidate \($0.rendered(using: .predicateMismatchCandidate)) "
-                + "did not match \(report.predicate.description)"
+        if case .unmet = result.evidence.predicate.status {
+            parts += traceProjection?.candidates.map {
+                "observed accessibility candidate \($0.rendered(using: .predicateMismatchCandidate)) "
+                    + "did not match \(predicate.authored.description)"
+            } ?? []
         }
         return parts.joined(separator: "; ")
     }
@@ -392,6 +370,96 @@ private extension Settlement.ResultProjector {
                 "container \(container)",
                 ordinal.map { "ordinal=\($0)" },
             ].compactMap { $0 }.joined(separator: " ")
+        }
+    }
+}
+
+private struct TimeoutTraceProjection {
+    private static let maximumCandidateCount = 8
+
+    let candidates: [ElementDiagnosticSummary]
+    let interfaceElementCount: Int?
+
+    init(
+        trace: AccessibilityTrace,
+        target: ResolvedAccessibilityTarget?
+    ) {
+        var candidates: [ElementDiagnosticSummary] = []
+        var interfaceElementCount: Int?
+        for capture in trace.captures {
+            let interface = capture.interface
+            guard let target else {
+                interfaceElementCount = interface.projectedElements.count
+                continue
+            }
+            let observedCandidates = AccessibilityTargetMatchGraph(interface: interface)
+                .elementCandidates(in: target)
+                .elements
+                .compactMap(ElementDiagnosticSummary.init(waitMismatchCandidate:))
+            guard !observedCandidates.isEmpty else { continue }
+            for candidate in observedCandidates where !candidates.contains(candidate) {
+                if candidates.count == Self.maximumCandidateCount {
+                    candidates.removeFirst()
+                }
+                candidates.append(candidate)
+            }
+            interfaceElementCount = interface.projectedElements.count
+        }
+        self.candidates = candidates
+        self.interfaceElementCount = interfaceElementCount
+    }
+}
+
+private extension ElementDiagnosticSummary {
+    init?(waitMismatchCandidate element: HeistElement) {
+        self.init(element: element)
+        guard label != nil
+                || identifier != nil
+                || value != nil
+                || hint != nil
+                || !traits.isEmpty
+                || !actions.isEmpty
+                || !rotors.isEmpty
+        else { return nil }
+    }
+}
+
+private extension ResolvedAccessibilityPredicate {
+    var timeoutDiagnosticTarget: ResolvedAccessibilityTarget? {
+        switch core {
+        case .presence(let presence):
+            presence.target
+        case .changed(.screen(let assertions)):
+            if assertions.count == 1,
+               case .presence(let presence) = assertions[0] {
+                presence.target
+            } else {
+                nil
+            }
+        case .changed(.elements(let assertions)):
+            assertions.count == 1 ? assertions[0].target : nil
+        case .announcement, .noChange:
+            nil
+        }
+    }
+}
+
+private extension PresencePredicateCore where Phase == ResolvedAccessibilityPredicatePhase {
+    var target: ResolvedAccessibilityTarget {
+        switch self {
+        case .exists(let target), .missing(let target):
+            target
+        }
+    }
+}
+
+private extension ElementAssertionCore where Phase == ResolvedAccessibilityPredicatePhase {
+    var target: ResolvedAccessibilityTarget {
+        switch self {
+        case .presence(let presence):
+            presence.target
+        case .appeared(let target), .disappeared(let target), .updated(let target, _):
+            target
         }
     }
 }
