@@ -13,6 +13,8 @@ final class AdversarialNavigationTests: XCTestCase {
     func testModalReviewBecomesInteractiveOnlyAfterPresentationCompletes() async throws {
         try await AdversarialLabRoute.open(.modalObstruction)
         let heist = try await runHeist("AdversarialModalObstructionPass") {
+            WaitFor(.exists(.label("Modal Obstruction")), timeout: 4)
+
             Activate(.label("Review order"))
                 .expect(.exists(.element(
                     .label("Order review"),
@@ -30,6 +32,8 @@ final class AdversarialNavigationTests: XCTestCase {
     func testModalObstructionBlocksBackgroundActionSearch() async throws {
         try await AdversarialLabRoute.open(.modalObstruction)
         let failure = try await expectHeistFailure("AdversarialModalObstructionBackgroundFails") {
+            WaitFor(.exists(.label("Modal Obstruction")), timeout: 4)
+
             Activate(.label("Review order"))
                 .expect(.exists(.element(
                     .label("Order review"),
@@ -44,10 +48,6 @@ final class AdversarialNavigationTests: XCTestCase {
         XCTAssertEqual(failedStep.failure?.category, .targetResolution)
         XCTAssertEqual(actionResult.outcome, .failure(.elementNotFound))
         XCTAssertNil(actionResult.subjectEvidence)
-        XCTAssertEqual(try counterValue(named: "Archived orders", in: actionResult), 0)
-        XCTAssertEqual(try counterValue(named: "Background archive actions", in: actionResult), 0)
-        XCTAssertEqual(try counterValue(named: "Background scroll attempts", in: actionResult), 0)
-        XCTAssertEqual(try counterValue(named: "Background scroll movements", in: actionResult), 0)
 
         let cleanup = try await runHeist("AdversarialModalObstructionCleanup") {
             If {
@@ -62,6 +62,11 @@ final class AdversarialNavigationTests: XCTestCase {
                     WaitFor(.exists(.label("ButtonHeist Demo")), timeout: 1)
                 }
             }
+
+            WaitFor(.exists(.element(.label("Archived orders"), .value("0"))), timeout: 2)
+            WaitFor(.exists(.element(.label("Background archive actions"), .value("0"))), timeout: 2)
+            WaitFor(.exists(.element(.label("Background scroll attempts"), .value("0"))), timeout: 2)
+            WaitFor(.exists(.element(.label("Background scroll movements"), .value("0"))), timeout: 2)
         }
         XCTAssertNil(cleanup.result.firstFailedStep)
     }
@@ -74,6 +79,8 @@ final class AdversarialNavigationTests: XCTestCase {
         )
         try await AdversarialLabRoute.open(.nestedScroll)
         let heist = try await runHeist("AdversarialNestedScrollPass") {
+            WaitFor(.exists(.label("Nested Scroll")), timeout: 4)
+
             Activate(target)
                 .expect(.exists(.label("Selected Verified")), timeout: 6)
             WaitFor(.exists(.element(
