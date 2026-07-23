@@ -13,7 +13,7 @@ extension TheBrainsPipelineTests {
     // MARK: - Wait Evidence Path
 
     func testWaitSuccessResultUsesSettledVisibleObservation() async throws {
-        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             makeScreen(elements: [("Home", .header, "home")])
         )
         let result = await brains.interactionCoordinator.waitForPredicate(
@@ -27,7 +27,7 @@ extension TheBrainsPipelineTests {
     }
 
     func testWaitTimeoutResultUsesLastSettledVisibleObservation() async throws {
-        brains.vault.installObservationForTesting(
+        await brains.vault.installObservationForTesting(
             makeScreen(elements: [("Known", .staticText, "known")])
         )
         let result = await brains.interactionCoordinator.waitForPredicate(
@@ -43,7 +43,7 @@ extension TheBrainsPipelineTests {
     }
 
     func testTimeoutReportIncludesObservedCombinedLabelMismatch() async throws {
-        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             makeScreen(elements: [("Ticket saved., Dismiss", .staticText, "toast")])
         )
         let wait = WaitStep(
@@ -89,7 +89,7 @@ extension TheBrainsPipelineTests {
 
         let semanticElement = try XCTUnwrap(brains.vault.captureObject(combined))
         XCTAssertEqual(semanticElement.label, "Ticket saved., Dismiss")
-        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             .makeForTests([.init(semanticElement, heistId: HeistId(rawValue: "toast"))])
         )
 
@@ -119,7 +119,7 @@ extension TheBrainsPipelineTests {
             customRotors: [.init(name: "Errors")],
             respondsToUserInteraction: false
         )
-        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             .makeForTests([.init(candidate, heistId: HeistId(rawValue: "checkout"))])
         )
 
@@ -164,7 +164,7 @@ extension TheBrainsPipelineTests {
     }
 
     func testTimeoutDiagnosticsRemainScopedToEachStandaloneWait() async throws {
-        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             makeScreen(elements: [("First candidate", .staticText, "first")])
         )
         let first = await brains.interactionCoordinator.waitForPredicate(
@@ -174,7 +174,7 @@ extension TheBrainsPipelineTests {
             ))
         )
 
-        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             makeScreen(elements: [("Second candidate", .staticText, "second")])
         )
         let second = await brains.interactionCoordinator.waitForPredicate(
@@ -215,8 +215,41 @@ extension TheBrainsPipelineTests {
             timeout: try .milliseconds(350)
         )
         let runtime = TheBrains.HeistExecutionRuntime(
-            execute: { command, _ in
-                spy.execute(command)
+            execute: { command, expectation in
+                let execution = spy.execute(command)
+                guard let expectation else { return execution }
+                let request = TheBrains.HeistRuntimeWaitRequest.actionEndpoint(
+                    expectation,
+                    trace: execution.result.settled == true
+                        ? execution.result.accessibilityTrace
+                        : nil,
+                    context: execution.actionExpectationContext
+                )
+                let result = await isolatedBrains.interactionCoordinator.waitForPredicate(
+                    request.step,
+                    initialTrace: request.initialTrace,
+                    baselineSequence: request.afterSequence,
+                    changeBaseline: request.changeBaseline,
+                    actionExpectationContext: request.actionExpectationContext,
+                    startedAt: request.startedAt
+                )
+                spy.record(result)
+                let evidence: HeistActionEvidence
+                switch result.outcome {
+                case .matched(let expectationResult, let checkedExpectation):
+                    evidence = .expectation(
+                        dispatchResult: execution.result,
+                        expectationResult: expectationResult,
+                        expectation: checkedExpectation.result
+                    )
+                case .unmatched(let expectationResult, let checkedExpectation):
+                    evidence = .expectation(
+                        dispatchResult: execution.result,
+                        expectationResult: expectationResult,
+                        expectation: checkedExpectation.result
+                    )
+                }
+                return RuntimeActionExecution(evidence: evidence)
             },
             wait: { request in
                 let result = await isolatedBrains.interactionCoordinator.waitForPredicate(
@@ -253,11 +286,11 @@ extension TheBrainsPipelineTests {
 
         _ = await isolatedBrains.executeHeistPlanForTest(plan, runtime: runtime)
         let result = try XCTUnwrap(spy.waitResult)
+        let latestSnapshot = await isolatedBrains.vault.semanticObservationStream.latestCommittedSnapshot()
         return HistoricalWaitAutomaticRun(
             result: result,
             work: spy.snapshot(
-                commitCount: isolatedBrains.vault.semanticObservationStream
-                    .latestCommittedObservation?.sequence.rawValue ?? 0
+                commitCount: latestSnapshot?.sequence.rawValue ?? 0
             )
         )
     }
@@ -266,7 +299,7 @@ extension TheBrainsPipelineTests {
         let elements = (0 ..< 10).map { index in
             ("Candidate \(index)", UIAccessibilityTraits.staticText, HeistId(rawValue: "candidate_\(index)"))
         }
-        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             makeScreen(elements: elements)
         )
 
@@ -385,10 +418,10 @@ extension TheBrainsPipelineTests {
     }
 
     func testCanonicalInitialTraceCanProveCompletedChangeWithoutAnotherObservation() async throws {
-        _ = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        _ = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             volumeScreen(value: "2")
         )
-        let after = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        let after = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             volumeScreen(value: "3")
         )
         let result = await brains.interactionCoordinator.waitForPredicate(
@@ -402,13 +435,13 @@ extension TheBrainsPipelineTests {
 
     func testSuppliedCanonicalBaselineOverridesStaleInitialTrace() async throws {
         let stream = brains.vault.semanticObservationStream
-        let beforeEvent = stream.commitVisibleObservationForTesting(volumeScreen(value: "2"))
-        let afterEvent = stream.commitVisibleObservationForTesting(volumeScreen(value: "3"))
-        let before = try XCTUnwrap(beforeEvent.settledCapture)
-        let after = try XCTUnwrap(afterEvent.settledCapture)
+        let beforeEvent = await stream.commitVisibleObservationForTesting(volumeScreen(value: "2"))
+        let afterEvent = await stream.commitVisibleObservationForTesting(volumeScreen(value: "3"))
+        let before = try XCTUnwrap(beforeEvent.moment)
+        let after = try XCTUnwrap(afterEvent.moment)
         let staleBrains = TheBrains(tripwire: TheTripwire())
         defer { staleBrains.stopSemanticObservation() }
-        let staleEvent = staleBrains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        let staleEvent = await staleBrains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             volumeScreen(value: "1")
         )
         let staleHash = try XCTUnwrap(staleEvent.trace.captures.last?.hash)
@@ -429,22 +462,22 @@ extension TheBrainsPipelineTests {
 
     func testPredicateWaitBuildsScreenChangeHistoryOnlyFromCanonicalObservationLog() async throws {
         let stream = brains.vault.semanticObservationStream
-        let beforeEvent = stream.commitVisibleObservationForTesting(
+        let beforeEvent = await stream.commitVisibleObservationForTesting(
             makeScreen(elements: [("ButtonHeist Demo", .header, "root")])
         )
-        let actionEndpointEvent = stream.commitVisibleObservationForTesting(
+        let actionEndpointEvent = await stream.commitVisibleObservationForTesting(
             makeScreen(elements: [("Order Summary", .header, "summary")]),
             notificationBatch: notificationBatch(kind: .screenChanged)
         )
-        let destinationEvent = stream.commitVisibleObservationForTesting(
+        let destinationEvent = await stream.commitVisibleObservationForTesting(
             makeScreen(elements: [
                 ("Order Summary", .header, "summary"),
                 ("Menu", .button, "menu"),
             ])
         )
-        let before = try XCTUnwrap(beforeEvent.settledCapture)
-        let actionEndpoint = try XCTUnwrap(actionEndpointEvent.settledCapture)
-        let destination = try XCTUnwrap(destinationEvent.settledCapture)
+        let before = try XCTUnwrap(beforeEvent.moment)
+        let actionEndpoint = try XCTUnwrap(actionEndpointEvent.moment)
+        let destination = try XCTUnwrap(destinationEvent.moment)
         let result = await brains.interactionCoordinator.waitForPredicate(
             try resolvedWait(WaitStep(
                 predicate: .changed(.screen([.exists(.label("Menu"))])),
@@ -467,109 +500,119 @@ extension TheBrainsPipelineTests {
         })
     }
 
-    func testCanonicalObservationWindowsKeepScreenAndElementFactsDistinct() throws {
+    func testCanonicalLogEventsKeepScreenAndElementFactsDistinct() async throws {
         let elementStream = brains.vault.semanticObservationStream
-        let elementBeforeEvent = elementStream.commitVisibleObservationForTesting(volumeScreen(value: "2"))
-        let elementAfterEvent = elementStream.commitVisibleObservationForTesting(volumeScreen(value: "3"))
-        let elementBefore = try XCTUnwrap(elementBeforeEvent.settledCapture)
-        let elementWindow = try XCTUnwrap(elementStream.observationWindow(
-            from: elementBefore,
-            through: elementAfterEvent
-        ))
+        let elementBeforeEvent = await elementStream.commitVisibleObservationForTesting(volumeScreen(value: "2"))
+        let elementAfterEvent = await elementStream.commitVisibleObservationForTesting(volumeScreen(value: "3"))
+        let elementBefore = try XCTUnwrap(elementBeforeEvent.moment)
+        let elementEvidence = PredicateObservationEvidence(
+            observation: brains.actionEvidenceProjector.projectSettledEvidence(from: elementAfterEvent),
+            baseline: elementBefore,
+            eventsSinceBaseline: await elementStream.storeOwner.readLog {
+                $0.events(since: elementBefore)
+            }
+        )
 
         let screenBrains = TheBrains(tripwire: TheTripwire())
         defer { screenBrains.stopSemanticObservation() }
         let screenStream = screenBrains.vault.semanticObservationStream
-        let screenBeforeEvent = screenStream.commitVisibleObservationForTesting(
+        let screenBeforeEvent = await screenStream.commitVisibleObservationForTesting(
             makeScreen(elements: [("Home", .header, "home")])
         )
-        let screenAfterEvent = screenStream.commitVisibleObservationForTesting(
+        let screenAfterEvent = await screenStream.commitVisibleObservationForTesting(
             makeScreen(elements: [("Details", .header, "details")]),
             notificationBatch: notificationBatch(kind: .screenChanged)
         )
-        let screenBefore = try XCTUnwrap(screenBeforeEvent.settledCapture)
-        let screenWindow = try XCTUnwrap(screenStream.observationWindow(
-            from: screenBefore,
-            through: screenAfterEvent
-        ))
+        let screenBefore = try XCTUnwrap(screenBeforeEvent.moment)
+        let screenEvidence = PredicateObservationEvidence(
+            observation: screenBrains.actionEvidenceProjector.projectSettledEvidence(from: screenAfterEvent),
+            baseline: screenBefore,
+            eventsSinceBaseline: await screenStream.storeOwner.readLog {
+                $0.events(since: screenBefore)
+            }
+        )
 
-        XCTAssertEqual(elementWindow.trace.changeFacts.map(\.kind), [.elementsChanged])
+        XCTAssertEqual(elementEvidence.changeTrace?.changeFacts.map(\.kind), [.elementsChanged])
         XCTAssertEqual(
-            screenWindow.trace.changeFacts.map(\.kind),
+            screenEvidence.changeTrace?.changeFacts.map(\.kind),
             [.elementsChanged, .screenChanged, .elementsChanged]
         )
         XCTAssertNil(screenAfterEvent.trace.captures.last?.transition.fallbackReason)
     }
 
-    func testObservationWindowRetainsFastRoundTripTransition() throws {
-        let baselineEvent = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+    func testLogEventsRetainFastRoundTripTransition() async throws {
+        let baselineEvent = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             volumeScreen(value: "50%")
         )
-        _ = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        _ = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             volumeScreen(value: "60%")
         )
-        let finalEvent = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        let finalEvent = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             volumeScreen(value: "50%")
         )
-        let baseline = try XCTUnwrap(baselineEvent.settledCapture)
-        let window = try XCTUnwrap(brains.vault.semanticObservationStream.observationWindow(
-            from: baseline,
-            through: finalEvent
-        ))
+        let baseline = try XCTUnwrap(baselineEvent.moment)
+        let evidence = PredicateObservationEvidence(
+            observation: brains.actionEvidenceProjector.projectSettledEvidence(from: finalEvent),
+            baseline: baseline,
+            eventsSinceBaseline: await brains.vault.semanticObservationStream.storeOwner.readLog {
+                $0.events(since: baseline)
+            }
+        )
+        let trace = try XCTUnwrap(evidence.changeTrace)
 
-        XCTAssertEqual(window.completeness, .complete)
-        XCTAssertEqual(window.trace.captures.count, 3)
-        XCTAssertEqual(window.trace.changeFacts.count, 2)
-        XCTAssertTrue(window.trace.changeFacts.allSatisfy {
+        XCTAssertEqual(trace.captures.count, 3)
+        XCTAssertEqual(trace.changeFacts.count, 2)
+        XCTAssertTrue(trace.changeFacts.allSatisfy {
             if case .elementsChanged = $0 { return true }
             return false
         })
     }
 
-    func testObservationWindowTraceContainsExactlyRetainedLogCaptures() throws {
-        let baselineEvent = brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+    func testLogEventsProduceTraceFromExactlyRecordedCaptures() async throws {
+        let baselineEvent = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
-        let actionEndpointEvent = brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let actionEndpointEvent = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "60%")
         )
-        let intermediateEvent = brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let intermediateEvent = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "70%")
         )
-        let finalEvent = brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let finalEvent = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "80%")
         )
-        let baseline = try XCTUnwrap(baselineEvent.settledCapture)
-        let actionEndpoint = try XCTUnwrap(actionEndpointEvent.settledCapture)
-        let intermediate = try XCTUnwrap(intermediateEvent.settledCapture)
-        let final = try XCTUnwrap(finalEvent.settledCapture)
-        let window = try XCTUnwrap(brains.vault.semanticObservationStream.observationWindow(
-            from: baseline,
-            through: finalEvent
-        ))
+        let baseline = try XCTUnwrap(baselineEvent.moment)
+        let actionEndpoint = try XCTUnwrap(actionEndpointEvent.moment)
+        let intermediate = try XCTUnwrap(intermediateEvent.moment)
+        let final = try XCTUnwrap(finalEvent.moment)
+        let evidence = PredicateObservationEvidence(
+            observation: brains.actionEvidenceProjector.projectSettledEvidence(from: finalEvent),
+            baseline: baseline,
+            eventsSinceBaseline: await brains.vault.semanticObservationStream.storeOwner.readLog {
+                $0.events(since: baseline)
+            }
+        )
+        let trace = try XCTUnwrap(evidence.changeTrace)
 
         XCTAssertEqual(
-            window.trace.captures.map(\.hash),
+            trace.captures.map(\.hash),
             [baseline.capture.hash, actionEndpoint.capture.hash, intermediate.capture.hash, final.capture.hash]
         )
-        XCTAssertEqual(window.trace.changeFacts.count, 3)
+        XCTAssertEqual(trace.changeFacts.count, 3)
     }
 
-    func testCompleteObservationWindowProducesUnchangedWaitEvidence() async throws {
-        let baselineEvent = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+    func testCompleteLogEventsProduceUnchangedWaitEvidence() async throws {
+        let baselineEvent = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             volumeScreen(value: "50%")
         )
-        let currentEvent = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        let currentEvent = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             volumeScreen(value: "50%")
         )
-        let baseline = try XCTUnwrap(baselineEvent.settledCapture)
-        let window = try XCTUnwrap(brains.vault.semanticObservationStream.observationWindow(
-            from: baseline,
-            through: currentEvent
-        ))
-
-        XCTAssertEqual(window.completeness, .complete)
-        XCTAssertTrue(window.trace.changeFacts.isEmpty)
+        let baseline = try XCTUnwrap(baselineEvent.moment)
+        let history = await brains.vault.semanticObservationStream.storeOwner.readLog {
+            $0.events(since: baseline)
+        }
+        XCTAssertEqual(history, .events([.snapshot(currentEvent)]))
 
         let expression = AccessibilityPredicate.noChange
         let predicate = try resolvedPredicate(expression)
@@ -584,26 +627,22 @@ extension TheBrainsPipelineTests {
         XCTAssertTrue(predicate.validate(against: result.outcome.actionResult).met)
     }
 
-    func testIncompleteObservationWindowTimesOutUnchangedWait() async throws {
-        let baselineEvent = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+    func testExpiredLogEventsTimeOutUnchangedWait() async throws {
+        let baselineEvent = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             volumeScreen(value: "50%")
         )
-        let baseline = try XCTUnwrap(baselineEvent.settledCapture)
-        var currentEvent = baselineEvent
-        for _ in 0...SemanticObservationStore.defaultRetentionLimit {
-            currentEvent = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        let baseline = try XCTUnwrap(baselineEvent.moment)
+        for _ in 0...Observation.Store.defaultRetentionLimit {
+            _ = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
                 volumeScreen(value: "50%")
             )
         }
-        let window = try XCTUnwrap(brains.vault.semanticObservationStream.observationWindow(
-            from: baseline,
-            through: currentEvent
-        ))
-
-        guard case .incomplete = window.completeness else {
-            return XCTFail("Expected evicted baseline history to make the window incomplete")
+        let expiredHistory = await brains.vault.semanticObservationStream.storeOwner.readLog {
+            $0.events(since: baseline)
         }
-        XCTAssertTrue(window.trace.changeFacts.isEmpty)
+        guard case .expired = expiredHistory else {
+            return XCTFail("Expected the evicted baseline moment to report expired history")
+        }
 
         let expression = AccessibilityPredicate.noChange
         let predicate = try resolvedPredicate(expression)
@@ -624,38 +663,35 @@ extension TheBrainsPipelineTests {
         XCTAssertEqual(laterValidation.actual, "observation history incomplete")
     }
 
-    func testIncompleteObservationWindowUsesOnlyRetainedElementEdges() throws {
-        let baselineEvent = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+    func testExpiredLogEventsCannotSatisfyElementChange() async throws {
+        let baselineEvent = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             volumeScreen(value: "50%")
         )
-        let baseline = try XCTUnwrap(baselineEvent.settledCapture)
-        for _ in 0...SemanticObservationStore.defaultRetentionLimit {
-            _ = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        let baseline = try XCTUnwrap(baselineEvent.moment)
+        for _ in 0...Observation.Store.defaultRetentionLimit {
+            _ = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
                 volumeScreen(value: "50%")
             )
         }
-        let currentEvent = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        let currentEvent = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             volumeScreen(value: "60%")
         )
-        let window = try XCTUnwrap(brains.vault.semanticObservationStream.observationWindow(
-            from: baseline,
-            through: currentEvent
-        ))
-
-        guard case .incomplete = window.completeness else {
-            return XCTFail("Expected evicted baseline history to make the window incomplete")
+        let events = await brains.vault.semanticObservationStream.storeOwner.readLog {
+            $0.events(since: baseline)
         }
-        XCTAssertNotEqual(window.captures.first?.cursor, baseline.cursor)
-        XCTAssertEqual(window.trace.changeFacts.count, 1)
+        guard case .expired = events else {
+            return XCTFail("Expected the evicted baseline moment to report expired history")
+        }
 
         let observation = brains.actionEvidenceProjector.projectSettledEvidence(from: currentEvent)
         let expression = AccessibilityPredicate.changed(.elements())
         let predicateResult = PredicateObservationEvidence(
             observation: observation,
             baseline: baseline,
-            window: window
+            eventsSinceBaseline: events
         ).evaluate(try resolvedPredicate(expression), expression: expression)
-        XCTAssertTrue(predicateResult.met)
+        XCTAssertFalse(predicateResult.met)
+        XCTAssertEqual(predicateResult.actual, "observation history incomplete")
     }
 
 }

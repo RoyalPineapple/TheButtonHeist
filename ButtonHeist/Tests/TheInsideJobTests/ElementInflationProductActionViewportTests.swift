@@ -72,7 +72,7 @@ extension ElementInflationProductTests {
     ) async throws -> (result: ActionResult, activationCount: Int) {
         let localBrains = TheBrains(tripwire: TheTripwire())
         localBrains.tripwire.startPulse()
-        localBrains.startSemanticObservation()
+        await localBrains.startSemanticObservation()
         defer {
             localBrains.stopSemanticObservation()
             localBrains.tripwire.stopPulse()
@@ -83,7 +83,7 @@ extension ElementInflationProductTests {
             label: label
         )
         defer { fixture.cleanup() }
-        try seedOffViewportTarget(fixture, in: localBrains)
+        try await seedOffViewportTarget(fixture, in: localBrains)
 
         if heist {
             let plan = try HeistPlan(body: [

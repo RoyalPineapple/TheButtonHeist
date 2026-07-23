@@ -57,7 +57,7 @@ express across files in the runtime target.
 
 | Rule ID | Invariant | Repair | Verification and deletion condition |
 | --- | --- | --- | --- |
-| `buttonheist.semantic_observation_commit_ownership` | `SemanticObservationStream+Settlement.swift` is the only caller of `SemanticObservationStore.commitObservation`, so graph, history, lineage, and cursors cannot be advanced by competing runtime paths. | Commit admitted observations through the semantic stream. | Verification: standard `boundaryOnly` with an invalid competing committer fixture and repository evaluation of the settlement owner. Delete when Store commit becomes inaccessible outside the stream owner. |
+| `buttonheist.semantic_observation_commit_ownership` | `Observation.Stream` is the only runtime caller that commits admissions through actor-owned `Observation.StoreOwner`, so graph, Log, lineage, and delivery order cannot be advanced by competing paths. | Commit admitted observations through the observation stream. | Verification: standard `boundaryOnly` with an invalid competing committer fixture and repository evaluation of the observation owner. Delete when Store commit becomes inaccessible outside the stream owner. |
 
 ## Plan Language Boundaries
 

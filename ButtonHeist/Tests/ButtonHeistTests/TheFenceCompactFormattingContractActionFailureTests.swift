@@ -91,6 +91,24 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertTrue(response.isFailure)
     }
 
+    func testMatchedAnnouncementExpectationWinsOverUnrelatedTraceAnnouncement() throws {
+        let response = FenceResponse.action(
+            command: .wait,
+            result: ActionResult.success(
+                payload: .wait,
+                observation: .announcement("AXPerformElementUpdateImmediatelyToken")
+            ),
+            expectation: ExpectationResult(
+                met: true,
+                predicate: .announcement("Ticket saved."),
+                actual: "Ticket saved."
+            )
+        )
+
+        XCTAssertTrue(response.compactFormatted().contains("announcement: \"Ticket saved.\""))
+        XCTAssertEqual(try publicJSONProbe(response).string("announcement"), "Ticket saved.")
+    }
+
     func testActionFailureProjectionFeedsJSONAndCompactRendering() throws {
         let response = FenceResponse.action(
             command: .wait,

@@ -27,7 +27,7 @@ final class TheBrainsScrollTests: XCTestCase {
             visibleObservationSource: visibleObservationSource.capture
         )
         brains.tripwire.startPulse()
-        brains.startSemanticObservation()
+        await brains.startSemanticObservation()
     }
 
     override func tearDown() async throws {
@@ -44,9 +44,9 @@ final class TheBrainsScrollTests: XCTestCase {
         return object
     }
 
-    func installSyntheticObservation(_ observation: InterfaceObservation) {
+    func installSyntheticObservation(_ observation: InterfaceObservation) async {
         visibleObservationSource.observation = observation
-        brains.vault.installObservationForTesting(observation)
+        await brains.vault.installObservationForTesting(observation)
     }
 
     func retainedLiveObject() -> NSObject {
@@ -114,7 +114,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
     // MARK: - Programmatic Scroll Safety
 
-    func testTargetUnavailableScrollFailureMapsToElementNotFoundErrorKind() {
+    func testTargetUnavailableScrollFailureMapsToElementNotFoundErrorKind() async {
         let result = TheSafecracker.ActionDispatchResult.failure(
             .scrollToVisible,
             message: "element inflation failed [notFound]: missing",
@@ -146,7 +146,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
     func testSemanticTargetScanIsUnavailableWhenInitialSettlementIsCancelled() async throws {
         let staleId: HeistId = "stale_action_target"
-        brains.vault.installObservationForTesting(.makeForTests([
+        await brains.vault.installObservationForTesting(.makeForTests([
             .init(
                 AccessibilityElement.make(label: "Stale action target", traits: .button),
                 heistId: staleId
@@ -178,7 +178,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
     func testSemanticTargetScanIsUnavailableWhenDeadlineIsExpired() async throws {
         let targetId: HeistId = "stale_action_target"
-        brains.vault.installObservationForTesting(.makeForTests([
+        await brains.vault.installObservationForTesting(.makeForTests([
             .init(
                 AccessibilityElement.make(label: "Stale action target", traits: .button),
                 heistId: targetId
@@ -216,7 +216,7 @@ final class TheBrainsScrollTests: XCTestCase {
             shape: .frame(AccessibilityRect(CGRect(x: 40, y: 120, width: 200, height: 44)))
         )
         let object = retainedLiveObject()
-        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests([
+        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests([
             .init(element, heistId: targetId, object: object),
         ]))
         let treeElement = try XCTUnwrap(brains.vault.interfaceElement(heistId: targetId))
@@ -312,7 +312,7 @@ final class TheBrainsScrollTests: XCTestCase {
             XCTAssertEqual(Optional(scrollView.contentOffset), unsafeOffsets[ObjectIdentifier(scrollView)])
         }
         XCTAssertTrue(
-            exploration.event.settledObservation.observation.tree.elements.values.contains {
+            exploration.event.snapshot.observation.tree.elements.values.contains {
                 $0.element.label == "Page One Visible Label"
             },
             "Visible page content should remain discoverable without scrolling the private queuing scroll view"
@@ -321,14 +321,14 @@ final class TheBrainsScrollTests: XCTestCase {
 
     // MARK: - requiredAxis Mapping
 
-    func testRequiredAxisForScrollDirection() {
+    func testRequiredAxisForScrollDirection() async {
         XCTAssertEqual(Navigation.requiredAxis(for: ScrollDirection.up), .vertical)
         XCTAssertEqual(Navigation.requiredAxis(for: ScrollDirection.down), .vertical)
         XCTAssertEqual(Navigation.requiredAxis(for: ScrollDirection.left), .horizontal)
         XCTAssertEqual(Navigation.requiredAxis(for: ScrollDirection.right), .horizontal)
     }
 
-    func testRequiredAxisForScrollEdge() {
+    func testRequiredAxisForScrollEdge() async {
         XCTAssertEqual(Navigation.requiredAxis(for: ScrollEdge.top), .vertical)
         XCTAssertEqual(Navigation.requiredAxis(for: ScrollEdge.bottom), .vertical)
         XCTAssertEqual(Navigation.requiredAxis(for: ScrollEdge.left), .horizontal)
@@ -337,7 +337,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
     // MARK: - uiScrollDirection Mapping
 
-    func testUIScrollDirectionFromScrollDirection() {
+    func testUIScrollDirectionFromScrollDirection() async {
         XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollDirection.up), .up)
         XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollDirection.down), .down)
         XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollDirection.left), .left)
@@ -346,7 +346,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
     // MARK: - Scroll Target Description
 
-    func testScrollTargetDescriptionUsesNamedPriority() {
+    func testScrollTargetDescriptionUsesNamedPriority() async {
         let labeled = InterfaceTree.Element(
             heistId: "labeled_item",
             scrollMembership: nil,
@@ -379,7 +379,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
     // MARK: - Scroll Target Selection
 
-    func testScrollCandidatesFilterToRequiredAxis() {
+    func testScrollCandidatesFilterToRequiredAxis() async {
         let vertical = makeScrollableContainer(
             contentSize: CGSize(width: 320, height: 2000),
             frame: CGRect(x: 0, y: 0, width: 320, height: 400)
@@ -388,14 +388,14 @@ final class TheBrainsScrollTests: XCTestCase {
             contentSize: CGSize(width: 1200, height: 200),
             frame: CGRect(x: 0, y: 420, width: 320, height: 200)
         )
-        installScrollableContainers([vertical, horizontal])
+        await installScrollableContainers([vertical, horizontal])
 
         let candidates = brains.navigation.scrollCandidates(requiredAxis: .horizontal)
 
         XCTAssertEqual(candidates.map(\.container), [horizontal])
     }
 
-    func testScrollCandidatesPreserveTreeOrderWithinRequiredAxis() {
+    func testScrollCandidatesPreserveTreeOrderWithinRequiredAxis() async {
         let horizontal = makeScrollableContainer(
             contentSize: CGSize(width: 1200, height: 200),
             frame: CGRect(x: 0, y: 0, width: 320, height: 200)
@@ -408,14 +408,14 @@ final class TheBrainsScrollTests: XCTestCase {
             contentSize: CGSize(width: 320, height: 1800),
             frame: CGRect(x: 0, y: 640, width: 320, height: 400)
         )
-        installScrollableContainers([horizontal, verticalOne, verticalTwo])
+        await installScrollableContainers([horizontal, verticalOne, verticalTwo])
 
         let candidates = brains.navigation.scrollCandidates(requiredAxis: .vertical)
 
         XCTAssertEqual(candidates.map(\.container), [verticalOne, verticalTwo])
     }
 
-    func testLiveVisibleScreenPreservesDuplicateEqualElementsByPath() {
+    func testLiveVisibleScreenPreservesDuplicateEqualElementsByPath() async {
         let duplicate = makeElement(label: "Duplicate", traits: .button)
         let firstPath = TreePath([0])
         let secondPath = TreePath([1])
@@ -430,7 +430,7 @@ final class TheBrainsScrollTests: XCTestCase {
             element: duplicate
         )
 
-        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [
                 firstEntry.heistId: firstEntry,
                 secondEntry.heistId: secondEntry,
@@ -464,7 +464,7 @@ final class TheBrainsScrollTests: XCTestCase {
             element: element
         )
         var object: NSObject? = NSObject()
-        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [entry.heistId: entry],
             hierarchy: [.element(element, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): entry.heistId],
@@ -501,12 +501,12 @@ final class TheBrainsScrollTests: XCTestCase {
     func installScreenWithOffViewportEntry(
         liveHierarchy: [(AccessibilityElement, HeistId)],
         offViewport: [InterfaceObservation.OffViewportEntry]
-    ) {
+    ) async {
         let observation = makeScreenWithOffViewportEntry(
             liveHierarchy: liveHierarchy,
             offViewport: offViewport
         )
-        installSyntheticObservation(observation)
+        await installSyntheticObservation(observation)
     }
 
     struct OffViewportScrollTarget {
@@ -536,7 +536,7 @@ final class TheBrainsScrollTests: XCTestCase {
         offscreen: OffViewportScrollTarget,
         includeLiveScrollAncestor: Bool = true,
         revealsTargetOnRefresh: Bool = false
-    ) {
+    ) async {
         let scrollContainerPath = TreePath([0])
         let visibleEntry = InterfaceTree.Element(
             heistId: visible.heistId,
@@ -577,7 +577,7 @@ final class TheBrainsScrollTests: XCTestCase {
                 ? [scrollContainerPath: .init(view: offscreen.scrollView)]
                 : [:]
         )
-        installSyntheticObservation(observation)
+        await installSyntheticObservation(observation)
         if revealsTargetOnRefresh {
             visibleObservationSource.observation = InterfaceObservation.makeForTests(
                 elements: [offscreenEntry.heistId: offscreenEntry],
@@ -652,7 +652,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
-    func installScrollableContainers(_ containers: [AccessibilityContainer]) {
+    func installScrollableContainers(_ containers: [AccessibilityContainer]) async {
         let containerRefs = Dictionary(uniqueKeysWithValues: containers.indices.map { index in
             (TreePath([index]), LiveCapture.ContainerRef(object: retainedLiveObject()))
         })
@@ -662,14 +662,14 @@ final class TheBrainsScrollTests: XCTestCase {
             containerRefsByPath: containerRefs,
             firstResponderHeistId: nil,
         )
-        installSyntheticObservation(observation)
+        await installSyntheticObservation(observation)
     }
 
     func installLiveScrollTarget(
         _ treeElement: InterfaceTree.Element,
         scrollView: UIScrollView,
         containerName: ContainerName
-    ) {
+    ) async {
         let container = makeScrollableContainer(
             contentSize: scrollView.contentSize,
             frame: scrollView.frame
@@ -692,7 +692,7 @@ final class TheBrainsScrollTests: XCTestCase {
                 TreePath([0]): .init(view: scrollView)
             ]
         )
-        installSyntheticObservation(observation)
+        await installSyntheticObservation(observation)
     }
 
     func makeButton(label: String, frame: CGRect) -> UIButton {

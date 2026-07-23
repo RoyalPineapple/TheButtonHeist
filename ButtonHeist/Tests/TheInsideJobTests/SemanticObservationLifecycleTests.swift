@@ -11,7 +11,7 @@ import ButtonHeistTestSupport
 
 @MainActor
 final class SemanticObservationLifecycleTests: SemanticObservationStreamTestCase {
-    func testLifecycleOwnsRunningObservationAndCancellation() {
+    func testLifecycleOwnsRunningObservationAndCancellation() async {
         var state = SemanticObservationLifecycle.stopped
         let task = Task<Void, Never> { await Task.yield() }
         let initialDiscovery: SemanticObservationLifecycle.DiscoveryObservation = { nil }
@@ -30,12 +30,12 @@ final class SemanticObservationLifecycleTests: SemanticObservationStreamTestCase
         XCTAssertTrue(task.isCancelled)
     }
 
-    func testStreamRunningTruthIsLifecycle() {
+    func testStreamRunningTruthIsLifecycle() async {
         let stream = vault.semanticObservationStream
         XCTAssertFalse(stream.isActive)
         XCTAssertFalse(stream.lifecycle.isRunning)
 
-        stream.start { nil }
+        await stream.start { nil }
         XCTAssertTrue(stream.isActive)
         XCTAssertTrue(stream.lifecycle.isRunning)
 
@@ -44,94 +44,102 @@ final class SemanticObservationLifecycleTests: SemanticObservationStreamTestCase
         XCTAssertFalse(stream.lifecycle.isRunning)
     }
 
-    func testStoreCommitAdvancesAllObservationTruthTogether() throws {
+    func testStoreCommitAdvancesAllObservationTruthTogether() async throws {
         let screen = observation(label: "Published", heistId: "published")
-        let interface = makeTestInterface(elements: [])
         let notificationBatch = screenChangedBatch()
-        var store = SemanticObservationStore()
+        let timestamp = Date(timeIntervalSince1970: 0)
+        let interface = TheVault.WireConversion.toSemanticInterface(
+            from: screen.tree,
+            timestamp: timestamp
+        )
+        var store = Observation.Store()
         store.requireReplacement()
 
-        let commit = try store.commitObservation(
-            .admittedForTesting(screen, tripwireSignal: .empty),
+        let commit = try store.commitObservation(Observation.Admission(
+            tree: screen.tree,
+            captureID: screen.captureID,
+            tripwireSignal: .empty,
+            discoveryCommitPolicy: .mergeIntoInterface,
+            lineageEvidence: nil,
             scope: .visible,
-            notificationBatch: notificationBatch,
-            evidence: { _ in SemanticObservationStore.Evidence(
-                interface: interface,
-                accessibilityNotifications: [],
-                firstResponder: nil
-            ) }
-        )
+            notificationAdmission: .action(.init(
+                evidence: vault.resolveAccessibilityNotificationEvidence(
+                    notificationBatch.events,
+                    in: screen
+                ),
+                through: notificationBatch.through,
+                scopedScreenChangedThrough: notificationBatch.scopedScreenChangedThrough,
+                gap: notificationBatch.gap
+            )),
+            timestamp: timestamp
+        ))
 
         XCTAssertEqual(commit.event.sequence, 1)
         XCTAssertEqual(commit.event.generation, ScreenGeneration.initial.advanced())
         XCTAssertEqual(commit.event.trace.captures.last?.interface, interface)
-        XCTAssertEqual(store.interfaceTree, commit.interfaceObservation.tree)
+        XCTAssertEqual(store.interfaceTree, commit.tree)
         XCTAssertEqual(store.sequence, 1)
-        XCTAssertEqual(store.notificationCursor, notificationBatch.through)
+        XCTAssertEqual(store.notificationIndex, notificationBatch.through)
         XCTAssertEqual(store.scopedScreenChangedSequence, 1)
     }
 
-    func testFirstPublicationInScopeDoesNotBorrowCrossScopePredecessor() throws {
+    func testFirstPublicationInScopeKeepsGlobalPredecessor() async throws {
         let screen = observation(label: "Stable", heistId: "stable")
-        _ = vault.semanticObservationStream.commitVisibleObservationForTesting(screen)
-        let discovery = vault.semanticObservationStream.commitDiscoveryObservationForTesting(screen)
+        let visible = await vault.semanticObservationStream.commitVisibleObservationForTesting(screen)
+        let discovery = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(screen)
 
-        XCTAssertNil(discovery.previousCursor)
-        let entry = try XCTUnwrap(
-            vault.semanticObservationStream.retainedObservationEntries(scope: .discovery).first
-        )
-        guard case .initial = entry.transition else {
-            return XCTFail("Expected first discovery publication to begin its own scoped lineage")
+        XCTAssertEqual(discovery.previousMoment, visible.moment)
+        guard case .sameGeneration(let previous) = discovery.transition else {
+            return XCTFail("Expected discovery publication to continue the global lineage")
         }
+        XCTAssertEqual(previous, visible.moment)
     }
 
-    func testSettledCaptureRequiresExactScopeAndSequence() throws {
+    func testSettledCaptureRequiresExactScopeAndSequence() async throws {
         let screen = observation(label: "Stable", heistId: "stable")
-        let initialDiscovery = vault.semanticObservationStream.commitDiscoveryObservationForTesting(screen)
-        let visibleCut = vault.semanticObservationStream.commitVisibleObservationForTesting(screen)
-        _ = vault.semanticObservationStream.commitDiscoveryObservationForTesting(screen)
+        let initialDiscovery = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(screen)
+        let visibleCut = await vault.semanticObservationStream.commitVisibleObservationForTesting(screen)
+        _ = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(screen)
 
-        let resolved = try XCTUnwrap(vault.semanticObservationStream.settledCapture(
+        let resolvedMoment = await vault.semanticObservationStream.moment(
             scope: .discovery,
             at: initialDiscovery.sequence
-        ))
+        )
+        let resolved = try XCTUnwrap(resolvedMoment)
 
-        XCTAssertEqual(resolved.cursor, initialDiscovery.cursor)
+        XCTAssertEqual(resolved, initialDiscovery.moment)
         XCTAssertEqual(resolved.capture.hash, initialDiscovery.trace.captures.last?.hash)
-        XCTAssertNil(vault.semanticObservationStream.settledCapture(
+        let visibleMoment = await vault.semanticObservationStream.moment(
             scope: .discovery,
             at: visibleCut.sequence
-        ))
+        )
+        XCTAssertNil(visibleMoment)
     }
 
-    func testLifecycleReplacementRetainsThePublishedEventAndItsExactLineage() throws {
+    func testLifecycleReplacementRetainsThePublishedEventAndItsExactLineage() async throws {
         let screen = observation(label: "Stable", heistId: "stable")
-        let firstEvent = vault.semanticObservationStream.commitVisibleObservationForTesting(screen)
-        vault.semanticObservationStream.requireScreenReplacement()
-        vault.semanticObservationStream.requireScreenReplacement()
-        let secondEvent = vault.semanticObservationStream.commitVisibleObservationForTesting(screen)
+        let firstEvent = await vault.semanticObservationStream.commitVisibleObservationForTesting(screen)
+        await vault.semanticObservationStream.requireScreenReplacement()
+        await vault.semanticObservationStream.requireScreenReplacement()
+        let secondEvent = await vault.semanticObservationStream.commitVisibleObservationForTesting(screen)
 
-        let entries = vault.semanticObservationStream.retainedObservationEntries(scope: .visible)
-        let baseline = try XCTUnwrap(firstEvent.settledCapture)
-        let window = try XCTUnwrap(vault.semanticObservationStream.observationWindow(
-            from: baseline,
-            through: secondEvent
-        ))
+        let baseline = firstEvent.moment
 
-        XCTAssertEqual(entries.count, 2)
+        let history = await vault.semanticObservationStream.storeOwner.readLog {
+            $0.events(since: baseline)
+        }
+        XCTAssertEqual(history, .events([.snapshot(secondEvent)]))
         XCTAssertEqual(secondEvent.generation, firstEvent.generation.advanced())
-        XCTAssertEqual(entries[1].event, secondEvent)
-        XCTAssertEqual(secondEvent.previousCursor, firstEvent.cursor)
-        XCTAssertEqual(window.trace, secondEvent.trace)
-        guard case .screenBoundary(let transition) = entries[1].transition else {
+        XCTAssertEqual(secondEvent.previousMoment, firstEvent.moment)
+        guard case .screenBoundary(let previous) = secondEvent.transition else {
             return XCTFail("Expected lifecycle replacement to append a boundary")
         }
-        XCTAssertEqual(transition.previousCursor, entries[0].cursor)
+        XCTAssertEqual(previous, firstEvent.moment)
     }
 
-    func testLifecycleResetPreservesTriggerEvidenceForNextBoundaryEntry() throws {
+    func testLifecycleResetPreservesTriggerEvidenceForNextBoundaryEntry() async throws {
         let screen = observation(label: "Stable", heistId: "stable")
-        let firstEvent = vault.semanticObservationStream.commitVisibleObservationForTesting(screen)
+        let firstEvent = await vault.semanticObservationStream.commitVisibleObservationForTesting(screen)
         let heist = vault.accessibilityNotifications.beginHeistScope()
         vault.accessibilityNotifications.recordForTesting(
             code: 1000,
@@ -150,16 +158,15 @@ final class SemanticObservationLifecycleTests: SemanticObservationStreamTestCase
         )
         heist.cancel()
 
-        vault.semanticObservationStream.requireScreenReplacement()
-        let secondEvent = vault.semanticObservationStream.commitVisibleObservationForTesting(screen)
+        await vault.semanticObservationStream.requireScreenReplacement()
+        let secondEvent = await vault.semanticObservationStream.commitVisibleObservationForTesting(screen)
 
         XCTAssertEqual(secondEvent.generation, firstEvent.generation.advanced())
         XCTAssertEqual(
             secondEvent.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
             [.screenChanged, .elementChanged(.layout), .elementChanged(.value)]
         )
-        let entries = vault.semanticObservationStream.retainedObservationEntries(scope: .visible)
-        guard case .screenBoundary = entries.last?.transition else {
+        guard case .screenBoundary = secondEvent.transition else {
             return XCTFail("Expected trigger evidence to be owned by the next screen boundary")
         }
     }

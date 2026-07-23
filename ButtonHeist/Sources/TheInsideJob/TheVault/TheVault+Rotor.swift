@@ -142,7 +142,7 @@ extension TheVault {
 private extension TheVault {
 
     var currentRotorGeneration: ScreenGeneration {
-        semanticObservationStream.latestCommittedEvent?.generation ?? .initial
+        semanticObservationStream.latestDeliveredSnapshotEvent?.generation ?? .initial
     }
 
     /// Return the known `InterfaceTree.Element` corresponding to a UIKit accessibility

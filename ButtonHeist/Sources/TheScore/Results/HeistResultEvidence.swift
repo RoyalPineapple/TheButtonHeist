@@ -324,10 +324,16 @@ private extension HeistActionEvidence {
             return result.outcome.isSuccess
         case .expectation(let result, let expectationResult, let expectation):
             guard result.outcome.isSuccess,
-                  expectationResult.method == .wait,
-                  expectationResult.outcome.isSuccess == expectation.met
-            else { return nil }
-            return expectation.met
+                  expectationResult.method == .wait else { return nil }
+            if expectationResult.outcome.isSuccess {
+                return expectation.met ? true : nil
+            }
+            if !expectation.met {
+                return false
+            }
+            guard let settlement = expectationResult.evidence.settlement,
+                  !settlement.observationHandoffCompleted else { return nil }
+            return false
         }
     }
 }

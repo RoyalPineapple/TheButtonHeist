@@ -14,8 +14,8 @@ extension TheBrainsPipelineTests {
 
     func testActionEvidenceProjectorFailureIncludesAfterObservationTrace() async {
         let beforeScreen = makeScreen(elements: [("Sign In", .button, "button_sign_in")])
-        brains.vault.installObservationForTesting(beforeScreen)
-        let before = brains.actionEvidenceProjector.projectBaseline()
+        await brains.vault.installObservationForTesting(beforeScreen)
+        let before = await brains.actionEvidenceProjector.projectBaseline()
         let afterScreen = makeScreen(elements: [("Still Here", .button, "button_sign_in")])
 
         let result = await brains.interactionCoordinator.settleAfterAction(
@@ -38,7 +38,7 @@ extension TheBrainsPipelineTests {
         } == true)
     }
 
-    func testSemanticStateCaptureProjectsFocusAndWindowSignals() {
+    func testSemanticStateCaptureProjectsFocusAndWindowSignals() async {
         let screen = makeScreen(elements: [("Sign In", .button, "button_sign_in")])
         let windowOwner = NSObject()
         let tripwireSignal = TheTripwire.TripwireSignal(
@@ -65,7 +65,7 @@ extension TheBrainsPipelineTests {
         ])
     }
 
-    func testSemanticStateCaptureProjectsFirstResponderTarget() throws {
+    func testSemanticStateCaptureProjectsFirstResponderTarget() async throws {
         let screen = InterfaceObservation.makeForTests(
             elements: [
                 (AccessibilityElement.make(label: "Email", traits: [.textEntry]), "email_field"),
@@ -103,8 +103,8 @@ extension TheBrainsPipelineTests {
             ),
             (persistent, HeistId(rawValue: "persistent_inbox"))
         ])
-        brains.vault.installObservationForTesting(beforeScreen)
-        let before = brains.actionEvidenceProjector.projectBaseline()
+        await brains.vault.installObservationForTesting(beforeScreen)
+        let before = await brains.actionEvidenceProjector.projectBaseline()
         let afterScreen = InterfaceObservation.makeForTests(elements: [
             (
                 AccessibilityElement.make(
@@ -141,15 +141,15 @@ extension TheBrainsPipelineTests {
         XCTAssertTrue(labels.contains("Inbox"), "Persistent visible chrome must survive screen-change final evidence")
     }
 
-    func testCommittedPostActionTraceUsesPublishedContinuity() {
+    func testCommittedPostActionTraceUsesPublishedContinuity() async {
         let before = brains.actionEvidenceProjector.projectBaseline(
             from: makeScreen(elements: [("Home", .header, "home_header")]),
             tripwireSignal: .empty,
             settledObservationSequence: nil
         )
         let finalScreen = makeScreen(elements: [("Details", .header, "details_header")])
-        _ = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(finalScreen)
-        let sameGenerationEvent = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(finalScreen)
+        _ = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(finalScreen)
+        let sameGenerationEvent = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(finalScreen)
         let observation = ObservationSettlement(
             settleResult: settledResult(finalScreen: finalScreen),
             commitOutcome: .committed(sameGenerationEvent)
@@ -166,7 +166,7 @@ extension TheBrainsPipelineTests {
         XCTAssertNil(trace.captures.last?.transition.fallbackReason)
     }
 
-    func testPostActionTraceKeepsFinalCaptureContextWithFinalInterface() throws {
+    func testPostActionTraceKeepsFinalCaptureContextWithFinalInterface() async throws {
         let before = brains.actionEvidenceProjector.projectBaseline(
             from: makeScreen(elements: [("Home", .header, "home_header")]),
             tripwireSignal: .empty,
@@ -200,7 +200,7 @@ extension TheBrainsPipelineTests {
         XCTAssertNotEqual(trace.captures.last?.context, before.capture.context)
     }
 
-    func testActionErrorKindClassifiesTargetUnavailableSeparatelyFromActionIdentity() throws {
+    func testActionErrorKindClassifiesTargetUnavailableSeparatelyFromActionIdentity() async throws {
         let result = TheSafecracker.ActionDispatchResult.failure(
             .activate,
             message: "target disappeared",
@@ -214,7 +214,7 @@ extension TheBrainsPipelineTests {
         XCTAssertEqual(result.method, .activate)
     }
 
-    func testActionErrorKindPreservesTreeUnavailableFailureKind() throws {
+    func testActionErrorKindPreservesTreeUnavailableFailureKind() async throws {
         let result = TheSafecracker.ActionDispatchResult.failure(
             .activate,
             message: TheBrains.treeUnavailableMessage,
@@ -227,7 +227,7 @@ extension TheBrainsPipelineTests {
         )
     }
 
-    func testActionDispatchResultDecoratorsPreserveExistingFields() throws {
+    func testActionDispatchResultDecoratorsPreserveExistingFields() async throws {
         let element = HeistElement(
             description: "Checkout",
             label: "Checkout",
@@ -293,7 +293,7 @@ extension TheBrainsPipelineTests {
     }
 
     func testActionEvidenceProjectorFailureDoesNotInferNotFoundFromActionIdentity() async {
-        let before = brains.actionEvidenceProjector.projectBaseline()
+        let before = await brains.actionEvidenceProjector.projectBaseline()
 
         let result = await brains.interactionCoordinator.settleAfterAction(
             dispatchResult: failureOutcome(),
@@ -305,7 +305,7 @@ extension TheBrainsPipelineTests {
     }
 
     func testActionEvidenceProjectorFailureRespectsExplicitErrorKind() async {
-        let before = brains.actionEvidenceProjector.projectBaseline()
+        let before = await brains.actionEvidenceProjector.projectBaseline()
 
         let result = await brains.interactionCoordinator.settleAfterAction(
             dispatchResult: failureOutcome(failureKind: .timeout),

@@ -10,26 +10,26 @@ import XCTest
 @MainActor
 extension TheBrainsActionTests {
 
-    func testActionEvidenceProjectorCaptureReturnsEmptySnapshotWhenRegistryEmpty() {
-        let before = brains.actionEvidenceProjector.projectBaseline()
+    func testActionEvidenceProjectorCaptureReturnsEmptySnapshotWhenRegistryEmpty() async {
+        let before = await brains.actionEvidenceProjector.projectBaseline()
         XCTAssertTrue(before.elements.isEmpty,
                       "Elements should be empty when no hierarchy set")
     }
 
-    func testActionEvidenceProjectorCaptureIncludesRegisteredElements() {
+    func testActionEvidenceProjectorCaptureIncludesRegisteredElements() async {
         let element = makeElement(label: "Title", traits: .header)
         let heistId: HeistId = "header_title"
-        installScreen(elements: [(element, heistId)])
+        await installScreen(elements: [(element, heistId)])
 
-        let before = brains.actionEvidenceProjector.projectBaseline()
+        let before = await brains.actionEvidenceProjector.projectBaseline()
         XCTAssertEqual(before.observation.tree.orderedElements.count, 1)
         XCTAssertEqual(before.observation.tree.orderedElements.first?.heistId, heistId)
         XCTAssertEqual(before.elements.count, 1)
     }
 
     func testInteractionCoordinatorBeforeStateDoesNotReuseInvalidatedSettledObservation() async {
-        installScreen(elements: [(makeElement(label: "Title", traits: .header), "header_title")])
-        brains.vault.invalidateSettledObservationFromTripwire()
+        await installScreen(elements: [(makeElement(label: "Title", traits: .header), "header_title")])
+        await brains.vault.invalidateSettledObservationFromTripwire()
         visibleObservationSource.observation = nil
 
         let current = await withNoTraversableWindows {
@@ -45,7 +45,7 @@ extension TheBrainsActionTests {
     func testExecuteIncrementFailsWhenElementIsNotAdjustable() async throws {
         let heistId: HeistId = "live_button"
         let liveObject = UIButton(type: .system)
-        registerScreenElement(
+        await registerScreenElement(
             heistId: heistId,
             element: makeElement(label: "Live", traits: .button),
             object: liveObject
@@ -69,7 +69,7 @@ extension TheBrainsActionTests {
     func testExecuteDecrementFailsWhenElementIsNotAdjustable() async throws {
         let heistId: HeistId = "live_button"
         let liveObject = UIButton(type: .system)
-        registerScreenElement(
+        await registerScreenElement(
             heistId: heistId,
             element: makeElement(label: "Live", traits: .button),
             object: liveObject
@@ -93,7 +93,7 @@ extension TheBrainsActionTests {
     func testExecuteCustomActionMissingReportsAvailableCustomActions() async throws {
         let heistId: HeistId = "options_button"
         let liveObject = ActionActivationOverrideView()
-        registerScreenElement(
+        await registerScreenElement(
             heistId: heistId,
             element: makeElement(
                 label: "Options",
@@ -129,7 +129,7 @@ extension TheBrainsActionTests {
             UIAccessibilityCustomAction(name: "Delete") { _ in false },
             UIAccessibilityCustomAction(name: "Archive") { _ in true },
         ]
-        registerScreenElement(
+        await registerScreenElement(
             heistId: heistId,
             element: makeElement(
                 label: "Options",
@@ -169,7 +169,7 @@ extension TheBrainsActionTests {
                 selector: #selector(CustomActionTargetObject.archive(_:))
             ),
         ]
-        registerScreenElement(
+        await registerScreenElement(
             heistId: heistId,
             element: makeElement(label: "Options", traits: .button),
             object: liveObject
@@ -199,7 +199,7 @@ extension TheBrainsActionTests {
                 selector: #selector(CustomActionTargetObject.decline(_:))
             ),
         ]
-        registerScreenElement(
+        await registerScreenElement(
             heistId: heistId,
             element: makeElement(label: "Options", traits: .button, customActions: ["Archive"]),
             object: liveObject
@@ -251,10 +251,57 @@ extension TheBrainsActionTests {
         XCTAssertEqual(liveObject.activationCount, 1)
     }
 
+    func testProductionActionSettlementPreservesDetailedPhaseTiming() async throws {
+        let rootView = UIView(frame: UIScreen.main.bounds)
+        rootView.backgroundColor = .white
+        let liveObject = ActionActivationOverrideView(
+            frame: CGRect(x: 80, y: 180, width: 180, height: 44)
+        )
+        liveObject.isAccessibilityElement = true
+        liveObject.accessibilityLabel = "Timed action"
+        liveObject.accessibilityIdentifier = "timed_action"
+        liveObject.accessibilityTraits = .button
+        rootView.addSubview(liveObject)
+
+        let window = try installModalWindow(rootView: rootView)
+        defer {
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
+        }
+        await brains.tripwire.yieldFrames(3)
+
+        let command = try HeistActionCommand.activate(.identifier("timed_action"))
+            .resolve(in: .empty)
+        let result = await brains.executeRuntimeAction(command)
+        let timing = try XCTUnwrap(result.timing)
+
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "activate failed")
+        let beforeObservation = try XCTUnwrap(timing.beforeObservationMs)
+        let targetResolution = try XCTUnwrap(timing.targetResolutionMs)
+        let actionDispatch = try XCTUnwrap(timing.actionDispatchMs)
+        let interaction = try XCTUnwrap(timing.interactionMs)
+        let finalSemanticEvidence = try XCTUnwrap(timing.finalSemanticEvidenceMs)
+        let resultAssembly = try XCTUnwrap(timing.resultAssemblyMs)
+        let total = try XCTUnwrap(timing.totalMs)
+        XCTAssertGreaterThanOrEqual(interaction.milliseconds, targetResolution.milliseconds)
+        XCTAssertGreaterThanOrEqual(interaction.milliseconds, actionDispatch.milliseconds)
+        for phase in [
+            beforeObservation,
+            targetResolution,
+            actionDispatch,
+            interaction,
+            finalSemanticEvidence,
+            resultAssembly,
+        ] {
+            XCTAssertGreaterThanOrEqual(total.milliseconds, phase.milliseconds)
+        }
+        XCTAssertEqual(liveObject.activationCount, 1)
+    }
+
     func testExecuteActivateDispatchesNoTraitElementWithoutActivationImplementation() async throws {
         let heistId: HeistId = "plain_label"
         let liveObject = UIView()
-        registerScreenElement(
+        await registerScreenElement(
             heistId: heistId,
             element: makeElement(label: "Plain label"),
             object: liveObject
@@ -320,7 +367,7 @@ extension TheBrainsActionTests {
     func testExecuteActivateBlocksDisabledElementWithActivationOverride() async throws {
         let heistId: HeistId = "disabled_action"
         let liveObject = ActionActivationOverrideView()
-        registerScreenElement(
+        await registerScreenElement(
             heistId: heistId,
             element: makeElement(label: "Disabled action", traits: .notEnabled),
             object: liveObject
@@ -339,7 +386,7 @@ extension TheBrainsActionTests {
     func testExecuteIncrementSucceedsWhenElementObjectIsLive() async throws {
         let heistId: HeistId = "live_slider"
         let liveObject = UISlider()
-        registerScreenElement(
+        await registerScreenElement(
             heistId: heistId,
             element: makeElement(label: "Live", traits: .adjustable),
             object: liveObject
@@ -366,7 +413,7 @@ extension TheBrainsActionTests {
             activationPoint: capturePoint
         )
         let liveObject = AdjustableGeometryView(frame: staleObjectFrame, activationPoint: staleObjectPoint)
-        installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
+        await installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
 
         let target = try AccessibilityTarget.label("Moving").resolve(in: .empty)
         let resolved = brains.vault.resolveTarget(target).resolvedElement
@@ -410,7 +457,7 @@ extension TheBrainsActionTests {
             frame: CGRect(x: 80, y: 180, width: 180, height: 44),
             activationPoint: CGPoint(x: 170, y: 202)
         )
-        installSyntheticObservation(.makeForTests(
+        await installSyntheticObservation(.makeForTests(
             elements: [(currentElement, heistId)],
             objects: [heistId: liveObject]
         ))
@@ -441,7 +488,7 @@ extension TheBrainsActionTests {
             traits: .adjustable
         )
         let liveObject = AdjustableGeometryView(frame: .zero, activationPoint: CGPoint(x: 170, y: 202))
-        installSyntheticObservation(.makeForTests(
+        await installSyntheticObservation(.makeForTests(
             elements: [(currentElement, heistId)],
             objects: [heistId: liveObject]
         ))
@@ -483,9 +530,9 @@ extension TheBrainsActionTests {
 
         for (label, authoredCommand) in commands {
             let command = try authoredCommand.resolve(in: .empty)
-            brains.vault.resetInterfaceForLifecycle()
+            await brains.vault.resetInterfaceForLifecycle()
             let single = await brains.executeRuntimeAction(command)
-            brains.vault.resetInterfaceForLifecycle()
+            await brains.vault.resetInterfaceForLifecycle()
             let heist = try await heistStepResult(
                 for: .action(ActionStep(command: authoredCommand)),
                 label: authoredCommand.wireType.rawValue
@@ -498,9 +545,9 @@ extension TheBrainsActionTests {
         }
 
         let authoredWait = WaitStep(predicate: .exists(target), timeout: 0.01)
-        brains.vault.resetInterfaceForLifecycle()
+        await brains.vault.resetInterfaceForLifecycle()
         let singleWait = await brains.performWait(step: try resolvedWait(authoredWait))
-        brains.vault.resetInterfaceForLifecycle()
+        await brains.vault.resetInterfaceForLifecycle()
         let heistWait = try await heistStepResult(for: .wait(authoredWait), label: "wait")
         XCTAssertEqual(heistWait.outcome.isSuccess, singleWait.outcome.isSuccess)
         XCTAssertEqual(heistWait.method, singleWait.method)
@@ -578,7 +625,7 @@ extension TheBrainsActionTests {
         XCTAssertEqual(step.actionEvidence?.dispatchResult?.activationTrace, activationTrace)
     }
 
-    func testViewportDebugCommandsResolveForDirectRuntimeDispatch() throws {
+    func testViewportDebugCommandsResolveForDirectRuntimeDispatch() async throws {
         let target = AccessibilityTarget.identifier("target")
         let commands: [(HeistActionCommand, HeistActionCommandType)] = [
             (.scroll(ScrollTarget(direction: .down)), .scroll),
@@ -593,16 +640,16 @@ extension TheBrainsActionTests {
         }
     }
 
-    func testClearCacheResetsStash() {
+    func testClearCacheResetsStash() async {
         let element = makeElement(label: "Item")
-        installScreen(elements: [(element, "test_id")])
+        await installScreen(elements: [(element, "test_id")])
 
-        brains.vault.resetInterfaceForLifecycle()
+        await brains.vault.resetInterfaceForLifecycle()
 
         XCTAssertEqual(brains.vault.interfaceTree, .empty)
     }
 
-    func testWaitTimesOutWhenAccessibilityTreeIsUnavailable() async throws {
+    func testWaitReportsUnavailableAccessibilityTreeAtItsBaselineBoundary() async throws {
         let step = WaitStep(predicate: .exists(.label("never")), timeout: try .milliseconds(1))
         let resolvedStep = try resolvedWait(step)
         let result = await withNoTraversableWindows {
@@ -611,7 +658,7 @@ extension TheBrainsActionTests {
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
-        XCTAssertEqual(result.outcome.failureKind, .timeout)
+        XCTAssertEqual(result.outcome.failureKind, .accessibilityTreeUnavailable)
     }
 
     func testActionsExecuteIncrementFailsWhenSemanticTargetHasNoLiveGeometry() async throws {
@@ -625,7 +672,7 @@ extension TheBrainsActionTests {
             frame: CGRect(x: 20, y: 20, width: 120, height: 44),
             activationPoint: CGPoint(x: 80, y: 42)
         )
-        installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
+        await installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
 
         let target = try AccessibilityTarget.label("Geometry Missing").resolve(in: .empty)
         let resolved = brains.vault.resolveTarget(target).resolvedElement
@@ -677,7 +724,7 @@ extension TheBrainsActionTests {
                 frame: settledElement.bhFrame,
                 activationPoint: settledElement.bhResolvedActivationPoint
             )
-            installScreen(elements: [(settledElement, heistId)], objects: [heistId: deallocatedObject])
+            await installScreen(elements: [(settledElement, heistId)], objects: [heistId: deallocatedObject])
         }
 
         let target = try AccessibilityTarget.identifier("refreshed_slider").resolve(in: .empty)
@@ -722,7 +769,7 @@ extension TheBrainsActionTests {
         )
         let staleObject = RefusingActivationView(frame: settledElement.bhFrame)
         let replacementObject = ActionActivationOverrideView(frame: settledElement.bhFrame)
-        installScreen(elements: [(settledElement, heistId)], objects: [heistId: staleObject])
+        await installScreen(elements: [(settledElement, heistId)], objects: [heistId: staleObject])
         visibleObservationSource.observation = .makeForTests(
             elements: [(settledElement, heistId)],
             objects: [heistId: replacementObject]
@@ -750,7 +797,7 @@ extension TheBrainsActionTests {
         )
         let selectedObject = ActionActivationOverrideView(frame: element.bhFrame)
         let otherObject = ActionActivationOverrideView(frame: element.bhFrame)
-        installScreen(elements: [
+        await installScreen(elements: [
             (element, selectedId),
             (element, otherId),
         ])
@@ -775,7 +822,7 @@ extension TheBrainsActionTests {
                 otherId: otherObject,
             ]
         )
-        _ = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(reorderedScreen)
+        _ = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(reorderedScreen)
         visibleObservationSource.observation = reorderedScreen
 
         let result = await actionTask.value

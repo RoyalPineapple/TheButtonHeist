@@ -17,12 +17,12 @@ is not the interesting part. The settled change is.
 One action crosses the same checkpoint every time:
 
 ```text
-read settled accessibility interface
--> resolve semantic target
--> perform declared action
--> wait for settled accessibility interface
--> append to the retained observation and notification logs
--> evaluate one cursor-backed observation window
+parse and resolve typed action and predicate
+-> capture and commit an Observation.Moment baseline
+-> arm observation, announcement, readiness, and deadline delivery
+-> dispatch the declared action exactly once
+-> capture, admit, commit, publish, and evaluate observations
+-> require predicate, readiness, and post-readiness handoff evidence
 -> assert evidence
 -> fold public result summary
 ```
@@ -48,20 +48,18 @@ settled semantic evidence, not a touch playback log.
 ```mermaid
 flowchart LR
     Contract["Accessibility contract<br/>what exists, what can act"]
-    Before["ObservationCursor<br/>plus settled baseline"]
+    Before["Observation.Moment<br/>snapshot + private Log index"]
     Action["Declared action<br/>activate, type, rotor, wait"]
-    After["Retained settled observations<br/>through current cursor"]
-    Window["ObservationWindow<br/>baseline through current"]
-    Evidence["Predicate evidence<br/>current tree or window transitions"]
+    After["Observation.Log<br/>ordered post-baseline events"]
+    Evidence["Predicate evidence<br/>handoff state or latched event"]
     Result["Result<br/>trace plus folded public delta"]
     Next["Next step"]
 
     Contract --> Before
     Before --> Action
     Action --> After
-    Before --> Window
-    After --> Window
-    Window --> Evidence
+    Before --> After
+    After --> Evidence
     Evidence --> Result
     Result --> Next
     Next --> Before
@@ -89,10 +87,10 @@ compose the next heist.
 |----------|------|----------------|
 | `AccessibilityTarget` | One node-target language for actions, waits, expectations, CLI/MCP, and subtree queries | Live UIKit identity, geometry authority, alternate query projections |
 | `AccessibilityPredicate` and `ChangeDeclaration` | Concrete conditions for waits, expectations, and control-flow cases | Target resolution, viewport movement, command execution |
-| `SemanticObservationStore` | Current semantic tree, retained entries, lineage, cursors, and admitted-read state committed together | Predicate-owned history, destructive reads, report formatting |
-| `ObservationWindow` | One baseline-to-current temporal view with explicit completeness | Independent capture or notification ownership |
+| `Observation.Store` and `Observation.Log` | Current semantic tree, ordered retained events, lineage, and admitted-read state committed together | Predicate-owned history, destructive reads, report formatting |
+| `Observation.Moment` | Immutable snapshot and private Log position used by `events(since:)` | Public index manipulation or independent capture ownership |
 | `AccessibilityTrace` | Durable result evidence and derived ordered `ChangeFact` values | A second runtime observation pipeline |
-| `InteractionCoordinator` | Before/body/after evidence coordination around one `ActionDispatchResult` | Command payload design and parallel result shapes |
+| `Settlement` | One reducer lifecycle for action/observation trigger, predicate, readiness, handoff, and deadline evidence | Fake no-op actions, post-action waits, or parallel result shapes |
 | `ActionResult.Payload` | One semantic action payload whose cases determine method and legal command data | A wire-only payload model or method/payload repair path |
 | `HeistReport` | One interpretation of `HeistResult`: nodes, summary, metrics, failures, warnings, and diagnostics | Execution ownership or formatter-specific traversal |
 | `ElementInflation` | Semantic target to inflated live target | Public viewport instructions, predicate evaluation, durable selector choice |
@@ -104,16 +102,17 @@ do not decide what a semantic action means or whether a predicate is true.
 
 The ownership rules for the remaining evidence boundaries are explicit:
 
-- `SettleLoopMachine` is the one settled AX reducer and `SettleLoopRunner` is
-  its one runner. `SettlePolicy` selects sampling cadence and the stability criterion;
-  it does not introduce another AX pipeline.
+- `Settlement.Reducer` is the one operation reducer and `Settlement.Executor`
+  is its one effect runner. UIKit capture and action dispatch remain boundary
+  effects; observation ownership and predicate truth remain typed values.
 - `HeistResult` is the one admitted heist execution tree.
   `HeistReport.project(result:)` interprets it once; JSON, compact, human,
   JUnit, doctor, and metric adapters render the resulting report instead of
   independently traversing execution truth.
 - `ActionDispatchResult` is the one app-side dispatch result.
-  `ActionEvidenceProjector` adds semantic evidence and constructs `ActionResult`,
-  whose success and failure cases permit only their valid evidence.
+  `Settlement.ResultProjector` combines it with canonical predicate, readiness,
+  handoff, and deadline evidence to construct `ActionResult`, whose success and
+  failure cases permit only their valid evidence.
   `ActionResult.Payload` is the only semantic payload, and custom `Codable`
   projects its method and optional command data directly to the wire.
 - `AccessibilityNotificationBus` retains one bounded ingress log. Cursors and
@@ -130,16 +129,18 @@ All public executable routes enter the same machine:
 1. A supported typed CLI/MCP command, ButtonHeist DSL source, trusted local
    Swift DSL authoring input, or generated `.heist` artifact produces either a
    single command or a `HeistPlan`.
-2. The runtime observes settled before-state when the route performs an action
-   or evaluates a wait.
-3. Element inflation resolves the target, reveals it if needed, acquires fresh
-   live inflation evidence, and executes the accessibility operation.
-4. The runtime waits for settled semantic evidence.
-5. The runtime appends the settled entry to one retained observation log and
-   extends the applicable cursor-backed window.
-6. Presence predicates evaluate the current delivered tree. Temporal
-   predicates evaluate transitions in that window; screen boundaries become
+2. The runtime resolves the action and optional predicate into one
+   `Settlement.Command`.
+3. Settlement commits a baseline Moment and arms all evidence channels before
+   an action dispatch; observation-only waits skip dispatch structurally.
+4. Each capture is admitted, committed to the Store and Log, published, and
+   evaluated once.
+5. Current-state predicates evaluate the eligible handoff snapshot. Temporal
+   predicates evaluate post-baseline Log events; screen boundaries become
    old-tree departures, a screen marker, then new-tree arrivals.
+6. The reducer completes when trigger, optional predicate, readiness, and
+   post-readiness handoff evidence agree, or returns the independent evidence
+   axes at the absolute deadline.
 7. Reports, JSON, compact output, and later repair artifacts project from the
    resulting trace and execution result. Public delta is a one-way lossy fold,
    never evaluator input.

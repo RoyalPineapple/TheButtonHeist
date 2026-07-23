@@ -12,7 +12,8 @@ flowchart TD
         AXE["AccessibilityElement /<br/>AccessibilityHierarchy<br/>(AccessibilitySnapshotModel)"]
         OBS["InterfaceObservation<br/>tree: InterfaceTree<br/>liveCapture: LiveCapture"]
         TREE["InterfaceTree<br/>elements + containers + HeistIds<br/>canonical viewport snapshot"]
-        STORE["SemanticObservationStore<br/>InterfaceTree + retained entries<br/>lineage + cursors + clean seal"]
+        STORE["Observation.Store<br/>InterfaceTree + Observation.Log<br/>lineage + admitted-read state"]
+        MOMENT["Observation.Moment<br/>Snapshot + private Log.Index"]
         STASH["TheVault<br/>Store projection + latest live evidence"]
         ADMITTED["AdmittedSemanticTarget<br/>ordinal-free resolved target<br/>+ semantic scroll-container path"]
         PIN["CommittedElementTarget<br/>CrossCaptureTarget + current-capture HeistId<br/>+ action subject resolution"]
@@ -24,6 +25,7 @@ flowchart TD
         OBS -- "admitted commit / merge" --> STORE
         OBS -- "live evidence for<br/>committed HeistIds only" --> STASH
         STORE --> TREE
+        STORE --> MOMENT
         STORE --> STASH
         STASH -- "current live evidence<br/>for current HeistId" --> PIN
         ADMITTED -- "re-resolve after each<br/>committed capture" --> PIN
@@ -71,8 +73,10 @@ Notes:
   and container entries once; its path-indexed convenience views are derived.
   Live references are replaced on every parse and never unioned across
   exploration pages.
-- `SemanticObservationStore` owns one `InterfaceTree`, retained history,
-  lineage, cursors, and clean-read state. `TheVault` keeps only the latest live
+- `Observation.Store` owns one `InterfaceTree`, retained `Observation.Log`,
+  lineage, and admitted-read state. `Observation.Moment` combines one immutable
+  snapshot with its private Log index for direct `events(since:)` reads.
+  `TheVault` keeps only the latest live
   UIKit observation beside that Store. There is no parallel screen/query store
   or semantic back map.
 - Each delivered `Interface` validates and stores one package `InterfaceGraph`

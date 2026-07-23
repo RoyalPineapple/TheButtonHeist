@@ -33,7 +33,7 @@ extension TheBrainsActionTests {
             shape: .frame(AccessibilityRect(CGRect(x: 300, y: 750, width: 66, height: 54))),
             activationPoint: stalePoint
         )
-        installScreen(offViewport: [.init(element, heistId: "below_fold_button")])
+        await installScreen(offViewport: [.init(element, heistId: "below_fold_button")])
 
         var dispatchedPoint: CGPoint?
         let result = await brains.actions.performPointAction(
@@ -63,7 +63,7 @@ extension TheBrainsActionTests {
         )
         let liveObject = ActionGeometryView(activationPoint: objectPoint)
         liveObject.accessibilityFrame = CGRect(x: 100, y: 430, width: 46, height: 52)
-        installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
+        await installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
 
         var dispatchedPoint: CGPoint?
         let result = await brains.actions.performPointAction(
@@ -92,7 +92,7 @@ extension TheBrainsActionTests {
         )
         let liveObject = ActionGeometryView(activationPoint: activationPoint)
         liveObject.accessibilityFrame = frame
-        installScreen(elements: [(element, "live_button")], objects: ["live_button": liveObject])
+        await installScreen(elements: [(element, "live_button")], objects: ["live_button": liveObject])
 
         var dispatchedPoint: CGPoint?
         let result = await brains.actions.performPointAction(
@@ -134,7 +134,7 @@ extension TheBrainsActionTests {
     func testExecuteRotorWithoutCustomRotorsReportsNextStep() async throws {
         let heistId: HeistId = "plain_rotor_host"
         let liveObject = UIView()
-        registerScreenElement(
+        await registerScreenElement(
             heistId: heistId,
             element: makeElement(label: "Plain rotor host", traits: .button),
             object: liveObject
@@ -168,7 +168,7 @@ extension TheBrainsActionTests {
                 UIAccessibilityCustomRotorItemResult(targetElement: liveObject, targetRange: nil)
             },
         ]
-        registerScreenElement(
+        await registerScreenElement(
             heistId: heistId,
             element: makeElement(label: "Rotor host", traits: .button),
             object: liveObject
@@ -207,7 +207,7 @@ extension TheBrainsActionTests {
                 UIAccessibilityCustomRotorItemResult(targetElement: liveObject, targetRange: nil)
             },
         ]
-        installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
+        await installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
 
         var timing = ActionTiming()
 
@@ -245,7 +245,7 @@ extension TheBrainsActionTests {
                 UIAccessibilityCustomRotorItemResult(targetElement: liveObject, targetRange: nil)
             },
         ]
-        installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
+        await installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
 
         var timing = ActionTiming()
 
@@ -306,7 +306,7 @@ extension TheBrainsActionTests {
             },
         ]
 
-        installSyntheticObservation(InterfaceObservation.makeForTests(
+        await installSyntheticObservation(InterfaceObservation.makeForTests(
             elements: [
                 hostHeistId: InterfaceTree.Element(
                     heistId: hostHeistId,
@@ -362,7 +362,7 @@ extension TheBrainsActionTests {
         liveObject.accessibilityCustomRotors = [
             UIAccessibilityCustomRotor(name: "Warnings") { _ in nil },
         ]
-        registerScreenElement(
+        await registerScreenElement(
             heistId: heistId,
             element: makeElement(
                 label: "Rotor host",
@@ -398,7 +398,7 @@ extension TheBrainsActionTests {
         liveObject.accessibilityCustomRotors = [
             UIAccessibilityCustomRotor(name: "Warnings") { _ in nil },
         ]
-        registerScreenElement(
+        await registerScreenElement(
             heistId: heistId,
             element: makeElement(label: "Rotor host", traits: .button),
             object: liveObject
@@ -426,7 +426,7 @@ extension TheBrainsActionTests {
         liveObject.accessibilityCustomRotors = [
             UIAccessibilityCustomRotor(systemType: .link) { _ in nil },
         ]
-        registerScreenElement(
+        await registerScreenElement(
             heistId: heistId,
             element: makeElement(label: "Rotor host", traits: .button),
             object: liveObject

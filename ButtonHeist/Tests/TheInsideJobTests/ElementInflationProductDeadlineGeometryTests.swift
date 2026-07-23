@@ -11,7 +11,7 @@ extension ElementInflationProductTests {
 
     // MARK: - Deadline and Geometry
 
-    func testHandoffTickCountFollowsNestedScrollMembershipGraph() {
+    func testHandoffTickCountFollowsNestedScrollMembershipGraph() async {
         let outerPath = TreePath([0])
         let innerPath = TreePath([0, 0])
         let element = InterfaceTree.Element(
@@ -68,7 +68,7 @@ extension ElementInflationProductTests {
             identifier: heistId.rawValue
         )
         let staleObject = UIButton(frame: CGRect(x: 20, y: 20, width: 160, height: 44))
-        brains.vault.installObservationForTesting(.makeForTests([
+        await brains.vault.installObservationForTesting(.makeForTests([
             .init(element, heistId: heistId, object: staleObject),
         ]))
         let treeElement = try XCTUnwrap(brains.vault.interfaceElement(heistId: heistId))
@@ -112,7 +112,7 @@ extension ElementInflationProductTests {
         XCTAssertEqual(refreshedTarget.deadline.timeoutSeconds, 2)
     }
 
-    func testMovingGeometryRequiresOneMatchingQuietSample() {
+    func testMovingGeometryRequiresOneMatchingQuietSample() async {
         let initial = geometrySample(x: 20)
         let moved = geometrySample(x: 44)
         let stabilization = ElementInflation.LiveGeometryStabilization(
@@ -130,7 +130,7 @@ extension ElementInflationProductTests {
         }
     }
 
-    func testOffscreenActivationPointAfterPlacementIsTerminal() {
+    func testOffscreenActivationPointAfterPlacementIsTerminal() async {
         let sample = geometrySample(x: 20)
         let stabilization = ElementInflation.LiveGeometryStabilization(
             initial: sample,
@@ -142,7 +142,7 @@ extension ElementInflationProductTests {
         }
     }
 
-    func testGeometryStabilizationDeadlineIsTerminal() {
+    func testGeometryStabilizationDeadlineIsTerminal() async {
         let stabilization = ElementInflation.LiveGeometryStabilization(
             initial: geometrySample(x: 20),
             requiresOnscreen: true
@@ -153,7 +153,7 @@ extension ElementInflationProductTests {
         }
     }
 
-    func testGeometryStabilizationCancellationIsTerminal() {
+    func testGeometryStabilizationCancellationIsTerminal() async {
         let stabilization = ElementInflation.LiveGeometryStabilization(
             initial: geometrySample(x: 20),
             requiresOnscreen: true
@@ -180,7 +180,7 @@ extension ElementInflationProductTests {
             label: "Live Decoy"
         )
         defer { fixture.cleanup() }
-        try seedOffViewportTarget(
+        try await seedOffViewportTarget(
             fixture,
             semanticIdentifier: "unrevealable_submit",
             semanticLabel: "Submit Order",

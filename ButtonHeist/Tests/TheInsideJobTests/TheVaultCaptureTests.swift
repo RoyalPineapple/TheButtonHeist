@@ -25,7 +25,7 @@ final class TheVaultCaptureTests: XCTestCase {
         XCTAssertNil(result)
     }
 
-    func testInjectedObservationSourceRemainsTheRefreshOwnerAcrossLifecycleReset() {
+    func testInjectedObservationSourceRemainsTheRefreshOwnerAcrossLifecycleReset() async {
         let observation = InterfaceObservation.empty
         var captureCount = 0
         let injectedVault = TheVault(
@@ -37,7 +37,7 @@ final class TheVaultCaptureTests: XCTestCase {
         )
 
         XCTAssertEqual(injectedVault.refreshLiveCapture()?.captureID, observation.captureID)
-        injectedVault.resetInterfaceForLifecycle()
+        await injectedVault.resetInterfaceForLifecycle()
         XCTAssertEqual(injectedVault.refreshLiveCapture()?.captureID, observation.captureID)
         XCTAssertEqual(captureCount, 2)
     }

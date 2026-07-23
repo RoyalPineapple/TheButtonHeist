@@ -70,7 +70,14 @@ private struct PublicHeistActionEvidenceJSON: Encodable {
             try container.encode(PublicHeistOutput.action(result, method: .heist(command), profile: profile), forKey: .result)
         case .expectation(let result, let expectationResult, let expectation):
             try container.encode(PublicHeistOutput.action(result, method: .heist(command), profile: profile), forKey: .result)
-            try container.encode(PublicHeistOutput.actionResult(expectationResult, profile: profile), forKey: .expectationResult)
+            try container.encode(
+                PublicHeistOutput.actionResult(
+                    expectationResult,
+                    expectation: expectation,
+                    profile: profile
+                ),
+                forKey: .expectationResult
+            )
             try container.encode(PublicHeistOutput.expectation(expectation), forKey: .expectation)
         }
     }
@@ -87,7 +94,14 @@ private struct PublicHeistWaitEvidenceJSON: Encodable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(evidence.outcome, forKey: .outcome)
-        try container.encode(PublicHeistOutput.actionResult(evidence.actionResult, profile: profile), forKey: .result)
+        try container.encode(
+            PublicHeistOutput.actionResult(
+                evidence.actionResult,
+                expectation: evidence.expectation,
+                profile: profile
+            ),
+            forKey: .result
+        )
         try container.encode(PublicHeistOutput.expectation(evidence.expectation), forKey: .expectation)
         try container.encodeIfPresent(evidence.baselineSummary, forKey: .baselineSummary)
         try container.encodeIfPresent(evidence.finalSummary, forKey: .finalSummary)
@@ -137,7 +151,11 @@ private struct PublicHeistRepeatUntilEvidenceJSON: Encodable {
         try container.encodeIfPresent(evidence.iterationOrdinal, forKey: .iterationOrdinal)
         try container.encode(PublicHeistOutput.expectation(evidence.expectation), forKey: .expectation)
         try container.encodeIfPresent(
-            PublicHeistOutput.actionResult(evidence.actionResult, profile: profile),
+            PublicHeistOutput.actionResult(
+                evidence.actionResult,
+                expectation: evidence.expectation,
+                profile: profile
+            ),
             forKey: .result
         )
         try container.encodeIfPresent(evidence.lastObservedSummary, forKey: .lastObservedSummary)
@@ -205,7 +223,11 @@ private struct PublicHeistInvocationEvidenceJSON: Encodable {
         )
         try container.encodeIfPresent(evidence.childFailedPath?.description, forKey: .childFailedPath)
         try container.encodeIfPresent(
-            PublicHeistOutput.actionResult(evidence.expectationActionResult, profile: profile),
+            PublicHeistOutput.actionResult(
+                evidence.expectationActionResult,
+                expectation: evidence.expectation,
+                profile: profile
+            ),
             forKey: .expectationResult
         )
         try container.encodeIfPresent(
@@ -222,26 +244,35 @@ private struct PublicHeistInvocationEvidenceJSON: Encodable {
 private enum PublicHeistOutput {
     static func actionResult(
         _ result: ActionResult,
+        expectation: ExpectationResult? = nil,
         profile: ProjectionProfile
     ) -> ActionProjection {
-        action(result, method: .result(result.method), profile: profile)
+        action(
+            result,
+            method: .result(result.method),
+            expectation: expectation,
+            profile: profile
+        )
     }
 
     static func actionResult(
         _ result: ActionResult?,
+        expectation: ExpectationResult? = nil,
         profile: ProjectionProfile
     ) -> ActionProjection? {
-        result.map { actionResult($0, profile: profile) }
+        result.map { actionResult($0, expectation: expectation, profile: profile) }
     }
 
     static func action(
         _ result: ActionResult,
         method: ActionMethodProjection,
+        expectation: ExpectationResult? = nil,
         profile: ProjectionProfile
     ) -> ActionProjection {
         ActionProjection(
             actionMethod: method,
             result: result,
+            announcementOverride: expectation?.matchedAnnouncement,
             profile: profile,
             publicContext: .heistReportEvidence
         )

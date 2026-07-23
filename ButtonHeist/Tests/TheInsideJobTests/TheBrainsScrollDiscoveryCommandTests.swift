@@ -12,7 +12,7 @@ extension TheBrainsScrollTests {
 
     func testOrdinalOnlyKnownTargetFailsBeforeViewportScan() async throws {
         let duplicate = makeElement(label: "Review PR", traits: .button)
-        installScreenWithOffViewportEntry(
+        await installScreenWithOffViewportEntry(
             liveHierarchy: [(makeElement(label: "Overview"), "overview")],
             offViewport: [
                 .init(duplicate, heistId: "duplicate_a", scrollContainerPath: TreePath([0])),
@@ -46,7 +46,7 @@ extension TheBrainsScrollTests {
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let staleVisible = makeElement(label: "Root Visible")
         let staleRootButton = makeElement(label: "Controls Demo", traits: .button)
-        installScreenWithOffViewport(
+        await installScreenWithOffViewport(
             visible: InterfaceObservation.TestEntry(staleVisible, heistId: "root_visible"),
             offscreen: OffViewportScrollTarget(
                 staleRootButton,
@@ -62,7 +62,7 @@ extension TheBrainsScrollTests {
             (currentHeader, "current_controls_header"),
             (currentBackButton, "current_back_button"),
         ])
-        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(currentScreen)
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(currentScreen)
         var discoveryAttempts = 0
         brains.navigation.elementInflation.exploration.discoverTarget = { _ in
             discoveryAttempts += 1
@@ -99,7 +99,7 @@ extension TheBrainsScrollTests {
                 )
             ]
         )
-        brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(staleRootScreen)
+        await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(staleRootScreen)
 
         let currentHeader = makeElement(label: "Controls Demo", traits: .header)
         let currentBackButton = makeElement(label: "ButtonHeist Demo", traits: [.button, .backButton])
@@ -114,8 +114,8 @@ extension TheBrainsScrollTests {
             try resolvedTarget(.label("Controls Demo").and(.traits([.button])))
         )
 
-        XCTAssertNotNil(discovered?.event.settledObservation.observation.tree.findElement(heistId: "current_controls_header"))
-        XCTAssertNil(discovered?.event.settledObservation.observation.tree.findElement(heistId: "stale_controls_button"))
+        XCTAssertNotNil(discovered?.event.snapshot.observation.tree.findElement(heistId: "current_controls_header"))
+        XCTAssertNil(discovered?.event.snapshot.observation.tree.findElement(heistId: "stale_controls_button"))
     }
 
     func testInterfaceDiscoveryDoesNotGraftStaleRowsFromReusedScrollContainerName() async throws {
@@ -161,7 +161,7 @@ extension TheBrainsScrollTests {
             }.first,
             "Expected the parser to expose the fixture scroll view as a scroll container"
         )
-        let visibleEvent = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(visibleScreen)
+        let visibleEvent = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(visibleScreen)
 
         let staleRootRow = makeElement(label: "Auto-Settle Fixtures", traits: .button)
         let staleEntry = InterfaceTree.Element(
@@ -176,7 +176,7 @@ extension TheBrainsScrollTests {
             ),
             liveCapture: visibleScreen.liveCapture
         )
-        brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(staleScreen)
+        await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(staleScreen)
 
         guard let exploration = await brains.navigation.exploreScreen(
             baseline: .currentViewport(brains.vault.visibleExplorationBaseline(from: visibleScreen)),
@@ -308,7 +308,7 @@ extension TheBrainsScrollTests {
             return XCTFail("Expected wait discovery to find the offscreen target")
         }
 
-        XCTAssertNotNil(exploration.event.settledObservation.observation.tree.orderedElements.first {
+        XCTAssertNotNil(exploration.event.snapshot.observation.tree.orderedElements.first {
             $0.element.label == "Wait Discovery Target"
         })
         XCTAssertEqual(
@@ -316,7 +316,7 @@ extension TheBrainsScrollTests {
             initialVisualOrigin.y,
             accuracy: 0.01
         )
-        XCTAssertFalse(exploration.event.settledObservation.observation.liveCapture.hierarchy.sortedElements.contains {
+        XCTAssertFalse(exploration.event.snapshot.observation.liveCapture.hierarchy.sortedElements.contains {
             $0.label == "Wait Discovery Target"
         })
     }
@@ -374,7 +374,7 @@ extension TheBrainsScrollTests {
         let staleScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
-        brains.vault.installObservationForTesting(.makeForTests(
+        await brains.vault.installObservationForTesting(.makeForTests(
             elements: [(visible, HeistId(rawValue: "visible_element"))]
         ))
 
@@ -399,7 +399,7 @@ extension TheBrainsScrollTests {
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
         let staleTarget = makeElement(label: "Target")
-        installScreenWithOffViewport(
+        await installScreenWithOffViewport(
             visible: InterfaceObservation.TestEntry(visible, heistId: "visible_element"),
             offscreen: OffViewportScrollTarget(
                 staleTarget,
@@ -446,7 +446,7 @@ extension TheBrainsScrollTests {
         }
         await waitForSettledSemanticWaiter()
         visibleObservationSource.observation = recoveredScreen
-        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
 
         await inflation.value
         guard case .inflated(let inflatedTarget)? = resultBox.value else {
@@ -467,7 +467,7 @@ extension TheBrainsScrollTests {
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
         let knownTarget = makeElement(label: "Coke", traits: .button)
-        installScreenWithOffViewport(
+        await installScreenWithOffViewport(
             visible: InterfaceObservation.TestEntry(visible, heistId: "visible_element"),
             offscreen: OffViewportScrollTarget(
                 knownTarget,
@@ -530,7 +530,7 @@ extension TheBrainsScrollTests {
         }
         await waitForSettledSemanticWaiter()
         visibleObservationSource.observation = recoveredScreen
-        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
         await inflation.value
 
         guard case .inflated(let inflatedTarget)? = resultBox.value else {
@@ -551,7 +551,7 @@ extension TheBrainsScrollTests {
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
         let offscreen = makeElement(label: "Offscreen")
-        installScreenWithOffViewport(
+        await installScreenWithOffViewport(
             visible: InterfaceObservation.TestEntry(visible, heistId: "visible_element"),
             offscreen: OffViewportScrollTarget(
                 offscreen,
@@ -581,7 +581,7 @@ extension TheBrainsScrollTests {
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
         let offscreen = makeElement(label: "Offscreen")
-        installScreenWithOffViewport(
+        await installScreenWithOffViewport(
             visible: InterfaceObservation.TestEntry(visible, heistId: "visible_element"),
             offscreen: OffViewportScrollTarget(
                 offscreen,

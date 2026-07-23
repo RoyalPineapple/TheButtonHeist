@@ -5,7 +5,7 @@ import TheScore
 
 enum AccessibilityObservationFallbackLog {
     enum Source: String, Sendable {
-        case settledObservation = "settled-observation"
+        case snapshot = "settled-observation"
         case postAction = "post-action"
     }
 

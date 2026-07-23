@@ -12,11 +12,11 @@ extension TheVaultResolutionTests {
 
     /// Matcher-based resolution reads the committed semantic state. Viewport
     /// reachability is handled later by action execution.
-    func testMatcherResolvesKnownEntryOutsideLiveHierarchy() throws {
+    func testMatcherResolvesKnownEntryOutsideLiveHierarchy() async throws {
         let onScreen = element(label: "Visible", traits: .button)
         let offScreen = element(label: "Long List", traits: .button)
-        register(onScreen, heistId: "button_visible", index: 0)
-        registerOffScreen(offScreen, heistId: "long_list_button")
+        await register(onScreen, heistId: "button_visible", index: 0)
+        await registerOffScreen(offScreen, heistId: "long_list_button")
 
         let result = bagman.resolveTarget(try resolvedTarget(
             AccessibilityTarget.element(.label("Long List"), traits: [.button])
@@ -28,11 +28,11 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(target.heistId, "long_list_button")
     }
 
-    func testScopedHeistIdsSeparateVisibleFromKnownUnion() {
+    func testScopedHeistIdsSeparateVisibleFromKnownUnion() async {
         let onScreen = element(label: "Visible", traits: .button)
         let offScreen = element(label: "Long List", traits: .button)
-        register(onScreen, heistId: "button_visible", index: 0)
-        registerOffScreen(offScreen, heistId: "long_list_button")
+        await register(onScreen, heistId: "button_visible", index: 0)
+        await registerOffScreen(offScreen, heistId: "long_list_button")
 
         XCTAssertEqual(bagman.ids(in: .viewport), ["button_visible"])
         XCTAssertEqual(bagman.ids(in: .interface), ["button_visible", "long_list_button"])
@@ -40,22 +40,22 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(bagman.interfaceElementIDs, bagman.ids(in: .interface))
     }
 
-    func testScopedInterfaceElementRequiresViewportScopeForCurrentCapture() {
+    func testScopedInterfaceElementRequiresViewportScopeForCurrentCapture() async {
         let onScreen = element(label: "Visible", traits: .button)
         let offScreen = element(label: "Long List", traits: .button)
-        register(onScreen, heistId: "button_visible", index: 0)
-        registerOffScreen(offScreen, heistId: "long_list_button")
+        await register(onScreen, heistId: "button_visible", index: 0)
+        await registerOffScreen(offScreen, heistId: "long_list_button")
 
         XCTAssertNotNil(bagman.treeElement(heistId: "button_visible", in: .viewport))
         XCTAssertNil(bagman.treeElement(heistId: "long_list_button", in: .viewport))
         XCTAssertNotNil(bagman.treeElement(heistId: "long_list_button", in: .interface))
     }
 
-    func testResolveVisibleTargetFailsClosedForAmbiguousMatcher() {
+    func testResolveVisibleTargetFailsClosedForAmbiguousMatcher() async {
         let save1 = element(label: "Save", value: "draft")
         let save2 = element(label: "Save", value: "final")
-        register(save1, heistId: "button_save_1", index: 0)
-        register(save2, heistId: "button_save_2", index: 1)
+        await register(save1, heistId: "button_save_1", index: 0)
+        await register(save2, heistId: "button_save_2", index: 1)
 
         let result = bagman.resolveVisibleTarget(literalTarget(ElementPredicate.label("Save")))
 
@@ -69,9 +69,9 @@ extension TheVaultResolutionTests {
         XCTAssertTrue(diagnostics.contains("2 elements match"))
     }
 
-    func testResolveVisibleTargetPreservesExplicitOrdinalOutOfRange() {
+    func testResolveVisibleTargetPreservesExplicitOrdinalOutOfRange() async {
         let save = element(label: "Save", traits: .button)
-        register(save, heistId: "button_save", index: 0)
+        await register(save, heistId: "button_save", index: 0)
 
         let result = bagman.resolveVisibleTarget(literalTarget(ElementPredicate.label("Save"), ordinal: 4))
 
@@ -86,11 +86,11 @@ extension TheVaultResolutionTests {
         XCTAssertTrue(diagnostics.contains("1 match"))
     }
 
-    func testResolveVisibleTargetRequiresLiveHierarchy() {
+    func testResolveVisibleTargetRequiresLiveHierarchy() async {
         let visible = element(label: "Visible", traits: .button)
         let offScreen = element(label: "Below Fold", traits: .button)
-        register(visible, heistId: "button_visible", index: 0)
-        registerOffScreen(offScreen, heistId: "below_fold_button")
+        await register(visible, heistId: "button_visible", index: 0)
+        await registerOffScreen(offScreen, heistId: "below_fold_button")
 
         let knownResult = bagman.resolveTarget(literalTarget(ElementPredicate.label("Below Fold")))
         XCTAssertEqual(knownResult.resolvedElement?.heistId, "below_fold_button")
@@ -107,7 +107,7 @@ extension TheVaultResolutionTests {
         XCTAssertTrue(diagnostics.contains("scope: viewport"), "Should identify failed resolution scope: \(diagnostics)")
     }
 
-    func testOffViewportEntryWithStaleObjectIsNotDispatchableUntilInViewport() {
+    func testOffViewportEntryWithStaleObjectIsNotDispatchableUntilInViewport() async {
         let offScreen = element(label: "Below Fold", traits: .button)
         let object = UIAccessibilityElement(accessibilityContainer: NSObject())
         object.accessibilityFrame = CGRect(x: 0, y: 0, width: 100, height: 44)
@@ -126,7 +126,7 @@ extension TheVaultResolutionTests {
             element: offScreen
         )
 
-        bagman.installObservationForTesting(InterfaceObservation.makeForTests(
+        await bagman.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [entry.heistId: entry],
             hierarchy: [.container(scrollContainer, children: [])],
             firstResponderHeistId: nil,
@@ -143,7 +143,7 @@ extension TheVaultResolutionTests {
             return
         }
 
-        bagman.installObservationForTesting(InterfaceObservation.makeForTests(
+        await bagman.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [entry.heistId: entry],
             hierarchy: [.container(scrollContainer, children: [.element(offScreen, traversalIndex: 0)])],
             heistIdsByPath: [elementPath: entry.heistId],
@@ -163,7 +163,7 @@ extension TheVaultResolutionTests {
         XCTAssertTrue(AccessibilityActionDispatcher().increment(liveTarget))
     }
 
-    func testLiveGeometryRejectsUnusableAccessibilityCaptureFrame() {
+    func testLiveGeometryRejectsUnusableAccessibilityCaptureFrame() async {
         let visible = AccessibilityElement.make(
             label: "Visible",
             traits: .button,
@@ -179,7 +179,7 @@ extension TheVaultResolutionTests {
             scrollMembership: nil,
             element: visible
         )
-        bagman.installObservationForTesting(InterfaceObservation.makeForTests(
+        await bagman.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [entry.heistId: entry],
             hierarchy: [.element(visible, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): entry.heistId],
@@ -199,25 +199,25 @@ extension TheVaultResolutionTests {
         }
     }
 
-    func testResolveTargetFindsKnownMatcherOutsideLiveHierarchy() {
+    func testResolveTargetFindsKnownMatcherOutsideLiveHierarchy() async {
         let offScreen = element(label: "Below Fold", traits: .button)
-        registerOffScreen(offScreen, heistId: "below_fold_button")
+        await registerOffScreen(offScreen, heistId: "below_fold_button")
 
         XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Below Fold"))).resolvedElement)
     }
 
-    func testResolveTargetFindsLivePredicateInViewport() {
+    func testResolveTargetFindsLivePredicateInViewport() async {
         let element = element(label: "Visible", traits: .button)
-        register(element, heistId: "visible_button", index: 0)
+        await register(element, heistId: "visible_button", index: 0)
 
         XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Visible"))).resolvedElement)
     }
 
-    func testResolveTargetHonorsExplicitOrdinal() {
+    func testResolveTargetHonorsExplicitOrdinal() async {
         let save1 = element(label: "Save", value: "draft")
         let save2 = element(label: "Save", value: "final")
-        register(save1, heistId: "button_save_1", index: 0)
-        register(save2, heistId: "button_save_2", index: 1)
+        await register(save1, heistId: "button_save_1", index: 0)
+        await register(save2, heistId: "button_save_2", index: 1)
 
         XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Save"), ordinal: 1)).resolvedElement)
         guard case .notFound = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save"), ordinal: 2)) else {
@@ -226,9 +226,9 @@ extension TheVaultResolutionTests {
         }
     }
 
-    func testRegisteredElementResolvesWithoutMarkPresented() {
+    func testRegisteredElementResolvesWithoutMarkPresented() async {
         let element = element(label: "Combobox", traits: .button)
-        register(element, heistId: "button_combobox", index: 0)
+        await register(element, heistId: "button_combobox", index: 0)
 
         // Element resolves immediately — no markPresented gate
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Combobox")))
@@ -242,8 +242,8 @@ extension TheVaultResolutionTests {
 
     // MARK: - Direct InterfaceTree Resolution
 
-    func testDirectInterfaceTreeResolutionPreservesOrdinalsAndDiagnostics() throws {
-        installMatchingScreen()
+    func testDirectInterfaceTreeResolutionPreservesOrdinalsAndDiagnostics() async throws {
+        await installMatchingScreen()
 
         enum ExpectedResolution {
             case resolved(HeistId)
@@ -325,9 +325,9 @@ extension TheVaultResolutionTests {
     // MARK: - Exact Default and Explicit Broad Matches
 
     /// A partial label must return `.notFound`; broad matching is explicit.
-    func testSubstringPartialLabelReturnsNotFound() {
+    func testSubstringPartialLabelReturnsNotFound() async {
         let save = element(label: "Save Draft", traits: .button)
-        register(save, heistId: "button_save_draft", index: 0)
+        await register(save, heistId: "button_save_draft", index: 0)
 
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save")))
         guard case .notFound(let facts) = result else {
@@ -343,9 +343,9 @@ extension TheVaultResolutionTests {
 
     /// A contains predicate is an authored broad match, useful for migrating
     /// KIF `usingLabelContaining` call sites without weakening exact literals.
-    func testExplicitContainsLabelResolves() throws {
+    func testExplicitContainsLabelResolves() async throws {
         let save = element(label: "Save Draft", traits: .button)
-        register(save, heistId: "button_save_draft", index: 0)
+        await register(save, heistId: "button_save_draft", index: 0)
 
         let result = bagman.resolveTarget(try resolvedTarget(.label(.contains("Save"))))
         guard let resolved = result.resolvedElement else {
@@ -356,9 +356,9 @@ extension TheVaultResolutionTests {
     }
 
     /// Exact equality (after case-insensitive comparison) still resolves.
-    func testExactLabelCaseInsensitiveResolves() {
+    func testExactLabelCaseInsensitiveResolves() async {
         let save = element(label: "Save", traits: .button)
-        register(save, heistId: "button_save", index: 0)
+        await register(save, heistId: "button_save", index: 0)
 
         XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Save"))).resolvedElement)
         XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("save"))).resolvedElement)
@@ -367,20 +367,20 @@ extension TheVaultResolutionTests {
 
     /// Typography folding still works under exact-or-miss: a label with a smart
     /// apostrophe resolves against an ASCII apostrophe matcher.
-    func testTypographyFoldingPreservedUnderExactSemantics() {
+    func testTypographyFoldingPreservedUnderExactSemantics() async {
         let dontSkip = element(label: "Don\u{2019}t skip", traits: .button)
-        register(dontSkip, heistId: "button_dont_skip", index: 0)
+        await register(dontSkip, heistId: "button_dont_skip", index: 0)
 
         XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Don't skip"))).resolvedElement)
     }
 
     /// When two labels share a partial substring, exact must win outright
     /// (no ambiguity). This was Finding 5's regression case.
-    func testExactMatchWinsOverPartialSiblings() {
+    func testExactMatchWinsOverPartialSiblings() async {
         let save = element(label: "Save")
         let saveDraft = element(label: "Save Draft")
-        register(save, heistId: "button_save", index: 0)
-        register(saveDraft, heistId: "button_save_draft", index: 1)
+        await register(save, heistId: "button_save", index: 0)
+        await register(saveDraft, heistId: "button_save_draft", index: 1)
 
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save")))
         guard let resolved = result.resolvedElement else {
@@ -392,9 +392,9 @@ extension TheVaultResolutionTests {
 
     /// Near-miss surface for absent semantics: a substring-only match must not
     /// be considered present.
-    func testResolveTargetReportsAbsentForSubstringOnlyMatch() {
+    func testResolveTargetReportsAbsentForSubstringOnlyMatch() async {
         let save = element(label: "Save Draft", traits: .button)
-        register(save, heistId: "button_save_draft", index: 0)
+        await register(save, heistId: "button_save_draft", index: 0)
 
         // "Save" is a substring of "Save Draft" but not equal, so semantic
         // resolution must not report it as present.
@@ -408,7 +408,7 @@ extension TheVaultResolutionTests {
 
     /// Server-side and client-side matchers must agree on the same input.
     /// Regression for Finding 4 (matcher contract drift).
-    func testServerAndClientMatchersAgreeOnSameInput() throws {
+    func testServerAndClientMatchersAgreeOnSameInput() async throws {
         let element = element(label: "Save Draft", value: "x", identifier: "save_btn", traits: .button)
         let matcher = try resolvedPredicate(
             AccessibilityTarget.element(.label("Save Draft"), traits: [.button])
@@ -439,7 +439,7 @@ extension TheVaultResolutionTests {
 
     /// Smart-quote labels must produce the same answer on both sides
     /// (Finding 4's typography divergence).
-    func testServerAndClientAgreeOnSmartQuoteLabel() {
+    func testServerAndClientAgreeOnSmartQuoteLabel() async {
         let smart = element(label: "Don\u{2019}t skip")
         let heist = HeistElement(
             description: "x",

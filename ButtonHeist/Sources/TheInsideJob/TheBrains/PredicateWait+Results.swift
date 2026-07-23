@@ -172,25 +172,29 @@ extension PredicateWait {
         expectation: ExpectationResult,
         start: RuntimeElapsed.Instant,
         success: Bool,
-        baseline: SettledCapture? = nil,
-        window: ObservationWindow? = nil,
+        baseline: Observation.Moment? = nil,
+        eventsSinceBaseline: Observation.EventsSince? = nil,
         observedSequence: SettledObservationSequence? = nil,
         timeoutMismatchMessage: String? = nil
-    ) -> HeistWaitResult {
+    ) async -> HeistWaitResult {
         let elapsed = Self.elapsedSeconds(since: start)
         let presenceMessage = success || observationSummary == nil
             ? nil
             : presenceTimeoutMessage(step.predicate, elapsed)
-        let latest = latestCommittedEvent()
-        let traceEvidence = window?.traceEvidence ?? trace.flatMap {
+        let latest = await latestCommittedEvent()
+        let traceEvidence = PredicateObservationEvidence.traceEvidence(
+            baseline: baseline,
+            eventsSinceBaseline: eventsSinceBaseline,
+            through: latest
+        ) ?? trace.flatMap {
             AccessibilityTraceEvidence(trace: $0, completeness: .incomplete)
         }
         let settledDiagnostics = success ? nil : SettledWaitDiagnostics(
             baseline: baseline,
-            window: window,
+            observedSequence: observedSequence,
             last: latest.map(SettledEventSummary.init(event:)),
             lastChangeFact: trace?.changeFacts.last ?? latest?.trace.changeFacts.last,
-            settleFailure: latestSettleFailure()
+            settleFailure: await latestSettleFailure()
         )
         return Self.waitResult(
             for: step,
@@ -420,13 +424,13 @@ extension PredicateWait {
         private let sequence: SettledObservationSequence
         private let hash: String?
 
-        fileprivate init(event: SettledObservationEvent) {
+        fileprivate init(event: Observation.SnapshotEvent) {
             sequence = event.sequence
             hash = event.latestCaptureRef?.hash
         }
 
-        fileprivate init(baseline: SettledCapture) {
-            sequence = baseline.cursor.sequence
+        fileprivate init(baseline: Observation.Moment) {
+            sequence = baseline.sequence
             hash = baseline.capture.hash
         }
 
@@ -439,21 +443,21 @@ extension PredicateWait {
     }
 
     private struct SettledWaitDiagnostics {
-        fileprivate let baselineCapture: SettledCapture?
-        fileprivate let window: ObservationWindow?
+        fileprivate let baselineCapture: Observation.Moment?
+        fileprivate let observedSequence: SettledObservationSequence?
         fileprivate let last: SettledEventSummary?
         fileprivate let lastChangeFact: AccessibilityTrace.ChangeFact?
         fileprivate let settleFailure: String?
 
         fileprivate init(
-            baseline: SettledCapture?,
-            window: ObservationWindow?,
+            baseline: Observation.Moment?,
+            observedSequence: SettledObservationSequence?,
             last: SettledEventSummary?,
             lastChangeFact: AccessibilityTrace.ChangeFact?,
             settleFailure: String?
         ) {
             self.baselineCapture = baseline
-            self.window = window
+            self.observedSequence = observedSequence
             self.last = last
             self.lastChangeFact = lastChangeFact
             self.settleFailure = settleFailure
@@ -464,8 +468,8 @@ extension PredicateWait {
         }
 
         fileprivate var observedChangeAfterBaseline: Bool {
-            guard let baselineCapture, let window else { return false }
-            return window.current.cursor.sequence > baselineCapture.cursor.sequence
+            guard let baselineCapture, let observedSequence else { return false }
+            return observedSequence > baselineCapture.sequence
         }
     }
 }

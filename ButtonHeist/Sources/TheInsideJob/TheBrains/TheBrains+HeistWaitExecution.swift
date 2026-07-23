@@ -95,6 +95,46 @@ extension TheBrains {
         }
     }
 
+    /// Executes one public standalone wait through observation-only settlement.
+    func executeStandaloneWait(
+        _ step: ResolvedWaitRuntimeInput,
+        startedAt: RuntimeElapsed.Instant = RuntimeElapsed.now
+    ) async -> HeistWaitResult {
+        let command = Settlement.Command(
+            trigger: .observation,
+            predicate: Settlement.Predicate(
+                authored: step.predicateExpression,
+                resolved: step.predicate
+            ),
+            deadline: Settlement.Deadline(
+                instant: startedAt.advanced(by: .seconds(step.timeout.seconds))
+            )
+        )
+        let discoveryDeadline = SemanticObservationDeadline(
+            start: startedAt,
+            timeoutSeconds: step.timeout.seconds
+        )
+        let settlement = await executeSettlement(
+            command,
+            observationEffects: { control in
+                if case .announcement = step.predicate.core { return }
+                await self.interactionCoordinator.publishStandaloneWaitDiscovery(
+                    target: step.predicate.waitTarget,
+                    deadline: discoveryDeadline,
+                    control: control
+                )
+            },
+            dispatch: { _ in
+                preconditionFailure("Observation settlement cannot dispatch an action")
+            }
+        )
+        let evidence = Settlement.ResultProjector.projectWait(settlement)
+        return HeistWaitResult.projected(
+            evidence,
+            observedSequence: settlement.evidence.handoff.event?.sequence
+        )
+    }
+
     private func waitStepResult(
         step: WaitStep,
         completion: HeistWaitCompletion,
@@ -212,6 +252,23 @@ struct HeistWaitResult {
             ),
             observedSequence: nil,
             observationSummary: nil
+        )
+    }
+
+    static func projected(
+        _ evidence: HeistWaitEvidence,
+        observedSequence: SettledObservationSequence?
+    ) -> HeistWaitResult {
+        let outcome: Outcome = switch evidence.expectation {
+        case .met(let expectation):
+            .matched(evidence.actionResult, expectation)
+        case .unmet(let expectation):
+            .unmatched(evidence.actionResult, expectation)
+        }
+        return HeistWaitResult(
+            outcome: outcome,
+            observedSequence: observedSequence,
+            observationSummary: evidence.finalSummary
         )
     }
 

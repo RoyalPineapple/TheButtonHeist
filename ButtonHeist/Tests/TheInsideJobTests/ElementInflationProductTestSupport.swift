@@ -19,13 +19,11 @@ final class ElementInflationProductTests: XCTestCase {
             tripwire: TheTripwire(),
             visibleObservationSource: visibleObservationSource.capture
         )
-        brains.tripwire.startPulse()
-        brains.startSemanticObservation()
+        await brains.startActionTestRuntime()
     }
 
     override func tearDown() async throws {
-        brains?.stopSemanticObservation()
-        brains?.tripwire.stopPulse()
+        brains?.stopActionTestRuntime()
         if let brains {
             assertRuntimeStopped(brains)
         }
@@ -42,6 +40,7 @@ final class ElementInflationProductTests: XCTestCase {
         let observationStream = brains.vault.semanticObservationStream
         XCTAssertFalse(brains.semanticObservationIsActive, file: file, line: line)
         XCTAssertFalse(brains.tripwire.isPulseRunning, file: file, line: line)
+        XCTAssertFalse(brains.tripwire.uikitIdleTracker.isInstalled, file: file, line: line)
         XCTAssertFalse(observationStream.isActive, file: file, line: line)
         XCTAssertEqual(observationStream.observationWaiterCount, 0, file: file, line: line)
         XCTAssertEqual(observationStream.activeObservationDemandCount, 0, file: file, line: line)
@@ -118,7 +117,7 @@ final class ElementInflationProductTests: XCTestCase {
         semanticLabel: String? = nil,
         scrollContainerPathOverride: TreePath? = nil,
         refreshesFromUIKit: Bool = true
-    ) throws {
+    ) async throws {
         let targetBrains = targetBrains ?? brains!
         let screen = try XCTUnwrap(targetBrains.vault.refreshLiveCapture())
         let identifier = semanticIdentifier ?? fixture.identifier
@@ -154,7 +153,7 @@ final class ElementInflationProductTests: XCTestCase {
         var elements = screen.tree.elements
         elements[entry.heistId] = entry
 
-        targetBrains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await targetBrains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             tree: InterfaceTree(elements: elements, containers: screen.tree.containers),
             liveCapture: screen.liveCapture
         ))

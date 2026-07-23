@@ -10,7 +10,7 @@ import ThePlans
 extension WireConverterTests {
     // MARK: - Tree Conversion
 
-    func testToWireTreePreservesParserModalBoundary() throws {
+    func testToWireTreePreservesParserModalBoundary() async throws {
         let element = makeElement(label: "Confirm", traits: [.button])
         let container = AccessibilityContainer(
             type: .semanticGroup(label: "Alert", value: nil), identifier: nil,
@@ -30,7 +30,7 @@ extension WireConverterTests {
         XCTAssertTrue(info.isModalBoundary)
     }
 
-    func testSemanticInterfaceAnnotatesTraceIdentityFromHeistIds() throws {
+    func testSemanticInterfaceAnnotatesTraceIdentityFromHeistIds() async throws {
         let treeElement = makeScreenElement(
             heistId: "checkout_button",
             label: "Checkout",
@@ -51,7 +51,7 @@ extension WireConverterTests {
         XCTAssertEqual(record.traceIdentity, HeistId(rawValue: "checkout_button").traceElementIdentity)
     }
 
-    func testSemanticInterfacePreservesContainersWhenKnownElementsShareParserPath() throws {
+    func testSemanticInterfacePreservesContainersWhenKnownElementsShareParserPath() async throws {
         let containerPath = TreePath([0])
         let recycledElementPath = TreePath([0, 0])
         let containerIdentifier = "SquareCheckoutAppletCore.OrderEntryContainerViewController"
@@ -112,7 +112,7 @@ extension WireConverterTests {
         XCTAssertEqual(Set(interface.projectedElements.compactMap(\.label)), ["First row", "Second row"])
     }
 
-    func testSemanticInterfaceDensifiesSparseContainerPathsBeforeValidation() throws {
+    func testSemanticInterfaceDensifiesSparseContainerPathsBeforeValidation() async throws {
         let rootPath = TreePath([0])
         let splitPath = TreePath([0, 2])
         let orderPath = TreePath([0, 2, 63])
@@ -199,7 +199,7 @@ extension WireConverterTests {
         XCTAssertEqual(interface.graph.nodesInPathOrder.count, 5)
     }
 
-    func testInterfaceSelectionPreservesTraceIdentityAnnotations() throws {
+    func testInterfaceSelectionPreservesTraceIdentityAnnotations() async throws {
         let first = makeScreenElement(heistId: "first_button", label: "First", traits: [.button])
         let second = makeScreenElement(heistId: "second_button", label: "Second", traits: [.button])
         let screen = InterfaceObservation.makeForTests(
@@ -218,7 +218,7 @@ extension WireConverterTests {
             firstResponderHeistId: nil
         )
         let vault = TheVault(tripwire: TheTripwire())
-        vault.installObservationForTesting(screen)
+        await vault.installObservationForTesting(screen)
         let selected = try vault.selectInterface(InterfaceQuery(
             subtree: .predicate(ElementPredicateTemplate(label: "Second"))
         ))
@@ -228,7 +228,7 @@ extension WireConverterTests {
         XCTAssertEqual(record.traceIdentity, HeistId(rawValue: "second_button").traceElementIdentity)
     }
 
-    func testContainerSubtreeSelectionPreservesAnnotationsAndTraceIdentity() throws {
+    func testContainerSubtreeSelectionPreservesAnnotationsAndTraceIdentity() async throws {
         let first = makeScreenElement(heistId: "first_button", label: "First", traits: [.button])
         let second = makeScreenElement(heistId: "second_button", label: "Second", traits: [.button])
         let container = AccessibilityContainer(
@@ -254,7 +254,7 @@ extension WireConverterTests {
             firstResponderHeistId: nil
         )
         let vault = TheVault(tripwire: TheTripwire())
-        vault.installObservationForTesting(screen)
+        await vault.installObservationForTesting(screen)
         let selected = try vault.selectInterface(InterfaceQuery(
             subtree: .container(.label("Actions"))
         ))
@@ -269,7 +269,7 @@ extension WireConverterTests {
         ])
     }
 
-    func testDiscoveryInterfaceGraftsKnownOffViewportElementsUnderScrollContainer() throws {
+    func testDiscoveryInterfaceGraftsKnownOffViewportElementsUnderScrollContainer() async throws {
         let visible = makeElement(
             label: "aardvark",
             traits: [.staticText],
@@ -328,7 +328,7 @@ extension WireConverterTests {
         XCTAssertEqual(projected.compactMap(\.label), ["aardvark", "zymurgy"])
 
         let vault = TheVault(tripwire: TheTripwire())
-        vault.installObservationForTesting(screen)
+        await vault.installObservationForTesting(screen)
         let selectedInterface = try vault.selectInterface(InterfaceQuery(
             subtree: .predicate(ElementPredicateTemplate(label: "zymurgy"))
         ))
@@ -336,7 +336,7 @@ extension WireConverterTests {
         XCTAssertEqual(selectedProjection.label, "zymurgy")
     }
 
-    func testDiscoveryInterfaceDoesNotRegraftOffscreenElementsAlreadyInFullTreeCapture() throws {
+    func testDiscoveryInterfaceDoesNotRegraftOffscreenElementsAlreadyInFullTreeCapture() async throws {
         let visible = makeElement(label: "Visible", traits: [.staticText])
         let offscreen = AccessibilityElement.make(
             label: "Offscreen",
@@ -382,7 +382,7 @@ extension WireConverterTests {
         XCTAssertEqual(interface.projectedElements.filter { $0.label == "Offscreen" }.count, 1)
     }
 
-    func testDiscoveryInterfaceGraftsKnownNestedScrollContainers() throws {
+    func testDiscoveryInterfaceGraftsKnownNestedScrollContainers() async throws {
         let outer = AccessibilityContainer(
             type: .none, scrollableContentSize: AccessibilitySize(CGSize(width: 320, height: 2_000)),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
@@ -434,7 +434,7 @@ extension WireConverterTests {
         XCTAssertNotNil(interface.annotations.elementByPath[TreePath([0, 0, 0])])
     }
 
-    func testDiscoveryInterfaceEmitsCanonicalGraftedHeistIdOnce() throws {
+    func testDiscoveryInterfaceEmitsCanonicalGraftedHeistIdOnce() async throws {
         let rootContainer = AccessibilityContainer(
             type: .none, scrollableContentSize: AccessibilitySize(CGSize(width: 320, height: 2_000)),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
@@ -485,7 +485,7 @@ extension WireConverterTests {
         XCTAssertNil(interface.annotations.elementByPath[TreePath([0, 1])])
     }
 
-    func testDiscoveryInterfacePreservesDistinctDisambiguatedHeistIds() throws {
+    func testDiscoveryInterfacePreservesDistinctDisambiguatedHeistIds() async throws {
         let rootContainer = AccessibilityContainer(
             type: .none, scrollableContentSize: AccessibilitySize(CGSize(width: 320, height: 2_000)),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
@@ -550,7 +550,7 @@ extension WireConverterTests {
         XCTAssertNotNil(interface.annotations.elementByPath[TreePath([0, 1])])
     }
 
-    func testDiscoveryInterfaceEmitsDuplicateGraftedContainerNamesByPath() throws {
+    func testDiscoveryInterfaceEmitsDuplicateGraftedContainerNamesByPath() async throws {
         let rootContainer = AccessibilityContainer(
             type: .none, scrollableContentSize: AccessibilitySize(CGSize(width: 320, height: 2_000)),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))

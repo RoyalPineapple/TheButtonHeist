@@ -107,8 +107,8 @@ final class TheBrains {
         )
     }
 
-    func treeUnavailableResult(payload: ActionResult.Payload) -> ActionResult {
-        let message = vault.semanticObservationStream.latestSettleFailureDiagnostic
+    func treeUnavailableResult(payload: ActionResult.Payload) async -> ActionResult {
+        let message = await vault.semanticObservationStream.latestSettleFailureDiagnostic()
             .map { "Could not observe accessibility tree; \($0)" }
             ?? TheBrains.treeUnavailableMessage
         return .failure(
@@ -138,7 +138,7 @@ final class TheBrains {
               let exploration = await navigation.exploreScreen(
                 baseline: .currentViewport(
                     vault.visibleExplorationBaseline(
-                        from: admittedVisibleObservation.event.settledObservation.observation
+                        from: admittedVisibleObservation.event.snapshot.observation
                     )
                 ),
                 maxScrollsPerContainer: query.maxScrollsPerContainer?.value,
@@ -150,7 +150,7 @@ final class TheBrains {
         do {
             let interface = try vault.selectInterface(query)
             let diagnostics = exploration.progress.interfaceDiagnostics(
-                for: exploration.event.settledObservation.observation,
+                for: exploration.event.snapshot.observation,
                 includedElementCount: interface.projectedElements.count
             )
             return .success(interface

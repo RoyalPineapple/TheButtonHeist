@@ -39,7 +39,7 @@ extension ElementInflationProductTests {
             label: "Submit Order"
         )
         defer { fixture.cleanup() }
-        try seedOffViewportTarget(fixture)
+        try await seedOffViewportTarget(fixture)
 
         XCTAssertEqual(fixture.scrollView.contentOffset, .zero)
 
@@ -62,7 +62,7 @@ extension ElementInflationProductTests {
         XCTAssertTrue(fixture.scrollView.didReceiveRevealRequest)
     }
 
-    func testLiveCaptureUsesDirectScrollContainerAsMovementOwner() throws {
+    func testLiveCaptureUsesDirectScrollContainerAsMovementOwner() async throws {
         let fixture = try installOffscreenActivationFixture(
             identifier: "direct_scroll_owner",
             label: "Direct Scroll Owner"
@@ -86,7 +86,7 @@ extension ElementInflationProductTests {
             nestedInGroup: true
         )
         defer { fixture.cleanup() }
-        try seedOffViewportTarget(fixture)
+        try await seedOffViewportTarget(fixture)
 
         let result = await brains.executeRuntimeAction(
             try HeistActionCommand.activate(
@@ -108,11 +108,11 @@ extension ElementInflationProductTests {
         )
         defer { fixture.cleanup() }
 
-        let keyboardImpl = ProductTextInputKeyboardImpl(textField: fixture.target) { [weak self] in
-            self?.brains.vault.invalidateSettledObservationFromTripwire()
+        let invalidation = TripwireInvalidationFixture(vault: brains.vault)
+        let keyboardImpl = ProductTextInputKeyboardImpl(textField: fixture.target) {
+            invalidation.signal()
         }
-        brains.stopSemanticObservation()
-        brains.tripwire.stopPulse()
+        brains.stopActionTestRuntime()
         brains = TheBrains(
             tripwire: TheTripwire(),
             keyboardInput: SafecrackerKeyboardInput(
@@ -120,9 +120,8 @@ extension ElementInflationProductTests {
             ),
             visibleObservationSource: visibleObservationSource.capture
         )
-        brains.tripwire.startPulse()
-        brains.startSemanticObservation()
-        try seedOffViewportTextInputTarget(fixture)
+        await brains.startActionTestRuntime()
+        try await seedOffViewportTextInputTarget(fixture)
 
         XCTAssertEqual(fixture.scrollView.contentOffset, .zero)
         XCTAssertFalse(fixture.target.isFirstResponder)
@@ -133,8 +132,10 @@ extension ElementInflationProductTests {
                 target: .identifier(fixture.identifier)
             ).resolve(in: .empty)
         )
+        await invalidation.wait()
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "semantic type_text failed")
+        XCTAssertEqual(result.settled, true)
         guard result.outcome.isSuccess else { return }
         XCTAssertEqual(result.method, .typeText)
         XCTAssertEqual(result.subjectEvidence?.source, .textInputTarget)
@@ -183,7 +184,7 @@ extension ElementInflationProductTests {
             label: "Confirm Nested Payment"
         )
         defer { fixture.cleanup() }
-        try seedKnownNestedScrollTarget(fixture)
+        try await seedKnownNestedScrollTarget(fixture)
         var revealOrder: [ObjectIdentifier] = []
         fixture.outerScrollView.onFirstRevealRequest = {
             revealOrder.append(ObjectIdentifier(fixture.outerScrollView))
@@ -225,7 +226,7 @@ extension ElementInflationProductTests {
         defer { fixture.cleanup() }
         let decoy = try installScrollDecoyWindow(contentSize: fixture.innerScrollView.contentSize)
         defer { decoy.cleanup() }
-        try seedKnownNestedScrollTarget(fixture, decoy: .separate(decoy.scrollView))
+        try await seedKnownNestedScrollTarget(fixture, decoy: .separate(decoy.scrollView))
         XCTAssertTrue(brains.vault.scrollableContainerViewsByPath.values.contains { $0 === decoy.scrollView })
         let decoyRevealCount = decoy.scrollView.revealRequestCount
         let decoyOffset = decoy.scrollView.contentOffset
@@ -257,7 +258,7 @@ extension ElementInflationProductTests {
         defer { fixture.cleanup() }
         let decoy = try installScrollDecoyWindow(contentSize: fixture.innerScrollView.contentSize)
         defer { decoy.cleanup() }
-        try seedKnownNestedScrollTarget(
+        try await seedKnownNestedScrollTarget(
             fixture,
             decoy: .duplicateOuterReferenceAtDecoyPath(decoy.scrollView)
         )
@@ -488,7 +489,7 @@ extension ElementInflationProductTests {
 
     private func seedOffViewportTextInputTarget(
         _ fixture: TextInputRevealFixture
-    ) throws {
+    ) async throws {
         let screen = try XCTUnwrap(brains.vault.refreshLiveCapture())
         let scrollContainerPath = try XCTUnwrap(
             firstLiveScrollableContainerPath(in: screen),
@@ -521,13 +522,13 @@ extension ElementInflationProductTests {
             tree: InterfaceTree(elements: elements, containers: screen.tree.containers),
             liveCapture: screen.liveCapture
         )
-        brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(discoveryObservation)
+        await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(discoveryObservation)
         visibleObservationSource.useLiveCapture()
     }
     private func seedKnownNestedScrollTarget(
         _ fixture: NestedScrollRevealFixture,
         decoy: NestedScrollDecoy = .absent
-    ) throws {
+    ) async throws {
         let screen = try XCTUnwrap(brains.vault.refreshLiveCapture())
         let outerContainerPath = try XCTUnwrap(
             liveScrollableContainerPath(for: fixture.outerScrollView, in: screen),
@@ -620,7 +621,7 @@ extension ElementInflationProductTests {
             )
         }
 
-        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             tree: InterfaceTree(elements: elements, containers: containers),
             liveCapture: liveCapture
         ))

@@ -41,6 +41,9 @@ extension FenceResponse {
                     }
                 }
             }
+            if let settlement = result.evidence.settlement, !settlement.settled {
+                text += "  [settlement: \(Self.incompleteSettlementSummary(settlement))]"
+            }
             return text
         case .screenshot(let path, let payload, let options):
             return formatScreenshot(
@@ -104,6 +107,10 @@ extension FenceResponse {
         }
         if let expectations = report.summary.expectations {
             text += " [expectations: \(expectations.met)/\(expectations.checked) met]"
+        }
+        let incompleteSettlements = report.outputNodes.compactMap(\.settlement).filter { !$0.settled }
+        if let settlement = incompleteSettlements.first {
+            text += " [settlement: \(Self.incompleteSettlementSummary(settlement))]"
         }
         return text
     }
@@ -514,5 +521,16 @@ extension FenceResponse {
 
     private static func display(_ value: ElementPropertyValue?) -> String {
         value?.displayText ?? "nil"
+    }
+}
+
+extension FenceResponse {
+    static func incompleteSettlementSummary(_ settlement: ActionSettlementEvidence) -> String {
+        let duration = settlement.durationMs.milliseconds
+        if settlement.readinessEstablished {
+            let path = settlement.path.map(String.init(describing:)) ?? "unknown"
+            return "readiness \(path); observation handoff timed out after \(duration)ms"
+        }
+        return "readiness timed out after \(duration)ms"
     }
 }

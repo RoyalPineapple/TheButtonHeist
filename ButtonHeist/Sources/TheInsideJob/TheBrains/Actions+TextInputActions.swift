@@ -164,7 +164,7 @@ extension Actions {
         }
 
         return .success(
-            payload: .typeText(nil),
+            payload: .typeText(focusedInput.flatMap { currentTextInputValue(from: $0.object) }),
             subjectEvidence: focusedInput?.subjectEvidence,
             resolvedElementId: focusedInput?.resolvedElementId
         )
@@ -202,6 +202,7 @@ extension Actions {
         let subjectEvidence: ActionSubjectEvidence
         let resolvedElementId: HeistId
         let currentValue: String?
+        let object: NSObject
     }
 
     private func focusTextInput(
@@ -279,7 +280,7 @@ extension Actions {
         }
         if let focused = await focusedFirstResponder(
             candidate: refreshedTarget,
-            waitForInput: true
+            waitForInput: false
         ) {
             return .focused(focused)
         }
@@ -369,8 +370,22 @@ extension Actions {
         FocusedTextInput(
             subjectEvidence: inflatedTarget.subjectEvidence(source: .textInputTarget),
             resolvedElementId: inflatedTarget.treeElement.heistId,
-            currentValue: liveTarget.element.value
+            currentValue: liveTarget.element.value,
+            object: liveTarget.object
         )
+    }
+
+    private func currentTextInputValue(from object: NSObject) -> String? {
+        if let searchBar = object as? UISearchBar {
+            return searchBar.searchTextField.accessibilityValue ?? searchBar.searchTextField.text
+        }
+        if let textField = object as? UITextField {
+            return textField.accessibilityValue ?? textField.text
+        }
+        if let textView = object as? UITextView {
+            return textView.accessibilityValue ?? textView.text
+        }
+        return object.accessibilityValue
     }
 
 }

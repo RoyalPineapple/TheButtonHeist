@@ -87,8 +87,8 @@ extension TheBrainsActionTests {
         )
         let runtime = heistRuntime(
             observations: [
-                observedState(labels: ["Search"]),
-                observedState(labels: ["Search", "subtotal"]),
+                await observedState(labels: ["Search"]),
+                await observedState(labels: ["Search", "subtotal"]),
             ],
             execute: { command in
                 executedCommands.append(command)
@@ -144,8 +144,8 @@ extension TheBrainsActionTests {
     func testHeistInvocationSnapshotExpectationEvaluatesFinalNestedState() async throws {
         let runtime = heistRuntime(
             observations: [
-                observedState(labels: ["Checkout"]),
-                observedState(labels: ["Payment Complete"]),
+                await observedState(labels: ["Checkout"]),
+                await observedState(labels: ["Payment Complete"]),
             ],
             execute: { _ in
                 ActionResult.success(payload: .activate)
@@ -184,10 +184,10 @@ extension TheBrainsActionTests {
     func testHeistInvocationTransitionExpectationEvaluatesAcrossNestedCall() async throws {
         let runtime = heistRuntime(
             observations: [
-                observedState(elements: [
+                await observedState(elements: [
                     (makeElement(label: "subtotal", value: "1 item", identifier: "subtotal"), "subtotal"),
                 ]),
-                observedState(elements: [
+                await observedState(elements: [
                     (makeElement(label: "subtotal", value: "2 items", identifier: "subtotal"), "subtotal"),
                 ]),
             ],
@@ -237,8 +237,8 @@ extension TheBrainsActionTests {
     func testHeistInvocationScreenChangeExpectationEvaluatesAcrossNestedCall() async throws {
         let runtime = heistRuntime(
             observations: [
-                observedState(labels: ["Checkout"], screenId: "checkout"),
-                observedState(labels: ["Receipt"], screenId: "receipt", screenChanged: true),
+                await observedState(labels: ["Checkout"], screenId: "checkout"),
+                await observedState(labels: ["Receipt"], screenId: "receipt", screenChanged: true),
             ],
             execute: { _ in
                 ActionResult.success(payload: .activate)
@@ -276,10 +276,10 @@ extension TheBrainsActionTests {
     func testHeistInvocationAttachedExpectationFailureStaysOnInvokeNode() async throws {
         let runtime = heistRuntime(
             observations: [
-                observedState(elements: [
+                await observedState(elements: [
                     (makeElement(label: "subtotal", value: "1 item", identifier: "subtotal"), "subtotal"),
                 ]),
-                observedState(elements: [
+                await observedState(elements: [
                     (makeElement(label: "subtotal", value: "1 item", identifier: "subtotal"), "subtotal"),
                 ]),
             ],

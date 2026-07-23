@@ -16,7 +16,7 @@ extension Navigation {
     }
 
     private struct ObservedViewport {
-        let event: SettledObservationEvent
+        let event: Observation.SnapshotEvent
         let decision: ViewportExplorationDecision
 
         var continuity: ScreenContinuity { event.continuity }
@@ -46,7 +46,7 @@ extension Navigation {
     }
 
     private struct ViewportExplorationState {
-        var latestEvent: SettledObservationEvent?
+        var latestEvent: Observation.SnapshotEvent?
         var didMoveViewport = false
         var exploredScrollViewIDs = Set<ObjectIdentifier>()
         var originByScrollViewID: [ObjectIdentifier: CGPoint] = [:]
@@ -90,7 +90,7 @@ extension Navigation {
 
         func exploreViewports(
             exitPosition: ViewportExitPosition,
-            onObservation: (SettledObservationEvent) -> ViewportExplorationDecision
+            onObservation: (Observation.SnapshotEvent) async -> ViewportExplorationDecision
         ) async -> InterfaceExplorationResult? {
             let startTime = CACurrentMediaTime()
             let outcome: TraversalOutcome
@@ -122,7 +122,7 @@ extension Navigation {
         }
 
         private func scanPendingContainers(
-            onObservation: (SettledObservationEvent) -> ViewportExplorationDecision
+            onObservation: (Observation.SnapshotEvent) async -> ViewportExplorationDecision
         ) async -> TraversalOutcome {
             while !exploration.progress.pendingScrollPaths.isEmpty {
                 guard !Task.isCancelled, exploration.hasTimeRemaining else { return .interrupted }
@@ -226,7 +226,7 @@ extension Navigation {
 
         private func scanContainer(
             _ container: ActiveContainerExploration,
-            onObservation: (SettledObservationEvent) -> ViewportExplorationDecision
+            onObservation: (Observation.SnapshotEvent) async -> ViewportExplorationDecision
         ) async -> ScrollScanOutcome {
             for (index, direction) in searchOrder.directions.enumerated() {
                 let outcome = await runScrollScan(
@@ -253,7 +253,7 @@ extension Navigation {
         private func runScrollScan(
             _ container: ActiveContainerExploration,
             direction: ScrollScanDirection,
-            onObservation: (SettledObservationEvent) -> ViewportExplorationDecision
+            onObservation: (Observation.SnapshotEvent) async -> ViewportExplorationDecision
         ) async -> ScrollScanOutcome {
             while exploration.hasTimeRemaining {
                 guard !Task.isCancelled else { return .interrupted }
@@ -279,7 +279,7 @@ extension Navigation {
                     state.didMoveViewport = true
                 }
                 guard let event = transition.event else { return .interrupted }
-                let observation = record(event, notifyObservation: true, onObservation: onObservation)
+                let observation = await record(event, notifyObservation: true, onObservation: onObservation)
                 if observation.decision == .goalSatisfied { return .goalSatisfied }
                 if observation.continuity.isReplacement { return .screenReplaced }
                 if let nestedOutcome = await scanNewlyVisibleNestedContainers(
@@ -294,7 +294,7 @@ extension Navigation {
 
         private func scanNewlyVisibleNestedContainers(
             inside parent: ActiveContainerExploration,
-            onObservation: (SettledObservationEvent) -> ViewportExplorationDecision
+            onObservation: (Observation.SnapshotEvent) async -> ViewportExplorationDecision
         ) async -> ScrollScanOutcome? {
             guard let parentTarget = currentLiveScrollableTarget(for: parent.scrollViewID) else {
                 return .interrupted
@@ -350,20 +350,20 @@ extension Navigation {
         }
 
         private func observe(
-            onObservation: (SettledObservationEvent) -> ViewportExplorationDecision
+            onObservation: (Observation.SnapshotEvent) async -> ViewportExplorationDecision
         ) async -> ObservedViewport? {
             guard let event = await navigation.settledExplorationPage(
                 deadline: exploration.deadline,
                 discoveryCommitPolicy: exploration.discoveryCommitPolicy
             ) else { return nil }
-            return record(event, notifyObservation: true, onObservation: onObservation)
+            return await record(event, notifyObservation: true, onObservation: onObservation)
         }
 
         private func record(
-            _ event: SettledObservationEvent,
+            _ event: Observation.SnapshotEvent,
             notifyObservation: Bool,
-            onObservation: (SettledObservationEvent) -> ViewportExplorationDecision
-        ) -> ObservedViewport {
+            onObservation: (Observation.SnapshotEvent) async -> ViewportExplorationDecision
+        ) async -> ObservedViewport {
             state.latestEvent = event
             if event.continuity.isReplacement {
                 state.resetLiveViewportMemory()
@@ -374,21 +374,28 @@ extension Navigation {
             )
             return ObservedViewport(
                 event: event,
-                decision: notifyObservation ? onObservation(event) : .continue
+                decision: notifyObservation ? await onObservation(event) : .continue
             )
         }
 
         private func finalize(
             exitPosition: ViewportExitPosition,
             notifyObservation: Bool,
-            onObservation: (SettledObservationEvent) -> ViewportExplorationDecision
+            onObservation: (Observation.SnapshotEvent) async -> ViewportExplorationDecision
         ) async -> Bool {
             guard exitPosition == .origin else { return true }
+            let restorationDeadline = exploration.hasTimeRemaining
+                ? exploration.deadline
+                : SemanticObservationDeadline(
+                    start: RuntimeElapsed.now,
+                    timeoutMs: SettleSession.viewportTransitionTimeoutMs
+                )
             for scrollViewID in state.originOrder.reversed() {
                 guard let origin = state.originByScrollViewID[scrollViewID] else { continue }
                 switch await restoreOrigin(
                     origin,
                     scrollViewID: scrollViewID,
+                    deadline: restorationDeadline,
                     notifyObservation: notifyObservation,
                     onObservation: onObservation
                 ) {
@@ -403,7 +410,7 @@ extension Navigation {
 
         private func restoreOrigin(
             of container: ActiveContainerExploration,
-            onObservation: (SettledObservationEvent) -> ViewportExplorationDecision
+            onObservation: (Observation.SnapshotEvent) async -> ViewportExplorationDecision
         ) async -> OriginRestoreOutcome {
             await restoreOrigin(
                 container.savedVisualOrigin,
@@ -415,8 +422,9 @@ extension Navigation {
         private func restoreOrigin(
             _ origin: CGPoint,
             scrollViewID: ObjectIdentifier,
+            deadline: SemanticObservationDeadline? = nil,
             notifyObservation: Bool = true,
-            onObservation: (SettledObservationEvent) -> ViewportExplorationDecision
+            onObservation: (Observation.SnapshotEvent) async -> ViewportExplorationDecision
         ) async -> OriginRestoreOutcome {
             guard let target = currentProgrammaticScrollTarget(for: scrollViewID),
                   case .uiScrollView = target else {
@@ -424,7 +432,7 @@ extension Navigation {
             }
             let transition = await navigation.performViewportTransition(
                 .restoreVisualOrigin(origin, in: target),
-                deadline: exploration.deadline,
+                deadline: deadline ?? exploration.deadline,
                 discoveryCommitPolicy: exploration.discoveryCommitPolicy
             )
             switch transition.outcome {
@@ -435,7 +443,7 @@ extension Navigation {
             case .moved:
                 state.didMoveViewport = true
                 guard let event = transition.event else { return .interrupted }
-                return .observed(record(
+                return .observed(await record(
                     event,
                     notifyObservation: notifyObservation,
                     onObservation: onObservation

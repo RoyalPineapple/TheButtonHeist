@@ -25,6 +25,7 @@ private enum PublicActionResultCodingKey: String, CodingKey {
     case retryable
     case hint
     case expectation
+    case settlement
     case activationTrace
     case timing
     case omitted
@@ -95,6 +96,7 @@ extension ActionProjection: Encodable {
         try container.encodeIfPresent(screenId, forKey: .screenId)
         try encodeFailure(to: &container)
         try container.encodeIfPresent(expectation, forKey: .expectation)
+        try container.encodeIfPresent(incompleteSettlement, forKey: .settlement)
         try container.encodeIfPresent(activationTrace, forKey: .activationTrace)
         try container.encodeIfPresent(timing, forKey: .timing)
         if publicContext.includesOmissions {

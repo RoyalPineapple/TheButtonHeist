@@ -6,47 +6,12 @@ import ButtonHeistSupport
 import TheScore
 
 /// Coordinates semantic observation scheduling, settlement, and delivery.
+extension Observation {
 @MainActor
-internal final class SemanticObservationStream {
+internal final class Stream {
     private static let passiveSettleTimeoutMs = 1_000
     private static let activeFallbackQuietWindowMs = 60
     private static let passiveDiscoveryCadence: Duration = .seconds(1)
-
-    internal typealias VisibleObservationSettler = @MainActor (
-        TheVault,
-        TheTripwire,
-        SemanticObservationDemandState,
-        TheTripwire.TripwireSignal,
-        Int
-    ) async -> SettleSession.Result
-
-    struct VisibleRefreshToken: Equatable {
-        let rawValue: UInt64
-    }
-
-    struct VisibleRefreshTask {
-        let token: VisibleRefreshToken
-        let task: Task<ObservationSettlement, Never>
-    }
-
-    enum VisibleRefreshPhase {
-        case idle
-        case refreshing(VisibleRefreshTask)
-
-        var task: VisibleRefreshTask? {
-            switch self {
-            case .idle:
-                nil
-            case .refreshing(let task):
-                task
-            }
-        }
-
-        mutating func cancel() {
-            task?.task.cancel()
-            self = .idle
-        }
-    }
 
     weak var vault: TheVault?
     let tripwire: TheTripwire
@@ -58,27 +23,36 @@ internal final class SemanticObservationStream {
     // MARK: - Observation Bookkeeping
 
     var scopePressure = SemanticObservationScopePressure()
-    var observationStore = SemanticObservationStore()
+    let storeOwner = StoreOwner()
     var observationWaiters = WaiterStore<UInt64, SemanticObservationWaiter>()
+    private var subscribers: [UInt64: Subscriber] = [:]
+    var deliveryState = DeliveryState()
+    private var publicationWaiters: [
+        StoreOwner.DeliveryToken: CheckedContinuation<PublicationOutcome, Never>
+    ] = [:]
+    var beforeCommittedDelivery: @MainActor (StoreOwner.DeliveryToken) async -> Void = { _ in }
+    var beforeResolvedDeliveryEnqueue: @MainActor (StoreOwner.DeliveryToken) async -> Void = { _ in }
+    var latestDeliveredSnapshotEvent: SnapshotEvent?
+    var latestDeliveredInterfaceTree: InterfaceTree = .empty
 
     // MARK: - Subscriber-Facing Settled Observation History
 
     var lifecycle = SemanticObservationLifecycle.stopped
-    internal var latestCommittedEvent: SettledObservationEvent? {
-        observationStore.latestCommittedEvent
+    internal func latestCommittedEvent() async -> SnapshotEvent? {
+        await storeOwner.latestCommittedEvent()
     }
     /// Invalidates only latest fulfilled events as admitted waiter results.
     /// Settled semantic truth remains in `TheVault` until the next explicit
     /// commit.
-    internal var latestSettledObservationInvalidated: Bool {
-        observationStore.latestSettledObservationInvalidated
+    internal func latestSettledObservationInvalidated() async -> Bool {
+        await storeOwner.latestSettledObservationInvalidated()
     }
-    internal var latestSettleFailureDiagnostic: String? {
-        observationStore.settleFailureDiagnostic
+    internal func latestSettleFailureDiagnostic() async -> String? {
+        await storeOwner.latestSettleFailureDiagnostic()
     }
 
-    internal var latestCommittedObservation: SettledObservation? {
-        observationStore.latestCommittedObservation
+    internal func latestCommittedSnapshot() async -> Snapshot? {
+        await storeOwner.latestCommittedSnapshot()
     }
 
     internal var isActive: Bool {
@@ -87,6 +61,10 @@ internal final class SemanticObservationStream {
 
     internal var observationWaiterCount: Int {
         observationWaiters.count
+    }
+
+    internal var publicationWaiterCount: Int {
+        publicationWaiters.count
     }
 
     internal var activeObservationDemandCount: Int {
@@ -134,13 +112,14 @@ internal final class SemanticObservationStream {
 
     internal func start(
         discovery: @escaping SemanticObservationLifecycle.DiscoveryObservation
-    ) {
+    ) async {
         guard !lifecycle.replaceDiscoveryIfRunning(discovery) else { return }
+        let generation = await storeOwner.invalidateCurrentObservation()
+        synchronizeDeliveryGeneration(generation, clearingSource: true)
         lastPassiveDiscoveryStartedAt = nil
         if let vault {
             AccessibilityNotificationObserver.shared.subscribe(vault.accessibilityNotifications)
         }
-        observationStore.invalidateCurrentObservation()
         let task = Task { [weak self] in
             guard let self else { return }
             while !Task.isCancelled {
@@ -161,12 +140,63 @@ internal final class SemanticObservationStream {
     }
 
     internal func subscribe(scope: SemanticObservationScope) -> SemanticObservationSubscription {
+        subscribe(scope: scope, receive: { _ in })
+    }
+
+    internal func subscribe(
+        scope: SemanticObservationScope,
+        receive: @escaping @MainActor (Event) -> Void
+    ) -> SemanticObservationSubscription {
         let id = scopePressure.addSubscription(scope: scope)
+        subscribers[id] = Subscriber(scope: scope, receive: receive)
         return SemanticObservationSubscription(id: id, scope: scope, stream: self)
     }
 
     internal func removeSubscription(_ id: UInt64) {
+        subscribers.removeValue(forKey: id)
         scopePressure.removeSubscription(id)
+    }
+
+    func publishImmediately(_ event: Event) {
+        if case .snapshot(let snapshotEvent) = event {
+            latestDeliveredSnapshotEvent = snapshotEvent
+            latestDeliveredInterfaceTree = snapshotEvent.snapshot.observation.tree
+        }
+        for subscriber in subscribers.values where event.canFulfill(subscriber.scope) {
+            subscriber.receive(event)
+        }
+    }
+
+    func synchronizeDeliveryGeneration(
+        _ generation: StoreOwner.DeliveryGeneration,
+        clearingProjection: Bool = false,
+        clearingSource: Bool = false
+    ) {
+        guard deliveryState.synchronize(to: generation, clearingSource: clearingSource) else { return }
+        let waiters = publicationWaiters.values
+        publicationWaiters.removeAll(keepingCapacity: true)
+        waiters.forEach { $0.resume(returning: .superseded) }
+        guard clearingProjection else { return }
+        latestDeliveredSnapshotEvent = nil
+        latestDeliveredInterfaceTree = .empty
+    }
+
+    func waitForPublication(
+        of token: StoreOwner.DeliveryToken
+    ) async -> PublicationOutcome {
+        await withCheckedContinuation { continuation in
+            precondition(
+                publicationWaiters.updateValue(continuation, forKey: token) == nil,
+                "Observation delivery may have only one publication waiter"
+            )
+        }
+    }
+
+    func completePublication(
+        of token: StoreOwner.DeliveryToken,
+        with outcome: PublicationOutcome
+    ) {
+        publicationWaiters.removeValue(forKey: token)?.resume(returning: outcome)
     }
 
     internal func beginActiveObservationDemand() -> SemanticObservationDemand {
@@ -199,7 +229,7 @@ internal final class SemanticObservationStream {
               await admitPassiveObservationCycle(scope: scope),
               await performObservationCycle(scope: scope),
               !Task.isCancelled else { return }
-        completeObservationWaiters(completedScope: scope)
+        await completeObservationWaiters(completedScope: scope)
         await Task.yield()
     }
 
@@ -230,11 +260,11 @@ internal final class SemanticObservationStream {
             return await observeVisibleSemanticState()
         case .discovery:
             guard let discovery = lifecycle.discovery else {
-                invalidateLatestSettledObservation()
+                await invalidateLatestSettledObservation()
                 return true
             }
             guard let exploration = await discovery() else {
-                invalidateLatestSettledObservation()
+                await invalidateLatestSettledObservation()
                 return true
             }
             _ = exploration
@@ -243,9 +273,9 @@ internal final class SemanticObservationStream {
     }
 
     private func observeVisibleSemanticState() async -> Bool {
-        if admittedObservation(scope: .visible, after: nil) != nil {
+        if await admittedObservation(scope: .visible, after: nil) != nil {
             _ = await Task.cancellableSleep(for: .milliseconds(100))
-            observationStore.invalidateIfSignalChanged(to: currentTripwireSignal())
+            await invalidateDeliveryIfSignalChanged(to: currentTripwireSignal())
             return !Task.isCancelled
         }
 
@@ -255,6 +285,138 @@ internal final class SemanticObservationStream {
         return !Task.isCancelled
     }
 
+    func invalidateDeliveryIfSignalChanged(
+        to signal: TheTripwire.TripwireSignal
+    ) async {
+        guard let generation = await storeOwner.invalidateIfSignalChanged(to: signal) else { return }
+        synchronizeDeliveryGeneration(generation, clearingSource: true)
+    }
+
+}
+}
+
+extension Observation.Stream {
+    internal typealias VisibleObservationSettler = @MainActor (
+        TheVault,
+        TheTripwire,
+        SemanticObservationDemandState,
+        TheTripwire.TripwireSignal,
+        Int
+    ) async -> SettleSession.Result
+
+    struct VisibleRefreshToken: Equatable {
+        let rawValue: UInt64
+    }
+
+    struct VisibleRefreshTask {
+        let token: VisibleRefreshToken
+        let task: Task<ObservationSettlement, Never>
+    }
+
+    private struct Subscriber {
+        let scope: SemanticObservationScope
+        let receive: @MainActor (Observation.Event) -> Void
+    }
+
+    struct PendingDelivery {
+        let delivery: Observation.StoreOwner.CommittedDelivery
+        let sourceObservation: InterfaceObservation
+        let fallbackReasons: [AccessibilityObservationFallbackReason]
+    }
+
+    struct ReadyDelivery {
+        let pending: PendingDelivery
+        let reattachesLiveCapture: Bool
+    }
+
+    struct DeliveryState {
+        private(set) var generation = Observation.StoreOwner.DeliveryGeneration.initial
+        private var nextOrder: UInt64 = 1
+        private var pending: [UInt64: PendingDelivery] = [:]
+        private var latestSourceCaptureID: InterfaceCaptureID?
+
+        mutating func observeSourceCapture(_ captureID: InterfaceCaptureID) {
+            latestSourceCaptureID = captureID
+        }
+
+        func isLatestSourceCapture(_ captureID: InterfaceCaptureID) -> Bool {
+            latestSourceCaptureID == captureID
+        }
+
+        mutating func synchronize(
+            to generation: Observation.StoreOwner.DeliveryGeneration,
+            clearingSource: Bool = false
+        ) -> Bool {
+            guard generation > self.generation else { return false }
+            self.generation = generation
+            nextOrder = 1
+            pending.removeAll(keepingCapacity: true)
+            if clearingSource {
+                latestSourceCaptureID = nil
+            }
+            return true
+        }
+
+        mutating func enqueue(
+            _ delivery: PendingDelivery,
+            currentCommitOrder: UInt64
+        ) -> DeliveryEnqueueResult {
+            guard delivery.delivery.token.generation >= generation else {
+                return .superseded
+            }
+            _ = synchronize(to: delivery.delivery.token.generation)
+            guard delivery.delivery.token.order >= nextOrder else {
+                return .superseded
+            }
+            pending[delivery.delivery.token.order] = delivery
+
+            var contiguous: [ReadyDelivery] = []
+            while let next = pending.removeValue(forKey: nextOrder) {
+                contiguous.append(ReadyDelivery(
+                    pending: next,
+                    reattachesLiveCapture: nextOrder == currentCommitOrder
+                        && next.sourceObservation.captureID == latestSourceCaptureID
+                ))
+                nextOrder += 1
+            }
+            return .ready(contiguous)
+        }
+    }
+
+    enum DeliveryEnqueueResult {
+        case ready([ReadyDelivery])
+        case superseded
+    }
+
+    enum VisibleRefreshPhase {
+        case idle
+        case refreshing(VisibleRefreshTask)
+
+        var task: VisibleRefreshTask? {
+            switch self {
+            case .idle:
+                nil
+            case .refreshing(let task):
+                task
+            }
+        }
+
+        mutating func cancel() {
+            task?.task.cancel()
+            self = .idle
+        }
+    }
+}
+
+private extension Observation.Event {
+    func canFulfill(_ scope: SemanticObservationScope) -> Bool {
+        switch self {
+        case .snapshot(let event):
+            event.scope.canFulfill(scope)
+        case .announcement:
+            true
+        }
+    }
 }
 
 #endif // DEBUG

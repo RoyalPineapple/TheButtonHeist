@@ -9,7 +9,7 @@ extension PredicateWait {
         case matched(PredicateObservationReduction)
         case unmatched(LifecycleEvidence)
         case empty
-        case unavailable(ObservationHistoryReadError)
+        case unavailable(Observation.LogReadError)
     }
 
     internal func initialTraceChangeEvaluation(
@@ -29,7 +29,7 @@ extension PredicateWait {
     internal func reduceActionContext(
         for step: ResolvedWaitRuntimeInput,
         context: ActionExpectationContext?
-    ) -> ActionContextReduction? {
+    ) async -> ActionContextReduction? {
         guard step.predicate.requiresChangeBaseline, let context else { return nil }
 
         var evidence = LifecycleEvidence(
@@ -37,33 +37,27 @@ extension PredicateWait {
             target: step.predicate.waitTarget
         )
         var lastReduction: PredicateObservationReduction?
-        var cursor = context.preActionCapture.cursor
-        let upperBound = context.throughObservationCursor
-        guard upperBound.scope == cursor.scope,
-              upperBound.sequence >= cursor.sequence else {
-            return .unavailable(.cursorUnavailable(upperBound))
+        guard context.throughMoment.isSameOrAfter(context.preActionMoment) else {
+            return .unavailable(.momentUnavailable(context.throughMoment))
         }
-        while cursor != upperBound {
-            let entry: ObservationEntry
-            switch vault.semanticObservationStream.readRetainedObservation(
-                after: cursor,
-                scope: cursor.scope
-            ) {
-            case .entry(let retained):
-                guard retained.cursor.sequence <= upperBound.sequence else {
-                    return .unavailable(.cursorUnavailable(upperBound))
-                }
-                entry = retained
-            case .pending:
-                return .unavailable(.cursorUnavailable(upperBound))
-            case .failure(let error):
-                return .unavailable(error)
-            }
-            let reduction = reduceObservation(
-                actionEvidenceProjector.projectSettledEvidence(from: entry.event),
+        let events: [Observation.Event]
+        switch await vault.semanticObservationStream.storeOwner.readLog({
+            $0.events(since: context.preActionMoment)
+        }) {
+        case .events(let retained):
+            events = retained
+        case .expired(let gap):
+            return .unavailable(.historyEvicted(gap))
+        case .unavailable(let error):
+            return .unavailable(error)
+        }
+        for case .snapshot(let event) in events {
+            guard context.throughMoment.isSameOrAfter(event.moment) else { break }
+            let reduction = await reduceObservation(
+                actionEvidenceProjector.projectSettledEvidence(from: event),
                 predicate: step.predicate,
                 predicateExpression: step.predicateExpression,
-                baselineSeed: .supplied(context.preActionCapture),
+                baselineSeed: .supplied(context.preActionMoment),
                 stream: evidence.stream
             )
             evidence = evidence.recording(reduction)
@@ -72,7 +66,6 @@ extension PredicateWait {
                reduction.reduction.expectation.met {
                 return .matched(reduction.reduction)
             }
-            cursor = entry.cursor
         }
         guard let lastReduction else { return .empty }
         return lastReduction.expectation.met
@@ -84,18 +77,18 @@ extension PredicateWait {
 
 internal struct PredicateObservationEvidence {
     private let snapshot: PredicateObservationSnapshot
-    internal let baseline: SettledCapture?
-    internal let window: ObservationWindow?
+    internal let baseline: Observation.Moment?
+    internal let eventsSinceBaseline: Observation.EventsSince?
 
     internal init(
         observation: SettledObservationEvidence,
-        baseline: SettledCapture?,
-        window: ObservationWindow?
+        baseline: Observation.Moment?,
+        eventsSinceBaseline: Observation.EventsSince?
     ) {
         let snapshot = PredicateObservationSnapshot(observation)
         self.snapshot = snapshot
         self.baseline = baseline
-        self.window = window
+        self.eventsSinceBaseline = eventsSinceBaseline
     }
 
     internal var observation: SettledObservationEvidence {
@@ -110,14 +103,22 @@ internal struct PredicateObservationEvidence {
             guard baseline != nil else {
                 return ExpectationResult(met: false, predicate: expression, actual: "noTrace")
             }
-            guard let window else {
+            guard let traceEvidence else {
+                let actual = switch eventsSinceBaseline {
+                case .expired:
+                    "observation history incomplete"
+                case .unavailable:
+                    "observation history unavailable"
+                case .events, .none:
+                    PredicateObservationDiagnostics.changePredicateNeedsFutureObservationMessage
+                }
                 return ExpectationResult(
                     met: false,
                     predicate: expression,
-                    actual: PredicateObservationDiagnostics.changePredicateNeedsFutureObservationMessage
+                    actual: actual
                 )
             }
-            return predicate.evaluate(in: window.traceEvidence).expectation(for: expression)
+            return predicate.evaluate(in: traceEvidence).expectation(for: expression)
         }
 
         guard let evidence = AccessibilityTraceEvidence(
@@ -128,23 +129,50 @@ internal struct PredicateObservationEvidence {
         }
         return predicate.evaluate(in: evidence).expectation(for: expression)
     }
-}
 
-extension ObservationWindow {
-    internal var traceEvidence: AccessibilityTraceEvidence {
-        let evidenceCompleteness: AccessibilityTraceEvidence.Completeness = switch completeness {
-        case .complete:
-            .complete
-        case .incomplete:
-            .incomplete
+    internal var changeTrace: AccessibilityTrace? {
+        Self.changeTrace(
+            baseline: baseline,
+            eventsSinceBaseline: eventsSinceBaseline,
+            through: observation.event
+        )
+    }
+
+    internal var traceEvidence: AccessibilityTraceEvidence? {
+        changeTrace.flatMap {
+            AccessibilityTraceEvidence(trace: $0, completeness: .complete)
         }
-        guard let evidence = AccessibilityTraceEvidence(
-            trace: trace,
-            completeness: evidenceCompleteness
-        ) else {
-            preconditionFailure("observation window requires at least one capture")
+    }
+
+    internal static func traceEvidence(
+        baseline: Observation.Moment?,
+        eventsSinceBaseline: Observation.EventsSince?,
+        through currentEvent: Observation.SnapshotEvent?
+    ) -> AccessibilityTraceEvidence? {
+        changeTrace(
+            baseline: baseline,
+            eventsSinceBaseline: eventsSinceBaseline,
+            through: currentEvent
+        ).flatMap {
+            AccessibilityTraceEvidence(trace: $0, completeness: .complete)
         }
-        return evidence
+    }
+
+    private static func changeTrace(
+        baseline: Observation.Moment?,
+        eventsSinceBaseline: Observation.EventsSince?,
+        through currentEvent: Observation.SnapshotEvent?
+    ) -> AccessibilityTrace? {
+        guard let baseline,
+              let currentEvent,
+              case .events(let events) = eventsSinceBaseline else { return nil }
+        let snapshots = events.compactMap { event -> Observation.SnapshotEvent? in
+            guard case .snapshot(let snapshot) = event,
+                  currentEvent.moment.isSameOrAfter(snapshot.moment) else { return nil }
+            return snapshot
+        }
+        guard snapshots.last?.moment == currentEvent.moment else { return nil }
+        return AccessibilityTrace(captures: [baseline.capture] + snapshots.map(\.moment.capture))
     }
 }
 

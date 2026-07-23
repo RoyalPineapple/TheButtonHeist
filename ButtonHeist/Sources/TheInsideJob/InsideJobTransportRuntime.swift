@@ -154,7 +154,7 @@ extension TheInsideJob {
             attempt.task.cancel()
             await attempt.task.value
         case .activateRuntime(let resources):
-            activateRuntime(resources)
+            await activateRuntime(resources)
         case .tearDownRuntimeServices:
             await getaway.tearDown()
             await muscle.tearDown()

@@ -6,13 +6,13 @@ import XCTest
 @MainActor
 final class TheBrainsObservationStateTests: XCTestCase {
 
-    func testChangedWaitLeaseRequiresActiveObservationAndRejectsReentry() {
+    func testChangedWaitLeaseRequiresActiveObservationAndRejectsReentry() async {
         let brains = TheBrains(tripwire: TheTripwire())
 
         XCTAssertFalse(brains.semanticObservationIsActive)
         XCTAssertFalse(brains.beginChangedWait())
 
-        brains.startSemanticObservation()
+        await brains.startSemanticObservation()
         defer {
             brains.finishChangedWait()
             brains.stopSemanticObservation()
@@ -28,9 +28,9 @@ final class TheBrainsObservationStateTests: XCTestCase {
         XCTAssertTrue(brains.beginChangedWait())
     }
 
-    func testStoppingObservationDuringChangedWaitIsNotReactivatedByWaitFinish() {
+    func testStoppingObservationDuringChangedWaitIsNotReactivatedByWaitFinish() async {
         let brains = TheBrains(tripwire: TheTripwire())
-        brains.startSemanticObservation()
+        await brains.startSemanticObservation()
 
         XCTAssertTrue(brains.beginChangedWait())
 

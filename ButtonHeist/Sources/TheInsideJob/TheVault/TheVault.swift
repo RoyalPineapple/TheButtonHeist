@@ -41,7 +41,7 @@ final class TheVault {
     // MARK: - Interface State
 
     var interfaceTree: InterfaceTree {
-        semanticObservationStream.observationStore.interfaceTree
+        semanticObservationStream.latestDeliveredInterfaceTree
     }
     var latestObservation: InterfaceObservation = .empty
     var latestFailedSettleDiagnosticEvidence: InterfaceObservation?
@@ -52,7 +52,7 @@ final class TheVault {
 
     // MARK: - Observation Scheduling
 
-    lazy var semanticObservationStream = SemanticObservationStream(vault: self, tripwire: tripwire)
+    lazy var semanticObservationStream = Observation.Stream(vault: self, tripwire: tripwire)
 
     // MARK: - Interaction Cursor State
 

@@ -14,7 +14,7 @@ extension TheBrainsScrollTests {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
-        installSyntheticObservation(InterfaceObservation.makeForTests(
+        await installSyntheticObservation(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerNamesByPath: [TreePath([0]): "main_scroll"],
@@ -22,7 +22,7 @@ extension TheBrainsScrollTests {
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [TreePath([0]): .init(view: scrollView)]
         ))
-        let baselineSequence = brains.vault.semanticObservationStream.latestCommittedEvent?.sequence
+        let baselineSequence = await brains.vault.semanticObservationStream.latestCommittedEvent()?.sequence
 
         let result = await brains.navigation.executeScroll(
             try resolvedScrollTarget(ScrollTarget())
@@ -30,7 +30,8 @@ extension TheBrainsScrollTests {
 
         XCTAssertTrue(result.success, "Expected default scroll to pick the only visible container: \(String(describing: result.message))")
         XCTAssertGreaterThan(scrollView.contentOffset.y, 0)
-        let committedMovement = try XCTUnwrap(brains.vault.semanticObservationStream.latestCommittedEvent)
+        let committedEvent = await brains.vault.semanticObservationStream.latestCommittedEvent()
+        let committedMovement = try XCTUnwrap(committedEvent)
         XCTAssertEqual(committedMovement.scope, .discovery)
         XCTAssertNotEqual(committedMovement.sequence, baselineSequence)
     }
@@ -40,7 +41,7 @@ extension TheBrainsScrollTests {
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         scrollView.contentOffset.y = 600
         let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
-        installSyntheticObservation(InterfaceObservation.makeForTests(
+        await installSyntheticObservation(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerNamesByPath: [TreePath([0]): "main_scroll"],
@@ -61,7 +62,7 @@ extension TheBrainsScrollTests {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
-        installSyntheticObservation(InterfaceObservation.makeForTests(
+        await installSyntheticObservation(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerNamesByPath: [TreePath([0]): "main_scroll"],
@@ -85,7 +86,7 @@ extension TheBrainsScrollTests {
         secondScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let firstContainer = makeScrollableContainer(contentSize: firstScrollView.contentSize, frame: firstScrollView.frame)
         let secondContainer = makeScrollableContainer(contentSize: secondScrollView.contentSize, frame: secondScrollView.frame)
-        installSyntheticObservation(InterfaceObservation.makeForTests(
+        await installSyntheticObservation(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [
                 .container(firstContainer, children: []),
@@ -126,7 +127,7 @@ extension TheBrainsScrollTests {
         secondScrollView.contentOffset.y = 500
         let firstContainer = makeScrollableContainer(contentSize: firstScrollView.contentSize, frame: firstScrollView.frame)
         let secondContainer = makeScrollableContainer(contentSize: secondScrollView.contentSize, frame: secondScrollView.frame)
-        installSyntheticObservation(InterfaceObservation.makeForTests(
+        await installSyntheticObservation(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [
                 .container(firstContainer, children: []),
@@ -170,7 +171,7 @@ extension TheBrainsScrollTests {
         let firstPath = TreePath([0])
         let secondPath = TreePath([1])
 
-        installSyntheticObservation(InterfaceObservation.makeForTests(
+        await installSyntheticObservation(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [
                 .container(repeatedContainer, children: []),
@@ -205,8 +206,8 @@ extension TheBrainsScrollTests {
     func testScrollWithoutElementReportsAmbiguousContainers() async throws {
         let firstContainer = makeScrollableContainer()
         let secondContainer = makeScrollableContainer(frame: CGRect(x: 0, y: 420, width: 320, height: 400))
-        installScrollableContainers([firstContainer, secondContainer])
-        installSyntheticObservation(InterfaceObservation.makeForTests(
+        await installScrollableContainers([firstContainer, secondContainer])
+        await installSyntheticObservation(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [
                 .container(firstContainer, children: []),

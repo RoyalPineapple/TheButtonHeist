@@ -46,6 +46,7 @@ struct ActionProjection: Sendable {
     let actionMethod: ActionMethodProjection
     let result: ActionResult
     private let surfacedExpectation: ExpectationResult?
+    private let announcementOverride: String?
     private let expectationHint: String?
     private let profile: ProjectionProfile
     let publicContext: PublicActionResultContext
@@ -54,6 +55,7 @@ struct ActionProjection: Sendable {
         actionMethod: ActionMethodProjection,
         result: ActionResult,
         expectation: ExpectationResult? = nil,
+        announcementOverride: String? = nil,
         expectationHint: String? = nil,
         profile: ProjectionProfile,
         publicContext: PublicActionResultContext = .standaloneAction
@@ -61,6 +63,7 @@ struct ActionProjection: Sendable {
         self.actionMethod = actionMethod
         self.result = result
         self.surfacedExpectation = result.outcome.isSuccess ? expectation : nil
+        self.announcementOverride = announcementOverride
         self.expectationHint = expectationHint
         self.profile = profile
         self.publicContext = publicContext
@@ -74,7 +77,9 @@ struct ActionProjection: Sendable {
 
     var warning: HeistActionWarning? { result.warning }
 
-    var announcement: String? { result.announcement }
+    var announcement: String? {
+        announcementOverride ?? surfacedExpectation?.matchedAnnouncement ?? result.announcement
+    }
 
     var screenActionHandler: ScreenActionHandlerName? { result.screenActionHandler }
 
@@ -136,6 +141,11 @@ struct ActionProjection: Sendable {
         surfacedExpectation.map {
             ExpectationProjection(result: $0, hint: expectationHint)
         }
+    }
+
+    var incompleteSettlement: ActionSettlementEvidence? {
+        guard let settlement = result.evidence.settlement, !settlement.settled else { return nil }
+        return settlement
     }
 
     var activationTrace: ActivationTrace? { result.activationTrace }

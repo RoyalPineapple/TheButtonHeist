@@ -11,7 +11,7 @@ import XCTest
 extension TheBrainsActionTests {
 
     func testHeistActionAndWaitStepsUseSeparateRuntimeTransitions() async throws {
-        let observedReady = observedState(labels: ["Ready"])
+        let observedReady = await observedState(labels: ["Ready"])
         let target = AccessibilityTarget.identifier("target")
         var dispatchedCommands: [ResolvedHeistActionCommand] = []
         var waitRequests: [TheBrains.HeistRuntimeWaitRequest] = []

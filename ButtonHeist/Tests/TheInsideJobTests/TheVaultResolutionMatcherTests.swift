@@ -10,9 +10,9 @@ extension TheVaultResolutionTests {
 
     // MARK: - Matcher Resolution
 
-    func testMatcherResolvesUniqueElement() {
+    func testMatcherResolvesUniqueElement() async {
         let element = element(label: "Save", traits: .button)
-        register(element, heistId: "button_save", index: 0)
+        await register(element, heistId: "button_save", index: 0)
 
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save")))
         guard let resolved = result.resolvedElement else {
@@ -22,11 +22,11 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(resolved.element.label, "Save")
     }
 
-    func testPredicateTargetResolvesExactScreenElement() {
+    func testPredicateTargetResolvesExactScreenElement() async {
         let save = element(label: "Save", traits: .button)
         let cancel = element(label: "Cancel", traits: .button)
-        register(save, heistId: "button_save", index: 0)
-        register(cancel, heistId: "button_cancel", index: 1)
+        await register(save, heistId: "button_save", index: 0)
+        await register(cancel, heistId: "button_cancel", index: 1)
 
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Cancel")))
         guard let resolved = result.resolvedElement else {
@@ -37,7 +37,7 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(resolved.element.label, "Cancel")
     }
 
-    func testNestedScopedTargetResolvesDescendantOfContainerLabels() throws {
+    func testNestedScopedTargetResolvesDescendantOfContainerLabels() async throws {
         let checkoutContainer = AccessibilityContainer(
             type: .semanticGroup(label: "Checkout", value: nil), identifier: nil,
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
@@ -58,7 +58,7 @@ extension TheVaultResolutionTests {
         let cartPay = element(label: "Pay", traits: .button)
         let checkoutPath = TreePath([0, 0, 0])
         let cartPath = TreePath([1, 0, 0])
-        bagman.installObservationForTesting(InterfaceObservation.makeForTests(
+        await bagman.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [
                 "checkout_pay": InterfaceTree.Element(
                     heistId: "checkout_pay",
@@ -98,7 +98,7 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(result.resolvedElement?.heistId, "checkout_pay")
     }
 
-    func testScopedTargetResolutionUsesInterfaceTreeScrollMembership() throws {
+    func testScopedTargetResolutionUsesInterfaceTreeScrollMembership() async throws {
         let containerPath = TreePath([30])
         let staleElementPath = TreePath([2])
         let container = AccessibilityContainer(
@@ -127,7 +127,7 @@ extension TheVaultResolutionTests {
             ),
             liveCapture: LiveCapture.makeForTests()
         )
-        bagman.installObservationForTesting(observation)
+        await bagman.installObservationForTesting(observation)
         let target = AccessibilityTarget.within(
             container: .identifier("order_entry_container"),
             .identifier("review_sale")
@@ -137,11 +137,11 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(bagman.resolveTarget(resolvedTarget).resolvedElement?.heistId, "review_sale")
     }
 
-    func testMatcherAmbiguousReturnsCandidates() {
+    func testMatcherAmbiguousReturnsCandidates() async {
         let save1 = element(label: "Save", value: "draft")
         let save2 = element(label: "Save", value: "final")
-        register(save1, heistId: "button_save_1", index: 0)
-        register(save2, heistId: "button_save_2", index: 1)
+        await register(save1, heistId: "button_save_1", index: 0)
+        await register(save2, heistId: "button_save_2", index: 1)
 
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save")))
         guard case .ambiguous(let facts) = result else {
@@ -156,11 +156,11 @@ extension TheVaultResolutionTests {
         XCTAssertTrue(diagnostics.contains("2 elements match"))
     }
 
-    func testMatcherAmbiguousCandidatesIncludeDetails() {
+    func testMatcherAmbiguousCandidatesIncludeDetails() async {
         let save1 = element(label: "Save", value: "draft", identifier: "save1")
         let save2 = element(label: "Save", value: "final", identifier: "save2")
-        register(save1, heistId: "save1", index: 0)
-        register(save2, heistId: "save2", index: 1)
+        await register(save1, heistId: "save1", index: 0)
+        await register(save2, heistId: "save2", index: 1)
 
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save")))
         guard case .ambiguous(let facts) = result else {
@@ -180,9 +180,9 @@ extension TheVaultResolutionTests {
         XCTAssertTrue(candidates[0].contains("visible"))
     }
 
-    func testMatcherNoMatchReturnsNotFound() {
+    func testMatcherNoMatchReturnsNotFound() async {
         let element = element(label: "OK", traits: .button)
-        register(element, heistId: "button_ok", index: 0)
+        await register(element, heistId: "button_ok", index: 0)
 
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Cancel")))
         guard case .notFound(let facts) = result else {
@@ -196,9 +196,9 @@ extension TheVaultResolutionTests {
         XCTAssertTrue(diagnostics.contains("exact label"))
     }
 
-    func testMatcherNearMissDiagnostics() throws {
+    func testMatcherNearMissDiagnostics() async throws {
         let element = element(label: "Save", value: "draft")
-        register(element, heistId: "button_save", index: 0)
+        await register(element, heistId: "button_save", index: 0)
 
         let result = bagman.resolveTarget(try resolvedTarget(
             AccessibilityTarget.label("Save").and(.value("final"))
@@ -213,11 +213,11 @@ extension TheVaultResolutionTests {
         XCTAssertTrue(diagnostics.contains("value"), "Should identify value as divergent field")
     }
 
-    func testMatcherNearMissIncludesOffscreenKnownElement() {
+    func testMatcherNearMissIncludesOffscreenKnownElement() async {
         let visible = element(label: "Visible", traits: .button)
         let offscreen = element(label: "Long List", traits: .button)
-        register(visible, heistId: "button_visible", index: 0)
-        registerOffScreen(offscreen, heistId: "long_list_button")
+        await register(visible, heistId: "button_visible", index: 0)
+        await registerOffScreen(offscreen, heistId: "long_list_button")
 
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Long")))
         guard case .notFound(let facts) = result else {
@@ -236,18 +236,18 @@ extension TheVaultResolutionTests {
 
     // MARK: - TargetResolution Algebra
 
-    func testMissingTargetIsNotFound() {
+    func testMissingTargetIsNotFound() async {
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("nope")))
         guard case .notFound = result else {
             return XCTFail("Expected .notFound, got \(result)")
         }
     }
 
-    func testDuplicateTargetsAreAmbiguous() {
+    func testDuplicateTargetsAreAmbiguous() async {
         let save1 = element(label: "Save")
         let save2 = element(label: "Save")
-        register(save1, heistId: "button_save_1", index: 0)
-        register(save2, heistId: "button_save_2", index: 1)
+        await register(save1, heistId: "button_save_1", index: 0)
+        await register(save2, heistId: "button_save_2", index: 1)
 
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save")))
         guard case .ambiguous = result else {
@@ -255,9 +255,9 @@ extension TheVaultResolutionTests {
         }
     }
 
-    func testDiagnosticsEmptyForResolved() {
+    func testDiagnosticsEmptyForResolved() async {
         let element = element(label: "OK", traits: .button)
-        register(element, heistId: "button_ok", index: 0)
+        await register(element, heistId: "button_ok", index: 0)
 
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("OK")))
         XCTAssertEqual(result.diagnostics, "")
@@ -265,17 +265,17 @@ extension TheVaultResolutionTests {
 
     // MARK: - Ambiguous Matcher Diagnostics
 
-    func testAmbiguousMatcherReturnsDiagnostics() {
+    func testAmbiguousMatcherReturnsDiagnostics() async {
         let save1 = element(label: "Save", value: "draft")
         let save2 = element(label: "Save", value: "final")
-        register(save1, heistId: "button_save_1", index: 0)
-        register(save2, heistId: "button_save_2", index: 1)
+        await register(save1, heistId: "button_save_1", index: 0)
+        await register(save2, heistId: "button_save_2", index: 1)
 
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save")))
         XCTAssertTrue(result.diagnostics.contains("2 elements match"), "Should return ambiguous message: \(result.diagnostics)")
     }
 
-    func testEmptyScreenReturnsCompactSummary() {
+    func testEmptyScreenReturnsCompactSummary() async {
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Anything")))
         guard case .notFound(let facts) = result else {
             XCTFail("Expected .notFound, got \(result)")
@@ -289,13 +289,13 @@ extension TheVaultResolutionTests {
 
     // MARK: - Ordinal Selection
 
-    func testOrdinalSelectsNthMatch() {
+    func testOrdinalSelectsNthMatch() async {
         let save1 = element(label: "Save", value: "draft")
         let save2 = element(label: "Save", value: "final")
         let save3 = element(label: "Save", value: "archive")
-        register(save1, heistId: "button_save_1", index: 0)
-        register(save2, heistId: "button_save_2", index: 1)
-        register(save3, heistId: "button_save_3", index: 2)
+        await register(save1, heistId: "button_save_1", index: 0)
+        await register(save2, heistId: "button_save_2", index: 1)
+        await register(save3, heistId: "button_save_3", index: 2)
 
         let result0 = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save"), ordinal: 0))
         XCTAssertEqual(result0.resolvedElement?.element.value, "draft")
@@ -307,11 +307,11 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(result2.resolvedElement?.element.value, "archive")
     }
 
-    func testOrdinalOutOfBoundsReturnsNotFound() {
+    func testOrdinalOutOfBoundsReturnsNotFound() async {
         let save1 = element(label: "Save", value: "draft")
         let save2 = element(label: "Save", value: "final")
-        register(save1, heistId: "button_save_1", index: 0)
-        register(save2, heistId: "button_save_2", index: 1)
+        await register(save1, heistId: "button_save_1", index: 0)
+        await register(save2, heistId: "button_save_2", index: 1)
 
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save"), ordinal: 5))
         guard case .notFound(let facts) = result else {
@@ -326,11 +326,11 @@ extension TheVaultResolutionTests {
         XCTAssertTrue(diagnostics.contains("ordinal 0...1"))
     }
 
-    func testOrdinalNilPreservesAmbiguousBehavior() {
+    func testOrdinalNilPreservesAmbiguousBehavior() async {
         let save1 = element(label: "Save", value: "draft")
         let save2 = element(label: "Save", value: "final")
-        register(save1, heistId: "button_save_1", index: 0)
-        register(save2, heistId: "button_save_2", index: 1)
+        await register(save1, heistId: "button_save_1", index: 0)
+        await register(save2, heistId: "button_save_2", index: 1)
 
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save")))
         guard case .ambiguous(let facts) = result else {
@@ -343,9 +343,9 @@ extension TheVaultResolutionTests {
         XCTAssertTrue(diagnostics.contains("ordinal"), "Should hint about ordinal usage")
     }
 
-    func testAmbiguousMatchedCountIsExactBeyondDisplayedCandidateLimit() {
+    func testAmbiguousMatchedCountIsExactBeyondDisplayedCandidateLimit() async {
         for index in 0..<12 {
-            register(
+            await register(
                 element(label: "Duplicate", value: "\(index)"),
                 heistId: HeistId(rawValue: "duplicate_\(index)"),
                 index: index
@@ -363,16 +363,16 @@ extension TheVaultResolutionTests {
         XCTAssertTrue(result.diagnostics.contains("... and more"))
     }
 
-    func testOrdinalZeroOnSingleMatchSucceeds() {
+    func testOrdinalZeroOnSingleMatchSucceeds() async {
         let element = element(label: "Save", traits: .button)
-        register(element, heistId: "button_save", index: 0)
+        await register(element, heistId: "button_save", index: 0)
 
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save"), ordinal: 0))
         XCTAssertNotNil(result.resolvedElement)
         XCTAssertEqual(result.resolvedElement?.element.label, "Save")
     }
 
-    func testOrdinalZeroOnNoMatchReturnsNotFound() {
+    func testOrdinalZeroOnNoMatchReturnsNotFound() async {
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Nonexistent"), ordinal: 0))
         guard case .notFound(let facts) = result else {
             XCTFail("Expected .notFound, got \(result)")

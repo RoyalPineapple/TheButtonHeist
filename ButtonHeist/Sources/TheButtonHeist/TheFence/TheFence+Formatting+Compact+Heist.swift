@@ -48,6 +48,9 @@ extension FenceResponse {
             if let expectation = step.expectation {
                 line += expectation.met ? " ✓" : " ✗"
             }
+            if let settlement = step.settlement, !settlement.settled {
+                detailLines.append("    settlement: \(Self.incompleteSettlementSummary(settlement))")
+            }
             text += "\n\(line)"
             if !detailLines.isEmpty {
                 text += "\n" + detailLines.joined(separator: "\n")

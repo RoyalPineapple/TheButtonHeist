@@ -110,6 +110,25 @@ extension TheBrains {
         )
     }
 
+    internal func actionExpectationFailureDetail(
+        wait: WaitStep,
+        evidence: HeistActionEvidence
+    ) -> HeistFailureDetail {
+        let expectationResult = evidence.expectationResult
+        let observed = [
+            evidence.checkedExpectation?.actual,
+            expectationResult?.message,
+            expectationResult?.outcome.failureKind.map { "failureKind=\($0.rawValue)" },
+            expectationResult?.settled.map { "settled=\($0)" },
+        ].compactMap { $0 }.joined(separator: "; ")
+        return HeistFailureDetail(
+            category: .expectation,
+            contract: "post-action expectation is met",
+            observed: observed,
+            expected: wait.predicate.description
+        )
+    }
+
     internal func standaloneWaitFailureDetail(
         wait: WaitStep,
         result: HeistWaitResult

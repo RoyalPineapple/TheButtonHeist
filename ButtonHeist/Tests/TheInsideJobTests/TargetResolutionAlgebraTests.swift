@@ -36,8 +36,8 @@ final class TargetResolutionAlgebraTests: XCTestCase {
         vault = nil
     }
 
-    func testElementTargetResolvesAsElementMatch() throws {
-        vault.installObservationForTesting(InterfaceObservation.makeForTests(elements: [
+    func testElementTargetResolvesAsElementMatch() async throws {
+        await vault.installObservationForTesting(InterfaceObservation.makeForTests(elements: [
             (element(label: "Save"), "save_button"),
         ]))
 
@@ -50,9 +50,9 @@ final class TargetResolutionAlgebraTests: XCTestCase {
         XCTAssertEqual(match.heistId, "save_button")
     }
 
-    func testContainerTargetResolvesAsContainerMatch() throws {
+    func testContainerTargetResolvesAsContainerMatch() async throws {
         let path = TreePath([0])
-        installContainers([
+        await installContainers([
             container(path: path, label: "Actions", identifier: "actions"),
         ])
 
@@ -67,8 +67,8 @@ final class TargetResolutionAlgebraTests: XCTestCase {
         XCTAssertEqual(match.path, path)
     }
 
-    func testElementAmbiguityCarriesOnlyElementMatches() throws {
-        vault.installObservationForTesting(InterfaceObservation.makeForTests(elements: [
+    func testElementAmbiguityCarriesOnlyElementMatches() async throws {
+        await vault.installObservationForTesting(InterfaceObservation.makeForTests(elements: [
             (element(label: "Save", y: 0), "first_save"),
             (element(label: "Save", y: 50), "second_save"),
         ]))
@@ -84,8 +84,8 @@ final class TargetResolutionAlgebraTests: XCTestCase {
         XCTAssertEqual(facts.matchedCount, 2)
     }
 
-    func testElementMissCarriesOnlyElementCandidates() throws {
-        vault.installObservationForTesting(InterfaceObservation.makeForTests(elements: [
+    func testElementMissCarriesOnlyElementCandidates() async throws {
+        await vault.installObservationForTesting(InterfaceObservation.makeForTests(elements: [
             (element(label: "Cancel"), "cancel_button"),
         ]))
 
@@ -101,10 +101,10 @@ final class TargetResolutionAlgebraTests: XCTestCase {
         XCTAssertTrue(matches.exactMatches.isEmpty)
     }
 
-    func testContainerOrdinalMissCarriesOnlyContainerMatches() throws {
+    func testContainerOrdinalMissCarriesOnlyContainerMatches() async throws {
         let firstPath = TreePath([0])
         let secondPath = TreePath([1])
-        installContainers([
+        await installContainers([
             container(path: firstPath, label: "Actions", identifier: "primary"),
             container(path: secondPath, label: "Actions", identifier: "secondary"),
         ])
@@ -126,7 +126,7 @@ final class TargetResolutionAlgebraTests: XCTestCase {
         XCTAssertEqual(matches.exactMatches.map(\.path), [firstPath, secondPath])
     }
 
-    func testSemanticAdmissionRemovesTerminalOrdinalWhenSemanticTargetIsUnique() throws {
+    func testSemanticAdmissionRemovesTerminalOrdinalWhenSemanticTargetIsUnique() async throws {
         let scrollPath = TreePath([0])
         let selected = InterfaceTree.Element(
             heistId: "save_button",
@@ -134,7 +134,7 @@ final class TargetResolutionAlgebraTests: XCTestCase {
             scrollMembership: .init(containerPath: scrollPath, index: 4),
             element: element(label: "Save")
         )
-        installTree(
+        await installTree(
             elements: [selected],
             containers: [container(path: scrollPath, label: "Actions", identifier: "actions")]
         )
@@ -150,8 +150,8 @@ final class TargetResolutionAlgebraTests: XCTestCase {
         XCTAssertEqual(admitted.scrollContainerPath, scrollPath)
     }
 
-    func testSemanticAdmissionRejectsOrdinalDependentDuplicate() throws {
-        vault.installObservationForTesting(InterfaceObservation.makeForTests(elements: [
+    func testSemanticAdmissionRejectsOrdinalDependentDuplicate() async throws {
+        await vault.installObservationForTesting(InterfaceObservation.makeForTests(elements: [
             (element(label: "Save", y: 0), "first_save"),
             (element(label: "Save", y: 50), "second_save"),
         ]))
@@ -166,8 +166,8 @@ final class TargetResolutionAlgebraTests: XCTestCase {
         XCTAssertEqual(facts.matchedCount, 2)
     }
 
-    func testSemanticAdmissionRejectsAmbiguousTargetWithoutOrdinal() throws {
-        vault.installObservationForTesting(InterfaceObservation.makeForTests(elements: [
+    func testSemanticAdmissionRejectsAmbiguousTargetWithoutOrdinal() async throws {
+        await vault.installObservationForTesting(InterfaceObservation.makeForTests(elements: [
             (element(label: "Save", y: 0), "first_save"),
             (element(label: "Save", y: 50), "second_save"),
         ]))
@@ -182,8 +182,8 @@ final class TargetResolutionAlgebraTests: XCTestCase {
         XCTAssertEqual(facts.matchedCount, 2)
     }
 
-    func testSemanticAdmissionRejectsMissingTarget() throws {
-        vault.installObservationForTesting(InterfaceObservation.makeForTests(elements: [
+    func testSemanticAdmissionRejectsMissingTarget() async throws {
+        await vault.installObservationForTesting(InterfaceObservation.makeForTests(elements: [
             (element(label: "Cancel"), "cancel_button"),
         ]))
         let sourceTarget = try resolvedTarget(.element(.label("Save")))
@@ -197,8 +197,8 @@ final class TargetResolutionAlgebraTests: XCTestCase {
         XCTAssertEqual(facts.reason, .noMatches)
     }
 
-    func testSemanticAdmissionRejectsWitnessDifferentFromUniqueMatch() throws {
-        vault.installObservationForTesting(InterfaceObservation.makeForTests(elements: [
+    func testSemanticAdmissionRejectsWitnessDifferentFromUniqueMatch() async throws {
+        await vault.installObservationForTesting(InterfaceObservation.makeForTests(elements: [
             (element(label: "Save"), "save_button"),
             (element(label: "Cancel"), "cancel_button"),
         ]))
@@ -243,19 +243,19 @@ final class TargetResolutionAlgebraTests: XCTestCase {
         )
     }
 
-    private func installContainers(_ containers: [InterfaceTree.Container]) {
-        installTree(elements: [], containers: containers)
+    private func installContainers(_ containers: [InterfaceTree.Container]) async {
+        await installTree(elements: [], containers: containers)
     }
 
     private func installTree(
         elements: [InterfaceTree.Element],
         containers: [InterfaceTree.Container] = []
-    ) {
+    ) async {
         let tree = InterfaceTree(
             elements: Dictionary(uniqueKeysWithValues: elements.map { ($0.heistId, $0) }),
             containers: Dictionary(uniqueKeysWithValues: containers.map { ($0.path, $0) })
         )
-        vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await vault.installObservationForTesting(InterfaceObservation.makeForTests(
             tree: tree,
             liveCapture: .makeForTests()
         ))

@@ -19,7 +19,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         try await super.tearDown()
     }
 
-    func testUnsubscribeRemovesSubscriberAndTearsDownInstalledCallback() throws {
+    func testUnsubscribeRemovesSubscriberAndTearsDownInstalledCallback() async throws {
         let bus = AccessibilityNotificationBus()
 
         AccessibilityNotificationObserver.shared.subscribe(bus)
@@ -36,7 +36,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertFalse(AccessibilityNotificationObserver.shared.isInstalled)
     }
 
-    func testSubscribeDuringCallbackRemovalReinstallsForTheNewSubscriber() {
+    func testSubscribeDuringCallbackRemovalReinstallsForTheNewSubscriber() async {
         let harness = CallbackRegistrationHarness()
         let observer = AccessibilityNotificationObserver(
             installCallbackForTesting: { harness.install() },
@@ -64,7 +64,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertFalse(harness.isInstalled)
     }
 
-    func testUnsubscribeDuringCallbackInstallationRemovesUnneededRegistration() {
+    func testUnsubscribeDuringCallbackInstallationRemovesUnneededRegistration() async {
         let harness = CallbackRegistrationHarness()
         let observer = AccessibilityNotificationObserver(
             installCallbackForTesting: { harness.install() },
@@ -138,7 +138,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         }
     }
 
-    func testActionWindowReadsOnlyEventsAfterCursorWithoutDrainingHistory() throws {
+    func testActionWindowReadsOnlyEventsAfterCursorWithoutDrainingHistory() async throws {
         let bus = AccessibilityNotificationBus()
         bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
 
@@ -164,7 +164,46 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         )
     }
 
-    func testActionWindowReportsHistoryGapWithoutDrainingRetainedEvents() throws {
+    func testNestedActionWindowRollsEvidenceIntoOwnerWithoutReleasingIt() async throws {
+        let bus = AccessibilityNotificationBus()
+        let owner = bus.beginActionWindow()
+        bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
+        let child = bus.beginActionWindow()
+        bus.recordForTesting(code: 1005, notificationData: .none, associatedElement: .none)
+
+        child.cancel()
+
+        XCTAssertTrue(
+            bus.checkpoint(after: .origin, selection: .unclaimedScoped).events.isEmpty
+        )
+        let ownerBatch = try XCTUnwrap(owner.capture())
+        XCTAssertEqual(ownerBatch.events.map(\.kind), [
+            .elementChanged(.layout),
+            .elementChanged(.value),
+        ])
+
+        owner.consume()
+        XCTAssertTrue(
+            bus.checkpoint(after: .origin, selection: .unclaimedScoped).events.isEmpty
+        )
+    }
+
+    func testOwnerReleaseReclassifiesNestedActionEvidenceAfterChildCloses() async {
+        let bus = AccessibilityNotificationBus()
+        let owner = bus.beginActionWindow()
+        let child = bus.beginActionWindow()
+        bus.recordForTesting(code: 1000, notificationData: .none, associatedElement: .none)
+
+        child.cancel()
+        owner.cancel()
+
+        XCTAssertEqual(
+            bus.checkpoint(after: .origin, selection: .unclaimedScoped).events.map(\.kind),
+            [.screenChanged]
+        )
+    }
+
+    func testActionWindowReportsHistoryGapWithoutDrainingRetainedEvents() async throws {
         let bus = AccessibilityNotificationBus()
         let action = bus.beginActionWindow()
 
@@ -186,7 +225,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(retainedSequences, batch.events.map(\.sequence))
     }
 
-    func testRawCheckpointReportsOnlyRetentionEvictionAsGap() {
+    func testRawCheckpointReportsOnlyRetentionEvictionAsGap() async {
         let bus = AccessibilityNotificationBus()
         for _ in 0..<65 {
             bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
@@ -264,7 +303,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(bus.announcementWaiterCount, 0)
     }
 
-    func testStoppingSemanticObservationDoesNotClearNotificationHistory() {
+    func testStoppingSemanticObservationDoesNotClearNotificationHistory() async {
         let vault = TheVault(tripwire: TheTripwire())
         let heist = vault.accessibilityNotifications.beginHeistScope()
         vault.accessibilityNotifications.recordForTesting(
@@ -281,7 +320,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertNil(batch.gap)
     }
 
-    func testEndingHeistScopePreservesEventsForOpenActionWindow() throws {
+    func testEndingHeistScopePreservesEventsForOpenActionWindow() async throws {
         let bus = AccessibilityNotificationBus()
         let heist = bus.beginHeistScope()
         let action = bus.beginActionWindow()
@@ -297,7 +336,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertNil(batch.gap)
     }
 
-    func testStringPayloadsFromPublicNotificationsAreCapturedAsAnnouncements() {
+    func testStringPayloadsFromPublicNotificationsAreCapturedAsAnnouncements() async {
         let bus = AccessibilityNotificationBus()
 
         bus.recordForTesting(
@@ -414,7 +453,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(bus.announcementWaiterCount, 0)
     }
 
-    func testObserverPublishesOneMonotonicPayloadSequenceToEverySubscriber() throws {
+    func testObserverPublishesOneMonotonicPayloadSequenceToEverySubscriber() async throws {
         var callback: AccessibilityNotificationCallback?
         let observer = AccessibilityNotificationObserver(
             installCallbackForTesting: { callback = $0 },
@@ -449,7 +488,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(secondValue, firstValue)
     }
 
-    func testObserverAdvancesPastSubscriberSequenceFromAnotherIngressSource() throws {
+    func testObserverAdvancesPastSubscriberSequenceFromAnotherIngressSource() async throws {
         var callback: AccessibilityNotificationCallback?
         let observer = AccessibilityNotificationObserver(
             installCallbackForTesting: { callback = $0 },
@@ -475,7 +514,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(observer.latestSequence, 8)
     }
 
-    func testUnknownNotificationsPreserveRawCodesAtBoundary() {
+    func testUnknownNotificationsPreserveRawCodesAtBoundary() async {
         let bus = AccessibilityNotificationBus()
 
         bus.recordForTesting(code: 1009, notificationData: .none, associatedElement: .none)
@@ -488,7 +527,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         )
     }
 
-    func testOnlyScopedScreenChangedAdvancesInvalidationCursor() {
+    func testOnlyScopedScreenChangedAdvancesInvalidationCursor() async {
         let bus = AccessibilityNotificationBus()
         XCTAssertEqual(bus.latestScopedScreenChangedSequence, 0)
 
@@ -506,7 +545,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(bus.latestScopedScreenChangedSequence, 5)
     }
 
-    func testExplicitNotificationEventsPreservePublisherSequence() {
+    func testExplicitNotificationEventsPreservePublisherSequence() async {
         let bus = AccessibilityNotificationBus()
         bus.record(
             sequence: 7,
@@ -524,7 +563,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(bus.latestSequence, 8)
     }
 
-    func testCheckpointIncludesScopedEventsAndExcludesAmbientEvents() {
+    func testCheckpointIncludesScopedEventsAndExcludesAmbientEvents() async {
         let bus = AccessibilityNotificationBus()
         bus.recordForTesting(code: 1000, notificationData: .none, associatedElement: .none)
         let heist = bus.beginHeistScope()
@@ -549,7 +588,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             visibleObservationSource: visibleObservationSource.capture
         )
         brains.tripwire.startPulse()
-        brains.startSemanticObservation()
+        await brains.startSemanticObservation()
         defer {
             brains.stopSemanticObservation()
             brains.tripwire.stopPulse()
@@ -561,7 +600,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
                 heistId: "overview_header"
             )
         ])
-        let staleEvent = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(staleScreen)
+        let staleEvent = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(staleScreen)
 
         // The completion notification lands after the commit, inside an
         // action's attribution window: the settled overview has already been
@@ -602,7 +641,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             visibleObservationSource: visibleObservationSource.capture
         )
         brains.tripwire.startPulse()
-        brains.startSemanticObservation()
+        await brains.startSemanticObservation()
         defer {
             brains.stopSemanticObservation()
             brains.tripwire.stopPulse()
@@ -614,7 +653,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
                 heistId: "overview_header"
             )
         ])
-        let staleEvent = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(staleScreen)
+        let staleEvent = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(staleScreen)
 
         brains.vault.accessibilityNotifications.recordForTesting(
             code: 1000,
@@ -643,7 +682,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         )
     }
 
-    func testHeistScopeKeepsActionClaimsInBoundedTaggedStreamAfterScopeEnds() {
+    func testHeistScopeKeepsActionClaimsInBoundedTaggedStreamAfterScopeEnds() async {
         let bus = AccessibilityNotificationBus()
         bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
 

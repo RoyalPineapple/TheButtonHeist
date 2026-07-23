@@ -21,7 +21,7 @@ final class RotorCursorTests: XCTestCase {
         try await super.tearDown()
     }
 
-    func testContinuationReacquiresReplacementObjectBySemanticIdentityAfterReparse() throws {
+    func testContinuationReacquiresReplacementObjectBySemanticIdentityAfterReparse() async throws {
         let hostHeistId: HeistId = "semantic_rotor_host"
         let resultHeistId: HeistId = "semantic_rotor_result"
         var initialHost: UIView? = UIView()
@@ -34,7 +34,7 @@ final class RotorCursorTests: XCTestCase {
                 }
             },
         ]
-        installRotorScreen(
+        await installRotorScreen(
             hostHeistId: hostHeistId,
             hostObject: try XCTUnwrap(initialHost),
             resultHeistId: resultHeistId,
@@ -67,7 +67,7 @@ final class RotorCursorTests: XCTestCase {
                 )
             },
         ]
-        installRotorScreen(
+        await installRotorScreen(
             hostHeistId: hostHeistId,
             hostObject: replacementHost,
             resultHeistId: resultHeistId,
@@ -87,7 +87,7 @@ final class RotorCursorTests: XCTestCase {
         XCTAssertTrue(receivedContinuationObject === replacementResult)
     }
 
-    func testUnavailableSemanticSelectionDoesNotRestartSearch() throws {
+    func testUnavailableSemanticSelectionDoesNotRestartSearch() async throws {
         let hostHeistId: HeistId = "unavailable_rotor_host"
         let resultHeistId: HeistId = "unavailable_rotor_result"
         let host = UIView()
@@ -97,7 +97,7 @@ final class RotorCursorTests: XCTestCase {
                 UIAccessibilityCustomRotorItemResult(targetElement: result, targetRange: nil)
             },
         ]
-        installRotorScreen(
+        await installRotorScreen(
             hostHeistId: hostHeistId,
             hostObject: host,
             resultHeistId: resultHeistId,
@@ -113,7 +113,7 @@ final class RotorCursorTests: XCTestCase {
                 return nil
             },
         ]
-        installRotorScreen(
+        await installRotorScreen(
             hostHeistId: hostHeistId,
             hostObject: replacementHost,
             resultHeistId: resultHeistId,
@@ -134,7 +134,7 @@ final class RotorCursorTests: XCTestCase {
         XCTAssertNil(vault.rotorCursor)
     }
 
-    func testScreenGenerationReplacementInvalidatesContinuation() throws {
+    func testScreenGenerationReplacementInvalidatesContinuation() async throws {
         let hostHeistId: HeistId = "generation_rotor_host"
         let resultHeistId: HeistId = "generation_rotor_result"
         let host = UIView()
@@ -146,7 +146,7 @@ final class RotorCursorTests: XCTestCase {
                 return UIAccessibilityCustomRotorItemResult(targetElement: result, targetRange: nil)
             },
         ]
-        installRotorScreen(
+        await installRotorScreen(
             hostHeistId: hostHeistId,
             hostObject: host,
             resultHeistId: resultHeistId,
@@ -154,8 +154,8 @@ final class RotorCursorTests: XCTestCase {
         )
         try expectSuccessfulStep(hostHeistId: hostHeistId, rotorName: "Items")
 
-        vault.semanticObservationStream.requireScreenReplacement()
-        installRotorScreen(
+        await vault.semanticObservationStream.requireScreenReplacement()
+        await installRotorScreen(
             hostHeistId: hostHeistId,
             hostObject: host,
             resultHeistId: resultHeistId,
@@ -174,7 +174,7 @@ final class RotorCursorTests: XCTestCase {
         XCTAssertNil(vault.rotorCursor)
     }
 
-    func testContinuationReconstructsTextRangeFromValueReference() throws {
+    func testContinuationReconstructsTextRangeFromValueReference() async throws {
         let hostHeistId: HeistId = "text_rotor_host"
         let resultHeistId: HeistId = "text_rotor_result"
         let host = UIView()
@@ -198,7 +198,7 @@ final class RotorCursorTests: XCTestCase {
                 )
             },
         ]
-        installRotorScreen(
+        await installRotorScreen(
             hostHeistId: hostHeistId,
             hostObject: host,
             resultHeistId: resultHeistId,
@@ -213,7 +213,7 @@ final class RotorCursorTests: XCTestCase {
         XCTAssertEqual(vault.rotorCursor?.textRange, TextRangeReference(startOffset: 1, endOffset: 4))
     }
 
-    func testResultRangeThatCannotBecomeAValueCursorFailsExplicitly() throws {
+    func testResultRangeThatCannotBecomeAValueCursorFailsExplicitly() async throws {
         let hostHeistId: HeistId = "invalid_text_rotor_host"
         let resultHeistId: HeistId = "invalid_text_rotor_result"
         let host = UIView()
@@ -226,7 +226,7 @@ final class RotorCursorTests: XCTestCase {
                 UIAccessibilityCustomRotorItemResult(targetElement: result, targetRange: range)
             },
         ]
-        installRotorScreen(
+        await installRotorScreen(
             hostHeistId: hostHeistId,
             hostObject: host,
             resultHeistId: resultHeistId,
@@ -245,7 +245,7 @@ final class RotorCursorTests: XCTestCase {
         XCTAssertNil(vault.rotorCursor)
     }
 
-    func testClearingCursorMakesNextStepStartFresh() throws {
+    func testClearingCursorMakesNextStepStartFresh() async throws {
         let hostHeistId: HeistId = "cleared_rotor_host"
         let resultHeistId: HeistId = "cleared_rotor_result"
         let host = UIView()
@@ -257,7 +257,7 @@ final class RotorCursorTests: XCTestCase {
                 return UIAccessibilityCustomRotorItemResult(targetElement: result, targetRange: nil)
             },
         ]
-        installRotorScreen(
+        await installRotorScreen(
             hostHeistId: hostHeistId,
             hostObject: host,
             resultHeistId: resultHeistId,
@@ -278,7 +278,7 @@ final class RotorCursorTests: XCTestCase {
         hostObject: NSObject,
         resultHeistId: HeistId,
         resultObject: NSObject?
-    ) {
+    ) async {
         let rotorNames = hostObject.accessibilityCustomRotors?.map(\.name) ?? []
         let hostElement = AccessibilityElement.make(
             label: "Rotor host",
@@ -293,7 +293,7 @@ final class RotorCursorTests: XCTestCase {
             shape: .frame(AccessibilityRect(x: 20, y: 80, width: 200, height: 44)),
             activationPoint: CGPoint(x: 120, y: 102)
         )
-        vault.installObservationForTesting(.makeForTests([
+        await vault.installObservationForTesting(.makeForTests([
             .init(hostElement, heistId: hostHeistId, object: hostObject),
             .init(resultElement, heistId: resultHeistId, object: resultObject),
         ]))

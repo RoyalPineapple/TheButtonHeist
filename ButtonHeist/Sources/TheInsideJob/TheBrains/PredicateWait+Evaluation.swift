@@ -68,12 +68,12 @@ extension PredicateWait {
             snapshot?.observation.sequence
         }
 
-        internal var changeBaseline: SettledCapture? {
+        internal var changeBaseline: Observation.Moment? {
             snapshot?.baseline
         }
 
-        internal var observationWindow: ObservationWindow? {
-            snapshot?.window
+        internal var eventsSinceBaseline: Observation.EventsSince? {
+            snapshot?.eventsSinceBaseline
         }
 
         internal var timeoutMismatchMessage: String? {
@@ -93,8 +93,8 @@ extension PredicateWait {
     internal struct Snapshot: Sendable, Equatable {
         internal let observation: WaitObservation
         internal let expectation: ExpectationResult
-        internal let baseline: SettledCapture?
-        internal let window: ObservationWindow?
+        internal let baseline: Observation.Moment?
+        internal let eventsSinceBaseline: Observation.EventsSince?
 
         internal init(_ reduction: PredicateObservationReduction) {
             observation = WaitObservation(
@@ -104,7 +104,7 @@ extension PredicateWait {
             )
             expectation = reduction.expectation
             baseline = reduction.changeBaseline
-            window = reduction.observationWindow
+            eventsSinceBaseline = reduction.eventsSinceBaseline
         }
     }
 

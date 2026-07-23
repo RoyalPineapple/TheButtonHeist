@@ -11,13 +11,13 @@ internal enum PredicateObservationDiagnostics {
 
 internal enum PredicateChangeBaselineSource: Sendable, Equatable {
     case establishFromFirstObservation
-    case supplied(SettledCapture?)
+    case supplied(Observation.Moment?)
 }
 
 private struct PredicateWaitDiscoveryResult<Evidence>
 where Evidence: Sendable & Equatable {
     let evaluation: PredicateWaitEvaluation<Evidence>
-    let event: SettledObservationEvent?
+    let event: Observation.SnapshotEvent?
 }
 
 @MainActor internal final class PredicateWait {
@@ -44,12 +44,12 @@ where Evidence: Sendable & Equatable {
             SettledObservationEvidence,
             Bool,
             Evidence
-        ) -> PredicateWaitEvaluation<Evidence>
+        ) async -> PredicateWaitEvaluation<Evidence>
         let result: @MainActor (
             PredicateWaitOutcome,
             SemanticObservationDeadline,
             Evidence
-        ) -> Result
+        ) async -> Result
     }
 
     internal let vault: TheVault
@@ -90,13 +90,13 @@ where Evidence: Sendable & Equatable {
         }
 
         var replayedEvidence: LifecycleEvidence?
-        if let contextReduction = reduceActionContext(
+        if let contextReduction = await reduceActionContext(
             for: step,
             context: actionExpectationContext
         ) {
             switch contextReduction {
             case .matched(let reduction):
-                return waitResult(
+                return await waitResult(
                     for: step,
                     trace: reduction.trace,
                     observationSummary: reduction.observation.summary,
@@ -104,7 +104,7 @@ where Evidence: Sendable & Equatable {
                     start: start,
                     success: true,
                     baseline: reduction.changeBaseline,
-                    window: reduction.observationWindow,
+                    eventsSinceBaseline: reduction.eventsSinceBaseline,
                     observedSequence: reduction.observation.event.sequence
                 )
             case .unmatched(let evidence):
@@ -125,7 +125,7 @@ where Evidence: Sendable & Equatable {
             for: step,
             initialTrace: initialTrace
         ), traceEvaluation.met {
-            return waitResult(
+            return await waitResult(
                 for: step,
                 trace: initialTrace,
                 observationSummary: nil,
@@ -151,12 +151,12 @@ where Evidence: Sendable & Equatable {
     private func unavailableActionContextResult(
         for step: ResolvedWaitRuntimeInput,
         context: ActionExpectationContext?,
-        error: ObservationHistoryReadError
+        error: Observation.LogReadError
     ) -> HeistWaitResult {
         let message = "Action expectation observation history unavailable: \(error)"
         let traceEvidence = context.flatMap {
             AccessibilityTraceEvidence(
-                trace: AccessibilityTrace(captures: [$0.preActionCapture.capture]),
+                trace: AccessibilityTrace(captures: [$0.preActionMoment.capture]),
                 completeness: .incomplete
             )
         }
@@ -193,10 +193,10 @@ where Evidence: Sendable & Equatable {
                     case .supplied(let supplied):
                         supplied.map(PredicateObservationBaselineSeed.supplied) ?? .preserve
                     case .establishFromFirstObservation:
-                        isInitialVisible ? .preserve : .currentObservation
+                        isInitialVisible ? .currentObservation : .preserve
                     }
                 }
-                let reduced = self.reduceObservation(
+                let reduced = await self.reduceObservation(
                     observation,
                     predicate: step.predicate,
                     predicateExpression: step.predicateExpression,
@@ -210,7 +210,7 @@ where Evidence: Sendable & Equatable {
                 )
             },
             result: { outcome, _, evidence in
-                self.waitResult(
+                await self.waitResult(
                     for: step,
                     trace: evidence.lastTrace,
                     observationSummary: evidence.lastObservationSummary,
@@ -218,7 +218,7 @@ where Evidence: Sendable & Equatable {
                     start: start,
                     success: outcome == .matched,
                     baseline: evidence.changeBaseline,
-                    window: evidence.observationWindow,
+                    eventsSinceBaseline: evidence.eventsSinceBaseline,
                     observedSequence: evidence.observedSequence,
                     timeoutMismatchMessage: outcome == .timedOut
                         ? evidence.timeoutMismatchMessage
@@ -277,105 +277,131 @@ where Evidence: Sendable & Equatable {
 
         func run() async -> Result {
             let initialRouteStart = RuntimeElapsed.now
-            var evaluation = evaluate(
-                await wait.settleVisible(deadline),
+            let admittedEvent = await wait.latestAdmittedVisibleEvent()
+            var evaluation = await evaluate(
+                admittedEvent,
                 isInitialVisible: true,
                 evidence: projection.initialEvidence
             )
             if evaluation.matched {
-                return finish(.matched, evidence: evaluation.evidence)
+                return await finish(.matched, evidence: evaluation.evidence)
             }
             if Task.isCancelled {
-                return finish(.cancelled, evidence: evaluation.evidence)
+                return await finish(.cancelled, evidence: evaluation.evidence)
             }
-            guard projection.continuesAfterInitialMiss else {
-                return finish(.timedOut, evidence: evaluation.evidence)
+            guard projection.continuesAfterInitialMiss,
+                  deadline.hasTimeRemaining(at: RuntimeElapsed.now) else {
+                return await finish(.timedOut, evidence: evaluation.evidence)
+            }
+
+            var latestEvaluatedSequence = admittedEvent?.sequence
+            if admittedEvent == nil {
+                let settledEvent = await wait.settleVisible(deadline)
+                latestEvaluatedSequence = settledEvent?.sequence
+                evaluation = await evaluate(
+                    settledEvent,
+                    isInitialVisible: true,
+                    evidence: evaluation.evidence
+                )
+                if evaluation.matched {
+                    return await finish(.matched, evidence: evaluation.evidence)
+                }
+                if Task.isCancelled {
+                    return await finish(.cancelled, evidence: evaluation.evidence)
+                }
+                guard deadline.hasTimeRemaining(at: RuntimeElapsed.now) else {
+                    return await finish(.timedOut, evidence: evaluation.evidence)
+                }
             }
 
             let initialDiscovery = await runDiscovery(
                 deadline: deadline,
+                after: latestEvaluatedSequence,
                 evidence: evaluation.evidence
             )
             recordTerminalVerificationCost(since: initialRouteStart)
             evaluation = initialDiscovery.evaluation
             if evaluation.matched {
-                return finish(.matched, evidence: evaluation.evidence)
+                return await finish(.matched, evidence: evaluation.evidence)
             }
             if Task.isCancelled {
-                return finish(.cancelled, evidence: evaluation.evidence)
+                return await finish(.cancelled, evidence: evaluation.evidence)
             }
             if let event = initialDiscovery.event {
                 onReadyToPoll?(event.sequence)
             }
 
             let stream = wait.vault.semanticObservationStream
-            var cursor = stream.latestCommittedObservationCursor(scope: .visible)
+            var moment = await stream.latestCommittedObservationMoment(scope: .visible)
             while true {
                 wait.observeScheduledEffect(.observationWait)
                 switch await stream.waitForObservation(
-                    after: cursor,
+                    since: moment,
                     scope: .visible,
                     deadline: deadline.reserving(terminalVerificationReserveSeconds)
                 ) {
                 case .observation(let observation):
-                    cursor = observation.cursor
-                    evaluation = evaluate(
-                        observation.event,
+                    moment = observation.moment
+                    evaluation = await evaluate(
+                        observation,
                         isInitialVisible: false,
                         evidence: evaluation.evidence
                     )
                     if evaluation.matched {
-                        return finish(.matched, evidence: evaluation.evidence)
+                        return await finish(.matched, evidence: evaluation.evidence)
                     }
                     if Task.isCancelled {
-                        return finish(.cancelled, evidence: evaluation.evidence)
+                        return await finish(.cancelled, evidence: evaluation.evidence)
                     }
 
                     let discoveryStart = RuntimeElapsed.now
                     let discovery = await runDiscovery(
                         deadline: deadline,
+                        after: observation.sequence,
                         evidence: evaluation.evidence
                     )
                     recordTerminalVerificationCost(since: discoveryStart)
                     evaluation = discovery.evaluation
                     if evaluation.matched {
-                        return finish(.matched, evidence: evaluation.evidence)
+                        return await finish(.matched, evidence: evaluation.evidence)
                     }
                     if Task.isCancelled {
-                        return finish(.cancelled, evidence: evaluation.evidence)
+                        return await finish(.cancelled, evidence: evaluation.evidence)
                     }
-                    cursor = stream.latestCommittedObservationCursor(scope: .visible) ?? cursor
+                    moment = await stream.latestCommittedObservationMoment(scope: .visible) ?? moment
                 case .deadlineReached, .unavailable:
                     return await terminalVerification(evidence: evaluation.evidence)
                 case .cycleCompleted:
                     continue
                 case .cancelled:
-                    return finish(.cancelled, evidence: evaluation.evidence)
+                    return await finish(.cancelled, evidence: evaluation.evidence)
                 }
             }
         }
 
         private func terminalVerification(evidence: Evidence) async -> Result {
-            let visibleEvaluation = evaluate(
-                await wait.settleVisible(deadline),
+            let settledEvent = await wait.settleVisible(deadline)
+            let visibleEvaluation = await evaluate(
+                settledEvent,
                 isInitialVisible: false,
                 evidence: evidence
             )
             if visibleEvaluation.matched {
-                return finish(.matched, evidence: visibleEvaluation.evidence)
+                return await finish(.matched, evidence: visibleEvaluation.evidence)
             }
             if Task.isCancelled {
-                return finish(.cancelled, evidence: visibleEvaluation.evidence)
+                return await finish(.cancelled, evidence: visibleEvaluation.evidence)
             }
 
             let discovery = await runDiscovery(
                 deadline: deadline,
+                after: settledEvent?.sequence,
                 evidence: visibleEvaluation.evidence
             )
             if discovery.evaluation.matched {
-                return finish(.matched, evidence: discovery.evaluation.evidence)
+                return await finish(.matched, evidence: discovery.evaluation.evidence)
             }
-            return finish(
+            return await finish(
                 Task.isCancelled ? .cancelled : .timedOut,
                 evidence: discovery.evaluation.evidence
             )
@@ -383,6 +409,7 @@ where Evidence: Sendable & Equatable {
 
         private func runDiscovery(
             deadline: SemanticObservationDeadline,
+            after sequence: SettledObservationSequence?,
             evidence: Evidence
         ) async -> PredicateWaitDiscoveryResult<Evidence> {
             var evaluation = PredicateWaitEvaluation(
@@ -396,23 +423,25 @@ where Evidence: Sendable & Equatable {
                 return PredicateWaitDiscoveryResult(evaluation: evaluation, event: nil)
             }
             wait.observeScheduledEffect(.discovery)
-            var lastEvaluatedSequence: SettledObservationSequence?
-            let event: SettledObservationEvent?
+            var lastEvaluatedSequence = sequence
+            let event: Observation.SnapshotEvent?
             if let waitTarget = projection.target,
                let revealed = await wait.revealTarget(waitTarget, deadline) {
-                lastEvaluatedSequence = revealed.sequence
-                evaluation = evaluate(
-                    revealed,
-                    isInitialVisible: false,
-                    evidence: evaluation.evidence
-                )
+                if revealed.sequence != lastEvaluatedSequence {
+                    lastEvaluatedSequence = revealed.sequence
+                    evaluation = await evaluate(
+                        revealed,
+                        isInitialVisible: false,
+                        evidence: evaluation.evidence
+                    )
+                }
                 event = revealed
             } else {
                 event = await wait.discover(projection.target, deadline) { event in
                     guard !evaluation.matched,
                           event.sequence != lastEvaluatedSequence else { return evaluation.matched }
                     lastEvaluatedSequence = event.sequence
-                    evaluation = self.evaluate(
+                    evaluation = await self.evaluate(
                         event,
                         isInitialVisible: false,
                         evidence: evaluation.evidence
@@ -423,7 +452,7 @@ where Evidence: Sendable & Equatable {
             if !evaluation.matched,
                let event,
                event.sequence != lastEvaluatedSequence {
-                evaluation = evaluate(
+                evaluation = await evaluate(
                     event,
                     isInitialVisible: false,
                     evidence: evaluation.evidence
@@ -436,22 +465,22 @@ where Evidence: Sendable & Equatable {
         }
 
         private func evaluate(
-            _ event: SettledObservationEvent?,
+            _ event: Observation.SnapshotEvent?,
             isInitialVisible: Bool,
             evidence: Evidence
-        ) -> PredicateWaitEvaluation<Evidence> {
+        ) async -> PredicateWaitEvaluation<Evidence> {
             guard let event else {
                 return PredicateWaitEvaluation(evidence: evidence, matched: false)
             }
-            return projection.evaluate(
+            return await projection.evaluate(
                 wait.actionEvidenceProjector.projectSettledEvidence(from: event),
                 isInitialVisible,
                 evidence
             )
         }
 
-        private func finish(_ outcome: PredicateWaitOutcome, evidence: Evidence) -> Result {
-            projection.result(outcome, deadline, evidence)
+        private func finish(_ outcome: PredicateWaitOutcome, evidence: Evidence) async -> Result {
+            await projection.result(outcome, deadline, evidence)
         }
 
         private func recordTerminalVerificationCost(since start: RuntimeElapsed.Instant) {
@@ -468,30 +497,51 @@ where Evidence: Sendable & Equatable {
         predicateExpression: AccessibilityPredicate,
         baselineSeed: PredicateObservationBaselineSeed,
         stream: PredicateObservationStreamState
-    ) -> PredicateObservationStreamReduction {
+    ) async -> PredicateObservationStreamReduction {
         let seeded = stream.seedingBaseline(
             baselineSeed,
             from: observation.event,
             when: predicate.requiresChangeBaseline
         )
-        let window = seeded.observationBaseline.flatMap { baseline in
-            vault.semanticObservationStream.observationWindow(
-                from: baseline,
-                through: observation.event
-            )
+        let eventsSinceBaseline: Observation.EventsSince?
+        if let baseline = seeded.observationBaseline {
+            eventsSinceBaseline = await vault.semanticObservationStream.storeOwner.readLog {
+                $0.events(since: baseline)
+            }
+        } else {
+            eventsSinceBaseline = nil
         }
         return seeded.reducing(
             observation,
             predicate: predicate,
             predicateExpression: predicateExpression,
-            observationWindow: window
+            eventsSinceBaseline: eventsSinceBaseline
         )
     }
 
-    internal func latestCommittedEvent() -> SettledObservationEvent? { vault.semanticObservationStream.latestCommittedEvent }
+    internal func latestCommittedEvent() async -> Observation.SnapshotEvent? {
+        await vault.semanticObservationStream.latestCommittedEvent()
+    }
 
-    internal func latestSettleFailure() -> String? {
-        vault.semanticObservationStream.latestSettleFailureDiagnostic
+    private func latestAdmittedVisibleEvent() async -> Observation.SnapshotEvent? {
+        await vault.semanticObservationStream.storeOwner.admittedObservation(
+            scope: .visible,
+            after: nil
+        )?.event
+    }
+
+    internal func latestSettleFailure() async -> String? {
+        await vault.semanticObservationStream.latestSettleFailureDiagnostic()
+    }
+
+    /// Publishes discovery observations while settlement exclusively evaluates them.
+    internal func publishStandaloneWaitDiscovery(
+        target: ResolvedAccessibilityTarget?,
+        deadline: SemanticObservationDeadline,
+        control: Settlement.ObservationEffectControl
+    ) async {
+        observeScheduledEffect(.discovery)
+        _ = await discover(target, deadline) { _ in control.stopRequested }
     }
 
     internal func presenceTimeoutMessage(
@@ -503,8 +553,8 @@ where Evidence: Sendable & Equatable {
 
     private func settleVisible(
         _ deadline: SemanticObservationDeadline
-    ) async -> SettledObservationEvent? {
-        if let current = vault.semanticObservationStream.admittedObservation(
+    ) async -> Observation.SnapshotEvent? {
+        if let current = await vault.semanticObservationStream.admittedObservation(
             scope: .visible,
             after: nil
         ) {
@@ -526,7 +576,7 @@ where Evidence: Sendable & Equatable {
     private func revealTarget(
         _ target: ResolvedAccessibilityTarget,
         _ deadline: SemanticObservationDeadline
-    ) async -> SettledObservationEvent? {
+    ) async -> Observation.SnapshotEvent? {
         guard target.isElementTarget,
               case .resolved(.element) = vault.resolveTarget(target)
         else { return nil }
@@ -539,7 +589,7 @@ where Evidence: Sendable & Equatable {
             operationDeadline: deadline
         ) {
         case .inflated:
-            return vault.semanticObservationStream.latestCommittedEvent
+            return await vault.semanticObservationStream.latestCommittedEvent()
         case .failed:
             return nil
         }
@@ -548,8 +598,8 @@ where Evidence: Sendable & Equatable {
     private func discover(
         _ target: ResolvedAccessibilityTarget?,
         _ deadline: SemanticObservationDeadline,
-        _ observer: @escaping @MainActor (SettledObservationEvent) -> Bool
-    ) async -> SettledObservationEvent? {
+        _ observer: @escaping @MainActor (Observation.SnapshotEvent) async -> Bool
+    ) async -> Observation.SnapshotEvent? {
         if !deadline.hasTimeRemaining(at: RuntimeElapsed.now) {
             return nil
         }
@@ -562,7 +612,7 @@ where Evidence: Sendable & Equatable {
             exitPosition: .origin,
             deadline: deadline,
             onObservation: { event in
-                observer(event) ? .goalSatisfied : .continue
+                await observer(event) ? .goalSatisfied : .continue
             },
         ) else { return nil }
         return exploration.event

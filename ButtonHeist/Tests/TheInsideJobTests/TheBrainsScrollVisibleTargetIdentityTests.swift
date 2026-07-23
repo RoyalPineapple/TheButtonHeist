@@ -23,7 +23,7 @@ extension TheBrainsScrollTests {
             scrollMembership: nil,
             element: second
         )
-        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [
                 firstEntry.heistId: firstEntry,
                 secondEntry.heistId: secondEntry,
@@ -115,7 +115,7 @@ extension TheBrainsScrollTests {
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [scrollContainerPath: .init(view: scrollView)]
         )
-        brains.vault.installObservationForTesting(liveScreen)
+        await brains.vault.installObservationForTesting(liveScreen)
         let prematureResolution = brains.vault.resolveTarget(
             literalTarget(ElementPredicate.label("Jump Target"), ordinal: 0)
         )
@@ -145,7 +145,7 @@ extension TheBrainsScrollTests {
             ),
             liveCapture: liveScreen.liveCapture
         )
-        brains.vault.installObservationForTesting(knownScreen)
+        await brains.vault.installObservationForTesting(knownScreen)
         brains.navigation.elementInflation.exploration.discoverTarget = { _ in nil }
 
         let result = await brains.navigation.elementInflation.inflate(

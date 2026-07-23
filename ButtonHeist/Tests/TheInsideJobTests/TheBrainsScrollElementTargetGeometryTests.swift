@@ -18,7 +18,7 @@ extension TheBrainsScrollTests {
             scrollMembership: nil,
             element: makeElement(label: "Item")
         )
-        installSyntheticObservation(InterfaceObservation.makeForTests(
+        await installSyntheticObservation(InterfaceObservation.makeForTests(
             elements: [treeElement.heistId: treeElement],
             hierarchy: [.element(treeElement.element, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): treeElement.heistId],
@@ -46,7 +46,7 @@ extension TheBrainsScrollTests {
             scrollMembership: nil,
             element: makeElement(label: "Item")
         )
-        installLiveScrollTarget(treeElement, scrollView: scrollView, containerName: "axis_scroll")
+        await installLiveScrollTarget(treeElement, scrollView: scrollView, containerName: "axis_scroll")
 
         let result = await brains.navigation.executeScroll(
             try resolvedScrollTarget(ScrollTarget(target: .label("Item"), direction: .down))
@@ -70,7 +70,7 @@ extension TheBrainsScrollTests {
             scrollMembership: nil,
             element: makeElement(label: "Item")
         )
-        installLiveScrollTarget(treeElement, scrollView: scrollView, containerName: "vertical_scroll")
+        await installLiveScrollTarget(treeElement, scrollView: scrollView, containerName: "vertical_scroll")
 
         let result = await brains.navigation.executeScroll(
             try resolvedScrollTarget(ScrollTarget(target: .label("Item"), direction: .down))
@@ -82,7 +82,7 @@ extension TheBrainsScrollTests {
 
     // MARK: - safeSwipeFrame
 
-    func testScrollableTargetUsesAccessibilityContainerFrameForSemanticOnlySwipeFallback() throws {
+    func testScrollableTargetUsesAccessibilityContainerFrameForSemanticOnlySwipeFallback() async throws {
         let captureFrame = CGRect(x: 40, y: 120, width: 240, height: 360)
         let contentSize = AccessibilitySize(width: 320, height: 2000)
         let container = AccessibilityContainer(
@@ -90,7 +90,7 @@ extension TheBrainsScrollTests {
             frame: AccessibilityRect(captureFrame)
         )
         let path = TreePath([0])
-        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerRefsByPath: [path: .init(object: retainedLiveObject())],
@@ -111,13 +111,13 @@ extension TheBrainsScrollTests {
         XCTAssertEqual(resolvedContentSize, contentSize.cgSize)
     }
 
-    func testScrollableTargetUsesPathKeyedLiveScrollView() throws {
+    func testScrollableTargetUsesPathKeyedLiveScrollView() async throws {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let contentSize = AccessibilitySize(width: 320, height: 1_600)
         let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
         let path = TreePath([0])
-        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerNamesByPath: [path: "main_scroll"],
@@ -145,7 +145,7 @@ extension TheBrainsScrollTests {
         oldScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let container = makeScrollableContainer(contentSize: oldScrollView.contentSize, frame: oldScrollView.frame)
         let contentSize = try XCTUnwrap(container.scrollableContentSize)
-        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerRefsByPath: [path: .init(object: oldScrollView)],
@@ -160,7 +160,7 @@ extension TheBrainsScrollTests {
 
         let replacementScrollView = UIScrollView(frame: oldScrollView.frame)
         replacementScrollView.contentSize = oldScrollView.contentSize
-        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerRefsByPath: [path: .init(object: replacementScrollView)],
@@ -185,7 +185,7 @@ extension TheBrainsScrollTests {
         oldScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let container = makeScrollableContainer(contentSize: oldScrollView.contentSize, frame: oldScrollView.frame)
         let contentSize = try XCTUnwrap(container.scrollableContentSize)
-        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerRefsByPath: [path: .init(object: oldScrollView)],
@@ -200,7 +200,7 @@ extension TheBrainsScrollTests {
 
         let replacementScrollView = UIScrollView(frame: oldScrollView.frame)
         replacementScrollView.contentSize = oldScrollView.contentSize
-        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerRefsByPath: [path: .init(object: replacementScrollView)],
@@ -215,7 +215,7 @@ extension TheBrainsScrollTests {
         XCTAssertEqual(replacementScrollView.contentOffset.y, 1_200)
     }
 
-    func testSafeSwipeFrameFullyInSafeBoundsIsUnchanged() throws {
+    func testSafeSwipeFrameFullyInSafeBoundsIsUnchanged() async throws {
         // A frame sitting comfortably inside the safe area passes through
         // intersected with itself, which is the frame.
         let screen = UIScreen.main.bounds
@@ -224,19 +224,19 @@ extension TheBrainsScrollTests {
         XCTAssertEqual(result, inner)
     }
 
-    func testSafeSwipeFrameZeroWidthReturnsNil() {
+    func testSafeSwipeFrameZeroWidthReturnsNil() async {
         // Degenerate input has no targetable on-screen geometry, so command
         // execution must fail instead of swiping the stale original frame.
         let input = CGRect(x: 0, y: 0, width: 0, height: 100)
         XCTAssertNil(brains.navigation.safeSwipeFrame(from: input))
     }
 
-    func testSafeSwipeFrameFullyOffscreenReturnsNil() {
+    func testSafeSwipeFrameFullyOffscreenReturnsNil() async {
         let input = CGRect(x: -500, y: -500, width: 100, height: 100)
         XCTAssertNil(brains.navigation.safeSwipeFrame(from: input))
     }
 
-    func testSafeSwipeFrameOversizedFrameClampsWithinScreen() throws {
+    func testSafeSwipeFrameOversizedFrameClampsWithinScreen() async throws {
         // A frame larger than any iPhone screen must clamp to the safe
         // region and stay within the current screen bounds.
         let huge = CGRect(x: -1000, y: -1000, width: 10000, height: 10000)
@@ -248,13 +248,13 @@ extension TheBrainsScrollTests {
         )
     }
 
-    func testSafeSwipeFrameClampsAboveTabBarContainer() throws {
+    func testSafeSwipeFrameClampsAboveTabBarContainer() async throws {
         // A .tabBar container in the accessibility hierarchy defines the
         // bottom clear line. A swipe rectangle that overlaps the tab bar
         // must be clipped to end at its top edge.
         let tabBarFrame = CGRect(x: 0, y: 700, width: 400, height: 80)
         let tabBarContainer = AccessibilityContainer(type: .tabBar, frame: AccessibilityRect(tabBarFrame))
-        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(tabBarContainer, children: [])],
             firstResponderHeistId: nil,

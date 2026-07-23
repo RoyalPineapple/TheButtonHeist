@@ -8,7 +8,7 @@ import TheScore
 
 /// A settled semantic observation paired with its trace and summary.
 struct SettledObservationEvidence {
-    let event: SettledObservationEvent
+    let event: Observation.SnapshotEvent
     let baseline: ActionEvidenceProjector.Baseline
     let accessibilityTrace: AccessibilityTrace
     let summary: String
@@ -106,25 +106,17 @@ final class ActionEvidenceProjector {
         self.safecracker = safecracker
     }
 
-    func projectBaseline(from observation: SettledObservation) -> Baseline {
+    func projectBaseline(from evidence: Observation.Store.AdmittedObservation) -> Baseline {
         projectBaseline(
-            from: observation.observation,
-            tripwireSignal: vault.tripwire.tripwireSignal(),
-            settledObservationSequence: observation.sequence
-        )
-    }
-
-    func projectBaseline(from evidence: SemanticObservationStore.AdmittedObservation) -> Baseline {
-        projectBaseline(
-            from: evidence.event.settledObservation.observation,
+            from: evidence.event.snapshot.observation,
             tripwireSignal: evidence.tripwireSignal,
             settledObservationSequence: evidence.event.sequence
         )
     }
 
-    func projectSettledEvidence(from event: SettledObservationEvent) -> SettledObservationEvidence {
+    func projectSettledEvidence(from event: Observation.SnapshotEvent) -> SettledObservationEvidence {
         let current = projectBaseline(
-            from: event.settledObservation.observation,
+            from: event.snapshot.observation,
             tripwireSignal: vault.tripwire.tripwireSignal(),
             settledObservationSequence: event.sequence
         )
@@ -380,12 +372,12 @@ final class ActionEvidenceProjector {
         )
     }
 
-    private func projectCommittedBaseline(from visibleEvent: SettledObservationEvent) -> Baseline {
-        let settledObservation = visibleEvent.settledObservation
+    private func projectCommittedBaseline(from visibleEvent: Observation.SnapshotEvent) -> Baseline {
+        let snapshot = visibleEvent.snapshot
         return projectBaseline(
-            from: settledObservation.observation,
+            from: snapshot.observation,
             tripwireSignal: vault.tripwire.tripwireSignal(),
-            settledObservationSequence: settledObservation.sequence
+            settledObservationSequence: visibleEvent.sequence
         )
     }
 

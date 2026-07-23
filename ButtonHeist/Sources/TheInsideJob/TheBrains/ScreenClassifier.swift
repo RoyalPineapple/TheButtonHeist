@@ -40,7 +40,7 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
 /// Tripwire triggers parsing; this type is the single place that decides
 /// whether the parsed result should be treated as a new screen. Same-screen
 /// element and tree changes are derived from accessibility trace captures.
-@MainActor enum ScreenClassifier {
+enum ScreenClassifier {
 
     struct Snapshot: Equatable {
         let signature: ScreenSignature
@@ -141,7 +141,7 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
         }
     }
 
-    static func snapshot(of vault: TheVault) -> Snapshot {
+    @MainActor static func snapshot(of vault: TheVault) -> Snapshot {
         snapshot(of: vault.interfaceTree)
     }
 

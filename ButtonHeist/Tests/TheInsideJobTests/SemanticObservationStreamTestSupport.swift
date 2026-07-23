@@ -136,7 +136,7 @@ class SemanticObservationStreamTestCase: XCTestCase {
         return { count }
     }
 
-    func admittedVisibleObservation() async throws -> SemanticObservationStore.AdmittedObservation {
+    func admittedVisibleObservation() async throws -> Observation.Store.AdmittedObservation {
         let evidence = await vault.semanticObservationStream.admittedVisibleObservation(timeout: 1)
         return try XCTUnwrap(evidence)
     }

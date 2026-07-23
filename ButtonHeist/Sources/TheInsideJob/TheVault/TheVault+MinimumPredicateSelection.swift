@@ -6,8 +6,7 @@ import ThePlans
 
 extension TheVault {
     func firstResponderTarget(in tree: InterfaceTree) -> AccessibilityTarget? {
-        guard let firstResponderHeistId = tree.firstResponderHeistId else { return nil }
-        return minimumUniqueTarget(for: firstResponderHeistId, in: tree)
+        tree.firstResponderTarget
     }
 
     func minimumUniqueTarget(for treeElement: InterfaceTree.Element) -> AccessibilityTarget? {
@@ -15,7 +14,17 @@ extension TheVault {
     }
 
     func minimumUniqueTarget(for heistId: HeistId, in tree: InterfaceTree) -> AccessibilityTarget? {
-        let elements = tree.orderedElements.map {
+        tree.minimumUniqueTarget(for: heistId)
+    }
+}
+
+extension InterfaceTree {
+    var firstResponderTarget: AccessibilityTarget? {
+        firstResponderHeistId.flatMap(minimumUniqueTarget)
+    }
+
+    func minimumUniqueTarget(for heistId: HeistId) -> AccessibilityTarget? {
+        let elements = orderedElements.map {
             PredicateSelectionSubjectElement(id: $0.heistId.predicateSelectionElementId, element: $0.element)
         }
         return MinimumPredicateSelector.minimumUniquePredicate(

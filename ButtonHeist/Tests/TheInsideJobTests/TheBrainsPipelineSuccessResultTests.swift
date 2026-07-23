@@ -23,8 +23,8 @@ extension TheBrainsPipelineTests {
             respondsToUserInteraction: true
         )
         let screen = InterfaceObservation.makeForTests(elements: [(element, HeistId(rawValue: "inert_option"))])
-        brains.vault.installObservationForTesting(screen)
-        let before = brains.actionEvidenceProjector.projectBaseline()
+        await brains.vault.installObservationForTesting(screen)
+        let before = await brains.actionEvidenceProjector.projectBaseline()
 
         let result = await brains.interactionCoordinator.settleAfterAction(
             dispatchResult: successOutcome(
@@ -54,8 +54,8 @@ extension TheBrainsPipelineTests {
             ("Widget 0, Hardware", .button, "top_row"),
             ("Long List", .header, "long_list_header"),
         ])
-        brains.vault.installObservationForTesting(topScreen)
-        let before = brains.actionEvidenceProjector.projectBaseline()
+        await brains.vault.installObservationForTesting(topScreen)
+        let before = await brains.actionEvidenceProjector.projectBaseline()
 
         let bottomScreen = makeScreen(elements: [
             ("Widget 90, Hardware", .button, "bottom_row"),
@@ -76,8 +76,8 @@ extension TheBrainsPipelineTests {
 
     func testOneFingerTapNoChangeCanRemainSuccessful() async {
         let beforeScreen = makeScreen(elements: [("Map", .button, "map_button")])
-        brains.vault.installObservationForTesting(beforeScreen)
-        let before = brains.actionEvidenceProjector.projectBaseline()
+        await brains.vault.installObservationForTesting(beforeScreen)
+        let before = await brains.actionEvidenceProjector.projectBaseline()
 
         let result = await brains.interactionCoordinator.settleAfterAction(
             dispatchResult: successOutcome(payload: .oneFingerTap),
@@ -103,8 +103,8 @@ extension TheBrainsPipelineTests {
             respondsToUserInteraction: true
         )
         let screen = InterfaceObservation.makeForTests(elements: [(element, HeistId(rawValue: "tap_activated_option"))])
-        brains.vault.installObservationForTesting(screen)
-        let before = brains.actionEvidenceProjector.projectBaseline()
+        await brains.vault.installObservationForTesting(screen)
+        let before = await brains.actionEvidenceProjector.projectBaseline()
         let activationTrace = ActivationTrace(.activationPointFallback(
             axActivateReturned: false,
             tapActivationPoint: ScreenPoint(x: 888, y: 372),
@@ -134,8 +134,8 @@ extension TheBrainsPipelineTests {
 
     func testActionResultWithDeltaSuccessReturnsTraceAfterElementChange() async {
         let beforeScreen = makeScreen(elements: [("Total", .staticText, "total")])
-        brains.vault.installObservationForTesting(beforeScreen)
-        let before = brains.actionEvidenceProjector.projectBaseline()
+        await brains.vault.installObservationForTesting(beforeScreen)
+        let before = await brains.actionEvidenceProjector.projectBaseline()
         let afterScreen = makeScreen(elements: [("Total $12.00", .staticText, "total")])
 
         let result = await brains.interactionCoordinator.settleAfterAction(
@@ -153,8 +153,8 @@ extension TheBrainsPipelineTests {
 
     func testActionResultWithDeltaPreservesSubjectEvidence() async throws {
         let beforeScreen = makeScreen(elements: [("Delete", .button, "delete_button")])
-        brains.vault.installObservationForTesting(beforeScreen)
-        let before = brains.actionEvidenceProjector.projectBaseline()
+        await brains.vault.installObservationForTesting(beforeScreen)
+        let before = await brains.actionEvidenceProjector.projectBaseline()
         let evidence = ActionSubjectEvidence(
             source: .resolvedSemanticTarget,
             target: try AccessibilityTarget.element(
@@ -189,8 +189,8 @@ extension TheBrainsPipelineTests {
 
     func testActionFailurePreservesResolvedSubjectEvidence() async throws {
         let beforeScreen = makeScreen(elements: [("Delete", .button, "delete_button")])
-        brains.vault.installObservationForTesting(beforeScreen)
-        let before = brains.actionEvidenceProjector.projectBaseline()
+        await brains.vault.installObservationForTesting(beforeScreen)
+        let before = await brains.actionEvidenceProjector.projectBaseline()
         let target = try AccessibilityTarget.element(
             .label("Delete"),
             traits: [.button]
@@ -228,8 +228,8 @@ extension TheBrainsPipelineTests {
 
     func testPostActionResultResolvesDeferredPayloadFromFinalSemanticState() async {
         let beforeScreen = makeScreen(elements: [("Status", .staticText, "status")])
-        brains.vault.installObservationForTesting(beforeScreen)
-        let before = brains.actionEvidenceProjector.projectBaseline()
+        await brains.vault.installObservationForTesting(beforeScreen)
+        let before = await brains.actionEvidenceProjector.projectBaseline()
         let afterScreen = InterfaceObservation.makeForTests(elements: [
             (
                 AccessibilityElement.make(
@@ -263,8 +263,8 @@ extension TheBrainsPipelineTests {
 
     func testPostActionResultDoesNotResolveDeferredPayloadFromUnsettledDiagnosticEvidence() async {
         let beforeScreen = makeScreen(elements: [("Status", .staticText, "status")])
-        brains.vault.installObservationForTesting(beforeScreen)
-        let before = brains.actionEvidenceProjector.projectBaseline()
+        await brains.vault.installObservationForTesting(beforeScreen)
+        let before = await brains.actionEvidenceProjector.projectBaseline()
         let diagnosticScreen = InterfaceObservation.makeForTests(elements: [
             (
                 AccessibilityElement.make(
@@ -304,7 +304,7 @@ extension TheBrainsPipelineTests {
         )
     }
 
-    func testTypeTextPayloadUsesCommittedElementIdentity() {
+    func testTypeTextPayloadUsesCommittedElementIdentity() async {
         let selectedId: HeistId = "selected_message"
         let replacementId: HeistId = "replacement_message"
         let afterScreen = InterfaceObservation.makeForTests(elements: [
@@ -327,8 +327,8 @@ extension TheBrainsPipelineTests {
                 replacementId
             ),
         ])
-        brains.vault.installObservationForTesting(afterScreen)
-        let afterState = brains.actionEvidenceProjector.projectBaseline()
+        await brains.vault.installObservationForTesting(afterScreen)
+        let afterState = await brains.actionEvidenceProjector.projectBaseline()
 
         XCTAssertEqual(
             brains.actions.typeTextPayload(resolvedElementId: selectedId, in: afterState),
@@ -338,8 +338,8 @@ extension TheBrainsPipelineTests {
 
     func testActionResultWithDeltaReportsTypedFallbackScreenChange() async {
         let beforeScreen = makeScreen(elements: [("Menu", .header, "menu_header")])
-        brains.vault.installObservationForTesting(beforeScreen)
-        let before = brains.actionEvidenceProjector.projectBaseline()
+        await brains.vault.installObservationForTesting(beforeScreen)
+        let before = await brains.actionEvidenceProjector.projectBaseline()
         let afterScreen = makeScreen(elements: [("Checkout", .header, "checkout_header")])
 
         let result = await brains.interactionCoordinator.settleAfterAction(
@@ -366,8 +366,8 @@ extension TheBrainsPipelineTests {
             ("Todo List", .button, "todo_list"),
             ("Words", .button, "words"),
         ])
-        brains.vault.installObservationForTesting(beforeScreen)
-        let before = brains.actionEvidenceProjector.projectBaseline()
+        await brains.vault.installObservationForTesting(beforeScreen)
+        let before = await brains.actionEvidenceProjector.projectBaseline()
 
         let settledScreen = makeScreen(elements: [
             ("Section A", .header, "section_a_header"),
@@ -410,8 +410,8 @@ extension TheBrainsPipelineTests {
             ("Todo List", .button, "todo_list"),
             ("Words", .button, "words"),
         ])
-        brains.vault.installObservationForTesting(beforeScreen)
-        let before = brains.actionEvidenceProjector.projectBaseline()
+        await brains.vault.installObservationForTesting(beforeScreen)
+        let before = await brains.actionEvidenceProjector.projectBaseline()
 
         let section = AccessibilityElement.make(
             label: "Section A",
@@ -483,8 +483,8 @@ extension TheBrainsPipelineTests {
 
     func testPassiveSemanticPublishDoesNotDrainPostActionAccessibilityNotifications() async throws {
         let beforeScreen = makeScreen(elements: [("Save", .button, "save")])
-        brains.vault.installObservationForTesting(beforeScreen)
-        let before = brains.actionEvidenceProjector.projectBaseline()
+        await brains.vault.installObservationForTesting(beforeScreen)
+        let before = await brains.actionEvidenceProjector.projectBaseline()
 
         let notifiedObject = NSObject()
         let saved = AccessibilityElement.make(
@@ -503,7 +503,7 @@ extension TheBrainsPipelineTests {
             associatedElement: .none
         )
 
-        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             makeScreen(elements: [("Passive", .staticText, "passive")])
         )
 
@@ -526,8 +526,8 @@ extension TheBrainsPipelineTests {
 
     func testActionResultFinalTraceUsesVisibleSettleNotLaterDiscovery() async throws {
         let beforeScreen = makeScreen(elements: [("Text Input", .header, "text_input")])
-        brains.vault.installObservationForTesting(beforeScreen)
-        let before = brains.actionEvidenceProjector.projectBaseline()
+        await brains.vault.installObservationForTesting(beforeScreen)
+        let before = await brains.actionEvidenceProjector.projectBaseline()
         let visibleAfter = makeScreen(elements: [("Controls Demo", .header, "controls_demo")])
         let discoveredOnly = AccessibilityElement.make(
             label: "ButtonHeist Demo",
@@ -560,7 +560,7 @@ extension TheBrainsPipelineTests {
         for _ in 0..<50 where brains.vault.semanticObservationStream.observationWaiterCount == 0 {
             await Task.yield()
         }
-        brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(discoveryAfter)
+        await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(discoveryAfter)
 
         let result = await resultTask.value
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "action unexpectedly failed")
@@ -575,9 +575,9 @@ extension TheBrainsPipelineTests {
 
     func testActionResultWithDeltaSettleTimeoutUsesObservedFinalEvidenceWithoutPublishingTruth() async {
         let beforeScreen = makeScreen(elements: [("Menu", .header, "menu_header")])
-        brains.vault.installObservationForTesting(beforeScreen)
-        let before = brains.actionEvidenceProjector.projectBaseline()
-        let settledSequence = brains.vault.semanticObservationStream.latestCommittedEvent?.sequence
+        await brains.vault.installObservationForTesting(beforeScreen)
+        let before = await brains.actionEvidenceProjector.projectBaseline()
+        let settledSequence = await brains.vault.semanticObservationStream.latestCommittedEvent()?.sequence
         let afterScreen = makeScreen(elements: [("Details", .header, "details_header")])
 
         let result = await brains.interactionCoordinator.settleAfterAction(
@@ -590,16 +590,18 @@ extension TheBrainsPipelineTests {
         XCTAssertNil(result.message)
         XCTAssertEqual(result.settled, false)
         XCTAssertEqual(result.settleTimeMs, 250)
+        let retainedEvent = await brains.vault.semanticObservationStream.latestCommittedEvent()
+        let invalidated = await brains.vault.semanticObservationStream.latestSettledObservationInvalidated()
         XCTAssertEqual(
-            brains.vault.semanticObservationStream.latestCommittedEvent?.sequence,
+            retainedEvent?.sequence,
             settledSequence,
             "timeout evidence must not be published as a new settled observation"
         )
         XCTAssertEqual(
-            brains.vault.semanticObservationStream.latestCommittedEvent?.settledObservation.observation.tree.orderedElements.first?.element.label,
+            retainedEvent?.snapshot.observation.tree.orderedElements.first?.element.label,
             "Menu"
         )
-        XCTAssertTrue(brains.vault.semanticObservationStream.latestSettledObservationInvalidated)
+        XCTAssertTrue(invalidated)
         XCTAssertEqual(brains.vault.interfaceTree.orderedElements.first?.element.label, "Menu")
         XCTAssertEqual(
             brains.vault.latestFailedSettleDiagnosticEvidence?.tree.orderedElements.first?.element.label,
@@ -615,7 +617,7 @@ extension TheBrainsPipelineTests {
 
     func testActionBaselineDoesNotPromoteDiagnosticOnlyEvidence() async {
         let diagnosticScreen = makeScreen(elements: [("Timeout", .staticText, "timeout")])
-        brains.vault.recordFailedSettleDiagnosticEvidence(diagnosticScreen)
+        await brains.vault.recordFailedSettleDiagnosticEvidence(diagnosticScreen)
 
         let admittedBaseline = await brains.interactionCoordinator.admittedVisibleBaseline(timeout: 0)
         XCTAssertNil(admittedBaseline)
@@ -627,9 +629,9 @@ extension TheBrainsPipelineTests {
 
     func testActionResultWithDeltaCancelledSettleFailsActionResult() async {
         let beforeScreen = makeScreen(elements: [("Save", .button, "save")])
-        brains.vault.installObservationForTesting(beforeScreen)
-        let before = brains.actionEvidenceProjector.projectBaseline()
-        let settledSequence = brains.vault.semanticObservationStream.latestCommittedEvent?.sequence
+        await brains.vault.installObservationForTesting(beforeScreen)
+        let before = await brains.actionEvidenceProjector.projectBaseline()
+        let settledSequence = await brains.vault.semanticObservationStream.latestCommittedEvent()?.sequence
 
         let result = await brains.interactionCoordinator.settleAfterAction(
             dispatchResult: successOutcome(),
@@ -642,17 +644,19 @@ extension TheBrainsPipelineTests {
         XCTAssertEqual(result.outcome.failureKind, .actionFailed)
         XCTAssertEqual(result.settled, false)
         XCTAssertEqual(result.settleTimeMs, 125)
-        XCTAssertEqual(brains.vault.semanticObservationStream.latestCommittedEvent?.sequence, settledSequence)
-        XCTAssertTrue(brains.vault.semanticObservationStream.latestSettledObservationInvalidated)
+        let retainedSequence = await brains.vault.semanticObservationStream.latestCommittedEvent()?.sequence
+        let invalidated = await brains.vault.semanticObservationStream.latestSettledObservationInvalidated()
+        XCTAssertEqual(retainedSequence, settledSequence)
+        XCTAssertTrue(invalidated)
         XCTAssertEqual(brains.vault.interfaceTree.orderedElements.first?.element.label, "Save")
         XCTAssertEqual(result.accessibilityTrace?.captures.count, 1)
         XCTAssertEqual(result.accessibilityTrace?.captures.first?.interface.projectedElements.first?.label, "Save")
     }
 
     func testActionResultWithDeltaParseFailureFailsActionResult() async {
-        seedScreen(elements: [("Save", .button, "save")])
-        let before = brains.actionEvidenceProjector.projectBaseline()
-        brains.vault.installObservationForTesting(.empty)
+        await seedScreen(elements: [("Save", .button, "save")])
+        let before = await brains.actionEvidenceProjector.projectBaseline()
+        await brains.vault.installObservationForTesting(.empty)
 
         let result = await brains.interactionCoordinator.settleAfterAction(
             dispatchResult: successOutcome(),

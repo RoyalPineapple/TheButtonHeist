@@ -53,7 +53,7 @@ extension ElementInflationProductTests {
             ordinal: 0
         ).resolve(in: .empty)
         fixture.second.isHidden = true
-        brains.vault.installObservationForTesting(try observation(for: [fixture.first]))
+        await brains.vault.installObservationForTesting(try observation(for: [fixture.first]))
         visibleObservationSource.useLiveCapture()
         guard case .success(let selected) = brains.navigation.elementInflation.knownSemanticTarget(target) else {
             return XCTFail("Expected the original element to satisfy the committed predicate")
@@ -63,7 +63,7 @@ extension ElementInflationProductTests {
         fixture.second.isHidden = false
         fixture.first.superview?.insertSubview(fixture.second, belowSubview: fixture.first)
         fixture.window.layoutIfNeeded()
-        brains.vault.installObservationForTesting(try observation(for: [fixture.second, fixture.first]))
+        await brains.vault.installObservationForTesting(try observation(for: [fixture.second, fixture.first]))
         visibleObservationSource.useLiveCapture()
 
         let state = await brains.navigation.elementInflation.stateAfterRefresh(
@@ -94,7 +94,7 @@ extension ElementInflationProductTests {
             ordinal: 0
         ).resolve(in: .empty)
         fixture.second.isHidden = true
-        brains.vault.installObservationForTesting(try observation(for: [fixture.first]))
+        await brains.vault.installObservationForTesting(try observation(for: [fixture.first]))
         visibleObservationSource.useLiveCapture()
         guard case .success(let selected) = brains.navigation.elementInflation.knownSemanticTarget(target) else {
             return XCTFail("Expected the original element to satisfy the committed predicate")
@@ -102,7 +102,7 @@ extension ElementInflationProductTests {
 
         fixture.first.removeFromSuperview()
         fixture.second.isHidden = false
-        brains.vault.installObservationForTesting(try observation(for: [fixture.second]))
+        await brains.vault.installObservationForTesting(try observation(for: [fixture.second]))
         visibleObservationSource.useLiveCapture()
 
         let state = await brains.navigation.elementInflation.stateAfterRefresh(
@@ -129,8 +129,8 @@ extension ElementInflationProductTests {
             label: "Duplicate Submit"
         )
         defer { fixture.cleanup() }
-        try seedOffViewportTarget(fixture)
-        seedKnownUnreachableDuplicate(
+        try await seedOffViewportTarget(fixture)
+        await seedKnownUnreachableDuplicate(
             label: fixture.label,
             identifier: "stale_\(fixture.identifier)",
             heistId: HeistId(rawValue: "stale_\(fixture.knownHeistId.rawValue)")
@@ -153,7 +153,7 @@ extension ElementInflationProductTests {
         ])
     }
 
-    func testSemanticAdmissionKeepsDuplicateIdentityAcrossVisibilityAndCandidateOrder() throws {
+    func testSemanticAdmissionKeepsDuplicateIdentityAcrossVisibilityAndCandidateOrder() async throws {
         let fixture = try installAmbiguousActivationFixture()
         defer { fixture.cleanup() }
         let target = try AccessibilityTarget.element(
@@ -167,13 +167,13 @@ extension ElementInflationProductTests {
             liveCapture: .makeForTests()
         )
 
-        let before = try admittedSemanticTarget(target, observation: firstOffscreen)
+        let before = try await admittedSemanticTarget(target, observation: firstOffscreen)
 
         fixture.first.superview?.insertSubview(fixture.second, belowSubview: fixture.first)
         fixture.window.layoutIfNeeded()
         let reorderedVisible = try observation(for: [fixture.second, fixture.first])
-        let during = try admittedSemanticTarget(target, observation: reorderedVisible)
-        let after = try admittedSemanticTarget(
+        let during = try await admittedSemanticTarget(target, observation: reorderedVisible)
+        let after = try await admittedSemanticTarget(
             target,
             observation: InterfaceObservation.makeForTests(
                 tree: reorderedVisible.tree,
@@ -223,7 +223,7 @@ extension ElementInflationProductTests {
         label: String,
         identifier: String,
         heistId: HeistId
-    ) {
+    ) async {
         let tree = brains.vault.interfaceTree
         let entry = InterfaceTree.Element(
             heistId: heistId,
@@ -232,7 +232,7 @@ extension ElementInflationProductTests {
         )
         var elements = tree.elements
         elements[heistId] = entry
-        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             tree: InterfaceTree(elements: elements, containers: tree.containers),
             liveCapture: brains.vault.latestObservation.liveCapture
         ))
@@ -257,8 +257,8 @@ extension ElementInflationProductTests {
     private func admittedSemanticTarget(
         _ target: ResolvedAccessibilityTarget,
         observation: InterfaceObservation
-    ) throws -> ElementInflation.AdmittedSemanticTarget {
-        brains.vault.installObservationForTesting(observation)
+    ) async throws -> ElementInflation.AdmittedSemanticTarget {
+        await brains.vault.installObservationForTesting(observation)
         let resolvedElement: InterfaceTree.Element? = {
             guard case .resolved(.element(let element)) = brains.vault.resolveTarget(target) else {
                 return nil

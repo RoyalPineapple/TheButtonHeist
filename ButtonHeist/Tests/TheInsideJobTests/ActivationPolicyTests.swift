@@ -18,7 +18,7 @@ final class ActivationPolicyTests: XCTestCase {
         override func accessibilityActivate() -> Bool { false }
     }
 
-    func testElementInflationFailureMapsNoRevealPathToCommandMethod() {
+    func testElementInflationFailureMapsNoRevealPathToCommandMethod() async {
         let result = ElementInflation.ElementInflationFailure.noRevealPath("target has no reveal path")
             .actionDispatchResult(payload: .activate)
 
@@ -27,7 +27,7 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(result.message, "element inflation failed [noRevealPath]: target has no reveal path")
     }
 
-    func testElementInflationFailurePreservesElementNotFoundMethod() {
+    func testElementInflationFailurePreservesElementNotFoundMethod() async {
         let result = ElementInflation.ElementInflationFailure.notFound("no such element")
             .actionDispatchResult(payload: .activate)
 
@@ -37,7 +37,7 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(result.message, "element inflation failed [notFound]: no such element")
     }
 
-    func testElementInflationCancellationPreservesTypedTerminalFailure() {
+    func testElementInflationCancellationPreservesTypedTerminalFailure() async {
         let failure = ElementInflation.ElementInflationFailure.cancelled(
             "stale live target refresh was cancelled after the live target no longer matched"
         )
@@ -56,8 +56,8 @@ final class ActivationPolicyTests: XCTestCase {
     }
 
     func testRefreshReresolveActivateSuccessStopsPolicy() async throws {
-        let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
-        let refreshedTarget = makeLiveTarget(
+        let initialTarget = await makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
+        let refreshedTarget = await makeLiveTarget(
             heistId: "refreshed",
             label: "Refreshed Target",
             activationPoint: CGPoint(x: 30, y: 40)
@@ -108,7 +108,7 @@ final class ActivationPolicyTests: XCTestCase {
     }
 
     func testRefreshReresolveFailureReturnsWithoutActivationAttemptOrDispatch() async {
-        let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
+        let initialTarget = await makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         var activateCount = 0
         var dispatchedPoints: [CGPoint] = []
 
@@ -136,8 +136,8 @@ final class ActivationPolicyTests: XCTestCase {
     }
 
     func testActivationPointDispatchCanCompleteActivate() async throws {
-        let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
-        let refreshedTarget = makeLiveTarget(heistId: "refreshed", activationPoint: CGPoint(x: 30, y: 40))
+        let initialTarget = await makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
+        let refreshedTarget = await makeLiveTarget(heistId: "refreshed", activationPoint: CGPoint(x: 30, y: 40))
         var activateCount = 0
         var dispatchedPoints: [CGPoint] = []
         let inflatedTarget = try makeInflatedTarget(refreshedTarget)
@@ -168,8 +168,8 @@ final class ActivationPolicyTests: XCTestCase {
     }
 
     func testNonFiniteActivationPointStopsBeforeMechanicalDispatch() async throws {
-        let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
-        let refreshedTarget = makeLiveTarget(
+        let initialTarget = await makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
+        let refreshedTarget = await makeLiveTarget(
             heistId: "refreshed",
             activationPoint: CGPoint(x: 30, y: 40)
         )
@@ -204,8 +204,8 @@ final class ActivationPolicyTests: XCTestCase {
     }
 
     func testTextEntryActivationPointDispatchRequiresFocusConfirmation() async throws {
-        let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
-        let refreshedTarget = makeLiveTarget(
+        let initialTarget = await makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
+        let refreshedTarget = await makeLiveTarget(
             heistId: "refreshed",
             traits: .textEntry,
             activationPoint: CGPoint(x: 30, y: 40)
@@ -237,8 +237,8 @@ final class ActivationPolicyTests: XCTestCase {
     }
 
     func testNonTextEntryActivationPointDispatchDoesNotRequireFocusConfirmation() async throws {
-        let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
-        let refreshedTarget = makeLiveTarget(
+        let initialTarget = await makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
+        let refreshedTarget = await makeLiveTarget(
             heistId: "refreshed",
             traits: .button,
             activationPoint: CGPoint(x: 30, y: 40)
@@ -263,8 +263,8 @@ final class ActivationPolicyTests: XCTestCase {
     }
 
     func testFinalFailureUsesRefreshedTargetAndFreshActivationPoint() async throws {
-        let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
-        let refreshedTarget = makeLiveTarget(
+        let initialTarget = await makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
+        let refreshedTarget = await makeLiveTarget(
             heistId: "refreshed",
             label: "Refreshed Button",
             traits: .button,
@@ -367,7 +367,7 @@ final class ActivationPolicyTests: XCTestCase {
         frame: CGRect = CGRect(x: 0, y: 0, width: 44, height: 44),
         activationPoint: CGPoint,
         object: NSObject = ActivationObject()
-    ) -> TheVault.LiveActionTarget {
+    ) async -> TheVault.LiveActionTarget {
         let element = AccessibilityElement.make(
             label: label,
             traits: traits,
@@ -382,7 +382,7 @@ final class ActivationPolicyTests: XCTestCase {
         )
         object.accessibilityFrame = frame
         let vault = TheVault(tripwire: TheTripwire())
-        vault.installObservationForTesting(.makeForTests(
+        await vault.installObservationForTesting(.makeForTests(
             elements: [(element, heistId)],
             objects: [heistId: object]
         ))

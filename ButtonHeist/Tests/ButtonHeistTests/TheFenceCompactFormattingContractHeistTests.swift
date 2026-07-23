@@ -48,6 +48,49 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertFalse(response.isFailure)
     }
 
+    @ButtonHeistActor
+    func testObservationHandoffTimeoutAgreesAcrossPublicFormats() async throws {
+        let predicate = AccessibilityPredicate.announcement("Saved")
+        let traceEvidence = makeTestTraceEvidence(
+            AccessibilityTrace.noChangeForTests(elementCount: 0),
+            completeness: .incomplete
+        )
+        let settlement = ActionSettlementEvidence.observationHandoffTimedOut(
+            duration: 25,
+            path: .uikitIdle
+        )
+        let expectationResult = ActionResult.failure(
+            payload: .wait,
+            failureKind: .timeout,
+            observation: .settledTrace(traceEvidence, settlement)
+        )
+        let step = HeistResultFixture.action(
+            command: .dismiss,
+            result: .success(payload: .dismiss),
+            expectationActionResult: expectationResult,
+            expectation: ExpectationResult(met: true, predicate: predicate, actual: "Saved"),
+            failure: HeistFailureDetail(
+                category: .wait,
+                contract: "observation handoff completes",
+                observed: "observation handoff timed out"
+            )
+        )
+        let report = HeistReport.project(result: try HeistResult(steps: [step], durationMs: 25))
+        let plan = try HeistPlan(body: [.action(ActionStep(command: .dismiss))])
+        let response = FenceResponse.heistExecution(plan: plan, report: report)
+        let node = try XCTUnwrap(try publicJSONProbe(response).object("report").array("nodes").first)
+        let projectedSettlement = try node.object("settlement")
+        let summary = "readiness uikitIdle; observation handoff timed out after 25ms"
+        let (fence, _) = makeConnectedFence()
+
+        XCTAssertEqual(try projectedSettlement.string("kind"), "observationHandoffTimedOut")
+        XCTAssertEqual(try projectedSettlement.string("path"), "uikitIdle")
+        XCTAssertEqual(try projectedSettlement.int("durationMs"), 25)
+        XCTAssertTrue(response.compactFormatted().contains(summary), response.compactFormatted())
+        XCTAssertTrue(response.humanFormatted().contains(summary), response.humanFormatted())
+        XCTAssertTrue(fence.junitReport(for: report, heistName: "handoff").junitXML().contains(summary))
+    }
+
     func testHumanHeistFormattingCountsNestedProjectedExpectations() throws {
         let expected = AccessibilityPredicate.exists(.label("Done"))
         let childAction = try HeistStep.action(ActionStep(

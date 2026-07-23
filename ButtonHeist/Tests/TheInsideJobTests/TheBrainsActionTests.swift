@@ -36,6 +36,21 @@ final class ActionActivatingTextField: UITextField {
     }
 }
 
+final class TouchFallbackTextField: UITextField {
+    private(set) var accessibilityActivationCount = 0
+    var onBecomeFirstResponder: (@MainActor () -> Void)?
+
+    override func accessibilityActivate() -> Bool {
+        accessibilityActivationCount += 1
+        return true
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        onBecomeFirstResponder?()
+        return super.becomeFirstResponder()
+    }
+}
+
 final class ResignationTrackingTextField: UITextField {
     private(set) var resignationCount = 0
 
@@ -187,30 +202,26 @@ final class TheBrainsActionTests: XCTestCase {
             tripwire: TheTripwire(),
             visibleObservationSource: visibleObservationSource.capture
         )
-        brains.tripwire.startPulse()
         installObservedGeometryHeartbeat()
-        brains.startSemanticObservation()
+        await brains.startActionTestRuntime()
     }
 
     override func tearDown() async throws {
-        brains.stopSemanticObservation()
-        brains.tripwire.stopPulse()
+        brains.stopActionTestRuntime()
         brains = nil
         visibleObservationSource = nil
         try await super.tearDown()
     }
 
-    func replaceBrains(keyboardInput: SafecrackerKeyboardInput) {
-        brains.stopSemanticObservation()
-        brains.tripwire.stopPulse()
+    func replaceBrains(keyboardInput: SafecrackerKeyboardInput) async {
+        brains.stopActionTestRuntime()
         brains = TheBrains(
             tripwire: TheTripwire(),
             keyboardInput: keyboardInput,
             visibleObservationSource: visibleObservationSource.capture
         )
-        brains.tripwire.startPulse()
         installObservedGeometryHeartbeat()
-        brains.startSemanticObservation()
+        await brains.startActionTestRuntime()
     }
 
     private func installObservedGeometryHeartbeat() {
@@ -226,36 +237,36 @@ final class TheBrainsActionTests: XCTestCase {
         heistId: HeistId,
         element: AccessibilityElement,
         object: NSObject?
-    ) {
+    ) async {
         if let object {
             object.accessibilityFrame = element.shape.frame
         }
-        installScreen(elements: [(element, heistId)], objects: [heistId: object])
+        await installScreen(elements: [(element, heistId)], objects: [heistId: object])
     }
 
-    func installSyntheticObservation(_ observation: InterfaceObservation) {
+    func installSyntheticObservation(_ observation: InterfaceObservation) async {
         visibleObservationSource.observation = observation
-        brains.vault.installObservationForTesting(observation)
+        await brains.vault.installObservationForTesting(observation)
     }
 
     func installScreen(
         elements: [(AccessibilityElement, HeistId)],
         objects: [HeistId: NSObject?] = [:]
-    ) {
+    ) async {
         let observation = InterfaceObservation.makeForTests(
             elements: elements.map { ($0.0, $0.1) },
             objects: objects
         )
-        installSyntheticObservation(observation)
+        await installSyntheticObservation(observation)
     }
 
     func installScreen(
         offViewport: [InterfaceObservation.OffViewportEntry]
-    ) {
+    ) async {
         let observation = InterfaceObservation.makeForTests(
             offViewport: offViewport
         )
-        installSyntheticObservation(observation)
+        await installSyntheticObservation(observation)
     }
 
     func installModalWindow(rootView: UIView) throws -> UIWindow {
@@ -407,8 +418,8 @@ final class TheBrainsActionTests: XCTestCase {
         labels: [String],
         screenId: String? = nil,
         screenChanged: Bool = false
-    ) -> ActionEvidenceProjector.Baseline {
-        observedState(elements: labels.enumerated().map { index, label in
+    ) async -> ActionEvidenceProjector.Baseline {
+        await observedState(elements: labels.enumerated().map { index, label in
             (makeElement(label: label), HeistId(rawValue: "element_\(index)"))
         }, screenId: screenId, screenChanged: screenChanged)
     }
@@ -431,9 +442,9 @@ final class TheBrainsActionTests: XCTestCase {
         elements: [(AccessibilityElement, HeistId)],
         screenId: String? = nil,
         screenChanged: Bool = false
-    ) -> ActionEvidenceProjector.Baseline {
-        brains.vault.installObservationForTesting(.makeForTests(elements: elements))
-        let state = brains.actionEvidenceProjector.projectBaseline()
+    ) async -> ActionEvidenceProjector.Baseline {
+        await brains.vault.installObservationForTesting(.makeForTests(elements: elements))
+        let state = await brains.actionEvidenceProjector.projectBaseline()
         guard let screenId else { return state }
 
         let context = AccessibilityTrace.Context(
@@ -490,8 +501,8 @@ final class TheBrainsActionTests: XCTestCase {
         let caseBrains = TheBrains(tripwire: TheTripwire())
 
         return TheBrains.HeistExecutionRuntime(
-            execute: { command, contextScope in
-                expectationContextScopes?(contextScope)
+            execute: { command, expectation in
+                expectationContextScopes?(expectation?.predicate.observationScope)
                 let result: ActionResult
                 if let execute {
                     result = await execute(command)
@@ -500,9 +511,38 @@ final class TheBrainsActionTests: XCTestCase {
                         payload: command.resultPayload
                     )
                 }
+                guard result.outcome.isSuccess, let expectation else {
+                    return RuntimeActionExecution(
+                        result: result,
+                        actionExpectationContext: nil
+                    )
+                }
+                let waitResult = await self.heistRuntimeWaitResult(
+                    for: .actionEndpoint(
+                        expectation,
+                        trace: result.settled == true ? result.accessibilityTrace : nil,
+                        context: actionExpectationContext
+                    ),
+                    wait: wait,
+                    observationSource: observationSource
+                )
+                let evidence: HeistActionEvidence
+                switch waitResult.outcome {
+                case .matched(let expectationResult, let checkedExpectation):
+                    evidence = .expectation(
+                        dispatchResult: result,
+                        expectationResult: expectationResult,
+                        expectation: checkedExpectation.result
+                    )
+                case .unmatched(let expectationResult, let checkedExpectation):
+                    evidence = .expectation(
+                        dispatchResult: result,
+                        expectationResult: expectationResult,
+                        expectation: checkedExpectation.result
+                    )
+                }
                 return RuntimeActionExecution(
-                    result: result,
-                    actionExpectationContext: actionExpectationContext
+                    evidence: evidence
                 )
             },
             wait: { request in
@@ -513,7 +553,7 @@ final class TheBrainsActionTests: XCTestCase {
                 )
             },
             selectPredicateCase: { cases, timeout in
-                observationSource.prepareCaseSelection(
+                await observationSource.prepareCaseSelection(
                     in: caseBrains.vault,
                     timeout: timeout
                 )
@@ -738,6 +778,21 @@ final class TheBrainsActionTests: XCTestCase {
     }
 }
 
+@MainActor
+extension TheBrains {
+    func startActionTestRuntime() async {
+        tripwire.uikitIdleTracker.installIfAvailable()
+        tripwire.startPulse()
+        await startSemanticObservation()
+    }
+
+    func stopActionTestRuntime() {
+        stopSemanticObservation()
+        tripwire.stopPulse()
+        tripwire.uikitIdleTracker.uninstallIfNeeded()
+    }
+}
+
 extension ResolvedHeistActionCommand {
     var resultPayload: ActionResult.Payload {
         switch self {
@@ -768,9 +823,9 @@ extension ResolvedHeistActionCommand {
 private final class ScriptedHeistObservationSource {
     private var remainingObservations: [ActionEvidenceProjector.Baseline]
     private var remainingUnavailableObservations: Int
-    private var previousObservation: SettledObservation?
     private var previousCapture: AccessibilityTrace.Capture?
     private var nextObservationSequence: SettledObservationSequence = 0
+    private var log = Observation.Log(retentionLimit: Observation.Store.defaultRetentionLimit)
     private let observedScopes: (@MainActor (SemanticObservationScope) -> Void)?
     private let observedTimeouts: (@MainActor (Double?) -> Void)?
     private let file: StaticString
@@ -795,10 +850,10 @@ private final class ScriptedHeistObservationSource {
     func prepareCaseSelection(
         in vault: TheVault,
         timeout: Double
-    ) {
-        vault.semanticObservationStream.invalidateLatestSettledObservation()
+    ) async {
+        await vault.semanticObservationStream.invalidateLatestSettledObservation()
         guard let observation = next(scope: .visible, timeout: timeout) else { return }
-        vault.semanticObservationStream.commitVisibleObservationForTesting(
+        await vault.semanticObservationStream.commitVisibleObservationForTesting(
             observation.baseline.observation
         )
     }
@@ -824,7 +879,6 @@ private final class ScriptedHeistObservationSource {
             scope: scope,
             sequence: nextObservationSequence
         )
-        previousObservation = observation.event.settledObservation
         previousCapture = observation.accessibilityTrace.captures.last
         return observation
     }
@@ -834,12 +888,6 @@ private final class ScriptedHeistObservationSource {
         scope: SemanticObservationScope,
         sequence: SettledObservationSequence
     ) -> SettledObservationEvidence {
-        let settledObservation = SettledObservation(
-            sequence: sequence,
-            scope: scope,
-            observation: .empty,
-            semanticSignal: .empty
-        )
         let trace = if let previousCapture {
             AccessibilityTrace(capture: previousCapture).appending(
                 state.capture.interface,
@@ -849,12 +897,21 @@ private final class ScriptedHeistObservationSource {
         } else {
             AccessibilityTrace(capture: state.capture)
         }
-        let event = SettledObservationEvent(
-            continuity: .sameGeneration,
-            settledObservation: settledObservation,
-            previous: previousObservation,
+        let snapshot = Observation.Snapshot(
+            sequence: sequence,
+            generation: .initial,
+            sourceScope: scope,
+            observation: .empty,
+            semanticSignal: .empty,
+            notificationSequence: 0,
             trace: trace
         )
+        let event: Observation.SnapshotEvent
+        do {
+            event = try log.record(snapshot: snapshot, continuity: .sameGeneration)
+        } catch {
+            preconditionFailure("Scripted heist produced an invalid observation transition: \(error)")
+        }
         return SettledObservationEvidence(
             event: event,
             baseline: state,

@@ -12,7 +12,7 @@ import XCTest
 @MainActor
 final class HeistResultTests: XCTestCase {
 
-    func testWaitResultFactoriesBindCanonicalActionAndExpectationOutcomes() {
+    func testWaitResultFactoriesBindCanonicalActionAndExpectationOutcomes() async {
         let predicate = AccessibilityPredicate.exists(.label("Done"))
         let met = ExpectationResult.Met(predicate: predicate, actual: "found")
         let unmet = ExpectationResult.Unmet(predicate: predicate, actual: "not found")
@@ -112,7 +112,7 @@ final class HeistResultTests: XCTestCase {
         XCTAssertNil(heist)
     }
 
-    func testXCTestFailureReporterRecordsAnAssertionAtTheSuppliedCallSite() {
+    func testXCTestFailureReporterRecordsAnAssertionAtTheSuppliedCallSite() async {
         let expectedMessage = "runHeistSyncOperation must be called on the main thread"
         let expectedFile = String(describing: #filePath)
         let expectedLine: UInt = 4_242
@@ -136,7 +136,7 @@ final class HeistResultTests: XCTestCase {
         }
     }
 
-    func testRunHeistTestingFacadeDottedStringArgumentBuildsValidatedInvocation() throws {
+    func testRunHeistTestingFacadeDottedStringArgumentBuildsValidatedInvocation() async throws {
         let input: HeistReferenceName = "input"
         let request = try makeRunHeistRequest("Cart.addItem", argument: "Milk") { _ in
             Warn("adding")
@@ -150,7 +150,7 @@ final class HeistResultTests: XCTestCase {
         XCTAssertEqual(invocation.argument, .string(reference: input))
     }
 
-    func testRunHeistTestingFacadeDottedAccessibilityTargetArgumentBuildsValidatedInvocation() throws {
+    func testRunHeistTestingFacadeDottedAccessibilityTargetArgumentBuildsValidatedInvocation() async throws {
         let input: HeistReferenceName = "input"
         let request = try makeRunHeistRequest("Rows.activate", argument: AccessibilityTarget.label("Milk")) { _ in
             Warn("activating")
@@ -203,7 +203,7 @@ final class HeistResultTests: XCTestCase {
             elements: [(staleHeader, "controls_demo")],
             offViewport: [InterfaceObservation.OffViewportEntry(staleOffscreen, heistId: "stale_row")]
         )
-        job.brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(staleDiscovery)
+        await job.brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(staleDiscovery)
 
         let currentHeader = AccessibilityElement.make(
             label: "ButtonHeist Demo",
@@ -252,7 +252,7 @@ final class HeistResultTests: XCTestCase {
         XCTAssertEqual(request.argument, .string("Milk"))
     }
 
-    func testRunHeistTestingFacadeNoArgumentUsesCanonicalInvocationTopology() throws {
+    func testRunHeistTestingFacadeNoArgumentUsesCanonicalInvocationTopology() async throws {
         let request = try makeRunHeistRequest("CheckoutPay") {
             Warn("paying")
         }
@@ -264,7 +264,7 @@ final class HeistResultTests: XCTestCase {
         XCTAssertEqual(request.argument, .none)
     }
 
-    func testRunHeistTestingFacadeStringArgumentUsesCanonicalInvocationTopology() throws {
+    func testRunHeistTestingFacadeStringArgumentUsesCanonicalInvocationTopology() async throws {
         let request = try makeRunHeistRequest("CartAddItem", argument: "Milk") { _ in
             Warn("adding")
         }
@@ -277,7 +277,7 @@ final class HeistResultTests: XCTestCase {
         XCTAssertEqual(invocation.argument, .string(reference: "input"))
     }
 
-    func testRunHeistTestingFacadeAccessibilityTargetArgumentUsesCanonicalInvocationTopology() throws {
+    func testRunHeistTestingFacadeAccessibilityTargetArgumentUsesCanonicalInvocationTopology() async throws {
         let request = try makeRunHeistRequest(
             "RowsActivate",
             argument: AccessibilityTarget.label("Milk")
@@ -309,8 +309,8 @@ final class HeistResultTests: XCTestCase {
     func testRepeatUntilSuccessResultDoesNotSynthesizeWaitActionResult() async throws {
         let job = try TheInsideJob(token: "in-app-repeat-until-success-result-test")
         let waitScript = WaitResultScript(states: [
-            observedQuantityState(job: job, value: "0"),
-            observedQuantityState(job: job, value: "2"),
+            await observedQuantityState(job: job, value: "0"),
+            await observedQuantityState(job: job, value: "2"),
         ])
         var incrementCount = 0
         let runtime = repeatUntilRuntime(job: job, waitScript: waitScript) { command in
@@ -347,7 +347,7 @@ final class HeistResultTests: XCTestCase {
     func testRepeatUntilTimeoutResultDoesNotSynthesizeWaitActionResult() async throws {
         let job = try TheInsideJob(token: "in-app-repeat-until-timeout-result-test")
         let waitScript = WaitResultScript(states: [
-            observedQuantityState(job: job, value: "0"),
+            await observedQuantityState(job: job, value: "0"),
         ])
         var incrementCount = 0
         let runtime = repeatUntilRuntime(job: job, waitScript: waitScript) { command in
@@ -420,7 +420,7 @@ final class HeistResultTests: XCTestCase {
         }
     }
 
-    func testFailureDescriptionIncludesScreenshotInterfaceDump() throws {
+    func testFailureDescriptionIncludesScreenshotInterfaceDump() async throws {
         var elements: [AccessibilityElement] = []
         elements.reserveCapacity(21)
         for index in 0..<21 {
@@ -511,7 +511,7 @@ final class HeistResultTests: XCTestCase {
             Warn("same executor")
         }
 
-        job.brains.startSemanticObservation()
+        await job.brains.startSemanticObservation()
         let directAction = await job.brains.executeHeistPlan(plan)
         job.brains.stopSemanticObservation()
         let directResult = try XCTUnwrap(directAction.resultPayload)
@@ -546,9 +546,9 @@ private final class RuntimeCapture {
 @MainActor
 private final class WaitResultScript {
     private var states: [ActionEvidenceProjector.Baseline]
-    private var previousObservation: SettledObservation?
     private var previousCapture: AccessibilityTrace.Capture?
     private var nextSequence: SettledObservationSequence = 0
+    private var log = Observation.Log(retentionLimit: Observation.Store.defaultRetentionLimit)
 
     init(states: [ActionEvidenceProjector.Baseline]) {
         self.states = states
@@ -565,19 +565,21 @@ private final class WaitResultScript {
                 transition: state.capture.transition
             )
         } ?? AccessibilityTrace(capture: state.capture)
-        let settledObservation = SettledObservation(
+        let snapshot = Observation.Snapshot(
             sequence: nextSequence,
-            scope: scope,
+            generation: .initial,
+            sourceScope: scope,
             observation: .empty,
-            semanticSignal: .empty
-        )
-        let event = SettledObservationEvent(
-            continuity: .sameGeneration,
-            settledObservation: settledObservation,
-            previous: previousObservation,
+            semanticSignal: .empty,
+            notificationSequence: 0,
             trace: trace
         )
-        previousObservation = settledObservation
+        let event: Observation.SnapshotEvent
+        do {
+            event = try log.record(snapshot: snapshot, continuity: .sameGeneration)
+        } catch {
+            preconditionFailure("Wait result fixture produced an invalid observation transition: \(error)")
+        }
         previousCapture = trace.captures.last
         return SettledObservationEvidence(
             event: event,
@@ -635,14 +637,14 @@ private final class WaitResultScript {
 private func observedQuantityState(
     job: TheInsideJob,
     value: String
-) -> ActionEvidenceProjector.Baseline {
+) async -> ActionEvidenceProjector.Baseline {
     let element = AccessibilityElement.make(
         value: value,
         identifier: "quantity",
         traits: .staticText
     )
-    job.brains.vault.installObservationForTesting(.makeForTests(elements: [(element, HeistId(rawValue: "quantity"))]))
-    return job.brains.actionEvidenceProjector.projectBaseline()
+    await job.brains.vault.installObservationForTesting(.makeForTests(elements: [(element, HeistId(rawValue: "quantity"))]))
+    return await job.brains.actionEvidenceProjector.projectBaseline()
 }
 
 @MainActor

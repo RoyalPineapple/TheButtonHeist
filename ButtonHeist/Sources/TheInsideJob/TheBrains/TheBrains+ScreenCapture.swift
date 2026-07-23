@@ -39,6 +39,16 @@ extension TheBrains {
                 return .actionFailed
             }
         }
+
+        var dispatchFailureKind: TheSafecracker.FailureKind {
+            switch self {
+            case .inactiveRuntime, .accessibilityTreeUnavailable:
+                return .treeUnavailable
+            case .appWindowUnavailable, .accessibilitySnapshotRenderingFailed, .pngEncodingFailed,
+                 .invalidScreenDimensions:
+                return .actionFailed
+            }
+        }
     }
 
     enum ScreenCaptureGatewayResult {
@@ -57,7 +67,7 @@ extension TheBrains {
             return .failure(.accessibilityTreeUnavailable)
         }
         guard let sequence = observation.settledObservationSequence,
-              let settledCapture = vault.semanticObservationStream.settledCapture(
+              let moment = await vault.semanticObservationStream.moment(
                 scope: .visible,
                 at: sequence
               ) else {
@@ -70,8 +80,8 @@ extension TheBrains {
             let window = vault.accessibilityNotifications.beginActionWindow()
             notificationWindow = window
             actionExpectationContext = ActionExpectationContext(
-                preActionCapture: settledCapture,
-                throughObservationCursor: settledCapture.cursor,
+                preActionMoment: moment,
+                throughMoment: moment,
                 announcementCursor: window.cursor
             )
         } else {
@@ -88,7 +98,7 @@ extension TheBrains {
             guard let payload = renderAccessibilitySnapshotPayload(
                 image: screenCapture.image,
                 bounds: screenCapture.bounds,
-                interface: settledCapture.capture.interface
+                interface: moment.capture.interface
             ) else {
                 return .failure(.accessibilitySnapshotRenderingFailed)
             }
@@ -103,7 +113,7 @@ extension TheBrains {
             pngData: pngData.base64EncodedString(),
             width: screenCapture.bounds.width,
             height: screenCapture.bounds.height,
-            interface: settledCapture.capture.interface
+            interface: moment.capture.interface
         ) else {
             return .failure(.invalidScreenDimensions)
         }
@@ -137,6 +147,24 @@ extension TheBrains {
                     timing: timing.freeze()
                 ),
                 actionExpectationContext: nil
+            )
+        }
+    }
+
+    func dispatchTakeScreenshot(
+        mode: ScreenCaptureMode = .raw
+    ) async -> TheSafecracker.ActionDispatchResult {
+        switch await captureScreenPayload(mode: mode) {
+        case .success(let payload, context: _):
+            return .success(
+                payload: .screenshot(payload),
+                message: "Captured screenshot \(Int(payload.width))x\(Int(payload.height))"
+            )
+        case .failure(let failure):
+            return .failure(
+                .screenshot(nil),
+                message: failure.message,
+                failureKind: failure.dispatchFailureKind
             )
         }
     }

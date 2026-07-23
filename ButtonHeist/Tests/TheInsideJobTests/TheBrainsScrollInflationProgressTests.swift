@@ -12,7 +12,7 @@ extension TheBrainsScrollTests {
 
     func testInflationRecordsDiscoveredOriginWhenExplorationFindsTarget() async throws {
         let baselineObject = retainedLiveObject()
-        brains.vault.installObservationForTesting(.makeForTests([
+        await brains.vault.installObservationForTesting(.makeForTests([
             .init(makeElement(label: "Home"), heistId: "home", object: baselineObject),
         ]))
         let discoveredFrame = CGRect(x: 40, y: 120, width: 240, height: 44)
@@ -32,7 +32,7 @@ extension TheBrainsScrollTests {
         visibleObservationSource.observation = discoveredScreen
         brains.navigation.elementInflation.exploration.discoverTarget = { _ in
             self.brains.vault.observeInterface(discoveredScreen)
-            let event = self.brains.vault.semanticObservationStream
+            let event = await self.brains.vault.semanticObservationStream
                 .commitDiscoveryObservationForTesting(discoveredScreen)
             return Navigation.InterfaceExplorationResult(
                 event: event,
@@ -63,7 +63,7 @@ extension TheBrainsScrollTests {
         brains.stopSemanticObservation()
         let targetId: HeistId = "coke_button"
         let staleKnownTarget = makeElement(label: "Coke", traits: .button)
-        installScreenWithOffViewportEntry(
+        await installScreenWithOffViewportEntry(
             liveHierarchy: [(makeElement(label: "Drink", traits: .header), "drink_header")],
             offViewport: [InterfaceObservation.OffViewportEntry(staleKnownTarget, heistId: targetId)]
         )
@@ -103,7 +103,7 @@ extension TheBrainsScrollTests {
         }
         await waitForSettledSemanticWaiter()
         visibleObservationSource.observation = visibleScreen
-        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(visibleScreen)
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(visibleScreen)
         await inflation.value
 
         guard case .inflated(let inflatedTarget)? = resultBox.value else {
@@ -120,7 +120,7 @@ extension TheBrainsScrollTests {
         let targetId: HeistId = "coke_button"
         let overviewVisible = makeElement(label: "Combo Overview", traits: .header)
         let staleCoke = makeElement(label: "Coke", traits: .button)
-        installScreenWithOffViewportEntry(
+        await installScreenWithOffViewportEntry(
             liveHierarchy: [(overviewVisible, "combo_overview_header")],
             offViewport: [InterfaceObservation.OffViewportEntry(staleCoke, heistId: targetId)]
         )
@@ -161,7 +161,7 @@ extension TheBrainsScrollTests {
         }
         await waitForSettledSemanticWaiter()
         visibleObservationSource.observation = arrivedScreen
-        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(arrivedScreen)
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(arrivedScreen)
 
         await inflation.value
 
@@ -180,7 +180,7 @@ extension TheBrainsScrollTests {
         brains.stopSemanticObservation()
         let overviewVisible = makeElement(label: "Combo Overview", traits: .header)
         let staleCoke = makeElement(label: "Coke", traits: .button)
-        installScreenWithOffViewportEntry(
+        await installScreenWithOffViewportEntry(
             liveHierarchy: [(overviewVisible, "combo_overview_header")],
             offViewport: [InterfaceObservation.OffViewportEntry(staleCoke, heistId: "stale_coke_button")]
         )
@@ -216,10 +216,10 @@ extension TheBrainsScrollTests {
         }
         await waitForSettledSemanticWaiter()
         visibleObservationSource.observation = freshKnownScreen
-        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(freshKnownScreen)
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(freshKnownScreen)
         await waitForSettledSemanticWaiter()
         XCTAssertEqual(revealAttempts, 0)
-        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(freshKnownScreen)
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(freshKnownScreen)
         await waitForSettledSemanticWaiter()
         XCTAssertEqual(revealAttempts, 0)
         inflation.cancel()
@@ -234,7 +234,7 @@ extension TheBrainsScrollTests {
     func testRevealRetryFailsNoRevealPathAtActionDeadline() async throws {
         let overviewVisible = makeElement(label: "Combo Overview", traits: .header)
         let staleCoke = makeElement(label: "Coke", traits: .button)
-        installScreenWithOffViewportEntry(
+        await installScreenWithOffViewportEntry(
             liveHierarchy: [(overviewVisible, "combo_overview_header")],
             offViewport: [InterfaceObservation.OffViewportEntry(staleCoke, heistId: "stale_coke_button")]
         )

@@ -16,6 +16,7 @@ final class WaitForIntegrationTests: XCTestCase {
     private var window: UIWindow!
     private var hostView: UIView!
     private var visibleObservationOverride: InterfaceObservation?
+    private var runtimeResources: TheInsideJob.InsideJobRuntimeResources!
 
     override func setUp() async throws {
         let windowScene = try requireForegroundWindowScene()
@@ -37,14 +38,27 @@ final class WaitForIntegrationTests: XCTestCase {
                 self?.visibleObservationOverride ?? TheVault.captureVisibleObservation(from: vault)
             }
         )
-        insideJob.tripwire.startPulse()
-        insideJob.brains.startSemanticObservation()
+        let runtimeResources = TheInsideJob.InsideJobRuntimeResources(
+            transport: ServerTransport(token: "wait-for-test-token"),
+            actualPort: 0,
+            bonjourServiceName: nil,
+            idleTimerBaseline: UIApplication.shared.isIdleTimerDisabled
+        )
+        self.runtimeResources = runtimeResources
+        await insideJob.activateRuntime(runtimeResources)
+        XCTAssertTrue(insideJob.tripwire.uikitIdleTracker.isInstalled)
     }
 
     override func tearDown() async throws {
-        insideJob?.brains.stopSemanticObservation()
-        insideJob?.tripwire.stopPulse()
+        if let insideJob, let runtimeResources {
+            insideJob.releaseRuntimeOwnedResources(
+                policy: .stop,
+                idleTimerBaseline: runtimeResources.idleTimerBaseline
+            )
+            XCTAssertFalse(insideJob.tripwire.uikitIdleTracker.isInstalled)
+        }
         insideJob = nil
+        runtimeResources = nil
         window?.rootViewController?.view.accessibilityViewIsModal = false
         window?.isHidden = true
         window?.rootViewController = nil
@@ -131,9 +145,21 @@ final class WaitForIntegrationTests: XCTestCase {
         ) != nil
     }
 
-    private func mutateVisibleHierarchy(_ body: () -> Void) {
+    private func mutateVisibleHierarchy(_ body: () -> Void) async {
         body()
-        insideJob.brains.vault.invalidateSettledObservationFromTripwire()
+        await insideJob.brains.vault.invalidateSettledObservationFromTripwire()
+    }
+
+    private func assertSuccessfulWaitSettlement(
+        _ result: ActionResult,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        XCTAssertTrue(insideJob.tripwire.uikitIdleTracker.isInstalled, file: file, line: line)
+        let settlement = try XCTUnwrap(result.evidence.settlement, file: file, line: line)
+        XCTAssertTrue(settlement.settled, file: file, line: line)
+        XCTAssertTrue(settlement.readinessEstablished, file: file, line: line)
+        XCTAssertTrue(settlement.observationHandoffCompleted, file: file, line: line)
     }
 
     // MARK: - Passive Observation
@@ -162,7 +188,7 @@ final class WaitForIntegrationTests: XCTestCase {
             "Regression setup must keep an unrelated CALayer animation active"
         )
 
-        insideJob.brains.vault.invalidateSettledObservationFromTripwire()
+        await insideJob.brains.vault.invalidateSettledObservationFromTripwire()
         let observation = await insideJob.brains.interactionCoordinator.settledEvidence(
             scope: .visible,
             after: nil,
@@ -171,10 +197,11 @@ final class WaitForIntegrationTests: XCTestCase {
 
         let event = try XCTUnwrap(observation?.event)
         XCTAssertTrue(
-            event.settledObservation.observation.tree.orderedElements.contains { $0.element.label == "PassiveObservation-StableAX" },
+            event.snapshot.observation.tree.orderedElements.contains { $0.element.label == "PassiveObservation-StableAX" },
             "Passive visible observation should publish a stable AX tree even while unrelated layer motion continues"
         )
-        XCTAssertNil(insideJob.brains.vault.semanticObservationStream.latestSettleFailureDiagnostic)
+        let diagnostic = await insideJob.brains.vault.semanticObservationStream.latestSettleFailureDiagnostic()
+        XCTAssertNil(diagnostic)
     }
 
     // MARK: - 1. Element already present — returns immediately
@@ -193,6 +220,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertEqual(result.method, .wait)
         XCTAssertTrue(result.message?.hasPrefix("matched") == true)
         XCTAssertNil(result.outcome.failureKind)
+        try assertSuccessfulWaitSettlement(result)
     }
 
     func testWaitForAppearTimeoutNamesExpectedMatcherAndInterfaceCount() async throws {
@@ -248,6 +276,7 @@ final class WaitForIntegrationTests: XCTestCase {
         let message = try XCTUnwrap(unwrapped.message)
         XCTAssertTrue(message.contains("matched after"), "Unexpected message: \(message)")
         XCTAssertNil(unwrapped.outcome.failureKind)
+        try assertSuccessfulWaitSettlement(unwrapped)
     }
 
     // MARK: - 3. wait_for absent: true on a present element — should timeout
@@ -293,6 +322,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertEqual(unwrapped.method, .wait)
         XCTAssertTrue(unwrapped.message?.contains("absent confirmed") == true)
         XCTAssertNil(unwrapped.outcome.failureKind)
+        try assertSuccessfulWaitSettlement(unwrapped)
     }
 
     // MARK: - 5. wait_for respects timeout value
@@ -330,6 +360,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertTrue(result.message?.hasPrefix("matched") == true)
+        try assertSuccessfulWaitSettlement(result)
     }
 
     func testWaitForAbsentTreatsKnownOffViewportElementAsPresent() async throws {
@@ -349,7 +380,7 @@ final class WaitForIntegrationTests: XCTestCase {
             offViewport: [.init(offViewportElement, heistId: offViewportHeistId)]
         )
         visibleObservationOverride = screen
-        insideJob.brains.vault.installObservationForTesting(screen)
+        await insideJob.brains.vault.installObservationForTesting(screen)
         XCTAssertTrue(insideJob.brains.semanticObservationIsActive)
         XCTAssertNotNil(insideJob.brains.vault.interfaceTree.findElement(heistId: offViewportHeistId))
 
@@ -380,6 +411,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertEqual(result.method, .wait)
         XCTAssertTrue(result.message?.contains("absent confirmed after") == true)
         XCTAssertNil(result.outcome.failureKind)
+        try assertSuccessfulWaitSettlement(result)
     }
 
     // MARK: - Changed wait trace truth
@@ -433,7 +465,7 @@ final class WaitForIntegrationTests: XCTestCase {
         }
         await fulfillment(of: [readyToPoll], timeout: 5.0)
         delayedLabel = addLabel("WaitForChange-Delayed")
-        insideJob.brains.vault.invalidateSettledObservationFromTripwire()
+        await insideJob.brains.vault.invalidateSettledObservationFromTripwire()
         let result = await waitTask.value
 
         XCTAssertTrue(result.outcome.isSuccess)
@@ -461,7 +493,7 @@ final class WaitForIntegrationTests: XCTestCase {
             )
         }
         await fulfillment(of: [readyToPoll], timeout: 5.0)
-        mutateVisibleHierarchy {
+        await mutateVisibleHierarchy {
             label.removeFromSuperview()
         }
 
@@ -489,7 +521,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(result.message?.contains("expected: changed(elements(*))") == true)
     }
 
-    func testPredicateWaitStableObservationDecisionUsesExplicitDeadlineBudget() {
+    func testPredicateWaitStableObservationDecisionUsesExplicitDeadlineBudget() async {
         let minimum = SettleSession.minimumStableDurationSeconds
         let start = RuntimeElapsed.now
         let deadline = SemanticObservationDeadline(start: start, timeoutSeconds: minimum)
@@ -561,15 +593,15 @@ final class WaitForIntegrationTests: XCTestCase {
                 .latestScopedScreenChangedSequence,
             gap: nil
         )
-        let baselineEvent = stream.commitVisibleObservationForTesting(
+        let baselineEvent = await stream.commitVisibleObservationForTesting(
             baseline,
             notificationBatch: notificationBatch
         )
-        let baselineCapture = try XCTUnwrap(baselineEvent.settledCapture)
+        let baselineCapture = try XCTUnwrap(baselineEvent.moment)
         XCTAssertNotNil(insideJob.brains.vault.interfaceTree.findElement(heistId: offViewportHeistId))
 
         let updatedVisible = InterfaceObservation.makeForTests(elements: [(visibleAfter, visibleHeistId)])
-        stream.commitVisibleObservationForTesting(
+        await stream.commitVisibleObservationForTesting(
             updatedVisible,
             notificationBatch: notificationBatch
         )
