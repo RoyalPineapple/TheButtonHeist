@@ -30,6 +30,7 @@ final class DogfoodRuntimeContractTests: XCTestCase {
     func testAdvancedActionCrossesPublicControlFlowBoundary() async throws {
         try await runHeist("DogfoodAdvancedActionControlFlow") {
             try DogfoodHome.openScreen("Custom Rotors")
+            WaitFor(.exists(.label("Rotor Host")), timeout: 2)
 
             If {
                 Case(.exists(.label("Rotor Host"))) {
