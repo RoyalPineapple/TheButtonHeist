@@ -263,12 +263,6 @@ extension TheBrainsPipelineTests {
                 spy.record(result)
                 return result
             },
-            selectPredicateCase: { cases, timeout in
-                await isolatedBrains.interactionCoordinator.waitForPredicateCases(
-                    cases,
-                    timeout: timeout
-                )
-            },
             settledEvidence: { scope, sequence, timeout in
                 await isolatedBrains.interactionCoordinator.settledEvidence(
                     scope: scope,

@@ -695,9 +695,6 @@ private func repeatUntilRuntime(
         wait: { request in
             waitScript.result(for: request.step)
         },
-        selectPredicateCase: { _, _ in
-            .selectingFirstMatch(cases: [], ifNone: .noMatch, elapsedMs: 0)
-        },
         settledEvidence: { scope, _, _ in
             waitScript.observation(scope: scope)
         }

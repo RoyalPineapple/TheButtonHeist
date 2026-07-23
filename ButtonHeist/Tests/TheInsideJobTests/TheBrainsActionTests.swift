@@ -533,8 +533,6 @@ final class TheBrainsActionTests: XCTestCase {
             file: file,
             line: line
         )
-        let caseBrains = TheBrains(tripwire: TheTripwire())
-
         return TheBrains.HeistExecutionRuntime(
             execute: { command, expectation in
                 expectationContextScopes?(expectation?.predicate.observationScope)
@@ -587,16 +585,6 @@ final class TheBrainsActionTests: XCTestCase {
                     observationSource: observationSource
                 )
             },
-            selectPredicateCase: { cases, timeout in
-                await observationSource.prepareCaseSelection(
-                    in: caseBrains.vault,
-                    timeout: timeout
-                )
-                return await caseBrains.interactionCoordinator.waitForPredicateCases(
-                    cases,
-                    timeout: timeout
-                )
-            },
             settledEvidence: { scope, _, timeout in
                 observationSource.next(scope: scope, timeout: timeout)
             }
@@ -629,9 +617,6 @@ final class TheBrainsActionTests: XCTestCase {
                 return RuntimeActionExecution(result: result, actionExpectationContext: nil)
             },
             wait: wait,
-            selectPredicateCase: { _, _ in
-                .selectingFirstMatch(cases: [], ifNone: .noMatch, elapsedMs: 0)
-            },
             settledEvidence: { scope, _, timeout in
                 observationSource.next(scope: scope, timeout: timeout)
             }
@@ -880,17 +865,6 @@ private final class ScriptedHeistObservationSource {
         self.observedTimeouts = observedTimeouts
         self.file = file
         self.line = line
-    }
-
-    func prepareCaseSelection(
-        in vault: TheVault,
-        timeout: Double
-    ) async {
-        await vault.semanticObservationStream.invalidateLatestSettledObservation()
-        guard let observation = next(scope: .visible, timeout: timeout) else { return }
-        await vault.semanticObservationStream.commitVisibleObservationForTesting(
-            observation.baseline.observation
-        )
     }
 
     func next(

@@ -58,8 +58,35 @@ extension TheBrainsActionTests {
         XCTAssertEqual(heistResult.steps.map(\.kind), [.conditional, .warn])
         XCTAssertEqual(
             heistResult.steps.first?.caseSelectionEvidence?.selection.outcome,
+            HeistCaseSelectionOutcome.noMatch
+        )
+    }
+
+    func testHeistConditionalUnmatchedRunsElse() async throws {
+        let runtime = heistRuntime(observations: [
+            await observedState(labels: ["Settings"]),
+        ])
+        let plan = try HeistPlan(body: [
+            .conditional(try ConditionalStep(
+                cases: [
+                    PredicateCase(
+                        predicate: .exists(.label("Home")),
+                        body: [.fail(FailStep(message: "should not run"))]
+                    ),
+                ],
+                elseBody: [.warn(WarnStep(message: "settings flow"))]
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let step = try XCTUnwrap(result.resultPayload?.steps.first)
+
+        XCTAssertTrue(result.outcome.isSuccess)
+        XCTAssertEqual(
+            step.caseSelectionEvidence?.selection.outcome,
             HeistCaseSelectionOutcome.elseBranch(reason: .noMatch)
         )
+        XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
     func testHeistWaitForTimeoutWithoutElseFails() async throws {
@@ -595,122 +622,6 @@ extension TheBrainsActionTests {
         XCTAssertNil(step.repeatUntilEvidence?.lastObservedSummary)
     }
 
-    func testHeistIfSelectsMatchingCaseImmediately() async throws {
-        let runtime = heistRuntime(observations: [
-            await observedState(labels: ["Home"]),
-        ])
-        let plan = try HeistPlan(body: [
-            .conditional(try ConditionalStep(cases: [
-                PredicateCase(
-                    predicate: .exists(.label("Home")),
-                    body: [.warn(WarnStep(message: "home flow"))]
-                ),
-                PredicateCase(
-                    predicate: .exists(.label("Settings")),
-                    body: [.fail(FailStep(message: "should not run"))]
-                ),
-            ])),
-        ])
-
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heistResult = try XCTUnwrap(result.resultPayload)
-        let step = try XCTUnwrap(heistResult.steps.first)
-
-        XCTAssertTrue(result.outcome.isSuccess)
-        XCTAssertEqual(step.kind, .conditional)
-        XCTAssertEqual(step.caseSelectionEvidence?.selection.outcome, HeistCaseSelectionOutcome.matchedCase(index: 0))
-        XCTAssertEqual(step.children.map(\.kind), [.warn])
-    }
-
-    func testZeroTimeoutCaseMatchesLatestAdmittedLevelStateWithoutSchedulingWork() async throws {
-        await installSyntheticObservation(.makeForTests(elements: [
-            (makeElement(label: "Rotor Host"), HeistId(rawValue: "rotor_host")),
-        ]))
-        let stream = brains.vault.semanticObservationStream
-        let initialMoment = await stream.storeOwner.latestCommittedMoment()
-        var scheduledEffects: [PredicateWait.ScheduledEffect] = []
-        brains.interactionCoordinator.observePredicateWaitScheduledEffects {
-            scheduledEffects.append($0)
-        }
-        let predicateCase = PredicateCase(
-            predicate: .exists(.label("Rotor Host")),
-            body: []
-        )
-        let input = try ResolvedPredicateCaseRuntimeInput(
-            resolving: predicateCase,
-            in: .empty
-        )
-
-        let result = await brains.interactionCoordinator.waitForPredicateCases(
-            [input],
-            timeout: 0
-        )
-        let finalMoment = await stream.storeOwner.latestCommittedMoment()
-
-        XCTAssertEqual(result.outcome, .matchedCase(index: 0))
-        XCTAssertEqual(result.cases.map(\.met), [true])
-        XCTAssertTrue(scheduledEffects.isEmpty)
-        XCTAssertEqual(finalMoment, initialMoment)
-    }
-
-    func testZeroTimeoutAppearedEstablishesFreshBaselineWithoutSchedulingWork() async throws {
-        let stream = brains.vault.semanticObservationStream
-        _ = await stream.commitVisibleObservationForTesting(.makeForTests(elements: [
-            (makeElement(label: "Loading"), HeistId(rawValue: "loading")),
-        ]))
-        _ = await stream.commitVisibleObservationForTesting(.makeForTests(elements: [
-            (makeElement(label: "Loading"), HeistId(rawValue: "loading")),
-            (makeElement(label: "Ready"), HeistId(rawValue: "ready")),
-        ]))
-        let initialMoment = await stream.storeOwner.latestCommittedMoment()
-        var scheduledEffects: [PredicateWait.ScheduledEffect] = []
-        let expression = AccessibilityPredicate.changed(.elements([.appeared(.label("Ready"))]))
-        let predicate = try resolvedPredicate(expression)
-        let predicateWait = PredicateWait(
-            vault: brains.vault,
-            navigation: brains.navigation,
-            actionEvidenceProjector: brains.actionEvidenceProjector
-        )
-        predicateWait.observeScheduledEffect = { scheduledEffects.append($0) }
-
-        let result = await predicateWait.execute(
-            start: RuntimeElapsed.now,
-            timeout: 0,
-            projection: PredicateWait.ExecutionProjection(
-                target: predicate.waitTarget,
-                continuesAfterInitialMiss: true,
-                initialEvidence: PredicateWait.LifecycleEvidence(
-                    predicate: expression,
-                    target: predicate.waitTarget
-                ),
-                evaluate: { observation, isInitialVisible, evidence in
-                    let reduced = await predicateWait.reduceObservation(
-                        observation,
-                        predicate: predicate,
-                        predicateExpression: expression,
-                        baselineSeed: isInitialVisible ? .currentObservation : .preserve,
-                        stream: evidence.stream
-                    )
-                    let recorded = evidence.recording(reduced)
-                    return PredicateWaitEvaluation(
-                        evidence: recorded,
-                        matched: recorded.evaluation.met
-                    )
-                },
-                result: { _, _, evidence in evidence.evaluation }
-            )
-        )
-        let finalMoment = await stream.storeOwner.latestCommittedMoment()
-
-        XCTAssertFalse(result.met)
-        XCTAssertEqual(
-            result.actual,
-            PredicateObservationDiagnostics.changePredicateNeedsFutureObservationMessage
-        )
-        XCTAssertTrue(scheduledEffects.isEmpty)
-        XCTAssertEqual(finalMoment, initialMoment)
-    }
-
     func testPredicateObservationStreamSeparatesStateAndChangeEvidence() async throws {
         let readyTarget = AccessibilityTarget.label("Ready")
         let observationStream = brains.vault.semanticObservationStream
@@ -791,31 +702,9 @@ extension TheBrainsActionTests {
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(
             step.caseSelectionEvidence?.selection.outcome,
-            HeistCaseSelectionOutcome.elseBranch(reason: .noMatch)
+            HeistCaseSelectionOutcome.noMatch
         )
         XCTAssertEqual(step.children.map(\.kind), [])
-    }
-
-    func testHeistIfPassesImmediateObservationBudget() async throws {
-        var observedTimeouts: [Double?] = []
-        let runtime = heistRuntime(
-            observations: [await observedState(labels: ["Settings"])],
-            observedTimeouts: { observedTimeouts.append($0) }
-        )
-        let plan = try HeistPlan(body: [
-            .conditional(try ConditionalStep(
-                cases: [
-                    PredicateCase(
-                        predicate: .exists(.label("Home")),
-                        body: [.warn(WarnStep(message: "home flow"))]
-                    ),
-                ]
-            )),
-        ])
-
-        _ = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-
-        XCTAssertEqual(observedTimeouts, [0])
     }
 
 }

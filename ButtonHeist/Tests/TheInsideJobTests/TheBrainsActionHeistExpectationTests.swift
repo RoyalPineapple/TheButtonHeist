@@ -701,9 +701,6 @@ observation: .settledTrace(
                     )
                 )
             },
-            selectPredicateCase: { _, _ in
-                .selectingFirstMatch(cases: [], ifNone: .noMatch, elapsedMs: 0)
-            },
             settledEvidence: { _, _, _ in nil }
         )
         let plan = try HeistPlan(body: [
@@ -1278,7 +1275,7 @@ observation: .settledTrace(
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(
             step.caseSelectionEvidence?.selection.outcome,
-            HeistCaseSelectionOutcome.elseBranch(reason: .noMatch)
+            HeistCaseSelectionOutcome.noMatch
         )
         XCTAssertEqual(step.caseSelectionEvidence?.selection.cases.first?.result.met, false)
     }

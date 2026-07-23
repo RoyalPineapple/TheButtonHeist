@@ -115,7 +115,6 @@ extension TheBrains {
             ResolvedWaitRuntimeInput?
         ) async -> RuntimeActionExecution
         internal let wait: @MainActor (HeistRuntimeWaitRequest) async -> HeistWaitResult
-        internal let selectPredicateCase: @MainActor ([ResolvedPredicateCaseRuntimeInput], Double) async -> HeistCaseSelectionResult
         internal let settledEvidence: @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> SettledObservationEvidence?
 
         internal init(
@@ -124,12 +123,10 @@ extension TheBrains {
                 ResolvedWaitRuntimeInput?
             ) async -> RuntimeActionExecution,
             wait: @escaping @MainActor (HeistRuntimeWaitRequest) async -> HeistWaitResult,
-            selectPredicateCase: @escaping @MainActor ([ResolvedPredicateCaseRuntimeInput], Double) async -> HeistCaseSelectionResult,
             settledEvidence: @escaping @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> SettledObservationEvidence?
         ) {
             self.execute = execute
             self.wait = wait
-            self.selectPredicateCase = selectPredicateCase
             self.settledEvidence = settledEvidence
         }
 
@@ -161,9 +158,6 @@ extension TheBrains {
                             startedAt: request.startedAt
                         )
                     }
-                },
-                selectPredicateCase: { cases, timeout in
-                    await brains.interactionCoordinator.waitForPredicateCases(cases, timeout: timeout)
                 },
                 settledEvidence: { scope, sequence, timeout in
                     await brains.interactionCoordinator.settledEvidence(scope: scope, after: sequence, timeout: timeout)
