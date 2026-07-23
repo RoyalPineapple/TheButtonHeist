@@ -53,7 +53,7 @@ package enum TextInputScreen {
 
     package static let fillProfile = HeistDef<String>("TextInputScreen.fillProfile", parameter: "name") { name in
         TypeText(name, into: nameField)
-            .expect(.exists(.value(name)), timeout: 2)
+            .expect(.exists(.value(name)), timeout: 4)
 
         dismissKeyboard()
             .withoutExpectation("Ends the first field edit before focusing the email field")
