@@ -325,7 +325,6 @@ extension Observation.Stream {
     struct PendingDelivery {
         let delivery: Observation.StoreOwner.CommittedDelivery
         let sourceObservation: InterfaceObservation
-        let fallbackReasons: [AccessibilityObservationFallbackReason]
     }
 
     struct ReadyDelivery {

@@ -5,11 +5,6 @@ import ThePlans
 import TheScore
 
 extension Settlement {
-    internal enum UnmatchedWaitDisposition: Sendable, Equatable {
-        case failed
-        case handledElse
-    }
-
     internal enum ResultProjector {
         internal static func projectAction(_ result: Result) -> HeistActionEvidence {
             let dispatchResult = actionResult(from: result)
@@ -25,10 +20,7 @@ extension Settlement {
             )
         }
 
-        internal static func projectWait(
-            _ result: Result,
-            unmatched disposition: UnmatchedWaitDisposition = .failed
-        ) -> HeistWaitEvidence {
+        internal static func projectWait(_ result: Result) -> HeistSettlementEvidence {
             precondition(
                 result.evidence.command.trigger == .observation,
                 "Wait projection requires an observation settlement trigger"
@@ -39,29 +31,37 @@ extension Settlement {
             let actionResult = waitActionResult(from: result)
             if result.outcome == .settled,
                let met = ExpectationResult.Met(expectation),
-               let check = HeistWaitEvidence.MatchedCheck(
+               let check = HeistSettlementEvidence.MatchedCheck(
                    actionResult: actionResult,
                    expectation: met
                ) {
-                return .matched(check, finalSummary: expectation.actual)
+                return .matched(
+                    check,
+                    baselineSummary: baselineSummary(from: result),
+                    finalSummary: expectation.actual
+                )
             }
-            guard let check = HeistWaitEvidence.UnmatchedCheck(
+            guard let check = HeistSettlementEvidence.UnmatchedCheck(
                 actionResult: actionResult,
                 expectation: expectation
             ) else {
                 preconditionFailure("Incomplete wait settlement requires unmatched public evidence")
             }
-            switch disposition {
-            case .failed:
-                return .failed(check, finalSummary: expectation.actual)
-            case .handledElse:
-                return .handledElse(check, finalSummary: expectation.actual)
-            }
+            return .failed(
+                check,
+                baselineSummary: baselineSummary(from: result),
+                finalSummary: expectation.actual
+            )
         }
     }
 }
 
 private extension Settlement.ResultProjector {
+    static func baselineSummary(from result: Settlement.Result) -> String? {
+        guard case .established(let boundary) = result.evidence.boundary else { return nil }
+        return boundary.moment.capture.summary
+    }
+
     static func actionResult(from result: Settlement.Result) -> ActionResult {
         guard case .action(let command) = result.evidence.command.trigger else {
             preconditionFailure("Action projection requires an action settlement trigger")
@@ -78,10 +78,11 @@ private extension Settlement.ResultProjector {
             )
             switch dispatch.outcome {
             case .success:
+                let settlementFailureMessage = actionSettlementFailureMessage(from: result)
                 return ActionResult(
-                    outcome: .success,
+                    outcome: settlementFailureMessage == nil ? .success : .failure(.actionFailed),
                     payload: payload,
-                    message: dispatch.message,
+                    message: settlementFailureMessage ?? dispatch.message,
                     observation: observation,
                     subjectEvidence: dispatch.subjectEvidence,
                     activationTrace: dispatch.activationTrace,
@@ -122,6 +123,21 @@ private extension Settlement.ResultProjector {
         }
     }
 
+    static func actionSettlementFailureMessage(from result: Settlement.Result) -> String? {
+        switch result.outcome {
+        case .cancelled:
+            "cancelled after \(result.evidence.deadline.elapsed)ms"
+        case .timedOut:
+            if case .captureFailed = result.evidence.handoff {
+                "Could not capture accessibility tree after action"
+            } else {
+                nil
+            }
+        case .settled, .dispatchFailed, .baselineUnavailable:
+            nil
+        }
+    }
+
     static func actionPayload(
         _ dispatch: TheSafecracker.ActionDispatchResult,
         result: Settlement.Result
@@ -138,7 +154,8 @@ private extension Settlement.ResultProjector {
     }
 
     static func waitActionResult(from result: Settlement.Result) -> ActionResult {
-        let projection = projectedEvidence(from: result)
+        let observation = projectedObservation(from: result)
+        let timing = ActionPerformanceTiming(totalMs: result.evidence.deadline.elapsed)
         if result.outcome == .settled {
             let message: String? = switch result.evidence.command.trigger {
             case .observation:
@@ -149,16 +166,16 @@ private extension Settlement.ResultProjector {
             return ActionResult.success(
                 payload: .wait,
                 message: message,
-                observation: projection.observation,
-                timing: projection.timing
+                observation: observation,
+                timing: timing
             )
         }
         return ActionResult.failure(
             payload: .wait,
             failureKind: waitFailureKind(for: result.outcome),
             message: waitFailureMessage(from: result),
-            observation: projection.observation,
-            timing: projection.timing
+            observation: observation,
+            timing: timing
         )
     }
 
@@ -200,13 +217,6 @@ private extension Settlement.ResultProjector {
         case .notRequired:
             preconditionFailure("Predicate command cannot carry not-required evidence")
         }
-    }
-
-    static func projectedEvidence(
-        from result: Settlement.Result
-    ) -> (observation: ActionResultObservationEvidence, timing: ActionPerformanceTiming) {
-        let timing = ActionPerformanceTiming(totalMs: result.evidence.deadline.elapsed)
-        return (projectedObservation(from: result), timing)
     }
 
     static func projectedObservation(
@@ -255,16 +265,16 @@ private extension Settlement.ResultProjector {
     static func traceEvidence(from result: Settlement.Result) -> AccessibilityTraceEvidence? {
         var traces: [AccessibilityTrace] = []
         if case .established(let boundary) = result.evidence.boundary {
-            traces.append(boundary.moment.snapshot.trace)
+            traces.append(AccessibilityTrace(capture: boundary.moment.capture))
         }
         if case .events(let events)? = result.evidence.observationHistory {
             traces += events.compactMap { event in
                 guard case .snapshot(let snapshot) = event else { return nil }
-                return snapshot.trace
+                return AccessibilityTrace(capture: snapshot.moment.capture)
             }
         }
         if let handoff = result.evidence.handoff.event {
-            traces.append(handoff.trace)
+            traces.append(AccessibilityTrace(capture: handoff.moment.capture))
         }
         guard let trace = AccessibilityTrace.combinedTrace(from: traces) ?? traces.last else {
             return nil
@@ -320,7 +330,7 @@ private extension Settlement.ResultProjector {
         }
 
         var parts = [headline]
-        let target = predicate.resolved.timeoutDiagnosticTarget
+        let target = predicate.resolved.singularTarget
         let traceProjection = traceEvidence(from: result).map {
             TimeoutTraceProjection(trace: $0.trace, target: target)
         }
@@ -421,46 +431,6 @@ private extension ElementDiagnosticSummary {
                 || !actions.isEmpty
                 || !rotors.isEmpty
         else { return nil }
-    }
-}
-
-private extension ResolvedAccessibilityPredicate {
-    var timeoutDiagnosticTarget: ResolvedAccessibilityTarget? {
-        switch core {
-        case .presence(let presence):
-            presence.target
-        case .changed(.screen(let assertions)):
-            if assertions.count == 1,
-               case .presence(let presence) = assertions[0] {
-                presence.target
-            } else {
-                nil
-            }
-        case .changed(.elements(let assertions)):
-            assertions.count == 1 ? assertions[0].target : nil
-        case .announcement, .noChange:
-            nil
-        }
-    }
-}
-
-private extension PresencePredicateCore where Phase == ResolvedAccessibilityPredicatePhase {
-    var target: ResolvedAccessibilityTarget {
-        switch self {
-        case .exists(let target), .missing(let target):
-            target
-        }
-    }
-}
-
-private extension ElementAssertionCore where Phase == ResolvedAccessibilityPredicatePhase {
-    var target: ResolvedAccessibilityTarget {
-        switch self {
-        case .presence(let presence):
-            presence.target
-        case .appeared(let target), .disappeared(let target), .updated(let target, _):
-            target
-        }
     }
 }
 

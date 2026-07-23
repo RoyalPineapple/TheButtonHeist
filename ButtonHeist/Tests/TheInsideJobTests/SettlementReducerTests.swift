@@ -147,6 +147,30 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         XCTAssertEqual(decision.effects.filter(\.isFinish).count, 1)
     }
 
+    func testMissingPreTriggerMomentRecapturesOnlyCurrentStatePredicates() throws {
+        XCTAssertEqual(
+            Settlement.Baseline.beforeTrigger(
+                observationMoment: nil,
+                predicate: try currentStatePredicate().resolved
+            ),
+            .capture
+        )
+        XCTAssertEqual(
+            Settlement.Baseline.beforeTrigger(
+                observationMoment: nil,
+                predicate: transitionPredicate().resolved
+            ),
+            .unavailable(.unavailable)
+        )
+        XCTAssertEqual(
+            Settlement.Baseline.beforeTrigger(
+                observationMoment: nil,
+                predicate: try announcementPredicate().resolved
+            ),
+            .unavailable(.unavailable)
+        )
+    }
+
     func testPositiveTransitionEvaluationEventBelongsToRetainedHistory() async throws {
         let baseline = await commit(label: "Baseline")
         var decision = armedObservationDecision(

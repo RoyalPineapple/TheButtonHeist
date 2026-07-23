@@ -29,7 +29,6 @@ private struct WeakAccessibilityNotificationSubscriber {
 @MainActor
 final class AccessibilityNotificationObserver {
     private struct CallbackInstallation {
-        let source: String
         let uninstall: @MainActor () -> Void
     }
 
@@ -80,15 +79,13 @@ final class AccessibilityNotificationObserver {
 
     private convenience init() {
         self.init { callback in
-            if AccessibilityNotificationPrivateSPI.enableUnitTestModeIfAvailable() {
-                accessibilityNotificationLogger.info("Armed accessibility notification callback via private unit-test mode SPI")
-            } else {
+            if !AccessibilityNotificationPrivateSPI.enableUnitTestModeIfAvailable() {
                 accessibilityNotificationLogger.debug("Private accessibility unit-test mode SPI is unavailable")
             }
             let callback = try AccessibilityNotificationPrivateSPI.installNotificationCallback(
                 callback
             )
-            return CallbackInstallation(source: callback.source) {
+            return CallbackInstallation {
                 callback.uninstall()
             }
         }
@@ -105,7 +102,6 @@ final class AccessibilityNotificationObserver {
         self.init { _ in
             installCallbackForTesting()
             return CallbackInstallation(
-                source: "test",
                 uninstall: uninstallCallbackForTesting
             )
         }
@@ -120,7 +116,6 @@ final class AccessibilityNotificationObserver {
         self.init { callback in
             installCallbackForTesting(callback)
             return CallbackInstallation(
-                source: "test",
                 uninstall: uninstallCallbackForTesting
             )
         }
@@ -173,9 +168,6 @@ final class AccessibilityNotificationObserver {
                 )
             }
             registrationPhase = .installed(generation: generation, installation)
-            accessibilityNotificationLogger.info(
-                "Installed accessibility notification callback source=\(installation.source, privacy: .public)"
-            )
             reconcileRegistration()
         } catch {
             registrationPhase = .installationUnavailable
@@ -190,7 +182,6 @@ final class AccessibilityNotificationObserver {
         registrationPhase = .uninstalling
         installation.uninstall()
         registrationPhase = .uninstalled
-        accessibilityNotificationLogger.info("Removed accessibility notification callback")
         reconcileRegistration()
     }
 

@@ -30,6 +30,24 @@ extension Settlement {
             self.baseline = baseline
         }
 
+        internal init(
+            observing input: ResolvedWaitRuntimeInput,
+            baseline: Baseline = .capture,
+            startedAt: RuntimeElapsed.Instant = RuntimeElapsed.now
+        ) {
+            self.init(
+                trigger: .observation,
+                predicate: Predicate(
+                    authored: input.predicateExpression,
+                    resolved: input.predicate
+                ),
+                deadline: Deadline(
+                    instant: startedAt.advanced(by: .seconds(input.timeout.seconds))
+                ),
+                baseline: baseline
+            )
+        }
+
         internal var observationScope: SemanticObservationScope {
             predicate?.observationScope ?? .visible
         }
@@ -39,6 +57,19 @@ extension Settlement {
         case capture
         case supplied(EvidenceBoundary)
         case unavailable(Capture.Failure)
+
+        internal static func beforeTrigger(
+            observationMoment: Observation.Moment?,
+            predicate: ResolvedAccessibilityPredicate
+        ) -> Self {
+            if let observationMoment {
+                return .supplied(EvidenceBoundary(moment: observationMoment))
+            }
+            if case .presence = predicate.core {
+                return .capture
+            }
+            return .unavailable(.unavailable)
+        }
     }
 
     internal enum Trigger: Sendable, Equatable {
@@ -61,6 +92,13 @@ extension Settlement {
         internal var startsAfterActionDispatch: Bool {
             if case .afterActionDispatch = start { return true }
             return false
+        }
+
+        internal func remainingDuration(
+            at now: ContinuousClock.Instant = RuntimeElapsed.now
+        ) -> Duration {
+            guard let instant = resolve(dispatchCompletedAt: nil) else { return .zero }
+            return max(.zero, now.duration(to: instant))
         }
 
         internal func resolve(
@@ -223,14 +261,6 @@ extension Settlement.Predicate {
             self.responses = []
             self.rejectedResponses = []
             self.evaluationLedger = []
-        }
-
-        internal var pendingRequests: [EvaluationRequest] {
-            evaluationLedger.map(\.request)
-        }
-
-        internal var correlatedResponses: [EvaluationResponse] {
-            evaluationLedger.compactMap(\.response)
         }
 
         internal var isSatisfied: Bool {

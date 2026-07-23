@@ -14,23 +14,14 @@ extension TheBrainsActionTests {
         let observedReady = await observedState(labels: ["Ready"])
         let target = AccessibilityTarget.identifier("target")
         var dispatchedCommands: [ResolvedHeistActionCommand] = []
-        var waitRequests: [TheBrains.HeistRuntimeWaitRequest] = []
+        var waitCommands: [Settlement.Command] = []
         let runtime = heistRuntime(
-            observations: [],
+            observations: [observedReady],
             execute: { command in
                 dispatchedCommands.append(command)
                 return ActionResult.success(payload: .activate)
             },
-            wait: { request in
-                waitRequests.append(request)
-                return ActionResult.success(
-                    payload: .wait,
-                    observation: .trace(makeTestTraceEvidence(
-                        AccessibilityTrace(capture: observedReady.capture),
-                        completeness: .incomplete
-                    ))
-                )
-            }
+            observedWaitCommands: { waitCommands.append($0) }
         )
         let plan = try HeistPlan(body: [
             .action(ActionStep(command: .activate(target))),
@@ -47,13 +38,13 @@ extension TheBrainsActionTests {
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "heist failed")
         XCTAssertEqual(dispatchedCommands, [.activate(try target.resolve(in: .empty))])
-        XCTAssertEqual(waitRequests.count, 1)
-        if case .standalone(let request, let startedAt)? = waitRequests.first {
-            XCTAssertEqual(request.predicate, try resolvedPredicate(.exists(.label("Ready"))))
-            XCTAssertLessThanOrEqual(startedAt, RuntimeElapsed.now)
-        } else {
-            XCTFail("Expected standalone wait request")
-        }
+        XCTAssertEqual(waitCommands.count, 1)
+        XCTAssertEqual(
+            waitCommands.first?.predicate?.resolved,
+            try resolvedPredicate(.exists(.label("Ready")))
+        )
+        XCTAssertEqual(waitCommands.first?.trigger, .observation)
+        XCTAssertEqual(waitCommands.first?.baseline, .capture)
         XCTAssertEqual(heistResult.steps.map(\.kind), [HeistExecutionStepKind.action, .wait])
         XCTAssertNotNil(actionStep.actionEvidence)
         XCTAssertNil(actionStep.waitEvidence)

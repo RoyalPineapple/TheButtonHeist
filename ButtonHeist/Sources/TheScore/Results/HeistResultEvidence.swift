@@ -242,14 +242,14 @@ package enum HeistFailedActionRule: HeistResultEvidenceRule {
 
 package enum HeistPassedWaitRule: HeistResultEvidenceRule {
     package static let rejection = "passed wait evidence must be matched or handled_else"
-    package static func admits(_ evidence: HeistWaitEvidence) -> Bool {
+    package static func admits(_ evidence: HeistSettlementEvidence) -> Bool {
         evidence.outcome == .matched || evidence.outcome == .handledElse
     }
 }
 
 package enum HeistFailedWaitRule: HeistResultEvidenceRule {
     package static let rejection = "failed wait evidence must prove failure"
-    package static func admits(_ evidence: HeistWaitEvidence) -> Bool { evidence.outcome == .failed }
+    package static func admits(_ evidence: HeistSettlementEvidence) -> Bool { evidence.outcome == .failed }
 }
 
 package enum HeistPassedForEachElementRule: HeistResultEvidenceRule {

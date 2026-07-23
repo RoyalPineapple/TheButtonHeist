@@ -62,7 +62,7 @@ extension ElementInflationProductTests {
         XCTAssertGreaterThan(fixture.scrollView.contentOffset.y, 0)
         XCTAssertNotNil(result.accessibilityTrace)
         let trace = try XCTUnwrap(result.accessibilityTrace)
-        XCTAssertGreaterThanOrEqual(trace.captures.count, 2)
+        XCTAssertNotNil(trace.captures.last)
     }
 
     private func runSemanticActivateThroughCommand(

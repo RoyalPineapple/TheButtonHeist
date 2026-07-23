@@ -131,10 +131,10 @@ package enum HeistResultFixture {
         durationMs: ElapsedMilliseconds = 1,
         failure: HeistFailureDetail? = nil
     ) -> HeistExecutionStepResult {
-        let evidence: HeistWaitEvidence
+        let evidence: HeistSettlementEvidence
         if failure == nil {
             guard let met = ExpectationResult.Met(expectation),
-                  let matched = HeistWaitEvidence.MatchedCheck(
+                  let matched = HeistSettlementEvidence.MatchedCheck(
                       actionResult: actionResult,
                       expectation: met
                   ) else {
@@ -142,7 +142,7 @@ package enum HeistResultFixture {
             }
             evidence = .matched(matched)
         } else {
-            guard let unmatched = HeistWaitEvidence.UnmatchedCheck(
+            guard let unmatched = HeistSettlementEvidence.UnmatchedCheck(
                 actionResult: actionResult,
                 expectation: expectation
             ) else {

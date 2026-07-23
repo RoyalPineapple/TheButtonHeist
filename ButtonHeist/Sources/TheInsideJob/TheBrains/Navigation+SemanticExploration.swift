@@ -157,6 +157,36 @@ extension Navigation {
             )
         }
     }
+
+    func exploreForWait(
+        target: ResolvedAccessibilityTarget?,
+        deadline: SemanticObservationDeadline,
+        stopWhen: @escaping @MainActor () -> Bool
+    ) async {
+        guard deadline.hasTimeRemaining(at: RuntimeElapsed.now) else { return }
+        if let target,
+           target.isElementTarget,
+           case .resolved(.element) = vault.resolveTarget(target) {
+            _ = await elementInflation.inflate(
+                for: target,
+                method: .scrollToVisible,
+                operationDeadline: deadline
+            )
+            return
+        }
+
+        _ = await exploreScreen(
+            target: target,
+            baseline: .currentViewport(
+                vault.visibleExplorationBaseline(from: vault.latestObservation)
+            ),
+            exitPosition: .origin,
+            deadline: deadline,
+            onObservation: { _ in
+                stopWhen() ? .goalSatisfied : .continue
+            }
+        )
+    }
 }
 
 #endif // DEBUG

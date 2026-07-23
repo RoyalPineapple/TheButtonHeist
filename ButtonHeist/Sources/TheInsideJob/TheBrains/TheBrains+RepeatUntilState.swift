@@ -19,11 +19,11 @@ extension TheBrains.RepeatUntil {
     }
 
     internal struct RunningState {
-        internal let currentObservation: Observation?
+        internal let currentObservation: ObservedState?
         internal let iterationNodes: HeistPassingChildren
 
         internal init(
-            currentObservation: Observation?,
+            currentObservation: ObservedState?,
             iterationNodes: HeistPassingChildren = .empty
         ) {
             self.currentObservation = currentObservation
@@ -85,7 +85,7 @@ extension TheBrains.RepeatUntil {
                     iterationCount: event.frame.count,
                     iterationNodes: running.iterationNodes.appending(event.iteration)
                 ))
-            case .noProgress(let observation, let expectation, _):
+            case .noProgress(let observation, let expectation):
                 return .terminal(.timedOut(
                     observation: observation,
                     expectation: expectation,
@@ -125,13 +125,13 @@ extension TheBrains.RepeatUntil {
     internal enum Terminal {
         case predicateMet(check: MetCheck, iterationCount: Int, iterationNodes: HeistPassingChildren)
         case timedOut(
-            observation: Observation?,
+            observation: ObservedState?,
             expectation: ExpectationResult.Unmet,
             iterationCount: Int,
             iterationNodes: HeistPassingChildren
         )
         case bodyFailed(
-            observation: Observation?,
+            observation: ObservedState?,
             expectation: ExpectationResult.Unmet,
             iterationIndex: Int,
             children: HeistAbortedChildren

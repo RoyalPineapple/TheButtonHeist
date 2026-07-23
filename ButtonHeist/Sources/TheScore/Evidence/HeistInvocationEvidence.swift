@@ -27,7 +27,7 @@ private enum InvocationOutcomeCodingKey: String, CodingKey, CaseIterable {
 public enum HeistInvocationEvidence: Codable, Sendable, Equatable {
     public enum InvocationExpectationEvidence: Codable, Sendable, Equatable {
         case result(actionResult: ActionResult, expectation: ExpectationResult)
-        case wait(HeistWaitEvidence)
+        case wait(HeistSettlementEvidence)
 
         public var actionResult: ActionResult {
             switch self {
@@ -43,7 +43,7 @@ public enum HeistInvocationEvidence: Codable, Sendable, Equatable {
             }
         }
 
-        public var waitEvidence: HeistWaitEvidence? {
+        public var waitEvidence: HeistSettlementEvidence? {
             guard case .wait(let evidence) = self else { return nil }
             return evidence
         }
@@ -65,7 +65,7 @@ public enum HeistInvocationEvidence: Codable, Sendable, Equatable {
                     typeName: "result invocation expectation evidence"
                 )
             case .wait:
-                self = .wait(try container.decode(HeistWaitEvidence.self, forKey: .waitEvidence))
+                self = .wait(try container.decode(HeistSettlementEvidence.self, forKey: .waitEvidence))
                 try container.rejectIncompatibleFields(
                     allowing: [.type, .waitEvidence],
                     typeName: "wait invocation expectation evidence"
@@ -103,7 +103,7 @@ public enum HeistInvocationEvidence: Codable, Sendable, Equatable {
 
     public var expectationActionResult: ActionResult? { expectationEvidence?.actionResult }
     public var expectation: ExpectationResult? { expectationEvidence?.expectation }
-    public var waitEvidence: HeistWaitEvidence? { expectationEvidence?.waitEvidence }
+    public var waitEvidence: HeistSettlementEvidence? { expectationEvidence?.waitEvidence }
 
     var provesInvocationFailure: Bool {
         switch self {

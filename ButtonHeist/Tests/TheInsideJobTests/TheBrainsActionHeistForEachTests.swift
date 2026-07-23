@@ -378,7 +378,7 @@ extension TheBrainsActionTests {
     func testHeistForEachExpectationUsesCurrentSemanticTarget() async throws {
         let matching = ElementPredicateTemplate.label("Delete")
         var executedCommands: [ResolvedHeistActionCommand] = []
-        var waitedSteps: [ResolvedWaitRuntimeInput] = []
+        var waitedPredicates: [Settlement.Predicate] = []
         let initialState = await observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
             (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
@@ -394,20 +394,16 @@ extension TheBrainsActionTests {
                 return ActionResult.success(
                     payload: .activate,
                     observation: .trace(makeTestTraceEvidence(
-                        AccessibilityTrace(capture: stillPresentState.capture),
+                        AccessibilityTrace(capture: stillPresentState.moment.capture),
                         completeness: .incomplete
                     ))
                 )
             },
-            wait: { request in
-                waitedSteps.append(request.step)
-                return ActionResult.success(
-                    payload: .wait,
-                    observation: .trace(makeTestTraceEvidence(
-                        AccessibilityTrace(capture: waitObservedState.capture),
-                        completeness: .incomplete
-                    ))
-                )
+            wait: { command in
+                if let predicate = command.predicate {
+                    waitedPredicates.append(predicate)
+                }
+                return scriptedSettlement(command, observation: waitObservedState)
             }
         )
         let plan = try HeistPlan(body: [
@@ -436,11 +432,11 @@ extension TheBrainsActionTests {
         let authoredExpectation = AccessibilityPredicate.missing(.ref("target"))
         let resolvedExpectation = try resolvedPredicate(.missing(.predicate(matching, ordinal: 0)))
         XCTAssertEqual(executedCommands.first, expectedCommand)
-        XCTAssertEqual(waitedSteps.first?.predicateExpression, authoredExpectation)
-        XCTAssertEqual(waitedSteps.first?.predicate, resolvedExpectation)
+        XCTAssertEqual(waitedPredicates.first?.authored, authoredExpectation)
+        XCTAssertEqual(waitedPredicates.first?.resolved, resolvedExpectation)
         XCTAssertEqual(executedCommands.last, expectedCommand)
-        XCTAssertEqual(waitedSteps.last?.predicateExpression, authoredExpectation)
-        XCTAssertEqual(waitedSteps.last?.predicate, resolvedExpectation)
+        XCTAssertEqual(waitedPredicates.last?.authored, authoredExpectation)
+        XCTAssertEqual(waitedPredicates.last?.resolved, resolvedExpectation)
     }
 
 }

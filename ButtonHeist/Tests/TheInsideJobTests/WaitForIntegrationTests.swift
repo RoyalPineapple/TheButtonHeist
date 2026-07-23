@@ -156,7 +156,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
     @discardableResult
     private func waitForSettledVisibleObservation() async -> Bool {
-        await insideJob.brains.interactionCoordinator.settledEvidence(
+        await insideJob.brains.interactionCoordinator.settledEvent(
             scope: .visible,
             after: nil,
             timeout: 1.0
@@ -207,13 +207,13 @@ final class WaitForIntegrationTests: XCTestCase {
         )
 
         await insideJob.brains.vault.invalidateSettledObservationFromTripwire()
-        let observation = await insideJob.brains.interactionCoordinator.settledEvidence(
+        let event = await insideJob.brains.interactionCoordinator.settledEvent(
             scope: .visible,
             after: nil,
             timeout: 2.0
         )
 
-        let event = try XCTUnwrap(observation?.event)
+        let event = try XCTUnwrap(event)
         XCTAssertTrue(
             event.snapshot.observation.tree.orderedElements.contains { $0.element.label == "PassiveObservation-StableAX" },
             "Passive visible observation should publish a stable AX tree even while unrelated layer motion continues"
@@ -245,7 +245,7 @@ final class WaitForIntegrationTests: XCTestCase {
         let button = addButton("Action-RepeatingAnimation")
         defer { button.removeFromSuperview() }
 
-        let baseline = await insideJob.brains.interactionCoordinator.settledEvidence(
+        let baseline = await insideJob.brains.interactionCoordinator.settledEvent(
             scope: .visible,
             after: nil,
             timeout: 1
@@ -300,6 +300,75 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(message.contains("expected: label=\"WaitFor-Missing-Target\""), "Unexpected message: \(message)")
         XCTAssertTrue(message.contains("interface:"), "Unexpected message: \(message)")
         XCTAssertTrue(message.contains("Next: get_interface()"), "Unexpected message: \(message)")
+    }
+
+    func testTimeoutDiagnosticsExcludeImperceptibleUIKitDescendants() async throws {
+        let combined = UIView(frame: CGRect(x: 10, y: 100, width: 240, height: 44))
+        combined.isAccessibilityElement = true
+        combined.accessibilityLabel = "Ticket saved., Dismiss"
+        combined.accessibilityTraits = .staticText
+        let inner = UILabel(frame: combined.bounds)
+        inner.text = "Ticket saved."
+        inner.isAccessibilityElement = true
+        combined.addSubview(inner)
+        hostView.addSubview(combined)
+        defer { combined.removeFromSuperview() }
+
+        let response = try await waitFor(
+            target: .label("Ticket saved."),
+            timeout: 0.2
+        )
+        let message = try XCTUnwrap(response?.message)
+
+        XCTAssertTrue(
+            message.contains(#"observed accessibility candidate label="Ticket saved., Dismiss""#),
+            message
+        )
+        XCTAssertFalse(
+            message.contains(#"observed accessibility candidate label="Ticket saved." did not match"#),
+            message
+        )
+    }
+
+    func testSequentialWaitTimeoutDiagnosticsRemainScopedToEachWindow() async throws {
+        let firstObservation = InterfaceObservation.makeForTests(elements: [(
+            AccessibilityElement.make(
+                label: "First candidate",
+                traits: .staticText,
+                respondsToUserInteraction: false
+            ),
+            "first_candidate"
+        )])
+        visibleObservationOverride = firstObservation
+        await insideJob.brains.vault.installObservationForTesting(firstObservation)
+
+        let first = try XCTUnwrap(try await waitFor(
+            target: .label("Missing candidate"),
+            timeout: 0.2
+        ))
+
+        let secondObservation = InterfaceObservation.makeForTests(elements: [(
+            AccessibilityElement.make(
+                label: "Second candidate",
+                traits: .staticText,
+                respondsToUserInteraction: false
+            ),
+            "second_candidate"
+        )])
+        visibleObservationOverride = secondObservation
+        await insideJob.brains.vault.installObservationForTesting(secondObservation)
+
+        let second = try XCTUnwrap(try await waitFor(
+            target: .label("Missing candidate"),
+            timeout: 0.2
+        ))
+        let firstMessage = try XCTUnwrap(first.message)
+        let secondMessage = try XCTUnwrap(second.message)
+
+        XCTAssertTrue(firstMessage.contains("First candidate"), firstMessage)
+        XCTAssertFalse(firstMessage.contains("Second candidate"), firstMessage)
+        XCTAssertTrue(secondMessage.contains("Second candidate"), secondMessage)
+        XCTAssertFalse(secondMessage.contains("First candidate"), secondMessage)
     }
 
     // MARK: - 2. Element appears after a delay

@@ -272,7 +272,7 @@ public extension HeistExecutionStepResult {
         }
     }
 
-    var waitEvidence: HeistWaitEvidence? {
+    var waitEvidence: HeistSettlementEvidence? {
         guard case .wait(_, _, let completion) = node else { return nil }
         switch completion {
         case .passed(let evidence, _), .childAborted(let evidence, _, _): return evidence.value

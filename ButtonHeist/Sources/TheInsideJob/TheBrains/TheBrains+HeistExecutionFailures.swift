@@ -100,18 +100,6 @@ extension TheBrains {
 
     internal func actionExpectationFailureDetail(
         wait: WaitStep,
-        result: HeistWaitResult
-    ) -> HeistFailureDetail {
-        HeistFailureDetail(
-            category: .expectation,
-            contract: "post-action expectation is met",
-            observed: expectationObserved(result),
-            expected: wait.predicate.description
-        )
-    }
-
-    internal func actionExpectationFailureDetail(
-        wait: WaitStep,
         evidence: HeistActionEvidence
     ) -> HeistFailureDetail {
         let expectationResult = evidence.expectationResult
@@ -131,12 +119,12 @@ extension TheBrains {
 
     internal func standaloneWaitFailureDetail(
         wait: WaitStep,
-        result: HeistWaitResult
+        evidence: HeistSettlementEvidence
     ) -> HeistFailureDetail {
         HeistFailureDetail(
             category: .wait,
             contract: "wait predicate is met before timeout",
-            observed: expectationObserved(result),
+            observed: expectationObserved(evidence),
             expected: wait.predicate.description
         )
     }
@@ -208,12 +196,12 @@ extension TheBrains {
         }
     }
 
-    private func expectationObserved(_ result: HeistWaitResult) -> String {
+    private func expectationObserved(_ evidence: HeistSettlementEvidence) -> String {
         [
-            result.outcome.expectation.actual,
-            result.outcome.actionResult.message,
-            result.outcome.actionResult.outcome.failureKind.map { "failureKind=\($0.rawValue)" },
-            result.outcome.actionResult.settled.map { "settled=\($0)" },
+            evidence.expectation.actual,
+            evidence.actionResult.message,
+            evidence.actionResult.outcome.failureKind.map { "failureKind=\($0.rawValue)" },
+            evidence.actionResult.settled.map { "settled=\($0)" },
         ].compactMap { $0 }.joined(separator: "; ")
     }
 }

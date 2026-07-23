@@ -272,6 +272,9 @@ a resolved action or observation; its optional predicate supplies current-state,
 positive-transition, announcement, or complete-history semantics. The executor
 captures a baseline Moment and announcement position, arms all event channels,
 and only then dispatches an action. An observation trigger performs no dispatch.
+Heist-internal observation commands may supply the exact Moment captured before
+an invocation or repeat body; the same executor replays retained events after
+that boundary before continuing with live delivery.
 
 Current-state predicates such as `exists` and `missing` must hold in the exact
 post-readiness handoff snapshot returned by settlement. Positive transitions

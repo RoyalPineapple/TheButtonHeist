@@ -86,7 +86,7 @@ public struct HeistReport: Sendable, Equatable {
 
     package enum Evidence: Sendable, Equatable {
         case action(command: HeistActionCommand, evidence: HeistActionEvidence)
-        case wait(HeistWaitEvidence)
+        case wait(HeistSettlementEvidence)
         case caseSelection(HeistCaseSelectionEvidence)
         case forEachString(declaration: HeistForEachStringDeclaration, evidence: HeistForEachStringEvidence)
         case forEachElement(declaration: HeistForEachElementDeclaration, evidence: HeistForEachElementEvidence)

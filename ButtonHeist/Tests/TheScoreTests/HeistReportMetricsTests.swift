@@ -198,7 +198,7 @@ import TheScore
     }
 
     private func waitStep(predicate: AccessibilityPredicate) throws -> HeistExecutionStepResult {
-        let check = try #require(HeistWaitEvidence.MatchedCheck(
+        let check = try #require(HeistSettlementEvidence.MatchedCheck(
             actionResult: .success(
                 payload: .wait,
                 observation: .settledTrace(

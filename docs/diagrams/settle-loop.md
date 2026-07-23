@@ -26,7 +26,9 @@ required for every successful result.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> AwaitingBaseline
+    [*] --> AwaitingBaseline : capture baseline
+    [*] --> Armed : supplied baseline
+    [*] --> Failed : required baseline unavailable
     AwaitingBaseline --> Armed : baseline Moment committed
     AwaitingBaseline --> Failed : baseline unavailable
     Armed --> Dispatching : action trigger
@@ -61,8 +63,13 @@ sequenceDiagram
     participant Reducer as Settlement.Reducer
 
     Caller->>Executor: execute typed Command
-    Executor->>Store: capture and commit baseline
-    Store-->>Executor: Moment
+    alt command captures its baseline
+        Executor->>Store: capture and commit baseline
+        Store-->>Executor: Moment
+    else command supplies an exact Moment
+        Executor->>Store: subscribe with replay after Moment
+        Store-->>Executor: retained Events, then live delivery
+    end
     Executor->>Channels: arm after baseline
     Channels-->>Reducer: channelsArmed
     alt action trigger

@@ -6,29 +6,6 @@ import UIKit
 import AccessibilitySnapshotParser
 import ButtonHeistSupport
 
-// MARK: - Settle Event/Outcome
-
-/// Signal observed while the AX-tree settle loop was waiting.
-///
-/// These are not settle outcomes and do not classify screen changes. They are
-/// lightweight facts that tell the caller why the loop reset its baseline and
-/// re-parsed before proving the post-transition AX tree became stable.
-enum SettleEvent: Equatable, Sendable {
-    case tripwireSignalChanged(
-        from: TheTripwire.TripwireSignal,
-        to: TheTripwire.TripwireSignal
-    )
-}
-
-extension Array where Element == SettleEvent {
-    var containsTripwireSignalChange: Bool {
-        contains { event in
-            if case .tripwireSignalChanged = event { return true }
-            return false
-        }
-    }
-}
-
 /// Result of running the multi-cycle AX-tree settle loop.
 enum SettleOutcome: Equatable, Sendable {
 
@@ -51,11 +28,8 @@ enum SettleOutcome: Equatable, Sendable {
         }
     }
 
-    /// True when the response represents a UI state we believe in —
-    /// the loop reached multi-cycle stability. A Tripwire signal may have
-    /// reset the baseline during the loop, but that event is tracked
-    /// separately in `SettleSession.Result.events`; it is not itself
-    /// stability criterion.
+    /// True when the response represents a UI state we believe in:
+    /// the loop reached multi-cycle stability.
     var didSettleCleanly: Bool {
         switch self {
         case .settled: return true
@@ -181,14 +155,12 @@ private enum SettleLoopStability: Equatable, Sendable {
 struct SettleLoopMachine: Equatable {
     struct State: Equatable, Sendable {
         fileprivate var tripwireBaseline: TheTripwire.TripwireSignal
-        private(set) var events: [SettleEvent]
         private var stability: SettleLoopStability
         private var previousFingerprint: Int?
         private(set) var settlementEvidence: SettleEvidence?
 
         init(policy: SettlePolicy, tripwireBaseline: TheTripwire.TripwireSignal) {
             self.tripwireBaseline = tripwireBaseline
-            self.events = []
             self.stability = SettleLoopStability(policy: policy)
             self.previousFingerprint = nil
             self.settlementEvidence = nil
@@ -207,15 +179,15 @@ struct SettleLoopMachine: Equatable {
             return settlementEvidence != nil
         }
 
-        fileprivate mutating func observe(_ signal: TheTripwire.TripwireSignal) {
+        fileprivate mutating func observe(_ signal: TheTripwire.TripwireSignal) -> Bool {
             let previous = tripwireBaseline
-            guard signal != previous else { return }
+            guard signal != previous else { return false }
 
             tripwireBaseline = signal
-            guard signal.requiresSettleBaselineReset(from: previous) else { return }
+            guard signal.requiresSettleBaselineReset(from: previous) else { return false }
 
-            events.append(.tripwireSignalChanged(from: previous, to: signal))
             resetStability()
+            return true
         }
 
         fileprivate mutating func observeUIKitIdle() {
@@ -237,6 +209,7 @@ struct SettleLoopMachine: Equatable {
 
     enum Decision: Equatable, Sendable {
         case continuePolling
+        case baselineReset
         case terminal(SettleOutcome)
     }
 
@@ -249,8 +222,7 @@ struct SettleLoopMachine: Equatable {
                 ? .terminal(.settled(timeMs: elapsedMs))
                 : .continuePolling
         case .tripwireSignal(let signal):
-            state.observe(signal)
-            decision = .continuePolling
+            decision = state.observe(signal) ? .baselineReset : .continuePolling
         case .uikitIdle:
             state.observeUIKitIdle()
             decision = .continuePolling
@@ -273,7 +245,7 @@ struct SettleSessionFinalObservation {
 
 // MARK: - SettleSession
 
-/// Multi-cycle accessibility-tree settle loop with inline transient capture.
+/// Multi-cycle accessibility-tree settle loop.
 ///
 /// Samples the parsed AX tree on the shared UI heartbeat. Returns `.settled` after
 /// `cyclesRequired` consecutive identical fingerprints — with elements
@@ -296,12 +268,6 @@ struct SettleSessionFinalObservation {
 /// the first heartbeat, so a static screen settles after exactly
 /// `cyclesRequired` cycles (300 ms with the default 3 × 100 ms), not
 /// `cyclesRequired + 1`.
-///
-/// During the loop, every observed `AccessibilityElement` is keyed by
-/// `TimelineKey` and accumulated into `elementsByKey`. After settle, the
-/// caller subtracts baseline ∪ final keys to compute transient elements
-/// (those that came and went mid-action) — no separate timeline class
-/// needed. Owns no state across calls.
 ///
 /// Dependencies are injected as closures so unit tests can drive the loop
 /// against a scripted sequence of parse results without standing up a
@@ -494,18 +460,11 @@ struct SettleSessionFinalObservation {
         )
     }
 
-    /// Result of the loop, exposed so the caller can compute transients.
+    /// Result of the loop.
     struct Result: Sendable {
         let outcome: SettleOutcome
-        /// Lightweight signals observed during the loop. These explain why
-        /// the settle baseline was reset, but the final `outcome` still owns
-        /// whether the AX tree became stable.
-        let events: [SettleEvent]
         /// Exact final semantic observation admitted by the settle loop.
         let finalObservation: SettleSessionFinalObservation?
-        /// Every `(key, element)` pair observed in any cycle of the loop.
-        /// Includes spinner cycles and other intermediate states.
-        let elementsByKey: [TimelineKey: AccessibilityElement]
         /// Full tripwire signal paired with the final observed generation.
         let tripwireSignal: TheTripwire.TripwireSignal
         let evidence: SettleEvidence?
@@ -515,9 +474,7 @@ struct SettleSessionFinalObservation {
 
         init(
             outcome: SettleOutcome,
-            events: [SettleEvent],
             finalObservation: SettleSessionFinalObservation?,
-            elementsByKey: [TimelineKey: AccessibilityElement],
             tripwireSignal: TheTripwire.TripwireSignal,
             evidence: SettleEvidence? = nil,
             instabilityDescription: String? = nil
@@ -527,9 +484,7 @@ struct SettleSessionFinalObservation {
                 "settled settle outcome requires a final observation"
             )
             self.outcome = outcome
-            self.events = events
             self.finalObservation = finalObservation
-            self.elementsByKey = elementsByKey
             self.tripwireSignal = tripwireSignal
             self.evidence = evidence
             self.instabilityDescription = instabilityDescription
@@ -539,9 +494,7 @@ struct SettleSessionFinalObservation {
     /// Run the settle loop with the full tripwire signal captured before the
     /// action. Visible window/navigation/key changes reset the settle baseline,
     /// then the loop proves the post-transition AX tree is stable before
-    /// returning. The returned events record any Tripwire signals observed along
-    /// the way so callers can suppress transition transients without treating
-    /// the signal itself as a screen-change classification.
+    /// returning.
     func run(start: RuntimeElapsed.Instant, baselineTripwireSignal: TheTripwire.TripwireSignal) async -> Result {
         return await SettleLoopRunner(
             parseProvider: parseProvider,
@@ -565,11 +518,9 @@ struct SettleSessionFinalObservation {
     ) -> Result {
         Result(
             outcome: outcome,
-            events: state.events,
             finalObservation: observations.currentGenerationLastObservation.map {
                 SettleSessionFinalObservation(observation: $0.observation)
             },
-            elementsByKey: observations.elementsByKey,
             tripwireSignal: state.tripwireBaseline,
             evidence: outcome.didSettleCleanly ? state.settlementEvidence : nil,
             instabilityDescription: outcome.didSettleCleanly
@@ -578,13 +529,6 @@ struct SettleSessionFinalObservation {
         )
     }
 
-    static func transientElements(
-        seenByKey: [TimelineKey: AccessibilityElement],
-        baseline: [AccessibilityElement],
-        final: [AccessibilityElement]
-    ) -> [AccessibilityElement] {
-        SettleTimeline.transientElements(seenByKey: seenByKey, baseline: baseline, final: final)
-    }
 }
 
 private extension SettlePolicy {

@@ -92,21 +92,14 @@ extension TheVault {
     /// Returns capture-local evidence or nil if no accessible windows exist.
     func capture() -> CaptureResult? {
         let windows = tripwire.captureAccessibleWindows()
-        guard !windows.isEmpty else {
-            insideJobLogger.debug("TheVault.capture(): no accessible windows - returning nil")
-            return nil
-        }
+        guard !windows.isEmpty else { return nil }
 
-        // Parse runs on the main thread (UIKit accessibility SPI). Long parses
-        // here are the main culprit when the main actor stalls during a UIKit
-        // transition, so log durations to make the cost visible. Slow parses
-        // (>= 100ms) get info-level so they show up without enabling debug logs.
+        // Parse runs on the main thread (UIKit accessibility SPI). Retain only
+        // opt-in diagnostics for captures that exceed the latency threshold.
         let parseStart = CFAbsoluteTimeGetCurrent()
         defer {
             let parseMs = Int((CFAbsoluteTimeGetCurrent() - parseStart) * 1000)
             if parseMs >= 100 {
-                insideJobLogger.info("TheVault.capture(): \(parseMs)ms (\(windows.count) window(s))")
-            } else {
                 insideJobLogger.debug("TheVault.capture(): \(parseMs)ms (\(windows.count) window(s))")
             }
         }
@@ -275,7 +268,7 @@ extension TheVault {
         budget: Int
     ) {
         guard result.knownUnattemptedCount > 0 else { return }
-        insideJobLogger.warning(
+        insideJobLogger.debug(
             """
             Bounded offscreen accessibility inventory at budget \(budget, privacy: .public): \
             attempted \(result.attemptedCount, privacy: .public) request(s), \

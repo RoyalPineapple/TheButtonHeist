@@ -40,8 +40,8 @@ extension TheBrains {
                 message: "could not resolve changed wait predicate: \(error)"
             )
         }
-        let result = await executeSettlementWait(step)
-        return result.outcome.actionResult
+        let result = await executeSettlementWait(Settlement.Command(observing: step))
+        return Settlement.ResultProjector.projectWait(result).actionResult
     }
 }
 

@@ -7,18 +7,10 @@ enum PredicateEvaluation {
     static func evaluate(
         _ predicate: ResolvedAccessibilityPredicate,
         expression: AccessibilityPredicate,
-        in evidence: PredicateObservationEvidence
-    ) -> ExpectationResult {
-        evidence.evaluate(predicate, expression: expression)
-    }
-
-    static func evaluate(
-        _ predicate: ResolvedAccessibilityPredicate,
-        expression: AccessibilityPredicate,
-        in observation: SettledObservationEvidence
+        in event: Observation.SnapshotEvent
     ) -> ExpectationResult {
         guard let evidence = AccessibilityTraceEvidence(
-            trace: observation.accessibilityTrace,
+            trace: event.trace,
             completeness: .incomplete
         ) else {
             return ExpectationResult(
@@ -51,14 +43,14 @@ enum PredicateEvaluation {
 
     static func caseMatch(
         _ predicateCase: ResolvedPredicateCaseRuntimeInput,
-        in observation: SettledObservationEvidence
+        in event: Observation.SnapshotEvent
     ) -> HeistCaseMatchResult {
         caseMatchResult(
             predicateCase,
             result: evaluate(
                 predicateCase.predicate.rootPredicate,
                 expression: predicateCase.predicateExpression.rootPredicate,
-                in: observation
+                in: event
             )
         )
     }

@@ -111,11 +111,8 @@ public enum AccessibilityPolicy {
 
     // MARK: - Static-Only Traits
 
-    /// Traits that are purely descriptive — elements bearing *only* these
-    /// traits, no custom actions, and no `respondsToUserInteraction` are
-    /// expected to be non-interactive. Used by
-    /// `TheVault.Interactivity.checkInteractivity` to surface an advisory
-    /// warning when an `activate` is dispatched against such an element.
+    /// Traits that are purely descriptive when no independent interaction
+    /// evidence is present.
     public static let staticOnlyTraits: Set<HeistTrait> = [
         .staticText,
         .image,

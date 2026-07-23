@@ -263,7 +263,7 @@ extension TheInsideJob {
         // previous run's settled semantic world when the app is already on
         // another screen.
         await brains.vault.resetInterfaceForLifecycle()
-        _ = await brains.interactionCoordinator.admittedVisibleBaseline(
+        _ = await brains.interactionCoordinator.admittedVisibleObservation(
             timeout: SemanticObservationTiming.defaultTimeout
         )
         let result = await brains.executeHeistPlan(plan, argument: argument)

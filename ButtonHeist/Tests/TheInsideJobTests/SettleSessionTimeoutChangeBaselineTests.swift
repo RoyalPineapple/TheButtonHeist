@@ -27,12 +27,6 @@ extension SettleSessionTests {
         )
 
         XCTAssertEqual(outcome.outcome, .settled(timeMs: 50))
-        XCTAssertEqual(outcome.events, [
-            .tripwireSignalChanged(
-                from: tripwireSignal(topmostVC: nil),
-                to: tripwireSignal(topmostVC: changedVC)
-            ),
-        ])
     }
 
     func testSemanticQuietSettleTimesOutWhenFingerprintNeverStabilizes() async {
@@ -193,8 +187,6 @@ extension SettleSessionTests {
             XCTFail("Expected .timedOut, got \(outcome.outcome)")
         }
         XCTAssertFalse(outcome.outcome.didSettleCleanly)
-        XCTAssertGreaterThan(outcome.elementsByKey.count, 1,
-                             "Every distinct element observed mid-loop should accumulate into elementsByKey")
     }
 
     func testTimeoutReportsUnstableFrameBucketChanges() async {
@@ -261,8 +253,6 @@ extension SettleSessionTests {
         } else {
             XCTFail("Expected .settled after Tripwire signal, got \(outcome.outcome)")
         }
-        XCTAssertTrue(outcome.events.containsTripwireSignalChange)
-        XCTAssertEqual(outcome.elementsByKey.count, 1)
         XCTAssertTrue(outcome.outcome.didSettleCleanly,
                       ".settled after Tripwire signal should report didSettleCleanly == true")
     }
@@ -297,10 +287,10 @@ extension SettleSessionTests {
         } else {
             XCTFail("Expected .settled after Tripwire signal, got \(outcome.outcome)")
         }
-        XCTAssertTrue(outcome.events.containsTripwireSignalChange)
-        let labels = Set(outcome.elementsByKey.values.compactMap(\.label))
-        XCTAssertTrue(labels.contains("Display"))
-        XCTAssertTrue(labels.contains("Controls Demo"))
+        XCTAssertEqual(
+            outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.map(\.label),
+            ["Controls Demo"]
+        )
     }
 
     func testLateTripwireTriggerResetsPreviouslyStableCycles() async {
@@ -338,11 +328,10 @@ extension SettleSessionTests {
         } else {
             XCTFail("Expected .settled after late Tripwire signal, got \(outcome.outcome)")
         }
-        XCTAssertTrue(outcome.events.containsTripwireSignalChange)
-        let labels = Set(outcome.elementsByKey.values.compactMap(\.label))
-        XCTAssertTrue(labels.contains("Before"))
-        XCTAssertTrue(labels.contains("Loading"))
-        XCTAssertTrue(labels.contains("After"))
+        XCTAssertEqual(
+            outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.map(\.label),
+            ["After"]
+        )
     }
 
     /// The baseline top-VC is passed in explicitly, so the loop never
@@ -409,7 +398,6 @@ extension SettleSessionTests {
         } else {
             XCTFail("Differing baseline vs provider must surface a Tripwire signal event, got \(outcome.outcome)")
         }
-        XCTAssertTrue(outcome.events.containsTripwireSignalChange)
     }
 }
 #endif // canImport(UIKit)

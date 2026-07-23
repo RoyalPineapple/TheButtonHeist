@@ -39,7 +39,7 @@ extension TheBrains {
 
     internal struct InvocationExpectationContext {
         internal let input: ResolvedWaitRuntimeInput
-        internal let baseline: HeistWaitResult
+        internal let baseline: Settlement.Baseline
     }
 
     private enum InvocationExpectationPreparation {
@@ -50,17 +50,17 @@ extension TheBrains {
 
     internal enum InvocationExpectationOutcome {
         case notEvaluated
-        case matched(HeistWaitResult)
-        case failed(result: HeistWaitResult, detail: HeistFailureDetail)
+        case matched(HeistSettlementEvidence)
+        case failed(evidence: HeistSettlementEvidence, detail: HeistFailureDetail)
 
-        internal var result: HeistWaitResult? {
+        internal var evidence: HeistSettlementEvidence? {
             switch self {
             case .notEvaluated:
                 return nil
-            case .matched(let result):
-                return result
-            case .failed(result: let result, detail: _):
-                return result
+            case .matched(let evidence):
+                return evidence
+            case .failed(evidence: let evidence, detail: _):
+                return evidence
             }
         }
     }
@@ -125,7 +125,6 @@ extension TheBrains {
         return completedInvocationResult(
             context: context,
             childExecution: children,
-            expectationContext: expectationContext,
             expectationOutcome: expectationOutcome
         )
     }
@@ -177,8 +176,14 @@ extension TheBrains {
                 error: error
             ))
         }
-        let baseline = await runtime.wait(
-            .immediate(input)
+        let event = await runtime.settledEvent(
+            input.predicate.observationScope,
+            nil,
+            0
+        )
+        let baseline = Settlement.Baseline.beforeTrigger(
+            observationMoment: event?.moment,
+            predicate: input.predicate
         )
         return .prepared(InvocationExpectationContext(
             input: input,
@@ -192,47 +197,39 @@ extension TheBrains {
         childExecution: HeistExecutedChildren
     ) async -> InvocationExpectationOutcome {
         guard case .passed = childExecution, let context else { return .notEvaluated }
-        let result: HeistWaitResult
-        if let observationMoment = context.baseline.observationMoment {
-            result = await runtime.wait(.afterObservation(
-                context.input,
-                baselineTrace: context.baseline.outcome.actionResult.accessibilityTrace,
-                moment: observationMoment
-            ))
-        } else {
-            result = await runtime.wait(.baselineTraceOnly(
-                context.input,
-                trace: context.baseline.outcome.actionResult.accessibilityTrace
-            ))
-        }
+        let settlement = await runtime.wait(Settlement.Command(
+            observing: context.input,
+            baseline: context.baseline
+        ))
+        let evidence = Settlement.ResultProjector.projectWait(settlement)
         guard let failure = invocationExpectationFailure(
             predicateExpression: context.input.predicateExpression,
-            result: result
+            evidence: evidence
         ) else {
-            return .matched(result)
+            return .matched(evidence)
         }
-        return .failed(result: result, detail: failure)
+        return .failed(evidence: evidence, detail: failure)
     }
 
     private func invocationExpectationFailure(
         predicateExpression: AccessibilityPredicate,
-        result: HeistWaitResult
+        evidence: HeistSettlementEvidence
     ) -> HeistFailureDetail? {
-        guard !result.outcome.actionResult.outcome.isSuccess || !result.outcome.expectation.met else { return nil }
+        guard !evidence.actionResult.outcome.isSuccess || !evidence.expectation.met else { return nil }
         return HeistFailureDetail(
             category: .expectation,
             contract: "heist invocation expectation is met",
-            observed: invocationExpectationObserved(result),
+            observed: invocationExpectationObserved(evidence),
             expected: predicateExpression.description
         )
     }
 
-    private func invocationExpectationObserved(_ result: HeistWaitResult) -> String {
+    private func invocationExpectationObserved(_ evidence: HeistSettlementEvidence) -> String {
         [
-            result.outcome.expectation.actual,
-            result.outcome.actionResult.message,
-            result.outcome.actionResult.outcome.failureKind.map { "failureKind=\($0.rawValue)" },
-            result.outcome.actionResult.settled.map { "settled=\($0)" },
+            evidence.expectation.actual,
+            evidence.actionResult.message,
+            evidence.actionResult.outcome.failureKind.map { "failureKind=\($0.rawValue)" },
+            evidence.actionResult.settled.map { "settled=\($0)" },
         ].compactMap { $0 }.joined(separator: "; ")
     }
 }

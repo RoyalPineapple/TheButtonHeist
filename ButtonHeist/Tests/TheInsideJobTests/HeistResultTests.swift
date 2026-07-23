@@ -12,48 +12,6 @@ import XCTest
 @MainActor
 final class HeistResultTests: XCTestCase {
 
-    func testWaitResultFactoriesBindCanonicalActionAndExpectationOutcomes() async {
-        let predicate = AccessibilityPredicate.exists(.label("Done"))
-        let met = ExpectationResult.Met(predicate: predicate, actual: "found")
-        let unmet = ExpectationResult.Unmet(predicate: predicate, actual: "not found")
-
-        let matched = HeistWaitResult.matched(
-            message: "matched",
-            traceEvidence: nil,
-            expectation: met
-        )
-        let timedOut = HeistWaitResult.timedOut(
-            message: "timed out",
-            traceEvidence: nil,
-            expectation: unmet
-        )
-        let failed = HeistWaitResult.failed(
-            failureKind: .actionFailed,
-            message: "failed",
-            traceEvidence: nil,
-            expectation: unmet
-        )
-
-        guard case .matched(let matchedResult, let matchedExpectation) = matched.outcome else {
-            return XCTFail("matched result must carry a matched result")
-        }
-        XCTAssertTrue(matchedResult.outcome.isSuccess)
-        XCTAssertEqual(matchedExpectation, met)
-        XCTAssertEqual(matchedResult.method, .wait)
-
-        guard case .unmatched(let timeoutResult, let timeoutExpectation) = timedOut.outcome else {
-            return XCTFail("timed-out result must carry an unmatched result")
-        }
-        XCTAssertEqual(timeoutResult.outcome.failureKind, .timeout)
-        XCTAssertEqual(timeoutExpectation, unmet)
-
-        guard case .unmatched(let failedResult, let failedExpectation) = failed.outcome else {
-            return XCTFail("failed result must carry an unmatched result")
-        }
-        XCTAssertEqual(failedResult.outcome.failureKind, .actionFailed)
-        XCTAssertEqual(failedExpectation, unmet)
-    }
-
     func testRunHeistFacadeProducesCanonicalInvocationResult() async throws {
         let heist = try await runHeist("PublicFacade.warn") {
             Warn("ok")
@@ -577,31 +535,32 @@ private final class RuntimeCapture {
 
 @MainActor
 private final class WaitResultScript {
-    private var states: [ActionEvidenceProjector.Baseline]
+    private var events: [Observation.SnapshotEvent]
     private var previousCapture: AccessibilityTrace.Capture?
     private var nextSequence: SettledObservationSequence = 0
     private var log = Observation.Log(retentionLimit: Observation.Store.defaultRetentionLimit)
 
-    init(states: [ActionEvidenceProjector.Baseline]) {
-        self.states = states
+    init(states: [Observation.SnapshotEvent]) {
+        events = states
     }
 
-    func observation(scope: SemanticObservationScope) -> SettledObservationEvidence? {
-        guard !states.isEmpty else { return nil }
-        let state = states.removeFirst()
+    func event(scope: SemanticObservationScope) -> Observation.SnapshotEvent? {
+        guard !events.isEmpty else { return nil }
+        let sourceEvent = events.removeFirst()
+        let capture = sourceEvent.moment.capture
         nextSequence += 1
         let trace = previousCapture.map {
             AccessibilityTrace(capture: $0).appending(
-                state.capture.interface,
-                context: state.capture.context,
-                transition: state.capture.transition
+                capture.interface,
+                context: capture.context,
+                transition: capture.transition
             )
-        } ?? AccessibilityTrace(capture: state.capture)
+        } ?? AccessibilityTrace(capture: capture)
         let snapshot = Observation.Snapshot(
             sequence: nextSequence,
             generation: .initial,
             sourceScope: scope,
-            observation: .empty,
+            observation: sourceEvent.snapshot.observation,
             semanticSignal: .empty,
             notificationSequence: 0,
             trace: trace
@@ -613,55 +572,11 @@ private final class WaitResultScript {
             preconditionFailure("Wait result fixture produced an invalid observation transition: \(error)")
         }
         previousCapture = trace.captures.last
-        return SettledObservationEvidence(
-            event: event,
-            baseline: state,
-            accessibilityTrace: trace,
-            summary: "interface: \(state.interface.projectedElements.count) elements"
-        )
+        return event
     }
 
-    func result(for step: ResolvedWaitRuntimeInput) -> HeistWaitResult {
-        guard let observation = observation(scope: .visible) else {
-            let expectation = ExpectationResult.Unmet(
-                predicate: step.predicateExpression,
-                actual: "no settled semantic observation available"
-            )
-            return .timedOut(
-                message: expectation.actual,
-                traceEvidence: nil,
-                expectation: expectation
-            )
-        }
-
-        let state = observation.baseline
-        let trace = observation.accessibilityTrace
-
-        let expectation = PredicateEvaluation.evaluate(
-            step.predicate,
-            expression: step.predicateExpression,
-            in: trace,
-            completeness: .complete
-        )
-        let traceEvidence = makeTestTraceEvidence(trace, completeness: .complete)
-        switch expectation {
-        case .met(let expectation):
-            return .matched(
-                message: expectation.actual,
-                traceEvidence: traceEvidence,
-                expectation: expectation,
-                observationMoment: observation.event.moment,
-                observationSummary: "interface: \(state.interface.projectedElements.count) elements"
-            )
-        case .unmet(let expectation):
-            return .timedOut(
-                message: expectation.actual,
-                traceEvidence: traceEvidence,
-                expectation: expectation,
-                observationMoment: observation.event.moment,
-                observationSummary: "interface: \(state.interface.projectedElements.count) elements"
-            )
-        }
+    func result(for command: Settlement.Command) -> Settlement.Result {
+        scriptedSettlement(command, observation: event(scope: command.observationScope))
     }
 }
 
@@ -669,14 +584,15 @@ private final class WaitResultScript {
 private func observedQuantityState(
     job: TheInsideJob,
     value: String
-) async -> ActionEvidenceProjector.Baseline {
+) async -> Observation.SnapshotEvent {
     let element = AccessibilityElement.make(
         value: value,
         identifier: "quantity",
         traits: .staticText
     )
-    await job.brains.vault.installObservationForTesting(.makeForTests(elements: [(element, HeistId(rawValue: "quantity"))]))
-    return await job.brains.actionEvidenceProjector.projectBaseline()
+    return await job.brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        .makeForTests(elements: [(element, HeistId(rawValue: "quantity"))])
+    )
 }
 
 @MainActor
@@ -692,11 +608,11 @@ private func repeatUntilRuntime(
                 actionExpectationContext: nil
             )
         },
-        wait: { request in
-            waitScript.result(for: request.step)
+        wait: { command in
+            waitScript.result(for: command)
         },
-        settledEvidence: { scope, _, _ in
-            waitScript.observation(scope: scope)
+        settledEvent: { scope, _, _ in
+            waitScript.event(scope: scope)
         }
     )
 }

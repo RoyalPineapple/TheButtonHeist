@@ -71,7 +71,6 @@ extension SettleSessionTests {
 
         XCTAssertEqual(outcome.outcome, .settled(timeMs: 30))
         XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
-        XCTAssertTrue(outcome.events.isEmpty)
     }
 
     func testSemanticQuietSettleIgnoresNilParsesUntilAStableScreenArrives() async {
@@ -134,7 +133,6 @@ extension SettleSessionTests {
         } else {
             XCTFail("Expected .settled, got \(outcome.outcome)")
         }
-        XCTAssertEqual(outcome.elementsByKey.count, 1)
         XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Hello")
     }
 
@@ -156,7 +154,6 @@ extension SettleSessionTests {
         } else {
             XCTFail("Expected .settled for no-change parses, got \(outcome.outcome)")
         }
-        XCTAssertFalse(outcome.events.containsTripwireSignalChange)
         XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.map(\.label), ["Unchanged"])
     }
 
@@ -262,19 +259,5 @@ extension SettleSessionTests {
         )
     }
 
-    func testTimelineKeysUseSharedCoarseFrameComparisonForIPadJitter() {
-        let first = makeElement(
-            label: "Cash",
-            traits: .staticText,
-            frame: CGRect(x: 244, y: 423, width: 42, height: 72)
-        )
-        let jittered = makeElement(
-            label: "Cash",
-            traits: .staticText,
-            frame: CGRect(x: 244, y: 428, width: 42, height: 72)
-        )
-
-        XCTAssertEqual(first.timelineKey(bucket: 13), jittered.timelineKey(bucket: 13))
-    }
 }
 #endif // canImport(UIKit)

@@ -156,6 +156,7 @@ extension Observation.Stream {
             lineageEvidence: committableObservation.lineageEvidence,
             scope: scope,
             notificationAdmission: notificationAdmission,
+            keyboardVisible: vault.keyboardVisible,
             timestamp: Date()
         )
         var delivery: Observation.StoreOwner.CommittedDelivery
@@ -214,8 +215,7 @@ extension Observation.Stream {
         let enqueueResult = deliveryState.enqueue(
             PendingDelivery(
                 delivery: delivery,
-                sourceObservation: sourceObservation,
-                fallbackReasons: delivery.committed.fallbackReasons
+                sourceObservation: sourceObservation
             ),
             currentCommitOrder: admission.currentCommitOrder
         )
@@ -240,12 +240,6 @@ extension Observation.Stream {
                     sourceObservation: pending.sourceObservation
                 )
             }
-            for fallbackReason in pending.fallbackReasons {
-                AccessibilityObservationFallbackLog.record(
-                    fallbackReason,
-                    source: .snapshot
-                )
-            }
             let event = pending.delivery.committed.event
             publishImmediately(.snapshot(event))
             completePublication(of: pending.delivery.token, with: .delivered(event))
@@ -254,25 +248,6 @@ extension Observation.Stream {
             }
         }
         return deliveredEvent.map(Observation.PublicationOutcome.delivered)
-    }
-
-    internal func settleActionObservation(
-        baselineTripwireSignal: TheTripwire.TripwireSignal,
-        commitScope: SemanticObservationScope = .visible,
-        settleResult providedResult: SettleSession.Result? = nil,
-        notificationWindow: AccessibilityNotificationScopeLease? = nil
-    ) async -> ObservationSettlement {
-        if let refresh = visibleRefreshPhase.task {
-            _ = await finishVisibleRefresh(refresh)
-        }
-        return await startVisibleRefresh(
-            baselineTripwireSignal: baselineTripwireSignal,
-            timeoutMs: SettleSession.defaultTimeoutMs,
-            commitScope: commitScope,
-            providedResult: providedResult,
-            notificationWindow: notificationWindow,
-            invalidatingCurrentObservation: true
-        )
     }
 
     internal func refreshVisibleObservation(
@@ -284,11 +259,7 @@ extension Observation.Stream {
         }
         return await startVisibleRefresh(
             baselineTripwireSignal: baselineTripwireSignal ?? currentTripwireSignal(),
-            timeoutMs: timeoutMs,
-            commitScope: .visible,
-            providedResult: nil,
-            notificationWindow: nil,
-            invalidatingCurrentObservation: false
+            timeoutMs: timeoutMs
         )
     }
 
@@ -313,25 +284,13 @@ extension Observation.Stream {
 
     private func startVisibleRefresh(
         baselineTripwireSignal: TheTripwire.TripwireSignal,
-        timeoutMs: Int,
-        commitScope: SemanticObservationScope,
-        providedResult: SettleSession.Result?,
-        notificationWindow: AccessibilityNotificationScopeLease?,
-        invalidatingCurrentObservation: Bool
+        timeoutMs: Int
     ) async -> ObservationSettlement {
-        if invalidatingCurrentObservation {
-            let generation = await storeOwner.invalidateCurrentObservation()
-            synchronizeDeliveryGeneration(generation, clearingSource: true)
-        } else {
-            await invalidateDeliveryIfSignalChanged(to: baselineTripwireSignal)
-        }
+        await invalidateDeliveryIfSignalChanged(to: baselineTripwireSignal)
         let task = Task { @MainActor in
             await self.produceVisibleSettlement(
                 baselineTripwireSignal: baselineTripwireSignal,
-                timeoutMs: timeoutMs,
-                commitScope: commitScope,
-                providedResult: providedResult,
-                notificationWindow: notificationWindow
+                timeoutMs: timeoutMs
             )
         }
         let refresh = VisibleRefreshTask(
@@ -360,86 +319,54 @@ extension Observation.Stream {
 
     private func produceVisibleSettlement(
         baselineTripwireSignal: TheTripwire.TripwireSignal,
-        timeoutMs: Int,
-        commitScope: SemanticObservationScope,
-        providedResult: SettleSession.Result?,
-        notificationWindow: AccessibilityNotificationScopeLease?
+        timeoutMs: Int
     ) async -> ObservationSettlement {
         guard let vault else {
-            let notificationBatch = notificationWindow?.capture()
-            notificationWindow?.cancel()
             return ObservationSettlement(
                 settleResult: SettleSession.Result(
                     outcome: .cancelled(timeMs: 0),
-                    events: [],
                     finalObservation: nil,
-                    elementsByKey: [:],
                     tripwireSignal: baselineTripwireSignal
                 ),
-                commitOutcome: .unavailable(notificationBatch: notificationBatch)
+                commitOutcome: .unavailable
             )
         }
-        let settleResult: SettleSession.Result
-        if let providedResult {
-            settleResult = providedResult
-        } else {
-            settleResult = await settleVisibleObservation(
-                vault,
-                tripwire,
-                activeObservationDemandState,
-                baselineTripwireSignal,
-                timeoutMs
-            )
-        }
-
-        let terminalActionNotificationBatch = notificationWindow?.capture()
-
-        if Task.isCancelled, providedResult == nil {
-            notificationWindow?.cancel()
+        let settleResult = await settleVisibleObservation(
+            vault,
+            tripwire,
+            activeObservationDemandState,
+            baselineTripwireSignal,
+            timeoutMs
+        )
+        if Task.isCancelled {
             return ObservationSettlement(
                 settleResult: settleResult,
-                commitOutcome: .unavailable(notificationBatch: terminalActionNotificationBatch)
+                commitOutcome: .unavailable
             )
         }
         if let committableObservation = await admitSettledObservation(settleResult, vault: vault) {
             let notificationIndex = await storeOwner.notificationIndex()
-            let notificationBatch = terminalActionNotificationBatch
-                ?? vault.accessibilityNotifications.checkpoint(
-                    after: notificationIndex
-                )
-            let outcome: Observation.PublicationOutcome
-            switch commitScope {
-            case .visible:
-                outcome = await commitSettledVisibleObservation(
-                    committableObservation,
-                    notificationBatch: notificationBatch,
-                    notificationIdentityObservation: committableObservation.observation
-                )
-            case .discovery:
-                outcome = await commitSettledDiscoveryObservation(
-                    committableObservation,
-                    notificationBatch: notificationBatch
-                )
-            }
+            let notificationBatch = vault.accessibilityNotifications.checkpoint(
+                after: notificationIndex
+            )
+            let outcome = await commitSettledVisibleObservation(
+                committableObservation,
+                notificationBatch: notificationBatch,
+                notificationIdentityObservation: committableObservation.observation
+            )
             switch outcome {
             case .delivered(let event):
-                notificationWindow?.consume()
                 return ObservationSettlement(settleResult: settleResult, commitOutcome: .committed(event))
             case .superseded:
-                notificationWindow?.cancel()
                 return ObservationSettlement(
                     settleResult: settleResult,
-                    commitOutcome: .unavailable(notificationBatch: notificationBatch)
+                    commitOutcome: .unavailable
                 )
             }
         }
-        notificationWindow?.cancel()
         return ObservationSettlement(
             settleResult: settleResult,
-            commitOutcome: postActionFailureResult(
-                settleResult,
-                notificationBatch: terminalActionNotificationBatch
-            )
+            commitOutcome: .unavailable
         )
     }
 
@@ -506,18 +433,6 @@ extension Observation.Stream {
             return nil
         }
         return committableObservation
-    }
-
-    private func postActionFailureResult(
-        _ settleResult: SettleSession.Result,
-        notificationBatch: AccessibilityNotificationBatch?
-    ) -> ObservationSettlement.CommitOutcome {
-        guard !settleResult.outcome.didSettleCleanly,
-              case .timedOut = settleResult.outcome,
-              let observation = settleResult.finalObservation?.observation else {
-            return .unavailable(notificationBatch: notificationBatch)
-        }
-        return .observedUnsettled(observation, notificationBatch: notificationBatch)
     }
 
     private func recordFailedSettle(

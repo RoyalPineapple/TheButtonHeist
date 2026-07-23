@@ -215,141 +215,55 @@ extension TheBrainsPipelineTests {
     }
 
     func testChangePredicatesReadScreenAndElementFactsSeparately() async throws {
-        let oldScreenEvent = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        _ = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Menu", .header, "menu_header")])
         )
         let newScreenEvent = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Checkout", .header, "checkout_header")]),
             notificationBatch: notificationBatch(kind: .screenChanged)
         )
-        let oldScreenBaseline = try XCTUnwrap(oldScreenEvent.moment)
-        let screenEvidence = PredicateObservationEvidence(
-            observation: brains.actionEvidenceProjector.projectSettledEvidence(from: newScreenEvent),
-            baseline: oldScreenBaseline,
-            eventsSinceBaseline: await brains.vault.semanticObservationStream.storeOwner.readLog {
-                $0.events(since: oldScreenBaseline)
-            }
-        )
+        let screenEvidence = try XCTUnwrap(AccessibilityTraceEvidence(
+            trace: newScreenEvent.trace,
+            completeness: .complete
+        ))
 
         let screenExpression = AccessibilityPredicate.changed(.screen())
         let elementExpression = AccessibilityPredicate.changed(.elements())
-        let screenPredicate = screenEvidence.evaluate(
-            try resolvedPredicate(screenExpression),
-            expression: screenExpression
+        let screenPredicate = ExpectationResult(
+            try resolvedPredicate(screenExpression).evaluate(in: screenEvidence),
+            predicate: screenExpression
         )
-        let elementPredicateAgainstScreen = screenEvidence.evaluate(
-            try resolvedPredicate(elementExpression),
-            expression: elementExpression
+        let elementPredicateAgainstScreen = ExpectationResult(
+            try resolvedPredicate(elementExpression).evaluate(in: screenEvidence),
+            predicate: elementExpression
         )
         XCTAssertTrue(screenPredicate.met)
         XCTAssertTrue(elementPredicateAgainstScreen.met)
 
-        let elementBaselineEvent = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        _ = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
         let elementCurrentEvent = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "60%")
         )
-        let elementBaseline = try XCTUnwrap(elementBaselineEvent.moment)
-        let elementEvidence = PredicateObservationEvidence(
-            observation: brains.actionEvidenceProjector.projectSettledEvidence(from: elementCurrentEvent),
-            baseline: elementBaseline,
-            eventsSinceBaseline: await brains.vault.semanticObservationStream.storeOwner.readLog {
-                $0.events(since: elementBaseline)
-            }
-        )
+        let elementEvidence = try XCTUnwrap(AccessibilityTraceEvidence(
+            trace: elementCurrentEvent.trace,
+            completeness: .complete
+        ))
 
-        let elementPredicate = elementEvidence.evaluate(
-            try resolvedPredicate(elementExpression),
-            expression: elementExpression
+        let elementPredicate = ExpectationResult(
+            try resolvedPredicate(elementExpression).evaluate(in: elementEvidence),
+            predicate: elementExpression
         )
-        let screenPredicateAgainstElement = elementEvidence.evaluate(
-            try resolvedPredicate(screenExpression),
-            expression: screenExpression
+        let screenPredicateAgainstElement = ExpectationResult(
+            try resolvedPredicate(screenExpression).evaluate(in: elementEvidence),
+            predicate: screenExpression
         )
         XCTAssertTrue(elementPredicate.met)
         XCTAssertFalse(screenPredicateAgainstElement.met)
         XCTAssertEqual(screenPredicateAgainstElement.actual, "elementsChanged")
     }
 
-    func testPredicateObservationStreamPreservesChangeBaselineAcrossReductions() async throws {
-        let baselineEvent = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
-            volumeScreen(value: "50%")
-        )
-        let intermediateEvent = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
-            volumeScreen(value: "60%")
-        )
-        let finalEvent = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
-            volumeScreen(value: "70%")
-        )
-
-        let expression = AccessibilityPredicate.changed(.elements())
-        let predicate = try resolvedPredicate(expression)
-        let stream = PredicateObservationStreamState().seedingBaseline(
-            .currentObservation,
-            from: baselineEvent,
-            when: predicate.requiresChangeBaseline
-        )
-
-        let intermediate = stream.reducing(
-            brains.actionEvidenceProjector.projectSettledEvidence(from: intermediateEvent),
-            predicate: predicate,
-            predicateExpression: expression,
-            eventsSinceBaseline: await brains.vault.semanticObservationStream.storeOwner.readLog {
-                $0.events(since: baselineEvent.moment)
-            }
-        )
-        let final = intermediate.state.reducing(
-            brains.actionEvidenceProjector.projectSettledEvidence(from: finalEvent),
-            predicate: predicate,
-            predicateExpression: expression,
-            eventsSinceBaseline: await brains.vault.semanticObservationStream.storeOwner.readLog {
-                $0.events(since: baselineEvent.moment)
-            }
-        )
-
-        XCTAssertEqual(intermediate.reduction.changeBaseline?.sequence, baselineEvent.sequence)
-        XCTAssertEqual(final.reduction.changeBaseline?.sequence, baselineEvent.sequence)
-        XCTAssertEqual(
-            final.reduction.eventsSinceBaseline,
-            .events([.snapshot(intermediateEvent), .snapshot(finalEvent)])
-        )
-    }
-
-    func testPredicateObservationStreamDoesNotOwnWindowForCurrentStateWait() async throws {
-        let predicate: AccessibilityPredicate = .missing(
-            .label("Removed")
-        )
-        let baselineEvent = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
-            makeScreen(elements: [
-                ("Anchor", .staticText, "anchor"),
-                ("Removed", .staticText, "removed"),
-            ])
-        )
-        let finalEvent = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
-            makeScreen(elements: [("Anchor", .staticText, "anchor")])
-        )
-
-        let resolved = try resolvedPredicate(predicate)
-        let stream = PredicateObservationStreamState().seedingBaseline(
-            .currentObservation,
-            from: baselineEvent,
-            when: resolved.requiresChangeBaseline
-        )
-        let final = stream.reducing(
-            brains.actionEvidenceProjector.projectSettledEvidence(from: finalEvent),
-            predicate: resolved,
-            predicateExpression: predicate
-        )
-
-        XCTAssertNil(stream.observationBaseline)
-        XCTAssertTrue(final.reduction.expectation.met)
-        XCTAssertNil(final.reduction.changeBaseline)
-        XCTAssertNil(final.reduction.eventsSinceBaseline)
-        XCTAssertTrue(final.reduction.trace?.changeFacts.contains {
-            if case .elementsChanged = $0 { true } else { false }
-        } == true)
-    }
 }
 
 #endif

@@ -84,7 +84,7 @@ private extension HeistReport.Evidence {
     }
 
     private func encode(
-        _ evidence: HeistWaitEvidence,
+        _ evidence: HeistSettlementEvidence,
         to encoder: Encoder,
         profile: ProjectionProfile
     ) throws {

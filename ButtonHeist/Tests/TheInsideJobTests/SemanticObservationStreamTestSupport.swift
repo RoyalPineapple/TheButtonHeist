@@ -6,6 +6,7 @@ import XCTest
 import ButtonHeistTestSupport
 
 @testable import AccessibilitySnapshotParser
+@_spi(ButtonHeistInternals) @testable import ThePlans
 @testable import TheInsideJob
 @testable import TheScore
 
@@ -100,9 +101,7 @@ class SemanticObservationStreamTestCase: XCTestCase {
     ) -> SettleSession.Result {
         SettleSession.Result(
             outcome: outcome,
-            events: [],
             finalObservation: SettleSessionFinalObservation(observation: observation),
-            elementsByKey: [:],
             tripwireSignal: tripwireSignal
         )
     }
@@ -160,6 +159,112 @@ class SemanticObservationStreamTestCase: XCTestCase {
             await Task.yield()
         }
         XCTFail("Timed out waiting for \(expectedCount) observation waiters")
+    }
+}
+
+@MainActor
+func scriptedSettlement(
+    _ command: Settlement.Command,
+    observation event: Observation.SnapshotEvent?
+) -> Settlement.Result {
+    guard let predicate = command.predicate else {
+        preconditionFailure("Scripted observation settlement requires a predicate")
+    }
+    var predicateEvidence = Settlement.Predicate.Evidence(predicate: predicate)
+    guard let event else {
+        return Settlement.Result(
+            outcome: .timedOut,
+            evidence: Settlement.Evidence(
+                command: command,
+                boundary: scriptedBoundary(command.baseline, fallback: nil),
+                trigger: .observation,
+                predicate: predicateEvidence,
+                readiness: .pending(.initial),
+                handoff: .pending(.initial),
+                observationHistory: nil,
+                deadline: .init(deadline: command.deadline, elapsed: 1, reached: true)
+            )
+        )
+    }
+    let expectation = PredicateEvaluation.evaluate(
+        predicate.resolved,
+        expression: predicate.authored,
+        in: event
+    )
+    let evaluationEvidence: Settlement.Predicate.EvaluationEvidence = switch predicate.semantics {
+    case .currentState:
+        .currentState(event)
+    case .positiveTransition:
+        .positiveTransition(event)
+    case .completeHistory:
+        .completeHistory(.init(
+            history: .events([.snapshot(event)]),
+            handoff: event
+        ))
+    case .announcement:
+        preconditionFailure("Scripted snapshot settlement cannot evaluate an announcement")
+    }
+    let request = Settlement.Predicate.EvaluationRequest(
+        predicate: predicate,
+        target: .observation(event.moment),
+        evidence: evaluationEvidence
+    )
+    precondition(predicateEvidence.schedule(request))
+    predicateEvidence.record(.init(
+        target: request.target,
+        result: PredicateEvaluationResult(
+            met: expectation.met,
+            actual: expectation.actual
+        )
+    ))
+    let readiness = Settlement.Readiness.Establishment(
+        generation: .initial,
+        path: .semanticStability,
+        observationBoundary: .including(event.moment)
+    )
+    let history = Observation.EventsSince.events([.snapshot(event)])
+    let admission = Settlement.ObservationAdmission(
+        event: event,
+        history: history
+    )
+    guard let handoff = Settlement.Handoff.Admission.admit(
+        admission,
+        for: readiness
+    ) else {
+        preconditionFailure("Scripted settlement handoff was not admitted")
+    }
+    return Settlement.Result(
+        outcome: expectation.met ? .settled : .timedOut,
+        evidence: Settlement.Evidence(
+            command: command,
+            boundary: scriptedBoundary(command.baseline, fallback: event.moment),
+            trigger: .observation,
+            predicate: predicateEvidence,
+            readiness: .established(readiness),
+            handoff: .admitted(handoff),
+            observationHistory: history,
+            deadline: .init(
+                deadline: command.deadline,
+                elapsed: 1,
+                reached: !expectation.met
+            )
+        )
+    )
+}
+
+private func scriptedBoundary(
+    _ baseline: Settlement.Baseline,
+    fallback: Observation.Moment?
+) -> Settlement.BoundaryEvidence {
+    switch baseline {
+    case .capture:
+        fallback.map {
+            .established(Settlement.EvidenceBoundary(moment: $0))
+        } ?? .pending
+    case .supplied(let boundary):
+        .established(boundary)
+    case .unavailable(let failure):
+        .unavailable(failure)
     }
 }
 

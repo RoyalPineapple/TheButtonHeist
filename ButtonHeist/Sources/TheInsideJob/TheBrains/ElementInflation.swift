@@ -354,11 +354,6 @@ internal final class ElementInflation {
         } else {
             nextState = proposedState
         }
-        let currentDescription = state.description
-        let nextDescription = nextState.description
-        insideJobLogger.debug(
-            "inflation: \(currentDescription, privacy: .public) -> \(nextDescription, privacy: .public)"
-        )
         return nextState
     }
 }

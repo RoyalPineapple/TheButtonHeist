@@ -130,12 +130,9 @@ extension TheBrains {
     internal func completedInvocationResult(
         context: InvocationExecutionContext,
         childExecution: HeistExecutedChildren,
-        expectationContext: InvocationExpectationContext?,
         expectationOutcome: InvocationExpectationOutcome
     ) -> HeistExecutionStepResult {
-        let expectationEvidence = expectationOutcome.result.map {
-            invocationExpectationEvidence(result: $0, context: expectationContext)
-        }
+        let expectationEvidence = expectationOutcome.evidence
         let invocationExpectation = expectationEvidence.map {
             HeistInvocationEvidence.InvocationExpectationEvidence.wait($0)
         }
@@ -180,27 +177,6 @@ extension TheBrains {
                     completion: .passed(evidence: .init(admitted: evidence), children: children)
                 )
             }
-        }
-    }
-
-    private func invocationExpectationEvidence(
-        result: HeistWaitResult,
-        context: InvocationExpectationContext?
-    ) -> HeistWaitEvidence {
-        let finalSummary = result.observationSummary ?? result.outcome.expectation.actual
-        switch result.outcome {
-        case .matched(let actionResult, let expectation):
-            return .matched(
-                .init(executed: actionResult, expectation: expectation),
-                baselineSummary: context?.baseline.observationSummary,
-                finalSummary: finalSummary
-            )
-        case .unmatched(let actionResult, let expectation):
-            return .failed(
-                .init(executed: actionResult, expectation: expectation.result),
-                baselineSummary: context?.baseline.observationSummary,
-                finalSummary: finalSummary
-            )
         }
     }
 

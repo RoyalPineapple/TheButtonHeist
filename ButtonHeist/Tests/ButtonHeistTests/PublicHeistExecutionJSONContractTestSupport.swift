@@ -313,12 +313,12 @@ enum PublicHeistExecutionJSONContractFixture {
         )
     }
 
-    private static func waitEvidence() throws -> HeistWaitEvidence {
+    private static func waitEvidence() throws -> HeistSettlementEvidence {
         let expectation = ExpectationResult.Met(
             predicate: donePredicate,
             actual: "Done visible"
         )
-        let check = try XCTUnwrap(HeistWaitEvidence.MatchedCheck(
+        let check = try XCTUnwrap(HeistSettlementEvidence.MatchedCheck(
             actionResult: .success(payload: .wait, message: "waited"),
             expectation: expectation
         ))

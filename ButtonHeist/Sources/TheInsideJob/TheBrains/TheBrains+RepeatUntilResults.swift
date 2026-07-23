@@ -106,7 +106,7 @@ extension TheBrains {
 
     private func repeatUntilTimedOutResult(
         context: RepeatUntilResultContext,
-        observation: RepeatUntil.Observation?,
+        observation: RepeatUntil.ObservedState?,
         expectation: ExpectationResult.Unmet,
         iterationCount: Int,
         children: HeistPassingChildren
@@ -130,7 +130,7 @@ extension TheBrains {
 
     private func repeatUntilBodyFailureResult(
         context: RepeatUntilResultContext,
-        observation: RepeatUntil.Observation?,
+        observation: RepeatUntil.ObservedState?,
         expectation: ExpectationResult.Unmet,
         iterationIndex: Int,
         children: HeistAbortedChildren
@@ -205,7 +205,7 @@ extension TheBrains {
                 iterationOrdinal: frame.index,
                 expectation: expectation
             )
-        case .noProgress(let observation, let expectation, _):
+        case .noProgress(let observation, let expectation):
             evidence = .executedContinued(
                 iterationCount: frame.count,
                 iterationOrdinal: frame.index,
@@ -228,7 +228,7 @@ extension TheBrains {
         frame: RepeatUntil.IterationFrame,
         step: ResolvedRepeatUntilStep,
         expectation: ExpectationResult.Unmet,
-        observation: RepeatUntil.Observation?,
+        observation: RepeatUntil.ObservedState?,
         children: HeistAbortedChildren
     ) -> HeistAbortedChildren {
         let childPath = children.abortedAtPath

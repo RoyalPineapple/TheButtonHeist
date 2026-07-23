@@ -230,8 +230,8 @@ extension TheBrains {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(payload: .wait)
         }
-        let result = await executeStandaloneWait(step)
-        return result.outcome.actionResult
+        let result = await executeSettlementWait(Settlement.Command(observing: step))
+        return Settlement.ResultProjector.projectWait(result).actionResult
     }
 
     nonisolated static func actionFailureKind(

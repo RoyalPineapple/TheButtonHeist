@@ -28,106 +28,25 @@ extension TheBrains {
         }
     }
 
-    internal enum HeistRuntimeWaitRequest: Equatable, Sendable {
-        case standalone(ResolvedWaitRuntimeInput, startedAt: RuntimeElapsed.Instant)
-        case actionEndpoint(
-            ResolvedWaitRuntimeInput,
-            trace: AccessibilityTrace?,
-            context: ActionExpectationContext?
-        )
-        case immediate(ResolvedWaitRuntimeInput)
-        case afterObservation(
-            ResolvedWaitRuntimeInput,
-            baselineTrace: AccessibilityTrace?,
-            moment: Observation.Moment
-        )
-        case baselineTraceOnly(ResolvedWaitRuntimeInput, trace: AccessibilityTrace?)
-
-        internal var step: ResolvedWaitRuntimeInput {
-            switch self {
-            case .standalone(let step, _),
-                 .actionEndpoint(let step, _, _),
-                 .immediate(let step),
-                 .afterObservation(let step, _, _),
-                 .baselineTraceOnly(let step, _):
-                return step
-            }
-        }
-
-        internal var initialTrace: AccessibilityTrace? {
-            switch self {
-            case .standalone,
-                 .immediate:
-                return nil
-            case .actionEndpoint(_, let trace, _),
-                 .afterObservation(_, let trace, _),
-                 .baselineTraceOnly(_, let trace):
-                return trace
-            }
-        }
-
-        internal var startedAt: RuntimeElapsed.Instant? {
-            switch self {
-            case .standalone(_, let startedAt):
-                return startedAt
-            case .actionEndpoint,
-                 .immediate,
-                 .afterObservation,
-                 .baselineTraceOnly:
-                return nil
-            }
-        }
-
-        internal var afterSequence: SettledObservationSequence? {
-            switch self {
-            case .standalone,
-                 .immediate,
-                 .baselineTraceOnly:
-                return nil
-            case .actionEndpoint(_, _, let context):
-                return context?.preActionMoment.sequence
-            case .afterObservation(_, _, let moment):
-                return moment.sequence
-            }
-        }
-
-        internal var changeBaseline: PredicateChangeBaselineSource {
-            switch self {
-            case .actionEndpoint(_, _, let context):
-                .supplied(context?.preActionMoment)
-            case .baselineTraceOnly:
-                .supplied(nil)
-            case .standalone, .immediate, .afterObservation:
-                .establishFromFirstObservation
-            }
-        }
-
-        internal var actionExpectationContext: ActionExpectationContext? {
-            guard case .actionEndpoint(_, _, let context) = self else { return nil }
-            return context
-        }
-
-    }
-
     internal struct HeistExecutionRuntime {
         internal let execute: @MainActor (
             ResolvedHeistActionCommand,
             ResolvedWaitRuntimeInput?
         ) async -> RuntimeActionExecution
-        internal let wait: @MainActor (HeistRuntimeWaitRequest) async -> HeistWaitResult
-        internal let settledEvidence: @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> SettledObservationEvidence?
+        internal let wait: @MainActor (Settlement.Command) async -> Settlement.Result
+        internal let settledEvent: @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> Observation.SnapshotEvent?
 
         internal init(
             execute: @escaping @MainActor (
                 ResolvedHeistActionCommand,
                 ResolvedWaitRuntimeInput?
             ) async -> RuntimeActionExecution,
-            wait: @escaping @MainActor (HeistRuntimeWaitRequest) async -> HeistWaitResult,
-            settledEvidence: @escaping @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> SettledObservationEvidence?
+            wait: @escaping @MainActor (Settlement.Command) async -> Settlement.Result,
+            settledEvent: @escaping @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> Observation.SnapshotEvent?
         ) {
             self.execute = execute
             self.wait = wait
-            self.settledEvidence = settledEvidence
+            self.settledEvent = settledEvent
         }
 
         @MainActor
@@ -139,28 +58,11 @@ extension TheBrains {
                         expectation: expectation
                     )
                 },
-                wait: { request in
-                    switch request {
-                    case .standalone(let step, let startedAt):
-                        return await brains.executeStandaloneWait(step, startedAt: startedAt)
-                    case .afterObservation(let step, _, let moment):
-                        return await brains.executeSettlementWait(
-                            step,
-                            baseline: .supplied(.init(moment: moment))
-                        )
-                    case .actionEndpoint, .immediate, .baselineTraceOnly:
-                        return await brains.interactionCoordinator.waitForPredicate(
-                            request.step,
-                            initialTrace: request.initialTrace,
-                            baselineSequence: request.afterSequence,
-                            changeBaseline: request.changeBaseline,
-                            actionExpectationContext: request.actionExpectationContext,
-                            startedAt: request.startedAt
-                        )
-                    }
+                wait: { command in
+                    await brains.executeSettlementWait(command)
                 },
-                settledEvidence: { scope, sequence, timeout in
-                    await brains.interactionCoordinator.settledEvidence(scope: scope, after: sequence, timeout: timeout)
+                settledEvent: { scope, sequence, timeout in
+                    await brains.interactionCoordinator.settledEvent(scope: scope, after: sequence, timeout: timeout)
                 }
             )
         }
@@ -174,7 +76,7 @@ extension TheBrains {
         let demand = vault.semanticObservationStream.beginActiveObservationDemand()
         defer { demand.cancel() }
         if tripwire.isPulseRunning,
-           await interactionCoordinator.refreshedVisibleBaseline() == nil {
+           await interactionCoordinator.refreshedVisibleObservation() == nil {
             return await treeUnavailableResult(payload: .heist(nil))
         }
         return await executeHeistPlan(plan, argument: argument, runtime: .live(self))

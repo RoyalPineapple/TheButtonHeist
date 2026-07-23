@@ -119,11 +119,11 @@ extension WireTypeRoundTripTests {
         let predicate = AccessibilityPredicate.exists(.label("Done"))
         let actionResult = ActionResult.success(payload: .wait)
         let expectation = ExpectationResult.Met(predicate: predicate)
-        let check = try XCTUnwrap(HeistWaitEvidence.MatchedCheck(
+        let check = try XCTUnwrap(HeistSettlementEvidence.MatchedCheck(
             actionResult: actionResult,
             expectation: expectation
         ))
-        let waitEvidence = HeistWaitEvidence.matched(check)
+        let waitEvidence = HeistSettlementEvidence.matched(check)
         let evidence = HeistInvocationEvidence.InvocationExpectationEvidence.wait(waitEvidence)
 
         XCTAssertEqual(evidence.actionResult, waitEvidence.actionResult)

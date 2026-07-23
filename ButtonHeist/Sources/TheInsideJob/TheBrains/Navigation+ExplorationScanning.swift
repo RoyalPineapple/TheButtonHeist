@@ -534,7 +534,6 @@ extension Navigation {
             if let seededResult = await moveToFallbackSeed(observedPoint, request: request) {
                 return seededResult
             }
-            logSkippedSemanticRevealSeed(observedPoint, request: request)
         }
         let explorer = ViewportExplorer(
             navigation: self,
@@ -596,18 +595,6 @@ extension Navigation {
         case .offscreen:
             return nil
         }
-    }
-
-    private func logSkippedSemanticRevealSeed(
-        _ observedPoint: InterfaceTree.ObservedScrollContentActivationPoint,
-        request: ElementInflation.SemanticTargetRevealRequest
-    ) {
-        let storedOwnerPath = observedPoint.ownerPath.indices.map(String.init).joined(separator: ".")
-        let expectedOwnerPath = request.target.scrollContainerPath?
-            .indices.map(String.init).joined(separator: ".") ?? "none"
-        let message = "semantic reveal seed skipped: storedOwnerPath=\(storedOwnerPath) "
-            + "expectedOwnerPath=\(expectedOwnerPath) fallback=ancestorPaging"
-        insideJobLogger.debug("\(message, privacy: .public)")
     }
 
     private func semanticTargetScanMatch(

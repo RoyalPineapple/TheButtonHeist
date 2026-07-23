@@ -11,9 +11,18 @@ import XCTest
 extension TheBrainsActionTests {
 
     func testHeistConditionalSelectsFirstMatchingCaseOnce() async throws {
-        let runtime = heistRuntime(observations: [
-            await observedState(labels: ["Home", "Login"]),
-        ])
+        var observationTimeouts: [Double?] = []
+        var waitCount = 0
+        let runtime = heistRuntime(
+            observations: [
+                await observedState(labels: ["Home", "Login"]),
+            ],
+            wait: { _ in
+                waitCount += 1
+                preconditionFailure("conditional scheduled a wait")
+            },
+            observedTimeouts: { observationTimeouts.append($0) }
+        )
         let plan = try HeistPlan(body: [
             .conditional(try ConditionalStep(cases: [
                 PredicateCase(
@@ -35,6 +44,8 @@ extension TheBrainsActionTests {
         XCTAssertEqual(step.kind, .conditional)
         XCTAssertEqual(step.caseSelectionEvidence?.selection.outcome, HeistCaseSelectionOutcome.matchedCase(index: 0))
         XCTAssertEqual(step.children.map(\.kind), [.warn])
+        XCTAssertEqual(observationTimeouts, [0])
+        XCTAssertEqual(waitCount, 0)
     }
 
     func testHeistConditionalUnmatchedWithoutElseContinues() async throws {
@@ -214,6 +225,7 @@ extension TheBrainsActionTests {
 
     func testHeistRepeatUntilExecutesBodyWhenBaselineObservationIsUnavailable() async throws {
         var incrementCount = 0
+        var waitBaselines: [Settlement.Baseline] = []
         let runtime = heistRuntime(
             observations: [
                 await observedState(elements: [(makeElement(value: "1", identifier: "quantity"), "quantity")]),
@@ -224,6 +236,7 @@ extension TheBrainsActionTests {
                 }
                 return ActionResult.success(payload: .increment)
             },
+            observedWaitCommands: { waitBaselines.append($0.baseline) },
             unavailableObservationCount: 1
         )
         let plan = try HeistPlan(body: [
@@ -244,6 +257,7 @@ extension TheBrainsActionTests {
         XCTAssertEqual(incrementCount, 1)
         XCTAssertEqual(step.repeatUntilEvidence?.iterationCount, 1)
         XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, true)
+        XCTAssertEqual(waitBaselines, [.capture])
     }
 
     func testHeistRepeatUntilChainsExactObservationMomentsAcrossPostBodyWaits() async throws {
@@ -251,8 +265,7 @@ extension TheBrainsActionTests {
         let initialState = await observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")])
         let firstMutation = await observedState(elements: [(makeElement(value: "1", identifier: "quantity"), "quantity")])
         let secondMutation = await observedState(elements: [(makeElement(value: "2", identifier: "quantity"), "quantity")])
-        let states = [initialState, firstMutation, secondMutation]
-        let moments = observationMoments(for: states)
+        let events = observationEvents(for: [initialState, firstMutation, secondMutation])
         var incrementCount = 0
         var nextObservationIndex = 1
         var postBodyBaselines: [Observation.Moment] = []
@@ -264,38 +277,15 @@ extension TheBrainsActionTests {
                 }
                 return ActionResult.success(payload: command.resultPayload)
             },
-            wait: { request in
-                switch request {
-                case .afterObservation(_, _, let baseline):
-                    postBodyBaselines.append(baseline)
-                    let state = states[nextObservationIndex]
-                    let moment = moments[nextObservationIndex]
-                    nextObservationIndex += 1
-                    return .matched(
-                        message: "observed change",
-                        traceEvidence: makeTestTraceEvidence(
-                            AccessibilityTrace(capture: state.capture),
-                            completeness: .incomplete
-                        ),
-                        expectation: ExpectationResult.Met(
-                            predicate: .changed(.elements()),
-                            actual: "observed change"
-                        ),
-                        observationMoment: moment,
-                        observationSummary: "interface: 1 elements"
-                    )
-                case .standalone, .actionEndpoint, .immediate, .baselineTraceOnly:
-                    XCTFail("repeat_until should not issue \(request)")
-                    return .failed(
-                        failureKind: .actionFailed,
-                        message: "unexpected wait request",
-                        traceEvidence: nil,
-                        expectation: ExpectationResult.Unmet(
-                            predicate: predicate,
-                            actual: "unexpected wait request"
-                        )
-                    )
+            wait: { command in
+                guard case .supplied(let boundary) = command.baseline else {
+                    XCTFail("repeat_until should supply its exact observation boundary")
+                    return scriptedSettlement(command, observation: nil)
                 }
+                postBodyBaselines.append(boundary.moment)
+                let event = events[nextObservationIndex]
+                nextObservationIndex += 1
+                return scriptedSettlement(command, observation: event)
             }
         )
         let plan = try HeistPlan(body: [
@@ -318,7 +308,8 @@ extension TheBrainsActionTests {
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "repeat_until failed")
         XCTAssertEqual(incrementCount, 2)
         XCTAssertEqual(postBodyBaselines.count, 2)
-        XCTAssertEqual(postBodyBaselines[1], moments[1])
+        XCTAssertEqual(postBodyBaselines[0].capture, initialState.moment.capture)
+        XCTAssertEqual(postBodyBaselines[1], events[1].moment)
         XCTAssertEqual(step.repeatUntilEvidence?.iterationCount, 2)
         XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, true)
         XCTAssertEqual(
@@ -472,211 +463,6 @@ extension TheBrainsActionTests {
         XCTAssertTrue(step.repeatUntilEvidence?.failureReason?.contains("timed out") == true)
         XCTAssertNotNil(step.failure)
         XCTAssertEqual(step.children.map(\.kind), [.repeatUntilIteration])
-    }
-
-    func testHeistRepeatUntilPostBodyMatchedWaitWithoutObservedMomentDoesNotReusePreviousMoment() async throws {
-        let predicate = AccessibilityPredicate.exists(.element(.identifier("quantity"), .value("2")))
-        let resolved = try resolvedPredicate(predicate)
-        let initialState = await observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")])
-        let matchedState = await observedState(elements: [(makeElement(value: "2", identifier: "quantity"), "quantity")])
-        let initialMoment = observationMoments(for: [initialState])[0]
-        let initialTrace = AccessibilityTrace(interface: initialState.interface)
-        let matchedTrace = AccessibilityTrace(interface: matchedState.interface)
-        var afterObservationCount = 0
-        let runtime = repeatUntilWaitRuntime(
-            observations: [initialState],
-            wait: { request in
-                switch request {
-                case .immediate:
-                    let expectation = PredicateEvaluation.evaluate(
-                        resolved,
-                        expression: predicate,
-                        in: initialTrace,
-                        completeness: .incomplete
-                    )
-                    return .timedOut(
-                        message: expectation.actual,
-                        traceEvidence: makeTestTraceEvidence(initialTrace, completeness: .incomplete),
-                        expectation: self.unmetExpectation(expectation),
-                        observationMoment: initialMoment,
-                        observationSummary: "interface: 1 elements"
-                    )
-                case .afterObservation:
-                    afterObservationCount += 1
-                    let expectation = PredicateEvaluation.evaluate(
-                        resolved,
-                        expression: predicate,
-                        in: matchedTrace,
-                        completeness: .incomplete
-                    )
-                    return .matched(
-                        message: expectation.actual,
-                        traceEvidence: makeTestTraceEvidence(matchedTrace, completeness: .incomplete),
-                        expectation: self.metExpectation(expectation)
-                    )
-                case .standalone, .actionEndpoint, .baselineTraceOnly:
-                    XCTFail("repeat_until should not issue \(request)")
-                    return .failed(
-                        failureKind: .actionFailed,
-                        message: "unexpected wait request",
-                        traceEvidence: nil,
-                        expectation: ExpectationResult.Unmet(
-                            predicate: predicate,
-                            actual: "unexpected wait request"
-                        )
-                    )
-                }
-            }
-        )
-        let plan = try HeistPlan(body: [
-            .repeatUntil(try RepeatUntilStep(
-                predicate: predicate,
-                timeout: 1,
-                body: [
-                    .action(ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
-                ]
-            )),
-        ])
-
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heistResult = try XCTUnwrap(result.resultPayload)
-        let step = try XCTUnwrap(heistResult.steps.first)
-
-        XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(afterObservationCount, 1)
-        XCTAssertEqual(step.repeatUntilEvidence?.outcome, .failed)
-        XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, false)
-        XCTAssertEqual(
-            step.repeatUntilEvidence?.expectation.actual,
-            "repeat_until post-body check matched without settled observation"
-        )
-        XCTAssertNil(step.repeatUntilEvidence?.lastObservedSummary)
-    }
-
-    func testHeistRepeatUntilPostBodyNilTraceWithNewMomentDoesNotReuseStaleTraceOrSummary() async throws {
-        let predicate = AccessibilityPredicate.exists(.element(.identifier("quantity"), .value("2")))
-        let resolved = try resolvedPredicate(predicate)
-        let initialState = await observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")])
-        let moments = observationMoments(for: [initialState, initialState])
-        let initialTrace = AccessibilityTrace(interface: initialState.interface)
-        let runtime = repeatUntilWaitRuntime(
-            observations: [initialState],
-            wait: { request in
-                switch request {
-                case .immediate:
-                    let expectation = PredicateEvaluation.evaluate(
-                        resolved,
-                        expression: predicate,
-                        in: initialTrace,
-                        completeness: .incomplete
-                    )
-                    return .timedOut(
-                        message: expectation.actual,
-                        traceEvidence: makeTestTraceEvidence(initialTrace, completeness: .incomplete),
-                        expectation: self.unmetExpectation(expectation),
-                        observationMoment: moments[0],
-                        observationSummary: "interface: 1 elements"
-                    )
-                case .afterObservation:
-                    return .timedOut(
-                        message: "no observed accessibility trace",
-                        traceEvidence: nil,
-                        expectation: ExpectationResult.Unmet(
-                            predicate: .changed(.elements()),
-                            actual: "no observed accessibility trace"
-                        ),
-                        observationMoment: moments[1],
-                        observationSummary: nil
-                    )
-                case .standalone, .actionEndpoint, .baselineTraceOnly:
-                    XCTFail("repeat_until should not issue \(request)")
-                    return .failed(
-                        failureKind: .actionFailed,
-                        message: "unexpected wait request",
-                        traceEvidence: nil,
-                        expectation: ExpectationResult.Unmet(
-                            predicate: predicate,
-                            actual: "unexpected wait request"
-                        )
-                    )
-                }
-            }
-        )
-        let plan = try HeistPlan(body: [
-            .repeatUntil(try RepeatUntilStep(
-                predicate: predicate,
-                timeout: 1,
-                body: [
-                    .action(ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
-                ]
-            )),
-        ])
-
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heistResult = try XCTUnwrap(result.resultPayload)
-        let step = try XCTUnwrap(heistResult.steps.first)
-
-        XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, false)
-        XCTAssertEqual(step.repeatUntilEvidence?.expectation.actual, "no observed accessibility trace")
-        XCTAssertNil(step.repeatUntilEvidence?.lastObservedSummary)
-    }
-
-    func testPredicateObservationStreamSeparatesStateAndChangeEvidence() async throws {
-        let readyTarget = AccessibilityTarget.label("Ready")
-        let observationStream = brains.vault.semanticObservationStream
-        let baselineEvent = await observationStream.commitVisibleObservationForTesting(
-            .makeForTests(elements: [(makeElement(label: "Loading"), HeistId(rawValue: "loading"))])
-        )
-        let changedEvent = await observationStream.commitVisibleObservationForTesting(
-            .makeForTests(elements: [
-                (makeElement(label: "Loading"), HeistId(rawValue: "loading")),
-                (makeElement(label: "Ready"), HeistId(rawValue: "ready")),
-            ])
-        )
-        var stream = PredicateObservationStreamState()
-
-        let baselineObservation = brains.actionEvidenceProjector.projectSettledEvidence(from: baselineEvent)
-        let changePredicate = AccessibilityPredicate.changed(.elements([.appeared(readyTarget)]))
-        let resolvedChangePredicate = try resolvedPredicate(changePredicate)
-        stream = stream.seedingBaseline(
-            .currentObservation,
-            from: baselineEvent,
-            when: resolvedChangePredicate.requiresChangeBaseline
-        )
-        let seeded = stream.reducing(
-            baselineObservation,
-            predicate: resolvedChangePredicate,
-            predicateExpression: changePredicate
-        )
-        stream = seeded.state
-
-        XCTAssertFalse(seeded.reduction.expectation.met)
-        XCTAssertEqual(
-            seeded.reduction.expectation.actual,
-            PredicateObservationDiagnostics.changePredicateNeedsFutureObservationMessage
-        )
-
-        let changedObservation = brains.actionEvidenceProjector.projectSettledEvidence(from: changedEvent)
-        let baseline = try XCTUnwrap(seeded.state.observationBaseline)
-        let changed = stream.reducing(
-            changedObservation,
-            predicate: resolvedChangePredicate,
-            predicateExpression: changePredicate,
-            eventsSinceBaseline: await observationStream.storeOwner.readLog {
-                $0.events(since: baseline)
-            }
-        )
-        let stateExpression = AccessibilityPredicate.exists(readyTarget)
-        let stateExpectation = PredicateEvaluation.evaluate(
-            try resolvedPredicate(stateExpression),
-            expression: stateExpression,
-            in: changed.reduction.evidence
-        )
-
-        XCTAssertTrue(stateExpectation.met)
-        XCTAssertTrue(changed.reduction.expectation.met)
-        XCTAssertEqual(changed.reduction.changeBaseline?.sequence, baselineObservation.event.sequence)
     }
 
     func testHeistIfNoOpsWhenImmediateObservationIsUnavailable() async throws {

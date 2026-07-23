@@ -145,13 +145,6 @@ extension Observation.Stream {
         await storeOwner.latestMoment(scope: scope)
     }
 
-    internal func moment(
-        scope: SemanticObservationScope,
-        at sequence: SettledObservationSequence
-    ) async -> Observation.Moment? {
-        await storeOwner.moment(scope: scope, at: sequence)
-    }
-
     internal func settledEvent(
         scope: SemanticObservationScope,
         after sequence: SettledObservationSequence?,

@@ -3,31 +3,14 @@
 import ThePlans
 import TheScore
 
-extension PredicateWait {
-    func selectPredicateCase(
-        _ cases: [ResolvedPredicateCaseRuntimeInput],
-        timeout _: Double
-    ) async -> HeistCaseSelectionResult {
-        let event = await vault.semanticObservationStream.settledEvent(
-            scope: cases.observationScope,
-            after: nil,
-            timeout: 0
-        )
-        return evaluatePredicateCases(
-            cases,
-            in: event.map { actionEvidenceProjector.projectSettledEvidence(from: $0) }
-        )
-    }
-}
-
 @MainActor
 func evaluatePredicateCases(
     _ cases: [ResolvedPredicateCaseRuntimeInput],
-    in observation: SettledObservationEvidence?
+    in event: Observation.SnapshotEvent?
 ) -> HeistCaseSelectionResult {
     let results = cases.map {
-        if let observation {
-            PredicateEvaluation.caseMatch($0, in: observation)
+        if let event {
+            PredicateEvaluation.caseMatch($0, in: event)
         } else {
             HeistCaseMatchResult(
                 predicate: $0.predicateExpression.rootPredicate,
@@ -40,7 +23,7 @@ func evaluatePredicateCases(
         cases: results,
         ifNone: .noMatch,
         elapsedMs: 0,
-        lastObservedSummary: observation?.summary
+        lastObservedSummary: event?.summary
     )
 }
 

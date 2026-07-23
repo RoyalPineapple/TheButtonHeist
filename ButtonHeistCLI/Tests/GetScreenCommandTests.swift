@@ -67,16 +67,16 @@ final class GetScreenCommandTests: XCTestCase {
             response: .ok(message: "done"),
             format: .json
         ))
-        let fallbackJSON = Data(
-            #"{"code":"formatting.json_encoding_failed","message":"encoding failed","status":"error"}"#.utf8
-        )
+        let fallbackText =
+            #"{"code":"formatting.json_encoding_failed","message":"encoding failed","status":"error"}"#
+        let fallbackJSON = Data(fallbackText.utf8)
 
         let rendered = CLIRunner.renderedOutput(
             for: result,
             jsonRenderer: { _ in fallbackJSON }
         )
 
-        XCTAssertEqual(rendered, .failedText(String(decoding: fallbackJSON, as: UTF8.self)))
+        XCTAssertEqual(rendered, .failedText(fallbackText))
         XCTAssertTrue(rendered.isFailure)
     }
 

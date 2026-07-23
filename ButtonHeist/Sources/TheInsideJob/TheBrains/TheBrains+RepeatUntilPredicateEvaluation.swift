@@ -6,85 +6,61 @@ import ThePlans
 import TheScore
 
 extension TheBrains.RepeatUntil {
-    internal struct Observation {
+    internal struct ObservedState {
         internal let boundary: Settlement.EvidenceBoundary
-        internal let traceEvidence: AccessibilityTraceEvidence?
         internal let summary: String?
 
         internal init(
             boundary: Settlement.EvidenceBoundary,
-            traceEvidence: AccessibilityTraceEvidence?,
             summary: String?
         ) {
             self.boundary = boundary
-            self.traceEvidence = traceEvidence
             self.summary = summary
         }
 
-        internal var trace: AccessibilityTrace? { traceEvidence?.trace }
-
-        internal init?(_ result: HeistWaitResult) {
-            guard let moment = result.observationMoment else { return nil }
+        internal init?(
+            settlement: Settlement.Result,
+            evidence: HeistSettlementEvidence
+        ) {
+            guard let moment = settlement.evidence.handoff.event?.moment else { return nil }
             boundary = Settlement.EvidenceBoundary(moment: moment)
-            traceEvidence = result.outcome.actionResult.traceEvidence
-            summary = result.observationSummary
+            summary = evidence.finalSummary
         }
 
-        internal init(_ observation: SettledObservationEvidence) {
-            boundary = Settlement.EvidenceBoundary(moment: observation.event.moment)
-            traceEvidence = AccessibilityTraceEvidence(
-                trace: observation.accessibilityTrace,
-                completeness: .incomplete
-            )
-            summary = observation.summary
+        internal init(_ event: Observation.SnapshotEvent) {
+            boundary = Settlement.EvidenceBoundary(moment: event.moment)
+            summary = event.summary
         }
     }
 
     internal struct MetCheck {
-        internal let observation: Observation
+        internal let observation: ObservedState
         internal let expectation: ExpectationResult.Met
-        internal let result: HeistWaitResult
     }
 
     internal struct UnmetCheck {
-        internal let observation: Observation
+        internal let observation: ObservedState
         internal let expectation: ExpectationResult.Unmet
-        internal let result: HeistWaitResult
     }
 
     internal enum ObservedCheck {
         case met(MetCheck)
         case unmet(UnmetCheck)
 
-        internal init?(
-            result: HeistWaitResult,
-            expectation: ExpectationResult? = nil
-        ) {
-            guard let observation = Observation(result) else { return nil }
-            self.init(
-                observation: observation,
-                check: expectation ?? result.outcome.expectation,
-                result: result
-            )
-        }
-
         internal init(
-            observation: Observation,
-            check: ExpectationResult,
-            result: HeistWaitResult
+            observation: ObservedState,
+            check: ExpectationResult
         ) {
             switch check {
             case .met(let expectation):
                 self = .met(MetCheck(
                     observation: observation,
-                    expectation: expectation,
-                    result: result
+                    expectation: expectation
                 ))
             case .unmet(let expectation):
                 self = .unmet(UnmetCheck(
                     observation: observation,
-                    expectation: expectation,
-                    result: result
+                    expectation: expectation
                 ))
             }
         }
@@ -94,9 +70,9 @@ extension TheBrains.RepeatUntil {
         case deadlineElapsed(ExpectationResult.Unmet)
         case met(MetCheck)
         case unmet(UnmetCheck)
-        case noProgress(observation: Observation?, expectation: ExpectationResult.Unmet, result: HeistWaitResult)
+        case noProgress(observation: ObservedState?, expectation: ExpectationResult.Unmet)
 
-        internal var observation: Observation? {
+        internal var observation: ObservedState? {
             switch self {
             case .deadlineElapsed:
                 return nil
@@ -104,7 +80,7 @@ extension TheBrains.RepeatUntil {
                 return check.observation
             case .unmet(let check):
                 return check.observation
-            case .noProgress(let observation, _, _):
+            case .noProgress(let observation, _):
                 return observation
             }
         }
@@ -151,7 +127,7 @@ extension TheBrains {
     internal func repeatUntilPostBodyCheck(
         context: RepeatUntil.Context,
         step: ResolvedRepeatUntilStep,
-        observation: RepeatUntil.Observation?,
+        observation: RepeatUntil.ObservedState?,
         iterationResults _: HeistPassingChildren,
         deadline: SemanticObservationDeadline
     ) async -> RepeatUntil.PostBodyCheck {
@@ -174,28 +150,36 @@ extension TheBrains {
                 actual: String(describing: error)
             ))
         }
-        let result: HeistWaitResult
+        let waitInput: ResolvedWaitRuntimeInput
+        let baseline: Settlement.Baseline
         if let observation {
-            result = await context.runtime.wait(.afterObservation(
-                .changedElements(timeout: progressTimeout),
-                baselineTrace: observation.trace,
-                moment: observation.boundary.moment
-            ))
+            waitInput = .changedElements(timeout: progressTimeout)
+            baseline = .supplied(observation.boundary)
         } else {
-            result = await context.runtime.wait(.baselineTraceOnly(
-                ResolvedWaitRuntimeInput(repeatUntil: step, timeout: progressTimeout),
-                trace: nil
-            ))
+            waitInput = ResolvedWaitRuntimeInput(repeatUntil: step, timeout: progressTimeout)
+            baseline = Settlement.Baseline.beforeTrigger(
+                observationMoment: nil,
+                predicate: waitInput.predicate
+            )
         }
+        let settlement = await context.runtime.wait(Settlement.Command(
+            observing: waitInput,
+            baseline: baseline
+        ))
+        let evidence = Settlement.ResultProjector.projectWait(settlement)
         let expectation = repeatUntilStopExpectation(
             authored: step.predicateExpression,
             resolved: step.predicate,
-            evidence: result.outcome.actionResult.traceEvidence,
-            fallback: result.outcome.actionResult.message ?? result.outcome.expectation.actual
+            evidence: evidence.actionResult.traceEvidence,
+            fallback: evidence.actionResult.message ?? evidence.expectation.actual
         )
         let stopCheck = expectation
-        let observedCheck = RepeatUntil.Observation(result).map {
-            RepeatUntil.ObservedCheck(observation: $0, check: stopCheck, result: result)
+        let observation = RepeatUntil.ObservedState(
+            settlement: settlement,
+            evidence: evidence
+        )
+        let observedCheck = observation.map {
+            RepeatUntil.ObservedCheck(observation: $0, check: stopCheck)
         }
         guard let check = observedCheck else {
             let noProgressExpectation: ExpectationResult.Unmet
@@ -203,28 +187,25 @@ extension TheBrains {
             case .met(let metExpectation):
                 noProgressExpectation = ExpectationResult.Unmet(
                     predicate: step.predicateExpression,
-                    actual: result.observationMoment == nil
-                        ? "repeat_until post-body check matched without settled observation"
-                        : (metExpectation.result.actual ?? "repeat_until post-body check made no progress")
+                    actual: metExpectation.result.actual
+                        ?? "repeat_until post-body check made no progress"
                 )
             case .unmet(let unmetExpectation):
                 noProgressExpectation = unmetExpectation
             }
             return .noProgress(
-                observation: RepeatUntil.Observation(result),
-                expectation: noProgressExpectation,
-                result: result
+                observation: nil,
+                expectation: noProgressExpectation
             )
         }
         switch check {
         case .met(let check):
             return .met(check)
         case .unmet(let check):
-            guard case .matched = result.outcome else {
+            guard evidence.outcome == .matched else {
                 return .noProgress(
                     observation: check.observation,
-                    expectation: check.expectation,
-                    result: result
+                    expectation: check.expectation
                 )
             }
             return .unmet(check)

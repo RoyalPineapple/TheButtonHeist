@@ -292,6 +292,14 @@ evidence. Observation effects may reveal a resolvable target or run canonical
 discovery; their graceful stop restores the authored viewport exit position
 before settlement finalizes.
 
+Heist-internal waits use the same command with an exact supplied Moment when
+the predicate spans an invocation or repeat body. Arming replays retained
+events after that Moment before delivering live events, so fast transitions
+between body execution and subscription are not lost. If the pre-body capture
+was unavailable, only a current-state presence predicate may establish a fresh
+post-body baseline; transition, announcement, and complete-history predicates
+fail without inventing earlier evidence.
+
 An action with `.expect(...)` uses the Moment and announcement position captured
 before dispatch. Current-state predicates must hold in the exact returned
 handoff snapshot. Positive transitions evaluate direct Log events strictly
@@ -458,10 +466,10 @@ and the wire decoder accepts only fields legal for its `type` and `outcome`.
 
 `ActionDispatchResult` is the one aggregate of app-side action dispatch. Its
 outcome is success, with an optional payload and resolved element id, or failure,
-with a typed failure kind. `InteractionCoordinator` coordinates settlement and
-combines that result with the evidence projected by `ActionEvidenceProjector`
+with a typed failure kind. `Settlement.ResultProjector` combines that dispatch
+evidence with the canonical observation events retained by `Observation.Store`
 to construct `ActionResult`; it does not translate through a second
-interaction-result model.
+interaction-result or observation model.
 
 `ActionResult.Payload` is the sole semantic action payload. Each case determines
 its `ActionMethod` and carries only the command-specific value legal for that
@@ -628,7 +636,7 @@ flowchart TD
     Result --> Project["Canonical result projector"]
     TimedOut --> Project
     Project --> ActionResult["ActionResult"]
-    Project --> WaitResult["HeistWaitEvidence"]
+    Project --> WaitResult["HeistSettlementEvidence"]
 
     Resolve -->|Action.until / RepeatUntil| LoopBaseline["Read baseline observation<br/>without evaluating stop predicate"]
     LoopBaseline --> RunBody["Run body action<br/>at least once"]
@@ -755,6 +763,10 @@ result shape, or wire field.
 arms the same event channels as an action, and performs no dispatch. Already
 committed current-state truth remains immediately evaluable, including with a
 zero timeout; transition predicates require a later Log event.
+
+An internal observation command may instead receive the exact Moment captured
+before its enclosing heist unit. The executor subscribes with replay after that
+Moment, preserving retained events committed before arming.
 
 Observation effects may reveal one already-resolvable target or run canonical
 viewport discovery. Discovery searches both directional rays and exits

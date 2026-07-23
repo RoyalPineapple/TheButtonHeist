@@ -145,6 +145,7 @@ final class SemanticObservationStoreTests: XCTestCase {
                 scopedScreenChangedThrough: 0,
                 gap: nil
             )),
+            keyboardVisible: nil,
             timestamp: Date(timeIntervalSince1970: 0)
         )
     }

@@ -71,6 +71,7 @@ final class SemanticObservationLifecycleTests: SemanticObservationStreamTestCase
                 scopedScreenChangedThrough: notificationBatch.scopedScreenChangedThrough,
                 gap: notificationBatch.gap
             )),
+            keyboardVisible: false,
             timestamp: timestamp
         ))
 
@@ -93,27 +94,6 @@ final class SemanticObservationLifecycleTests: SemanticObservationStreamTestCase
             return XCTFail("Expected discovery publication to continue the global lineage")
         }
         XCTAssertEqual(previous, visible.moment)
-    }
-
-    func testSettledCaptureRequiresExactScopeAndSequence() async throws {
-        let screen = observation(label: "Stable", heistId: "stable")
-        let initialDiscovery = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(screen)
-        let visibleCut = await vault.semanticObservationStream.commitVisibleObservationForTesting(screen)
-        _ = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(screen)
-
-        let resolvedMoment = await vault.semanticObservationStream.moment(
-            scope: .discovery,
-            at: initialDiscovery.sequence
-        )
-        let resolved = try XCTUnwrap(resolvedMoment)
-
-        XCTAssertEqual(resolved, initialDiscovery.moment)
-        XCTAssertEqual(resolved.capture.hash, initialDiscovery.trace.captures.last?.hash)
-        let visibleMoment = await vault.semanticObservationStream.moment(
-            scope: .discovery,
-            at: visibleCut.sequence
-        )
-        XCTAssertNil(visibleMoment)
     }
 
     func testLifecycleReplacementRetainsThePublishedEventAndItsExactLineage() async throws {
@@ -169,6 +149,44 @@ final class SemanticObservationLifecycleTests: SemanticObservationStreamTestCase
         guard case .screenBoundary = secondEvent.transition else {
             return XCTFail("Expected trigger evidence to be owned by the next screen boundary")
         }
+    }
+
+    func testFailedSettlementReleasesScreenChangedEvidenceForNextIdenticalCapture() async {
+        let screen = observation(label: "Stable", heistId: "stable")
+        let firstEvent = await vault.semanticObservationStream.commitVisibleObservationForTesting(screen)
+        let lifecycle = LiveSettlementLifecycle()
+        lifecycle.begin(
+            demand: vault.semanticObservationStream.beginActiveObservationDemand(),
+            notificationWindow: vault.accessibilityNotifications.beginActionWindow()
+        )
+        vault.accessibilityNotifications.recordForTesting(
+            code: 1000,
+            notificationData: .none,
+            associatedElement: .none
+        )
+
+        await lifecycle.quiesce()
+        let didFinalize = await lifecycle.finalize()
+        XCTAssertTrue(didFinalize)
+        XCTAssertEqual(
+            vault.accessibilityNotifications
+                .checkpoint(after: .origin, selection: .unclaimedScoped)
+                .events
+                .map(\.kind),
+            [.screenChanged]
+        )
+        let secondEvent = await vault.semanticObservationStream
+            .commitVisibleObservationForTesting(screen)
+
+        XCTAssertEqual(secondEvent.generation, firstEvent.generation.advanced())
+        XCTAssertEqual(
+            secondEvent.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
+            [.screenChanged]
+        )
+        guard case .screenBoundary(let previous) = secondEvent.transition else {
+            return XCTFail("Expected released screen-change evidence to establish a boundary")
+        }
+        XCTAssertEqual(previous, firstEvent.moment)
     }
 }
 #endif // DEBUG

@@ -20,7 +20,6 @@ final class TheBrains {
     let tripwire: TheTripwire
     let navigation: Navigation
     let actions: Actions
-    let actionEvidenceProjector: ActionEvidenceProjector
     let interactionCoordinator: InteractionCoordinator
     let failureEvidencePolicy: FailureEvidencePolicy
     private let requestExecutor: InteractionRequestExecutor
@@ -76,13 +75,14 @@ final class TheBrains {
         self.tripwire = tripwire
         self.failureEvidencePolicy = failureEvidencePolicy
         self.requestExecutor = requestExecutor ?? InteractionRequestExecutor()
-        let vault = TheVault(
-            tripwire: tripwire,
-            visibleObservationSource: visibleObservationSource
-        )
         let safecracker = TheSafecracker(
             fingerprintsEnabled: fingerprintsEnabled,
             keyboardInput: keyboardInput
+        )
+        let vault = TheVault(
+            tripwire: tripwire,
+            visibleObservationSource: visibleObservationSource,
+            keyboardVisibilitySource: { safecracker.isKeyboardVisible }
         )
         self.vault = vault
         self.safecracker = safecracker
@@ -98,13 +98,7 @@ final class TheBrains {
             tripwire: tripwire,
             navigation: navigation
         )
-        let actionEvidenceProjector = ActionEvidenceProjector(vault: vault, safecracker: safecracker)
-        self.actionEvidenceProjector = actionEvidenceProjector
-        self.interactionCoordinator = InteractionCoordinator(
-            vault: vault,
-            navigation: navigation,
-            actionEvidenceProjector: actionEvidenceProjector
-        )
+        self.interactionCoordinator = InteractionCoordinator(vault: vault)
     }
 
     func treeUnavailableResult(payload: ActionResult.Payload) async -> ActionResult {

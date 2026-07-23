@@ -6,36 +6,7 @@ import AccessibilitySnapshotParser
 import ThePlans
 import TheScore
 
-struct TimelineKey: Hashable, Sendable {
-    let label: String?
-    let identifier: String?
-    let frame: CoarseFrameKey
-}
-
-extension AccessibilityElement {
-    @MainActor
-    var timelineKey: TimelineKey {
-        timelineKey(bucket: CoarseFrameComparison.currentBucket)
-    }
-
-    @MainActor
-    func timelineKey(bucket: CGFloat) -> TimelineKey {
-        let masked = traits.contains(.updatesFrequently)
-        let frameKey = masked
-            ? CoarseFrameKey.masked
-            : ScreenFrameEvidence(shape).rect.map {
-                CoarseFrameComparison.key(for: $0.cgRect, bucket: bucket)
-            } ?? .unavailable
-        return TimelineKey(
-            label: label,
-            identifier: identifier,
-            frame: frameKey
-        )
-    }
-}
-
 @MainActor struct SettleObservationLedger {
-    private(set) var elementsByKey: [TimelineKey: AccessibilityElement] = [:]
     private(set) var currentGenerationLastObservation: SettleRecordedObservation?
     private(set) var latestChangeDescription: String?
     private let bucket: CGFloat
@@ -55,14 +26,9 @@ extension AccessibilityElement {
             )
         }
         previousElements = elements
-        for element in elements {
-            elementsByKey[element.timelineKey(bucket: bucket)] = element
-        }
         let recordedObservation = SettleRecordedObservation(
             observation: observation,
-            fingerprint: SettleTimeline.fingerprint(of: observation, bucket: bucket),
-            elementsByKey: elementsByKey,
-            instabilityDescription: latestChangeDescription
+            fingerprint: SettleTimeline.fingerprint(of: observation, bucket: bucket)
         )
         currentGenerationLastObservation = recordedObservation
         return recordedObservation
@@ -76,8 +42,6 @@ extension AccessibilityElement {
 struct SettleRecordedObservation {
     let observation: InterfaceObservation
     let fingerprint: Int
-    let elementsByKey: [TimelineKey: AccessibilityElement]
-    let instabilityDescription: String?
 
     var sample: SettleObservationSample {
         SettleObservationSample(fingerprint: fingerprint)
@@ -144,31 +108,6 @@ struct SettleRecordedObservation {
             for: CGRect(x: element.activationPoint.x, y: element.activationPoint.y, width: 0, height: 0),
             bucket: bucket
         ))
-    }
-
-    static func transientElements(
-        seenByKey: [TimelineKey: AccessibilityElement],
-        baseline: [AccessibilityElement],
-        final: [AccessibilityElement]
-    ) -> [AccessibilityElement] {
-        if seenByKey.isEmpty { return [] }
-        let baselineKeys = Set(baseline.map(\.timelineKey))
-        let finalKeys = Set(final.map(\.timelineKey))
-        let candidates = seenByKey.compactMap { key, element -> AccessibilityElement? in
-            (baselineKeys.contains(key) || finalKeys.contains(key)) ? nil : element
-        }
-        return candidates.sorted { lhs, rhs in
-            let lhsKey = lhs.timelineKey
-            let rhsKey = rhs.timelineKey
-            if lhsKey.frame.sortMinY != rhsKey.frame.sortMinY {
-                return lhsKey.frame.sortMinY < rhsKey.frame.sortMinY
-            }
-            if lhsKey.frame.sortMinX != rhsKey.frame.sortMinX {
-                return lhsKey.frame.sortMinX < rhsKey.frame.sortMinX
-            }
-            if (lhsKey.label ?? "") != (rhsKey.label ?? "") { return (lhsKey.label ?? "") < (rhsKey.label ?? "") }
-            return (lhsKey.identifier ?? "") < (rhsKey.identifier ?? "")
-        }
     }
 
     static func changeDescription(

@@ -706,6 +706,8 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             tripwire: TheTripwire(),
             visibleObservationSource: visibleObservationSource.capture
         )
+        let tripwireSignal = brains.tripwire.tripwireSignal()
+        brains.vault.semanticObservationStream.readTripwireSignal = { tripwireSignal }
         brains.tripwire.startPulse()
         await brains.startSemanticObservation()
         defer {

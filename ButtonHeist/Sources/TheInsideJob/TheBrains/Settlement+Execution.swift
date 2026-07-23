@@ -1353,7 +1353,7 @@ private extension Settlement.Trigger {
 
 private enum SettlementDiagnosisLogger {
     static func record(_ diagnosis: Settlement.Diagnosis) {
-        insideJobLogger.info("\(diagnosis.description, privacy: .public)")
+        insideJobLogger.debug("\(diagnosis.description, privacy: .public)")
     }
 }
 

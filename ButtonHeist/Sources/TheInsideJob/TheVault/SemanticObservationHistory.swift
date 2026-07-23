@@ -64,6 +64,11 @@ extension Observation {
         internal var notificationSequence: UInt64 { snapshot.notificationSequence }
         internal var trace: AccessibilityTrace { snapshot.trace }
         internal var previousMoment: Moment? { transition.previousMoment }
+        internal var summary: String {
+            let interfaceSummary = "interface: \(moment.capture.interface.projectedElements.count) elements"
+            guard let screenID = moment.capture.context.screenId else { return interfaceSummary }
+            return "screen: \(screenID); \(interfaceSummary)"
+        }
 
         internal var latestCaptureRef: AccessibilityTrace.CaptureRef? {
             trace.captures.last.map(AccessibilityTrace.CaptureRef.init(capture:))

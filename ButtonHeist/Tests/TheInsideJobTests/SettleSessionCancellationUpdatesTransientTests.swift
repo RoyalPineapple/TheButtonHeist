@@ -104,7 +104,6 @@ extension SettleSessionTests {
         } else {
             XCTFail("Spinner with .updatesFrequently must not block settle. Got \(outcome.outcome)")
         }
-        XCTAssertFalse(outcome.events.containsTripwireSignalChange)
     }
 
     func testUpdatesFrequentlyMaskingAlsoIgnoresFrameChanges() async {
@@ -136,88 +135,5 @@ extension SettleSessionTests {
         }
     }
 
-    func testTransientElementsExcludesBaselineAndFinal() {
-        let baseline = makeElement(label: "Baseline", traits: .staticText)
-        let final = makeElement(label: "Final", traits: .staticText)
-        let transient = makeElement(label: "Loading", traits: .staticText)
-
-        let seenByKey: [TimelineKey: AccessibilityElement] = [
-            baseline.timelineKey: baseline,
-            final.timelineKey: final,
-            transient.timelineKey: transient
-        ]
-
-        let result = SettleSession.transientElements(
-            seenByKey: seenByKey,
-            baseline: [baseline],
-            final: [final]
-        )
-
-        XCTAssertEqual(result.count, 1)
-        XCTAssertEqual(result.first?.label, "Loading")
-    }
-
-    func testTransientSpinnerCapturedOnCleanSameScreenSettle() async {
-        let content = makeElement(label: "Content", traits: .staticText)
-        let spinner = makeElement(label: "Loading", traits: .staticText)
-        let stable = makeParseResult([content])
-        let session = makeSession(
-            script: [
-                stable,
-                makeParseResult([content, spinner]),
-                stable,
-                stable
-            ],
-            cyclesRequired: 2
-        )
-
-        let outcome = await session.run(
-            start: RuntimeElapsed.now,
-            baselineTripwireSignal: tripwireSignal(topmostVC: nil)
-        )
-
-        if case .settled = outcome.outcome {
-            // Expected.
-        } else {
-            XCTFail("Expected clean same-screen settle, got \(outcome.outcome)")
-        }
-        XCTAssertFalse(outcome.events.containsTripwireSignalChange)
-        let transients = SettleSession.transientElements(
-            seenByKey: outcome.elementsByKey,
-            baseline: [content],
-            final: [content]
-        )
-        XCTAssertEqual(transients.map(\.label), ["Loading"])
-    }
-
-    func testTransientElementsOrderedByReadingOrder() {
-        let lowerLeft = makeElement(label: "B", frame: CGRect(x: 0, y: 100, width: 10, height: 10))
-        let upperLeft = makeElement(label: "A", frame: CGRect(x: 0, y: 0, width: 10, height: 10))
-        let upperRight = makeElement(label: "C", frame: CGRect(x: 50, y: 0, width: 10, height: 10))
-
-        let seenByKey: [TimelineKey: AccessibilityElement] = [
-            lowerLeft.timelineKey: lowerLeft,
-            upperRight.timelineKey: upperRight,
-            upperLeft.timelineKey: upperLeft
-        ]
-
-        let result = SettleSession.transientElements(
-            seenByKey: seenByKey,
-            baseline: [],
-            final: []
-        )
-
-        XCTAssertEqual(result.map(\.label), ["A", "C", "B"],
-                       "Reading order: top row left-to-right, then next row.")
-    }
-
-    func testTransientElementsReturnsEmptyWhenSeenIsEmpty() {
-        let result = SettleSession.transientElements(
-            seenByKey: [:],
-            baseline: [makeElement(label: "X")],
-            final: []
-        )
-        XCTAssertTrue(result.isEmpty)
-    }
 }
 #endif // canImport(UIKit)
