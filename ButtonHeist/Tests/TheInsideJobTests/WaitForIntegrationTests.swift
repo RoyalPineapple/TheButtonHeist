@@ -207,13 +207,13 @@ final class WaitForIntegrationTests: XCTestCase {
         )
 
         await insideJob.brains.vault.invalidateSettledObservationFromTripwire()
-        let event = await insideJob.brains.interactionCoordinator.settledEvent(
+        let settledEvent = await insideJob.brains.interactionCoordinator.settledEvent(
             scope: .visible,
             after: nil,
             timeout: 2.0
         )
 
-        let event = try XCTUnwrap(event)
+        let event = try XCTUnwrap(settledEvent)
         XCTAssertTrue(
             event.snapshot.observation.tree.orderedElements.contains { $0.element.label == "PassiveObservation-StableAX" },
             "Passive visible observation should publish a stable AX tree even while unrelated layer motion continues"
@@ -342,10 +342,11 @@ final class WaitForIntegrationTests: XCTestCase {
         visibleObservationOverride = firstObservation
         await insideJob.brains.vault.installObservationForTesting(firstObservation)
 
-        let first = try XCTUnwrap(try await waitFor(
+        let firstResult = try await waitFor(
             target: .label("Missing candidate"),
             timeout: 0.2
-        ))
+        )
+        let first = try XCTUnwrap(firstResult)
 
         let secondObservation = InterfaceObservation.makeForTests(elements: [(
             AccessibilityElement.make(
@@ -358,10 +359,11 @@ final class WaitForIntegrationTests: XCTestCase {
         visibleObservationOverride = secondObservation
         await insideJob.brains.vault.installObservationForTesting(secondObservation)
 
-        let second = try XCTUnwrap(try await waitFor(
+        let secondResult = try await waitFor(
             target: .label("Missing candidate"),
             timeout: 0.2
-        ))
+        )
+        let second = try XCTUnwrap(secondResult)
         let firstMessage = try XCTUnwrap(first.message)
         let secondMessage = try XCTUnwrap(second.message)
 

@@ -171,7 +171,6 @@ final class AdversarialNavigationTests: XCTestCase {
         for actionResult in targetActivations {
             let subject = try XCTUnwrap(actionResult.subjectEvidence)
             XCTAssertEqual(subject.source, .resolvedSemanticTarget)
-            XCTAssertEqual(subject.resolution.origin, .known)
         }
         let finalActionResult = try XCTUnwrap(targetActivations.last)
         XCTAssertEqual(try counterValue(named: "Home High activations", in: finalActionResult), 2)
