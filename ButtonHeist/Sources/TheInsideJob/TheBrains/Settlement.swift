@@ -841,22 +841,14 @@ extension Settlement {
     internal enum State: Sendable {
         case awaitingBaseline(Command)
         case armed(Session)
-        case dispatching(Session)
-        case observing(Session)
-        case needHandoff(Session)
-        case completed(Result)
-        case failed(Result)
-        case timedOut(Result)
-        case cancelled(Result)
+        case active(Session)
+        case terminal(Result)
 
         internal var result: Result? {
             switch self {
-            case .completed(let result),
-                 .failed(let result),
-                 .timedOut(let result),
-                 .cancelled(let result):
+            case .terminal(let result):
                 result
-            case .awaitingBaseline, .armed, .dispatching, .observing, .needHandoff:
+            case .awaitingBaseline, .armed, .active:
                 nil
             }
         }
