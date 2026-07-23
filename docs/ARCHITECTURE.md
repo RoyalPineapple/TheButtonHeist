@@ -147,7 +147,10 @@ The executor captures the invocation baseline, arms observation,
 announcement, readiness, and deadline delivery, and only then dispatches an
 action. Every capture follows capture → admit → commit → publish → evaluate.
 `Settlement.Reducer` owns the explicit state machine and produces typed effects;
-boundary code alone performs UIKit work.
+boundary code alone performs UIKit work. `Settlement.State` has exactly four
+structural phases: `awaitingBaseline`, `armed`, `active`, and `terminal`.
+`Settlement.Session` is the sole active evidence aggregate, and
+`Settlement.Result.outcome` is the sole terminal classifier.
 
 One pure `ScreenClassifier` combines typed snapshots with scoped
 `screenChanged`, `elementChanged`, and `announcement` notifications.
@@ -430,7 +433,7 @@ pipelines are explicit:
 | Result interpretation | `HeistReport.project(result:)` in `HeistResult+Report.swift` | JSON, compact, human, JUnit, doctor, and metric renderers |
 | Result recording decision | `HeistResult.Outcome` and `HeistResultRecordingMode` | `HeistResultRecording` filesystem boundary |
 | Offline validation algebra | `HeistValidation.Result<Value>` composed by `HeistValidation.Report` | Public JSON and text projections |
-| Settlement lifecycle | `Settlement.State`, `Settlement.Reducer`, and `Settlement.Executor` | Actions and observation-only waits provide typed commands; boundaries perform effects |
+| Settlement lifecycle | `Settlement.State` (`awaitingBaseline`, `armed`, `active`, `terminal`); `Settlement.Session` owns active evidence and `Settlement.Result.outcome` owns terminal classification | `Settlement.Reducer` produces transitions and effects; `Settlement.Executor` performs effects for actions and observation-only waits |
 | Semantic observation scheduling | `Observation.Stream` in `SemanticObservationStream.swift` | Capture scheduling, publication, and observation demand |
 | Semantic observation state | `Observation.StoreOwner` and `Observation.Store` | Actor-owned atomic commit of graph, Log, lineage, positions, and admitted-read state |
 | Semantic observation history | `Observation.Log` in `SemanticObservationHistory.swift` | Private collection indices, Moments, direct `events(since:)`, retention, and typed gaps |
