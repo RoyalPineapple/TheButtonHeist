@@ -11,6 +11,81 @@ import ButtonHeistTestSupport
 
 @MainActor
 final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
+    func testReplayRelayDeliversEveryRetainedSnapshotInOrder() async {
+        let stream = vault.semanticObservationStream
+        let first = await stream.commitVisibleObservationForTesting(
+            observation(label: "First", heistId: "first")
+        )
+        let second = await stream.commitVisibleObservationForTesting(
+            observation(label: "Second", heistId: "second")
+        )
+        var received: [Observation.Event] = []
+        let relay = ObservationReplayRelay(
+            receiveEvent: { received.append($0) },
+            receiveUnavailable: { _ in XCTFail("Expected retained history") }
+        )
+
+        relay.replay(.events([.snapshot(first), .snapshot(second)]))
+
+        XCTAssertEqual(received, [.snapshot(first), .snapshot(second)])
+    }
+
+    func testReplayRelayDeduplicatesSubscriptionHandoff() async {
+        let stream = vault.semanticObservationStream
+        let retained = await stream.commitVisibleObservationForTesting(
+            observation(label: "Retained", heistId: "retained")
+        )
+        let raced = await stream.commitVisibleObservationForTesting(
+            observation(label: "Raced", heistId: "raced")
+        )
+        var received: [Observation.Event] = []
+        let relay = ObservationReplayRelay(
+            receiveEvent: { received.append($0) },
+            receiveUnavailable: { _ in XCTFail("Expected retained history") }
+        )
+
+        relay.receive(.snapshot(raced))
+        relay.replay(.events([.snapshot(retained), .snapshot(raced)]))
+
+        XCTAssertEqual(received, [.snapshot(retained), .snapshot(raced)])
+    }
+
+    func testReplayRelayReportsExpiredHistoryBeforeBufferedDelivery() async {
+        let stream = vault.semanticObservationStream
+        await stream.storeOwner.reset(retentionLimit: 2)
+        let baseline = await stream.commitVisibleObservationForTesting(
+            observation(label: "Baseline", heistId: "baseline")
+        )
+        _ = await stream.commitVisibleObservationForTesting(
+            observation(label: "First", heistId: "first")
+        )
+        _ = await stream.commitVisibleObservationForTesting(
+            observation(label: "Second", heistId: "second")
+        )
+        let latest = await stream.commitVisibleObservationForTesting(
+            observation(label: "Latest", heistId: "latest")
+        )
+        let history = await stream.events(since: baseline.moment, scope: .visible)
+        guard case .expired = history else {
+            return XCTFail("Expected baseline history to expire")
+        }
+        var received: [Observation.Event] = []
+        var unavailable: [Observation.EventsSince] = []
+        let relay = ObservationReplayRelay(
+            receiveEvent: {
+                XCTAssertEqual(unavailable.count, 1)
+                received.append($0)
+            },
+            receiveUnavailable: { unavailable.append($0) }
+        )
+
+        relay.receive(.snapshot(latest))
+        relay.replay(history)
+
+        XCTAssertEqual(unavailable, [history])
+        XCTAssertEqual(received, [.snapshot(latest)])
+    }
+
     func testIndependentStreamReplaysDoNotShareProgress() async throws {
         let screen = observation(label: "Stable", heistId: "stable")
         let baseline = await vault.semanticObservationStream.commitVisibleObservationForTesting(screen)

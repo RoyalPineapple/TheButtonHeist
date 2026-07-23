@@ -6,10 +6,36 @@ import TheScore
 extension Settlement {
     internal enum Reducer {
         internal static func begin(_ command: Command) -> Decision {
-            Decision(
-                state: .awaitingBaseline(command),
-                effects: [.capture(.baseline(command.observationScope))]
-            )
+            switch command.baseline {
+            case .capture:
+                Decision(
+                    state: .awaitingBaseline(command),
+                    effects: [.capture(.baseline(command.observationScope))]
+                )
+            case .supplied(let boundary):
+                Decision(
+                    state: .armed(Settlement.Session(
+                        command: command,
+                        boundary: boundary,
+                        timing: Settlement.ExecutionTiming(),
+                        elapsed: 0
+                    )),
+                    effects: [.arm(Settlement.Arming(
+                        boundary: boundary,
+                        observationScope: command.observationScope,
+                        deadline: command.deadline
+                    ))]
+                )
+            case .unavailable(let failure):
+                terminalBeforeBaseline(
+                    command: command,
+                    boundary: .unavailable(failure),
+                    outcome: .baselineUnavailable,
+                    timing: Settlement.ExecutionTiming(),
+                    elapsed: 0,
+                    deadlineReached: false
+                )
+            }
         }
 
         internal static func reduce(_ state: State, event: Event) -> Decision {

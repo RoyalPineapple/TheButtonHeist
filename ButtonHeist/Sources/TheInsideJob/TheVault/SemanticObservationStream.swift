@@ -412,16 +412,5 @@ extension Observation.Stream {
     }
 }
 
-private extension Observation.Event {
-    func canFulfill(_ scope: SemanticObservationScope) -> Bool {
-        switch self {
-        case .snapshot(let event):
-            event.scope.canFulfill(scope)
-        case .announcement:
-            true
-        }
-    }
-}
-
 #endif // DEBUG
 #endif // canImport(UIKit)

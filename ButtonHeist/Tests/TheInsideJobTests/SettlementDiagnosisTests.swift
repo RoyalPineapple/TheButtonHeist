@@ -67,7 +67,10 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
                 diagnosis.announcementCursors,
                 name == "tree unavailable"
                     ? .unavailable
-                    : .bounded(after: 4, through: announcement.announcement.sequence),
+                    : .bounded(
+                        after: baseline.notificationSequence,
+                        through: announcement.announcement.sequence
+                    ),
                 name
             )
         }
@@ -402,10 +405,7 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
             outcome: outcome,
             evidence: Settlement.Evidence(
                 command: command,
-                boundary: boundary ?? .established(.init(
-                    moment: baseline.moment,
-                    announcementCursor: .init(sequence: 4)
-                )),
+                boundary: boundary ?? .established(.init(moment: baseline.moment)),
                 trigger: trigger,
                 predicate: predicateEvidence,
                 readiness: readiness,
@@ -513,10 +513,6 @@ private final class AutomaticTimeoutDiagnosisBoundary: SettlementExecutionBounda
     ) async -> Settlement.CaptureAdmissionOutcome {
         lock.withLock { state.snapshot.admissions += 1 }
         return .admitted(capture)
-    }
-
-    func announcementCursor() async -> AccessibilityNotificationCursor {
-        .origin
     }
 
     func events(since _: Observation.Moment) async -> Observation.EventsSince {

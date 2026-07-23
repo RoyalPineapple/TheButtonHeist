@@ -16,16 +16,29 @@ extension Settlement {
         internal let trigger: Trigger
         internal let predicate: Predicate?
         internal let deadline: Deadline
+        internal let baseline: Baseline
 
-        internal init(trigger: Trigger, predicate: Predicate?, deadline: Deadline) {
+        internal init(
+            trigger: Trigger,
+            predicate: Predicate?,
+            deadline: Deadline,
+            baseline: Baseline = .capture
+        ) {
             self.trigger = trigger
             self.predicate = predicate
             self.deadline = deadline
+            self.baseline = baseline
         }
 
         internal var observationScope: SemanticObservationScope {
             predicate?.observationScope ?? .visible
         }
+    }
+
+    internal enum Baseline: Sendable, Equatable {
+        case capture
+        case supplied(EvidenceBoundary)
+        case unavailable(Capture.Failure)
     }
 
     internal enum Trigger: Sendable, Equatable {
@@ -73,14 +86,15 @@ extension Settlement {
 
     internal struct EvidenceBoundary: Sendable, Equatable {
         internal let moment: Observation.Moment
-        internal let announcementCursor: AccessibilityNotificationCursor
 
-        internal init(
-            moment: Observation.Moment,
-            announcementCursor: AccessibilityNotificationCursor
-        ) {
+        internal init(moment: Observation.Moment) {
             self.moment = moment
-            self.announcementCursor = announcementCursor
+        }
+
+        internal var announcementCursor: AccessibilityNotificationCursor {
+            AccessibilityNotificationCursor(
+                sequence: moment.snapshot.notificationSequence
+            )
         }
     }
 }

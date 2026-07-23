@@ -100,6 +100,15 @@ extension TheBrains {
         _ step: ResolvedWaitRuntimeInput,
         startedAt: RuntimeElapsed.Instant = RuntimeElapsed.now
     ) async -> HeistWaitResult {
+        await executeSettlementWait(step, startedAt: startedAt)
+    }
+
+    /// Executes a wait through the canonical settlement state machine.
+    func executeSettlementWait(
+        _ step: ResolvedWaitRuntimeInput,
+        startedAt: RuntimeElapsed.Instant = RuntimeElapsed.now,
+        baseline: Settlement.Baseline = .capture
+    ) async -> HeistWaitResult {
         let command = Settlement.Command(
             trigger: .observation,
             predicate: Settlement.Predicate(
@@ -108,7 +117,8 @@ extension TheBrains {
             ),
             deadline: Settlement.Deadline(
                 instant: startedAt.advanced(by: .seconds(step.timeout.seconds))
-            )
+            ),
+            baseline: baseline
         )
         let discoveryDeadline = SemanticObservationDeadline(
             start: startedAt,

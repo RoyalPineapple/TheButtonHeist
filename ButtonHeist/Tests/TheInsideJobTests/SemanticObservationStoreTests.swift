@@ -57,6 +57,31 @@ final class SemanticObservationStoreTests: XCTestCase {
         XCTAssertEqual(store.latestMoment(scope: .discovery), discovery.moment)
     }
 
+    func testHistoryProjectionKeepsOnlyEventsThatFulfillTheRequestedScope() throws {
+        var store = Observation.Store()
+        let baseline = try commit(scope: .visible, in: &store)
+        _ = try commit(scope: .visible, in: &store)
+        let discovery = try commit(scope: .discovery, in: &store)
+
+        XCTAssertEqual(
+            store.log.events(since: baseline.moment).projected(for: .discovery),
+            .events([.snapshot(discovery)])
+        )
+    }
+
+    func testSettlementBoundaryDerivesAnnouncementCursorFromItsMoment() throws {
+        var log = Observation.Log(retentionLimit: 1)
+        let event = try log.record(
+            snapshot: snapshot(sequence: 4),
+            continuity: .sameGeneration
+        )
+
+        XCTAssertEqual(
+            Settlement.EvidenceBoundary(moment: event.moment).announcementCursor.sequence,
+            event.notificationSequence
+        )
+    }
+
     func testLogConformsToCollectionWithOpaqueMonotonicIndices() throws {
         var log = Observation.Log(retentionLimit: 3)
         let first = try log.record(snapshot: snapshot(sequence: 1), continuity: .sameGeneration)

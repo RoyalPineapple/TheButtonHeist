@@ -79,6 +79,7 @@ extension Settlement {
 
     fileprivate enum ExecutionInput: Sendable {
         case observation(Observation.Event)
+        case observationHistoryUnavailable(Observation.EventsSince)
         case announcement(Observation.AnnouncementEvent)
         case announcementHistoryUnavailable(AccessibilityNotificationGap)
         case readiness(Readiness.Signal)
@@ -107,7 +108,6 @@ internal protocol SettlementExecutionBoundary: Sendable {
         for request: Settlement.Capture.Request
     ) async -> Settlement.CaptureAdmissionOutcome
 
-    func announcementCursor() async -> AccessibilityNotificationCursor
     func events(since moment: Observation.Moment) async -> Observation.EventsSince
     @MainActor
     func beginSettlement(_ arming: Settlement.Arming) async
@@ -169,6 +169,10 @@ extension Settlement {
             _ gap: AccessibilityNotificationGap
         ) {
             record(.announcementHistoryUnavailable(gap))
+        }
+
+        internal func observeHistoryUnavailable(_ history: Observation.EventsSince) {
+            record(.observationHistoryUnavailable(history))
         }
 
         internal func observeReadiness(_ signal: Readiness.Signal) {
@@ -305,6 +309,7 @@ private extension Settlement.ExecutionInput {
         case .readiness(.invalidated):
             .readinessInvalidated
         case .observation,
+             .observationHistoryUnavailable,
              .announcement,
              .announcementHistoryUnavailable,
              .deadlineReached,
@@ -590,13 +595,9 @@ extension Settlement {
             let startedAt = RuntimeElapsed.now
             switch await capture(request) {
             case .admitted(let event):
-                let cursor = await boundary.announcementCursor()
                 return await reduce(
                     state,
-                    fact: .baselineAdmitted(.init(
-                        moment: event.moment,
-                        announcementCursor: cursor
-                    )),
+                    fact: .baselineAdmitted(.init(moment: event.moment)),
                     timing: ExecutionTiming(
                         beforeObservationMs: RuntimeElapsed.milliseconds(since: startedAt)
                     )
@@ -636,6 +637,8 @@ extension Settlement {
                     event: event,
                     history: await boundary.events(since: baseline)
                 ))
+            case .observationHistoryUnavailable(let history):
+                return .observationHistoryUnavailable(history)
             case .observation(.announcement(let event)), .announcement(let event):
                 return .announcementObserved(event)
             case .announcementHistoryUnavailable(let gap):
@@ -896,14 +899,11 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
         .admitted(capture)
     }
 
-    internal func announcementCursor() async -> AccessibilityNotificationCursor {
-        vault.accessibilityNotifications.cursor()
-    }
-
     internal func events(since moment: Observation.Moment) async -> Observation.EventsSince {
-        await vault.semanticObservationStream.storeOwner.readLog {
-            $0.events(since: moment)
-        }
+        await vault.semanticObservationStream.events(
+            since: moment,
+            scope: command.observationScope
+        )
     }
 
     @MainActor
@@ -922,9 +922,11 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
         _ arming: Settlement.Arming,
         sink: Settlement.ExecutionSink
     ) async {
-        let subscription = vault.semanticObservationStream.subscribe(
+        let subscription = await vault.semanticObservationStream.subscribe(
             scope: arming.observationScope,
-            receive: sink.observe
+            replayingAfter: arming.boundary.moment,
+            receive: sink.observe,
+            historyUnavailable: sink.observeHistoryUnavailable
         )
         lifecycle.retain(subscription)
     }

@@ -145,8 +145,8 @@ extension Observation {
         }
 
         internal mutating func settlementDidArm(at moment: Moment) {
-            guard case .events = log.events(since: moment) else {
-                preconditionFailure("Settlement cannot arm from unavailable observation history")
+            if case .unavailable = log.events(since: moment) {
+                preconditionFailure("Settlement boundary belongs to a different observation log")
             }
             precondition(
                 !activeSettlementBoundaries.contains(moment),

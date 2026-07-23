@@ -139,7 +139,6 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
         XCTAssertEqual(boundary.operations, [
             .captureBaseline,
             .admitBaseline,
-            .announcementCursor,
             .beginSettlement,
             .armObservation,
             .armAnnouncement,
@@ -465,128 +464,6 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
         XCTAssertTrue(boundary.captureGenerations.isEmpty)
     }
 
-    func testSuppliedBaselineReplaysEveryRetainedSnapshotInOrder() async throws {
-        let baseline = await commit(label: "Baseline")
-        let first = await commit(label: "First")
-        let second = await commit(label: "Second")
-        let predicate = try settlementPredicate(.exists(.label("Second")))
-        let command = Settlement.Command(
-            trigger: .observation,
-            predicate: predicate,
-            deadline: .init(instant: ContinuousClock.now.advanced(by: .seconds(1))),
-            baseline: .supplied(.init(
-                moment: baseline.moment,
-                announcementCursor: .origin
-            ))
-        )
-        let boundary = ScriptedSettlementBoundary(
-            baseline: baseline,
-            changed: second,
-            history: .events([.snapshot(first), .snapshot(second)]),
-            liveObservationBoundary: liveBoundary(for: command),
-            replayCompletionMoment: second.moment
-        )
-
-        let result = await Settlement.Executor(boundary: boundary).execute(command)
-
-        XCTAssertEqual(result.outcome, .settled)
-        XCTAssertFalse(boundary.operations.contains(.captureBaseline))
-        XCTAssertEqual(
-            result.evidence.predicate.responses.map(\.target),
-            [.observation(first.moment), .observation(second.moment)]
-        )
-        XCTAssertEqual(boundary.evaluatedMoments.count, 2)
-        XCTAssertTrue(boundary.evaluatedMoments.contains(first.moment))
-        XCTAssertTrue(boundary.evaluatedMoments.contains(second.moment))
-        XCTAssertEqual(result.evidence.handoff.event?.moment, second.moment)
-    }
-
-    func testSnapshotAcrossSubscriptionReplayHandoffIsEvaluatedExactlyOnce() async throws {
-        let baseline = await commit(label: "Baseline")
-        let gate = SettlementCommitDeliveryGate(blockingOrder: 2)
-        vault.semanticObservationStream.beforeCommittedDelivery = { token in
-            await gate.suspend(order: token.order)
-        }
-        defer {
-            vault.semanticObservationStream.beforeCommittedDelivery = { _ in }
-        }
-        let commitTask = Task { @MainActor in
-            await self.commit(label: "Raced")
-        }
-        await gate.waitUntilEntered()
-        let latestCommitted = await vault.semanticObservationStream.latestCommittedEvent()
-        let raced = try XCTUnwrap(latestCommitted)
-        let predicate = try settlementPredicate(.exists(.label("Raced")))
-        let command = Settlement.Command(
-            trigger: .observation,
-            predicate: predicate,
-            deadline: .init(instant: ContinuousClock.now.advanced(by: .seconds(1))),
-            baseline: .supplied(.init(
-                moment: baseline.moment,
-                announcementCursor: .origin
-            ))
-        )
-        let boundary = ScriptedSettlementBoundary(
-            baseline: baseline,
-            changed: raced,
-            history: .events([.snapshot(raced)]),
-            liveObservationBoundary: liveBoundary(for: command),
-            replayCompletionMoment: raced.moment,
-            beforeReadiness: {
-                await gate.release()
-                _ = await commitTask.value
-            }
-        )
-
-        let result = await Settlement.Executor(boundary: boundary).execute(command)
-        let committed = await commitTask.value
-
-        XCTAssertEqual(result.outcome, .settled)
-        XCTAssertEqual(boundary.evaluatedMoments, [raced.moment])
-        XCTAssertEqual(committed.moment, raced.moment)
-    }
-
-    func testExpiredSuppliedHistoryBecomesTypedSettlementUnavailability() async throws {
-        await vault.semanticObservationStream.storeOwner.reset(retentionLimit: 2)
-        let baseline = await commit(label: "Baseline")
-        _ = await commit(label: "First")
-        _ = await commit(label: "Second")
-        let latest = await commit(label: "Latest")
-        let history = await vault.semanticObservationStream.storeOwner.readLog {
-            $0.events(since: baseline.moment)
-        }
-        guard case .expired(let expectedGap) = history else {
-            return XCTFail("Expected the supplied boundary to predate retained history")
-        }
-        let command = Settlement.Command(
-            trigger: .observation,
-            predicate: try transitionPredicate(),
-            deadline: .init(instant: ContinuousClock.now.advanced(by: .milliseconds(50))),
-            baseline: .supplied(.init(
-                moment: baseline.moment,
-                announcementCursor: .origin
-            ))
-        )
-        let boundary = ScriptedSettlementBoundary(
-            baseline: baseline,
-            changed: latest,
-            history: history,
-            liveObservationBoundary: liveBoundary(for: command),
-            replayCompletionMoment: latest.moment,
-            replaySatisfiesAtCompletion: false
-        )
-
-        let result = await Settlement.Executor(boundary: boundary).execute(command)
-
-        XCTAssertEqual(result.outcome, .timedOut)
-        XCTAssertEqual(
-            result.evidence.predicate.unavailability,
-            .historyExpired(expectedGap)
-        )
-        XCTAssertEqual(result.evidence.observationHistory, .expired(expectedGap))
-        XCTAssertFalse(boundary.operations.contains(.captureBaseline))
-    }
-
     private func observationCommand() -> Settlement.Command {
         Settlement.Command(
             trigger: .observation,
@@ -600,37 +477,6 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
             trigger: .action(.dismiss),
             predicate: nil,
             deadline: .init(instant: ContinuousClock.now.advanced(by: .seconds(1)))
-        )
-    }
-
-    private func settlementPredicate(
-        _ authored: AccessibilityPredicate
-    ) throws -> Settlement.Predicate {
-        Settlement.Predicate(
-            authored: authored,
-            resolved: try authored.resolve(in: HeistExecutionEnvironment())
-        )
-    }
-
-    private func transitionPredicate() throws -> Settlement.Predicate {
-        let authored = AccessibilityPredicate.changed(.elements())
-        return Settlement.Predicate(
-            authored: authored,
-            resolved: try authored.resolve(in: HeistExecutionEnvironment())
-        )
-    }
-
-    private func liveBoundary(
-        for command: Settlement.Command
-    ) -> LiveSettlementExecutionBoundary {
-        LiveSettlementExecutionBoundary(
-            command: command,
-            vault: vault,
-            tripwire: vault.tripwire,
-            dispatch: { _ in
-                preconditionFailure("Observation settlement cannot dispatch")
-            },
-            observationEffects: { _ in }
         )
     }
 
@@ -730,44 +576,6 @@ private final class DispatchReadinessProbe {
     }
 }
 
-private actor SettlementCommitDeliveryGate {
-    private let blockingOrder: UInt64
-    private var entered = false
-    private var released = false
-    private var entryWaiters: [CheckedContinuation<Void, Never>] = []
-    private var releaseWaiter: CheckedContinuation<Void, Never>?
-
-    init(blockingOrder: UInt64) {
-        self.blockingOrder = blockingOrder
-    }
-
-    func suspend(order: UInt64) async {
-        guard order == blockingOrder else { return }
-        entered = true
-        let waiters = entryWaiters
-        entryWaiters.removeAll()
-        waiters.forEach { $0.resume() }
-        guard !released else { return }
-        await withCheckedContinuation { continuation in
-            releaseWaiter = continuation
-        }
-    }
-
-    func waitUntilEntered() async {
-        guard !entered else { return }
-        await withCheckedContinuation { continuation in
-            entryWaiters.append(continuation)
-        }
-    }
-
-    func release() {
-        guard !released else { return }
-        released = true
-        releaseWaiter?.resume()
-        releaseWaiter = nil
-    }
-}
-
 /// `NSLock` protects the complete mutable `state` value: operations, sink,
 /// capture generations, admission generations, and arming continuations.
 private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @unchecked Sendable {
@@ -786,7 +594,6 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
     enum Operation: Equatable {
         case captureBaseline
         case admitBaseline
-        case announcementCursor
         case beginSettlement
         case armObservation
         case armAnnouncement
@@ -824,7 +631,6 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         var outsideLeaseWakeupCount = 0
         var activeChildLeaseCount = 0
         var viewportMutationCount = 0
-        var evaluatedMoments: [Observation.Moment] = []
     }
 
     private let lock = NSLock()
@@ -839,10 +645,6 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
     private let publishesAfterDisarm: Bool
     private let longRunningObservationEffects: Bool
     private let captureScenario: CaptureScenario
-    private let liveObservationBoundary: LiveSettlementExecutionBoundary?
-    private let replayCompletionMoment: Observation.Moment?
-    private let replaySatisfiesAtCompletion: Bool
-    private let beforeReadiness: @MainActor @Sendable () async -> Void
 
     init(
         baseline: Observation.SnapshotEvent,
@@ -854,11 +656,7 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         slowDispatchDeadline: Bool = false,
         publishesAfterDisarm: Bool = false,
         longRunningObservationEffects: Bool = false,
-        captureScenario: CaptureScenario = .none,
-        liveObservationBoundary: LiveSettlementExecutionBoundary? = nil,
-        replayCompletionMoment: Observation.Moment? = nil,
-        replaySatisfiesAtCompletion: Bool = true,
-        beforeReadiness: @escaping @MainActor @Sendable () async -> Void = {}
+        captureScenario: CaptureScenario = .none
     ) {
         self.baseline = baseline
         self.changed = changed
@@ -870,10 +668,6 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         self.publishesAfterDisarm = publishesAfterDisarm
         self.longRunningObservationEffects = longRunningObservationEffects
         self.captureScenario = captureScenario
-        self.liveObservationBoundary = liveObservationBoundary
-        self.replayCompletionMoment = replayCompletionMoment
-        self.replaySatisfiesAtCompletion = replaySatisfiesAtCompletion
-        self.beforeReadiness = beforeReadiness
     }
 
     var operations: [Operation] {
@@ -914,10 +708,6 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
 
     var viewportMutationCount: Int {
         lock.withLock { state.viewportMutationCount }
-    }
-
-    var evaluatedMoments: [Observation.Moment] {
-        lock.withLock { state.evaluatedMoments }
     }
 
     func waitUntilArmed() async {
@@ -985,35 +775,21 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         }
     }
 
-    func announcementCursor() async -> AccessibilityNotificationCursor {
-        record(.announcementCursor)
-        return .origin
-    }
-
-    func events(since moment: Observation.Moment) async -> Observation.EventsSince {
-        if let liveObservationBoundary {
-            return await liveObservationBoundary.events(since: moment)
-        }
+    func events(since _: Observation.Moment) async -> Observation.EventsSince {
         return history
     }
 
-    func beginSettlement(_ arming: Settlement.Arming) async {
-        if let liveObservationBoundary {
-            await liveObservationBoundary.beginSettlement(arming)
-        }
+    func beginSettlement(_: Settlement.Arming) async {
         record(.beginSettlement)
     }
 
     func armObservations(
-        _ arming: Settlement.Arming,
+        _: Settlement.Arming,
         sink: Settlement.ExecutionSink
     ) async {
         lock.withLock {
             state.sink = sink
             state.operations.append(.armObservation)
-        }
-        if let liveObservationBoundary {
-            await liveObservationBoundary.armObservations(arming, sink: sink)
         }
     }
 
@@ -1032,15 +808,6 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         sink: Settlement.ExecutionSink
     ) async {
         record(.armReadiness)
-        if let replayCompletionMoment {
-            await beforeReadiness()
-            sink.observeReadiness(.established(
-                path: .uikitIdle,
-                observationBoundary: .including(replayCompletionMoment)
-            ))
-            XCTAssertEqual(arming.boundary.moment, baseline.moment)
-            return
-        }
         if observationOnlyEvidence {
             sink.observe(.snapshot(changed))
         } else if case .none = captureScenario {
@@ -1056,7 +823,7 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
     }
 
     func armDeadline(
-        _ arming: Settlement.Arming,
+        _: Settlement.Arming,
         sink: Settlement.ExecutionSink
     ) async {
         let waiters = lock.withLock {
@@ -1065,9 +832,7 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
             return state.armingWaiters
         }
         waiters.forEach { $0.resume() }
-        if let liveObservationBoundary {
-            await liveObservationBoundary.armDeadline(arming, sink: sink)
-        } else if deadlineOnArm {
+        if deadlineOnArm {
             sink.reachDeadline()
         } else if slowDispatchDeadline {
             Task {
@@ -1103,7 +868,7 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         }
     }
 
-    func quiesceSettlement(_ arming: Settlement.Arming) async {
+    func quiesceSettlement(_: Settlement.Arming) async {
         record(.quiesce)
         let (sink, control, observationEffectsTask) = lock.withLock {
             defer {
@@ -1135,15 +900,9 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
                 observationBoundary: .including(changed.moment)
             ))
         }
-        if let liveObservationBoundary {
-            await liveObservationBoundary.quiesceSettlement(arming)
-        }
     }
 
-    func finalizeSettlement(_ arming: Settlement.Arming) async {
-        if let liveObservationBoundary {
-            await liveObservationBoundary.finalizeSettlement(arming)
-        }
+    func finalizeSettlement(_: Settlement.Arming) async {
         record(.finalize)
     }
 
@@ -1198,13 +957,6 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
             return PredicateEvaluationResult(met: true)
         }
         record(.evaluateObservation)
-        if let replayCompletionMoment,
-           case .observation(let moment) = request.target {
-            lock.withLock { state.evaluatedMoments.append(moment) }
-            return PredicateEvaluationResult(
-                met: replaySatisfiesAtCompletion && moment == replayCompletionMoment
-            )
-        }
         return PredicateEvaluationResult(met: false)
     }
 

@@ -146,7 +146,19 @@ extension TheBrains {
                     switch request {
                     case .standalone(let step, let startedAt):
                         return await brains.executeStandaloneWait(step, startedAt: startedAt)
-                    case .actionEndpoint, .immediate, .afterObservation, .baselineTraceOnly:
+                    case .afterObservation(let step, _, let sequence):
+                        let moment = await brains.vault.semanticObservationStream.moment(
+                            scope: step.predicate.observationScope,
+                            at: sequence
+                        )
+                        let baseline: Settlement.Baseline = moment.map {
+                            .supplied(.init(moment: $0))
+                        } ?? .unavailable(.unavailable)
+                        return await brains.executeSettlementWait(
+                            step,
+                            baseline: baseline
+                        )
+                    case .actionEndpoint, .immediate, .baselineTraceOnly:
                         return await brains.interactionCoordinator.waitForPredicate(
                             request.step,
                             initialTrace: request.initialTrace,

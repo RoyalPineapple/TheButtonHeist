@@ -81,7 +81,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
             outcome: .dispatchFailed,
             evidence: Settlement.Evidence(
                 command: command,
-                boundary: .established(.init(moment: baseline.moment, announcementCursor: .origin)),
+                boundary: .established(.init(moment: baseline.moment)),
                 trigger: .actionDispatched(.failure(.dismiss, message: "dismiss failed")),
                 predicate: predicateEvidence,
                 readiness: .pending(.initial),
@@ -110,7 +110,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
             outcome: .timedOut,
             evidence: Settlement.Evidence(
                 command: command,
-                boundary: .established(.init(moment: baseline.moment, announcementCursor: .origin)),
+                boundary: .established(.init(moment: baseline.moment)),
                 trigger: .actionPending(.dismiss),
                 predicate: Settlement.Predicate.Evidence(predicate: predicate),
                 readiness: .established(readiness(at: observed)),
@@ -283,7 +283,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
             outcome: outcome,
             evidence: Settlement.Evidence(
                 command: command,
-                boundary: .established(.init(moment: baseline.moment, announcementCursor: .origin)),
+                boundary: .established(.init(moment: baseline.moment)),
                 trigger: .observation,
                 predicate: predicateEvidence,
                 readiness: readiness,

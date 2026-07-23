@@ -694,6 +694,32 @@ extension TheBrainsPipelineTests {
         XCTAssertEqual(predicateResult.actual, "observation history incomplete")
     }
 
+    func testAfterObservationWithUnavailableSequenceNeverUsesPredicateWait() async throws {
+        var scheduledLegacyEffects: [PredicateWait.ScheduledEffect] = []
+        brains.interactionCoordinator.observePredicateWaitScheduledEffects {
+            scheduledLegacyEffects.append($0)
+        }
+        let step = try resolvedWait(WaitStep(
+            predicate: .changed(.elements()),
+            timeout: .milliseconds(1)
+        ))
+
+        let result = await TheBrains.HeistExecutionRuntime.live(brains).wait(
+            .afterObservation(
+                step,
+                baselineTrace: nil,
+                sequence: SettledObservationSequence(UInt64.max)
+            )
+        )
+
+        XCTAssertTrue(scheduledLegacyEffects.isEmpty)
+        XCTAssertEqual(
+            result.outcome.actionResult.outcome.failureKind,
+            .accessibilityTreeUnavailable
+        )
+        XCTAssertFalse(result.outcome.expectation.met)
+    }
+
 }
 
 @MainActor

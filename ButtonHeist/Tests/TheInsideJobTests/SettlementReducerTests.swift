@@ -31,10 +31,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
 
             decision = reduce(
                 decision,
-                .baselineAdmitted(.init(
-                    moment: baseline.moment,
-                    announcementCursor: .origin
-                ))
+                .baselineAdmitted(.init(moment: baseline.moment))
             )
             XCTAssertEqual(decision.effects.count, 1)
             guard case .arm = decision.effects.first else {
@@ -112,10 +109,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
 
     func testSuppliedBaselineArmsWithoutCapturingAnotherBaseline() async {
         let baseline = await commit(label: "Baseline")
-        let boundary = Settlement.EvidenceBoundary(
-            moment: baseline.moment,
-            announcementCursor: .origin
-        )
+        let boundary = Settlement.EvidenceBoundary(moment: baseline.moment)
         let command = Settlement.Command(
             trigger: .observation,
             predicate: transitionPredicate(),
@@ -151,6 +145,30 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         XCTAssertFalse(decision.effects.contains(where: \.capturesBaseline))
         XCTAssertFalse(decision.effects.contains(where: \.armsChannels))
         XCTAssertEqual(decision.effects.filter(\.isFinish).count, 1)
+    }
+
+    func testPositiveTransitionEvaluationEventBelongsToRetainedHistory() async throws {
+        let baseline = await commit(label: "Baseline")
+        var decision = armedObservationDecision(
+            baseline: baseline,
+            predicate: transitionPredicate()
+        )
+        let first = await commit(label: "First")
+        let second = await commit(label: "Second")
+
+        decision = reduce(
+            decision,
+            .observationAdmitted(await admission(second, after: baseline))
+        )
+
+        let request = try XCTUnwrap(decision.effects.compactMap(\.predicateEvaluation).first)
+        guard case .positiveTransition(let evaluatedEvent) = request.evidence,
+              case .events(let events) = try activeSession(in: decision).observationHistory else {
+            return XCTFail("Expected retained transition history")
+        }
+        XCTAssertEqual(events, [.snapshot(first), .snapshot(second)])
+        XCTAssertEqual(evaluatedEvent, second)
+        XCTAssertTrue(events.contains(.snapshot(evaluatedEvent)))
     }
 
     func testCanonicalPredicateTruthMatrixUsesOnlyPostBaselineLogEvents() async throws {
@@ -899,10 +917,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         ))
         decision = reduce(
             decision,
-            .baselineAdmitted(.init(
-                moment: baseline.moment,
-                announcementCursor: .origin
-            ))
+            .baselineAdmitted(.init(moment: baseline.moment))
         )
         return reduce(decision, .channelsArmed)
     }
@@ -914,10 +929,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         var decision = Settlement.Reducer.begin(command)
         decision = reduce(
             decision,
-            .baselineAdmitted(.init(
-                moment: baseline.moment,
-                announcementCursor: .origin
-            ))
+            .baselineAdmitted(.init(moment: baseline.moment))
         )
         return reduce(decision, .channelsArmed)
     }

@@ -332,6 +332,28 @@ extension Observation.Log {
     }
 }
 
+extension Observation.Event {
+    internal func canFulfill(_ scope: SemanticObservationScope) -> Bool {
+        switch self {
+        case .snapshot(let event):
+            event.scope.canFulfill(scope)
+        case .announcement:
+            true
+        }
+    }
+}
+
+extension Observation.EventsSince {
+    internal func projected(for scope: SemanticObservationScope) -> Self {
+        switch self {
+        case .events(let events):
+            .events(events.filter { $0.canFulfill(scope) })
+        case .expired, .unavailable:
+            self
+        }
+    }
+}
+
 private extension Observation.Event {
     var snapshot: Observation.SnapshotEvent? {
         guard case .snapshot(let event) = self else { return nil }
