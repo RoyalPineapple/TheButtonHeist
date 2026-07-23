@@ -308,6 +308,10 @@ extension Observation.Stream {
         let rawValue: UInt64
     }
 
+    struct VisibleRefreshBoundary: Equatable {
+        let nextTokenRawValue: UInt64
+    }
+
     struct VisibleRefreshTask {
         let token: VisibleRefreshToken
         let task: Task<ObservationSettlement, Never>

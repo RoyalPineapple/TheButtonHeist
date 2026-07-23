@@ -992,9 +992,14 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
             startAfterDispatch: true,
             operation: { [vault] in
                 guard let deadline = await lifecycle.resolveDeadline(arming.deadline) else { return }
+                guard let refreshBoundary = lifecycle.visibleRefreshBoundaryAfterDispatch() else {
+                    return
+                }
                 let timeout = ContinuousClock.now.duration(to: deadline)
                 guard timeout > .zero else { return }
-                let settlement = await vault.semanticObservationStream.refreshVisibleObservation(
+                let settlement = await vault.semanticObservationStream
+                    .refreshVisibleObservation(
+                    after: refreshBoundary,
                     baselineTripwireSignal: baselineTripwireSignal,
                     timeoutMs: max(1, Int((timeout / .milliseconds(1)).rounded(.up)))
                 )
@@ -1064,7 +1069,9 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
 
     @MainActor
     internal func dispatchDidComplete() async {
-        lifecycle.dispatchDidComplete()
+        lifecycle.dispatchDidComplete(
+            visibleRefreshBoundary: vault.semanticObservationStream.visibleRefreshBoundary()
+        )
     }
 
     internal func evaluate(
@@ -1093,6 +1100,7 @@ internal final class LiveSettlementLifecycle {
         var tasks: [Task<Void, Never>] = []
         var observationEffect: ObservationEffect?
         var readinessTask: Task<Void, Never>?
+        var dispatchVisibleRefreshBoundary: Observation.Stream.VisibleRefreshBoundary?
     }
 
     private struct FinalizationResources {
@@ -1196,11 +1204,19 @@ internal final class LiveSettlementLifecycle {
     }
 
     internal func dispatchDidComplete(
+        visibleRefreshBoundary: Observation.Stream.VisibleRefreshBoundary,
         at instant: ContinuousClock.Instant = ContinuousClock.now
     ) {
-        guard case .active = phase else { return }
+        guard case .active(var resources) = phase else { return }
+        resources.dispatchVisibleRefreshBoundary = visibleRefreshBoundary
+        phase = .active(resources)
         dispatchCompletionContinuation.yield(instant)
         dispatchCompletionContinuation.finish()
+    }
+
+    internal func visibleRefreshBoundaryAfterDispatch() -> Observation.Stream.VisibleRefreshBoundary? {
+        guard case .active(let resources) = phase else { return nil }
+        return resources.dispatchVisibleRefreshBoundary
     }
 
     internal func resolveDeadline(

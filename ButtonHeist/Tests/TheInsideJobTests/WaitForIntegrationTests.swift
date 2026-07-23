@@ -237,6 +237,13 @@ final class WaitForIntegrationTests: XCTestCase {
         let button = addButton("Action-RepeatingAnimation")
         defer { button.removeFromSuperview() }
 
+        let baseline = await insideJob.brains.interactionCoordinator.settledEvidence(
+            scope: .visible,
+            after: nil,
+            timeout: 1
+        )
+        XCTAssertNotNil(baseline, "The action fixture must be observable before animation begins")
+
         UIView.animate(
             withDuration: 0.01,
             delay: 0,

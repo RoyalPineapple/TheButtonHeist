@@ -292,6 +292,25 @@ extension Observation.Stream {
         )
     }
 
+    internal func visibleRefreshBoundary() -> VisibleRefreshBoundary {
+        VisibleRefreshBoundary(nextTokenRawValue: nextVisibleRefreshToken)
+    }
+
+    internal func refreshVisibleObservation(
+        after boundary: VisibleRefreshBoundary,
+        baselineTripwireSignal: TheTripwire.TripwireSignal,
+        timeoutMs: Int
+    ) async -> ObservationSettlement {
+        if let refresh = visibleRefreshPhase.task,
+           refresh.token.rawValue < boundary.nextTokenRawValue {
+            _ = await finishVisibleRefresh(refresh)
+        }
+        return await refreshVisibleObservation(
+            baselineTripwireSignal: baselineTripwireSignal,
+            timeoutMs: timeoutMs
+        )
+    }
+
     private func startVisibleRefresh(
         baselineTripwireSignal: TheTripwire.TripwireSignal,
         timeoutMs: Int,

@@ -27,7 +27,9 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
         XCTAssertFalse(probe.didObserveReadiness)
 
         probe.startDispatchWork()
-        lifecycle.dispatchDidComplete()
+        lifecycle.dispatchDidComplete(
+            visibleRefreshBoundary: vault.semanticObservationStream.visibleRefreshBoundary()
+        )
         await probe.waitUntilReadinessObserved()
 
         XCTAssertTrue(probe.dispatchWorkStartedAtReadiness)
@@ -50,7 +52,10 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
         let second = Task { await lifecycle.resolveDeadline(deadline) }
         let dispatchCompletedAt = ContinuousClock.now
 
-        lifecycle.dispatchDidComplete(at: dispatchCompletedAt)
+        lifecycle.dispatchDidComplete(
+            visibleRefreshBoundary: vault.semanticObservationStream.visibleRefreshBoundary(),
+            at: dispatchCompletedAt
+        )
 
         let expected = dispatchCompletedAt.advanced(by: timeout)
         let firstDeadline = await first.value

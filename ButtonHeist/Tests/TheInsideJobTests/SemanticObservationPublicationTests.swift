@@ -100,6 +100,79 @@ final class SemanticObservationPublicationTests: SemanticObservationStreamTestCa
         XCTAssertEqual(first.event.sequence, second.event.sequence)
     }
 
+    func testPostDispatchRefreshRejectsCycleStartedBeforeBoundary() async {
+        let stream = vault.semanticObservationStream
+        let signal = tripwireSignal(sequence: 1)
+        var releaseSettle: CheckedContinuation<Void, Never>?
+        var shouldSuspend = true
+        let settleCount = installSettler(signal: { signal }, beforeSettle: {
+            guard shouldSuspend else { return }
+            shouldSuspend = false
+            await withCheckedContinuation { releaseSettle = $0 }
+        })
+        defer { releaseSettle?.resume() }
+
+        let inFlight = Task { @MainActor in
+            await stream.refreshVisibleObservation(timeoutMs: 1_000)
+        }
+        await waitForSettleCount(1, current: settleCount)
+        let boundary = stream.visibleRefreshBoundary()
+        let postDispatch = Task { @MainActor in
+            await stream.refreshVisibleObservation(
+                after: boundary,
+                baselineTripwireSignal: signal,
+                timeoutMs: 1_000
+            )
+        }
+
+        releaseSettle?.resume()
+        releaseSettle = nil
+        let first = await inFlight.value
+        let second = await postDispatch.value
+
+        XCTAssertEqual(settleCount(), 2)
+        guard case .committed(let firstEvent) = first.commitOutcome,
+              case .committed(let secondEvent) = second.commitOutcome else {
+            return XCTFail("Expected both refreshes to commit")
+        }
+        XCTAssertNotEqual(firstEvent.moment, secondEvent.moment)
+    }
+
+    func testPostDispatchRefreshSharesCycleStartedAfterBoundary() async {
+        let stream = vault.semanticObservationStream
+        let signal = tripwireSignal(sequence: 1)
+        var releaseSettle: CheckedContinuation<Void, Never>?
+        let settleCount = installSettler(signal: { signal }, beforeSettle: {
+            await withCheckedContinuation { releaseSettle = $0 }
+        })
+        defer { releaseSettle?.resume() }
+
+        let boundary = stream.visibleRefreshBoundary()
+        let inFlight = Task { @MainActor in
+            await stream.refreshVisibleObservation(timeoutMs: 1_000)
+        }
+        await waitForSettleCount(1, current: settleCount)
+        let postDispatch = Task { @MainActor in
+            await stream.refreshVisibleObservation(
+                after: boundary,
+                baselineTripwireSignal: signal,
+                timeoutMs: 1_000
+            )
+        }
+
+        releaseSettle?.resume()
+        releaseSettle = nil
+        let first = await inFlight.value
+        let second = await postDispatch.value
+
+        XCTAssertEqual(settleCount(), 1)
+        guard case .committed(let firstEvent) = first.commitOutcome,
+              case .committed(let secondEvent) = second.commitOutcome else {
+            return XCTFail("Expected the shared refresh to commit")
+        }
+        XCTAssertEqual(firstEvent.moment, secondEvent.moment)
+    }
+
     func testAdmittedStateIsReusedUntilTripInvalidationOrScreenReplacement() async throws {
         let stream = vault.semanticObservationStream
         let initialSignal = tripwireSignal(sequence: 1)
