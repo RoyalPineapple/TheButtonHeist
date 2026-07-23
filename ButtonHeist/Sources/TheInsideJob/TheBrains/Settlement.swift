@@ -863,15 +863,12 @@ extension Settlement {
         internal var handoff: Handoff.Evidence
         internal var observationHistory: Observation.EventsSince?
         internal var latestObservation: ObservationAdmission?
-        internal var latestMoment: Observation.Moment
         internal var timing: ExecutionTiming
-        internal var elapsed: ElapsedMilliseconds
 
         internal init(
             command: Command,
             boundary: EvidenceBoundary,
-            timing: ExecutionTiming,
-            elapsed: ElapsedMilliseconds
+            timing: ExecutionTiming
         ) {
             self.command = command
             self.boundary = boundary
@@ -884,9 +881,7 @@ extension Settlement {
             self.handoff = .pending(.initial)
             self.observationHistory = nil
             self.latestObservation = nil
-            self.latestMoment = boundary.moment
             self.timing = timing
-            self.elapsed = elapsed
         }
     }
 
@@ -916,7 +911,6 @@ extension Settlement {
         case arm(Arming)
         case dispatchAction(ResolvedHeistActionCommand)
         case evaluatePredicate(Predicate.EvaluationRequest)
-        case finish(Result)
     }
 }
 

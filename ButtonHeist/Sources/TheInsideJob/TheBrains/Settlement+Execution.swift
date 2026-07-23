@@ -388,7 +388,8 @@ extension Settlement {
                             let decision = await consume(input, state: state, sink: sink,
                                 admittedMoments: &admittedMoments,
                                 finalSemanticEvidence: &finalSemanticEvidence)
-                            mergeDrained(decision, state: &state, effects: &effects)
+                            state = decision.state
+                            effects += decision.effects
                             if state.result != nil {
                                 drainsArmingInputs = false
                                 continue
@@ -404,6 +405,16 @@ extension Settlement {
                             continue
                         }
                         drainsArmingInputs = false
+                    }
+
+                    if case .terminal(let result) = state {
+                        sink.finish()
+                        if let arming { await boundary.quiesceSettlement(arming) }
+                        tasks.cancelAll()
+                        await tasks.waitForAll()
+                        if let arming { await boundary.finalizeSettlement(arming) }
+                        diagnosisSink(Diagnosis.project(result))
+                        return result
                     }
 
                     if !effects.isEmpty {
@@ -444,19 +455,6 @@ extension Settlement {
                                 let result = await boundary.evaluate(request)
                                 sink.completeEvaluation(.init(target: request.target, result: result))
                             }
-
-                        case .finish(let result):
-                            sink.finish()
-                            if let arming {
-                                await boundary.quiesceSettlement(arming)
-                            }
-                            tasks.cancelAll()
-                            await tasks.waitForAll()
-                            if let arming {
-                                await boundary.finalizeSettlement(arming)
-                            }
-                            diagnosisSink(Diagnosis.project(result))
-                            return result
                         }
                         continue
                     }
@@ -478,19 +476,6 @@ extension Settlement {
                         tasks: &tasks
                     )
                 }
-            }
-        }
-
-        private func mergeDrained(
-            _ decision: Decision,
-            state: inout State,
-            effects: inout [Effect]
-        ) {
-            state = decision.state
-            if state.result == nil {
-                effects += decision.effects
-            } else {
-                effects = decision.effects
             }
         }
 
@@ -532,7 +517,10 @@ extension Settlement {
             if decision.state.concludesFinalSemanticEvidence
                 || fact.endsFinalSemanticEvidenceAttempt {
                 if let timing = finalSemanticEvidence.complete() {
-                    decision = decision.recording(timing)
+                    decision = Settlement.Decision(
+                        state: decision.state.recording(timing),
+                        effects: decision.effects
+                    )
                 }
             }
             return decision
@@ -785,18 +773,6 @@ private extension Settlement.Event.Fact {
              .handoffCaptureFailed:
             false
         }
-    }
-}
-
-private extension Settlement.Decision {
-    func recording(_ timing: Settlement.ExecutionTiming) -> Settlement.Decision {
-        Settlement.Decision(
-            state: state.recording(timing),
-            effects: effects.map { effect in
-                guard case .finish(let result) = effect else { return effect }
-                return .finish(result.recording(timing))
-            }
-        )
     }
 }
 

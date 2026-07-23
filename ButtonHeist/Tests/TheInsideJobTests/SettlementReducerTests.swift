@@ -131,7 +131,6 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             ))
         )
         XCTAssertFalse(decision.effects.contains(where: \.armsChannels))
-        XCTAssertEqual(decision.effects.filter(\.isFinish).count, 1)
     }
 
     func testPredicateSemanticsAreDerivedFromResolvedCore() async throws {
@@ -194,7 +193,6 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         XCTAssertEqual(result.evidence.boundary, .unavailable(.unavailable))
         XCTAssertFalse(decision.effects.contains(where: \.capturesBaseline))
         XCTAssertFalse(decision.effects.contains(where: \.armsChannels))
-        XCTAssertEqual(decision.effects.filter(\.isFinish).count, 1)
     }
 
     func testUnavailableCurrentStateRecapturesOnlyPresencePredicates() throws {
@@ -766,7 +764,6 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         XCTAssertEqual(result.outcome, .cancelled)
         XCTAssertTrue(result.evidence.predicate.isSatisfied)
         XCTAssertFalse(result.evidence.readiness.isEstablished)
-        XCTAssertEqual(decision.effects.filter(\.isFinish).count, 1)
 
         decision = reduce(decision, .deadlineReached)
         XCTAssertTrue(decision.effects.isEmpty)
@@ -1200,10 +1197,6 @@ private extension Settlement.Effect {
         return request
     }
 
-    var isFinish: Bool {
-        guard case .finish = self else { return false }
-        return true
-    }
 }
 
 private extension Observation.EventsSince {

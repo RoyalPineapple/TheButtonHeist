@@ -29,8 +29,7 @@ extension Settlement {
                     state: .armed(Settlement.Session(
                         command: command,
                         boundary: boundary,
-                        timing: Settlement.ExecutionTiming(),
-                        elapsed: 0
+                        timing: Settlement.ExecutionTiming()
                     )),
                     effects: [.arm(Settlement.Arming(
                         boundary: boundary,
@@ -87,8 +86,7 @@ private extension Settlement.Reducer {
             let session = Settlement.Session(
                 command: command,
                 boundary: boundary,
-                timing: event.timing,
-                elapsed: event.elapsed
+                timing: event.timing
             )
             return Settlement.Decision(
                 state: .armed(session),
@@ -181,7 +179,6 @@ private extension Settlement.Reducer {
     ) -> Settlement.Decision {
         var session = original
         session.timing.merge(event.timing)
-        session.elapsed = event.elapsed
         var effects: [Settlement.Effect] = []
 
         switch event.fact {
@@ -232,7 +229,6 @@ private extension Settlement.Reducer {
         _ admission: Settlement.ObservationAdmission,
         to session: inout Settlement.Session
     ) -> [Settlement.Effect] {
-        session.latestMoment = admission.event.moment
         session.observationHistory = admission.history
         session.latestObservation = admission
         if case .established(let readiness) = session.readiness,
@@ -449,7 +445,7 @@ private extension Settlement.Reducer {
                 )
             )
         )
-        return Settlement.Decision(state: .terminal(result), effects: [.finish(result)])
+        return Settlement.Decision(state: .terminal(result), effects: [])
     }
 
     static func terminalBeforeBaseline(
@@ -484,7 +480,7 @@ private extension Settlement.Reducer {
                 deadline: deadlineEvidence
             )
         )
-        return Settlement.Decision(state: .terminal(result), effects: [.finish(result)])
+        return Settlement.Decision(state: .terminal(result), effects: [])
     }
 
     static func terminalCurrentState(
@@ -512,7 +508,7 @@ private extension Settlement.Reducer {
                 deadline: .notApplicable(elapsed: elapsed)
             )
         )
-        return Settlement.Decision(state: .terminal(result), effects: [.finish(result)])
+        return Settlement.Decision(state: .terminal(result), effects: [])
     }
 
     static func deadline(for command: Settlement.Command) -> Settlement.Deadline {
