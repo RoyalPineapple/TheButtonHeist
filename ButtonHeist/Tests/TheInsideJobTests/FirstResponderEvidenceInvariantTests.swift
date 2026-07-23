@@ -9,7 +9,7 @@ import ThePlans
 @MainActor
 final class FirstResponderEvidenceInvariantTests: XCTestCase {
 
-    func testParseNormalizesFirstResponderIntoValueSnapshot() throws {
+    func testParseNormalizesFirstResponderIntoValueSnapshot() async throws {
         let firstPath = TreePath([0])
         let secondPath = TreePath([1])
         let result = TheVault.CaptureResult(
@@ -32,7 +32,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
         XCTAssertTrue(valueOnly.liveCapture.elementRefs.isEmpty)
     }
 
-    func testFirstResponderSnapshotDoesNotRetainUIKitObject() {
+    func testFirstResponderSnapshotDoesNotRetainUIKitObject() async {
         let heistId: HeistId = "email_field"
         var responder: UITextField? = UITextField()
         weak let releasedResponder: UITextField? = responder
@@ -57,7 +57,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
         XCTAssertEqual(capture.snapshot.firstResponderHeistId, heistId)
     }
 
-    func testReplacementCaptureDoesNotInheritStaleFirstResponderEvidence() {
+    func testReplacementCaptureDoesNotInheritStaleFirstResponderEvidence() async {
         let heistId: HeistId = "email_field"
         let brains = TheBrains(tripwire: TheTripwire())
         var original: UITextField? = UITextField()
@@ -115,7 +115,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             traits: .textEntry,
             object: expectedObject
         )
-        brains.vault.installObservationForTesting(.makeForTests(
+        await brains.vault.installObservationForTesting(.makeForTests(
             [expectedEntry],
             firstResponderHeistId: expected
         ))
@@ -168,7 +168,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             ],
             firstResponderHeistId: expected
         )
-        brains.vault.installObservationForTesting(screen)
+        await brains.vault.installObservationForTesting(screen)
         let expectedElement = try XCTUnwrap(brains.vault.interfaceElement(heistId: expected))
         let expectedAuthoredTarget = try XCTUnwrap(brains.vault.minimumUniqueTarget(for: expectedElement))
         let expectedTarget = try expectedAuthoredTarget.resolve(in: .empty)
@@ -210,7 +210,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
         )
     }
 
-    func testSemanticAndPostActionContextsShareCanonicalFirstResponderTarget() throws {
+    func testSemanticAndPostActionContextsShareCanonicalFirstResponderTarget() async throws {
         let brains = TheBrains(tripwire: TheTripwire())
         let screen = InterfaceObservation.makeForTests(
             elements: [
@@ -227,7 +227,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             tripwireSignal: .empty,
             settledObservationSequence: nil
         )
-        let semantic = brains.vault.semanticObservationStream
+        let semantic = await brains.vault.semanticObservationStream
             .commitVisibleObservationForTesting(screen)
         let authoredTarget = try XCTUnwrap(brains.vault.firstResponderTarget(in: screen.tree))
         let resolvedTarget = try authoredTarget.resolve(in: .empty)
@@ -238,7 +238,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
         XCTAssertEqual(semantic.trace.captures.last?.context.firstResponder, authoredTarget)
     }
 
-    func testAmbiguousLiveResponderEvidenceIsNotGuessed() {
+    func testAmbiguousLiveResponderEvidenceIsNotGuessed() async {
         let firstPath = TreePath([0])
         let secondPath = TreePath([1])
         let result = TheVault.CaptureResult(
@@ -259,7 +259,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
         XCTAssertNil(parsed.liveCapture.firstResponderHeistId)
     }
 
-    func testFilteringPreservesOnlyFirstResponderStillInCommittedTree() {
+    func testFilteringPreservesOnlyFirstResponderStillInCommittedTree() async {
         let brains = TheBrains(tripwire: TheTripwire())
         let screen = InterfaceObservation.makeForTests(
             elements: [

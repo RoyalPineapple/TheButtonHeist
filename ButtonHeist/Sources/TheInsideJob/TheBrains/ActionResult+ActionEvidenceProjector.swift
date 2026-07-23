@@ -9,26 +9,26 @@ extension ActionResult {
     @MainActor init(
         dispatchResult: TheSafecracker.ActionDispatchResult,
         afterStateValue: ((ActionPayloadEvidence) -> String?)?,
-        settledObservation: ActionEvidenceProjector.Result,
+        snapshot: ActionEvidenceProjector.Result,
         timing initialTiming: ActionTiming
     ) {
         var timing = initialTiming
         let assemblyStart = RuntimeElapsed.now
-        let resultOutcome = settledObservation.resultOutcome(for: dispatchResult)
-        let message = settledObservation.message(explicit: dispatchResult.message)
-        let payload = settledObservation.payload(
+        let resultOutcome = snapshot.resultOutcome(for: dispatchResult)
+        let message = snapshot.message(explicit: dispatchResult.message)
+        let payload = snapshot.payload(
             for: dispatchResult,
             afterStateValue: afterStateValue
         )
-        let duration = RuntimeElapsed.admit(milliseconds: settledObservation.settleTimeMs)
-        let settlement: ActionSettlementEvidence = settledObservation.settled
+        let duration = RuntimeElapsed.admit(milliseconds: snapshot.settleTimeMs)
+        let settlement: ActionSettlementEvidence = snapshot.settled
             ? .settled(
                 duration: duration,
-                path: settledObservation.settleEvidence?.actionSettlementPath
+                path: snapshot.settleEvidence?.actionSettlementPath
             )
             : .timedOut(duration: duration)
         let observation = ActionResultObservationEvidence.settledTrace(
-            settledObservation.traceEvidence,
+            snapshot.traceEvidence,
             settlement
         )
         timing.record(.resultAssembly, since: assemblyStart)

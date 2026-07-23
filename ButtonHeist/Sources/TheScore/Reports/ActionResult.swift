@@ -39,6 +39,7 @@ public struct ActionSettlementEvidence: Codable, Sendable, Equatable {
     private enum State: Sendable, Equatable {
         case settled
         case timedOut
+        case observationHandoffTimedOut
     }
 
     private let state: State
@@ -48,6 +49,7 @@ public struct ActionSettlementEvidence: Codable, Sendable, Equatable {
     private enum Kind: String, Codable {
         case settled
         case timedOut
+        case observationHandoffTimedOut
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -67,7 +69,28 @@ public struct ActionSettlementEvidence: Codable, Sendable, Equatable {
         ActionSettlementEvidence(state: .timedOut, duration: duration, path: nil)
     }
 
+    public static func observationHandoffTimedOut(
+        duration: ElapsedMilliseconds,
+        path: ActionSettlementPath
+    ) -> ActionSettlementEvidence {
+        ActionSettlementEvidence(state: .observationHandoffTimedOut, duration: duration, path: path)
+    }
+
     public var settled: Bool {
+        if case .settled = state { return true }
+        return false
+    }
+
+    public var readinessEstablished: Bool {
+        switch state {
+        case .settled, .observationHandoffTimedOut:
+            true
+        case .timedOut:
+            false
+        }
+    }
+
+    public var observationHandoffCompleted: Bool {
         if case .settled = state { return true }
         return false
     }
@@ -95,6 +118,15 @@ public struct ActionSettlementEvidence: Codable, Sendable, Equatable {
                 )
             }
             self.init(state: .timedOut, duration: duration, path: nil)
+        case .observationHandoffTimedOut:
+            guard let path else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .path,
+                    in: container,
+                    debugDescription: "observation handoff timeout requires an established readiness path"
+                )
+            }
+            self.init(state: .observationHandoffTimedOut, duration: duration, path: path)
         }
     }
 
@@ -105,6 +137,8 @@ public struct ActionSettlementEvidence: Codable, Sendable, Equatable {
             try container.encode(Kind.settled, forKey: .kind)
         case .timedOut:
             try container.encode(Kind.timedOut, forKey: .kind)
+        case .observationHandoffTimedOut:
+            try container.encode(Kind.observationHandoffTimedOut, forKey: .kind)
         }
         try container.encode(durationMs, forKey: .durationMs)
         try container.encodeIfPresent(path, forKey: .path)

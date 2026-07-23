@@ -1,5 +1,9 @@
 #if canImport(UIKit)
 import XCTest
+
+import ButtonHeistHostedTestSupport
+import ButtonHeistTesting
+import TheScore
 @testable import TheInsideJob
 
 @MainActor
@@ -128,6 +132,86 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
         tripwire.startPulse()
 
         XCTAssertFalse(tripwire.allClear())
+    }
+
+    func testTransientExpectationLatchesUntilReadyHandoff() async throws {
+        let heist = try await runHeist("HostedTransientExpectationReadyHandoff") {
+            try DemoNavigation.backToRoot()
+            try DogfoodHome.openScreen("Transient Flow")
+            Activate(.label("Submit"))
+                .expect(TransientFlowScreen.lifecycle, timeout: 8)
+        }
+        let evidence = try actionEvidence(
+            matching: TransientFlowScreen.lifecycle,
+            in: heist.result
+        )
+        let result = try XCTUnwrap(evidence.expectationResult)
+        let trace = try XCTUnwrap(result.accessibilityTrace)
+        let settlement = try XCTUnwrap(result.evidence.settlement)
+
+        XCTAssertEqual(evidence.checkedExpectation?.met, true)
+        XCTAssertTrue(trace.hostedAppearedLabels.contains("Processing"))
+        XCTAssertTrue(trace.hostedDisappearedLabels.contains("Submit"))
+        XCTAssertTrue(settlement.readinessEstablished)
+        XCTAssertTrue(settlement.observationHandoffCompleted)
+    }
+
+    func testAnnouncementExpectationLatchesUntilReadyHandoff() async throws {
+        let heist = try await runHeist("HostedAnnouncementExpectationReadyHandoff") {
+            try DemoNavigation.backToRoot()
+            try DogfoodHome.openScreen("Transient Flow")
+            Activate(.label("Submit"))
+                .expect(TransientFlowScreen.announcement, timeout: 8)
+        }
+        let evidence = try actionEvidence(
+            matching: TransientFlowScreen.announcement,
+            in: heist.result
+        )
+        let result = try XCTUnwrap(evidence.expectationResult)
+        let settlement = try XCTUnwrap(result.evidence.settlement)
+
+        XCTAssertEqual(evidence.checkedExpectation?.met, true)
+        XCTAssertEqual(evidence.announcement, "Ticket saved.")
+        XCTAssertTrue(settlement.readinessEstablished)
+        XCTAssertTrue(settlement.observationHandoffCompleted)
+    }
+
+    private func actionEvidence(
+        matching predicate: AccessibilityPredicate,
+        in result: HeistResult,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws -> HeistActionEvidence {
+        try XCTUnwrap(
+            result.outputNodes.lazy.compactMap(\.actionEvidence)
+                .first { $0.checkedExpectation?.predicate == predicate },
+            "Missing action evidence for \(predicate)",
+            file: file,
+            line: line
+        )
+    }
+}
+
+private extension AccessibilityTrace {
+    var hostedAppearedLabels: [String] {
+        changeFacts.flatMap { fact -> [String] in
+            guard case .elementsChanged(let elements) = fact else { return [] }
+            return elements.appeared.compactMap(\.hostedElementLabel)
+        }
+    }
+
+    var hostedDisappearedLabels: [String] {
+        changeFacts.flatMap { fact -> [String] in
+            guard case .elementsChanged(let elements) = fact else { return [] }
+            return elements.disappeared.compactMap(\.hostedElementLabel)
+        }
+    }
+}
+
+private extension AccessibilityTrace.InterfaceChangeNode {
+    var hostedElementLabel: String? {
+        guard case .element(let element, _) = node else { return nil }
+        return element.label
     }
 }
 

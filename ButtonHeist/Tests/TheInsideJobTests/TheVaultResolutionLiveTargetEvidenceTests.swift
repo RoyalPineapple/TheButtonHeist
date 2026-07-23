@@ -8,14 +8,14 @@ import ThePlans
 @MainActor
 extension TheVaultResolutionTests {
 
-    func testContainerTargetResolutionUsesCommittedSemanticContainers() throws {
+    func testContainerTargetResolutionUsesCommittedSemanticContainers() async throws {
         let path = TreePath([0, 1])
         let container = AccessibilityContainer(
             type: .semanticGroup(label: "Actions", value: nil), identifier: "actions",
             frame: AccessibilityRect(CGRect(x: 0, y: 900, width: 240, height: 80)),
             customActions: [.init(name: "Archive")]
         )
-        bagman.installObservationForTesting(InterfaceObservation.makeForTests(
+        await bagman.installObservationForTesting(InterfaceObservation.makeForTests(
             tree: InterfaceTree(
                 elements: [:],
                 containers: [
@@ -43,10 +43,10 @@ extension TheVaultResolutionTests {
         }
     }
 
-    func testContainerTargetResolutionReportsStructuredFacts() throws {
+    func testContainerTargetResolutionReportsStructuredFacts() async throws {
         let primaryPath = TreePath([0, 1])
         let secondaryPath = TreePath([0, 2])
-        bagman.installObservationForTesting(InterfaceObservation.makeForTests(
+        await bagman.installObservationForTesting(InterfaceObservation.makeForTests(
             tree: InterfaceTree(
                 elements: [:],
                 containers: [
@@ -109,10 +109,10 @@ extension TheVaultResolutionTests {
         XCTAssertTrue(outOfRange.diagnostics.contains("target an element inside the intended region"))
     }
 
-    func testGeneratedConcreteTargetUsesMinimumPredicateSelector() throws {
+    func testGeneratedConcreteTargetUsesMinimumPredicateSelector() async throws {
         let selected = element(label: "Mode", value: "A", traits: [.button, .selected])
         let other = element(label: "Mode", value: "B", traits: [.button, .selected])
-        bagman.installObservationForTesting(InterfaceObservation.makeForTests(elements: [
+        await bagman.installObservationForTesting(InterfaceObservation.makeForTests(elements: [
             (selected, "mode_a"),
             (other, "mode_b"),
         ]))
@@ -131,7 +131,7 @@ extension TheVaultResolutionTests {
 
     // MARK: - Live Geometry Replay
 
-    func testMatcherTargetAcquiresFreshLiveGeometry() throws {
+    func testMatcherTargetAcquiresFreshLiveGeometry() async throws {
         let sourceFrame = CGRect(x: 10, y: 20, width: 80, height: 44)
         let sourcePoint = CGPoint(x: 50, y: 42)
         let freshFrame = CGRect(x: 120, y: 240, width: 80, height: 44)
@@ -147,7 +147,7 @@ extension TheVaultResolutionTests {
         let object = UIAccessibilityElement(accessibilityContainer: NSObject())
         object.accessibilityFrame = sourceFrame
         object.accessibilityActivationPoint = sourcePoint
-        bagman.installObservationForTesting(InterfaceObservation.makeForTests(
+        await bagman.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [(currentElement, "quantity_1")],
             objects: ["quantity_1": object]
         ))
@@ -179,7 +179,7 @@ extension TheVaultResolutionTests {
         XCTAssertNotEqual(liveTarget.activationPoint, sourcePoint)
     }
 
-    func testVisibleResolutionKeepsSettledSemanticsWhileLiveTargetUsesFreshGeometry() throws {
+    func testVisibleResolutionKeepsSettledSemanticsWhileLiveTargetUsesFreshGeometry() async throws {
         let staleFrame = CGRect(x: 32, y: 865, width: 240, height: 44)
         let stalePoint = CGPoint(x: staleFrame.midX, y: staleFrame.midY)
         let settledElement = AccessibilityElement.make(
@@ -193,7 +193,7 @@ extension TheVaultResolutionTests {
         let liveObject = UIAccessibilityElement(accessibilityContainer: NSObject())
         liveObject.accessibilityFrame = staleFrame
         liveObject.accessibilityActivationPoint = stalePoint
-        bagman.installObservationForTesting(InterfaceObservation.makeForTests(
+        await bagman.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [(settledElement, "rotor_host")],
             objects: ["rotor_host": liveObject]
         ))
@@ -231,7 +231,7 @@ extension TheVaultResolutionTests {
         XCTAssertNotEqual(liveTarget.activationPoint, liveObject.accessibilityActivationPoint)
     }
 
-    func testRawEvidenceRequiresCommittedHeistIdForLiveObjectAndGeometry() throws {
+    func testRawEvidenceRequiresCommittedHeistIdForLiveObjectAndGeometry() async throws {
         let committedId: HeistId = "committed_control"
         let rawId: HeistId = "raw_control"
         let settledFrame = CGRect(x: 20, y: 40, width: 120, height: 44)
@@ -240,7 +240,7 @@ extension TheVaultResolutionTests {
             traits: .adjustable,
             frame: settledFrame
         )
-        bagman.semanticObservationStream.commitVisibleObservationForTesting(
+        await bagman.semanticObservationStream.commitVisibleObservationForTesting(
             InterfaceObservation.makeForTests(elements: [(settledElement, committedId)])
         )
         let target = try resolvedTarget(
@@ -280,7 +280,7 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(liveTarget.frame, rawFrame)
     }
 
-    func testVisibleSettleCommitStripsLiveHandlesFromSettledProjection() {
+    func testVisibleSettleCommitStripsLiveHandlesFromSettledProjection() async {
         let liveObject = UIAccessibilityElement(accessibilityContainer: NSObject())
         liveObject.accessibilityFrame = CGRect(x: 10, y: 10, width: 100, height: 44)
         let observation = InterfaceObservation.makeForTests(
@@ -288,13 +288,13 @@ extension TheVaultResolutionTests {
             objects: ["save": liveObject]
         )
 
-        bagman.semanticObservationStream.commitVisibleObservationForTesting(observation)
+        await bagman.semanticObservationStream.commitVisibleObservationForTesting(observation)
 
         XCTAssertNotNil(bagman.liveObject(for: "save"))
         XCTAssertNil(LiveCapture.makeForTests(snapshot: bagman.interfaceTree.viewportCapture).object(for: "save"))
     }
 
-    func testLiveContainerTargetAcquiresFreshGeometryFromLatestLiveCapture() throws {
+    func testLiveContainerTargetAcquiresFreshGeometryFromLatestLiveCapture() async throws {
         let path = TreePath([0])
         let staleFrame = CGRect(x: 0, y: 800, width: 240, height: 80)
         let freshFrame = CGRect(x: 0, y: 120, width: 240, height: 80)
@@ -328,7 +328,7 @@ extension TheVaultResolutionTests {
                 firstResponderHeistId: nil,
             )
         )
-        bagman.semanticObservationStream.commitDiscoveryObservationForTesting(settledObservationScreen)
+        await bagman.semanticObservationStream.commitDiscoveryObservationForTesting(settledObservationScreen)
         let liveScreen = InterfaceObservation.makeForTests(
             tree: InterfaceTree(
                 elements: [:],
@@ -368,7 +368,7 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(liveTarget.activationPoint, CGPoint(x: freshFrame.midX, y: freshFrame.midY))
     }
 
-    func testViewportUpdatePreservesKnownDiscoveryUnionWhenRefreshingSameScreen() throws {
+    func testViewportUpdatePreservesKnownDiscoveryUnionWhenRefreshingSameScreen() async throws {
         let controls = element(label: "Controls Demo", traits: .button)
         let customRotors = element(label: "Custom Rotors", traits: .button)
         let discovery = InterfaceObservation.makeForTests(
@@ -381,10 +381,10 @@ extension TheVaultResolutionTests {
                 ),
             ]
         )
-        bagman.semanticObservationStream.commitDiscoveryObservationForTesting(discovery)
+        await bagman.semanticObservationStream.commitDiscoveryObservationForTesting(discovery)
 
         let refreshedBottom = InterfaceObservation.makeForTests(elements: [(customRotors, "custom_rotors")])
-        bagman.semanticObservationStream.commitVisibleObservationForTesting(refreshedBottom)
+        await bagman.semanticObservationStream.commitVisibleObservationForTesting(refreshedBottom)
 
         XCTAssertEqual(bagman.viewportElementIDs, ["custom_rotors"])
         XCTAssertEqual(bagman.interfaceElementIDs, ["controls_demo", "custom_rotors"])
@@ -396,7 +396,7 @@ extension TheVaultResolutionTests {
         )
     }
 
-    func testViewportUpdateDoesNotPreserveOffViewportMemoryForDisjointCommittedViewport() {
+    func testViewportUpdateDoesNotPreserveOffViewportMemoryForDisjointCommittedViewport() async {
         let bottom = element(label: "Bottom Row", traits: .button)
         let staleOffscreen = element(label: "Stale Row", traits: .button)
         let discovery = InterfaceObservation.makeForTests(
@@ -409,11 +409,11 @@ extension TheVaultResolutionTests {
                 ),
             ]
         )
-        bagman.semanticObservationStream.commitDiscoveryObservationForTesting(discovery)
+        await bagman.semanticObservationStream.commitDiscoveryObservationForTesting(discovery)
 
         let freshVisible = element(label: "Fresh Row", traits: .button)
         let refreshedTop = InterfaceObservation.makeForTests(elements: [(freshVisible, "shared_row")])
-        bagman.semanticObservationStream.commitVisibleObservationForTesting(refreshedTop)
+        await bagman.semanticObservationStream.commitVisibleObservationForTesting(refreshedTop)
 
         XCTAssertEqual(bagman.viewportElementIDs, ["shared_row"])
         XCTAssertEqual(bagman.interfaceElementIDs, ["shared_row"])
@@ -421,7 +421,7 @@ extension TheVaultResolutionTests {
         XCTAssertNil(bagman.interfaceElement(heistId: "bottom_row"))
     }
 
-    func testViewportUpdateDropsDiscoveryMemoryWhenScreenIdChangesDespiteSharedVisibleElement() {
+    func testViewportUpdateDropsDiscoveryMemoryWhenScreenIdChangesDespiteSharedVisibleElement() async {
         let previousHeader = element(label: "Controls Demo", traits: .header)
         let sharedPreviousAction = element(label: "Shared Action", traits: .button)
         let staleOffscreen = element(label: "Stale Offscreen", traits: .button)
@@ -439,7 +439,7 @@ extension TheVaultResolutionTests {
             ]
         )
         XCTAssertEqual(previousDiscovery.tree.id, "controls_demo")
-        bagman.semanticObservationStream.commitDiscoveryObservationForTesting(previousDiscovery)
+        await bagman.semanticObservationStream.commitDiscoveryObservationForTesting(previousDiscovery)
 
         let currentHeader = element(label: "ButtonHeist Demo", traits: .header)
         let sharedCurrentAction = element(label: "Shared Action", traits: .button)
@@ -448,7 +448,7 @@ extension TheVaultResolutionTests {
             (sharedCurrentAction, "shared_action"),
         ])
         XCTAssertEqual(currentVisible.tree.id, "buttonheist_demo")
-        bagman.semanticObservationStream.commitVisibleObservationForTesting(currentVisible)
+        await bagman.semanticObservationStream.commitVisibleObservationForTesting(currentVisible)
 
         XCTAssertEqual(bagman.viewportElementIDs, ["buttonheist_demo", "shared_action"])
         XCTAssertEqual(bagman.interfaceElementIDs, ["buttonheist_demo", "shared_action"])

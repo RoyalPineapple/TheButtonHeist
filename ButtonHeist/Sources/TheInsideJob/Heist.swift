@@ -245,14 +245,16 @@ extension TheInsideJob {
     ) async -> ActionResult {
         let shouldRestoreRuntime = !brains.semanticObservationIsActive
         if shouldRestoreRuntime {
+            tripwire.uikitIdleTracker.installIfAvailable()
             tripwire.startPulse()
-            brains.startSemanticObservation()
+            await brains.startSemanticObservation()
             brains.safecracker.startKeyboardObservation()
         }
         defer {
             if shouldRestoreRuntime {
                 brains.stopSemanticObservation()
                 tripwire.stopPulse()
+                tripwire.uikitIdleTracker.uninstallIfNeeded()
                 brains.safecracker.stopKeyboardObservation()
             }
         }
@@ -260,7 +262,7 @@ extension TheInsideJob {
         // keeps conditionals, waits, and first actions from inheriting the
         // previous run's settled semantic world when the app is already on
         // another screen.
-        brains.vault.resetInterfaceForLifecycle()
+        await brains.vault.resetInterfaceForLifecycle()
         _ = await brains.interactionCoordinator.admittedVisibleBaseline(
             timeout: SemanticObservationTiming.defaultTimeout
         )

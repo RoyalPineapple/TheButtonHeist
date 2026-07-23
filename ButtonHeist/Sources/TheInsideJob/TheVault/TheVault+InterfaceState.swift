@@ -10,14 +10,14 @@ import TheScore
 
 extension TheVault {
 
-    func resetInterfaceForLifecycle() {
+    func resetInterfaceForLifecycle() async {
         latestObservation = .empty
         latestFailedSettleDiagnosticEvidence = nil
-        semanticObservationStream.clearCurrentInterface()
+        await semanticObservationStream.clearCurrentInterface()
     }
 
-    func invalidateSettledObservationFromTripwire() {
-        semanticObservationStream.invalidateLatestSettledObservation()
+    func invalidateSettledObservationFromTripwire() async {
+        await semanticObservationStream.invalidateLatestSettledObservation()
     }
 
     /// Refresh the latest live viewport evidence. The returned value remains the raw
@@ -37,9 +37,9 @@ extension TheVault {
         latestFailedSettleDiagnosticEvidence = nil
     }
 
-    func recordFailedSettleDiagnosticEvidence(_ observation: InterfaceObservation?) {
+    func recordFailedSettleDiagnosticEvidence(_ observation: InterfaceObservation?) async {
         latestFailedSettleDiagnosticEvidence = observation
-        semanticObservationStream.invalidateLatestSettledObservation()
+        await semanticObservationStream.invalidateLatestSettledObservation()
     }
 
     func observeInterface(_ observation: InterfaceObservation) {

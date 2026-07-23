@@ -15,7 +15,7 @@ extension TheBrainsActionTests {
         var observedScopes: [SemanticObservationScope] = []
         let runtime = heistRuntime(
             observations: [
-                observedState(labels: ["Keep"]),
+                await observedState(labels: ["Keep"]),
             ],
             observedScopes: { observedScopes.append($0) }
         )
@@ -89,7 +89,7 @@ extension TheBrainsActionTests {
         var executedCommands: [ResolvedHeistActionCommand] = []
         let runtime = heistRuntime(
             observations: [
-                observedState(elements: [
+                await observedState(elements: [
                     (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
                     (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
                 ]),
@@ -130,7 +130,7 @@ extension TheBrainsActionTests {
     func testHeistForEachCallsBodyWithOrdinalTargetForEachInitialMatchWithoutMutatingPlan() async throws {
         let matching = ElementPredicateTemplate.label("Delete")
         var executedCommands: [ResolvedHeistActionCommand] = []
-        let initialState = observedState(elements: [
+        let initialState = await observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
             (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
             (makeElement(label: "Delete", identifier: "delete_third"), "delete_third"),
@@ -172,7 +172,7 @@ extension TheBrainsActionTests {
     func testHeistForEachPreservesCallerPredicateInsteadOfMinimumMatchers() async throws {
         let matching = ElementPredicateTemplate(label: "Delete", traits: [.button])
         var executedCommands: [ResolvedHeistActionCommand] = []
-        let initialState = observedState(elements: [
+        let initialState = await observedState(elements: [
             (
                 makeElement(label: "Delete", value: "First", identifier: "delete_first", traits: [.button]),
                 "delete_first"
@@ -212,11 +212,11 @@ extension TheBrainsActionTests {
     func testHeistForEachResetsOrdinalWhenMatchedCollectionIdentityChanges() async throws {
         let matching = ElementPredicateTemplate.label("Delete")
         var executedCommands: [ResolvedHeistActionCommand] = []
-        let initialState = observedState(elements: [
+        let initialState = await observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
             (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
         ])
-        let afterFirstMutation = observedState(elements: [
+        let afterFirstMutation = await observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
         ])
         let runtime = heistRuntime(
@@ -251,11 +251,11 @@ extension TheBrainsActionTests {
     func testHeistForEachAdditionResetsOrdinalWithoutExtendingInitialIterationBudget() async throws {
         let matching = ElementPredicateTemplate.label("Delete")
         var executedCommands: [ResolvedHeistActionCommand] = []
-        let initialState = observedState(elements: [
+        let initialState = await observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
             (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
         ])
-        let afterAddition = observedState(elements: [
+        let afterAddition = await observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_new"), "delete_new"),
             (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
             (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
@@ -289,11 +289,11 @@ extension TheBrainsActionTests {
     func testHeistForEachDoesNotResetOrdinalForStateOnlyMatchMutation() async throws {
         let matching = ElementPredicateTemplate.label("Delete")
         var executedCommands: [ResolvedHeistActionCommand] = []
-        let initialState = observedState(elements: [
+        let initialState = await observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_first", traits: [.button]), "delete_first"),
             (makeElement(label: "Delete", identifier: "delete_second", traits: [.button]), "delete_second"),
         ])
-        let stateOnlyMutation = observedState(elements: [
+        let stateOnlyMutation = await observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_first", traits: [.button, .selected]), "delete_first"),
             (makeElement(label: "Delete", identifier: "delete_second", traits: [.button]), "delete_second"),
         ])
@@ -327,7 +327,7 @@ extension TheBrainsActionTests {
 
     func testHeistForEachBodyFailureStopsBeforeFollowingTopLevelSteps() async throws {
         let matching = ElementPredicateTemplate.label("Delete")
-        let initialState = observedState(elements: [
+        let initialState = await observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
             (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
         ])
@@ -379,14 +379,14 @@ extension TheBrainsActionTests {
         let matching = ElementPredicateTemplate.label("Delete")
         var executedCommands: [ResolvedHeistActionCommand] = []
         var waitedSteps: [ResolvedWaitRuntimeInput] = []
-        let initialState = observedState(elements: [
+        let initialState = await observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
             (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
         ])
-        let stillPresentState = observedState(elements: [
+        let stillPresentState = await observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
         ])
-        let waitObservedState = observedState(labels: ["Done"])
+        let waitObservedState = await observedState(labels: ["Done"])
         let runtime = heistRuntime(
             observations: [initialState, stillPresentState],
             execute: { command in

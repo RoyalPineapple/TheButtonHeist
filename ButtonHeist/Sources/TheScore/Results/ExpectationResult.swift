@@ -151,6 +151,13 @@ public enum ExpectationResult: Codable, Sendable, Equatable {
         }
     }
 
+    package var matchedAnnouncement: String? {
+        guard met,
+              let predicate,
+              case .announcement = predicate.core else { return nil }
+        return actual
+    }
+
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ExpectationResult")
         let container = try decoder.container(keyedBy: CodingKeys.self)

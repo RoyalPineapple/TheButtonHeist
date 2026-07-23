@@ -45,10 +45,10 @@ Crew members inside `TheInsideJob` (directories under `ButtonHeist/Sources/TheIn
 
 | Crew member | Responsibility |
 |---|---|
-| `TheBrains` | Action execution, settle loop, observation-window coordination, predicate evaluation |
+| `TheBrains` | One settlement reducer/executor for actions and observation-only waits, predicate evaluation, and result projection |
 | `TheGetaway` | Message encoding/decoding and transport routing |
 | `TheSafecracker` | Touch injection and text input dispatch |
-| `TheVault` | Accessibility hierarchy capture, interface tree/graph projection, retained observation log, latest live evidence, target resolution, heistId assignment |
+| `TheVault` | Accessibility capture, actor-owned Observation Store/Log/Stream, latest live evidence, target resolution, heistId assignment |
 | `TheTripwire` | UIKit timing signals — animations, layout, window ordering, keyboard state |
 | `Server` | `TheMuscle` admission and sessions, `NWListener`, Bonjour advertisement |
 | `Lifecycle` | App lifecycle coordination and server startup/shutdown |

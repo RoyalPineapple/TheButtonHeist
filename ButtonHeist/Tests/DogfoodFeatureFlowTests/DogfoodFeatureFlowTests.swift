@@ -52,7 +52,7 @@ final class DogfoodFeatureFlowTests: XCTestCase {
         )
 
         XCTAssertEqual(evidence.checkedExpectation?.met, true)
-        XCTAssertEqual(evidence.expectationResult?.announcement, "Ticket saved.")
+        XCTAssertEqual(evidence.announcement, "Ticket saved.")
 
         let exactFailure = try await expectHeistFailure("DogfoodCombinedToastExactTextFails") {
             WaitFor(TransientFlowScreen.exactToastText, timeout: 0.5)

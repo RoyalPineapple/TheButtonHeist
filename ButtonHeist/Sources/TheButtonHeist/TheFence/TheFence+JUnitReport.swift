@@ -47,7 +47,11 @@ extension TheFence {
             let enriched = step.path == report.summary.abortedAtPath
                 ? junitFailureMessage(message, report: report, failure: failure)
                 : junitFailureMessage(message, failure: failure)
-            return .failed(message: enriched, failureKind: junitFailureKind(for: step))
+            let settlementMessage = step.settlement.flatMap { settlement in
+                settlement.settled ? nil : FenceResponse.incompleteSettlementSummary(settlement)
+            }
+            let diagnostic = [enriched, settlementMessage].compactMap { $0 }.joined(separator: "\n")
+            return .failed(message: diagnostic, failureKind: junitFailureKind(for: step))
         }
         if step.status == .skipped {
             return .skipped

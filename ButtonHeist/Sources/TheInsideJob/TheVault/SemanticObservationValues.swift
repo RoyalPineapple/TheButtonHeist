@@ -13,297 +13,173 @@ internal struct ScreenGeneration: RawRepresentable, Sendable, Equatable, Hashabl
     }
 }
 
-internal struct ObservationCursor: Sendable, Equatable, Hashable {
-    internal let generation: ScreenGeneration
-    internal let scope: SemanticObservationScope
-    internal let sequence: SettledObservationSequence
-    internal let captureHash: String
-    internal let notificationSequence: UInt64
-    internal let observedAt: Date
+internal enum Observation {}
 
-    internal init(
-        generation: ScreenGeneration,
-        scope: SemanticObservationScope,
-        sequence: SettledObservationSequence,
-        capture: AccessibilityTrace.Capture,
-        notificationSequence: UInt64
-    ) {
-        self.generation = generation
-        self.scope = scope
-        self.sequence = sequence
-        captureHash = capture.hash
-        self.notificationSequence = notificationSequence
-        observedAt = capture.interface.timestamp
+extension Observation {
+    internal struct Gap: Sendable, Equatable {
+        internal let reason: Reason
+        internal let baseline: Moment
+        internal let current: Moment
     }
+
+    internal enum TransitionValidationError: Error, Sendable, Equatable {
+        case logIndexDidNotAdvance
+        case generationMismatch(from: ScreenGeneration, to: ScreenGeneration)
+        case replacementGenerationDidNotAdvance(from: ScreenGeneration, to: ScreenGeneration)
+    }
+
+    internal enum Transition: Sendable, Equatable {
+        case initial
+        case sameGeneration(previous: Moment)
+        case screenBoundary(previous: Moment)
+
+        internal var previousMoment: Moment? {
+            switch self {
+            case .initial:
+                nil
+            case .sameGeneration(let previous), .screenBoundary(let previous):
+                previous
+            }
+        }
+    }
+
+    internal struct Snapshot: Sendable, Equatable {
+        internal let sequence: SettledObservationSequence
+        internal let generation: ScreenGeneration
+        internal let sourceScope: SemanticObservationScope
+        internal let semanticSignal: TheTripwire.SemanticSignal
+        internal let notificationSequence: UInt64
+        internal let trace: AccessibilityTrace
+        private let tree: InterfaceTree
+        private let captureID: InterfaceCaptureID
+
+        internal var observation: InterfaceObservation {
+            do {
+                return try InterfaceObservation.build(
+                    tree: tree,
+                    dispatchReferences: .empty,
+                    captureID: captureID
+                )
+            } catch {
+                preconditionFailure("Committed semantic observation failed validation: \(error)")
+            }
+        }
+
+        internal init(
+            sequence: SettledObservationSequence,
+            generation: ScreenGeneration,
+            sourceScope: SemanticObservationScope,
+            tree: InterfaceTree,
+            captureID: InterfaceCaptureID,
+            semanticSignal: TheTripwire.SemanticSignal,
+            notificationSequence: UInt64,
+            trace: AccessibilityTrace
+        ) {
+            self.sequence = sequence
+            self.generation = generation
+            self.sourceScope = sourceScope
+            self.semanticSignal = semanticSignal
+            self.notificationSequence = notificationSequence
+            self.trace = trace
+            self.tree = tree
+            self.captureID = captureID
+        }
+
+        internal init(
+            sequence: SettledObservationSequence,
+            generation: ScreenGeneration,
+            sourceScope: SemanticObservationScope,
+            observation: InterfaceObservation,
+            semanticSignal: TheTripwire.SemanticSignal,
+            notificationSequence: UInt64,
+            trace: AccessibilityTrace
+        ) {
+            self.init(
+                sequence: sequence,
+                generation: generation,
+                sourceScope: sourceScope,
+                tree: observation.tree,
+                captureID: observation.captureID,
+                semanticSignal: semanticSignal,
+                notificationSequence: notificationSequence,
+                trace: trace
+            )
+        }
+    }
+
 }
 
-internal struct SettledCapture: Sendable, Equatable {
-    internal let cursor: ObservationCursor
-    internal let capture: AccessibilityTrace.Capture
-
-    internal init(cursor: ObservationCursor, capture: AccessibilityTrace.Capture) {
-        precondition(cursor.captureHash == capture.hash, "settled capture cursor must identify its capture")
-        self.cursor = cursor
-        self.capture = capture
-    }
-
-    internal init?(previousOf event: SettledObservationEvent) {
-        guard let cursor = event.previousCursor,
-              let capture = event.trace.captures.first,
-              capture.hash == cursor.captureHash
-        else { return nil }
-        self.init(cursor: cursor, capture: capture)
-    }
-}
-
-internal struct ObservationGap: Sendable, Equatable {
+extension Observation.Gap {
     internal enum Reason: Sendable, Equatable {
         case noObservationAfterBaseline
         case scopeChanged
         case historyUnavailable
         case historyEvicted
     }
-
-    internal let reason: Reason
-    internal let baseline: ObservationCursor
-    internal let current: ObservationCursor
 }
 
-internal enum ObservationTransitionValidationError: Error, Sendable, Equatable {
-    case scopeMismatch(from: SemanticObservationScope, to: SemanticObservationScope)
-    case sequenceDidNotAdvance(from: SettledObservationSequence, to: SettledObservationSequence)
-    case generationMismatch(from: ScreenGeneration, to: ScreenGeneration)
-    case replacementGenerationDidNotAdvance(from: ScreenGeneration, to: ScreenGeneration)
-}
-
-private enum ObservationTransitionLineage {
-    static func validate(
-        from previousCursor: ObservationCursor,
-        to currentCursor: ObservationCursor
-    ) throws(ObservationTransitionValidationError) {
-        guard currentCursor.scope == previousCursor.scope else {
-            throw ObservationTransitionValidationError.scopeMismatch(
-                from: previousCursor.scope,
-                to: currentCursor.scope
-            )
-        }
-        guard currentCursor.sequence > previousCursor.sequence else {
-            throw ObservationTransitionValidationError.sequenceDidNotAdvance(
-                from: previousCursor.sequence,
-                to: currentCursor.sequence
-            )
-        }
-    }
-}
-
-internal struct SameGenerationTransition: Sendable, Equatable {
-    internal let previousCursor: ObservationCursor
-
-    internal init(
-        from previousCursor: ObservationCursor,
-        to currentCursor: ObservationCursor
-    ) throws(ObservationTransitionValidationError) {
-        try ObservationTransitionLineage.validate(
-            from: previousCursor,
-            to: currentCursor
-        )
-        guard currentCursor.generation == previousCursor.generation else {
-            throw ObservationTransitionValidationError.generationMismatch(
-                from: previousCursor.generation,
-                to: currentCursor.generation
-            )
-        }
-        self.previousCursor = previousCursor
-    }
-}
-
-internal struct ScreenBoundaryTransition: Sendable, Equatable {
-    internal let previousCursor: ObservationCursor
-
-    internal init(
-        from previousCursor: ObservationCursor,
-        to currentCursor: ObservationCursor
-    ) throws(ObservationTransitionValidationError) {
-        try ObservationTransitionLineage.validate(
-            from: previousCursor,
-            to: currentCursor
-        )
-        guard currentCursor.generation.rawValue > previousCursor.generation.rawValue else {
-            throw ObservationTransitionValidationError.replacementGenerationDidNotAdvance(
-                from: previousCursor.generation,
-                to: currentCursor.generation
-            )
-        }
-        self.previousCursor = previousCursor
-    }
-}
-
-internal enum ObservationTransition: Sendable, Equatable {
-    case initial
-    case sameGeneration(SameGenerationTransition)
-    case screenBoundary(ScreenBoundaryTransition)
-
-    internal var previousCursor: ObservationCursor? {
-        switch self {
-        case .initial:
-            nil
-        case .sameGeneration(let transition):
-            transition.previousCursor
-        case .screenBoundary(let transition):
-            transition.previousCursor
-        }
-    }
-}
-
-/// One retained settled event and the typed edge that admitted it.
-internal struct ObservationEntry: Sendable, Equatable {
-    internal let event: SettledObservationEvent
-    internal let transition: ObservationTransition
-
-    internal var settledCapture: SettledCapture {
-        Self.settledCapture(for: event)
+extension Observation {
+    internal struct Admission: Sendable {
+        internal let tree: InterfaceTree
+        internal let captureID: InterfaceCaptureID
+        internal let tripwireSignal: TheTripwire.TripwireSignal
+        internal let discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy
+        internal let lineageEvidence: ScreenLineageEvidence?
+        internal let scope: SemanticObservationScope
+        internal let notificationAdmission: NotificationAdmission
+        internal let timestamp: Date
     }
 
-    internal var cursor: ObservationCursor {
-        settledCapture.cursor
+    internal enum NotificationAdmission: Sendable {
+        case passive(NotificationSnapshot)
+        case action(NotificationSnapshot)
     }
 
-    internal static func initial(_ event: SettledObservationEvent) -> ObservationEntry {
-        ObservationEntry(event: event, transition: .initial)
-    }
+    internal enum PublicationOutcome: Sendable {
+        case delivered(SnapshotEvent)
+        case superseded
 
-    internal static func sameGeneration(
-        _ event: SettledObservationEvent,
-        after previousCursor: ObservationCursor
-    ) throws(ObservationTransitionValidationError) -> ObservationEntry {
-        let transition = try SameGenerationTransition(
-            from: previousCursor,
-            to: settledCapture(for: event).cursor
-        )
-        return ObservationEntry(
-            event: event,
-            transition: .sameGeneration(transition)
-        )
-    }
-
-    internal static func screenBoundary(
-        _ event: SettledObservationEvent,
-        replacing previousCursor: ObservationCursor
-    ) throws(ObservationTransitionValidationError) -> ObservationEntry {
-        let transition = try ScreenBoundaryTransition(
-            from: previousCursor,
-            to: settledCapture(for: event).cursor
-        )
-        return ObservationEntry(
-            event: event,
-            transition: .screenBoundary(transition)
-        )
-    }
-
-    internal init(
-        event: SettledObservationEvent,
-        transition: ObservationTransition
-    ) {
-        self.event = event
-        self.transition = transition
-    }
-
-    private static func settledCapture(
-        for event: SettledObservationEvent
-    ) -> SettledCapture {
-        guard let capture = event.settledCapture else {
-            preconditionFailure("Published semantic observation has no settled capture")
-        }
-        return capture
-    }
-}
-
-/// A settled semantic tree and the signal that admitted it.
-internal struct SettledObservation: Sendable, Equatable {
-    internal let sequence: SettledObservationSequence
-    internal let scope: SemanticObservationScope
-    internal let semanticSignal: TheTripwire.SemanticSignal
-    private let tree: InterfaceTree
-    private let captureID: InterfaceCaptureID
-
-    internal var observation: InterfaceObservation {
-        do {
-            return try InterfaceObservation.build(
-                tree: tree,
-                dispatchReferences: .empty,
-                captureID: captureID
-            )
-        } catch {
-            preconditionFailure("Settled semantic observation failed validation: \(error)")
+        internal var event: SnapshotEvent? {
+            guard case .delivered(let event) = self else { return nil }
+            return event
         }
     }
 
-    internal init(
-        sequence: SettledObservationSequence,
-        scope: SemanticObservationScope,
-        observation: InterfaceObservation,
-        semanticSignal: TheTripwire.SemanticSignal
-    ) {
-        self.sequence = sequence
-        self.scope = scope
-        self.semanticSignal = semanticSignal
-        self.tree = observation.tree
-        self.captureID = observation.captureID
-    }
-}
+    internal struct NotificationSnapshot: Sendable {
+        internal let evidence: [AccessibilityNotificationEvidence]
+        internal let through: AccessibilityNotificationCursor
+        internal let scopedScreenChangedThrough: UInt64
+        internal let gap: AccessibilityNotificationGap?
 
-/// One committed settled observation with its generation and evidence lineage.
-internal struct SettledObservationEvent: Sendable, Equatable {
-    internal let generation: ScreenGeneration
-    internal let continuity: ScreenContinuity
-    internal let settledObservation: SettledObservation
-    internal let previous: SettledObservation?
-    internal let previousCursor: ObservationCursor?
-    internal let notificationSequence: UInt64
-    internal let trace: AccessibilityTrace
-
-    internal var sequence: SettledObservationSequence { settledObservation.sequence }
-    internal var scope: SemanticObservationScope { settledObservation.scope }
-
-    internal var cursor: ObservationCursor? {
-        trace.captures.last.map {
-            ObservationCursor(
-                generation: generation,
-                scope: scope,
-                sequence: sequence,
-                capture: $0,
-                notificationSequence: notificationSequence
+        internal func notifications(
+            after cursor: AccessibilityNotificationCursor,
+            scopedScreenChangedCursor: UInt64
+        ) -> Notifications {
+            let selectedEvidence = evidence.filter { $0.sequence > cursor.sequence }
+            return Notifications(
+                kinds: selectedEvidence.map(\.kind),
+                evidence: selectedEvidence,
+                through: AccessibilityNotificationCursor(
+                    sequence: max(cursor.sequence, through.sequence)
+                ),
+                scopedScreenChangedThrough: max(
+                    scopedScreenChangedCursor,
+                    scopedScreenChangedThrough
+                ),
+                gap: gap.flatMap {
+                    $0.droppedThroughSequence > cursor.sequence ? $0 : nil
+                }
             )
         }
     }
 
-    internal var settledCapture: SettledCapture? {
-        guard let cursor, let capture = trace.captures.last else { return nil }
-        return SettledCapture(cursor: cursor, capture: capture)
+    internal struct Notifications: Sendable {
+        internal let kinds: [AccessibilityNotificationKind]
+        internal let evidence: [AccessibilityNotificationEvidence]
+        internal let through: AccessibilityNotificationCursor
+        internal let scopedScreenChangedThrough: UInt64
+        internal let gap: AccessibilityNotificationGap?
     }
-
-    internal var latestCaptureRef: AccessibilityTrace.CaptureRef? {
-        trace.captures.last.map(AccessibilityTrace.CaptureRef.init(capture:))
-    }
-
-    internal init(
-        generation: ScreenGeneration = .initial,
-        continuity: ScreenContinuity,
-        settledObservation: SettledObservation,
-        previous: SettledObservation?,
-        previousCursor: ObservationCursor? = nil,
-        notificationSequence: UInt64 = 0,
-        trace: AccessibilityTrace
-    ) {
-        self.generation = generation
-        self.continuity = continuity
-        self.settledObservation = settledObservation
-        self.previous = previous
-        self.previousCursor = previousCursor
-        self.notificationSequence = notificationSequence
-        self.trace = trace
-    }
-
 }
 
 /// A semantic observation admitted for commit.
@@ -326,6 +202,18 @@ internal struct CommittableInterfaceObservation {
     }
 
     internal static func admittedForTesting(
+        _ observation: InterfaceObservation,
+        tripwireSignal: TheTripwire.TripwireSignal,
+        lineageEvidence: ScreenLineageEvidence? = nil
+    ) -> Self {
+        admitCaptured(
+            observation,
+            tripwireSignal: tripwireSignal,
+            lineageEvidence: lineageEvidence
+        )
+    }
+
+    internal static func admitCaptured(
         _ observation: InterfaceObservation,
         tripwireSignal: TheTripwire.TripwireSignal,
         lineageEvidence: ScreenLineageEvidence? = nil
@@ -355,9 +243,9 @@ internal struct CommittableInterfaceObservation {
 
 /// The settlement result available after an action observation attempt.
 @MainActor
-internal struct ObservationSettlement {
+    internal struct ObservationSettlement {
     internal enum CommitOutcome {
-        case committed(SettledObservationEvent)
+        case committed(Observation.SnapshotEvent)
         case observedUnsettled(InterfaceObservation, notificationBatch: AccessibilityNotificationBatch?)
         case unavailable(notificationBatch: AccessibilityNotificationBatch?)
     }

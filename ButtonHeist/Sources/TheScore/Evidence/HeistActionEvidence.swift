@@ -45,6 +45,10 @@ public enum HeistActionEvidence: Codable, Sendable, Equatable {
         dispatchResult?.warning
     }
 
+    public var announcement: String? {
+        checkedExpectation?.matchedAnnouncement ?? reportedResult?.announcement
+    }
+
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case type
         case dispatchResult

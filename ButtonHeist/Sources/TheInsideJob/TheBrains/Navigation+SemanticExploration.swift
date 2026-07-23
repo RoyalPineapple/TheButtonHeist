@@ -24,7 +24,7 @@ extension Navigation {
         }
     }
 
-    enum DiscoveryCommitPolicy: Equatable {
+    enum DiscoveryCommitPolicy: Equatable, Sendable {
         case mergeIntoInterface
         case replaceInterface
     }
@@ -78,12 +78,12 @@ extension Navigation {
     }
 
     struct InterfaceExplorationResult {
-        let event: SettledObservationEvent
+        let event: Observation.SnapshotEvent
         let progress: InterfaceExplorationProgress
         let didMoveViewport: Bool
 
         internal init(
-            event: SettledObservationEvent,
+            event: Observation.SnapshotEvent,
             progress: InterfaceExplorationProgress,
             didMoveViewport: Bool = false
         ) {
@@ -146,7 +146,7 @@ extension Navigation {
 
         mutating func finish(
             startTime: CFTimeInterval,
-            event: SettledObservationEvent,
+            event: Observation.SnapshotEvent,
             didMoveViewport: Bool
         ) -> InterfaceExplorationResult {
             progress.explorationTime = CACurrentMediaTime() - startTime

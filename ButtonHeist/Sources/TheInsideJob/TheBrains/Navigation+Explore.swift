@@ -16,7 +16,7 @@ extension Navigation {
         deadline: SemanticObservationDeadline? = nil,
         maxScrollsPerContainer: Int? = nil,
         maxScrollsPerDiscovery: Int? = nil,
-        onObservation: ((SettledObservationEvent) -> ViewportExplorationDecision)? = nil,
+        onObservation: ((Observation.SnapshotEvent) async -> ViewportExplorationDecision)? = nil,
     ) async -> InterfaceExplorationResult? {
         let explorer = ViewportExplorer(
             navigation: self,
@@ -29,11 +29,11 @@ extension Navigation {
             searchOrder: searchOrder,
         )
         return await explorer.exploreViewports(exitPosition: exitPosition) { event in
-            if let decision = onObservation?(event), decision == .goalSatisfied {
+            if let decision = await onObservation?(event), decision == .goalSatisfied {
                 return .goalSatisfied
             }
             guard let target else { return .continue }
-            return vault.hasVisibleTerminalResolution(target, in: event.settledObservation.observation.tree)
+            return vault.hasVisibleTerminalResolution(target, in: event.snapshot.observation.tree)
                 ? .goalSatisfied
                 : .continue
         }
@@ -46,7 +46,7 @@ extension Navigation {
         discoveryCommitPolicy: DiscoveryCommitPolicy,
         notificationWindow: AccessibilityNotificationScopeLease? = nil,
         previousViewportHash: String? = nil
-    ) async -> SettledObservationEvent? {
+    ) async -> Observation.SnapshotEvent? {
         let afterViewportMovement = previousViewportHash != nil
         defer { notificationWindow?.cancel() }
         guard !Task.isCancelled,
@@ -74,12 +74,12 @@ extension Navigation {
                transitionCanSettleAgain {
                 continue
             }
-            if let event = vault.semanticObservationStream.commitSettledDiscoveryObservation(
+            if let event = await vault.semanticObservationStream.commitSettledDiscoveryObservation(
                 settle,
                 discoveryCommitPolicy: discoveryCommitPolicy,
                 afterViewportMovement: afterViewportMovement,
                 notificationBatch: notificationWindow?.capture()
-            ) {
+            )?.event {
                 return event
             }
         } while transitionDeadline.hasTimeRemaining(at: RuntimeElapsed.now)
@@ -94,8 +94,8 @@ extension Navigation {
 
 extension TheBrains {
 
-    func startSemanticObservation() {
-        vault.semanticObservationStream.start { [weak self] in
+    func startSemanticObservation() async {
+        await vault.semanticObservationStream.start { [weak self] in
             guard let self else { return nil }
             return await self.executeSemanticDiscovery()
         }

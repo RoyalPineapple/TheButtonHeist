@@ -141,10 +141,8 @@ struct InterfaceTree: Sendable, Equatable {
         )
     }
 
-    @MainActor
-    func updatingViewport(with observation: InterfaceObservation) -> InterfaceTree {
-        guard observation.tree != .empty else { return .empty }
-        let next = observation.tree
+    func updatingViewport(with next: InterfaceTree) -> InterfaceTree {
+        guard next != .empty else { return .empty }
         let previousVisible = viewportElementIDs
         let disappearedVisible = previousVisible.subtracting(next.viewportElementIDs)
         let previousContainerPaths = Set(viewportCapture.hierarchy.pathIndexedContainers.map(\.path))

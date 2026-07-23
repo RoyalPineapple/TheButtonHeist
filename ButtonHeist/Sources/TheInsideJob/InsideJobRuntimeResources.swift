@@ -4,7 +4,7 @@ import UIKit
 
 @MainActor
 extension TheInsideJob {
-    func activateRuntime(_ resources: InsideJobRuntimeResources) {
+    func activateRuntime(_ resources: InsideJobRuntimeResources) async {
         getaway.identity.tlsActive = true
 
         installLifecycleObservationIfNeeded()
@@ -12,7 +12,7 @@ extension TheInsideJob {
 
         tripwire.uikitIdleTracker.installIfAvailable()
         tripwire.startPulse()
-        brains.startSemanticObservation()
+        await brains.startSemanticObservation()
         brains.safecracker.startKeyboardObservation()
     }
 

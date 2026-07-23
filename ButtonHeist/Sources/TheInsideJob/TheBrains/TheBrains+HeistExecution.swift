@@ -85,7 +85,7 @@ extension TheBrains {
                  .baselineTraceOnly:
                 return nil
             case .actionEndpoint(_, _, let context):
-                return context?.preActionCapture.cursor.sequence
+                return context?.preActionMoment.sequence
             case .afterObservation(_, _, let sequence):
                 return sequence
             }
@@ -94,7 +94,7 @@ extension TheBrains {
         internal var changeBaseline: PredicateChangeBaselineSource {
             switch self {
             case .actionEndpoint(_, _, let context):
-                .supplied(context?.preActionCapture)
+                .supplied(context?.preActionMoment)
             case .baselineTraceOnly:
                 .supplied(nil)
             case .standalone, .immediate, .afterObservation:
@@ -112,7 +112,7 @@ extension TheBrains {
     internal struct HeistExecutionRuntime {
         internal let execute: @MainActor (
             ResolvedHeistActionCommand,
-            SemanticObservationScope?
+            ResolvedWaitRuntimeInput?
         ) async -> RuntimeActionExecution
         internal let wait: @MainActor (HeistRuntimeWaitRequest) async -> HeistWaitResult
         internal let selectPredicateCase: @MainActor ([ResolvedPredicateCaseRuntimeInput], Double) async -> HeistCaseSelectionResult
@@ -121,7 +121,7 @@ extension TheBrains {
         internal init(
             execute: @escaping @MainActor (
                 ResolvedHeistActionCommand,
-                SemanticObservationScope?
+                ResolvedWaitRuntimeInput?
             ) async -> RuntimeActionExecution,
             wait: @escaping @MainActor (HeistRuntimeWaitRequest) async -> HeistWaitResult,
             selectPredicateCase: @escaping @MainActor ([ResolvedPredicateCaseRuntimeInput], Double) async -> HeistCaseSelectionResult,
@@ -136,21 +136,26 @@ extension TheBrains {
         @MainActor
         internal static func live(_ brains: TheBrains) -> HeistExecutionRuntime {
             HeistExecutionRuntime(
-                execute: { command, expectationContextScope in
+                execute: { command, expectation in
                     await brains.executeRuntimeActionForHeist(
                         command,
-                        expectationContextScope: expectationContextScope
+                        expectation: expectation
                     )
                 },
                 wait: { request in
-                    return await brains.interactionCoordinator.waitForPredicate(
-                        request.step,
-                        initialTrace: request.initialTrace,
-                        baselineSequence: request.afterSequence,
-                        changeBaseline: request.changeBaseline,
-                        actionExpectationContext: request.actionExpectationContext,
-                        startedAt: request.startedAt
-                    )
+                    switch request {
+                    case .standalone(let step, let startedAt):
+                        return await brains.executeStandaloneWait(step, startedAt: startedAt)
+                    case .actionEndpoint, .immediate, .afterObservation, .baselineTraceOnly:
+                        return await brains.interactionCoordinator.waitForPredicate(
+                            request.step,
+                            initialTrace: request.initialTrace,
+                            baselineSequence: request.afterSequence,
+                            changeBaseline: request.changeBaseline,
+                            actionExpectationContext: request.actionExpectationContext,
+                            startedAt: request.startedAt
+                        )
+                    }
                 },
                 selectPredicateCase: { cases, timeout in
                     await brains.interactionCoordinator.waitForPredicateCases(cases, timeout: timeout)
@@ -171,7 +176,7 @@ extension TheBrains {
         defer { demand.cancel() }
         if tripwire.isPulseRunning,
            await interactionCoordinator.refreshedVisibleBaseline() == nil {
-            return treeUnavailableResult(payload: .heist(nil))
+            return await treeUnavailableResult(payload: .heist(nil))
         }
         return await executeHeistPlan(plan, argument: argument, runtime: .live(self))
     }

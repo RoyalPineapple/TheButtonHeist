@@ -10,13 +10,13 @@ import UIKit
 @MainActor
 final class ScreenGenerationTests: XCTestCase {
 
-    func testCommittedDiscoveryPagesMergeWithinGeneration() {
+    func testCommittedDiscoveryPagesMergeWithinGeneration() async {
         let brains = TheBrains(tripwire: TheTripwire())
 
-        let first = brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let first = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             screen(header: "Catalog", entries: [("Visible", .staticText, "visible")])
         )
-        let second = brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let second = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             screen(header: "Catalog", entries: [("Discovered", .button, "discovered")])
         )
 
@@ -25,9 +25,9 @@ final class ScreenGenerationTests: XCTestCase {
         XCTAssertNotNil(brains.vault.interfaceTree.findElement(heistId: "discovered"))
     }
 
-    func testCommittedDiscoveryReplacementRemovesPriorGeneration() {
+    func testCommittedDiscoveryReplacementRemovesPriorGeneration() async {
         let brains = TheBrains(tripwire: TheTripwire())
-        let before = brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let before = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             screen(header: "Home", entries: [("Old Action", .button, "old_action")])
         )
         let actionWindow = brains.vault.accessibilityNotifications.beginActionWindow()
@@ -37,7 +37,7 @@ final class ScreenGenerationTests: XCTestCase {
             notificationData: .none,
             associatedElement: .none
         )
-        let after = brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let after = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             screen(header: "Settings", entries: [("New Action", .button, "new_action")]),
             notificationBatch: actionWindow.capture()
         )
@@ -47,15 +47,15 @@ final class ScreenGenerationTests: XCTestCase {
         XCTAssertNotNil(brains.vault.interfaceTree.findElement(heistId: "new_action"))
     }
 
-    func testDiagnosticEvidenceCannotBecomeCommittedTarget() {
+    func testDiagnosticEvidenceCannotBecomeCommittedTarget() async {
         let brains = TheBrains(tripwire: TheTripwire())
-        brains.vault.recordFailedSettleDiagnosticEvidence(
+        await brains.vault.recordFailedSettleDiagnosticEvidence(
             screen(
                 header: "Checkout",
                 entries: [("Unsettled Purchase", .button, "unsettled_purchase")]
             )
         )
-        brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             screen(header: "Receipt", entries: [("Done", .button, "done")])
         )
 
@@ -63,7 +63,7 @@ final class ScreenGenerationTests: XCTestCase {
         XCTAssertNotNil(brains.vault.interfaceTree.findElement(heistId: "done"))
     }
 
-    func testScreenReplacementResetsManifestWithoutResettingDiscoveryBound() {
+    func testScreenReplacementResetsManifestWithoutResettingDiscoveryBound() async {
         let oldPath = TreePath([0])
         let newPath = TreePath([1])
         var exploration = Navigation.SemanticExploration(
@@ -90,7 +90,7 @@ final class ScreenGenerationTests: XCTestCase {
         XCTAssertEqual(exploration.progress.recordScrollAttempt(in: newPath), .discoveryScrollLimit)
     }
 
-    func testCurrentViewportBaselineReplacesOnceThenMergesDiscoveryPages() {
+    func testCurrentViewportBaselineReplacesOnceThenMergesDiscoveryPages() async {
         var exploration = Navigation.SemanticExploration(
             baseline: .currentViewport(screen(header: "Catalog"))
         )

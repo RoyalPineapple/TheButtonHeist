@@ -28,7 +28,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         try await super.tearDown()
     }
 
-    func testCaptureSemanticStateKeepsKnownElementsInCanonicalInterface() {
+    func testCaptureSemanticStateKeepsKnownElementsInCanonicalInterface() async {
         let visible = AccessibilityElement.make(
             label: "Visible",
             traits: .button,
@@ -39,11 +39,11 @@ final class TheBrainsPipelineTests: XCTestCase {
             traits: .button,
             respondsToUserInteraction: false
         )
-        brains.vault.installObservationForTesting(.makeForTests(
+        await brains.vault.installObservationForTesting(.makeForTests(
             elements: [(visible, HeistId(rawValue: "button_visible"))],
             offViewport: [.init(offViewport, heistId: HeistId(rawValue: "button_below_fold"))]
         ))
-        let state = brains.actionEvidenceProjector.projectBaseline()
+        let state = await brains.actionEvidenceProjector.projectBaseline()
 
         XCTAssertEqual(
             Set(state.observation.tree.orderedElements.map(\.heistId)),
@@ -55,7 +55,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
     }
 
-    func testVisibleSettledEvidenceKeepsKnownElementsInCanonicalBaseline() {
+    func testVisibleSettledEvidenceKeepsKnownElementsInCanonicalBaseline() async {
         let observation = InterfaceObservation.makeForTests(
             elements: [
                 (AccessibilityElement.make(label: "Visible", traits: .button), "button_visible"),
@@ -67,7 +67,7 @@ final class TheBrainsPipelineTests: XCTestCase {
                 ),
             ]
         )
-        let event = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(observation)
+        let event = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(observation)
 
         let evidence = brains.actionEvidenceProjector.projectSettledEvidence(from: event)
 
@@ -81,10 +81,10 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
     }
 
-    func testBeforeStateDerivesNeededSemanticProjectionsFromCanonicalInputs() {
+    func testBeforeStateDerivesNeededSemanticProjectionsFromCanonicalInputs() async {
         let screen = makeScreen(elements: [("Save", .button, "save")])
-        brains.vault.installObservationForTesting(screen)
-        let captured = brains.actionEvidenceProjector.projectBaseline()
+        await brains.vault.installObservationForTesting(screen)
+        let captured = await brains.actionEvidenceProjector.projectBaseline()
 
         let state = ActionEvidenceProjector.Baseline(
             observation: captured.observation,
@@ -100,7 +100,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(state.screenId, screen.tree.id)
     }
 
-    func testDiscoveryObservationStateAndTraceUseCanonicalSemanticInterface() throws {
+    func testDiscoveryObservationStateAndTraceUseCanonicalSemanticInterface() async throws {
         let viewportObservation = makeDiscoveryObservationProjectionFixture()
         let discoveryInterface = TheVault.WireConversion.discoveryProjection(
             from: viewportObservation.tree
@@ -114,18 +114,17 @@ final class TheBrainsPipelineTests: XCTestCase {
             screenId: viewportObservation.tree.id
         )
         let trace = AccessibilityTrace(capture: traceCapture)
-        let settled = SettledObservation(
+        let settled = Observation.Snapshot(
             sequence: 7,
-            scope: .discovery,
+            generation: .initial,
+            sourceScope: .discovery,
             observation: viewportObservation,
-            semanticSignal: .empty
-        )
-        let event = SettledObservationEvent(
-            continuity: .sameGeneration,
-            settledObservation: settled,
-            previous: nil,
+            semanticSignal: .empty,
+            notificationSequence: 0,
             trace: trace
         )
+        var log = Observation.Log(retentionLimit: 1)
+        let event = try log.record(snapshot: settled, continuity: .sameGeneration)
         let observation = brains.actionEvidenceProjector.projectSettledEvidence(from: event)
 
         XCTAssertNotEqual(discoveryInterface.tree, semanticInterface.tree)
@@ -141,7 +140,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
     }
 
-    func testShouldRecordAccessibilityTraceIgnoresViewportOnlyMovement() {
+    func testShouldRecordAccessibilityTraceIgnoresViewportOnlyMovement() async {
         let beforeElement = AccessibilityElement.make(
             label: "Chicken Tikka",
             traits: .button,
@@ -149,10 +148,10 @@ final class TheBrainsPipelineTests: XCTestCase {
             activationPoint: CGPoint(x: 100, y: 22),
             respondsToUserInteraction: false
         )
-        brains.vault.installObservationForTesting(.makeForTests(
+        await brains.vault.installObservationForTesting(.makeForTests(
             elements: [(beforeElement, HeistId(rawValue: "chicken_tikka_button"))]
         ))
-        let baseline = brains.actionEvidenceProjector.projectBaseline()
+        let baseline = await brains.actionEvidenceProjector.projectBaseline()
 
         let afterElement = AccessibilityElement.make(
             label: "Chicken Tikka",
@@ -161,10 +160,10 @@ final class TheBrainsPipelineTests: XCTestCase {
             activationPoint: CGPoint(x: 100, y: -278),
             respondsToUserInteraction: false
         )
-        brains.vault.installObservationForTesting(.makeForTests(
+        await brains.vault.installObservationForTesting(.makeForTests(
             elements: [(afterElement, HeistId(rawValue: "chicken_tikka_button"))]
         ))
-        let current = brains.actionEvidenceProjector.projectBaseline()
+        let current = await brains.actionEvidenceProjector.projectBaseline()
         let classification = ScreenClassifier.classify(
             before: baseline.screenSnapshot,
             after: current.screenSnapshot,
@@ -181,17 +180,17 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
     }
 
-    func testShouldRecordAccessibilityTraceRecordsSameScreenSemanticChange() {
+    func testShouldRecordAccessibilityTraceRecordsSameScreenSemanticChange() async {
         let beforeElement = AccessibilityElement.make(
             label: "Total",
             value: "$4.00",
             traits: .staticText,
             respondsToUserInteraction: false
         )
-        brains.vault.installObservationForTesting(.makeForTests(
+        await brains.vault.installObservationForTesting(.makeForTests(
             elements: [(beforeElement, HeistId(rawValue: "total_staticText"))]
         ))
-        let baseline = brains.actionEvidenceProjector.projectBaseline()
+        let baseline = await brains.actionEvidenceProjector.projectBaseline()
 
         let afterElement = AccessibilityElement.make(
             label: "Total",
@@ -199,10 +198,10 @@ final class TheBrainsPipelineTests: XCTestCase {
             traits: .staticText,
             respondsToUserInteraction: false
         )
-        brains.vault.installObservationForTesting(.makeForTests(
+        await brains.vault.installObservationForTesting(.makeForTests(
             elements: [(afterElement, HeistId(rawValue: "total_staticText"))]
         ))
-        let current = brains.actionEvidenceProjector.projectBaseline()
+        let current = await brains.actionEvidenceProjector.projectBaseline()
         let classification = ScreenClassifier.classify(
             before: baseline.screenSnapshot,
             after: current.screenSnapshot,
@@ -231,10 +230,10 @@ final class TheBrainsPipelineTests: XCTestCase {
         // With no scrollable containers in the host hierarchy, semantic discovery
         // reduces to refresh-and-commit, and the seeded entry merges into the
         // live parse rather than being pruned.
-        seedScreen(elements: [("Seed", .button, "button_seed")])
+        await seedScreen(elements: [("Seed", .button, "button_seed")])
         XCTAssertEqual(brains.vault.interfaceTree.elements.count, 1)
 
-        brains.startSemanticObservation()
+        await brains.startSemanticObservation()
         let observation = await brains.vault.semanticObservationStream.settledEvent(scope: .discovery, after: nil, timeout: 2)
 
         // Either the seed survives (no live parse landed and the union still
@@ -270,7 +269,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(exploration.progress.exploredScrollPaths.isEmpty)
     }
 
-    func testExplorationTerminalResolutionSupportsContainerTargets() throws {
+    func testExplorationTerminalResolutionSupportsContainerTargets() async throws {
         let observation = makeDiscoveryObservationProjectionFixture()
         let visibleRoot = try AccessibilityTarget.container(.identifier("RootViewController")).resolve(in: .empty)
         let offscreenGroup = try AccessibilityTarget.container(.identifier("OffscreenGroup")).resolve(in: .empty)
@@ -281,7 +280,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertFalse(brains.vault.hasVisibleTerminalResolution(missing, in: observation.tree))
     }
 
-    func testSemanticExplorationAddsNestedContainersAfterOuterContainerIsExplored() {
+    func testSemanticExplorationAddsNestedContainersAfterOuterContainerIsExplored() async {
         let outer = makeScrollableContainer(
             frame: CGRect(x: 0, y: 0, width: 320, height: 400),
             contentSize: CGSize(width: 320, height: 1_200)
@@ -305,7 +304,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(exploration.progress.pendingScrollPaths.contains(nestedPath))
     }
 
-    func testSemanticExplorationAbsorbQueuesScrollContainersFromParsedPage() {
+    func testSemanticExplorationAbsorbQueuesScrollContainersFromParsedPage() async {
         let outer = makeScrollableContainer(
             frame: CGRect(x: 0, y: 0, width: 320, height: 400),
             contentSize: CGSize(width: 320, height: 1_200)
@@ -334,7 +333,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(exploration.progress.pendingScrollPaths.contains(TreePath([0, 0])))
     }
 
-    func testSemanticExplorationAbsorbQueuesNestedContainerWithoutRequeuingExploredOuter() {
+    func testSemanticExplorationAbsorbQueuesNestedContainerWithoutRequeuingExploredOuter() async {
         let outer = makeScrollableContainer(
             frame: CGRect(x: 0, y: 0, width: 320, height: 400),
             contentSize: CGSize(width: 320, height: 1_200)
@@ -369,9 +368,9 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(exploration.progress.pendingScrollPaths.contains(nestedPath))
     }
 
-    func testSemanticExplorationFinishOwnsExplorationTimestamp() {
+    func testSemanticExplorationFinishOwnsExplorationTimestamp() async {
         var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(.empty))
-        let event = brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(.empty)
+        let event = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(.empty)
 
         let result = exploration.finish(
             startTime: CACurrentMediaTime() - 0.01,
@@ -381,14 +380,14 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         XCTAssertGreaterThan(result.progress.explorationTime, 0)
         XCTAssertFalse(result.didMoveViewport)
-        XCTAssertEqual(result.event.settledObservation.observation.tree, InterfaceObservation.empty.tree)
+        XCTAssertEqual(result.event.snapshot.observation.tree, InterfaceObservation.empty.tree)
         XCTAssertEqual(
-            result.event.settledObservation.observation.liveCapture.snapshot,
+            result.event.snapshot.observation.liveCapture.snapshot,
             InterfaceObservation.empty.liveCapture.snapshot
         )
     }
 
-    func testSemanticOnlyScrollableContainerIsQueuedForSwipeExploration() {
+    func testSemanticOnlyScrollableContainerIsQueuedForSwipeExploration() async {
         let path = TreePath([0])
         let container = semanticContainer(
             makeScrollableContainer(
@@ -515,8 +514,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
     }
 
-    func seedScreen(elements: [(label: String, traits: UIAccessibilityTraits, heistId: HeistId)]) {
-        brains.vault.installObservationForTesting(makeScreen(elements: elements))
+    func seedScreen(elements: [(label: String, traits: UIAccessibilityTraits, heistId: HeistId)]) async {
+        await brains.vault.installObservationForTesting(makeScreen(elements: elements))
     }
 
     func notificationBatch(
@@ -558,9 +557,9 @@ final class TheBrainsPipelineTests: XCTestCase {
         final: InterfaceObservation
     ) async throws -> HeistWaitResult {
         let stream = brains.vault.semanticObservationStream
-        let baselineEvent = stream.commitVisibleObservationForTesting(baseline)
-        brains.vault.installObservationForTesting(final)
-        let baselineCapture = try XCTUnwrap(baselineEvent.settledCapture)
+        let baselineEvent = await stream.commitVisibleObservationForTesting(baseline)
+        await brains.vault.installObservationForTesting(final)
+        let baselineCapture = try XCTUnwrap(baselineEvent.moment)
         return await brains.interactionCoordinator.waitForPredicate(
             try resolvedWait(WaitStep(predicate: predicate, timeout: .milliseconds(1))),
             changeBaseline: .supplied(baselineCapture)

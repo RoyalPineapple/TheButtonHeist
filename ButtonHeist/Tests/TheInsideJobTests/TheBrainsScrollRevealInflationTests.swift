@@ -18,7 +18,7 @@ extension TheBrainsScrollTests {
             scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: nil),
             element: makeElement(label: "Visible")
         )
-        installLiveScrollTarget(visibleEntry, scrollView: scrollView, containerName: "visible_scroll")
+        await installLiveScrollTarget(visibleEntry, scrollView: scrollView, containerName: "visible_scroll")
 
         let result = await brains.navigation.elementInflation.revealSemanticTarget(
             visibleEntry, deadline: semanticRevealDeadline()
@@ -36,7 +36,7 @@ extension TheBrainsScrollTests {
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         scrollView.contentOffset = CGPoint(x: 0, y: 80)
         let targetId: HeistId = "direct_reused_target"
-        installScreenWithOffViewport(
+        await installScreenWithOffViewport(
             visible: .init(makeElement(label: "Visible"), heistId: "visible_element"),
             offscreen: .init(
                 makeElement(label: "Original Target", traits: .button),
@@ -73,7 +73,7 @@ extension TheBrainsScrollTests {
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
         let offscreen = makeElement(label: "Settings")
-        installScreenWithOffViewport(
+        await installScreenWithOffViewport(
             visible: InterfaceObservation.TestEntry(visible, heistId: "visible_element"),
             offscreen: OffViewportScrollTarget(
                 offscreen,
@@ -102,7 +102,7 @@ extension TheBrainsScrollTests {
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let observedPoint = CGPoint(x: 160, y: 1_200)
-        installScreenWithOffViewport(
+        await installScreenWithOffViewport(
             visible: .init(makeElement(label: "Visible"), heistId: "visible_element"),
             offscreen: .init(
                 makeElement(label: "Settings", traits: .button),
@@ -112,7 +112,7 @@ extension TheBrainsScrollTests {
             )
         )
         let entry = try XCTUnwrap(brains.vault.interfaceTree.findElement(heistId: "settings_button"))
-        let currentEvent = brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let currentEvent = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             brains.vault.latestObservation
         )
         let originalMoveViewport = brains.navigation.elementInflation.exploration.moveViewport
@@ -158,7 +158,7 @@ extension TheBrainsScrollTests {
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let observedPoint = CGPoint(x: 160, y: 1_200)
-        installScreenWithOffViewport(
+        await installScreenWithOffViewport(
             visible: .init(makeElement(label: "Visible"), heistId: "visible_element"),
             offscreen: .init(
                 makeElement(label: "Settings", traits: .button),
@@ -202,7 +202,7 @@ extension TheBrainsScrollTests {
         }
         brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
 
-        installSyntheticObservation(mismatchedObservation)
+        await installSyntheticObservation(mismatchedObservation)
         guard case .admitted(let mismatchedTarget) = brains.navigation.elementInflation.admitSemanticTarget(
             sourceTarget,
             selectedElement: mismatchedElement
@@ -218,7 +218,7 @@ extension TheBrainsScrollTests {
         XCTAssertTrue(dispatchedPoints.isEmpty)
         XCTAssertTrue(dispatchedOwnerPaths.isEmpty)
 
-        installSyntheticObservation(matchingObservation)
+        await installSyntheticObservation(matchingObservation)
         guard case .admitted(let matchingTarget) = brains.navigation.elementInflation.admitSemanticTarget(
             sourceTarget,
             selectedElement: matchingElement
@@ -308,7 +308,7 @@ extension TheBrainsScrollTests {
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [ancestorPath: .init(view: scrollView)]
         )
-        installSyntheticObservation(initialObservation)
+        await installSyntheticObservation(initialObservation)
         var movementTargets: [ObjectIdentifier] = []
         scrollView.onSetContentOffset = { scrollView in
             movementTargets.append(ObjectIdentifier(scrollView))
@@ -351,7 +351,7 @@ extension TheBrainsScrollTests {
         }
         await brains.tripwire.yieldFrames(3)
 
-        installSyntheticObservation(fixture.initialObservation)
+        await installSyntheticObservation(fixture.initialObservation)
         fixture.siblingScrollView.onSetContentOffset = { _ in
             self.visibleObservationSource.observation = fixture.revealedObservation
         }
@@ -390,7 +390,7 @@ extension TheBrainsScrollTests {
 
     func testLaterOwnerMatchConsumesStoredSeed() async throws {
         let fixture = laterOwnerMatchFixture()
-        installSyntheticObservation(fixture.unavailableObservation)
+        await installSyntheticObservation(fixture.unavailableObservation)
         let sourceTarget = try resolvedTarget(
             .label("Later Owner Target").and(.traits([.button]))
         )
@@ -414,7 +414,7 @@ extension TheBrainsScrollTests {
         XCTAssertTrue(fixture.ownerScrollView.requestedContentOffsets.isEmpty)
         XCTAssertTrue(fixture.decoyScrollView.requestedContentOffsets.isEmpty)
 
-        installSyntheticObservation(fixture.matchingObservation)
+        await installSyntheticObservation(fixture.matchingObservation)
         fixture.ownerScrollView.onSetContentOffset = { _ in
             self.visibleObservationSource.observation = fixture.revealedObservation
         }
@@ -516,7 +516,7 @@ extension TheBrainsScrollTests {
     func testKnownTargetRevealReturnsTimedOutInflationFailureBeforeWork() async throws {
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
-        installScreenWithOffViewport(
+        await installScreenWithOffViewport(
             visible: .init(makeElement(label: "Visible"), heistId: "visible_element"),
             offscreen: .init(
                 makeElement(label: "Settings"),
@@ -556,7 +556,7 @@ extension TheBrainsScrollTests {
     func testKnownTargetRevealReturnsCancelledInflationFailureBeforeWork() async throws {
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
-        installScreenWithOffViewport(
+        await installScreenWithOffViewport(
             visible: .init(makeElement(label: "Visible"), heistId: "visible_element"),
             offscreen: .init(
                 makeElement(label: "Settings"),
@@ -594,7 +594,7 @@ extension TheBrainsScrollTests {
 
     func testScrollToVisibleUnknownTargetUsesCurrentSemanticDiagnostics() async throws {
         let visible = makeElement(label: "Visible")
-        brains.vault.installObservationForTesting(.makeForTests(
+        await brains.vault.installObservationForTesting(.makeForTests(
             elements: [(visible, HeistId(rawValue: "visible_element"))]
         ))
 
@@ -616,7 +616,7 @@ extension TheBrainsScrollTests {
     func testElementInflationNamesNoRevealPathFailure() async throws {
         let visible = makeElement(label: "Visible")
         let offscreen = makeElement(label: "Offscreen")
-        installScreenWithOffViewportEntry(
+        await installScreenWithOffViewportEntry(
             liveHierarchy: [(visible, "visible_element")],
             offViewport: [InterfaceObservation.OffViewportEntry(offscreen, heistId: "offscreen_button")]
         )
@@ -847,7 +847,7 @@ extension TheBrainsScrollTests {
     ) async throws -> ElementInflation.ElementInflationResult {
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
-        installScreenWithOffViewport(
+        await installScreenWithOffViewport(
             visible: .init(reviewPRElement(priority: "P2"), heistId: "initial_priority_two"),
             offscreen: .init(
                 reviewPRElement(
@@ -881,7 +881,7 @@ extension TheBrainsScrollTests {
         )
         brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in
             self.brains.vault.observeInterface(revealedObservation)
-            let event = self.brains.vault.semanticObservationStream
+            let event = await self.brains.vault.semanticObservationStream
                 .commitDiscoveryObservationForTesting(revealedObservation)
             self.visibleObservationSource.observation = postRevealObservation
             guard let current = self.brains.vault.interfaceElement(heistId: "current_priority_one") else {

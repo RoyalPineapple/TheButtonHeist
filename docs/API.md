@@ -254,36 +254,32 @@ for the full matching contract.
 
 ## Captures, Change Facts, and Public Deltas
 
-`SemanticObservationStore` is the runtime semantic owner. It commits the
-current tree, retained `ObservationEntry` values, generation and sequence
-lineage, notification cursor, and clean-read seal together. Each entry pairs
-one `SettledCapture` with an initial, same-generation, or screen-boundary
-transition. Consumers read retained history through scope-plus-cursor Store
-reads coordinated by `SemanticObservationStream`; reads and notification
-checkpoints do not consume shared history.
+`Observation.Store` is the runtime semantic owner. It atomically commits the
+current tree, one retained `Observation.Log`, generation and sequence lineage,
+notification position, and admitted-read state. `Observation.Stream` publishes
+the same committed event afterward; readers can never observe an event whose
+snapshot is not current Store truth.
 
-Temporal evaluation builds one `ObservationWindow` from an immutable baseline
-cursor through the current retained entry. Presence predicates bypass temporal
-history and resolve against the current tree. Change predicates derive their
-ordered `ChangeFact.elementsChanged` and `ChangeFact.screenChanged` values from
-the window's capture lineage. `AccessibilityTrace` is the durable result form
-of that evidence, not a second observation pipeline.
+`Observation.Log` is a private `RandomAccessCollection` of snapshot and
+announcement events. `Observation.Moment` pairs one immutable snapshot with its
+private Log index and is passed directly to `events(since:)`. Active settlement
+boundaries protect required entries from pruning; an expired or unavailable
+read is typed incomplete evidence. Callers cannot manipulate indices or retain
+a second temporal window.
 
-An action with an attached `.expect(...)` captures its exact pre-action
-`SettledCapture` and announcement cursor before dispatch. After action
-settlement commits, the runtime freezes the same-action upper
-`ObservationCursor` and replays Store entries between those bounds through the
-canonical predicate reducer. A transient appearance or disappearance therefore
-qualifies even when the element is absent again at the settled endpoint.
-Announcements are eligible only when they occur after the action's opening
-announcement cursor. Presence expectations still resolve against current
-settled state.
+Actions and waits use one internal `Settlement.Command`. Its trigger is either
+a resolved action or observation; its optional predicate supplies current-state,
+positive-transition, announcement, or complete-history semantics. The executor
+captures a baseline Moment and announcement position, arms all event channels,
+and only then dispatches an action. An observation trigger performs no dispatch.
 
-That context belongs only to the explicitly attached expectation. A standalone
-`WaitFor` establishes its own invocation-local baseline and announcement cursor;
-it cannot consume evidence from an earlier action or heist. If an attached
-expectation is still unmet after bounded replay, it continues through the same
-wait lifecycle without replacing its pre-action baseline.
+Current-state predicates such as `exists` and `missing` must hold in the exact
+post-readiness handoff snapshot returned by settlement. Positive transitions
+such as `appeared`, `disappeared`, and `updated` consume ordered Log events
+strictly after the baseline and latch their first qualifying fact. Announcements
+likewise latch only after the invocation boundary. `noChange` requires complete
+retained history. A standalone `waitFor` creates its own boundaries and cannot
+consume evidence from an earlier action or heist.
 
 A screen boundary emits three ordered facts: all old-tree nodes disappear, the
 screen marker occurs, then all new-tree nodes appear. Element updates exist only
@@ -295,8 +291,8 @@ reason in the trace.
 Notifications are best-effort UIKit evidence, not a delivery guarantee; their
 absence does not by itself prove replacement or stability.
 
-An incomplete window cannot prove `noChange`. A complete window may span
-multiple entries and retains fast intermediate changes until evaluation.
+Incomplete Log history cannot prove `noChange`. Complete history may span
+multiple events and retains fast intermediate changes until evaluation.
 An action-settlement diagnostic trace is result evidence only and cannot bypass
 the settled observation window.
 
@@ -530,9 +526,10 @@ message, and outcome-bound evidence. Each payload case determines its action
 method and carries only the command-specific value legal for that method;
 custom `Codable` projects that value directly to the public `method` plus
 an optional `payload` value. There is no separate semantic or wire payload
-wrapper. The app-side dispatch path
-first produces one `ActionDispatchResult`; post-action observation adds
-semantic evidence without inventing a parallel result shape. Failures carry
+wrapper. The app-side settlement path records one `ActionDispatchResult` and
+the predicate, readiness, and handoff evidence in one `Settlement.Result`;
+`Settlement.ResultProjector` derives the public action result without a
+post-action wait or parallel result shape. Failures carry
 their typed action failure inside `outcome.failureKind`. Fence result projections
 add an expectation result when requested and derive a public delta from the
 same trace evidence.
@@ -554,7 +551,11 @@ string and integer shapes.
 
 Successful action settlement may also report the optional typed `path` that
 proved the result: `semanticStability`, `uikitIdle`, or
-`accessibilityQuietWindow`. Timed-out settlement has no path.
+`accessibilityQuietWindow`. `timedOut` has no path.
+`observationHandoffTimedOut` identifies the narrower case where readiness was
+proved, but no eligible observation was admitted for that readiness generation
+before the deadline; it retains the readiness path and reports `settled ==
+false`.
 
 For `elementsChanged`, public responses include concrete semantic edits under
 `delta.edits.added`, `delta.edits.removed`, and `delta.edits.updated` when

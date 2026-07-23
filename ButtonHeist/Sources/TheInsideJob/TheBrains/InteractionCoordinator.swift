@@ -52,16 +52,16 @@ final class InteractionCoordinator {
         return actionEvidenceProjector.projectBaseline(from: observation)
     }
 
-    func settledCapture(
+    func moment(
         scope: SemanticObservationScope?,
         timeout: Double = InteractionCoordinator.defaultVisibleStateTimeout
-    ) async -> SettledCapture? {
+    ) async -> Observation.Moment? {
         guard let scope else { return nil }
         return await vault.semanticObservationStream.settledEvent(
             scope: scope,
             after: nil,
             timeout: timeout
-        )?.settledCapture
+        )?.moment
     }
 
     func admittedVisibleBaseline(timeout: Double? = InteractionCoordinator.defaultVisibleStateTimeout) async -> ActionEvidenceProjector.Baseline? {
@@ -112,11 +112,13 @@ final class InteractionCoordinator {
         return ActionResult(
             dispatchResult: dispatchResult,
             afterStateValue: afterStateValue,
-            settledObservation: actionEvidence,
+            snapshot: actionEvidence,
             timing: timing
         )
     }
 
+    /// Evaluates internal replay and supplied-baseline waits.
+    /// Public standalone waits execute through `Settlement.Executor`.
     func waitForPredicate(
         _ step: ResolvedWaitRuntimeInput,
         initialTrace: AccessibilityTrace? = nil,
@@ -129,7 +131,7 @@ final class InteractionCoordinator {
         let baselineSource: PredicateChangeBaselineSource
         switch (changeBaseline, baselineSequence) {
         case (.establishFromFirstObservation, .some(let sequence)):
-            baselineSource = .supplied(vault.semanticObservationStream.settledCapture(
+            baselineSource = .supplied(await vault.semanticObservationStream.moment(
                 scope: .visible,
                 at: sequence
             ))
@@ -150,6 +152,19 @@ final class InteractionCoordinator {
         _ observer: @escaping @MainActor (PredicateWait.ScheduledEffect) -> Void
     ) {
         predicateWait.observeScheduledEffect = observer
+    }
+
+    /// Publishes navigation observations while standalone settlement owns evaluation.
+    func publishStandaloneWaitDiscovery(
+        target: ResolvedAccessibilityTarget?,
+        deadline: SemanticObservationDeadline,
+        control: Settlement.ObservationEffectControl
+    ) async {
+        await predicateWait.publishStandaloneWaitDiscovery(
+            target: target,
+            deadline: deadline,
+            control: control
+        )
     }
 
     func waitForPredicateCases(

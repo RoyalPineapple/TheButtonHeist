@@ -12,7 +12,7 @@ extension TheBrainsActionTests {
 
     func testHeistConditionalSelectsFirstMatchingCaseOnce() async throws {
         let runtime = heistRuntime(observations: [
-            observedState(labels: ["Home", "Login"]),
+            await observedState(labels: ["Home", "Login"]),
         ])
         let plan = try HeistPlan(body: [
             .conditional(try ConditionalStep(cases: [
@@ -39,7 +39,7 @@ extension TheBrainsActionTests {
 
     func testHeistConditionalUnmatchedWithoutElseContinues() async throws {
         let runtime = heistRuntime(observations: [
-            observedState(labels: ["Settings"]),
+            await observedState(labels: ["Settings"]),
         ])
         let plan = try HeistPlan(body: [
             .conditional(try ConditionalStep(cases: [
@@ -64,7 +64,7 @@ extension TheBrainsActionTests {
 
     func testHeistWaitForTimeoutWithoutElseFails() async throws {
         let runtime = heistRuntime(observations: [
-            observedState(labels: ["Settings"]),
+            await observedState(labels: ["Settings"]),
         ])
         let plan = try HeistPlan(body: [
             .wait(WaitStep(
@@ -85,7 +85,7 @@ extension TheBrainsActionTests {
 
     func testHeistWaitForTimeoutWithElseRunsElse() async throws {
         let runtime = heistRuntime(observations: [
-            observedState(labels: ["Settings"]),
+            await observedState(labels: ["Settings"]),
         ])
         let plan = try HeistPlan(body: [
             .wait(WaitStep(
@@ -109,9 +109,9 @@ extension TheBrainsActionTests {
         var incrementCount = 0
         let runtime = heistRuntime(
             observations: [
-                observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")]),
-                observedState(elements: [(makeElement(value: "1", identifier: "quantity"), "quantity")]),
-                observedState(elements: [(makeElement(value: "2", identifier: "quantity"), "quantity")]),
+                await observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")]),
+                await observedState(elements: [(makeElement(value: "1", identifier: "quantity"), "quantity")]),
+                await observedState(elements: [(makeElement(value: "2", identifier: "quantity"), "quantity")]),
             ],
             execute: { command in
                 if case .increment = command {
@@ -150,8 +150,8 @@ extension TheBrainsActionTests {
         var observedTimeouts: [Double?] = []
         let runtime = heistRuntime(
             observations: [
-                observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")]),
-                observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")]),
+                await observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")]),
+                await observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")]),
             ],
             execute: { command in
                 if case .increment = command {
@@ -189,7 +189,7 @@ extension TheBrainsActionTests {
         var incrementCount = 0
         let runtime = heistRuntime(
             observations: [
-                observedState(elements: [(makeElement(value: "1", identifier: "quantity"), "quantity")]),
+                await observedState(elements: [(makeElement(value: "1", identifier: "quantity"), "quantity")]),
             ],
             execute: { command in
                 if case .increment = command {
@@ -222,9 +222,9 @@ extension TheBrainsActionTests {
     func testHeistRepeatUntilUsesActionTraceProgressBeforePostBodyWait() async throws {
         let predicate = AccessibilityPredicate.exists(.element(.identifier("quantity"), .value("2")))
         let resolved = try resolvedPredicate(predicate)
-        let initialState = observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")])
-        let firstMutation = observedState(elements: [(makeElement(value: "1", identifier: "quantity"), "quantity")])
-        let secondMutation = observedState(elements: [(makeElement(value: "2", identifier: "quantity"), "quantity")])
+        let initialState = await observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")])
+        let firstMutation = await observedState(elements: [(makeElement(value: "1", identifier: "quantity"), "quantity")])
+        let secondMutation = await observedState(elements: [(makeElement(value: "2", identifier: "quantity"), "quantity")])
         let states = [initialState, firstMutation, secondMutation]
         var incrementCount = 0
         let runtime = repeatUntilWaitRuntime(
@@ -325,9 +325,9 @@ extension TheBrainsActionTests {
         var activationCount = 0
         let runtime = heistRuntime(
             observations: [
-                observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")]),
-                observedState(elements: [(makeElement(value: "1", identifier: "quantity"), "quantity")]),
-                observedState(elements: [(makeElement(value: "2", identifier: "quantity"), "quantity")]),
+                await observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")]),
+                await observedState(elements: [(makeElement(value: "1", identifier: "quantity"), "quantity")]),
+                await observedState(elements: [(makeElement(value: "2", identifier: "quantity"), "quantity")]),
             ],
             execute: { command in
                 if case .activate = command {
@@ -373,9 +373,9 @@ extension TheBrainsActionTests {
         var activationCount = 0
         let runtime = heistRuntime(
             observations: [
-                observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")]),
-                observedState(elements: [(makeElement(value: "1", identifier: "quantity"), "quantity")]),
-                observedState(elements: [(makeElement(value: "1", identifier: "quantity"), "quantity")]),
+                await observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")]),
+                await observedState(elements: [(makeElement(value: "1", identifier: "quantity"), "quantity")]),
+                await observedState(elements: [(makeElement(value: "1", identifier: "quantity"), "quantity")]),
             ],
             execute: { command in
                 if case .activate = command {
@@ -430,7 +430,7 @@ extension TheBrainsActionTests {
 
     func testHeistRepeatUntilMinimumTimeoutFailsAfterRunningBodyOnce() async throws {
         var incrementCount = 0
-        let quantityZero = observedState(elements: [
+        let quantityZero = await observedState(elements: [
             (makeElement(value: "0", identifier: "quantity"), "quantity"),
         ])
         let runtime = heistRuntime(
@@ -471,8 +471,8 @@ extension TheBrainsActionTests {
     func testHeistRepeatUntilPostBodyMatchedWaitWithoutObservedSequenceDoesNotReusePreviousSequence() async throws {
         let predicate = AccessibilityPredicate.exists(.element(.identifier("quantity"), .value("2")))
         let resolved = try resolvedPredicate(predicate)
-        let initialState = observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")])
-        let matchedState = observedState(elements: [(makeElement(value: "2", identifier: "quantity"), "quantity")])
+        let initialState = await observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")])
+        let matchedState = await observedState(elements: [(makeElement(value: "2", identifier: "quantity"), "quantity")])
         let initialTrace = AccessibilityTrace(interface: initialState.interface)
         let matchedTrace = AccessibilityTrace(interface: matchedState.interface)
         var afterObservationCount = 0
@@ -549,7 +549,7 @@ extension TheBrainsActionTests {
     func testHeistRepeatUntilPostBodyNilTraceWithNewSequenceDoesNotReuseStaleTraceOrSummary() async throws {
         let predicate = AccessibilityPredicate.exists(.element(.identifier("quantity"), .value("2")))
         let resolved = try resolvedPredicate(predicate)
-        let initialState = observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")])
+        let initialState = await observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")])
         let initialTrace = AccessibilityTrace(interface: initialState.interface)
         let runtime = repeatUntilWaitRuntime(
             observations: [initialState],
@@ -616,7 +616,7 @@ extension TheBrainsActionTests {
 
     func testHeistIfSelectsMatchingCaseImmediately() async throws {
         let runtime = heistRuntime(observations: [
-            observedState(labels: ["Home"]),
+            await observedState(labels: ["Home"]),
         ])
         let plan = try HeistPlan(body: [
             .conditional(try ConditionalStep(cases: [
@@ -641,13 +641,102 @@ extension TheBrainsActionTests {
         XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
+    func testZeroTimeoutCaseMatchesLatestAdmittedLevelStateWithoutSchedulingWork() async throws {
+        await installSyntheticObservation(.makeForTests(elements: [
+            (makeElement(label: "Rotor Host"), HeistId(rawValue: "rotor_host")),
+        ]))
+        let stream = brains.vault.semanticObservationStream
+        let initialMoment = await stream.storeOwner.latestCommittedMoment()
+        var scheduledEffects: [PredicateWait.ScheduledEffect] = []
+        brains.interactionCoordinator.observePredicateWaitScheduledEffects {
+            scheduledEffects.append($0)
+        }
+        let predicateCase = PredicateCase(
+            predicate: .exists(.label("Rotor Host")),
+            body: []
+        )
+        let input = try ResolvedPredicateCaseRuntimeInput(
+            resolving: predicateCase,
+            in: .empty
+        )
+
+        let result = await brains.interactionCoordinator.waitForPredicateCases(
+            [input],
+            timeout: 0
+        )
+        let finalMoment = await stream.storeOwner.latestCommittedMoment()
+
+        XCTAssertEqual(result.outcome, .matchedCase(index: 0))
+        XCTAssertEqual(result.cases.map(\.met), [true])
+        XCTAssertTrue(scheduledEffects.isEmpty)
+        XCTAssertEqual(finalMoment, initialMoment)
+    }
+
+    func testZeroTimeoutAppearedEstablishesFreshBaselineWithoutSchedulingWork() async throws {
+        let stream = brains.vault.semanticObservationStream
+        _ = await stream.commitVisibleObservationForTesting(.makeForTests(elements: [
+            (makeElement(label: "Loading"), HeistId(rawValue: "loading")),
+        ]))
+        _ = await stream.commitVisibleObservationForTesting(.makeForTests(elements: [
+            (makeElement(label: "Loading"), HeistId(rawValue: "loading")),
+            (makeElement(label: "Ready"), HeistId(rawValue: "ready")),
+        ]))
+        let initialMoment = await stream.storeOwner.latestCommittedMoment()
+        var scheduledEffects: [PredicateWait.ScheduledEffect] = []
+        let expression = AccessibilityPredicate.changed(.elements([.appeared(.label("Ready"))]))
+        let predicate = try resolvedPredicate(expression)
+        let predicateWait = PredicateWait(
+            vault: brains.vault,
+            navigation: brains.navigation,
+            actionEvidenceProjector: brains.actionEvidenceProjector
+        )
+        predicateWait.observeScheduledEffect = { scheduledEffects.append($0) }
+
+        let result = await predicateWait.execute(
+            start: RuntimeElapsed.now,
+            timeout: 0,
+            projection: PredicateWait.ExecutionProjection(
+                target: predicate.waitTarget,
+                continuesAfterInitialMiss: true,
+                initialEvidence: PredicateWait.LifecycleEvidence(
+                    predicate: expression,
+                    target: predicate.waitTarget
+                ),
+                evaluate: { observation, isInitialVisible, evidence in
+                    let reduced = await predicateWait.reduceObservation(
+                        observation,
+                        predicate: predicate,
+                        predicateExpression: expression,
+                        baselineSeed: isInitialVisible ? .currentObservation : .preserve,
+                        stream: evidence.stream
+                    )
+                    let recorded = evidence.recording(reduced)
+                    return PredicateWaitEvaluation(
+                        evidence: recorded,
+                        matched: recorded.evaluation.met
+                    )
+                },
+                result: { _, _, evidence in evidence.evaluation }
+            )
+        )
+        let finalMoment = await stream.storeOwner.latestCommittedMoment()
+
+        XCTAssertFalse(result.met)
+        XCTAssertEqual(
+            result.actual,
+            PredicateObservationDiagnostics.changePredicateNeedsFutureObservationMessage
+        )
+        XCTAssertTrue(scheduledEffects.isEmpty)
+        XCTAssertEqual(finalMoment, initialMoment)
+    }
+
     func testPredicateObservationStreamSeparatesStateAndChangeEvidence() async throws {
         let readyTarget = AccessibilityTarget.label("Ready")
         let observationStream = brains.vault.semanticObservationStream
-        let baselineEvent = observationStream.commitVisibleObservationForTesting(
+        let baselineEvent = await observationStream.commitVisibleObservationForTesting(
             .makeForTests(elements: [(makeElement(label: "Loading"), HeistId(rawValue: "loading"))])
         )
-        let changedEvent = observationStream.commitVisibleObservationForTesting(
+        let changedEvent = await observationStream.commitVisibleObservationForTesting(
             .makeForTests(elements: [
                 (makeElement(label: "Loading"), HeistId(rawValue: "loading")),
                 (makeElement(label: "Ready"), HeistId(rawValue: "ready")),
@@ -682,10 +771,9 @@ extension TheBrainsActionTests {
             changedObservation,
             predicate: resolvedChangePredicate,
             predicateExpression: changePredicate,
-            observationWindow: try XCTUnwrap(observationStream.observationWindow(
-                from: baseline,
-                through: changedEvent
-            ))
+            eventsSinceBaseline: await observationStream.storeOwner.readLog {
+                $0.events(since: baseline)
+            }
         )
         let stateExpression = AccessibilityPredicate.exists(readyTarget)
         let stateExpectation = PredicateEvaluation.evaluate(
@@ -696,12 +784,12 @@ extension TheBrainsActionTests {
 
         XCTAssertTrue(stateExpectation.met)
         XCTAssertTrue(changed.reduction.expectation.met)
-        XCTAssertEqual(changed.reduction.changeBaseline?.cursor.sequence, baselineObservation.event.sequence)
+        XCTAssertEqual(changed.reduction.changeBaseline?.sequence, baselineObservation.event.sequence)
     }
 
     func testHeistIfNoOpsWhenImmediateObservationIsUnavailable() async throws {
         let runtime = heistRuntime(
-            observations: [observedState(labels: ["Home"])],
+            observations: [await observedState(labels: ["Home"])],
             unavailableObservationCount: 1
         )
         let plan = try HeistPlan(body: [
@@ -730,7 +818,7 @@ extension TheBrainsActionTests {
     func testHeistIfPassesImmediateObservationBudget() async throws {
         var observedTimeouts: [Double?] = []
         let runtime = heistRuntime(
-            observations: [observedState(labels: ["Settings"])],
+            observations: [await observedState(labels: ["Settings"])],
             observedTimeouts: { observedTimeouts.append($0) }
         )
         let plan = try HeistPlan(body: [

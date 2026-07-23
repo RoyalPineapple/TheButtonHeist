@@ -5,8 +5,8 @@
 extension ActionEvidenceProjector {
     /// Test-only projection helper. Production callers must supply a settled
     /// observation or explicit screen evidence through `InteractionCoordinator`.
-    func projectBaseline() -> Baseline {
-        let latestCommittedEvent = vault.semanticObservationStream.latestCommittedEvent
+    func projectBaseline() async -> Baseline {
+        let latestCommittedEvent = await vault.semanticObservationStream.latestCommittedEvent()
         return projectBaseline(
             from: InterfaceObservation.makeForTests(
                 tree: vault.interfaceTree,

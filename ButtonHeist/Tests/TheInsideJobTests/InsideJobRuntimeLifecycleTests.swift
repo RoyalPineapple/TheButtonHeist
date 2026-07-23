@@ -206,8 +206,10 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         await attempt.task.value
 
         assertSuspendedPreservingLifecycleObservation(harness.job)
+        let latestDiagnostic = await harness.job.brains.vault.semanticObservationStream
+            .latestSettleFailureDiagnostic()
         XCTAssertEqual(
-            harness.job.brains.vault.semanticObservationStream.latestSettleFailureDiagnostic,
+            latestDiagnostic,
             diagnostic
         )
         XCTAssertFalse(harness.job.brains.semanticObservationIsActive)
@@ -358,7 +360,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
             baselineTripwireSignal: job.tripwire.tripwireSignal(),
             settleResult: settleResult
         )
-        guard let diagnostic = job.brains.vault.semanticObservationStream.latestSettleFailureDiagnostic else {
+        guard let diagnostic = await job.brains.vault.semanticObservationStream.latestSettleFailureDiagnostic() else {
             XCTFail("Expected settle failure diagnostic")
             return ""
         }

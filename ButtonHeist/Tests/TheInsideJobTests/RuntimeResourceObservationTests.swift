@@ -92,7 +92,7 @@ final class RuntimeResourceObservationTests: XCTestCase {
         )
         XCTAssertFalse(job.tripwire.uikitIdleTracker.isInstalled)
 
-        job.activateRuntime(resources)
+        await job.activateRuntime(resources)
         XCTAssertTrue(job.tripwire.uikitIdleTracker.isInstalled)
     }
 
@@ -122,7 +122,8 @@ final class RuntimeResourceObservationTests: XCTestCase {
             idleTimerBaseline: resources.idleTimerBaseline
         )
 
-        XCTAssertEqual(job.brains.vault.semanticObservationStream.latestSettleFailureDiagnostic, diagnostic)
+        let retainedDiagnostic = await job.brains.vault.semanticObservationStream.latestSettleFailureDiagnostic()
+        XCTAssertEqual(retainedDiagnostic, diagnostic)
         XCTAssertTrue(job.lifecycleObservationIsInstalled)
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.brains.vault.semanticObservationStream.isActive)
@@ -136,7 +137,8 @@ final class RuntimeResourceObservationTests: XCTestCase {
 
         await job.stop()
 
-        XCTAssertEqual(job.brains.vault.semanticObservationStream.latestSettleFailureDiagnostic, diagnostic)
+        let retainedDiagnostic = await job.brains.vault.semanticObservationStream.latestSettleFailureDiagnostic()
+        XCTAssertEqual(retainedDiagnostic, diagnostic)
         XCTAssertFalse(job.lifecycleObservationIsInstalled)
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.brains.vault.semanticObservationStream.isActive)
@@ -169,7 +171,7 @@ final class RuntimeResourceObservationTests: XCTestCase {
             baselineTripwireSignal: job.tripwire.tripwireSignal(),
             settleResult: settleResult
         )
-        guard let diagnostic = job.brains.vault.semanticObservationStream.latestSettleFailureDiagnostic else {
+        guard let diagnostic = await job.brains.vault.semanticObservationStream.latestSettleFailureDiagnostic() else {
             XCTFail("Expected settle failure diagnostic")
             return ""
         }

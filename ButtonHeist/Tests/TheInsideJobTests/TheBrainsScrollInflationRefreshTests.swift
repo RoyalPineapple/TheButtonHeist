@@ -18,7 +18,7 @@ extension TheBrainsScrollTests {
             traits: .button,
             frame: CGRect(x: 40, y: 120, width: 240, height: 44)
         )
-        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [(staleTarget, targetId)],
             objects: [targetId: nil]
         ))
@@ -71,7 +71,7 @@ extension TheBrainsScrollTests {
             traits: .button,
             frame: staleFrame
         )
-        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [(staleTarget, targetId)],
             objects: [targetId: nil]
         ))
@@ -100,7 +100,7 @@ extension TheBrainsScrollTests {
         }
         await waitForSettledSemanticWaiter()
         visibleObservationSource.observation = recoveredScreen
-        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
 
         await inflation.value
 
@@ -133,11 +133,11 @@ extension TheBrainsScrollTests {
                 object: retainedLiveObject()
             ),
         ])
-        brains.vault.installObservationForTesting(originalScreen)
+        await brains.vault.installObservationForTesting(originalScreen)
         let selected = try XCTUnwrap(brains.vault.interfaceElement(heistId: targetId))
 
         let emptyScreen = InterfaceObservation.makeForTests()
-        brains.vault.installObservationForTesting(emptyScreen)
+        await brains.vault.installObservationForTesting(emptyScreen)
         visibleObservationSource.observation = emptyScreen
 
         let recoveredFrame = CGRect(x: 40, y: 120, width: 240, height: 44)
@@ -175,7 +175,7 @@ extension TheBrainsScrollTests {
         }
         await waitForSettledSemanticWaiter()
         visibleObservationSource.observation = recoveredScreen
-        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
 
         let resolution = await resolutionTask.value
         XCTAssertEqual(

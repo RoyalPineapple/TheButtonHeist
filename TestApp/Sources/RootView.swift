@@ -150,6 +150,10 @@ struct RootView: View {
             }
         }
         .onOpenURL(perform: openDemoRoute)
+        .task {
+            await Task.yield()
+            AdversarialLabRoute.markHostReady()
+        }
     }
 
     private func openDemoRoute(_ url: URL) {
@@ -177,11 +181,21 @@ private struct AdversarialRoute: Identifiable, Hashable {
 
 @MainActor
 internal final class AdversarialLabRoute {
+    private static var isHostReady = false
     private static var readyRouteID: UUID?
 
     private init() {}
 
     internal static func open(_ scenario: AdversarialScenario) async throws {
+        let clock = ContinuousClock()
+        let hostDeadline = clock.now.advanced(by: .seconds(5))
+        while !isHostReady {
+            guard clock.now < hostDeadline else {
+                throw AdversarialLabRouteError.hostTimedOut
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
         let routeID = UUID()
         var components = URLComponents()
         components.scheme = "buttonheist-demo"
@@ -197,7 +211,6 @@ internal final class AdversarialLabRoute {
             throw AdversarialLabRouteError.rejectedByApplication
         }
 
-        let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: .seconds(5))
         while readyRouteID != routeID {
             guard clock.now < deadline else {
@@ -211,6 +224,10 @@ internal final class AdversarialLabRoute {
         readyRouteID = nil
     }
 
+    fileprivate static func markHostReady() {
+        isHostReady = true
+    }
+
     fileprivate static func markReady(_ routeID: UUID) {
         readyRouteID = routeID
     }
@@ -219,5 +236,6 @@ internal final class AdversarialLabRoute {
 internal enum AdversarialLabRouteError: Error {
     case invalidURL
     case rejectedByApplication
+    case hostTimedOut
     case timedOut(AdversarialScenario)
 }

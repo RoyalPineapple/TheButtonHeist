@@ -51,6 +51,9 @@ extension FenceResponse {
         if let announcement = projection.announcement {
             text += "\nannouncement: \"\(announcement)\""
         }
+        if let settlement = projection.incompleteSettlement {
+            text += "\nsettlement: \(Self.incompleteSettlementSummary(settlement))"
+        }
         if let activationTrace = projection.activationTrace {
             text += "\nactivate: \(Self.compactActivationTrace(activationTrace))"
         }

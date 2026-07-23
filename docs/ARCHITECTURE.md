@@ -71,22 +71,20 @@ reinterpret parser fields.
 
 `InterfaceObservation` pairs an `InterfaceTree` with the viewport-local
 `LiveCapture` from one parser read. Raw parser samples remain live evidence or
-failed-settle diagnostic evidence; they never append temporal history and do
-not become targetable semantic truth by themselves. `SettleSession` reduces
-those samples and carries its exact final observation in a successful outcome. The
-semantic stream alone admits that outcome into `CommittableInterfaceObservation`, and
-only while both its tripwire signal and capture identity remain current.
+failed-settlement diagnostic evidence; they never append temporal history and
+do not become targetable semantic truth by themselves. Capture admission
+normalizes the sample into `Observation.Snapshot`; UIKit objects remain
+capture-boundary evidence and are never durable identity.
 
-`SemanticObservationStore` is the sole semantic state owner. It holds the
-current `InterfaceTree`, retained entries, generation and sequence lineage,
-notification cursor, and admitted-read state. `SemanticObservationStream` admits a
-`CommittableInterfaceObservation` and asks the Store to commit it. The Store
-classifies continuity, derives every fulfilled-scope event, validates history
-in a copied value, and installs graph, history, lineage, cursors, and admitted-read state with
-one assignment. The stream updates disposable live UIKit evidence and wakes
-waiters only after that commit returns. There is no parser-to-history path,
-subscriber-driven graph mutation, compatibility reducer, or second runtime
-state projection.
+`Observation.Store` is the sole semantic state owner. It holds the current
+`InterfaceTree`, one `Observation.Log`, generation and sequence lineage,
+notification position, and admitted-read state. `Observation.Stream` admits a
+capture and asks the Store to commit it. The Store classifies continuity,
+derives the event, validates a copied value, records the event in its Log, and
+installs the graph, log, lineage, and admitted-read state atomically. The Stream
+publishes that same committed event only after the Store exposes it. There is
+no parser-to-log path, subscriber-driven graph mutation, compatibility reducer,
+or second runtime state projection.
 
 The stream is also the one visible-observation producer. `TheTripwire` is its
 serialized refresh trigger: a changed signal invalidates the admitted read,
@@ -96,17 +94,15 @@ state, waits and action before-state acquisition reuse the committed event until
 the next trip, explicit invalidation, or screen replacement. After-action
 observation always requests a fresh cycle from the same producer.
 
-The Store's private `SemanticObservationHistory` retains ordered entries. Each
-`ObservationEntry` pairs a settled capture with an initial, same-generation, or
-screen-boundary transition. `ObservationCursor` records generation, scope,
-settled sequence, capture hash, notification sequence, and `observedAt`.
-`observedAt` is derived automatically from the capture's interface timestamp;
-it is descriptive metadata, not an ordering input. Generation and settled
-sequence provide correctness ordering. Consumers read through
-`SemanticObservationStore.read(after:scope:)`, and
-`SemanticObservationStream` owns the single waiter path for future entries. An
-`ObservationWindow` is built from one immutable baseline cursor through the
-current retained entry. No predicate, action, or adapter owns another history.
+The Store's private `Observation.Log` is a `RandomAccessCollection` of ordered
+`Observation.Event` values. A snapshot event contains its immutable snapshot
+and initial, same-generation, or screen-boundary transition. An
+`Observation.Moment` is the snapshot plus its private `Observation.Log.Index`;
+it is the invocation baseline passed directly to `Log.events(since:)`.
+Collection indices stay private to observation ownership and callers cannot
+advance, retain, or manipulate them. Active settlement boundaries temporarily
+protect the required history from pruning. No predicate, action, or adapter
+owns another log or temporal window.
 
 A raw parser read may replace live object and geometry evidence, but only a
 `HeistId` resolved from the committed `InterfaceTree` can select that evidence
@@ -120,14 +116,14 @@ that semantic target and adopts the matching element's current `HeistId` for
 live UIKit handoff. Missing or ambiguous re-resolution fails safely; it never
 retains the previous id or substitutes a sibling duplicate.
 
-The window materializes `AccessibilityTrace` evidence and its ordered
-`ChangeFact` values for temporal predicates and results. Presence predicates
-do not need a temporal window; they read the current tree through the same
-target resolver actions and `get_interface` use. An action-settlement diagnostic
-trace is result-local evidence; it is not committed, targetable, or an
-observation baseline. A public response may expose a compact `delta`, but that
-value is a one-way, lossy fold of ordered facts and is never fed back into
-predicate evaluation.
+The Log materializes `AccessibilityTrace` evidence and its ordered
+`ChangeFact` values for temporal predicates and results. Current-state
+predicates read the returned handoff snapshot through the same target resolver
+that actions and `get_interface` use. An action-settlement diagnostic trace is
+result-local evidence; it is not committed, targetable, or an observation
+baseline. A public response may expose a compact `delta`, but that value is a
+one-way, lossy fold of ordered facts and is never fed back into predicate
+evaluation.
 
 Agents should start from `get_interface`, then inspect an action result's public
 delta before issuing another read. After a screen change, build follow-up
@@ -143,25 +139,27 @@ layout, animations, top view-controller identity, navigation state, window
 ordering, keyboard state, and first responder state. It never classifies the
 accessibility tree.
 
-When Tripwire triggers, TheBrains parses the accessibility hierarchy and
-`SettleSession` waits for a successful result that can produce a
-`CommittableInterfaceObservation`. One pure `ScreenClassifier` combines typed
-snapshots with scoped `screenChanged`, `elementChanged`, and `announcement`
-notifications. `AccessibilityNotificationBus` appends normalized events to one
-bounded ingress log. Action/heist cursors checkpoint that retained history
-without clearing it; notifications are edge evidence, not a second state model. A
-scoped screen notification is authoritative replacement evidence. Element and
-announcement notifications keep the edge in the same generation; only an
-empty or unknown notification batch permits snapshot inference. An inferred
-replacement carries its `AccessibilityObservationFallbackReason` in
-`transition.fallbackReason`.
+`Settlement.Executor` is the one operation loop for actions and waits. Its
+typed command is the product of an action-or-observation trigger and an
+optional resolved predicate. Readiness is mandatory for all four combinations;
+an observation-only command is a real trigger, not a fabricated no-op action.
+The executor captures the invocation baseline, arms observation,
+announcement, readiness, and deadline delivery, and only then dispatches an
+action. Every capture follows capture → admit → commit → publish → evaluate.
+`Settlement.Reducer` owns the explicit state machine and produces typed effects;
+boundary code alone performs UIKit work.
+
+One pure `ScreenClassifier` combines typed snapshots with scoped
+`screenChanged`, `elementChanged`, and `announcement` notifications.
+`AccessibilityNotificationBus` appends normalized events to one bounded ingress
+log. An action window checkpoints retained history without clearing it;
+notifications are edge evidence, not a second state model. A scoped screen
+notification is authoritative replacement evidence. Element and announcement
+notifications keep the edge in the same generation; only an empty or unknown
+notification batch permits snapshot inference. An inferred replacement carries
+its `AccessibilityObservationFallbackReason` in `transition.fallbackReason`.
 Notification delivery is best effort; absence is not evidence of replacement
 or stability.
-
-Settling itself has one AX reducer, `SettleLoopMachine`, and one async runner,
-`SettleLoopRunner`. `SettlePolicy` selects the stability criterion and sampling
-cadence for that pair; it does not create another settle pipeline. UIKit and
-ObjC signals may trigger or reset sampling, but they never classify the AX tree.
 
 The active Inside Job runtime owns one UIKit idle tracker. Its typed
 Objective-C swizzles remain installed from runtime activation until suspension
@@ -197,6 +195,15 @@ That boundary prevents pre-existing navigation work from being attributed to
 the first action. Runtime release invalidates the observer, cancels waiters,
 and safely restores both methods unless a later swizzler superseded Button
 Heist's implementation.
+
+Settlement completion is an evidence conjunction: the trigger completed,
+readiness is established, the optional predicate is satisfied under its typed
+semantics, and an admitted observation belongs to that readiness generation.
+If readiness arrives after the last eligible observation, the reducer requests
+one handoff capture. A post-readiness observation is reused when available, so
+there is no fixed delay or redundant final parse. Readiness invalidation starts
+a new generation and makes an older handoff ineligible without erasing latched
+transition or announcement evidence.
 
 That shared deadline is an operation bound, not a main-thread responsiveness
 probe. A true liveness probe must originate off the main actor, schedule a
@@ -270,32 +277,29 @@ depleted its rays, hit a budget, or was interrupted after dispatch.
 traversal; it derives from canonical vault truth and owns no second graph or
 commit path. There is no compatibility traversal or commit path.
 
-Each Store commit appends its settled captures to the same private history used
-by waits and action expectations. Consumers read that history only through
-Store reads selected by scope and cursor, with
-`SemanticObservationStream` owning waiter registration and wakeup; they do not
-subscribe to parser samples, build private capture arrays, or claim
-notification events. Retained-history eviction is explicit incomplete evidence,
-never an inferred `noChange`.
+Each Store commit records its event in the same private `Observation.Log` used
+by waits and action expectations. Consumers read it through
+`Log.events(since: Observation.Moment)` and receive future committed events from
+`Observation.Stream`; they do not subscribe to parser samples, build private
+capture arrays, or claim notification events. Retention loss is explicit
+incomplete evidence, never an inferred `noChange`.
 
-Waits first evaluate settled visible truth. A wait with one eligible predicate
-target reveals and retains an element that already resolves before a standalone
-temporal wait establishes its baseline; unmatched observations re-run that
-reveal. Appearance assertions, unresolved targets, containers, and predicates
-with multiple targets use canonical discovery with `.origin`. Every temporal
-evaluation asks the log for the accumulated baseline-through-current
-`ObservationWindow`. Action expectations retain their supplied pre-action
-baseline and replay only through the cursor committed at the end of that
-action's settlement. Replay uses the same predicate reducer as ordinary wait
-observations, so an intermediate appearance or disappearance can satisfy the
-expectation even when the settled endpoint no longer contains it. Action
-announcement expectations likewise begin at the announcement cursor captured
-before dispatch. A standalone wait establishes its own invocation-local
-baseline and announcement cursor; it cannot consume earlier action or heist
-evidence. Terminal verification is scheduled before the authored operation
-deadline by reserving the longest observed reveal or discovery route cost. Its
-visible settle and final reveal or discovery inherit that same deadline; no
-phase receives a fresh budget and no discovery continues after it expires.
+`waitFor` is the observation-triggered form of `Settlement.Command`. It shares
+the same reducer, deadline, readiness, handoff, and projection rules as an
+action, but cannot produce a dispatch effect. It establishes its own baseline
+Moment and announcement position, so it cannot consume earlier action or heist
+evidence. Observation effects may reveal a resolvable target or run canonical
+discovery; their graceful stop restores the authored viewport exit position
+before settlement finalizes.
+
+An action with `.expect(...)` uses the Moment and announcement position captured
+before dispatch. Current-state predicates must hold in the exact returned
+handoff snapshot. Positive transitions evaluate direct Log events strictly
+after the Moment and latch their first qualifying fact, so a transient
+appearance or disappearance remains valid even when absent at the endpoint.
+Announcements likewise latch only after the invocation boundary. Every phase
+inherits one absolute authored deadline; no follow-on wait or final-validation
+budget is added after the action.
 
 Detail level is separate: `detail: "summary"` keeps responses compact, while
 `detail: "full"` adds geometry and heavier accessibility fields.
@@ -368,10 +372,10 @@ durable artifact, or final output formatting.
 The approved long-lived owners are:
 
 - `TheVault`: latest disposable `LiveCapture` and live UIKit boundary evidence.
-  Its `SemanticObservationStore` owns the committed `InterfaceTree`, retained
-  history, lineage, cursors, admitted-read state, and settle diagnostics. Its
-  `SemanticObservationStream` is the sole visible-observation producer and
-  waiter-delivery owner.
+  Its actor-owned `Observation.Store` owns the committed `InterfaceTree`, Log,
+  lineage, positions, admitted-read state, and settlement diagnostics.
+  `Observation.Stream` is the sole visible-observation producer and delivery
+  owner.
 - `TheMuscle`: auth, admission, and session state inside the app.
 - `ClientDelivery`: the newest admitted callback generation and its current
   callbacks inside the app.
@@ -415,10 +419,11 @@ pipelines are explicit:
 | Result interpretation | `HeistReport.project(result:)` in `HeistResult+Report.swift` | JSON, compact, human, JUnit, doctor, and metric renderers |
 | Result recording decision | `HeistResult.Outcome` and `HeistResultRecordingMode` | `HeistResultRecorder` filesystem boundary |
 | Offline validation algebra | `HeistValidation.Result<Value>` composed by `HeistValidation.Report` | Public JSON and text projections |
-| Semantic observation scheduling | `SemanticObservationStream.swift` | Passive settle cycles and observation demand |
-| Semantic observation state | `SemanticObservationStore.swift` | One commit of graph, retained history, lineage, cursors, and admitted-read state |
-| Semantic observation settlement | `SemanticObservationStream+Settlement.swift` | Observation admission, Store commit, disposable live-evidence refresh, and waiter delivery |
-| Semantic observation waiter delivery | `SemanticObservationStream+Waiters.swift` | Cursor, window, replay, and timeout projections |
+| Settlement lifecycle | `Settlement.State`, `Settlement.Reducer`, and `Settlement.Executor` | Actions and observation-only waits provide typed commands; boundaries perform effects |
+| Semantic observation scheduling | `Observation.Stream` in `SemanticObservationStream.swift` | Capture scheduling, publication, and observation demand |
+| Semantic observation state | `Observation.StoreOwner` and `Observation.Store` | Actor-owned atomic commit of graph, Log, lineage, positions, and admitted-read state |
+| Semantic observation history | `Observation.Log` in `SemanticObservationHistory.swift` | Private collection indices, Moments, direct `events(since:)`, retention, and typed gaps |
+| Result projection | `Settlement.ResultProjector` | Existing action and wait contracts, settlement evidence, and diagnostics |
 | Testing request construction | `ButtonHeistTesting.swift` | Synchronous helpers and joined sessions live in their named extension files |
 | Fence action JSON | `FenceJSON+Action.swift` and `FenceJSON+HeistExecution.swift`, one result family each | Fence response formatting |
 | Exported tuple contract enforcement | The single `buttonheist.exported_tuple_return` Bumper rule | One effective-access projection covers functions, properties, subscripts, protocol requirements, and inherited public or package visibility; private and local tuple scratch values never enter the exported-contract projection |
@@ -503,7 +508,7 @@ the active installing or installed generation. A callback retained past
 uninstall or replacement is rejected before it can advance notification
 sequence or publish into a later action window.
 
-`SemanticObservationStream` owns notification invalidation. It records the
+`Observation.Stream` owns notification invalidation. It records the
 scoped `screenChanged` sequence covered by the committed batch. A scoped
 `screenChanged` recorded after that capture remains beyond the committed
 through-cursor and invalidates the fulfilled observation before it can be
@@ -604,66 +609,45 @@ flowchart TD
     FenceCommand --> HandoffSocket["Handoff socket<br/>client version == app version"]
     HandoffSocket --> Executor["TheBrains-owned InteractionRequestExecutor<br/>one UI FIFO"]
 
-    Executor --> StepKind{"Step kind"}
+    Executor --> Resolve["Resolve typed action and predicate"]
+    Resolve --> Command["Settlement.Command<br/>trigger × optional predicate"]
+    Command --> Baseline["Capture and commit baseline<br/>Observation.Moment + announcement position"]
+    Baseline --> Arm["Arm observation, announcement,<br/>readiness, and deadline channels"]
+    Arm --> Trigger{"Trigger"}
+    Trigger -->|action| Dispatch["Dispatch exactly once"]
+    Trigger -->|observation| Observe["No dispatch"]
+    Dispatch --> Observe
+    Observe --> Commit["capture → admit → commit → publish"]
+    Commit --> Reduce["Settlement.Reducer<br/>evaluate typed evidence"]
+    Reduce --> Ready{"trigger + predicate + readiness<br/>+ eligible handoff?"}
+    Ready -->|no, time remains| Observe
+    Ready -->|ready, handoff absent| Handoff["Request one post-readiness capture"]
+    Handoff --> Commit
+    Ready -->|yes| Result["Settlement.Result"]
+    Ready -->|deadline| TimedOut["Independent predicate,<br/>readiness, and handoff evidence"]
+    Result --> Project["Canonical result projector"]
+    TimedOut --> Project
+    Project --> ActionResult["ActionResult"]
+    Project --> WaitResult["HeistWaitEvidence"]
 
-    StepKind -->|WaitFor| WaitForPath["PredicateWait.wait<br/>timeout default 30s"]
-
-    StepKind -->|Action + expect| PreAction["Capture exact pre-action SettledCapture<br/>+ announcement cursor"]
-    PreAction --> Invoke["Invoke action<br/>ActionDispatchResult"]
-    Invoke --> ActionBound["Settle and commit action<br/>freeze through ObservationCursor"]
-    ActionBound --> ExpectPath["Replay Store baseline → bound<br/>then PredicateWait.wait if unmet"]
-
-    StepKind -->|Action.until / RepeatUntil| LoopBaseline["Read baseline observation<br/>without evaluating stop predicate"]
+    Resolve -->|Action.until / RepeatUntil| LoopBaseline["Read baseline observation<br/>without evaluating stop predicate"]
     LoopBaseline --> RunBody["Run body action<br/>at least once"]
-    RunBody --> ProgressGate["Use settled action trace or await<br/>the next settled element observation"]
+    RunBody --> ProgressGate["Use action Settlement.Result or await<br/>the next committed observation"]
     ProgressGate --> EvaluateStop["Evaluate stop predicate<br/>against retained observations"]
     EvaluateStop --> StopMet{"stop met?"}
     StopMet -->|yes| Done["success"]
     StopMet -->|no, progress + time remains| RunBody
     StopMet -->|no progress or deadline elapsed| Fail["fail / timeout"]
-
-    WaitForPath --> Lifecycle["PredicateWait execution<br/>visible check → target reveal or canonical discovery<br/>→ retained-log waiter → re-reveal/discovery → terminal verification"]
-    ExpectPath --> Lifecycle
-
-    Lifecycle --> PredicateKind{"Predicate kind"}
-    PredicateKind -->|exists / missing| Current["Current InterfaceTree"]
-    PredicateKind -->|changed / noChange| Observe["Read next settled ObservationEntry<br/>through the stream waiter"]
-    Observe --> Log["SemanticObservationStore<br/>retained, non-destructive history"]
-    Log --> Window["ObservationWindow<br/>baseline through current"]
-    Current --> HostAdapter["Private InterfaceTree adapter"]
-    HostAdapter --> MatchInput["AccessibilityTargetMatchInput"]
-    Delivered["Delivered Interface"] --> MatchInput
-    MatchInput --> MatchGraph["AccessibilityTargetMatchGraph<br/>one element + container matcher"]
-    MatchGraph --> Target["Resolve AccessibilityTarget"]
-    Target --> ElementTarget["element predicate"]
-    Target --> ContainerTarget["container predicate"]
-    Target --> WithinTarget["within container"]
-    Window --> Facts["Derive ordered ChangeFact values"]
-    ElementTarget --> Evaluate["Evaluate predicate"]
-    ContainerTarget --> Evaluate
-    WithinTarget --> Evaluate
-    Facts --> Evaluate
-    Evaluate --> Matched{"matched?"}
-    Matched -->|yes| Success["ActionResult success<br/>outcome-bound observation + expectation"]
-    Matched -->|no, lifecycle has work remaining| Lifecycle
-    Matched -->|no, timeout elapsed| Timeout["ActionResult timeout<br/>outcome-bound observation + unmet evidence"]
 ```
 
-The `WaitFor`, post-action `.expect`, and `RepeatUntil` progress paths all call
-`PredicateWait.wait(...)`. The caller chooses the baseline:
+`waitFor` and action `.expect(...)` enter the same settlement executor with
+different typed triggers:
 
-- `WaitFor(...)`: presence predicates read the current tree immediately. For a
-  temporal predicate with one eligible, already-resolvable element target, the
-  wait reveals and retains that target before using the resulting settled cursor
-  as its invocation-local baseline. Other standalone temporal waits establish
-  their own baseline from canonical discovery. Neither route can read evidence
-  from an action or heist that completed before the wait began.
-- `Action(...).expect(...)`: a temporal expectation supplies the exact
-  pre-action `SettledCapture` and the upper `ObservationCursor` committed after
-  action settlement. The wait replays only that same-action Store window and
-  preserves the baseline if live waiting must continue. An announcement
-  expectation reads only notifications after the action's opening cursor.
-  Presence expectations read current settled state.
+- `waitFor(...)` uses `.observation`, establishes a new invocation-local
+  `Observation.Moment` and announcement position, and never dispatches.
+- `Action(...).expect(...)` uses `.action`, establishes those boundaries before
+  dispatch, and evaluates while the action is still settling. It never starts a
+  second wait after dispatch.
 - `RunHeist(...).expect(...)`: baseline is the nested heist boundary and stays
   action-like.
 - `RepeatUntil(...)` and action `.until(...)`: a direct semantic observation
@@ -674,22 +658,14 @@ The `WaitFor`, post-action `.expect`, and `RepeatUntil` progress paths all call
   result with time remaining starts another iteration. Screen boundaries emit
   element lifecycle facts and therefore participate in the same evaluation.
 
-Each baseline is a settled `ObservationCursor` carrying generation, semantic
-scope, sequence, capture hash, notification sequence, and capture-derived
-timestamp metadata. Generation and sequence order the lineage; timestamp does
-not. The semantic log retains bounded per-scope history and builds a new
-accumulated `ObservationWindow` from the immutable baseline through every
-settled capture the wait evaluates. The wait does not maintain a second capture
-array, baseline, or notification claim. Action expectations carry the exact
-capture and announcement cursor across the action boundary, then bound replay
-with the post-settlement cursor. They never replace that evidence with a
-standalone wait baseline or manufacture a cursor by combining fields from
-different captures.
-
-Bounded action replay may satisfy a temporal expectation before live waiting
-begins. An action-settlement diagnostic trace cannot take that path; the
-predicate reducer reads only committed Store observations, so uncommitted
-evidence never becomes a successful change verdict.
+Each baseline is an `Observation.Moment`: one immutable snapshot paired with a
+private index into its owning Log. Settlement consumes direct
+`Log.events(since:)` results and never maintains a second capture array,
+baseline, or notification claim. Current-state evidence is deliberately not
+latched; it must hold in the returned handoff. Positive transitions and
+announcements latch their first qualifying post-boundary event. `noChange`
+requires complete retained history. Uncommitted diagnostic evidence can never
+become a successful predicate verdict.
 
 A scoped screen notification or snapshot-inferred replacement carrying typed
 `fallbackReason` evidence ends the current observation generation and starts
@@ -714,10 +690,11 @@ again. This keeps visible and discovery commits from either hiding a real
 boundary or counting the same boundary twice. Each retained event still links
 only to the previous event in its own scope.
 
-An observation window contains raw settled captures and completeness. Its
-ordered `ChangeFact` stream is derived from those captures plus scoped
-notification evidence. The evaluator reads neither warning text nor an endpoint
-delta. Only a complete, fact-free window can satisfy `.noChange`.
+`Observation.Log.events(since:)` returns ordered committed events or a typed
+expired/unavailable result. Ordered `ChangeFact` values derive from those events
+plus scoped notification evidence. The evaluator reads neither warning text nor
+an endpoint delta. Only complete, fact-free retained history can satisfy
+`.noChange`.
 
 The public predicate layer is a concrete root with concrete declaration types:
 
@@ -758,54 +735,39 @@ result shape, or wire field.
    then lowers it into a one-step or composed `HeistPlan` and sends
    `ClientMessage.heistPlan`.
 3. TheGetaway routes the plan to TheBrains' heist runtime.
-4. TheBrains captures before-state, resolves the semantic target, carries an
-   admitted identity across any reveal captures, and joins its current-capture
-   `HeistId` to live UIKit evidence before performing the action into one
-   `ActionDispatchResult`, waiting for stable UI, and parsing after-state.
-5. For an action with `.expect(...)`, the pre-action settled capture and opening
-   announcement cursor are retained internally. The settled entry is appended
-   to the observation log, and its cursor closes that action's replay window;
-   the checkpoint reads scoped notification evidence without consuming it.
-6. Presence predicates evaluate the current tree. Temporal predicates evaluate
-   the bounded Store replay and its ordered facts through the canonical reducer.
+4. TheBrains resolves the semantic target and predicate, then creates one
+   `Settlement.Command` with an action trigger and absolute deadline.
+5. Settlement captures and commits its baseline Moment, opens the action
+   notification window, and arms observation, announcement, readiness, and
+   deadline delivery before dispatching exactly once.
+6. Each admitted observation atomically updates the Store and Log, publishes
+   one event, and is evaluated by the reducer. Successful completion requires
+   dispatch, predicate truth when requested, readiness, and an eligible
+   post-readiness handoff observation.
 7. The response includes the heist execution result. `HeistReport` classifies
    its accumulated accessibility evidence once, and public renderers project
    any resulting delta from that classification.
 
 ### Wait
 
-`wait` is a one-step heist with an explicit bounded lifecycle. It checks the
-latest visible committed state first and exits immediately on a match. If
-unmatched, an eligible wait with one already-resolvable terminal element target
-uses element inflation to admit and reveal that exact semantic target, adopting
-each committed capture's local `HeistId`, and exits `.current`, retaining the
-revealed viewport. A standalone temporal wait establishes its baseline only
-after that positioning commit. Each later retained entry is evaluated against
-the complete accumulated window from that immutable baseline; an unmatched
-entry triggers another reveal before the wait returns to idle.
+`wait` is a one-step heist projected from an observation-triggered
+`Settlement.Command`. It establishes a fresh Moment and announcement position,
+arms the same event channels as an action, and performs no dispatch. Already
+committed current-state truth remains immediately evaluable, including with a
+zero timeout; transition predicates require a later Log event.
 
-Appearance assertions, unresolved element targets, container targets, and
-predicates containing multiple targets use the canonical viewport explorer
-instead. Discovery searches both directional rays and exits `.origin`. The wait
-then sits idle on retained-log waiter coordination rather than polling or
-reparsing; an unmatched retained entry permits one bounded rediscovery. Action
-expectations do not establish a standalone baseline in either route: they keep
-the supplied pre-action `SettledCapture` and replay no later than the action's
-post-settlement cursor. Standalone waits establish their baseline and
-announcement cursor inside their own invocation and cannot consume evidence
-from a prior action or heist.
+Observation effects may reveal one already-resolvable target or run canonical
+viewport discovery. Discovery searches both directional rays and exits
+`.origin`; graceful stop restores the saved origin before settlement finalizes.
+The executor otherwise waits on committed Log/Stream events instead of polling.
+A standalone wait cannot consume evidence from a prior action or heist.
 
-Every settle, reveal, discovery, and waiter phase inherits one authored
-operation deadline. Already-settled truth remains immediately evaluable, but a
-new stability route starts only when the remaining budget contains the settle
-reducer's declared quiet-window floor. After each reveal or discovery, the wait records its route
-cost and reserves the longest observed duration so terminal verification starts
-before that deadline. Terminal verification performs one final visible check
-followed, if still unmatched and time remains, by one final reveal or canonical
-discovery under the same deadline. It receives no fresh 250 ms budget and does
-not continue discovery after the operation deadline. Every matching stage exits
-early. These reveal and discovery routes are the only wait routes; there is no
-compatibility orchestration path.
+Every observation effect, readiness wait, predicate evaluation, and handoff
+capture inherits one authored operation deadline. When predicate, readiness,
+and handoff evidence are complete, the reducer exits immediately—there is no
+extra stability sleep or final predicate revalidation. After a terminal result,
+the lifecycle first suppresses new callbacks, then quiesces and joins child
+work, and only then releases its outer notification and observation leases.
 
 `.exists(target)` and `.missing(target)` resolve any element, container, or
 descendant-scoped `AccessibilityTarget` against current state.

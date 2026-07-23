@@ -357,17 +357,18 @@ media only through explicit, size-bounded opt-ins.
 {"buttonHeistVersion":"<semver>","type":"heistPlan","payload":{"plan":{"version":2,"parameter":{"type":"none"},"body":[{"type":"wait","wait":{"predicate":{"type":"changed","scope":"screen","assertions":[]},"timeout":30}}]},"argument":{"type":"none"}}}
 ```
 
-The host evaluates current-tree predicates against the current delivered
-interface first, then extends one observation window until the predicate is met
-or the timeout expires. `exists` and `missing` read current state. Lifecycle
-assertions require observed facts and never pass from an implied final state.
-Each standalone wait establishes an invocation-local baseline and announcement
-cursor, so it cannot consume prior action or heist evidence. An expectation
-explicitly attached to an action instead uses the exact pre-action settled
-baseline and opening announcement cursor, then replays canonical Store entries
-only through the cursor committed after that action settles. This preserves
-transient appeared and disappeared facts while limiting announcements to those
-after the action began.
+The host lowers a standalone wait to an observation-triggered
+`Settlement.Command`; it performs no action dispatch. The command captures an
+invocation-local `Observation.Moment` and announcement position, so it cannot
+consume prior action or heist evidence. `exists` and `missing` evaluate current
+state in the returned handoff snapshot. Lifecycle assertions require ordered
+post-baseline Log events and never pass from an implied final state.
+
+An expectation attached to an action enters the same settlement executor with
+an action trigger. Its observation, announcement, readiness, and deadline
+channels are armed before the single dispatch. A transient positive transition
+or matching announcement latches while readiness continues; no second wait is
+started after the action.
 The response is a heist execution result, even for a single wait. Public report
 JSON includes `netDelta` only when the complete accumulated execution trace
 proves a change; not-applicable, incomplete, and complete unchanged evidence do
@@ -416,15 +417,19 @@ Action responses use `actionResult`:
 {"buttonHeistVersion":"<semver>","type":"actionResult","payload":{"outcome":{"kind":"success"},"method":"activate","evidence":{"observation":{"kind":"none"}}}}
 ```
 
-App-side dispatch first produces one `ActionDispatchResult`; observation adds
-evidence to that result without another intermediate result shape. Action
+App-side settlement records one `ActionDispatchResult` together with predicate,
+readiness, and observation-handoff evidence. One projector derives the action
+result without another intermediate result shape. Action
 evidence is required and bound to the wire result outcome. Its `observation`
 is exactly one tagged case: `none`, `announcement`, `trace`, or `settledTrace`.
 Only `settledTrace` owns the tagged settlement shape
-`{"kind":"settled|timedOut","durationMs":...,"path":"..."}`. Successful
+`{"kind":"settled|timedOut|observationHandoffTimedOut","durationMs":...,"path":"..."}`. Successful
 settlement may include `path` as `semanticStability`, `uikitIdle`, or
 `accessibilityQuietWindow`; the optional field preserves decoding of older
 receipts. Timed-out settlement cannot carry a path.
+`observationHandoffTimedOut` requires a path and means readiness was established,
+but no observation eligible for that readiness generation was admitted before
+the deadline. It reports `settled == false` while preserving the readiness proof.
 The `trace` case cannot include `settlement`.
 `settledTrace` with `timedOut` may carry result-local action-settlement
 diagnostic captures, but those captures are not admitted to settled semantic
@@ -458,11 +463,13 @@ an action is drawn in the [action pipeline diagram](diagrams/action-pipeline.md)
 
 ## Traces, Facts, and Public Deltas
 
-`SemanticObservationStore` is the in-app semantic owner. It commits the current
-tree and retained entries with typed lineage and serves replayable cursor-backed sequences. A
-temporal predicate builds one `ObservationWindow` from its immutable baseline
-through the current retained entry; it does not merge a private trace or claim
-notification ownership. Presence predicates read the current tree directly.
+`Observation.Store` is the in-app semantic owner. It atomically commits the
+current tree, typed lineage, and one retained `Observation.Log` before
+`Observation.Stream` publishes the same event. `Observation.Moment` pairs an
+immutable snapshot with its private Log index. Temporal predicates consume
+direct `Log.events(since:)` results; they do not merge a private trace or claim
+notification ownership. Current-state predicates read the returned handoff
+snapshot.
 
 `AccessibilityTrace` is the durable wire/result evidence materialized from
 that lineage, and the runtime derives ordered `ChangeFact` values from its
@@ -470,17 +477,16 @@ adjacent captures. An action-settlement timeout may return a diagnostic trace
 in its result, but that trace is not committed or usable as a settled
 observation baseline. No separate stored or endpoint temporal model exists.
 
-Only `CommittableInterfaceObservation` values are committed and appended to
-retained semantic history. A raw `InterfaceObservation` is live parser evidence
-and cannot be committed directly. Visible commits require an admitted
-`CommittableInterfaceObservation`; discovery commits require the value admitted
-from the finished exploration graph after its settled pages have been reduced.
+Only admitted `Observation.Snapshot` values are committed and recorded in the
+Log. A raw `InterfaceObservation` is live parser evidence and cannot be
+published directly. Visible and discovery captures share the same admission,
+commit, and publication boundary.
 
 Facts have two kinds: `elementsChanged` and `screenChanged`. A screen boundary
 always derives three ordered facts: old-tree departures, the screen marker,
 then new-tree arrivals. `updated` entries can only be derived from captures in
-the same screen generation. Only a complete observation window with no facts
-proves `noChange`; no `noChange` fact is emitted.
+the same screen generation. Only complete retained history with no facts proves
+`noChange`; no `noChange` fact is emitted.
 
 Scoped notification evidence has one semantic shape: `screenChanged`,
 `elementChanged` with a `layout` or `value` subtype, `announcement`, or

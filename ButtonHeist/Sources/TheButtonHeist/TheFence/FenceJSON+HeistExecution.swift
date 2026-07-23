@@ -22,7 +22,7 @@ private enum PublicHeistExpectationSummaryCodingKey: String, CodingKey {
 
 private enum PublicHeistReportNodeCodingKey: String, CodingKey {
     case path, kind, capability, status, message, durationMs, evidence, failure
-    case abortedAtChildPath, expectation, children
+    case abortedAtChildPath, expectation, settlement, children
 }
 
 private enum PublicHeistReportFailureCodingKey: String, CodingKey {
@@ -104,6 +104,9 @@ struct PublicHeistExecutionResponse: Encodable {
             node.expectation.map { ExpectationProjection(result: $0) },
             forKey: .expectation
         )
+        if node.settlement?.settled == false {
+            try container.encodeIfPresent(node.settlement, forKey: .settlement)
+        }
         var children = container.nestedUnkeyedContainer(forKey: .children)
         for child in node.children {
             try encode(child, to: children.superEncoder())

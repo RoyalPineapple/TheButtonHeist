@@ -35,10 +35,10 @@ enum SemanticObservationScope: Int, Comparable, Sendable {
 final class SemanticObservationSubscription {
     let id: UInt64
     let scope: SemanticObservationScope
-    private weak var stream: SemanticObservationStream?
+    private weak var stream: Observation.Stream?
     private var isCancelled = false
 
-    init(id: UInt64, scope: SemanticObservationScope, stream: SemanticObservationStream) {
+    init(id: UInt64, scope: SemanticObservationScope, stream: Observation.Stream) {
         self.id = id
         self.scope = scope
         self.stream = stream
@@ -62,10 +62,10 @@ final class SemanticObservationSubscription {
 @MainActor
 final class SemanticObservationDemand {
     let id: UInt64
-    private weak var stream: SemanticObservationStream?
+    private weak var stream: Observation.Stream?
     private var isCancelled = false
 
-    init(id: UInt64, stream: SemanticObservationStream) {
+    init(id: UInt64, stream: Observation.Stream) {
         self.id = id
         self.stream = stream
     }

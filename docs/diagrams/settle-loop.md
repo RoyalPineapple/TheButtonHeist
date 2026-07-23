@@ -1,82 +1,129 @@
-# Settle Loop
+# Settlement Loop
 
-The tripwire and the settle loop as cooperating mechanisms: TheTripwire watches UIKit timing signals on one display-link pulse, while SettleSession parses concurrently and accepts the first valid UIKit-idle or semantic-stability proof. This diagram makes "settled evidence" concrete — it answers "what exactly does Button Heist mean when it says the screen settled?"
+Actions and waits use one reducer-driven settlement engine. The command is a
+two-axis product: its trigger is either an action or observation, and it may
+carry one resolved predicate. Readiness and an admitted observation handoff are
+required for every successful result.
 
-**Illustrates:** [ARCHITECTURE.md](../ARCHITECTURE.md), [ACCESSIBILITY-CONTRACT.md](../ACCESSIBILITY-CONTRACT.md), [SCOPE-AND-LIMITS.md](../SCOPE-AND-LIMITS.md)
-**Source of truth:** `ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/SettleTimeline.swift`, `ButtonHeist/Sources/TheInsideJob/TheTripwire/UIKitIdleTracker.swift`, `ButtonHeist/Sources/TheInsideJob/TheTripwire/TheTripwire.swift`, `ButtonHeist/Sources/TheInsideJob/TheTripwire/TheTripwire+Pulse.swift`, `ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift`
+**Illustrates:** [ARCHITECTURE.md](../ARCHITECTURE.md), [API.md](../API.md),
+[WIRE-PROTOCOL.md](../WIRE-PROTOCOL.md)
+
+**Source of truth:**
+`ButtonHeist/Sources/TheInsideJob/TheBrains/Settlement.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheBrains/Settlement+Reducer.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheBrains/Settlement+Execution.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheBrains/Settlement+ResultProjection.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheTripwire/UIKitIdleTracker.swift`
+
+## Four commands, one lifecycle
+
+| Trigger | Predicate | Meaning | Dispatches |
+| --- | --- | --- | --- |
+| action | absent | perform an action and return when its UI is ready | once |
+| action | present | perform an action while evaluating its attached expectation | once |
+| observation | present | `waitFor` | never |
+| observation | absent | observe and settle current UI | never |
 
 ```mermaid
 stateDiagram-v2
-    direction TB
-    state "consecutiveCycles" as cycles
-    state "parse on every heartbeat" as parsing
-    state "60 ms AX quiet window" as semanticQuiet
-    state "settled(timeMs:)" as settled
-    state "timedOut(timeMs:)" as timedOut
-    state "cancelled(timeMs:)" as cancelled
-
-    [*] --> cycles : action delivered
-    cycles --> cycles : fingerprint unchanged, quiet +1
-    cycles --> cycles : fingerprint or tripwireSignal changed, reset
-    cycles --> settled : 3 consecutive quiet cycles
-    cycles --> timedOut : defaultTimeoutMs = 5000
-    cycles --> cancelled : context cancelled
-
-    state "animation count > 0" as animating
-    state "main run loop BeforeWaiting" as runLoopIdle
-    state "shared CADisplayLink heartbeat" as heartbeat
-
-    [*] --> parsing : active heist settlement
-    parsing --> parsing : fingerprint changed
-    parsing --> semanticQuiet : fingerprint unchanged
-    semanticQuiet --> parsing : fingerprint or tripwireSignal changed
-    semanticQuiet --> settled : unchanged for 60 ms
-    parsing --> animating : animation start observed
-    animating --> runLoopIdle : aggregate count reaches zero
-    parsing --> runLoopIdle : count already zero after first heartbeat
-    runLoopIdle --> animating : animation started before idle edge
-    runLoopIdle --> heartbeat : idle edge with count still zero
-    heartbeat --> settled : parse first future native-rate tick
-
-    settled --> [*]
-    timedOut --> [*]
-    cancelled --> [*]
+    [*] --> AwaitingBaseline
+    AwaitingBaseline --> Armed : baseline Moment committed
+    AwaitingBaseline --> Failed : baseline unavailable
+    Armed --> Dispatching : action trigger
+    Armed --> Observing : observation trigger
+    Dispatching --> Observing : dispatch completes
+    Observing --> Observing : observation, announcement,<br/>predicate, or readiness event
+    Observing --> NeedHandoff : readiness without eligible observation
+    NeedHandoff --> Observing : handoff capture admitted
+    Observing --> Completed : trigger + predicate +<br/>readiness + handoff
+    NeedHandoff --> Completed : remaining evidence complete
+    Dispatching --> TimedOut : absolute deadline
+    Observing --> TimedOut : absolute deadline
+    NeedHandoff --> TimedOut : absolute deadline
+    AwaitingBaseline --> Cancelled : cancellation
+    Armed --> Cancelled : cancellation
+    Observing --> Cancelled : cancellation
+    Completed --> [*]
+    Failed --> [*]
+    TimedOut --> [*]
+    Cancelled --> [*]
 ```
 
-The active proof race shares the same `timedOut` and `cancelled` edges as
-`consecutiveCycles`; they are drawn once to keep the picture readable. If the
-private idle tracker is unavailable or a cosmetic animation repeats forever,
-the 60 ms AX quiet-window proof can still settle. Both proofs use the single CADisplayLink heartbeat;
-immediate demand boosts it from the ambient rate to the active screen maximum
-until the next tick. An idle wait that consumes the authored deadline stays timed out.
-
-The two clocks:
+## Arm before dispatch
 
 ```mermaid
-flowchart TD
-    subgraph tripwire["TheTripwire — UIKit signals"]
-        ANIMATION["runtime-installed UIViewAnimationState hooks<br/>lifecycle-wide aggregate counter"]
-        ANIMATION_IDLE["animation idle edge<br/>count 1 → 0"]
-        RUN_LOOP_IDLE["CFRunLoopObserver<br/>beforeWaiting"]
-        PULSE["one CADisplayLink heartbeat<br/>ambient 10 Hz · immediate native maximum"]
-        SIGNAL["TripwireSignal<br/>layer scan · VC identity · window stack"]
-        ANIMATION --> ANIMATION_IDLE --> RUN_LOOP_IDLE
-        PULSE --> SIGNAL
+sequenceDiagram
+    participant Caller
+    participant Executor as Settlement.Executor
+    participant Store as Observation.Store
+    participant Channels as Observation + announcement<br/>+ readiness + deadline
+    participant UIKit as Action boundary
+    participant Reducer as Settlement.Reducer
+
+    Caller->>Executor: execute typed Command
+    Executor->>Store: capture and commit baseline
+    Store-->>Executor: Moment
+    Executor->>Channels: arm after baseline
+    Channels-->>Reducer: channelsArmed
+    alt action trigger
+        Executor->>UIKit: dispatch exactly once
+        UIKit-->>Reducer: dispatchCompleted
+    else observation trigger
+        Note over Executor,UIKit: no action and no fake no-op
     end
-    subgraph settle["SettleSession — AX tree"]
-        PARSE["parse throughout animation<br/>on immediate heartbeat demand"]
-        FP["fingerprint complete hierarchy:<br/>paths · ordering · semantic facts · containers<br/>heist ids · first responder · coarse geometry"]
-        PARSE --> FP
+    loop until terminal
+        Channels-->>Reducer: committed Event / announcement / readiness
+        Reducer-->>Executor: typed effects
     end
-    RUN_LOOP_IDLE -- "admit first parse from an<br/>explicitly future heartbeat" --> PARSE
-    PULSE --> PARSE
-    SIGNAL -- "signal change resets<br/>the settle baseline" --> PARSE
+    alt readiness has no eligible observation
+        Reducer-->>Executor: capture one handoff
+        Executor->>Store: admit and commit capture
+        Store-->>Reducer: post-readiness Event
+    end
+    Reducer-->>Executor: Settlement.Result
+    Executor-->>Caller: project action or wait result
 ```
 
-Notes:
+Arming first closes the synchronous-change race: an announcement or hierarchy
+change caused during dispatch cannot occur before its consumer exists. The
+absolute deadline covers baseline, dispatch, observation effects, readiness,
+predicate evaluation, and handoff; no phase receives a fresh timeout.
 
-- The fingerprint (`SettleTimeline.fingerprint(of:)`) hashes hierarchy paths and ordering, every stable element semantic fact, containers, heist-id assignments, first-responder identity, and coarse geometry. Volatile `value`, shape, and activation-point facts are **skipped for elements carrying `updatesFrequently`**, so clocks and progress bars cannot hold the screen "unsettled" forever.
-- A clean result carries the exact final `InterfaceObservation`; the semantic stream admits that observation only while its tripwire signal and capture identity are still current. It never reacquires or reconstructs the parser sample after settlement.
-- `SettleOutcome.timedOut` is explicitly unsettled: `didSettleCleanly` is `false` and the result reports `settled: false`. It is never passed off as stable.
-- `cancelled` is the third outcome — the session was torn down mid-action, distinct from `timedOut` so the caller can short-circuit instead of continuing on a dead session.
-- Constants live in `SettleSession`: `defaultCyclesRequired = 3`, `defaultCycleIntervalMs = 100`, `defaultTimeoutMs = 5_000`.
+## Completion evidence
+
+A successful result is constructible only when all applicable evidence agrees:
+
+1. The trigger completed successfully. Observation triggers satisfy this
+   structurally; action triggers require one successful dispatch.
+2. The optional predicate is satisfied. Current-state evidence must hold in the
+   returned handoff. Positive transitions and announcements may remain latched.
+3. UIKit readiness is established for the current readiness generation.
+4. The returned observation was admitted at or after that readiness boundary.
+
+Readiness that arrives after the latest observation requests exactly one
+handoff capture. If a qualifying observation was already admitted after the
+readiness boundary, it is reused. There is no fixed 30 ms stability delay and
+no blanket final predicate revalidation.
+
+The lifecycle-wide `UIKitIdleTracker` combines the aggregate animation counter
+with a main-run-loop `beforeWaiting` edge. The private start/stop hooks are
+installed for the active Inside Job runtime, not around each action. Nested
+heists share the outer observation demand. The existing semantic quiet-window
+path remains the fallback for unavailable private tracking and cosmetic
+infinite animations.
+
+## Terminal cleanup
+
+Terminal projection happens after structured cleanup:
+
+1. stop accepting new sink callbacks;
+2. request graceful stop for viewport-mutating observation work;
+3. cancel and join owned dispatch, capture, evaluation, readiness, and deadline
+   tasks;
+4. consume or release child notification scopes;
+5. release the outer action notification window and observation demand; and
+6. emit one diagnosis derived from the canonical result.
+
+This ordering prevents a child scope from outliving its owner, restores the
+viewport before an observation-only wait returns, and guarantees no capture or
+predicate work occurs after the terminal result.

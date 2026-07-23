@@ -17,7 +17,7 @@ extension InterfaceTreeTests {
             (anchor, "anchor"),
         ])
 
-        let updated = initial.tree.updatingViewport(with: refreshed)
+        let updated = initial.tree.updatingViewport(with: refreshed.tree)
 
         XCTAssertEqual(updated.viewportElementIDs, ["anchor"])
         XCTAssertEqual(updated.elementIDs, ["anchor", "target"])

@@ -45,6 +45,7 @@ public struct HeistReport: Sendable, Equatable {
         public let failure: Failure?
         public let abortedAtChildPath: HeistExecutionPath?
         public let expectation: ExpectationResult?
+        public let settlement: ActionSettlementEvidence?
         public let activationTrace: ActivationTrace?
         public let children: [Node]
         package let evidence: Evidence?
@@ -76,6 +77,7 @@ public struct HeistReport: Sendable, Equatable {
             }
             abortedAtChildPath = step.abortedAtChildPath
             expectation = step.reportExpectation
+            settlement = actionResult?.evidence.settlement
             activationTrace = actionResult?.activationTrace
             self.children = children
             evidence = Evidence(step: step)

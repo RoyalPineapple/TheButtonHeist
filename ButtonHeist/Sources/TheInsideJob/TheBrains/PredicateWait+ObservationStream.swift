@@ -6,31 +6,31 @@ import TheScore
 
 internal enum PredicateObservationBaselineSeed {
     case preserve
-    case supplied(SettledCapture)
+    case supplied(Observation.Moment)
     case currentObservation
 }
 
 /// Reduces settled observations against one immutable baseline. The semantic
-/// observation log supplies the complete window for each reduction; this
-/// value does not own or merge history.
+/// observation log supplies the events for each reduction; this value does
+/// not own or merge history.
 internal struct PredicateObservationStreamState: Sendable, Equatable {
-    private let baseline: SettledCapture?
+    private let baseline: Observation.Moment?
 
     internal init() {
         baseline = nil
     }
 
-    private init(baseline: SettledCapture?) {
+    private init(baseline: Observation.Moment?) {
         self.baseline = baseline
     }
 
-    internal var observationBaseline: SettledCapture? {
+    internal var observationBaseline: Observation.Moment? {
         baseline
     }
 
     internal func seedingBaseline(
         _ seed: PredicateObservationBaselineSeed,
-        from event: SettledObservationEvent,
+        from event: Observation.SnapshotEvent,
         when required: Bool
     ) -> Self {
         guard required else { return PredicateObservationStreamState(baseline: nil) }
@@ -43,12 +43,12 @@ internal struct PredicateObservationStreamState: Sendable, Equatable {
         _ observation: SettledObservationEvidence,
         predicate: ResolvedAccessibilityPredicate,
         predicateExpression: AccessibilityPredicate,
-        observationWindow: ObservationWindow? = nil
+        eventsSinceBaseline: Observation.EventsSince? = nil
     ) -> PredicateObservationStreamReduction {
         let evidence = PredicateObservationEvidence(
             observation: observation,
             baseline: baseline,
-            window: baseline == nil ? nil : observationWindow
+            eventsSinceBaseline: baseline == nil ? nil : eventsSinceBaseline
         )
         return PredicateObservationStreamReduction(
             state: self,
@@ -65,14 +65,14 @@ internal struct PredicateObservationStreamState: Sendable, Equatable {
 }
 
 private extension PredicateObservationBaselineSeed {
-    func baseline(for event: SettledObservationEvent) -> SettledCapture? {
+    func baseline(for event: Observation.SnapshotEvent) -> Observation.Moment? {
         switch self {
         case .preserve:
             nil
         case .supplied(let baseline):
             baseline
         case .currentObservation:
-            event.settledCapture
+            event.moment
         }
     }
 }
@@ -91,15 +91,15 @@ internal struct PredicateObservationReduction {
     }
 
     internal var trace: AccessibilityTrace? {
-        evidence.window?.trace ?? observation.accessibilityTrace
+        evidence.changeTrace ?? observation.accessibilityTrace
     }
 
-    internal var changeBaseline: SettledCapture? {
+    internal var changeBaseline: Observation.Moment? {
         evidence.baseline
     }
 
-    internal var observationWindow: ObservationWindow? {
-        evidence.window
+    internal var eventsSinceBaseline: Observation.EventsSince? {
+        evidence.eventsSinceBaseline
     }
 }
 

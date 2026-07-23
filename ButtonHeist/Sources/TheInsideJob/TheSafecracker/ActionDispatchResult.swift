@@ -18,6 +18,7 @@ extension TheSafecracker {
         let subjectEvidence: ActionSubjectEvidence?
         let activationTrace: ActivationTrace?
         let screenActionHandler: ScreenActionHandlerName?
+        let timing: ActionPerformanceTiming?
         let outcome: ActionDispatchOutcome
 
         var success: Bool {
@@ -41,6 +42,7 @@ extension TheSafecracker {
             subjectEvidence: ActionSubjectEvidence?,
             activationTrace: ActivationTrace?,
             screenActionHandler: ScreenActionHandlerName?,
+            timing: ActionPerformanceTiming?,
             outcome: ActionDispatchOutcome
         ) {
             self.payload = payload
@@ -48,6 +50,7 @@ extension TheSafecracker {
             self.subjectEvidence = subjectEvidence
             self.activationTrace = activationTrace
             self.screenActionHandler = screenActionHandler
+            self.timing = timing
             self.outcome = outcome
         }
 
@@ -65,6 +68,7 @@ extension TheSafecracker {
                 subjectEvidence: subjectEvidence,
                 activationTrace: activationTrace,
                 screenActionHandler: screenActionHandler,
+                timing: nil,
                 outcome: .success(resolvedElementId: resolvedElementId)
             )
         }
@@ -82,6 +86,7 @@ extension TheSafecracker {
                 subjectEvidence: subjectEvidence,
                 activationTrace: activationTrace,
                 screenActionHandler: nil,
+                timing: nil,
                 outcome: .failure(failureKind)
             )
         }
@@ -94,6 +99,7 @@ extension TheSafecracker {
                 subjectEvidence: evidence,
                 activationTrace: activationTrace,
                 screenActionHandler: screenActionHandler,
+                timing: timing,
                 outcome: outcome
             )
         }
@@ -106,6 +112,7 @@ extension TheSafecracker {
                 subjectEvidence: subjectEvidence,
                 activationTrace: activationTrace,
                 screenActionHandler: screenActionHandler,
+                timing: timing,
                 outcome: .success(resolvedElementId: heistId)
             )
         }
@@ -118,6 +125,19 @@ extension TheSafecracker {
                 subjectEvidence: subjectEvidence,
                 activationTrace: trace,
                 screenActionHandler: screenActionHandler,
+                timing: timing,
+                outcome: outcome
+            )
+        }
+
+        func withTiming(_ timing: ActionPerformanceTiming) -> ActionDispatchResult {
+            ActionDispatchResult(
+                payload: payload,
+                message: message,
+                subjectEvidence: subjectEvidence,
+                activationTrace: activationTrace,
+                screenActionHandler: screenActionHandler,
+                timing: timing,
                 outcome: outcome
             )
         }

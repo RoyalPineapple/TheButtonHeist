@@ -49,7 +49,7 @@ extension TheBrainsScrollTests {
             object: object,
             scrollView: scrollView
         )
-        brains.vault.installObservationForTesting(initialScreen)
+        await brains.vault.installObservationForTesting(initialScreen)
         guard let committed = brains.vault.interfaceElement(heistId: targetId) else {
             return XCTFail("Expected placement target in committed semantic state")
         }
@@ -97,7 +97,7 @@ extension TheBrainsScrollTests {
             object.accessibilityFrame = placedFrame
             object.accessibilityActivationPoint = placedActivationPoint
             self.visibleObservationSource.observation = placedScreen
-            let event = self.brains.vault.semanticObservationStream
+            let event = await self.brains.vault.semanticObservationStream
                 .commitDiscoveryObservationAfterViewportMovementForTesting(placedScreen)
             return Navigation.ViewportTransition(
                 outcome: .moved,
@@ -129,7 +129,7 @@ extension TheBrainsScrollTests {
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
         let offscreen = makeElement(label: "Offscreen")
-        installScreenWithOffViewport(
+        await installScreenWithOffViewport(
             visible: InterfaceObservation.TestEntry(visible, heistId: "visible_element"),
             offscreen: OffViewportScrollTarget(
                 offscreen,
@@ -179,7 +179,7 @@ extension TheBrainsScrollTests {
             scrollMembership: nil,
             element: element
         )
-        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [entry.heistId: entry],
             hierarchy: [.element(element, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): entry.heistId],
@@ -216,7 +216,7 @@ extension TheBrainsScrollTests {
             scrollMembership: nil,
             element: element
         )
-        installSyntheticObservation(InterfaceObservation.makeForTests(
+        await installSyntheticObservation(InterfaceObservation.makeForTests(
             elements: [entry.heistId: entry],
             hierarchy: [.element(element, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): entry.heistId],
@@ -239,7 +239,7 @@ extension TheBrainsScrollTests {
     func testElementActionsConsumeElementInflationFailureBeforeDispatch() async throws {
         let visible = makeElement(label: "Visible")
         let offscreen = makeElement(label: "Offscreen")
-        installScreenWithOffViewportEntry(
+        await installScreenWithOffViewportEntry(
             liveHierarchy: [(visible, "visible_element")],
             offViewport: [InterfaceObservation.OffViewportEntry(offscreen, heistId: "offscreen_button")]
         )
@@ -273,7 +273,7 @@ extension TheBrainsScrollTests {
         let screen = InterfaceObservation.makeForTests([
             .init(element, heistId: "refreshable_button", object: object),
         ])
-        brains.vault.installObservationForTesting(screen)
+        await brains.vault.installObservationForTesting(screen)
         visibleObservationSource.observation = screen
         let target = try resolvedTarget(AccessibilityTarget.label("Refreshable").and(.traits([.button])))
         let finalResolution = ActionSubjectResolution(
@@ -308,7 +308,7 @@ extension TheBrainsScrollTests {
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let staleVisible = makeElement(label: "Old Visible")
         let staleOffscreen = makeElement(label: "Old Offscreen")
-        installScreenWithOffViewport(
+        await installScreenWithOffViewport(
             visible: InterfaceObservation.TestEntry(staleVisible, heistId: "old_visible"),
             offscreen: OffViewportScrollTarget(
                 staleOffscreen,

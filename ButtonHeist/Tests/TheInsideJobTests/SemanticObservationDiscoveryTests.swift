@@ -11,12 +11,12 @@ import ButtonHeistTestSupport
 
 @MainActor
 final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase {
-    func testPathOnlyScrollReplacementDiscardsPriorDiscoveryAndLiveEvidence() {
+    func testPathOnlyScrollReplacementDiscardsPriorDiscoveryAndLiveEvidence() async {
         let oldHeader = NSObject()
         let oldRow = NSObject()
         let newHeader = NSObject()
         let newRow = NSObject()
-        let firstEvent = vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let firstEvent = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             scrollObservation(
                 headerId: "old_header",
                 rowLabel: "Orders",
@@ -25,7 +25,7 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
                 rowObject: oldRow
             )
         )
-        let secondEvent = vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let secondEvent = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             scrollObservation(
                 headerId: "new_header",
                 rowLabel: "Products",
@@ -46,30 +46,23 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
         XCTAssertTrue(vault.latestObservation.liveCapture.object(for: "new_row") === newRow)
     }
 
-    func testDiscoveryPublicationMaintainsIndependentScopeLineage() throws {
+    func testDiscoveryPublicationProjectsOneLogAcrossFulfilledScopes() async throws {
         let first = observation(label: "First", heistId: "first")
         let second = observation(label: "Second", heistId: "second")
-        _ = vault.semanticObservationStream.commitDiscoveryObservationForTesting(first)
-        _ = vault.semanticObservationStream.commitVisibleObservationForTesting(second)
+        let discovery = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(first)
+        let visible = await vault.semanticObservationStream.commitVisibleObservationForTesting(second)
 
-        let visibleEntries = vault.semanticObservationStream.retainedObservationEntries(scope: .visible)
-        let discoveryEntries = vault.semanticObservationStream.retainedObservationEntries(scope: .discovery)
-
-        XCTAssertEqual(visibleEntries.count, 2)
-        XCTAssertEqual(discoveryEntries.count, 1)
-        XCTAssertEqual(visibleEntries.map(\.cursor.scope), [.visible, .visible])
-        XCTAssertEqual(discoveryEntries.map(\.cursor.scope), [.discovery])
-        XCTAssertEqual(
-            vault.semanticObservationStream.latestCommittedObservationCursor(scope: .visible),
-            visibleEntries.last?.cursor
-        )
-        XCTAssertEqual(
-            vault.semanticObservationStream.latestCommittedObservationCursor(scope: .discovery),
-            discoveryEntries.last?.cursor
-        )
+        let history = await vault.semanticObservationStream.storeOwner.readLog {
+            $0.events(since: discovery.moment)
+        }
+        let visibleMoment = await vault.semanticObservationStream.latestCommittedObservationMoment(scope: .visible)
+        let discoveryMoment = await vault.semanticObservationStream.latestCommittedObservationMoment(scope: .discovery)
+        XCTAssertEqual(history, .events([.snapshot(visible)]))
+        XCTAssertEqual(visibleMoment, visible.moment)
+        XCTAssertEqual(discoveryMoment, discovery.moment)
     }
 
-    func testDiscoveryPublicationCarriesCanonicalGraphAndEvidenceAcrossFulfilledScopes() throws {
+    func testDiscoveryPublicationCarriesCanonicalGraphAndEvidenceAcrossFulfilledScopes() async throws {
         let visible = AccessibilityElement.make(label: "Visible", traits: .header)
         let offViewport = AccessibilityElement.make(label: "Off Viewport", traits: .button)
         let observation = InterfaceObservation.makeForTests(
@@ -77,33 +70,32 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
             offViewport: [.init(offViewport, heistId: "off_viewport")]
         )
 
-        let discoveryEvent = vault.semanticObservationStream.commitDiscoveryObservationForTesting(observation)
-        let visibleEvent = try XCTUnwrap(
-            vault.semanticObservationStream.retainedObservationEntries(scope: .visible).last?.event
-        )
+        let discoveryEvent = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(observation)
+        let visibleEvent = discoveryEvent
 
-        XCTAssertEqual(discoveryEvent.settledObservation.observation.tree.elementIDs, ["visible", "off_viewport"])
-        XCTAssertEqual(discoveryEvent.settledObservation.observation.captureID, observation.captureID)
+        XCTAssertEqual(discoveryEvent.snapshot.observation.tree.elementIDs, ["visible", "off_viewport"])
+        XCTAssertEqual(discoveryEvent.snapshot.observation.captureID, observation.captureID)
         XCTAssertEqual(
             discoveryEvent.trace.captures.last?.interface.projectedElements.compactMap(\.label),
             ["Visible", "Off Viewport"]
         )
-        XCTAssertEqual(visibleEvent.settledObservation.observation.tree.elementIDs, ["visible", "off_viewport"])
-        XCTAssertEqual(visibleEvent.settledObservation.observation.captureID, observation.captureID)
+        XCTAssertEqual(visibleEvent.snapshot.observation.tree.elementIDs, ["visible", "off_viewport"])
+        XCTAssertEqual(visibleEvent.snapshot.observation.captureID, observation.captureID)
         XCTAssertEqual(
             visibleEvent.trace.captures.last?.interface.projectedElements.compactMap(\.label),
             ["Visible", "Off Viewport"]
         )
+        XCTAssertEqual(visibleEvent, discoveryEvent)
         XCTAssertEqual(vault.latestObservation.captureID, observation.captureID)
     }
 
-    func testDiscoverySettlementRejectsTripwireChangeBeforeCommit() {
+    func testDiscoverySettlementRejectsTripwireChangeBeforeCommit() async {
         let observation = observation(label: "Candidate", heistId: "candidate")
         vault.observeInterface(observation)
         let settledSignal = tripwireSignal(sequence: 1)
         let currentSignal = tripwireSignal(sequence: 2)
         vault.semanticObservationStream.readTripwireSignal = { currentSignal }
-        let event = vault.semanticObservationStream.commitSettledDiscoveryObservation(
+        let event = await vault.semanticObservationStream.commitSettledDiscoveryObservation(
             settleResult(
                 .settled(timeMs: 1),
                 observation: observation,
@@ -117,32 +109,34 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
         XCTAssertNil(vault.interfaceTree.findElement(heistId: "candidate"))
     }
 
-    func testDiscoveryAfterVisibleReplacementUsesGlobalGenerationAndScopedPredecessor() throws {
-        let initialDiscovery = vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+    func testDiscoveryAfterVisibleReplacementUsesGlobalGenerationAndPredecessor() async throws {
+        let initialDiscovery = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             observation(label: "First Screen", heistId: "first_screen")
         )
-        let replacementVisible = vault.semanticObservationStream.commitVisibleObservationForTesting(
+        let replacementVisible = await vault.semanticObservationStream.commitVisibleObservationForTesting(
             observation(label: "Second Screen", heistId: "second_screen"),
             notificationBatch: screenChangedBatch()
         )
-        let replacementDiscovery = vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let replacementDiscovery = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             observation(label: "Second Screen", heistId: "second_screen")
         )
 
         XCTAssertEqual(replacementVisible.generation, initialDiscovery.generation.advanced())
         XCTAssertEqual(replacementDiscovery.generation, replacementVisible.generation)
-        XCTAssertEqual(replacementDiscovery.previousCursor, initialDiscovery.cursor)
+        XCTAssertEqual(replacementDiscovery.previousMoment, replacementVisible.moment)
         XCTAssertEqual(
             replacementDiscovery.trace.captures.first?.hash,
-            initialDiscovery.trace.captures.last?.hash
+            replacementVisible.trace.captures.last?.hash
         )
 
-        let discoveryEntries = vault.semanticObservationStream.retainedObservationEntries(scope: .discovery)
-        XCTAssertEqual(discoveryEntries.count, 2)
-        guard case .screenBoundary(let transition) = discoveryEntries[1].transition else {
+        let history = await vault.semanticObservationStream.storeOwner.readLog {
+            $0.events(since: initialDiscovery.moment)
+        }
+        XCTAssertEqual(history, .events([.snapshot(replacementVisible), .snapshot(replacementDiscovery)]))
+        guard case .sameGeneration(let previous) = replacementDiscovery.transition else {
             return XCTFail("Expected the skipped discovery scope to cross the retained screen boundary")
         }
-        XCTAssertEqual(transition.previousCursor, discoveryEntries[0].cursor)
+        XCTAssertEqual(previous, replacementVisible.moment)
     }
 }
 #endif // DEBUG

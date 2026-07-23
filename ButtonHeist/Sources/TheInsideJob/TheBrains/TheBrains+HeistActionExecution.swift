@@ -38,49 +38,37 @@ extension TheBrains {
         }
 
         let expectation = step.expectationPolicy.expectedStep
-        let expectationContextScope = expectation == nil
-            ? nil
-            : SemanticObservationScope.visible
-        let execution = await runtime.execute(resolvedCommand, expectationContextScope)
-        let actionResult = execution.result
-        guard actionResult.outcome.isSuccess, let expectation else {
-            return actionStepResult(
-                command: step.command,
-                actionResult: actionResult,
-                path: path,
-                start: start
-            )
-        }
-
-        let resolvedWait: ResolvedWaitRuntimeInput
+        let resolvedExpectation: ResolvedWaitRuntimeInput?
         do {
-            resolvedWait = try ResolvedWaitRuntimeInput(resolving: expectation, in: environment)
+            resolvedExpectation = try expectation.map {
+                try ResolvedWaitRuntimeInput(resolving: $0, in: environment)
+            }
         } catch {
+            guard let expectation else {
+                preconditionFailure("Expectation resolution failed without an authored expectation")
+            }
+            let observed = "could not resolve heist expectation: \(error)"
             return expectationResolutionFailureResult(
                 HeistExpectationResolutionFailure(
                     wait: expectation,
                     errorDescription: String(describing: error)
                 ),
                 command: step.command,
-                actionResult: actionResult,
+                actionResult: .failure(
+                    payload: resolvedCommand.actionResultPayload,
+                    failureKind: .validationError,
+                    message: observed
+                ),
                 path: path,
                 start: start
             )
         }
 
-        let settledTrace = actionResult.settled == true
-            ? actionResult.accessibilityTrace
-            : nil
-        let result = await runtime.wait(.actionEndpoint(
-            resolvedWait,
-            trace: settledTrace,
-            context: execution.actionExpectationContext
-        ))
-        return actionExpectationStepResult(
+        let execution = await runtime.execute(resolvedCommand, resolvedExpectation)
+        return actionStepResult(
             command: step.command,
-            actionResult: actionResult,
-            wait: expectation,
-            result: result,
+            evidence: execution.evidence,
+            expectation: expectation,
             path: path,
             start: start
         )
@@ -88,57 +76,34 @@ extension TheBrains {
 
     private func actionStepResult(
         command: HeistActionCommand,
-        actionResult: ActionResult,
+        evidence: HeistActionEvidence,
+        expectation: WaitStep?,
         path: HeistExecutionPath,
         start: RuntimeElapsed.Instant
     ) -> HeistExecutionStepResult {
-        let evidence = HeistActionEvidence.dispatch(dispatchResult: actionResult)
         let execution: HeistActionExecution
-        switch actionResult.outcome {
-        case .success:
-            execution = .passed(command: command, evidence: .init(admitted: evidence))
-        case .failure:
-            execution = .failed(
-                command: command,
-                evidence: .init(admitted: evidence),
-                failure: actionDispatchFailureDetail(command: command, result: actionResult)
-            )
+        guard let dispatchResult = evidence.dispatchResult else {
+            preconditionFailure("Resolved action execution requires dispatch evidence")
         }
-        return actionStepResult(
-            execution: execution,
-            path: path,
-            start: start
-        )
-    }
-
-    private func actionExpectationStepResult(
-        command: HeistActionCommand,
-        actionResult: ActionResult,
-        wait: WaitStep,
-        result: HeistWaitResult,
-        path: HeistExecutionPath,
-        start: RuntimeElapsed.Instant
-    ) -> HeistExecutionStepResult {
-        let execution: HeistActionExecution
-        switch result.outcome {
-        case .matched(let expectationResult, let expectation):
-            let evidence = HeistActionEvidence.expectation(
-                dispatchResult: actionResult,
-                expectationResult: expectationResult,
-                expectation: expectation.result
-            )
-            execution = .passed(command: command, evidence: .init(admitted: evidence))
-        case .unmatched(let expectationResult, let expectation):
-            let evidence = HeistActionEvidence.expectation(
-                dispatchResult: actionResult,
-                expectationResult: expectationResult,
-                expectation: expectation.result
-            )
+        if !dispatchResult.outcome.isSuccess {
             execution = .failed(
                 command: command,
                 evidence: .init(admitted: evidence),
-                failure: actionExpectationFailureDetail(wait: wait, result: result)
+                failure: actionDispatchFailureDetail(command: command, result: dispatchResult)
             )
+        } else if let expectation,
+                  let expectationResult = evidence.expectationResult,
+                  evidence.checkedExpectation?.met != true || !expectationResult.outcome.isSuccess {
+            execution = .failed(
+                command: command,
+                evidence: .init(admitted: evidence),
+                failure: actionExpectationFailureDetail(
+                    wait: expectation,
+                    evidence: evidence
+                )
+            )
+        } else {
+            execution = .passed(command: command, evidence: .init(admitted: evidence))
         }
         return actionStepResult(
             execution: execution,

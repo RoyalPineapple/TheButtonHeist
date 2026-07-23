@@ -54,7 +54,7 @@ final class TheVaultCustomRotorTests: XCTestCase {
         return liveTarget
     }
 
-    func testRotorNextReturnsParsedLiveResultElement() throws {
+    func testRotorNextReturnsParsedLiveResultElement() async throws {
         let windowScene = try requireForegroundWindowScene()
         let rootView = UIView(frame: UIScreen.main.bounds)
         rootView.backgroundColor = .white
@@ -89,7 +89,7 @@ final class TheVaultCustomRotorTests: XCTestCase {
             XCTFail("Expected live capture")
             return
         }
-        vault.installObservationForTesting(observation)
+        await vault.installObservationForTesting(observation)
 
         let resolvedHost = vault.resolveTarget(
             literalTarget(ElementPredicate.identifier("rotor_host"))
@@ -116,7 +116,7 @@ final class TheVaultCustomRotorTests: XCTestCase {
         XCTAssertNil(hit.textRange)
     }
 
-    func testSystemRotorCanBeInvokedByDisplayedName() throws {
+    func testSystemRotorCanBeInvokedByDisplayedName() async throws {
         let windowScene = try requireForegroundWindowScene()
         let rootView = UIView(frame: UIScreen.main.bounds)
         rootView.backgroundColor = .white
@@ -151,7 +151,7 @@ final class TheVaultCustomRotorTests: XCTestCase {
             XCTFail("Expected live capture")
             return
         }
-        vault.installObservationForTesting(observation)
+        await vault.installObservationForTesting(observation)
 
         let resolvedHost = vault.resolveTarget(
             literalTarget(ElementPredicate.identifier("system_rotor_host"))
@@ -218,7 +218,7 @@ final class TheVaultCustomRotorTests: XCTestCase {
 
         let brains = TheBrains(tripwire: TheTripwire())
         brains.tripwire.startPulse()
-        brains.startSemanticObservation()
+        await brains.startSemanticObservation()
         defer {
             brains.stopSemanticObservation()
             brains.tripwire.stopPulse()
@@ -289,7 +289,7 @@ final class TheVaultCustomRotorTests: XCTestCase {
                 frame: CGRect(x: 20, y: 120, width: 280, height: 44)
             )
         )
-        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             tree: InterfaceTree(elements: elements, containers: observation.tree.containers),
             liveCapture: observation.liveCapture
         ))
@@ -312,7 +312,7 @@ final class TheVaultCustomRotorTests: XCTestCase {
         XCTAssertEqual(cachedResult.activationCount, 0)
     }
 
-    func testRotorReportsMissingRotorName() throws {
+    func testRotorReportsMissingRotorName() async throws {
         let host = UIAccessibilityElement(accessibilityContainer: NSObject())
         let frame = CGRect(x: 20, y: 40, width: 280, height: 44)
         host.accessibilityFrame = frame
@@ -331,7 +331,7 @@ final class TheVaultCustomRotorTests: XCTestCase {
         host.accessibilityCustomRotors = [
             UIAccessibilityCustomRotor(name: "Warnings") { _ in nil }
         ]
-        vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [treeElement.heistId: treeElement],
             hierarchy: [.element(element, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): treeElement.heistId],

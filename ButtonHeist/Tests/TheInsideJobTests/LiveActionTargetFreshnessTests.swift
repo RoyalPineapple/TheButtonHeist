@@ -12,14 +12,14 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
     func testCaptureReplacementReacquiresSameSemanticTargetBeforeDispatch() async throws {
         let vault = TheVault(tripwire: TheTripwire())
         let oldObject = ActivationTrackingView()
-        let liveTarget = try installTarget(
+        let liveTarget = try await installTarget(
             in: vault,
             heistId: "checkout",
             object: oldObject
         )
         let originalCaptureToken = liveTarget.captureID
         let replacementObject = ActivationTrackingView()
-        let replacement = try installTarget(
+        let replacement = try await installTarget(
             in: vault,
             heistId: "checkout",
             object: replacementObject
@@ -49,12 +49,12 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
     func testCaptureReplacementWithoutSameHeistIDReturnsTypedStaleTarget() async throws {
         let vault = TheVault(tripwire: TheTripwire())
         let oldObject = ActivationTrackingView()
-        let liveTarget = try installTarget(
+        let liveTarget = try await installTarget(
             in: vault,
             heistId: "checkout",
             object: oldObject
         )
-        _ = try installTarget(
+        _ = try await installTarget(
             in: vault,
             heistId: "replacement",
             object: ActivationTrackingView()
@@ -78,13 +78,13 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
         let vault = TheVault(tripwire: TheTripwire())
         let originalFrame = CGRect(x: 20, y: 40, width: 120, height: 44)
         let replacementFrame = CGRect(x: 200, y: 300, width: 80, height: 60)
-        let liveTarget = try installTarget(
+        let liveTarget = try await installTarget(
             in: vault,
             heistId: "checkout",
             object: ActivationTrackingView(),
             frame: originalFrame
         )
-        let replacement = try installTarget(
+        let replacement = try await installTarget(
             in: vault,
             heistId: "checkout",
             object: ActivationTrackingView(),
@@ -173,13 +173,13 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
         heistId: HeistId,
         object: NSObject,
         frame: CGRect = CGRect(x: 20, y: 40, width: 120, height: 44)
-    ) throws -> TheVault.LiveActionTarget {
+    ) async throws -> TheVault.LiveActionTarget {
         let element = AccessibilityElement.make(
             label: "Checkout",
             traits: .button,
             frame: frame
         )
-        vault.installObservationForTesting(.makeForTests(
+        await vault.installObservationForTesting(.makeForTests(
             elements: [(element, heistId)],
             objects: [heistId: object]
         ))

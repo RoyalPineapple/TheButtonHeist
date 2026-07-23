@@ -15,7 +15,7 @@ extension TheVault {
     /// `AccessibilityHierarchy`, `InterfaceObservation`) to their wire-facing projections.
     /// Pure transform — no stored state. Delta projection is capture-backed in
     /// TheScore.
-    @MainActor enum WireConversion {
+    enum WireConversion {
 
     // MARK: - Element Conversion
 
@@ -59,7 +59,6 @@ extension TheVault.WireConversion {
     }
 }
 
-@MainActor
 private struct InterfaceTreeProjection {
     let interface: Interface
     let containerPathBySourcePath: [TreePath: TreePath]
