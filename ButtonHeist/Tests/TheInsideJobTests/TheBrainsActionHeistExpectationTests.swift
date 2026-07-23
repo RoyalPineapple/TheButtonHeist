@@ -392,10 +392,12 @@ extension TheBrainsActionTests {
     }
 
     func testZeroTimeUnsequencedEvidenceReadsCurrentSettledObservation() async {
-        let current = await brains.vault.semanticObservationStream
-            .commitVisibleObservationForTesting(.makeForTests(elements: [
-                (makeElement(label: "Current"), HeistId(rawValue: "current")),
-            ]))
+        let stream = brains.vault.semanticObservationStream
+        let tripwireSignal = stream.currentTripwireSignal()
+        stream.readTripwireSignal = { tripwireSignal }
+        let current = await stream.commitVisibleObservationForTesting(.makeForTests(elements: [
+            (makeElement(label: "Current"), HeistId(rawValue: "current")),
+        ]))
 
         let event = await brains.interactionCoordinator.settledEvent(
             scope: .visible,
