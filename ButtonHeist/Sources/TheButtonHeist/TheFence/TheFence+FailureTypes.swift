@@ -299,6 +299,17 @@ public struct DiagnosticFailure: Sendable, Equatable {
     }
 }
 
+extension HeistReport.Failure {
+    var diagnosticFailure: DiagnosticFailure {
+        actionKind.map {
+            DiagnosticFailure(failureKind: $0, message: diagnosticMessage)
+        } ?? DiagnosticFailure(
+            reportFailure: detail,
+            message: diagnosticMessage
+        )
+    }
+}
+
 /// Typed connection-attempt failure preserved from the lower-level disconnect cause.
 public struct ConnectionFailure: Equatable, Sendable {
     public let message: String

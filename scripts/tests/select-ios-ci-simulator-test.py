@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
 import importlib.util
+import subprocess
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "select-ios-ci-simulator.py"
@@ -67,6 +69,53 @@ class SimulatorSelectionTests(unittest.TestCase):
         preferred, fallback = SELECTOR.create_candidates(self.runtimes, "iPhone 16 Pro")
         self.assertEqual(preferred[0]["device_type_identifier"], "iphone-16-pro")
         self.assertEqual(fallback, [])
+
+    def test_failed_boot_deletes_the_selected_simulator(self) -> None:
+        selected = {
+            "source": "existing",
+            "udid": "selected-udid",
+            "name": "accra-created",
+            "device_type": "iPhone 16 Pro",
+            "runtime_version": "26.3",
+        }
+        boot = mock.Mock(returncode=0, stdout="", stderr="")
+        failure = subprocess.CalledProcessError(1, ["bootstatus"])
+        cleaned = mock.Mock(returncode=0, stdout="", stderr="")
+        with mock.patch.object(
+            SELECTOR,
+            "parse_args",
+            return_value=mock.Mock(
+                sim_name="accra-created",
+                preferred_device="iPhone 16 Pro",
+                wait=True,
+                github_env=None,
+                github_output=None,
+            ),
+        ), mock.patch.object(
+            SELECTOR,
+            "select_or_create_simulator",
+            return_value=selected,
+        ), mock.patch.object(
+            SELECTOR,
+            "run",
+            side_effect=[boot, failure, cleaned, cleaned],
+        ) as run:
+            with self.assertRaises(subprocess.CalledProcessError):
+                SELECTOR.main()
+
+        self.assertEqual(
+            run.call_args_list[-2:],
+            [
+                mock.call(
+                    ["xcrun", "simctl", "shutdown", "selected-udid"],
+                    check=False,
+                ),
+                mock.call(
+                    ["xcrun", "simctl", "delete", "selected-udid"],
+                    check=False,
+                ),
+            ],
+        )
 
 
 if __name__ == "__main__":

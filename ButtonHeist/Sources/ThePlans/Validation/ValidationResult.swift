@@ -67,7 +67,7 @@ public extension ValidationResult {
         }
     }
 
-    func get<Failure: Error>(
+    func value<Failure: Error>(
         orThrow makeError: ([Diagnostic]) -> Failure
     ) throws -> Value {
         switch self {

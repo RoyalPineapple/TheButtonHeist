@@ -559,7 +559,7 @@ struct HeistSwiftCompilerTests {
 private func requireSuccess<Value>(
     _ result: ValidationResult<Value, HeistBuildDiagnostic>
 ) async throws -> (Value, [HeistBuildDiagnostic]) {
-    let value = try result.get(orThrow: {
+    let value = try result.value(orThrow: {
         CompilerTestFailure($0.map(\.description).joined(separator: "\n"))
     })
     return (value, result.diagnostics)

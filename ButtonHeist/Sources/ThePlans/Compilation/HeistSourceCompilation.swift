@@ -29,7 +29,7 @@ public enum HeistSourceCompilation {
         sourceName: String = "inline-heist-plan"
     ) throws -> HeistPlan {
         try compileResult(source, sourceName: sourceName)
-            .get(orThrow: HeistSourceCompilationError.init(diagnostics:))
+            .value(orThrow: HeistSourceCompilationError.init(diagnostics:))
     }
 }
 

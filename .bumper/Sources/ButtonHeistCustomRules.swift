@@ -61,6 +61,8 @@ private let demoAccessibilityIdentifierResearchFixtures: Set<RelativeFilePath> =
 
 private let semanticObservationSettlementPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream+Settlement.swift"
+private let startupConfigurationPath: RelativeFilePath =
+    "ButtonHeist/Sources/TheInsideJob/Lifecycle/StartupConfiguration.swift"
 
 private let anyBoundaryRule = Rules.files(
     "buttonheist.any_boundary",
@@ -69,7 +71,8 @@ private let anyBoundaryRule = Rules.files(
 ) { file in
     SyntaxQuery<IdentifierTypeSyntax>()
         .filter { match in
-            match.node.name.text == "Any" && !isAllowedAnyBoundary(match.node)
+            match.node.name.text == "Any"
+                && !isAllowedAnyBoundary(match.node, path: file.path)
         }
         .matches(in: file)
         .map { match in
@@ -398,7 +401,10 @@ private func explicitAccess(_ modifiers: DeclModifierListSyntax) -> ContractAcce
     return nil
 }
 
-private func isAllowedAnyBoundary(_ node: IdentifierTypeSyntax) -> Bool {
+private func isAllowedAnyBoundary(
+    _ node: IdentifierTypeSyntax,
+    path: RelativeFilePath
+) -> Bool {
     if node.ancestors.contains(where: { ancestor in
         ancestor.as(TypeAliasDeclSyntax.self)?.name.text == "FoundationFileAttributeDictionary"
     }) {
@@ -409,8 +415,8 @@ private func isAllowedAnyBoundary(_ node: IdentifierTypeSyntax) -> Bool {
     if context.enclosingFunctionName == "expectedDescription" {
         return context.enclosingNominalNames.contains("HeistValuePayloadDecoder")
     }
-    return context.enclosingFunctionName == "value"
-        && context.enclosingNominalNames.contains("FoundationInfoPlistProjection")
+    return path == startupConfigurationPath
+        && context.enclosingFunctionName == "decodeFoundationInfoPlistValue"
 }
 
 private func isIsolationAttribute(_ name: String) -> Bool {

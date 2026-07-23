@@ -5,7 +5,7 @@ import XCTest
 
 enum HeistXCTestIssue: CustomStringConvertible {
     case joinedSessionRequiresMainThread
-    case requestConstructionFailed(Error)
+    case commandPreparationFailed(Error)
     case synchronousHeistRequiresMainThread
     case synchronousOperationRequiresMainThread
     case operationFailed(Error)
@@ -15,7 +15,7 @@ enum HeistXCTestIssue: CustomStringConvertible {
         switch self {
         case .joinedSessionRequiresMainThread:
             return "Joined heist sessions must stop on the main thread so the main run loop can be pumped."
-        case .requestConstructionFailed(let error):
+        case .commandPreparationFailed(let error):
             return "Heist failed before execution: \(error)"
         case .synchronousHeistRequiresMainThread:
             return "runHeistSync must be called on the main thread so it can pump the main run loop."

@@ -67,6 +67,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          submodules: recursive
 
       - name: Classify changed paths
         if: github.event_name == 'pull_request'
@@ -127,6 +128,7 @@ jobs:
           scripts/swift-test-gate.sh HeistPlanTests --disable-xctest
           scripts/swift-test-gate.sh ButtonHeistCLI
           scripts/swift-test-gate.sh ButtonHeistMCP
+          scripts/heist-doctor-demo.sh --work-dir "$RUNNER_TEMP/heist-doctor-demo"
 
       - name: Collect macOS failure evidence
         if: failure()
@@ -152,7 +154,7 @@ jobs:
     name: ios-tests
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: macos-15
-    timeout-minutes: 40
+    timeout-minutes: 80
     env:
       BUTTONHEIST_RESULTS_MODE: failures
       BUTTONHEIST_TEST_ARTIFACTS_DIR: ${{ github.workspace }}/ci-artifacts/test-runs
@@ -180,7 +182,7 @@ jobs:
         timeout-minutes: 20
         run: |
           echo "IOS_CORE_BUILD_START=$(date +%s)" >> "$GITHUB_ENV"
-          scripts/test-runner.py build-for-testing TheInsideJobTests
+          scripts/test-runner.py build-for-testing TheInsideJobTests --retain-simulator
           echo "IOS_CORE_BUILD_END=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Build ButtonHeist CLI
@@ -191,7 +193,7 @@ jobs:
         timeout-minutes: 18
         run: |
           echo "IOS_CORE_RUN_START=$(date +%s)" >> "$GITHUB_ENV"
-          scripts/test-runner.py test-without-building TheInsideJobTests
+          scripts/test-runner.py test-without-building TheInsideJobTests --retain-simulator
           echo "IOS_CORE_RUN_END=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Run trimmed BH Demo smoke
@@ -212,6 +214,10 @@ jobs:
       - name: Collect iOS failure evidence
         if: failure()
         run: scripts/test-runner.py collect TheInsideJobTests
+
+      - name: Delete dedicated iOS simulator
+        if: always()
+        run: scripts/test-runner.py cleanup
 
       - name: Upload iOS failure results
         if: failure()
@@ -248,7 +254,7 @@ jobs:
     name: ios-demo-gates
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: macos-15
-    timeout-minutes: 35
+    timeout-minutes: 60
     env:
       BUTTONHEIST_RESULTS_MODE: failures
       BUTTONHEIST_TEST_ARTIFACTS_DIR: ${{ github.workspace }}/ci-artifacts/test-runs
@@ -276,19 +282,23 @@ jobs:
         timeout-minutes: 20
         run: |
           echo "HOSTED_BUILD_START=$(date +%s)" >> "$GITHUB_ENV"
-          scripts/test-runner.py build-for-testing HostedBehaviorTests
+          scripts/test-runner.py build-for-testing HostedBehaviorTests --retain-simulator
           echo "HOSTED_BUILD_END=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Run representative hosted canaries
         timeout-minutes: 15
         run: |
           echo "HOSTED_RUN_START=$(date +%s)" >> "$GITHUB_ENV"
-          scripts/test-runner.py test-without-building HostedBehaviorTests
+          scripts/test-runner.py test-without-building HostedBehaviorTests --retain-simulator
           echo "HOSTED_RUN_END=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Collect hosted failure evidence
         if: failure()
         run: scripts/test-runner.py collect HostedBehaviorTests
+
+      - name: Delete dedicated iOS simulator
+        if: always()
+        run: scripts/test-runner.py cleanup
 
       - name: Upload hosted failure results
         if: failure()
@@ -324,7 +334,7 @@ jobs:
     needs: ios-tests
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: macos-15
-    timeout-minutes: 35
+    timeout-minutes: 65
     env:
       BUTTONHEIST_RESULTS_MODE: failures
       BUTTONHEIST_TEST_ARTIFACTS_DIR: ${{ github.workspace }}/ci-artifacts/test-runs
@@ -352,19 +362,23 @@ jobs:
         timeout-minutes: 20
         run: |
           echo "INTEGRATION_BUILD_START=$(date +%s)" >> "$GITHUB_ENV"
-          scripts/test-runner.py build-for-testing TheInsideJobIntegrationTests
+          scripts/test-runner.py build-for-testing TheInsideJobIntegrationTests --retain-simulator
           echo "INTEGRATION_BUILD_END=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Run genuine iOS integration suite
         timeout-minutes: 18
         run: |
           echo "INTEGRATION_RUN_START=$(date +%s)" >> "$GITHUB_ENV"
-          scripts/test-runner.py test-without-building TheInsideJobIntegrationTests
+          scripts/test-runner.py test-without-building TheInsideJobIntegrationTests --retain-simulator
           echo "INTEGRATION_RUN_END=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Collect integration failure evidence
         if: failure()
         run: scripts/test-runner.py collect TheInsideJobIntegrationTests
+
+      - name: Delete dedicated iOS simulator
+        if: always()
+        run: scripts/test-runner.py cleanup
 
       - name: Upload integration failure results
         if: failure()

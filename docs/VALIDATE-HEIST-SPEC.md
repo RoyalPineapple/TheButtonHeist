@@ -742,7 +742,7 @@ Add a named request shape. Do not pass a tuple across files:
 
 ```swift
 struct ValidateHeistRequest: Sendable {
-    let source: HeistPlanSourceAdmissionRequest
+    let source: HeistPlanLoadRequest
     let argument: HeistArgument
     let argumentProvided: Bool
     let lintMode: HeistValidationLintMode

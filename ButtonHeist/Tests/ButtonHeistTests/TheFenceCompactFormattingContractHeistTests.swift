@@ -88,7 +88,7 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertEqual(try projectedSettlement.int("durationMs"), 25)
         XCTAssertTrue(response.compactFormatted().contains(summary), response.compactFormatted())
         XCTAssertTrue(response.humanFormatted().contains(summary), response.humanFormatted())
-        XCTAssertTrue(fence.junitReport(for: report, heistName: "handoff").junitXML().contains(summary))
+        XCTAssertTrue(fence.junitXML(for: report, heistName: "handoff").contains(summary))
     }
 
     func testHumanHeistFormattingCountsNestedProjectedExpectations() throws {
@@ -351,7 +351,7 @@ extension TheFenceCompactFormattingContractTests {
             response.humanFormatted(),
             "Heist: 1 top-level step(s) executed in 1ms (stopped at $.body[0]) [expectations: 0/1 met]"
         )
-        let junit = fence.junitReport(for: report, heistName: "toast").junitXML()
+        let junit = fence.junitXML(for: report, heistName: "toast")
         XCTAssertTrue(junit.contains(#"observed accessibility candidate label=&quot;Ticket saved., Dismiss&quot;"#))
         XCTAssertTrue(junit.contains(#"did not match exists(target(predicate(label=&quot;Ticket saved.&quot;)))"#))
         try node.assertMissing("historicalDiagnostics")

@@ -114,12 +114,7 @@ struct PublicHeistExecutionResponse: Encodable {
     }
 
     private func encode(_ failure: HeistReport.Failure, to encoder: Encoder) throws {
-        let diagnostic = failure.actionKind.map {
-            DiagnosticFailure(failureKind: $0, message: failure.diagnosticMessage)
-        } ?? DiagnosticFailure(
-            reportFailure: failure.detail,
-            message: failure.diagnosticMessage
-        )
+        let diagnostic = failure.diagnosticFailure
         var container = encoder.container(keyedBy: PublicHeistReportFailureCodingKey.self)
         try container.encode(failure.detail.category, forKey: .category)
         try container.encode(failure.detail.contract, forKey: .contract)

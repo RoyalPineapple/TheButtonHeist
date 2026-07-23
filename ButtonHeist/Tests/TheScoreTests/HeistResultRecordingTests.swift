@@ -4,21 +4,21 @@ import ThePlans
 import Testing
 @testable import TheScore
 
-@Suite(.serialized) struct HeistResultRecorderTests {
+@Suite(.serialized) struct HeistResultRecordingTests {
 
     @Test func `record failing result as gzip artifact`() throws {
         try withTemporaryDirectory(prefix: "heist-result-recorder") { directory in
             let plan = try samplePlan()
             let result = failedResult()
 
-            let recording = try #require(try HeistResultRecorder.write(
+            let recording = try #require(try HeistResultRecording.write(
                 result,
                 plan: plan,
                 configuration: HeistResultRecordingConfiguration(rootDirectory: directory, mode: .failures)
             ))
 
             #expect(recording.heistName == "Checkout_Flow")
-            #expect(recording.fingerprint == (try HeistResultRecorder.heistFingerprint(for: plan)))
+            #expect(recording.fingerprint == (try HeistResultRecording.heistFingerprint(for: plan)))
             #expect(recording.url.pathExtension == "gz")
             #expect(recording.url.lastPathComponent.hasSuffix("-failed.json.gz"))
             #expect(recording.url.deletingLastPathComponent().lastPathComponent.hasPrefix("checkout-flow-"))
@@ -31,12 +31,12 @@ import Testing
             let plan = try samplePlan()
             let result = passedResult()
 
-            let skipped = try HeistResultRecorder.write(
+            let skipped = try HeistResultRecording.write(
                 result,
                 plan: plan,
                 configuration: HeistResultRecordingConfiguration(rootDirectory: directory, mode: .failures)
             )
-            let recording = try #require(try HeistResultRecorder.write(
+            let recording = try #require(try HeistResultRecording.write(
                 result,
                 plan: plan,
                 configuration: HeistResultRecordingConfiguration(rootDirectory: directory, mode: .all)
@@ -60,6 +60,36 @@ import Testing
         for (mode, failure, passing) in expectations {
             #expect(mode.shouldRecord(failed) == failure)
             #expect(mode.shouldRecord(passed) == passing)
+        }
+    }
+
+    @Test func `scoped recorder disables and restores ambient failure collection`() async throws {
+        try await withResultDirectory(prefix: "heist-result-recorder-scope") { directory in
+            let previousDirectory = EnvironmentKey.buttonheistResultsDir.value
+            let previousMode = EnvironmentKey.buttonheistResultsMode.value
+            setEnvironment(EnvironmentKey.buttonheistResultsDir.rawValue, directory.path)
+            setEnvironment(EnvironmentKey.buttonheistResultsMode.rawValue, HeistResultRecordingMode.failures.rawValue)
+            defer {
+                setEnvironment(EnvironmentKey.buttonheistResultsDir.rawValue, previousDirectory)
+                setEnvironment(EnvironmentKey.buttonheistResultsMode.rawValue, previousMode)
+            }
+
+            let before = HeistResultRecording.recordIfEnabled(
+                failedResult(),
+                plan: try samplePlan()
+            )
+            let skipped = try await HeistResultRecording.withEnvironmentRecording(false) {
+                HeistResultRecording.recordIfEnabled(failedResult(), plan: try samplePlan())
+            }
+            let after = HeistResultRecording.recordIfEnabled(
+                failedResult(),
+                plan: try samplePlan()
+            )
+
+            #expect(before != nil)
+            #expect(skipped == nil)
+            #expect(after != nil)
+            #expect(try resultArtifactURLs(in: directory).count == 2)
         }
     }
 

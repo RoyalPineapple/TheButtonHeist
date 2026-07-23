@@ -177,29 +177,33 @@ def main() -> None:
     args = parse_args()
     sim_name = args.sim_name or default_sim_name(args.preferred_device)
     selected = select_or_create_simulator(args.preferred_device, sim_name)
+    try:
+        boot = run(["xcrun", "simctl", "boot", selected["udid"]], check=False)
+        if boot.returncode != 0:
+            message = (boot.stderr or boot.stdout).strip()
+            if message:
+                print(f"simctl boot returned {boot.returncode}: {message}")
+        if args.wait:
+            run(["xcrun", "simctl", "bootstatus", selected["udid"], "-b"])
 
-    boot = run(["xcrun", "simctl", "boot", selected["udid"]], check=False)
-    if boot.returncode != 0:
-        message = (boot.stderr or boot.stdout).strip()
-        if message:
-            print(f"simctl boot returned {boot.returncode}: {message}")
-    if args.wait:
-        run(["xcrun", "simctl", "bootstatus", selected["udid"], "-b"])
+        env = {
+            "SIM_UDID": selected["udid"],
+            "SIM_OS": selected["runtime_version"],
+            "SIM_NAME": selected["name"],
+            "SIM_DEVICE_TYPE": selected["device_type"],
+        }
+        write_env(args.github_env, env)
+        write_env(args.github_output, {key.lower(): value for key, value in env.items()})
 
-    env = {
-        "SIM_UDID": selected["udid"],
-        "SIM_OS": selected["runtime_version"],
-        "SIM_NAME": selected["name"],
-        "SIM_DEVICE_TYPE": selected["device_type"],
-    }
-    write_env(args.github_env, env)
-    write_env(args.github_output, {key.lower(): value for key, value in env.items()})
-
-    print(
-        "Selected {device_type} ({name}) on iOS {runtime_version}: {udid} [{source}]".format(
-            **selected
+        print(
+            "Selected {device_type} ({name}) on iOS {runtime_version}: {udid} [{source}]".format(
+                **selected
+            )
         )
-    )
+    except BaseException:
+        run(["xcrun", "simctl", "shutdown", selected["udid"]], check=False)
+        run(["xcrun", "simctl", "delete", selected["udid"]], check=False)
+        raise
 
 
 if __name__ == "__main__":

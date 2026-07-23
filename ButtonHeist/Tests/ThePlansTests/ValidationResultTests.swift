@@ -35,14 +35,14 @@ import Testing
     #expect(failure.failureDiagnostics == ["error"])
 }
 
-@Test func `validationResult get throws constructed failure error`() throws {
+@Test func `validationResult value throws constructed failure error`() throws {
     let error = validationDiagnostic(.error, "failed")
 
     do {
         _ = try ValidationResult<Int, HeistBuildDiagnostic>
             .failure([error])
-            .get(orThrow: ValidationResultTestError.init(diagnostics:))
-        Issue.record("Expected get(orThrow:) to throw")
+            .value(orThrow: ValidationResultTestError.init(diagnostics:))
+        Issue.record("Expected value(orThrow:) to throw")
     } catch let thrown as ValidationResultTestError {
         #expect(thrown.diagnostics == [error])
     }

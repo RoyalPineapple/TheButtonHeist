@@ -20,7 +20,7 @@ Options:
 
 The demo generates a last-passing Checkout result and a new-failing result
 where Checkout has become Go to Checkout. Results are written through the same
-HeistResultRecorder path used by tests and CI, then paired by fingerprint and
+HeistResultRecording path used by tests and CI, then paired by fingerprint and
 fed into heist-doctor.
 EOF
 }
@@ -138,14 +138,14 @@ struct DoctorDemoFixture {
             after: nil
         )
 
-        guard let passRecording = try HeistResultRecorder.write(
+        guard let passRecording = try HeistResultRecording.write(
             lastPass,
             plan: plan,
             configuration: configuration
         ) else {
             throw FixtureError.message("failed to record passing result")
         }
-        guard let failRecording = try HeistResultRecorder.write(
+        guard let failRecording = try HeistResultRecording.write(
             newFail,
             plan: plan,
             configuration: configuration
@@ -173,22 +173,19 @@ struct DoctorDemoFixture {
         switch outcome {
         case .passed:
             actionResult = .success(
-                method: .activate,
-                evidence: ActionResultSuccessEvidence(observation: .trace(traceEvidence))
+                payload: .activate,
+                observation: .trace(traceEvidence)
             )
         case .failed:
             actionResult = .failure(
-                method: .activate,
-                errorKind: .elementNotFound,
+                payload: .activate,
+                failureKind: .elementNotFound,
                 message: "No element matching \(target)",
-                evidence: ActionResultFailureEvidence(observation: .trace(traceEvidence))
+                observation: .trace(traceEvidence)
             )
         }
         let command = HeistActionCommand.activate(target)
-        let evidence = HeistActionEvidence.dispatch(
-            command: command,
-            dispatchResult: actionResult
-        )
+        let evidence = HeistActionEvidence.dispatch(dispatchResult: actionResult)
         let node = ActionNodeFixture(
             command: command,
             outcome: outcome,
@@ -217,11 +214,11 @@ struct DoctorDemoFixture {
     private static func menuInterface(primaryAction: String) throws -> Interface {
         try interface(nodes: [
             container(children: [
-                element(label: "Menu", traits: [.header], frameY: 0),
-                element(label: "Greek Salad", traits: [.staticText], frameY: 50),
-                element(label: "Margherita Pizza", traits: [.staticText], frameY: 94),
-                element(label: "Items, 2", value: "US$23.50", traits: [.staticText], frameY: 138),
-                element(label: primaryAction, traits: [.button], actions: [.activate], frameY: 190),
+                try element(label: "Menu", traits: [.header], frameY: 0),
+                try element(label: "Greek Salad", traits: [.staticText], frameY: 50),
+                try element(label: "Margherita Pizza", traits: [.staticText], frameY: 94),
+                try element(label: "Items, 2", value: "US$23.50", traits: [.staticText], frameY: 138),
+                try element(label: primaryAction, traits: [.button], actions: [.activate], frameY: 190),
             ]),
         ])
     }
@@ -229,10 +226,10 @@ struct DoctorDemoFixture {
     private static func confirmationInterface() throws -> Interface {
         try interface(nodes: [
             container(children: [
-                element(label: "Review Order", traits: [.header], frameY: 0),
-                element(label: "Greek Salad", traits: [.staticText], frameY: 50),
-                element(label: "Margherita Pizza", traits: [.staticText], frameY: 94),
-                element(label: "Place Order", traits: [.button], actions: [.activate], frameY: 150),
+                try element(label: "Review Order", traits: [.header], frameY: 0),
+                try element(label: "Greek Salad", traits: [.staticText], frameY: 50),
+                try element(label: "Margherita Pizza", traits: [.staticText], frameY: 94),
+                try element(label: "Place Order", traits: [.button], actions: [.activate], frameY: 150),
             ]),
         ])
     }
@@ -242,26 +239,32 @@ struct DoctorDemoFixture {
         var elementAnnotations: [InterfaceElementAnnotation] = []
         var containerAnnotations: [InterfaceContainerAnnotation] = []
 
-        func convert(_ node: FixtureNode, path: TreePath) -> AccessibilityHierarchy {
+        func convert(_ node: FixtureNode, path: TreePath) throws -> AccessibilityHierarchy {
             switch node {
             case .element(let element):
                 let index = traversalIndex
                 traversalIndex += 1
                 elementAnnotations.append(InterfaceElementAnnotation(path: path, actions: element.actions))
-                return .element(accessibilityElement(element), traversalIndex: index)
+                return .element(try accessibilityElement(element), traversalIndex: index)
             case .container(let container, let children):
                 containerAnnotations.append(InterfaceContainerAnnotation(path: path, containerName: nil))
                 return .container(
                     container,
-                    children: children.enumerated().map { offset, child in
-                        convert(child, path: path.appending(offset))
+                    children: try children.enumerated().map { offset, child in
+                        guard let childPath = path.appending(validating: offset) else {
+                            throw FixtureError.message("invalid child tree path")
+                        }
+                        return try convert(child, path: childPath)
                     }
                 )
             }
         }
 
-        let tree = nodes.enumerated().map { offset, node in
-            convert(node, path: TreePath([offset]))
+        let tree = try nodes.enumerated().map { offset, node in
+            guard let path = TreePath.root.appending(validating: offset) else {
+                throw FixtureError.message("invalid root tree path")
+            }
+            return try convert(node, path: path)
         }
         return try Interface(
             timestamp: Date(timeIntervalSince1970: 0),
@@ -289,23 +292,36 @@ struct DoctorDemoFixture {
         traits: [HeistTrait],
         actions: [ElementAction] = [],
         frameY: Double
-    ) -> FixtureNode {
-        .element(HeistElement(
+    ) throws -> FixtureNode {
+        let frame = try ScreenRect(validating: AccessibilityRect(
+            x: 0,
+            y: frameY,
+            width: 280,
+            height: 44
+        ))
+        let activationPoint = ScreenPoint(
+            x: try FiniteCoordinate(validating: frame.midX),
+            y: try FiniteCoordinate(validating: frame.midY)
+        )
+        return .element(HeistElement(
             description: "\(label).",
             label: label,
             value: value,
             identifier: nil,
             traits: traits,
-            frameX: 0,
-            frameY: frameY,
-            frameWidth: 280,
-            frameHeight: 44,
+            frameEvidence: .available(frame),
+            activationPointEvidence: .defaultCenter(activationPoint),
             actions: actions
         ))
     }
 
-    private static func accessibilityElement(_ element: HeistElement) -> AccessibilityElement {
-        AccessibilityElement(
+    private static func accessibilityElement(_ element: HeistElement) throws -> AccessibilityElement {
+        guard let frame = element.screenFrame,
+              let activationPoint = element.activationPointEvidence.point
+        else {
+            throw FixtureError.message("fixture element requires frame and activation-point evidence")
+        }
+        return AccessibilityElement(
             description: element.description,
             label: element.label,
             value: element.value,
@@ -314,14 +330,14 @@ struct DoctorDemoFixture {
             hint: element.hint,
             userInputLabels: nil,
             shape: .frame(AccessibilityRect(
-                x: element.frameX,
-                y: element.frameY,
-                width: element.frameWidth,
-                height: element.frameHeight
+                x: frame.x.value,
+                y: frame.y.value,
+                width: frame.width.value,
+                height: frame.height.value
             )),
             activationPoint: AccessibilityPoint(
-                x: element.activationPointX,
-                y: element.activationPointY
+                x: activationPoint.x,
+                y: activationPoint.y
             ),
             usesDefaultActivationPoint: true,
             customActions: [],

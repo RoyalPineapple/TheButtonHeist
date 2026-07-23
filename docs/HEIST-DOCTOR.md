@@ -140,7 +140,7 @@ For a deterministic demo that does not require manufacturing a red CI build:
 scripts/heist-doctor-demo.sh
 ```
 
-That demo generates two raw results through `HeistResultRecorder`: a last pass
+That demo generates two raw results through `HeistResultRecording`: a last pass
 where the target was `Checkout`, and a current failure where the same semantic
 control is now `Go to Checkout`. CI runs this demo in the macOS test lane as a
 workflow smoke test.

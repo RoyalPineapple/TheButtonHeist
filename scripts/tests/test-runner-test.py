@@ -19,6 +19,16 @@ SIMULATOR = {
 }
 
 
+def select_simulator_during_execute(
+    _args: object,
+    _name: str,
+    _only_tests: object,
+    selected_simulators: list[dict[str, str]],
+) -> int:
+    selected_simulators.append(SIMULATOR)
+    return 0
+
+
 class TestRunnerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.environment = mock.patch.dict(
@@ -85,6 +95,31 @@ class TestRunnerTests(unittest.TestCase):
             ])
         with self.assertRaises(ValueError):
             RUNNER["parse_args"](["run"])
+
+    def test_retain_simulator_is_limited_to_simulator_using_test_modes(self) -> None:
+        args = RUNNER["parse_args"]([
+            "build-for-testing",
+            "TheInsideJobTests",
+            "--retain-simulator",
+        ])
+        self.assertTrue(args.retain_simulator)
+
+        with self.assertRaisesRegex(ValueError, "requires an iOS suite"):
+            RUNNER["parse_args"]([
+                "run",
+                "MacFrameworkTests",
+                "--retain-simulator",
+            ])
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "--retain-simulator requires a simulator-using test mode",
+        ):
+            RUNNER["parse_args"]([
+                "collect",
+                "TheScoreTests",
+                "--retain-simulator",
+            ])
 
     def test_focus_expansion_merges_tests_per_suite_without_duplicates(self) -> None:
         selected = RUNNER["focus_runs"]([
@@ -301,6 +336,113 @@ class TestRunnerTests(unittest.TestCase):
             RUNNER["clear_simulator_results"](SIMULATOR)
 
         remove.assert_called_once_with(Path("/result-dir"))
+
+    def test_simulator_deletion_shuts_down_and_deletes_the_selected_udid(self) -> None:
+        completed = mock.Mock(returncode=0, stderr="", stdout="")
+        with mock.patch.object(
+            RUNNER["subprocess"],
+            "run",
+            return_value=completed,
+        ) as run:
+            deleted = RUNNER["delete_simulator"](SIMULATOR)
+
+        self.assertTrue(deleted)
+        self.assertEqual(
+            run.call_args_list,
+            [
+                mock.call(
+                    ["xcrun", "simctl", "shutdown", "TEST-UDID"],
+                    check=False,
+                    text=True,
+                    capture_output=True,
+                ),
+                mock.call(
+                    ["xcrun", "simctl", "delete", "TEST-UDID"],
+                    check=False,
+                    text=True,
+                    capture_output=True,
+                ),
+            ],
+        )
+
+    def test_cleanup_resolves_only_exactly_named_simulators(self) -> None:
+        completed = mock.Mock(
+            stdout=(
+                '{"devices":{"runtime":['
+                '{"udid":"owned","name":"accra-owned","isAvailable":true},'
+                '{"udid":"owned-unavailable","name":"accra-owned","isAvailable":false},'
+                '{"udid":"other","name":"accra-other","isAvailable":true}]}}'
+            )
+        )
+        with mock.patch.object(
+            RUNNER["subprocess"],
+            "run",
+            return_value=completed,
+        ):
+            simulators = RUNNER["simulators_named"]("accra-owned")
+
+        self.assertEqual(
+            simulators,
+            [
+                {"udid": "owned", "name": "accra-owned"},
+                {"udid": "owned-unavailable", "name": "accra-owned"},
+            ],
+        )
+
+    def test_runner_deletes_selected_simulators_unless_retained(self) -> None:
+        for mode in ("run", "build-for-testing", "test-without-building"):
+            with self.subTest(mode=mode), mock.patch.dict(
+                RUNNER["main"].__globals__,
+                {
+                    "execute": select_simulator_during_execute,
+                    "delete_simulators": mock.Mock(return_value=True),
+                },
+            ):
+                status = RUNNER["main"]([mode, "TheInsideJobTests"])
+                delete = RUNNER["main"].__globals__["delete_simulators"]
+
+                self.assertEqual(status, 0)
+                delete.assert_called_once_with([SIMULATOR])
+
+    def test_retained_terminal_run_leaves_cleanup_to_its_caller(self) -> None:
+        with mock.patch.dict(
+            RUNNER["main"].__globals__,
+            {
+                "execute": select_simulator_during_execute,
+                "delete_simulators": mock.Mock(return_value=True),
+            },
+        ):
+            status = RUNNER["main"]([
+                "run",
+                "TheInsideJobTests",
+                "--retain-simulator",
+            ])
+            delete = RUNNER["main"].__globals__["delete_simulators"]
+
+        self.assertEqual(status, 0)
+        delete.assert_not_called()
+
+    def test_cleanup_command_deletes_every_simulator_with_the_owned_name(self) -> None:
+        owned = [
+            {"udid": "first", "name": "accra-owned"},
+            {"udid": "second", "name": "accra-owned"},
+        ]
+        with mock.patch.dict(
+            RUNNER["main"].__globals__,
+            {
+                "simulators_named": mock.Mock(return_value=owned),
+                "delete_simulators": mock.Mock(return_value=True),
+            },
+        ):
+            status = RUNNER["main"]([
+                "cleanup",
+                "--simulator-name",
+                "accra-owned",
+            ])
+            delete = RUNNER["main"].__globals__["delete_simulators"]
+
+        self.assertEqual(status, 0)
+        delete.assert_called_once_with(owned)
 
     @mock.patch.object(RUNNER["subprocess"], "run")
     def test_dependency_install_runs_once_for_multiple_suites(

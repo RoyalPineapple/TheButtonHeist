@@ -75,13 +75,24 @@ public struct HeistResultRecording: Sendable, Equatable {
     public let fingerprint: String
 }
 
-public enum HeistResultRecorder {
+extension HeistResultRecording {
+    @TaskLocal package static var environmentRecordingEnabled = true
+
+    package static func withEnvironmentRecording<Value>(
+        _ enabled: Bool,
+        operation: @Sendable () async throws -> Value
+    ) async rethrows -> Value {
+        try await $environmentRecordingEnabled.withValue(enabled, operation: operation)
+    }
+
     @discardableResult
     public static func recordIfEnabled(
         _ result: HeistResult,
         plan: HeistPlan
     ) -> HeistResultRecording? {
-        guard let configuration = HeistResultRecordingConfiguration.environment else {
+        guard environmentRecordingEnabled,
+              let configuration = HeistResultRecordingConfiguration.environment
+        else {
             return nil
         }
         do {

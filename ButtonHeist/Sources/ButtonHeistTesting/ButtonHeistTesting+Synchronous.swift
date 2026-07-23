@@ -16,6 +16,8 @@ public enum HeistTestResultRecording: Sendable, Equatable {
     /// Use the normal `BUTTONHEIST_RESULTS_MODE` / `BUTTONHEIST_RESULTS_DIR`
     /// environment-variable behavior.
     case environment
+    /// Do not record this heist result, even when ambient recording is enabled.
+    case off
     /// Write only failed heist results to the supplied directory.
     case failures
     /// Write failed and passing heist results to the supplied directory.
@@ -23,13 +25,17 @@ public enum HeistTestResultRecording: Sendable, Equatable {
 
     fileprivate var explicitRecorderMode: HeistResultRecordingMode? {
         switch self {
-        case .environment:
+        case .environment, .off:
             return nil
         case .failures:
             return .failures
         case .always:
             return .all
         }
+    }
+
+    fileprivate var usesEnvironment: Bool {
+        self == .environment
     }
 }
 
@@ -59,8 +65,8 @@ public func runHeistSync(
     line: UInt = #line,
     @HeistBuilder _ content: @escaping () throws -> HeistContent
 ) -> Heist? {
-    runHeistSyncRequest(
-        makeRequest: { try makeRunHeistRequest(path, content) },
+    runHeistSynchronously(
+        prepareCommand: { try HeistRunCommand(path, content) },
         timeout: timeout,
         recordResult: recordResult,
         resultDirectory: resultDirectory,
@@ -82,9 +88,9 @@ public func runHeistSync(
     line: UInt = #line,
     @HeistBuilder _ content: @escaping (HeistReferenceName) throws -> HeistContent
 ) -> Heist? {
-    runHeistSyncRequest(
-        makeRequest: {
-            try makeRunHeistRequest(path, argument: input, parameter: parameter, content)
+    runHeistSynchronously(
+        prepareCommand: {
+            try HeistRunCommand(path, argument: input, parameter: parameter, content)
         },
         timeout: timeout,
         recordResult: recordResult,
@@ -108,9 +114,9 @@ public func runHeistSync(
     line: UInt = #line,
     @HeistBuilder _ content: @escaping (AccessibilityTarget) throws -> HeistContent
 ) -> Heist? {
-    runHeistSyncRequest(
-        makeRequest: {
-            try makeRunHeistRequest(path, argument: input, parameter: parameter, content)
+    runHeistSynchronously(
+        prepareCommand: {
+            try HeistRunCommand(path, argument: input, parameter: parameter, content)
         },
         timeout: timeout,
         recordResult: recordResult,
@@ -120,19 +126,19 @@ public func runHeistSync(
     )
 }
 
-private func runHeistSyncRequest(
-    makeRequest: () throws -> HeistRunRequest,
+private func runHeistSynchronously(
+    prepareCommand: () throws -> HeistRunCommand,
     timeout: TimeInterval,
     recordResult: HeistTestResultRecording,
     resultDirectory: URL?,
     file: StaticString,
     line: UInt
 ) -> Heist? {
-    let request: HeistRunRequest
+    let command: HeistRunCommand
     do {
-        request = try makeRequest()
+        command = try prepareCommand()
     } catch {
-        recordHeistXCTestIssue(.requestConstructionFailed(error), file: file, line: line)
+        recordHeistXCTestIssue(.commandPreparationFailed(error), file: file, line: line)
         return nil
     }
 
@@ -146,30 +152,32 @@ private func runHeistSyncRequest(
     }
 
     return runHeistSyncOperation(timeout: timeout, file: file, line: line) { @MainActor in
-        do {
-            let heist = try await Heist(request.plan, argument: request.argument)
-            try recordResultIfRequested(
-                heist.result,
-                plan: request.plan,
-                policy: recordResult,
-                resultDirectory: resultDirectory
-            )
-            return heist
-        } catch let failure as Heist.Failure {
+        try await HeistResultRecording.withEnvironmentRecording(recordResult.usesEnvironment) {
             do {
+                let heist = try await Heist(command.plan, argument: command.argument)
                 try recordResultIfRequested(
-                    failure.result,
-                    plan: request.plan,
+                    heist.result,
+                    plan: command.plan,
                     policy: recordResult,
                     resultDirectory: resultDirectory
                 )
-            } catch {
-                throw HeistXCTestFailure(
-                    primaryError: failure,
-                    resultRecordingError: error
-                )
+                return heist
+            } catch let failure as Heist.Failure {
+                do {
+                    try recordResultIfRequested(
+                        failure.result,
+                        plan: command.plan,
+                        policy: recordResult,
+                        resultDirectory: resultDirectory
+                    )
+                } catch {
+                    throw HeistXCTestFailure(
+                        primaryError: failure,
+                        resultRecordingError: error
+                    )
+                }
+                throw failure
             }
-            throw failure
         }
     }
 }
@@ -281,7 +289,7 @@ private func recordResultIfRequested(
     guard let mode = policy.explicitRecorderMode else { return }
     let rootDirectory = resultDirectory ?? FileManager.default.temporaryDirectory
         .appendingPathComponent("buttonheist-results", isDirectory: true)
-    _ = try HeistResultRecorder.write(
+    _ = try HeistResultRecording.write(
         result,
         plan: plan,
         configuration: HeistResultRecordingConfiguration(

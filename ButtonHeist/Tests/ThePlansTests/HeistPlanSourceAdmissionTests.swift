@@ -9,44 +9,31 @@ func `plan loading loads generated heist artifact source`() throws {
     let plan = try representativeArtifactPlan()
     try HeistArtifactCodec.writePlan(plan, to: artifactURL)
 
-    let loaded = try #require(HeistPlanLoading.loadValidated(from: HeistPlanLoadRequest(
+    let request = try #require(HeistPlanSourceAdmission.admit(
         commandName: "run_heist",
-        source: .artifactPath(artifactURL.path)
-    )).value)
+        path: artifactURL.path,
+        inlineDSL: nil
+    ).value)
+    let loaded = try #require(HeistPlanLoading.loadValidated(from: request).value)
 
     #expect(loaded == plan)
 }
 
 @Test
 func `plan loading compiles inline ButtonHeist DSL source`() throws {
-    let loaded = try #require(HeistPlanLoading.loadValidated(from: HeistPlanLoadRequest(
+    let request = try #require(HeistPlanSourceAdmission.admit(
         commandName: "run_heist",
-        source: .inlineDSL("""
+        path: nil,
+        inlineDSL: """
         HeistPlan("sourceFlow") {
             Warn("from source")
         }
-        """)
-    )).value)
+        """
+    ).value)
+    let loaded = try #require(HeistPlanLoading.loadValidated(from: request).value)
 
     #expect(loaded.name == "sourceFlow")
     #expect(loaded.body == [.warn(WarnStep(message: "from source"))])
-}
-
-@Test
-func `plan source admission request carries one closed source`() throws {
-    let artifact = try #require(HeistPlanSourceAdmission.request(
-        commandName: "run_heist",
-        path: "/tmp/SearchFlow.heist",
-        inlineDSL: nil
-    ).value)
-    let inline = try #require(HeistPlanSourceAdmission.request(
-        commandName: "run_heist",
-        path: nil,
-        inlineDSL: #"HeistPlan("sourceFlow") { Warn("from source") }"#
-    ).value)
-
-    #expect(artifact.source == .artifactPath("/tmp/SearchFlow.heist"))
-    #expect(inline.source == .inlineDSL(#"HeistPlan("sourceFlow") { Warn("from source") }"#))
 }
 
 @Test
@@ -63,35 +50,42 @@ func `plan source admission raw IR keys map to a closed rejected field set`() th
 
 @Test
 func `plan source admission rejects missing public source`() throws {
-    let result = HeistPlanSourceAdmission.request(
+    let result = HeistPlanSourceAdmission.admit(
         commandName: "run_heist",
         path: nil,
         inlineDSL: nil
     )
 
-    #expect(try #require(result.failureDiagnostics?.first).message.contains("requires exactly one plan source"))
+    #expect(try #require(result.failureDiagnostics?.first).message.contains(
+        "run_heist requires exactly one plan source"
+    ))
 }
 
 @Test
 func `plan source admission rejects multiple public sources`() throws {
-    let result = HeistPlanSourceAdmission.request(
+    let result = HeistPlanSourceAdmission.admit(
         commandName: "run_heist",
         path: "/tmp/SearchFlow.heist",
         inlineDSL: #"HeistPlan("searchFlow") { Warn("from source") }"#
     )
 
-    #expect(try #require(result.failureDiagnostics?.first).message.contains("accepts exactly one plan source"))
+    #expect(try #require(result.failureDiagnostics?.first).message.contains(
+        "run_heist accepts exactly one plan source"
+    ))
 }
 
 @Test
 func `plan source admission rejects inline source when policy is artifact only`() throws {
-    let result = HeistPlanSourceAdmission.admit(from: HeistPlanSourceAdmissionRequest(
+    let result = HeistPlanSourceAdmission.admit(
         commandName: "heist-plan",
-        source: .inlineDSL(#"HeistPlan("searchFlow") { Warn("from source") }"#),
+        path: nil,
+        inlineDSL: #"HeistPlan("searchFlow") { Warn("from source") }"#,
         sourcePolicy: .artifactOnly
-    ))
+    )
 
-    #expect(try #require(result.failureDiagnostics?.first).message.contains("does not accept inline ButtonHeist DSL source"))
+    #expect(try #require(result.failureDiagnostics?.first).message.contains(
+        "heist-plan does not accept inline ButtonHeist DSL source"
+    ))
 }
 
 @Test

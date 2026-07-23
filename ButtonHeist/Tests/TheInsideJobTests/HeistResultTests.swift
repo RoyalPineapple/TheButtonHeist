@@ -86,30 +86,50 @@ final class HeistResultTests: XCTestCase {
         }
     }
 
-    func testRunHeistSyncRecordsXCTestFailureWhenHeistFails() {
-        let expectedFile = String(describing: #filePath)
-        let expectedLine: UInt = 4_241
-        let options = XCTExpectedFailure.Options()
-        options.issueMatcher = { issue in
-            issue.type == .assertionFailure
-                && issue.compactDescription.contains(
-                    "Heist failed path=$.body[0].invoke.body[0] kind=fail message=stop"
-                )
-                && issue.sourceCodeContext.location?.fileURL.path == expectedFile
-                && issue.sourceCodeContext.location?.lineNumber == Int(expectedLine)
-        }
-        var heist: Heist?
-
-        XCTExpectFailure(
-            "runHeistSync reports failed heists through XCTest at the call site",
-            options: options
-        ) {
-            heist = runHeistSync("syncFailure", file: #filePath, line: expectedLine) {
-                Fail("stop")
+    func testRunHeistSyncRecordsXCTestFailureWithoutAmbientArtifactWhenDisabled() throws {
+        try withResultDirectory(prefix: "buttonheist-sync-results-off") { directory in
+            let previousDirectory = EnvironmentKey.buttonheistResultsDir.value
+            let previousMode = EnvironmentKey.buttonheistResultsMode.value
+            setEnvironment(EnvironmentKey.buttonheistResultsDir.rawValue, directory.path)
+            setEnvironment(
+                EnvironmentKey.buttonheistResultsMode.rawValue,
+                HeistResultRecordingMode.failures.rawValue
+            )
+            defer {
+                setEnvironment(EnvironmentKey.buttonheistResultsDir.rawValue, previousDirectory)
+                setEnvironment(EnvironmentKey.buttonheistResultsMode.rawValue, previousMode)
             }
-        }
 
-        XCTAssertNil(heist)
+            let expectedFile = String(describing: #filePath)
+            let expectedLine: UInt = 4_241
+            let options = XCTExpectedFailure.Options()
+            options.issueMatcher = { issue in
+                issue.type == .assertionFailure
+                    && issue.compactDescription.contains(
+                        "Heist failed path=$.body[0].invoke.body[0] kind=fail message=stop"
+                    )
+                    && issue.sourceCodeContext.location?.fileURL.path == expectedFile
+                    && issue.sourceCodeContext.location?.lineNumber == Int(expectedLine)
+            }
+            var heist: Heist?
+
+            XCTExpectFailure(
+                "runHeistSync reports failed heists through XCTest at the call site",
+                options: options
+            ) {
+                heist = runHeistSync(
+                    "syncFailure",
+                    recordResult: .off,
+                    file: #filePath,
+                    line: expectedLine
+                ) {
+                    Fail("stop")
+                }
+            }
+
+            XCTAssertNil(heist)
+            XCTAssertTrue(try resultArtifactURLs(in: directory).isEmpty)
+        }
     }
 
     func testXCTestFailureReporterRecordsAnAssertionAtTheSuppliedCallSite() async {
@@ -138,7 +158,7 @@ final class HeistResultTests: XCTestCase {
 
     func testRunHeistTestingFacadeDottedStringArgumentBuildsValidatedInvocation() async throws {
         let input: HeistReferenceName = "input"
-        let request = try makeRunHeistRequest("Cart.addItem", argument: "Milk") { _ in
+        let request = try HeistRunCommand("Cart.addItem", argument: "Milk") { _ in
             Warn("adding")
         }
 
@@ -152,7 +172,7 @@ final class HeistResultTests: XCTestCase {
 
     func testRunHeistTestingFacadeDottedAccessibilityTargetArgumentBuildsValidatedInvocation() async throws {
         let input: HeistReferenceName = "input"
-        let request = try makeRunHeistRequest("Rows.activate", argument: AccessibilityTarget.label("Milk")) { _ in
+        let request = try HeistRunCommand("Rows.activate", argument: AccessibilityTarget.label("Milk")) { _ in
             Warn("activating")
         }
 
@@ -240,7 +260,7 @@ final class HeistResultTests: XCTestCase {
         let heist = try await runHeist("addToCart", argument: "Milk") { _ in
             Warn("adding")
         }
-        let request = try makeRunHeistRequest("addToCart", argument: "Milk") { _ in
+        let request = try HeistRunCommand("addToCart", argument: "Milk") { _ in
             Warn("adding")
         }
 
@@ -253,7 +273,7 @@ final class HeistResultTests: XCTestCase {
     }
 
     func testRunHeistTestingFacadeNoArgumentUsesCanonicalInvocationTopology() async throws {
-        let request = try makeRunHeistRequest("CheckoutPay") {
+        let request = try HeistRunCommand("CheckoutPay") {
             Warn("paying")
         }
 
@@ -265,7 +285,7 @@ final class HeistResultTests: XCTestCase {
     }
 
     func testRunHeistTestingFacadeStringArgumentUsesCanonicalInvocationTopology() async throws {
-        let request = try makeRunHeistRequest("CartAddItem", argument: "Milk") { _ in
+        let request = try HeistRunCommand("CartAddItem", argument: "Milk") { _ in
             Warn("adding")
         }
 
@@ -278,7 +298,7 @@ final class HeistResultTests: XCTestCase {
     }
 
     func testRunHeistTestingFacadeAccessibilityTargetArgumentUsesCanonicalInvocationTopology() async throws {
-        let request = try makeRunHeistRequest(
+        let request = try HeistRunCommand(
             "RowsActivate",
             argument: AccessibilityTarget.label("Milk")
         ) { _ in
@@ -403,8 +423,10 @@ final class HeistResultTests: XCTestCase {
 
     func testFailedHeistThrowsFailureWithInspectableResult() async throws {
         do {
-            _ = try await runHeist("failedHeist") {
-                Fail("stop")
+            _ = try await HeistResultRecording.withEnvironmentRecording(false) {
+                try await runHeist("failedHeist") {
+                    Fail("stop")
+                }
             }
             XCTFail("Expected failed heist to throw")
         } catch let failure as Heist.Failure {
@@ -483,10 +505,12 @@ final class HeistResultTests: XCTestCase {
         let job = try TheInsideJob(token: "in-app-heist-abort-test")
 
         do {
-            _ = try await Heist(runtime: .insideJob(job)) {
-                Warn("before")
-                Fail("abort")
-                Warn("after")
+            _ = try await HeistResultRecording.withEnvironmentRecording(false) {
+                try await Heist(runtime: .insideJob(job)) {
+                    Warn("before")
+                    Fail("abort")
+                    Warn("after")
+                }
             }
             XCTFail("Expected failed heist to throw")
         } catch let failure as Heist.Failure {
@@ -502,6 +526,14 @@ final class HeistResultTests: XCTestCase {
             XCTAssertFalse(job.isRunning)
             XCTAssertFalse(job.brains.semanticObservationIsActive)
             XCTAssertFalse(job.tripwire.isPulseRunning)
+        }
+    }
+
+    private func setEnvironment(_ key: String, _ value: String?) {
+        if let value {
+            setenv(key, value, 1)
+        } else {
+            unsetenv(key)
         }
     }
 

@@ -32,21 +32,13 @@ package extension HeistExecutionStepResult {
         }
     }
 
-    var reportInvocationDisplayName: String? {
-        invocation?.runHeistSummary
-    }
 }
 
 public extension HeistExecutionStepResult {
     /// Human-facing display label for a step. Invoke steps surface the product
     /// capability that ran rather than the bare `invoke` kind.
     var reportDisplayName: String {
-        reportInvocationDisplayName ?? reportCommandName ?? kind.rawValue
-    }
-
-    /// Wire command name for an action-kind step.
-    var reportCommandName: String? {
-        actionCommand?.wireType.rawValue
+        invocation?.runHeistSummary ?? actionCommand?.wireType.rawValue ?? kind.rawValue
     }
 
     /// Durable matcher target for an action-kind step, if any.

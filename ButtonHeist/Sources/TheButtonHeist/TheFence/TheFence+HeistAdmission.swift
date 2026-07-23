@@ -24,7 +24,7 @@ extension TheFence {
     }
 
     struct ValidateHeistRequest {
-        let source: HeistPlanSourceAdmissionRequest
+        let source: HeistPlanLoadRequest
         let argument: HeistArgument
         let argumentProvided: Bool
         let lintMode: HeistValidationLintMode
@@ -100,13 +100,13 @@ extension TheFence {
             commandName: Command.validateHeist.rawValue,
             fields: rawStructuredJSONIRSourceFields(in: arguments, dropping: [.argument, .lint])
         ).flatMap {
-            HeistPlanSourceAdmission.request(
+            HeistPlanSourceAdmission.admit(
                 commandName: Command.validateHeist.rawValue,
                 path: path,
                 inlineDSL: inlineDSL
             )
         }
-        let source: HeistPlanSourceAdmissionRequest
+        let source: HeistPlanLoadRequest
         switch sourceResult {
         case .success(let request, _):
             source = request
@@ -240,7 +240,7 @@ private extension TheFence {
             fields: rawStructuredJSONIRSourceFields(in: arguments, dropping: droppingPlanKeys)
         )
         .flatMap {
-            HeistPlanSourceAdmission.request(
+            HeistPlanSourceAdmission.admit(
                 commandName: commandName,
                 path: path,
                 inlineDSL: inlineDSL

@@ -297,7 +297,7 @@ public struct HeistDef<Input>: Sendable {
     }
 
     fileprivate func invocation(argument: HeistArgument) throws -> HeistInvocationContent {
-        let definition = try definitionResult.get(orThrow: HeistPlanBuildError.init(diagnostics:))
+        let definition = try definitionResult.value(orThrow: HeistPlanBuildError.init(diagnostics:))
         return HeistInvocationContent(
             invocation: HeistInvocationStep(
                 path: HeistInvocationPath(definitionPath: path),
