@@ -346,7 +346,9 @@ extension Settlement {
         private let diagnosisSink: Settlement.DiagnosisSink
 
         internal init(boundary: Boundary) {
-            self.init(boundary: boundary, diagnosisSink: SettlementDiagnosisLogger.record)
+            self.init(boundary: boundary) {
+                insideJobLogger.debug("\($0.description, privacy: .public)")
+            }
         }
 
         internal init(
@@ -1306,12 +1308,6 @@ internal final class LiveSettlementLifecycle {
         resources.demand.cancel()
         phase = .finalized
         return true
-    }
-}
-
-private enum SettlementDiagnosisLogger {
-    static func record(_ diagnosis: Settlement.Diagnosis) {
-        insideJobLogger.debug("\(diagnosis.description, privacy: .public)")
     }
 }
 
