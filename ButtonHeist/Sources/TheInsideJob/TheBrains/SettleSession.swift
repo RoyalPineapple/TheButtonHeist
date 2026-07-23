@@ -134,17 +134,17 @@ private enum SettleLoopStability: Equatable, Sendable {
                 == true ? .semanticStability : nil
 
         case .uikitIdleOrQuietWindow(let milliseconds, var startedAtMs, let uikitIdleObserved):
-            if uikitIdleObserved {
-                return .uikitIdle
-            }
             if !repeatedFingerprint {
                 startedAtMs = elapsedMs
             }
             self = .uikitIdleOrQuietWindow(
                 milliseconds: milliseconds,
                 startedAtMs: startedAtMs,
-                uikitIdleObserved: false
+                uikitIdleObserved: uikitIdleObserved
             )
+            if uikitIdleObserved, repeatedFingerprint {
+                return .uikitIdle
+            }
             return startedAtMs.map { elapsedMs - $0 >= milliseconds }
                 == true ? .accessibilityQuietWindow : nil
 
