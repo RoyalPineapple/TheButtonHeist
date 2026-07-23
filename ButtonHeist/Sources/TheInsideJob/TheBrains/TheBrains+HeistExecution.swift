@@ -172,9 +172,7 @@ extension TheBrains {
             return runtimeInactiveResult(payload: .heist(nil))
         }
 
-        let demand = vault.semanticObservationStream.beginActiveObservationDemand(
-            for: .readinessOnly
-        )
+        let demand = vault.semanticObservationStream.beginActiveObservationDemand()
         defer { demand.cancel() }
         if tripwire.isPulseRunning,
            await interactionCoordinator.refreshedVisibleBaseline() == nil {
@@ -199,9 +197,7 @@ extension TheBrains {
         let notificationScope = vault.accessibilityNotifications.beginHeistScope()
         defer { notificationScope.cancel() }
 
-        let demand = vault.semanticObservationStream.beginActiveObservationDemand(
-            for: .readinessOnly
-        )
+        let demand = vault.semanticObservationStream.beginActiveObservationDemand()
         defer { demand.cancel() }
 
         let heistStart = RuntimeElapsed.now

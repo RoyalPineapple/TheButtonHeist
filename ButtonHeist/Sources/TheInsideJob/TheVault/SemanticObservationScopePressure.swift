@@ -7,21 +7,18 @@ struct SemanticObservationScopePressure {
     private var subscriptions: [UInt64: SemanticObservationScope] = [:]
 
     private var nextActiveDemandID: UInt64 = 0
-    private var activeObservationDemands: [UInt64: SemanticObservationDemand.Purpose] = [:]
+    private var activeObservationDemands: Set<UInt64> = []
 
     var activeDemandCount: Int {
         activeObservationDemands.count
     }
 
     var demandState: SemanticObservationDemandState {
-        guard let purpose = activeObservationDemands.values.max() else {
-            return .idle
-        }
-        return .active(purpose)
+        activeObservationDemands.isEmpty ? .idle : .active
     }
 
     var hasActiveDemand: Bool {
-        if case .active = demandState { true } else { false }
+        demandState == .active
     }
 
     mutating func addSubscription(scope: SemanticObservationScope) -> UInt64 {
@@ -35,17 +32,15 @@ struct SemanticObservationScopePressure {
         subscriptions[id] = nil
     }
 
-    mutating func addActiveDemand(
-        for purpose: SemanticObservationDemand.Purpose
-    ) -> UInt64 {
+    mutating func addActiveDemand() -> UInt64 {
         let id = nextActiveDemandID
         nextActiveDemandID += 1
-        activeObservationDemands[id] = purpose
+        activeObservationDemands.insert(id)
         return id
     }
 
     mutating func removeActiveDemand(_ id: UInt64) {
-        activeObservationDemands[id] = nil
+        activeObservationDemands.remove(id)
     }
 
     func subscribedObservationScope() -> SemanticObservationScope {
@@ -55,11 +50,7 @@ struct SemanticObservationScopePressure {
 
 enum SemanticObservationDemandState: Sendable, Equatable {
     case idle
-    case active(SemanticObservationDemand.Purpose)
-
-    var samplesSemantics: Bool {
-        self == .active(.observation)
-    }
+    case active
 }
 
 #endif // DEBUG

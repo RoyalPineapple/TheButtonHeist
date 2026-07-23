@@ -190,31 +190,16 @@ extension TheVaultResolutionTests {
         _ = visible
     }
 
-    func testActiveObservationDemandChoosesStrongestPurposeWithoutWideningScope() async {
+    func testActiveObservationDemandChangesCadenceWithoutWideningScope() async {
         XCTAssertFalse(bagman.semanticObservationStream.hasActiveObservationDemand)
         XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandCount, 0)
         XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandState, .idle)
         XCTAssertEqual(bagman.semanticObservationStream.subscribedObservationScope(), .visible)
 
-        let readinessDemand = bagman.semanticObservationStream.beginActiveObservationDemand(
-            for: .readinessOnly
-        )
+        let demand = bagman.semanticObservationStream.beginActiveObservationDemand()
         XCTAssertTrue(bagman.semanticObservationStream.hasActiveObservationDemand)
         XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandCount, 1)
-        XCTAssertEqual(
-            bagman.semanticObservationStream.activeObservationDemandState,
-            .active(.readinessOnly)
-        )
-
-        let observationDemand = bagman.semanticObservationStream.beginActiveObservationDemand(
-            for: .observation
-        )
-        XCTAssertTrue(bagman.semanticObservationStream.hasActiveObservationDemand)
-        XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandCount, 2)
-        XCTAssertEqual(
-            bagman.semanticObservationStream.activeObservationDemandState,
-            .active(.observation)
-        )
+        XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandState, .active)
         XCTAssertEqual(bagman.semanticObservationStream.subscribedObservationScope(), .visible)
 
         do {
@@ -225,16 +210,8 @@ extension TheVaultResolutionTests {
 
         XCTAssertEqual(bagman.semanticObservationStream.subscribedObservationScope(), .visible)
 
-        observationDemand.cancel()
+        demand.cancel()
 
-        XCTAssertTrue(bagman.semanticObservationStream.hasActiveObservationDemand)
-        XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandCount, 1)
-        XCTAssertEqual(
-            bagman.semanticObservationStream.activeObservationDemandState,
-            .active(.readinessOnly)
-        )
-
-        readinessDemand.cancel()
         XCTAssertFalse(bagman.semanticObservationStream.hasActiveObservationDemand)
         XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandCount, 0)
         XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandState, .idle)

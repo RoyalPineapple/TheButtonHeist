@@ -7,6 +7,7 @@ struct SettleLoopRunner {
     let tripwireSignalProvider: SettleSession.TripwireSignalProvider
     let observationYield: SettleSession.ObservationYield
     let uikitIdleWait: SettleSession.UIKitIdleWait?
+    let presentationIsSettled: SettleSession.PresentationSettled
     let clock: SettleSession.Clock
     let timeoutMs: Int
     let initial: SettleLoopMachine.State
@@ -33,6 +34,7 @@ struct SettleLoopRunner {
                 )
             )
             guard case .terminal(let outcome) = transition.decision else { return nil }
+            guard presentationAdmitsSettlement(transition.state, deadline: deadline) else { return nil }
             return SettleSession.result(
                 outcome: outcome,
                 state: transition.state,
@@ -123,6 +125,16 @@ struct SettleLoopRunner {
         }
 
         return result(await evaluateCompletion(source: source, deadline: deadline))
+    }
+
+    @MainActor
+    private func presentationAdmitsSettlement(
+        _ state: SettleLoopMachine.State,
+        deadline: SemanticObservationDeadline
+    ) -> Bool {
+        state.settlementEvidence != .accessibilityQuietWindow
+            || deadline.elapsedMilliseconds(at: clock()) >= SettleSession.presentationSettleGraceMs
+            || presentationIsSettled()
     }
 
     @MainActor

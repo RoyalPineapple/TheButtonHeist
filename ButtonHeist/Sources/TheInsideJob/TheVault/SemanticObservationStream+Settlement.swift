@@ -275,12 +275,15 @@ extension Observation.Stream {
         )
     }
 
-    internal func refreshVisibleObservation(timeoutMs: Int) async -> ObservationSettlement {
+    internal func refreshVisibleObservation(
+        baselineTripwireSignal: TheTripwire.TripwireSignal? = nil,
+        timeoutMs: Int
+    ) async -> ObservationSettlement {
         if let refresh = visibleRefreshPhase.task {
             return await finishVisibleRefresh(refresh)
         }
         return await startVisibleRefresh(
-            baselineTripwireSignal: currentTripwireSignal(),
+            baselineTripwireSignal: baselineTripwireSignal ?? currentTripwireSignal(),
             timeoutMs: timeoutMs,
             commitScope: .visible,
             providedResult: nil,

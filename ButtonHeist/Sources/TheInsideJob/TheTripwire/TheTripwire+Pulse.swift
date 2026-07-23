@@ -87,46 +87,6 @@ extension TheTripwire {
 
     // MARK: - Settle Waiting
 
-    /// Waits for the complete post-dispatch UIKit readiness proof.
-    ///
-    /// A zero animation count and a run-loop idle edge are not sufficient on
-    /// their own: deferred SwiftUI work can start an animation on the following
-    /// display update. Presentation stability supplies that future-frame
-    /// boundary. The final zero-count check rejects an animation that began
-    /// after the initial idle edge.
-    func waitForUIKitReadiness(timeout: Duration) async -> Bool {
-        guard timeout > .zero else { return false }
-        let deadline = ContinuousClock.now.advanced(by: timeout)
-        guard await waitForNextHeartbeat(
-            timeout: timeout,
-            demand: .immediate
-        ) == .observed else {
-            return false
-        }
-
-        while !Task.isCancelled {
-            let animationBudget = ContinuousClock.now.duration(to: deadline)
-            guard animationBudget > .zero,
-                  await uikitIdleTracker.waitUntilIdle(timeout: animationBudget) else {
-                return false
-            }
-
-            let presentationBudget = ContinuousClock.now.duration(to: deadline)
-            guard presentationBudget > .zero,
-                  await waitForSettle(
-                      timeout: presentationBudget / .seconds(1),
-                      requiredQuietFrames: 1
-                  ) else {
-                return false
-            }
-
-            if await uikitIdleTracker.waitUntilIdle(timeout: .zero) {
-                return true
-            }
-        }
-        return false
-    }
-
     /// Wait for the UI to settle — no pending layout, stable presentation
     /// fingerprint for `requiredQuietFrames` consecutive ticks.
     ///
@@ -153,7 +113,6 @@ extension TheTripwire {
                         deadline: CFAbsoluteTimeGetCurrent() + timeout,
                         continuation: oneShot
                     ), id: waiterID)
-                    updateDisplayLinkRate(context)
                 } else {
                     continuation.resume(returning: false)
                 }
@@ -166,9 +125,7 @@ extension TheTripwire {
     }
 
     private func removeSettleWaiter(id: UInt64) {
-        guard let context = runningContext,
-              context.settleWaiters.remove(id: id) != nil else { return }
-        updateDisplayLinkRate(context)
+        _ = runningContext?.settleWaiters.remove(id: id)
     }
 
     /// Waits for one future tick of Button Heist's single CADisplayLink heartbeat.
@@ -307,8 +264,9 @@ extension TheTripwire {
     }
 
     private func updateDisplayLinkRate(_ context: RunningContext) {
-        let hasImmediateDemand = !context.settleWaiters.isEmpty
-            || context.heartbeatWaiters.contains { $0.demand == .immediate }
+        let hasImmediateDemand = context.heartbeatWaiters.contains {
+            $0.demand == .immediate
+        }
         context.link.preferredFrameRateRange = hasImmediateDemand
             ? Self.activeDisplayFrameRateRange(
                 maximumFramesPerSecond: activeScreenMaximumFramesPerSecond()
@@ -334,9 +292,6 @@ extension TheTripwire {
 
         let completed = context.settleWaiters.removeAll {
             $0.quietFrames >= $0.requiredQuietFrames || now >= $0.deadline
-        }
-        if !completed.isEmpty {
-            updateDisplayLinkRate(context)
         }
         for waiter in completed {
             waiter.continuation.resolve(returning: waiter.quietFrames >= waiter.requiredQuietFrames)

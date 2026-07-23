@@ -108,6 +108,16 @@ final class WaitForIntegrationTests: XCTestCase {
         return label
     }
 
+    private func addButton(_ title: String, y: CGFloat = 100) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setTitle(title, for: .normal)
+        button.accessibilityLabel = title
+        button.frame = CGRect(x: 10, y: y, width: 200, height: 44)
+        button.addAction(UIAction { _ in }, for: .primaryActionTriggered)
+        hostView.addSubview(button)
+        return button
+    }
+
     private func waitFor(
         target: AccessibilityTarget,
         absent: Bool = false,
@@ -223,35 +233,35 @@ final class WaitForIntegrationTests: XCTestCase {
         try assertSuccessfulWaitSettlement(result)
     }
 
-    func testWaitForSettlesThroughSemanticStabilityDuringRepeatingCosmeticAnimation() async throws {
-        let label = addLabel("WaitFor-RepeatingCosmeticAnimation")
-        defer { label.removeFromSuperview() }
-        let animationsWereEnabled = UIView.areAnimationsEnabled
-        UIView.setAnimationsEnabled(true)
-        insideJob.tripwire.uikitIdleTracker.beginOperationIfAvailable()
-        defer {
-            insideJob.tripwire.uikitIdleTracker.endOperationIfNeeded()
-            UIView.setAnimationsEnabled(animationsWereEnabled)
-        }
+    func testActionUsesSettledObservationWhileAnimationRemainsActive() async throws {
+        let button = addButton("Action-RepeatingAnimation")
+        defer { button.removeFromSuperview() }
 
         UIView.animate(
             withDuration: 0.01,
             delay: 0,
             options: [.autoreverse, .repeat],
             animations: {
-                label.alpha = 0.5
+                button.alpha = 0.5
             }
         )
-        defer { label.layer.removeAllAnimations() }
+        defer { button.layer.removeAllAnimations() }
 
-        let response = try await waitFor(
-            target: .label("WaitFor-RepeatingCosmeticAnimation"),
-            timeout: 1.0
+        let command = try HeistActionCommand.activate(
+            .label("Action-RepeatingAnimation")
+        ).resolve(in: .empty)
+        let expectation = try resolvedWait(WaitStep(
+            predicate: .exists(.label("Action-RepeatingAnimation")),
+            timeout: .seconds(1)
+        ))
+        let execution = await insideJob.brains.executeRuntimeActionForHeist(
+            command,
+            expectation: expectation
         )
-        let result = try XCTUnwrap(response)
+        let result = execution.result
 
-        XCTAssertTrue(result.outcome.isSuccess)
-        XCTAssertEqual(result.evidence.settlement?.path, .semanticStability)
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "action failed")
+        XCTAssertEqual(result.evidence.settlement?.path, .accessibilityQuietWindow)
         try assertSuccessfulWaitSettlement(result)
         let animationIsIdle = await insideJob.tripwire.uikitIdleTracker.waitUntilIdle(timeout: .zero)
         XCTAssertFalse(animationIsIdle)
