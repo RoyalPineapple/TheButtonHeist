@@ -63,6 +63,36 @@ import Testing
         }
     }
 
+    @Test func `scoped recorder disables and restores ambient failure collection`() async throws {
+        try await withResultDirectory(prefix: "heist-result-recorder-scope") { directory in
+            let previousDirectory = EnvironmentKey.buttonheistResultsDir.value
+            let previousMode = EnvironmentKey.buttonheistResultsMode.value
+            setEnvironment(EnvironmentKey.buttonheistResultsDir.rawValue, directory.path)
+            setEnvironment(EnvironmentKey.buttonheistResultsMode.rawValue, HeistResultRecordingMode.failures.rawValue)
+            defer {
+                setEnvironment(EnvironmentKey.buttonheistResultsDir.rawValue, previousDirectory)
+                setEnvironment(EnvironmentKey.buttonheistResultsMode.rawValue, previousMode)
+            }
+
+            let before = HeistResultRecorder.recordIfEnabled(
+                failedResult(),
+                plan: try samplePlan()
+            )
+            let skipped = try await HeistResultRecorder.withEnvironmentRecording(false) {
+                HeistResultRecorder.recordIfEnabled(failedResult(), plan: try samplePlan())
+            }
+            let after = HeistResultRecorder.recordIfEnabled(
+                failedResult(),
+                plan: try samplePlan()
+            )
+
+            #expect(before != nil)
+            #expect(skipped == nil)
+            #expect(after != nil)
+            #expect(try resultArtifactURLs(in: directory).count == 2)
+        }
+    }
+
     @Test func `environment resolves process temp and rejects unknown mode`() throws {
         let previousDirectory = EnvironmentKey.buttonheistResultsDir.value
         let previousMode = EnvironmentKey.buttonheistResultsMode.value

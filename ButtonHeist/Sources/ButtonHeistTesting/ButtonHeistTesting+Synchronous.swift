@@ -16,6 +16,8 @@ public enum HeistTestResultRecording: Sendable, Equatable {
     /// Use the normal `BUTTONHEIST_RESULTS_MODE` / `BUTTONHEIST_RESULTS_DIR`
     /// environment-variable behavior.
     case environment
+    /// Do not record this heist result, even when ambient recording is enabled.
+    case off
     /// Write only failed heist results to the supplied directory.
     case failures
     /// Write failed and passing heist results to the supplied directory.
@@ -23,13 +25,17 @@ public enum HeistTestResultRecording: Sendable, Equatable {
 
     fileprivate var explicitRecorderMode: HeistResultRecordingMode? {
         switch self {
-        case .environment:
+        case .environment, .off:
             return nil
         case .failures:
             return .failures
         case .always:
             return .all
         }
+    }
+
+    fileprivate var usesEnvironment: Bool {
+        self == .environment
     }
 }
 
@@ -146,30 +152,32 @@ private func runHeistSyncRequest(
     }
 
     return runHeistSyncOperation(timeout: timeout, file: file, line: line) { @MainActor in
-        do {
-            let heist = try await Heist(request.plan, argument: request.argument)
-            try recordResultIfRequested(
-                heist.result,
-                plan: request.plan,
-                policy: recordResult,
-                resultDirectory: resultDirectory
-            )
-            return heist
-        } catch let failure as Heist.Failure {
+        try await HeistResultRecorder.withEnvironmentRecording(recordResult.usesEnvironment) {
             do {
+                let heist = try await Heist(request.plan, argument: request.argument)
                 try recordResultIfRequested(
-                    failure.result,
+                    heist.result,
                     plan: request.plan,
                     policy: recordResult,
                     resultDirectory: resultDirectory
                 )
-            } catch {
-                throw HeistXCTestFailure(
-                    primaryError: failure,
-                    resultRecordingError: error
-                )
+                return heist
+            } catch let failure as Heist.Failure {
+                do {
+                    try recordResultIfRequested(
+                        failure.result,
+                        plan: request.plan,
+                        policy: recordResult,
+                        resultDirectory: resultDirectory
+                    )
+                } catch {
+                    throw HeistXCTestFailure(
+                        primaryError: failure,
+                        resultRecordingError: error
+                    )
+                }
+                throw failure
             }
-            throw failure
         }
     }
 }
