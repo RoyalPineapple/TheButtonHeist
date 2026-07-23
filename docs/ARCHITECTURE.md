@@ -284,13 +284,16 @@ by waits and action expectations. Consumers read it through
 capture arrays, or claim notification events. Retention loss is explicit
 incomplete evidence, never an inferred `noChange`.
 
-`waitFor` is the observation-triggered form of `Settlement.Command`. It shares
-the same reducer, deadline, readiness, handoff, and projection rules as an
-action, but cannot produce a dispatch effect. It establishes its own baseline
-Moment and announcement position, so it cannot consume earlier action or heist
-evidence. Observation effects may reveal a resolvable target or run canonical
-discovery; their graceful stop restores the authored viewport exit position
-before settlement finalizes.
+`waitFor` is the predicate-bearing observation case of `Settlement.Command`.
+It shares the same reducer, deadline, readiness, handoff, and projection rules
+as an action, but cannot produce a dispatch effect. The separate `currentState`
+case performs one exact capture without arming timed channels; conditionals,
+element iteration, repeat-until, and invocation expectations use that result
+instead of reading the observation store through a second runtime API. A wait
+establishes its own baseline Moment and announcement position, so it cannot
+consume earlier action or heist evidence. Observation effects may reveal a
+resolvable target or run canonical discovery; their graceful stop restores the
+authored viewport exit position before settlement finalizes.
 
 Heist-internal waits use the same command with an exact supplied Moment when
 the predicate spans an invocation or repeat body. Arming replays retained
@@ -618,10 +621,11 @@ flowchart TD
     HandoffSocket --> Executor["TheBrains-owned InteractionRequestExecutor<br/>one UI FIFO"]
 
     Executor --> Resolve["Resolve typed action and predicate"]
-    Resolve --> Command["Settlement.Command<br/>trigger × optional predicate"]
+    Resolve --> Command["Settlement.Command<br/>currentState | observation | action"]
     Command --> Baseline["Capture and commit baseline<br/>Observation.Moment + announcement position"]
+    Command -->|currentState| Current["Return exact admitted capture"]
     Baseline --> Arm["Arm observation, announcement,<br/>readiness, and deadline channels"]
-    Arm --> Trigger{"Trigger"}
+    Arm --> Trigger{"Command"}
     Trigger -->|action| Dispatch["Dispatch exactly once"]
     Trigger -->|observation| Observe["No dispatch"]
     Dispatch --> Observe
@@ -633,6 +637,7 @@ flowchart TD
     Handoff --> Commit
     Ready -->|yes| Result["Settlement.Result"]
     Ready -->|deadline| TimedOut["Independent predicate,<br/>readiness, and handoff evidence"]
+    Current --> Result
     Result --> Project["Canonical result projector"]
     TimedOut --> Project
     Project --> ActionResult["ActionResult"]

@@ -45,14 +45,11 @@ extension Settlement {
 
         internal init(
             observing input: ResolvedWaitRuntimeInput,
-            after currentStateResult: Settlement.Result,
+            after priorResult: Settlement.Result,
             startedAt: RuntimeElapsed.Instant = RuntimeElapsed.now
         ) {
-            guard case .currentState = currentStateResult.evidence.command else {
-                preconditionFailure("A wait baseline requires a current-state settlement result")
-            }
             let baseline: Baseline
-            if let moment = currentStateResult.evidence.handoff.event?.moment {
+            if let moment = priorResult.evidence.handoff.event?.moment {
                 baseline = .supplied(EvidenceBoundary(moment: moment))
             } else if case .presence = input.predicate.core {
                 baseline = .capture

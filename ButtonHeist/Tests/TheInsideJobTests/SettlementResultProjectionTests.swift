@@ -159,10 +159,12 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
             activationTrace: activationTrace,
             failureKind: .targetUnavailable
         )
-        let command = Settlement.Command(
-            trigger: .action(.activate(target)),
+        let deadline = Settlement.Deadline(instant: .now)
+        let command = Settlement.Command.action(
+            .activate(target),
             predicate: predicate,
-            deadline: .init(instant: .now)
+            deadline: deadline,
+            baseline: .capture
         )
         let result = Settlement.Result(
             outcome: .dispatchFailed,
@@ -174,7 +176,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
                 readiness: .pending(.initial),
                 handoff: .pending(.initial),
                 observationHistory: .events([]),
-                deadline: .init(deadline: command.deadline, elapsed: 4, reached: false)
+                deadline: .bounded(deadline: deadline, elapsed: 4, reached: false)
             )
         )
 
@@ -191,10 +193,12 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
         let baseline = await commit(label: "Baseline")
         let observed = await commit(label: "Observed")
         let predicate = transitionPredicate()
-        let command = Settlement.Command(
-            trigger: .action(.dismiss),
+        let deadline = Settlement.Deadline(instant: .now)
+        let command = Settlement.Command.action(
+            .dismiss,
             predicate: predicate,
-            deadline: .init(instant: .now)
+            deadline: deadline,
+            baseline: .capture
         )
         let result = Settlement.Result(
             outcome: .timedOut,
@@ -209,7 +213,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
                     readinessGeneration: .initial
                 )),
                 observationHistory: await history(after: baseline),
-                deadline: .init(deadline: command.deadline, elapsed: 25, reached: true)
+                deadline: .bounded(deadline: deadline, elapsed: 25, reached: true)
             )
         )
 
@@ -483,10 +487,11 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
             target: request.target,
             result: PredicateEvaluationResult(met: predicateMet, actual: predicateMet ? "matched" : "missing")
         ))
-        let command = Settlement.Command(
-            trigger: .observation,
+        let deadline = Settlement.Deadline(instant: .now)
+        let command = Settlement.Command.observation(
             predicate: predicate,
-            deadline: .init(instant: .now)
+            deadline: deadline,
+            baseline: .capture
         )
         return Settlement.Result(
             outcome: outcome,
@@ -498,7 +503,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
                 readiness: readiness,
                 handoff: handoff,
                 observationHistory: await history(after: baseline),
-                deadline: .init(deadline: command.deadline, elapsed: elapsed, reached: true)
+                deadline: .bounded(deadline: deadline, elapsed: elapsed, reached: true)
             )
         )
     }
@@ -513,10 +518,12 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
         handoffEvidence: Settlement.Handoff.Evidence? = nil,
         elapsed: ElapsedMilliseconds = 25
     ) async -> Settlement.Result {
-        let command = Settlement.Command(
-            trigger: .action(action),
+        let deadline = Settlement.Deadline(instant: .now)
+        let command = Settlement.Command.action(
+            action,
             predicate: nil,
-            deadline: .init(instant: .now)
+            deadline: deadline,
+            baseline: .capture
         )
         let finalHandoff: Settlement.Handoff.Evidence
         if let handoffEvidence {
@@ -534,8 +541,8 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
                 readiness: readinessEvidence ?? .established(readiness(at: observed)),
                 handoff: finalHandoff,
                 observationHistory: await history(after: baseline),
-                deadline: .init(
-                    deadline: command.deadline,
+                deadline: .bounded(
+                    deadline: deadline,
                     elapsed: elapsed,
                     reached: outcome == .timedOut
                 )

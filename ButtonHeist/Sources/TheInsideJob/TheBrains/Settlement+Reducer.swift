@@ -17,7 +17,7 @@ extension Settlement {
             }
             switch baseline {
             case .capture:
-                Decision(
+                return Decision(
                     state: .awaitingBaseline(command),
                     effects: [.capture(.baseline(command.observationScope))]
                 )
@@ -25,7 +25,7 @@ extension Settlement {
                 guard let deadline = command.deadline else {
                     preconditionFailure("Supplied settlement baseline requires a deadline")
                 }
-                Decision(
+                return Decision(
                     state: .armed(Settlement.Session(
                         command: command,
                         boundary: boundary,
@@ -39,7 +39,7 @@ extension Settlement {
                     ))]
                 )
             case .unavailable(let failure):
-                terminalBeforeBaseline(
+                return terminalBeforeBaseline(
                     command: command,
                     boundary: .unavailable(failure),
                     outcome: .baselineUnavailable,

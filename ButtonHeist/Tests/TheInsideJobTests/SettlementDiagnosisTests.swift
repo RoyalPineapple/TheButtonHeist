@@ -80,10 +80,11 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
         let baseline = await commit(label: "Baseline")
         let boundary = AutomaticTimeoutDiagnosisBoundary(baseline: baseline)
         let recorder = SettlementDiagnosisRecorder(boundary: boundary)
-        let command = Settlement.Command(
-            trigger: .action(.dismiss),
+        let command = Settlement.Command.action(
+            .dismiss,
             predicate: nil,
-            deadline: .init(instant: .now)
+            deadline: .init(instant: .now),
+            baseline: .capture
         )
 
         let result = await Settlement.Executor(
@@ -193,7 +194,12 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
                         message: "dismiss failed",
                         failureKind: .actionFailed
                     )),
-                    commandTrigger: .action(.dismiss),
+                    command: .action(
+                        .dismiss,
+                        predicate: predicate,
+                        deadline: .init(instant: .now),
+                        baseline: .capture
+                    ),
                     predicate: predicate,
                     predicateEvidence: dispatchFailureEvidence(predicate),
                     readiness: .established(readiness),
@@ -362,7 +368,12 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
                 result(
                     outcome: .timedOut,
                     trigger: .actionPending(.dismiss),
-                    commandTrigger: .action(.dismiss),
+                    command: .action(
+                        .dismiss,
+                        predicate: predicate,
+                        deadline: .init(instant: .now),
+                        baseline: .capture
+                    ),
                     predicate: predicate,
                     predicateEvidence: Settlement.Predicate.Evidence(predicate: predicate),
                     readiness: .pending(.initial),
@@ -386,7 +397,7 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
     private func result(
         outcome: Settlement.Outcome,
         trigger: Settlement.TriggerEvidence = .observation,
-        commandTrigger: Settlement.Trigger = .observation,
+        command: Settlement.Command? = nil,
         predicate: Settlement.Predicate,
         predicateEvidence: Settlement.Predicate.Evidence,
         readiness: Settlement.Readiness.Evidence,
@@ -396,10 +407,11 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
         baseline: Observation.SnapshotEvent,
         deadlineReached: Bool = false
     ) -> Settlement.Result {
-        let command = Settlement.Command(
-            trigger: commandTrigger,
+        let deadline = Settlement.Deadline(instant: .now)
+        let command = command ?? Settlement.Command.observation(
             predicate: predicate,
-            deadline: .init(instant: .now)
+            deadline: deadline,
+            baseline: .capture
         )
         return Settlement.Result(
             outcome: outcome,
@@ -411,8 +423,8 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
                 readiness: readiness,
                 handoff: handoff,
                 observationHistory: history,
-                deadline: .init(
-                    deadline: command.deadline,
+                deadline: .bounded(
+                    deadline: command.deadline ?? deadline,
                     elapsed: 25,
                     reached: deadlineReached
                 )

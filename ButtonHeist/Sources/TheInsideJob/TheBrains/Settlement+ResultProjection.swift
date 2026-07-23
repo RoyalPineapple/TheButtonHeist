@@ -22,7 +22,7 @@ extension Settlement {
 
         internal static func projectWait(_ result: Result) -> HeistSettlementEvidence {
             precondition(
-                result.evidence.command.trigger == .observation,
+                result.evidence.command.waitsForObservation,
                 "Wait projection requires an observation settlement trigger"
             )
             guard let expectation = expectation(from: result) else {
@@ -63,7 +63,7 @@ private extension Settlement.ResultProjector {
     }
 
     static func actionResult(from result: Settlement.Result) -> ActionResult {
-        guard case .action(let command) = result.evidence.command.trigger else {
+        guard case .action(let command, _, _, _) = result.evidence.command else {
             preconditionFailure("Action projection requires an action settlement trigger")
         }
         let assemblyStart = RuntimeElapsed.now
@@ -157,11 +157,13 @@ private extension Settlement.ResultProjector {
         let observation = projectedObservation(from: result)
         let timing = ActionPerformanceTiming(totalMs: result.evidence.deadline.elapsed)
         if result.outcome == .settled {
-            let message: String? = switch result.evidence.command.trigger {
+            let message: String? = switch result.evidence.command {
             case .observation:
                 standaloneWaitSuccessMessage(from: result)
             case .action:
                 expectation(from: result)?.actual
+            case .currentState:
+                preconditionFailure("Current-state settlement has no public wait projection")
             }
             return ActionResult.success(
                 payload: .wait,
@@ -180,7 +182,7 @@ private extension Settlement.ResultProjector {
     }
 
     static func standaloneWaitSuccessMessage(from result: Settlement.Result) -> String {
-        guard case .observation = result.evidence.command.trigger,
+        guard case .observation = result.evidence.command,
               result.outcome == .settled,
               let predicate = result.evidence.command.predicate else {
             preconditionFailure("Successful standalone wait message requires a settled observation predicate")
@@ -437,6 +439,8 @@ private extension ElementDiagnosticSummary {
 private extension Settlement.Readiness.Path {
     var actionSettlementPath: ActionSettlementPath {
         switch self {
+        case .currentStateCapture:
+            preconditionFailure("Current-state capture has no public action settlement path")
         case .uikitIdle:
             .uikitIdle
         case .semanticStability:

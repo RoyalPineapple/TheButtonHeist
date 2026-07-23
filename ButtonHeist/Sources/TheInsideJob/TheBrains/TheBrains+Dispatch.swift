@@ -126,12 +126,13 @@ extension TheBrains {
         let timeoutMilliseconds = expectation.map {
             Int64(($0.timeout.seconds * 1_000).rounded(.up))
         } ?? Int64(SettleSession.defaultTimeoutMs)
-        let settlementCommand = Settlement.Command(
-            trigger: .action(command),
+        let settlementCommand = Settlement.Command.action(
+            command,
             predicate: predicate,
             deadline: Settlement.Deadline(
                 afterActionDispatch: .milliseconds(timeoutMilliseconds)
-            )
+            ),
+            baseline: .capture
         )
         let result = await executeSettlement(settlementCommand) { command in
             await self.dispatchRuntimeAction(command)
