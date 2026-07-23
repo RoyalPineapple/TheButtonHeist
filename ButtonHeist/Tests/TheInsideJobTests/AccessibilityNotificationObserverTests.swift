@@ -223,15 +223,44 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         )
     }
 
-    func testNewActionWindowCanBeginWhileEndedOwnerDrainsChildren() async {
+    func testChildEventAfterOwnerReleaseStaysClaimedUntilLastChildEnds() async {
         let bus = AccessibilityNotificationBus()
         let owner = bus.beginActionWindow()
         let child = bus.beginActionWindow()
-        owner.consume()
+
+        owner.cancel()
+        bus.recordForTesting(code: 1000, notificationData: .none, associatedElement: .none)
+
+        XCTAssertTrue(
+            bus.checkpoint(after: .origin, selection: .unclaimedScoped).events.isEmpty
+        )
+
+        child.cancel()
+
+        XCTAssertEqual(
+            bus.checkpoint(after: .origin, selection: .unclaimedScoped).events.map(\.kind),
+            [.screenChanged]
+        )
+    }
+
+    func testChildEventAfterSuccessorBeginsIsAttributedToDrainingWindow() async throws {
+        let bus = AccessibilityNotificationBus()
+        let owner = bus.beginActionWindow()
+        let child = bus.beginActionWindow()
+        owner.cancel()
 
         let successor = bus.beginActionWindow()
         bus.recordForTesting(code: 1000, notificationData: .none, associatedElement: .none)
+
+        let childBatch = try XCTUnwrap(child.capture())
+        XCTAssertEqual(childBatch.events.map(\.kind), [.screenChanged])
+
         child.cancel()
+
+        XCTAssertTrue(
+            bus.checkpoint(after: .origin, selection: .unclaimedScoped).events.isEmpty
+        )
+
         successor.cancel()
 
         XCTAssertEqual(

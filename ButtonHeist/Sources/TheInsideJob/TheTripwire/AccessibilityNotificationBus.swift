@@ -14,18 +14,18 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
     private struct ActiveActionWindow {
         let id: AccessibilityNotificationActionWindowID
         var childLeaseCount: Int
-    }
 
-    /// A window whose owner lease ended while child leases were still open.
-    ///
-    /// Owner and child leases end on independent tasks: settlement owns the
-    /// window, while a viewport transition or screen capture dispatched during
-    /// that settlement holds a child lease, so the owner can finish first.
-    /// The window keeps draining until the last child ends, at which point a
-    /// deferred release is applied.
-    private struct DrainingActionWindow {
-        var childLeaseCount: Int
-        var pendingRelease: Bool
+        /// Set when the owner lease ends while child leases are still open.
+        ///
+        /// Owner and child leases end on independent tasks: settlement owns
+        /// the window, while a viewport transition or screen capture
+        /// dispatched during that settlement holds a child lease, so the
+        /// owner can finish first. Ingress attributes events to the single
+        /// active window, so the window must stay active - still claiming
+        /// events and still absorbing new `beginActionWindow` callers as
+        /// children - until the last child ends, at which point this
+        /// deferred outcome is applied.
+        var pendingOwnerOutcome: AccessibilityNotificationScopeOutcome?
     }
 
     private struct IngressLog {
@@ -159,7 +159,6 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
     private var activeScopeLeases = 0
     private var nextActionWindowID: UInt64 = 0
     private var activeActionWindow: ActiveActionWindow?
-    private var drainingActionWindows: [AccessibilityNotificationActionWindowID: DrainingActionWindow] = [:]
     private var announcementWaiters = WaiterStore<UInt64, AnnouncementWaiter>()
 
     var latestSequence: UInt64 {
@@ -485,43 +484,36 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
         case .heist:
             break
         case .actionChild(let actionWindowID):
-            if activeActionWindow?.id == actionWindowID {
-                precondition(
-                    activeActionWindow?.childLeaseCount ?? 0 > 0,
-                    "Cannot end an inactive child action notification window"
-                )
-                activeActionWindow?.childLeaseCount -= 1
-            } else if var draining = drainingActionWindows[actionWindowID] {
-                draining.childLeaseCount -= 1
-                if draining.childLeaseCount == 0 {
-                    if draining.pendingRelease {
-                        ingressLog.releaseActionWindow(actionWindowID)
-                    }
-                    drainingActionWindows[actionWindowID] = nil
-                } else {
-                    drainingActionWindows[actionWindowID] = draining
-                }
-            } else {
-                preconditionFailure(
-                    "Cannot end a child action notification window without its owner"
-                )
-            }
+            precondition(
+                activeActionWindow?.id == actionWindowID,
+                "Cannot end a child action notification window without its owner"
+            )
+            precondition(
+                activeActionWindow?.childLeaseCount ?? 0 > 0,
+                "Cannot end an inactive child action notification window"
+            )
+            activeActionWindow?.childLeaseCount -= 1
+            closeActionWindowIfDrainedLocked()
         case .actionOwner(let actionWindowID):
             precondition(
                 activeActionWindow?.id == actionWindowID,
                 "Cannot end an action notification window that is not active"
             )
-            let childLeaseCount = activeActionWindow?.childLeaseCount ?? 0
-            if childLeaseCount > 0 {
-                drainingActionWindows[actionWindowID] = DrainingActionWindow(
-                    childLeaseCount: childLeaseCount,
-                    pendingRelease: outcome == .released
-                )
-            } else if outcome == .released {
-                ingressLog.releaseActionWindow(actionWindowID)
-            }
-            activeActionWindow = nil
+            activeActionWindow?.pendingOwnerOutcome = outcome
+            closeActionWindowIfDrainedLocked()
         }
+    }
+
+    private func closeActionWindowIfDrainedLocked() {
+        guard
+            let window = activeActionWindow,
+            let outcome = window.pendingOwnerOutcome,
+            window.childLeaseCount == 0
+        else { return }
+        if outcome == .released {
+            ingressLog.releaseActionWindow(window.id)
+        }
+        activeActionWindow = nil
     }
 
     private var provenanceLocked: AccessibilityNotificationProvenance {
@@ -561,7 +553,7 @@ enum AccessibilityNotificationCheckpointSelection: Sendable {
     }
 }
 
-struct AccessibilityNotificationActionWindowID: RawRepresentable, Sendable, Hashable {
+struct AccessibilityNotificationActionWindowID: RawRepresentable, Sendable, Equatable {
     let rawValue: UInt64
 }
 
