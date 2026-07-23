@@ -131,28 +131,32 @@ struct RootView: View {
             }
             .navigationTitle("ButtonHeist Demo")
             .listRowInsets(settings.compactMode ? EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16) : nil)
-            .navigationDestination(isPresented: Binding(
-                get: { adversarialRoute != nil },
-                set: { isPresented in
-                    if !isPresented {
-                        adversarialRoute = nil
-                    }
-                }
-            )) {
-                if let route = adversarialRoute {
+        }
+        .accessibilityHidden(adversarialRoute != nil)
+        .overlay {
+            if let route = adversarialRoute {
+                NavigationStack {
                     AdversarialScenarioView(scenario: route.scenario)
                         .id(route.id)
-                        .task {
-                            await Task.yield()
-                            AdversarialLabRoute.markReady(route.id)
+                        .onAppear {
+                            AdversarialLabRoute.observePresented(route.id)
+                        }
+                        .onDisappear {
+                            AdversarialLabRoute.observeDismissed(route.id)
                         }
                 }
+                .background(Color(uiColor: .systemBackground))
             }
         }
         .onOpenURL(perform: openDemoRoute)
         .task {
             await Task.yield()
-            AdversarialLabRoute.markHostReady()
+            AdversarialLabRoute.installPresenter { route in
+                adversarialRoute = route
+            }
+        }
+        .onDisappear {
+            AdversarialLabRoute.uninstallPresenter()
         }
     }
 
@@ -165,77 +169,109 @@ struct RootView: View {
               let rawRouteID = components.queryItems?.first(where: { $0.name == "route_id" })?.value,
               let routeID = UUID(uuidString: rawRouteID)
         else { return }
-        AdversarialLabRoute.begin()
-        adversarialRoute = nil
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(10))
-            adversarialRoute = AdversarialRoute(id: routeID, scenario: scenario)
+        Task {
+            try? await AdversarialLabRoute.present(
+                AdversarialRoute(id: routeID, scenario: scenario)
+            )
         }
     }
 }
 
-private struct AdversarialRoute: Identifiable, Hashable {
+struct AdversarialRoute: Identifiable, Hashable {
     let id: UUID
     let scenario: AdversarialScenario
 }
 
 @MainActor
 internal final class AdversarialLabRoute {
-    private static var isHostReady = false
-    private static var readyRouteID: UUID?
+    typealias Presenter = (AdversarialRoute?) -> Void
+
+    private enum Phase {
+        case unavailable
+        case idle(Presenter)
+        case presenting(Presenter, routeID: UUID)
+        case presented(Presenter, routeID: UUID)
+        case dismissing(Presenter, routeID: UUID)
+    }
+
+    private static var phase = Phase.unavailable
 
     private init() {}
 
     internal static func open(_ scenario: AdversarialScenario) async throws {
+        try await present(AdversarialRoute(id: UUID(), scenario: scenario))
+    }
+
+    static func present(_ route: AdversarialRoute) async throws {
         let clock = ContinuousClock()
-        let hostDeadline = clock.now.advanced(by: .seconds(5))
-        while !isHostReady {
-            guard clock.now < hostDeadline else {
-                throw AdversarialLabRouteError.hostTimedOut
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
-
-        let routeID = UUID()
-        var components = URLComponents()
-        components.scheme = "buttonheist-demo"
-        components.host = "adversarial"
-        components.queryItems = [
-            URLQueryItem(name: "scenario", value: scenario.rawValue),
-            URLQueryItem(name: "route_id", value: routeID.uuidString),
-        ]
-        guard let url = components.url else {
-            throw AdversarialLabRouteError.invalidURL
-        }
-        guard await UIApplication.shared.open(url) else {
-            throw AdversarialLabRouteError.rejectedByApplication
-        }
-
         let deadline = clock.now.advanced(by: .seconds(5))
-        while readyRouteID != routeID {
-            guard clock.now < deadline else {
-                throw AdversarialLabRouteError.timedOut(scenario)
+        let presenter = try await idlePresenter(clock: clock, deadline: deadline)
+        phase = .presenting(presenter, routeID: route.id)
+        presenter(route)
+
+        while true {
+            if case .presented(_, let presentedRouteID) = phase,
+               presentedRouteID == route.id {
+                return
             }
+            guard clock.now < deadline else { throw AdversarialLabRouteError.timedOut(route.scenario) }
             try await Task.sleep(for: .milliseconds(10))
         }
     }
 
-    fileprivate static func begin() {
-        readyRouteID = nil
+    static func installPresenter(
+        _ presenter: @escaping Presenter
+    ) {
+        phase = .idle(presenter)
     }
 
-    fileprivate static func markHostReady() {
-        isHostReady = true
+    static func uninstallPresenter() {
+        phase = .unavailable
     }
 
-    fileprivate static func markReady(_ routeID: UUID) {
-        readyRouteID = routeID
+    static func observePresented(_ routeID: UUID) {
+        guard case .presenting(let presenter, let presentingRouteID) = phase,
+              presentingRouteID == routeID else { return }
+        phase = .presented(presenter, routeID: routeID)
+    }
+
+    static func observeDismissed(_ routeID: UUID) {
+        switch phase {
+        case .presented(let presenter, let presentedRouteID)
+            where presentedRouteID == routeID:
+            phase = .idle(presenter)
+        case .presenting(let presenter, let presentingRouteID)
+            where presentingRouteID == routeID:
+            phase = .idle(presenter)
+        case .dismissing(let presenter, let dismissingRouteID)
+            where dismissingRouteID == routeID:
+            phase = .idle(presenter)
+        case .unavailable, .idle, .presenting, .presented, .dismissing:
+            break
+        }
+    }
+
+    private static func idlePresenter(
+        clock: ContinuousClock,
+        deadline: ContinuousClock.Instant
+    ) async throws -> Presenter {
+        while true {
+            switch phase {
+            case .idle(let presenter):
+                return presenter
+            case .presented(let presenter, let routeID):
+                phase = .dismissing(presenter, routeID: routeID)
+                presenter(nil)
+            case .unavailable, .presenting, .dismissing:
+                break
+            }
+            guard clock.now < deadline else { throw AdversarialLabRouteError.hostTimedOut }
+            try await Task.sleep(for: .milliseconds(10))
+        }
     }
 }
 
 internal enum AdversarialLabRouteError: Error {
-    case invalidURL
-    case rejectedByApplication
     case hostTimedOut
     case timedOut(AdversarialScenario)
 }

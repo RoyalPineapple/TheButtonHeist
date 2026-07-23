@@ -38,6 +38,30 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
         XCTAssertFalse(didFinalizeAgain)
     }
 
+    func testDeferredActionDeadlineStartsAtDispatchCompletionForEveryWaiter() async {
+        let lifecycle = LiveSettlementLifecycle()
+        lifecycle.begin(
+            demand: vault.semanticObservationStream.beginActiveObservationDemand(),
+            notificationWindow: vault.accessibilityNotifications.beginActionWindow()
+        )
+        let timeout = Duration.milliseconds(250)
+        let deadline = Settlement.Deadline(afterActionDispatch: timeout)
+        let first = Task { await lifecycle.resolveDeadline(deadline) }
+        let second = Task { await lifecycle.resolveDeadline(deadline) }
+        let dispatchCompletedAt = ContinuousClock.now
+
+        lifecycle.dispatchDidComplete(at: dispatchCompletedAt)
+
+        let expected = dispatchCompletedAt.advanced(by: timeout)
+        let firstDeadline = await first.value
+        let secondDeadline = await second.value
+        XCTAssertEqual(firstDeadline, expected)
+        XCTAssertEqual(secondDeadline, expected)
+        await lifecycle.quiesce()
+        let didFinalize = await lifecycle.finalize()
+        XCTAssertTrue(didFinalize)
+    }
+
     func testCommittedHandoffDefersNotificationConsumptionUntilChildLeaseCloses() async throws {
         let lifecycle = LiveSettlementLifecycle()
         let notifications = AccessibilityNotificationBus()

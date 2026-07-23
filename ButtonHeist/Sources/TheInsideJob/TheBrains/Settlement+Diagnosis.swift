@@ -131,7 +131,7 @@ extension Settlement {
                 "outcome=\(outcome.rendered)",
                 "elapsedMs=\(deadline.elapsed)",
                 "deadlineReached=\(deadline.reached)",
-                "deadline=\(deadline.deadline.instant)",
+                "deadline=\(deadline.deadline.diagnosisDescription)",
             ].joined(separator: " ")
         }
     }

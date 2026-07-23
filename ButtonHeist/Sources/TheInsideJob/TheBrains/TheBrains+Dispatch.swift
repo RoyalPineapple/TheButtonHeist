@@ -130,7 +130,7 @@ extension TheBrains {
             trigger: .action(command),
             predicate: predicate,
             deadline: Settlement.Deadline(
-                instant: ContinuousClock.now.advanced(by: .milliseconds(timeoutMilliseconds))
+                afterActionDispatch: .milliseconds(timeoutMilliseconds)
             )
         )
         let result = await executeSettlement(settlementCommand) { command in

@@ -131,11 +131,19 @@ internal protocol SettlementExecutionBoundary: Sendable {
         _ command: ResolvedHeistActionCommand
     ) async -> TheSafecracker.ActionDispatchResult
 
+    @MainActor
+    func dispatchDidComplete() async
+
     func evaluate(
         _ request: Settlement.Predicate.EvaluationRequest
     ) async -> PredicateEvaluationResult
 
     func elapsed() async -> ElapsedMilliseconds
+}
+
+extension SettlementExecutionBoundary {
+    @MainActor
+    internal func dispatchDidComplete() async {}
 }
 
 extension Settlement {
@@ -421,6 +429,7 @@ extension Settlement {
                             tasks.addTask {
                                 let result = await boundary.dispatch(action)
                                 sink.completeDispatch(result)
+                                await boundary.dispatchDidComplete()
                             }
 
                         case .evaluatePredicate(let request):
@@ -929,9 +938,10 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
               case .announcement(let announcement) = predicate.resolved.core else { return }
         let notifications = vault.accessibilityNotifications
         lifecycle.retain(Task {
+            guard let deadline = await lifecycle.resolveDeadline(arming.deadline) else { return }
             let timeout = max(
                 0,
-                ContinuousClock.now.duration(to: arming.deadline.instant) / .seconds(1)
+                ContinuousClock.now.duration(to: deadline) / .seconds(1)
             )
             switch await notifications.waitForAnnouncement(
                 after: arming.boundary.announcementCursor,
@@ -956,7 +966,8 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
         lifecycle.armReadiness(
             startAfterDispatch: !command.trigger.isObservation,
             operation: { [tripwire, vault] in
-                let timeout = ContinuousClock.now.duration(to: arming.deadline.instant)
+                guard let deadline = await lifecycle.resolveDeadline(arming.deadline) else { return }
+                let timeout = ContinuousClock.now.duration(to: deadline)
                 guard timeout > .zero,
                       await tripwire.uikitIdleTracker.waitUntilIdle(timeout: timeout) else { return }
                 let latest = await vault.semanticObservationStream.latestCommittedObservationMoment(
@@ -979,8 +990,9 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
         sink: Settlement.ExecutionSink
     ) async {
         lifecycle.retain(Task {
+            guard let deadline = await lifecycle.resolveDeadline(arming.deadline) else { return }
             do {
-                try await ContinuousClock().sleep(until: arming.deadline.instant)
+                try await ContinuousClock().sleep(until: deadline)
                 sink.reachDeadline()
             } catch {}
         })
@@ -1014,9 +1026,12 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
     internal func dispatch(
         _ command: ResolvedHeistActionCommand
     ) async -> TheSafecracker.ActionDispatchResult {
-        let result = await dispatchAction(command)
+        await dispatchAction(command)
+    }
+
+    @MainActor
+    internal func dispatchDidComplete() async {
         lifecycle.dispatchDidComplete()
-        return result
     }
 
     internal func evaluate(
@@ -1067,12 +1082,17 @@ internal final class LiveSettlementLifecycle {
     }
 
     private var phase = Phase.idle
-    private let dispatchCompletion: AsyncStream<Void>
-    private let dispatchCompletionContinuation: AsyncStream<Void>.Continuation
+    private let dispatchCompletion: Task<ContinuousClock.Instant?, Never>
+    private let dispatchCompletionContinuation: AsyncStream<ContinuousClock.Instant>.Continuation
 
     internal init() {
-        let dispatchCompletion = AsyncStream<Void>.makeStream()
-        self.dispatchCompletion = dispatchCompletion.stream
+        let dispatchCompletion = AsyncStream<ContinuousClock.Instant>.makeStream()
+        self.dispatchCompletion = Task {
+            for await instant in dispatchCompletion.stream {
+                return instant
+            }
+            return nil
+        }
         self.dispatchCompletionContinuation = dispatchCompletion.continuation
     }
 
@@ -1132,12 +1152,8 @@ internal final class LiveSettlementLifecycle {
         let dispatchCompletion = self.dispatchCompletion
         let task = Task {
             if startAfterDispatch {
-                var didDispatch = false
-                for await _ in dispatchCompletion {
-                    didDispatch = true
-                    break
-                }
-                guard didDispatch, !Task.isCancelled else { return }
+                guard await dispatchCompletion.value != nil,
+                      !Task.isCancelled else { return }
             }
             await operation()
         }
@@ -1146,10 +1162,22 @@ internal final class LiveSettlementLifecycle {
         phase = .active(resources)
     }
 
-    internal func dispatchDidComplete() {
+    internal func dispatchDidComplete(
+        at instant: ContinuousClock.Instant = ContinuousClock.now
+    ) {
         guard case .active = phase else { return }
-        dispatchCompletionContinuation.yield()
+        dispatchCompletionContinuation.yield(instant)
         dispatchCompletionContinuation.finish()
+    }
+
+    internal func resolveDeadline(
+        _ deadline: Settlement.Deadline
+    ) async -> ContinuousClock.Instant? {
+        guard deadline.startsAfterActionDispatch else {
+            return deadline.resolve(dispatchCompletedAt: nil)
+        }
+        guard let dispatchCompletedAt = await dispatchCompletion.value else { return nil }
+        return deadline.resolve(dispatchCompletedAt: dispatchCompletedAt)
     }
 
     internal func captureNotificationBatch() -> AccessibilityNotificationBatch? {

@@ -7,6 +7,11 @@ import TheScore
 internal enum Settlement {}
 
 extension Settlement {
+    private enum DeadlineStart: Sendable, Equatable {
+        case immediate(ContinuousClock.Instant)
+        case afterActionDispatch(Duration)
+    }
+
     internal struct Command: Sendable, Equatable {
         internal let trigger: Trigger
         internal let predicate: Predicate?
@@ -29,10 +34,40 @@ extension Settlement {
     }
 
     internal struct Deadline: Sendable, Equatable {
-        internal let instant: ContinuousClock.Instant
+        private let start: DeadlineStart
 
         internal init(instant: ContinuousClock.Instant) {
-            self.instant = instant
+            self.start = .immediate(instant)
+        }
+
+        internal init(afterActionDispatch timeout: Duration) {
+            precondition(timeout >= .zero, "Settlement timeout cannot be negative")
+            self.start = .afterActionDispatch(timeout)
+        }
+
+        internal var startsAfterActionDispatch: Bool {
+            if case .afterActionDispatch = start { return true }
+            return false
+        }
+
+        internal func resolve(
+            dispatchCompletedAt: ContinuousClock.Instant?
+        ) -> ContinuousClock.Instant? {
+            switch start {
+            case .immediate(let instant):
+                instant
+            case .afterActionDispatch(let timeout):
+                dispatchCompletedAt?.advanced(by: timeout)
+            }
+        }
+
+        internal var diagnosisDescription: String {
+            switch start {
+            case .immediate(let instant):
+                "at(\(instant))"
+            case .afterActionDispatch(let timeout):
+                "afterActionDispatch(\(timeout))"
+            }
         }
     }
 
