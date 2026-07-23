@@ -56,13 +56,9 @@ extension Settlement {
                 reduceAwaitingBaseline(command, event: event)
             case .armed(let session):
                 reduceArmed(session, event: event)
-            case .dispatching(let session):
-                reduceActive(session, phase: .dispatching, event: event)
-            case .observing(let session):
-                reduceActive(session, phase: .observing, event: event)
-            case .needHandoff(let session):
-                reduceActive(session, phase: .needHandoff, event: event)
-            case .completed, .failed, .timedOut, .cancelled:
+            case .active(let session):
+                reduceActive(session, event: event)
+            case .terminal:
                 Decision(state: state, effects: [])
             }
         }
@@ -70,12 +66,6 @@ extension Settlement {
 }
 
 private extension Settlement.Reducer {
-    enum ActivePhase: Equatable {
-        case dispatching
-        case observing
-        case needHandoff
-    }
-
     static func reduceAwaitingBaseline(
         _ command: Settlement.Command,
         event: Settlement.Event
@@ -158,11 +148,11 @@ private extension Settlement.Reducer {
             switch session.command {
             case .action(let command, _, _, _):
                 return Settlement.Decision(
-                    state: .dispatching(session),
+                    state: .active(session),
                     effects: [.dispatchAction(command)]
                 )
             case .observation:
-                return Settlement.Decision(state: .observing(session), effects: [])
+                return Settlement.Decision(state: .active(session), effects: [])
             case .currentState:
                 preconditionFailure("Current-state capture cannot enter channel arming")
             }
@@ -187,7 +177,6 @@ private extension Settlement.Reducer {
 
     static func reduceActive(
         _ original: Settlement.Session,
-        phase: ActivePhase,
         event: Settlement.Event
     ) -> Settlement.Decision {
         var session = original
@@ -198,7 +187,7 @@ private extension Settlement.Reducer {
         switch event.fact {
         case .dispatchCompleted(let result):
             guard case .actionPending = session.triggerEvidence else {
-                return Settlement.Decision(state: activeState(session, phase: phase), effects: [])
+                return Settlement.Decision(state: .active(session), effects: [])
             }
             session.triggerEvidence = .actionDispatched(result)
             if !result.success {
@@ -232,7 +221,7 @@ private extension Settlement.Reducer {
             return terminal(session, outcome: outcome, elapsed: event.elapsed, deadlineReached: false)
         }
         return Settlement.Decision(
-            state: activeState(session, phase: phase),
+            state: .active(session),
             effects: effects
         )
     }
@@ -433,19 +422,6 @@ private extension Settlement.Reducer {
               ) else { return nil }
         return .settled
     }
-
-    static func activeState(
-        _ session: Settlement.Session,
-        phase: ActivePhase
-    ) -> Settlement.State {
-        if case .actionPending = session.triggerEvidence, phase == .dispatching {
-            return .dispatching(session)
-        }
-        if session.readiness.isEstablished, session.handoff.event == nil {
-            return .needHandoff(session)
-        }
-        return .observing(session)
-    }
 }
 
 private extension Settlement.Reducer {
@@ -473,17 +449,7 @@ private extension Settlement.Reducer {
                 )
             )
         )
-        let state: Settlement.State = switch outcome {
-        case .settled:
-            .completed(result)
-        case .dispatchFailed, .baselineUnavailable:
-            .failed(result)
-        case .timedOut:
-            .timedOut(result)
-        case .cancelled:
-            .cancelled(result)
-        }
-        return Settlement.Decision(state: state, effects: [.finish(result)])
+        return Settlement.Decision(state: .terminal(result), effects: [.finish(result)])
     }
 
     static func terminalBeforeBaseline(
@@ -518,17 +484,7 @@ private extension Settlement.Reducer {
                 deadline: deadlineEvidence
             )
         )
-        let state: Settlement.State = switch outcome {
-        case .baselineUnavailable, .dispatchFailed:
-            .failed(result)
-        case .timedOut:
-            .timedOut(result)
-        case .cancelled:
-            .cancelled(result)
-        case .settled:
-            preconditionFailure("Settlement cannot succeed before baseline admission")
-        }
-        return Settlement.Decision(state: state, effects: [.finish(result)])
+        return Settlement.Decision(state: .terminal(result), effects: [.finish(result)])
     }
 
     static func terminalCurrentState(
@@ -556,7 +512,7 @@ private extension Settlement.Reducer {
                 deadline: .notApplicable(elapsed: elapsed)
             )
         )
-        return Settlement.Decision(state: .completed(result), effects: [.finish(result)])
+        return Settlement.Decision(state: .terminal(result), effects: [.finish(result)])
     }
 
     static func deadline(for command: Settlement.Command) -> Settlement.Deadline {
