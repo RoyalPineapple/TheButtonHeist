@@ -14,6 +14,18 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
     private struct ActiveActionWindow {
         let id: AccessibilityNotificationActionWindowID
         var childLeaseCount: Int
+
+        /// Set when the owner lease ends while child leases are still open.
+        ///
+        /// Owner and child leases end on independent tasks: settlement owns
+        /// the window, while a viewport transition or screen capture
+        /// dispatched during that settlement holds a child lease, so the
+        /// owner can finish first. Ingress attributes events to the single
+        /// active window, so the window must stay active - still claiming
+        /// events and still absorbing new `beginActionWindow` callers as
+        /// children - until the last child ends, at which point this
+        /// deferred outcome is applied.
+        var pendingOwnerOutcome: AccessibilityNotificationScopeOutcome?
     }
 
     private struct IngressLog {
@@ -481,20 +493,27 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
                 "Cannot end an inactive child action notification window"
             )
             activeActionWindow?.childLeaseCount -= 1
+            closeActionWindowIfDrainedLocked()
         case .actionOwner(let actionWindowID):
             precondition(
                 activeActionWindow?.id == actionWindowID,
                 "Cannot end an action notification window that is not active"
             )
-            precondition(
-                activeActionWindow?.childLeaseCount == 0,
-                "Cannot end an action notification window while child scopes are active"
-            )
-            if outcome == .released {
-                ingressLog.releaseActionWindow(actionWindowID)
-            }
-            activeActionWindow = nil
+            activeActionWindow?.pendingOwnerOutcome = outcome
+            closeActionWindowIfDrainedLocked()
         }
+    }
+
+    private func closeActionWindowIfDrainedLocked() {
+        guard
+            let window = activeActionWindow,
+            let outcome = window.pendingOwnerOutcome,
+            window.childLeaseCount == 0
+        else { return }
+        if outcome == .released {
+            ingressLog.releaseActionWindow(window.id)
+        }
+        activeActionWindow = nil
     }
 
     private var provenanceLocked: AccessibilityNotificationProvenance {
