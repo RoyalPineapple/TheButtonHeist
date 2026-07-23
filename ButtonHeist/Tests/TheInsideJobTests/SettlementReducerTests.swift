@@ -110,6 +110,49 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         ])
     }
 
+    func testSuppliedBaselineArmsWithoutCapturingAnotherBaseline() async {
+        let baseline = await commit(label: "Baseline")
+        let boundary = Settlement.EvidenceBoundary(
+            moment: baseline.moment,
+            announcementCursor: .origin
+        )
+        let command = Settlement.Command(
+            trigger: .observation,
+            predicate: transitionPredicate(),
+            deadline: deadline,
+            baseline: .supplied(boundary)
+        )
+
+        let decision = Settlement.Reducer.begin(command)
+
+        guard case .armed(let session) = decision.state else {
+            return XCTFail("Expected the supplied evidence boundary to arm Settlement")
+        }
+        XCTAssertEqual(session.boundary, boundary)
+        XCTAssertFalse(decision.effects.contains(where: \.capturesBaseline))
+        XCTAssertEqual(decision.effects.filter(\.armsChannels).count, 1)
+    }
+
+    func testUnavailableSuppliedBaselineTerminatesWithoutArmingOrCapture() {
+        let command = Settlement.Command(
+            trigger: .observation,
+            predicate: transitionPredicate(),
+            deadline: deadline,
+            baseline: .unavailable(.unavailable)
+        )
+
+        let decision = Settlement.Reducer.begin(command)
+
+        guard case .failed(let result) = decision.state else {
+            return XCTFail("Expected unavailable supplied evidence to fail before arming")
+        }
+        XCTAssertEqual(result.outcome, .baselineUnavailable)
+        XCTAssertEqual(result.evidence.boundary, .unavailable(.unavailable))
+        XCTAssertFalse(decision.effects.contains(where: \.capturesBaseline))
+        XCTAssertFalse(decision.effects.contains(where: \.armsChannels))
+        XCTAssertEqual(decision.effects.filter(\.isFinish).count, 1)
+    }
+
     func testCanonicalPredicateTruthMatrixUsesOnlyPostBaselineLogEvents() async throws {
         let empty = InterfaceObservation.makeForTests()
         let ready = truthObservation(label: "Ready", heistId: "ready")
@@ -1021,6 +1064,16 @@ private struct PredicateTruthRow {
 }
 
 private extension Settlement.Effect {
+    var armsChannels: Bool {
+        guard case .arm = self else { return false }
+        return true
+    }
+
+    var capturesBaseline: Bool {
+        guard case .capture(.baseline) = self else { return false }
+        return true
+    }
+
     var isDispatch: Bool {
         guard case .dispatchAction = self else { return false }
         return true
