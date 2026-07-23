@@ -65,7 +65,6 @@ extension TheHandoff {
             return
         }
         guard connectionLifecycle.isConnected else { return }
-        handoffConnectionLogger.warning("Force-disconnecting stale connection")
         let reconnectDevice = connectionLifecycle.connectedDevice
         tearDownConnection(replacementReason: .localDisconnect)
         if let reconnectDevice {

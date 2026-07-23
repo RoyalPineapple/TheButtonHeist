@@ -1,4 +1,3 @@
-import ButtonHeistSupport
 import Foundation
 import Network
 @_spi(ButtonHeistInternals) import TheScore
@@ -20,7 +19,6 @@ extension DeviceConnection {
             encoded.append(WireFrameLimits.newlineDelimiterByte)
             data = encoded
         } catch {
-            deviceConnectionLogger.error("Failed to encode message: \(error)")
             return .failed(.encodingFailed(DeviceEncodingFailure(error)))
         }
 
@@ -28,7 +26,6 @@ extension DeviceConnection {
         let eventStream = session.eventStream
         sendContent(connection, data, .contentProcessed { error in
             if let error {
-                deviceConnectionLogger.error("Send error: \(error)")
                 eventStream.yield(.sendFailed(
                     error,
                     requestId: requestId,

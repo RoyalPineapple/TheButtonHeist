@@ -80,7 +80,7 @@ extension DeviceConnection {
             content.count
         )
         if overflowed || bufferedByteCount > WireFrameLimits.serverToClientMaxBufferedBytes {
-            deviceConnectionLogger.error("Server exceeded max buffer size, disconnecting")
+            deviceConnectionLogger.warning("Server exceeded max buffer size, disconnecting")
             transitionToDisconnected(.cancel(.bufferOverflow))
             return false
         }
@@ -103,7 +103,7 @@ extension DeviceConnection {
 
     private func closeForCompletedReceive(_ session: RuntimeSession) {
         guard connectedSession(matching: session.id, connection: session.connection) != nil else { return }
-        deviceConnectionLogger.info("Connection closed by server")
+        deviceConnectionLogger.warning("Connection closed by server")
         transitionToDisconnected(.observed(.serverClosed))
     }
 }

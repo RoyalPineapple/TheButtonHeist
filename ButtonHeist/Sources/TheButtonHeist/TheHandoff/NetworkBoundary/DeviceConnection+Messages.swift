@@ -6,11 +6,7 @@ extension DeviceConnection {
 
     // Internal for testing (see AuthFlowTests, AuthFailureTests)
     func handleMessage(_ data: Data) {
-        deviceConnectionLogger.debug("Parsing message: \(data.count) bytes")
         guard let envelope = decodeEnvelope(from: data) else {
-            if let str = String(data: data, encoding: .utf8) {
-                deviceConnectionLogger.error("Failed to decode: \(str.prefix(200))")
-            }
             let detail = String(data: data.prefix(200), encoding: .utf8) ?? "<binary data>"
             let message: ServerErrorMessage
             do {
@@ -41,7 +37,6 @@ extension DeviceConnection {
 
         switch envelope.message {
         case .serverHello:
-            deviceConnectionLogger.info("Received server hello")
             emitEnvelopeMessage(envelope)
         case .protocolMismatch(let payload):
             let message = DisconnectReason.buttonHeistVersionMismatchMessage(
@@ -67,7 +62,6 @@ extension DeviceConnection {
             // its missed-pong counter. Earlier code logged the pong here and
             // stopped, which meant the counter incremented every 5s but never
             // decremented.
-            deviceConnectionLogger.debug("Received pong")
             emitEnvelopeMessage(envelope)
         default:
             emitEnvelopeMessage(envelope)

@@ -1,8 +1,5 @@
 import Foundation
-import os.log
 import TheScore
-
-private let logger = ButtonHeistLog.logger(.handoff(.config))
 
 /// A named connection target: device address + optional auth token.
 public struct TargetConfig: Codable, Sendable, Equatable {
@@ -193,7 +190,6 @@ enum TargetConfigResolver {
         do {
             return try JSONDecoder().decode(ButtonHeistFileConfig.self, from: data)
         } catch {
-            logger.error("Failed to decode config \(url.path): \(error)")
             throw TargetConfigLoadError(
                 path: url.path,
                 kind: .decodeFailed,

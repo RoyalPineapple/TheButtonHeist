@@ -91,10 +91,26 @@ enum CLIRunner {
         }
     }
 
-    enum OutputPayload: Equatable {
+    enum RenderedCommandResult: Equatable {
         case text(String)
         case binary(Data)
-        case status(String)
+        case failedText(String)
+        case failedStatus(String)
+
+        var isFailure: Bool {
+            switch self {
+            case .text, .binary:
+                return false
+            case .failedText, .failedStatus:
+                return true
+            }
+        }
+    }
+
+    typealias JSONResponseRenderer = (FormattedResponse) throws -> Data
+
+    private struct JSONResponseStatus: Decodable {
+        let code: KnownFailureCode?
     }
 
     // MARK: - Command Execution
@@ -145,56 +161,77 @@ enum CLIRunner {
             commandResult = .response(FormattedResponse(response: .failure(error), format: fallbackFormat))
         }
 
-        output(commandResult)
-        if commandResult.isFailure {
+        if output(commandResult).isFailure {
             throw ExitCode.failure
         }
     }
 
     // MARK: - Output Formatting
 
+    @discardableResult
     @ButtonHeistActor
-    static func output(_ result: CommandResult) {
-        switch renderedOutput(for: result) {
-        case .text(let text):
+    static func output(_ result: CommandResult) -> RenderedCommandResult {
+        let rendered = renderedOutput(for: result)
+        switch rendered {
+        case .text(let text), .failedText(let text):
             writeOutput(text)
         case .binary(let data):
             writeBinaryOutput(data)
-        case .status(let message):
+        case .failedStatus(let message):
             logStatus(message)
         }
+        return rendered
     }
 
-    static func renderedOutput(for result: CommandResult) -> OutputPayload {
+    static func renderedOutput(
+        for result: CommandResult,
+        jsonRenderer: JSONResponseRenderer = defaultJSONResponse
+    ) -> RenderedCommandResult {
         switch result {
         case .response(let formatted):
-            return renderedResponsePayload(formatted)
+            return renderedResponse(formatted, jsonRenderer: jsonRenderer)
         case .binary(let data):
             return .binary(data)
         }
     }
 
-    private static func renderedResponsePayload(_ formatted: FormattedResponse) -> OutputPayload {
+    private static func renderedResponse(
+        _ formatted: FormattedResponse,
+        jsonRenderer: JSONResponseRenderer
+    ) -> RenderedCommandResult {
         let presenter = FenceResponsePresenter(profile: .summary)
+        let responseFailed = formatted.envelope.response.isFailure
         switch formatted.format {
         case .human:
-            return .text(presenter.humanText(for: formatted.envelope.response))
+            let text = presenter.humanText(for: formatted.envelope.response)
+            return responseFailed ? .failedText(text) : .text(text)
         case .compact:
-            return .text(presenter.compactText(for: formatted.envelope.response))
+            let text = presenter.compactText(for: formatted.envelope.response)
+            return responseFailed ? .failedText(text) : .text(text)
         case .json:
             do {
-                let data = try presenter.jsonData(
-                    for: formatted.envelope.response,
-                    requestId: formatted.envelope.requestId
-                )
+                let data = try jsonRenderer(formatted)
                 if let json = String(data: data, encoding: .utf8) {
-                    return .text(json)
+                    let failed = responseFailed || isJSONRenderingFailure(data)
+                    return failed ? .failedText(json) : .text(json)
                 }
-                return .status("Failed to encode JSON data as UTF-8")
+                return .failedStatus("Failed to encode JSON data as UTF-8")
             } catch {
-                return .status("Failed to serialize response as JSON: \(error.localizedDescription)")
+                return .failedStatus("Failed to serialize response as JSON: \(error.localizedDescription)")
             }
         }
+    }
+
+    private static func defaultJSONResponse(_ formatted: FormattedResponse) throws -> Data {
+        try FenceResponsePresenter(profile: .summary).jsonData(
+            for: formatted.envelope.response,
+            requestId: formatted.envelope.requestId
+        )
+    }
+
+    private static func isJSONRenderingFailure(_ data: Data) -> Bool {
+        (try? JSONDecoder().decode(JSONResponseStatus.self, from: data).code)
+            == .formattingJSONEncodingFailed
     }
 
     // MARK: - Private Helpers
