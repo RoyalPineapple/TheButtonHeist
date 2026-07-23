@@ -16,6 +16,18 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
         var childLeaseCount: Int
     }
 
+    /// A window whose owner lease ended while child leases were still open.
+    ///
+    /// Owner and child leases end on independent tasks: settlement owns the
+    /// window, while a viewport transition or screen capture dispatched during
+    /// that settlement holds a child lease, so the owner can finish first.
+    /// The window keeps draining until the last child ends, at which point a
+    /// deferred release is applied.
+    private struct DrainingActionWindow {
+        var childLeaseCount: Int
+        var pendingRelease: Bool
+    }
+
     private struct IngressLog {
         let retentionLimit: Int
         private(set) var retainedEvents: [PendingAccessibilityNotificationEvent] = []
@@ -147,6 +159,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
     private var activeScopeLeases = 0
     private var nextActionWindowID: UInt64 = 0
     private var activeActionWindow: ActiveActionWindow?
+    private var drainingActionWindows: [AccessibilityNotificationActionWindowID: DrainingActionWindow] = [:]
     private var announcementWaiters = WaiterStore<UInt64, AnnouncementWaiter>()
 
     var latestSequence: UInt64 {
@@ -472,25 +485,39 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
         case .heist:
             break
         case .actionChild(let actionWindowID):
-            precondition(
-                activeActionWindow?.id == actionWindowID,
-                "Cannot end a child action notification window without its owner"
-            )
-            precondition(
-                activeActionWindow?.childLeaseCount ?? 0 > 0,
-                "Cannot end an inactive child action notification window"
-            )
-            activeActionWindow?.childLeaseCount -= 1
+            if activeActionWindow?.id == actionWindowID {
+                precondition(
+                    activeActionWindow?.childLeaseCount ?? 0 > 0,
+                    "Cannot end an inactive child action notification window"
+                )
+                activeActionWindow?.childLeaseCount -= 1
+            } else if var draining = drainingActionWindows[actionWindowID] {
+                draining.childLeaseCount -= 1
+                if draining.childLeaseCount == 0 {
+                    if draining.pendingRelease {
+                        ingressLog.releaseActionWindow(actionWindowID)
+                    }
+                    drainingActionWindows[actionWindowID] = nil
+                } else {
+                    drainingActionWindows[actionWindowID] = draining
+                }
+            } else {
+                preconditionFailure(
+                    "Cannot end a child action notification window without its owner"
+                )
+            }
         case .actionOwner(let actionWindowID):
             precondition(
                 activeActionWindow?.id == actionWindowID,
                 "Cannot end an action notification window that is not active"
             )
-            precondition(
-                activeActionWindow?.childLeaseCount == 0,
-                "Cannot end an action notification window while child scopes are active"
-            )
-            if outcome == .released {
+            let childLeaseCount = activeActionWindow?.childLeaseCount ?? 0
+            if childLeaseCount > 0 {
+                drainingActionWindows[actionWindowID] = DrainingActionWindow(
+                    childLeaseCount: childLeaseCount,
+                    pendingRelease: outcome == .released
+                )
+            } else if outcome == .released {
                 ingressLog.releaseActionWindow(actionWindowID)
             }
             activeActionWindow = nil
@@ -534,7 +561,7 @@ enum AccessibilityNotificationCheckpointSelection: Sendable {
     }
 }
 
-struct AccessibilityNotificationActionWindowID: RawRepresentable, Sendable, Equatable {
+struct AccessibilityNotificationActionWindowID: RawRepresentable, Sendable, Hashable {
     let rawValue: UInt64
 }
 

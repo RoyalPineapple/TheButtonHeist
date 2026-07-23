@@ -203,6 +203,43 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         )
     }
 
+    func testOwnerReleaseBeforeChildCloseDefersReclassificationUntilChildEnds() async {
+        let bus = AccessibilityNotificationBus()
+        let owner = bus.beginActionWindow()
+        let child = bus.beginActionWindow()
+        bus.recordForTesting(code: 1000, notificationData: .none, associatedElement: .none)
+
+        owner.cancel()
+
+        XCTAssertTrue(
+            bus.checkpoint(after: .origin, selection: .unclaimedScoped).events.isEmpty
+        )
+
+        child.cancel()
+
+        XCTAssertEqual(
+            bus.checkpoint(after: .origin, selection: .unclaimedScoped).events.map(\.kind),
+            [.screenChanged]
+        )
+    }
+
+    func testNewActionWindowCanBeginWhileEndedOwnerDrainsChildren() async {
+        let bus = AccessibilityNotificationBus()
+        let owner = bus.beginActionWindow()
+        let child = bus.beginActionWindow()
+        owner.consume()
+
+        let successor = bus.beginActionWindow()
+        bus.recordForTesting(code: 1000, notificationData: .none, associatedElement: .none)
+        child.cancel()
+        successor.cancel()
+
+        XCTAssertEqual(
+            bus.checkpoint(after: .origin, selection: .unclaimedScoped).events.map(\.kind),
+            [.screenChanged]
+        )
+    }
+
     func testActionWindowReportsHistoryGapWithoutDrainingRetainedEvents() async throws {
         let bus = AccessibilityNotificationBus()
         let action = bus.beginActionWindow()
