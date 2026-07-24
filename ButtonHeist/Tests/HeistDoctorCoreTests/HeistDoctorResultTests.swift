@@ -54,7 +54,7 @@ import TheScore
             element(label: "Still Processing", traits: [.staticText]),
         ])
         let dispatchTrace = AccessibilityTrace(first: before).appending(dispatchAfter)
-        let expectationTrace = AccessibilityTrace(first: dispatchAfter).appending(expectationAfter)
+        let actionTrace = dispatchTrace.appending(expectationAfter)
         let predicate = AccessibilityPredicate.changed(.screen())
         let failure = HeistFailureDetail(
             category: .expectation,
@@ -65,15 +65,11 @@ import TheScore
         let step = HeistResultFixture.action(
             path: "$.body[0]",
             command: .activate(target),
-            result: ActionResult.success(
+            result: ActionResult.failure(
                 payload: .activate,
-                observation: .trace(makeTestTraceEvidence(dispatchTrace, completeness: .incomplete))
-            ),
-            expectationActionResult: ActionResult.failure(
-                payload: .wait,
                 failureKind: .timeout,
                 message: "wait timed out",
-                observation: .trace(makeTestTraceEvidence(expectationTrace, completeness: .incomplete))
+                observation: .trace(makeTestTraceEvidence(actionTrace, completeness: .incomplete))
             ),
             expectation: ExpectationResult(
                 met: false,
@@ -87,7 +83,7 @@ import TheScore
         let repairEvidence = try HeistDoctor.repairEvidence(from: step)
 
         #expect(repairEvidence.beforeSnapshot == before)
-        #expect(repairEvidence.changeFacts == dispatchTrace.changeFacts)
+        #expect(repairEvidence.changeFacts == actionTrace.changeFacts)
         #expect(repairEvidence.command == .activate(target))
         #expect(repairEvidence.method == .activate)
         #expect(repairEvidence.expectation?.met == false)

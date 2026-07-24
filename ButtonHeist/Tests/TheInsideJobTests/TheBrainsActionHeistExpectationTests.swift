@@ -96,7 +96,7 @@ extension TheBrainsActionTests {
         let result = await brains.executeHeistPlan(plan)
         await committedObservations.wait()
         let steps = try XCTUnwrap(result.resultPayload?.steps)
-        let elementTrace = try XCTUnwrap(steps.first?.actionEvidence?.expectationResult?.accessibilityTrace)
+        let elementTrace = try XCTUnwrap(steps.first?.actionEvidence?.result?.accessibilityTrace)
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "heist failed")
         XCTAssertEqual(saveObject.activationCount, 1)
@@ -114,7 +114,7 @@ extension TheBrainsActionTests {
             elementTrace.captures.last?.interface.projectedElements.compactMap(\.label),
             ["Save", "Announce"]
         )
-        XCTAssertEqual(steps.last?.actionEvidence?.expectationResult?.announcement, "Confirmed")
+        XCTAssertEqual(steps.last?.actionEvidence?.announcement, "Confirmed")
     }
 
     func testStandaloneWaitStartsAtItsOwnFirstObservation() async throws {
@@ -246,12 +246,12 @@ extension TheBrainsActionTests {
 
         let result = await brains.executeHeistPlan(plan)
         let step = try XCTUnwrap(result.resultPayload?.steps.first)
-        let expectationResult = try XCTUnwrap(step.actionEvidence?.expectationResult)
+        let actionResult = try XCTUnwrap(step.actionEvidence?.result)
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "heist failed")
         XCTAssertEqual(targetObject.activationCount, 1)
-        XCTAssertTrue(expectationResult.evidence.settlement?.settled == true)
-        let labels = expectationResult.accessibilityTrace?.captures.last?.interface.projectedElements.map(\.label)
+        XCTAssertTrue(actionResult.evidence.settlement?.settled == true)
+        let labels = actionResult.accessibilityTrace?.captures.last?.interface.projectedElements.map(\.label)
         XCTAssertEqual(labels, ["Target", "Long List"])
     }
 

@@ -6,11 +6,13 @@ import TheScore
 
 @Suite struct HeistResultPublicAPIContractTests {
     @Test func `evidence admission permits only its legal completion polarity`() {
-        let passedAction = HeistActionEvidence.dispatch(
-            dispatchResult: .success(payload: .dismiss)
+        let passedAction = HeistActionEvidence.completed(
+            result: .success(payload: .dismiss),
+            expectation: nil
         )
-        let failedAction = HeistActionEvidence.dispatch(
-            dispatchResult: .failure(payload: .dismiss, failureKind: .actionFailed)
+        let failedAction = HeistActionEvidence.completed(
+            result: .failure(payload: .dismiss, failureKind: .actionFailed),
+            expectation: nil
         )
 
         #expect(HeistPassedActionEvidence(passedAction) != nil)

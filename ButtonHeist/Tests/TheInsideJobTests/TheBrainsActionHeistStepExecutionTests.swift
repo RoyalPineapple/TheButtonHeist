@@ -187,7 +187,7 @@ extension TheBrainsActionTests {
         XCTAssertEqual(screenshotStep.kind, .action)
         XCTAssertEqual(screenshotStep.status, .passed)
         XCTAssertEqual(screenshotStep.actionCommand, .takeScreenshot)
-        guard case .screenshot(let payload) = screenshotStep.actionEvidence?.dispatchResult?.payload else {
+        guard case .screenshot(let payload) = screenshotStep.actionEvidence?.result?.payload else {
             return XCTFail("Expected screenshot action payload")
         }
         XCTAssertEqual(payload, screenshot)

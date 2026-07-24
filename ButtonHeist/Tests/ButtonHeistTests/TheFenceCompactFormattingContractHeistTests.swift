@@ -59,15 +59,14 @@ extension TheFenceCompactFormattingContractTests {
             duration: 25,
             path: .uikitIdle
         )
-        let expectationResult = ActionResult.failure(
-            payload: .wait,
+        let actionResult = ActionResult.failure(
+            payload: .dismiss,
             failureKind: .timeout,
             observation: .settledTrace(traceEvidence, settlement)
         )
         let step = HeistResultFixture.action(
             command: .dismiss,
-            result: .success(payload: .dismiss),
-            expectationActionResult: expectationResult,
+            result: actionResult,
             expectation: ExpectationResult(met: true, predicate: predicate, actual: "Saved"),
             failure: HeistFailureDetail(
                 category: .wait,
@@ -105,7 +104,6 @@ extension TheFenceCompactFormattingContractTests {
         let childResult = HeistResultFixture.action(
             path: "$.body[0].conditional.cases[0].body[0]",
             result: ActionResult.success(payload: .activate),
-            expectationActionResult: ActionResult.success(payload: .wait),
             expectation: ExpectationResult(met: true, predicate: expected)
         )
         let result = try HeistResult(
@@ -150,7 +148,6 @@ extension TheFenceCompactFormattingContractTests {
                     path: "$.body[1]",
                     command: .activate(.predicate(ElementPredicateTemplate(label: "Submit"))),
                     result: ActionResult.success(payload: .activate),
-                    expectationActionResult: ActionResult.success(payload: .wait),
                     expectation: ExpectationResult(met: true, predicate: expected, actual: "matched")
                 ),
             ],
@@ -194,11 +191,6 @@ extension TheFenceCompactFormattingContractTests {
                     command: command,
                     result: ActionResult.success(
                         payload: .activate,
-                        observation: .none,
-                        timing: ActionPerformanceTiming(targetResolutionMs: 1, totalMs: 5)
-                    ),
-                    expectationActionResult: ActionResult.success(
-                        payload: .wait,
                         observation: .settledTrace(
                             makeTestTraceEvidence(
                                 .noChangeForTests(elementCount: 0),
@@ -206,7 +198,7 @@ extension TheFenceCompactFormattingContractTests {
                             ),
                             .settled(duration: 7)
                         ),
-                        timing: ActionPerformanceTiming(totalMs: 9)
+                        timing: ActionPerformanceTiming(targetResolutionMs: 1, totalMs: 9)
                     ),
                     expectation: ExpectationResult(met: true, predicate: expected)
                 ),
@@ -221,10 +213,8 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertEqual(metrics.measurements.map(MeasurementExpectation.init(measurement:)), [
             MeasurementExpectation(name: "heistDurationMs", valueMs: 12, path: nil),
             MeasurementExpectation(name: "actionPipeline.targetResolutionMs", valueMs: 1, path: "$.body[0]"),
-            MeasurementExpectation(name: "actionPipeline.totalMs", valueMs: 5, path: "$.body[0]"),
-            MeasurementExpectation(name: "waitPipeline.settleMs", valueMs: 7, path: "$.body[0]"),
-            MeasurementExpectation(name: "waitPipeline.totalMs", valueMs: 9, path: "$.body[0]"),
-            MeasurementExpectation(name: "expectationWaitMs", valueMs: 9, path: "$.body[0]"),
+            MeasurementExpectation(name: "actionPipeline.settleMs", valueMs: 7, path: "$.body[0]"),
+            MeasurementExpectation(name: "actionPipeline.totalMs", valueMs: 9, path: "$.body[0]"),
         ])
     }
 

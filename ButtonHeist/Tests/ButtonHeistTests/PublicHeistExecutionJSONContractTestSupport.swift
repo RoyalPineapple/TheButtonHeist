@@ -99,7 +99,6 @@ enum PublicHeistExecutionJSONContractFixture {
         HeistResultFixture.action(
             command: .dismiss,
             result: .success(payload: .dismiss, message: "dismissed"),
-            expectationActionResult: .success(payload: .wait, message: "matched"),
             expectation: ExpectationResult(
                 met: true,
                 predicate: donePredicate,

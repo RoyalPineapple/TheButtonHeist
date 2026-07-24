@@ -335,14 +335,14 @@ private extension HeistReport {
 
 private extension HeistReport.AccessibilityChange {
     init(result: HeistResult) {
-        let dispatchedActions = result.steps.compactMapInResultOrder {
-            $0.actionEvidence?.dispatchResult
+        let actionResults = result.steps.compactMapInResultOrder {
+            $0.actionEvidence?.result
         }
-        guard !dispatchedActions.isEmpty else {
+        guard !actionResults.isEmpty else {
             self = .notApplicable
             return
         }
-        guard dispatchedActions.allSatisfy({ $0.traceEvidence?.isComplete == true }) else {
+        guard actionResults.allSatisfy({ $0.traceEvidence?.isComplete == true }) else {
             self = .incomplete
             return
         }
@@ -370,11 +370,7 @@ private struct MetricAccumulator {
         switch step.node {
         case .action:
             guard let evidence = step.actionEvidence else { return }
-            appendActionTiming(evidence.dispatchResult, step: step)
-            if let expectationResult = evidence.expectationResult {
-                appendWaitTiming(expectationResult, step: step)
-                append(.expectationWaitMs, valueMs: expectationResult.timing?.totalMs, step: step)
-            }
+            appendActionTiming(evidence.result, step: step)
         case .wait(_, let timeout, _):
             guard let evidence = step.waitEvidence else { return }
             appendWaitTiming(evidence.actionResult, step: step)
@@ -522,7 +518,7 @@ package extension HeistResult {
               let candidate = steps.last,
               candidate.path != abortedAtPath,
               candidate.actionCommand == .takeScreenshot,
-              candidate.actionEvidence?.dispatchResult?.method == .takeScreenshot
+              candidate.actionEvidence?.result?.method == .takeScreenshot
         else { return nil }
         return candidate
     }

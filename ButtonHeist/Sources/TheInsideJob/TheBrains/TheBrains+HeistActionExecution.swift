@@ -82,18 +82,10 @@ extension TheBrains {
         start: RuntimeElapsed.Instant
     ) -> HeistExecutionStepResult {
         let execution: HeistActionExecution
-        guard let dispatchResult = evidence.dispatchResult else {
-            preconditionFailure("Resolved action execution requires dispatch evidence")
+        guard let result = evidence.result else {
+            preconditionFailure("Resolved action execution requires action result evidence")
         }
-        if !dispatchResult.outcome.isSuccess {
-            execution = .failed(
-                command: command,
-                evidence: .init(admitted: evidence),
-                failure: actionDispatchFailureDetail(command: command, result: dispatchResult)
-            )
-        } else if let expectation,
-                  let expectationResult = evidence.expectationResult,
-                  evidence.checkedExpectation?.met != true || !expectationResult.outcome.isSuccess {
+        if !result.outcome.isSuccess, let expectation, evidence.expectation != nil {
             execution = .failed(
                 command: command,
                 evidence: .init(admitted: evidence),
@@ -101,6 +93,12 @@ extension TheBrains {
                     wait: expectation,
                     evidence: evidence
                 )
+            )
+        } else if !result.outcome.isSuccess {
+            execution = .failed(
+                command: command,
+                evidence: .init(admitted: evidence),
+                failure: actionDispatchFailureDetail(command: command, result: result)
             )
         } else {
             execution = .passed(command: command, evidence: .init(admitted: evidence))
@@ -137,7 +135,7 @@ extension TheBrains {
         guard result.method == .takeScreenshot else { return nil }
 
         let command = HeistActionCommand.takeScreenshot
-        let evidence = HeistActionEvidence.dispatch(dispatchResult: result)
+        let evidence = HeistActionEvidence.completed(result: result, expectation: nil)
         let execution: HeistActionExecution
         switch result.outcome {
         case .success:

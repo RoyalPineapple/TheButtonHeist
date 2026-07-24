@@ -100,7 +100,7 @@ extension WireTypeRoundTripTests {
 
         XCTAssertEqual(decoded, result)
         XCTAssertEqual(decoded.abortedAtPath?.description, "$.body[0]")
-        XCTAssertEqual(decoded.steps[0].actionEvidence?.dispatchResult?.activationTrace, activationTrace)
+        XCTAssertEqual(decoded.steps[0].actionEvidence?.result?.activationTrace, activationTrace)
 
         let payload = try JSONProbe(data: data)
         let encodedStep = try payload.array("steps")[0]

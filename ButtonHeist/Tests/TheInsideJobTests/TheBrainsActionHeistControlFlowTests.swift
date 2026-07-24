@@ -428,7 +428,7 @@ extension TheBrainsActionTests {
             "child failed at \(failedRetryPath)"
         )
         XCTAssertEqual(failedRetry.status, .failed)
-        XCTAssertEqual(failedRetry.actionEvidence?.dispatchResult?.outcome.failureKind, .actionFailed)
+        XCTAssertEqual(failedRetry.actionEvidence?.result?.outcome.failureKind, .actionFailed)
     }
 
     func testHeistRepeatUntilMinimumTimeoutFailsAfterRunningBodyOnce() async throws {

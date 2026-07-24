@@ -79,7 +79,7 @@ private extension HeistReport.Evidence {
         let result: ActionResult?
         switch self {
         case .action(_, let evidence):
-            result = evidence.reportedResult
+            result = evidence.result
         case .wait(let evidence):
             result = evidence.actionResult
         case .repeatUntil(_, let evidence):

@@ -86,11 +86,11 @@ extension TheBrains {
         }
         guard failedStep.kind == .action,
               failedStep.failure?.category == .action,
-              failedStep.actionEvidence?.dispatchResult?.outcome.isSuccess == false else {
+              failedStep.actionEvidence?.result?.outcome.isSuccess == false else {
             return .abort
         }
         let shouldCheck: Bool
-        switch failedStep.actionEvidence?.dispatchResult?.outcome.failureKind {
+        switch failedStep.actionEvidence?.result?.outcome.failureKind {
         case nil, .some(.actionFailed):
             shouldCheck = true
         case .some(.accessibilityTreeUnavailable),

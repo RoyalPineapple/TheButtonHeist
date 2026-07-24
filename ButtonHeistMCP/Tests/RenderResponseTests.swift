@@ -281,11 +281,12 @@ struct RenderResponseTests {
             trace: trace,
             completeness: .complete
         ))
-        let evidence = HeistActionEvidence.dispatch(
-            dispatchResult: .success(
+        let evidence = HeistActionEvidence.completed(
+            result: .success(
                 payload: .activate,
                 observation: .trace(traceEvidence)
-            )
+            ),
+            expectation: nil
         )
         let step: [String: Any] = [
             "path": "$.body[0]",

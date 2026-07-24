@@ -605,7 +605,7 @@ extension TheBrainsActionTests {
             return XCTFail("Expected failed heist execution payload")
         }
         let step = try XCTUnwrap(heistResult.steps.first)
-        XCTAssertEqual(step.actionEvidence?.dispatchResult?.activationTrace, activationTrace)
+        XCTAssertEqual(step.actionEvidence?.result?.activationTrace, activationTrace)
     }
 
     func testViewportDebugCommandsResolveForDirectRuntimeDispatch() async throws {

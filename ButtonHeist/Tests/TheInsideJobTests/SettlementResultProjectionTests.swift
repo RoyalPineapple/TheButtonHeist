@@ -29,7 +29,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
                 observed: observed
             )
         )
-        let result = try XCTUnwrap(projection.dispatchResult)
+        let result = try XCTUnwrap(projection.result)
         let trace = try XCTUnwrap(result.traceEvidence)
 
         XCTAssertEqual(result.message, dispatch.message)
@@ -73,7 +73,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
             observed: observed
         )
         let result = try XCTUnwrap(
-            Settlement.ResultProjector.projectAction(settlement).dispatchResult
+            Settlement.ResultProjector.projectAction(settlement).result
         )
 
         XCTAssertEqual(result.payload, .typeText("Selected"))
@@ -174,11 +174,11 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
 
         let projection = Settlement.ResultProjector.projectAction(result)
 
-        XCTAssertNil(projection.checkedExpectation)
-        XCTAssertEqual(projection.dispatchResult?.outcome, .failure(.elementNotFound))
-        XCTAssertEqual(projection.dispatchResult?.message, dispatch.message)
-        XCTAssertEqual(projection.dispatchResult?.subjectEvidence, subjectEvidence)
-        XCTAssertEqual(projection.dispatchResult?.activationTrace, activationTrace)
+        XCTAssertNil(projection.expectation)
+        XCTAssertEqual(projection.result?.outcome, .failure(.elementNotFound))
+        XCTAssertEqual(projection.result?.message, dispatch.message)
+        XCTAssertEqual(projection.result?.subjectEvidence, subjectEvidence)
+        XCTAssertEqual(projection.result?.activationTrace, activationTrace)
     }
 
     func testActionPendingAtDeadlineProjectsDispatchTimeoutAndPreservesDiagnosis() async throws {
@@ -209,7 +209,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
         )
 
         let projection = Settlement.ResultProjector.projectAction(result)
-        let dispatch = try XCTUnwrap(projection.dispatchResult)
+        let dispatch = try XCTUnwrap(projection.result)
         let settlement = try XCTUnwrap(dispatch.evidence.settlement)
         let diagnosis = Settlement.Diagnosis.project(result)
 
@@ -219,7 +219,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
             "action dispatch did not complete before settlement deadline after 25ms"
         )
         XCTAssertEqual(settlement, .observationHandoffTimedOut(duration: 25, path: .uikitIdle))
-        XCTAssertEqual(projection.checkedExpectation?.met, false)
+        XCTAssertEqual(projection.expectation?.met, false)
         XCTAssertEqual(diagnosis.dispatch, .pending)
         XCTAssertEqual(diagnosis.readiness, .established(generation: .initial, path: .uikitIdle))
         XCTAssertEqual(diagnosis.handoff, .captureRequested(generation: .initial))
@@ -252,12 +252,12 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
 
         let rows = [
             (
-                result: Settlement.ResultProjector.projectAction(cancelled).dispatchResult,
+                result: Settlement.ResultProjector.projectAction(cancelled).result,
                 message: "cancelled after 125ms",
                 settlement: ActionSettlementEvidence.timedOut(duration: 125)
             ),
             (
-                result: Settlement.ResultProjector.projectAction(captureFailed).dispatchResult,
+                result: Settlement.ResultProjector.projectAction(captureFailed).result,
                 message: "Could not capture accessibility tree after action",
                 settlement: ActionSettlementEvidence.observationHandoffTimedOut(
                     duration: 300,

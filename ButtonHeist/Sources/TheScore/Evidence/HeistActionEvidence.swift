@@ -3,63 +3,35 @@ import ThePlans
 
 public enum HeistActionEvidence: Codable, Sendable, Equatable {
     case commandResolutionFailure
-    case dispatch(dispatchResult: ActionResult)
-    case expectation(
-        dispatchResult: ActionResult,
-        expectationResult: ActionResult,
-        expectation: ExpectationResult
-    )
+    case completed(result: ActionResult, expectation: ExpectationResult?)
 
-    public var dispatchResult: ActionResult? {
-        switch self {
-        case .commandResolutionFailure:
-            return nil
-        case .dispatch(let result),
-             .expectation(let result, _, _):
-            return result
-        }
-    }
-
-    public var reportedResult: ActionResult? {
-        switch self {
-        case .commandResolutionFailure:
-            return nil
-        case .dispatch(let result):
-            return result
-        case .expectation(_, let result, _):
-            return result
-        }
-    }
-
-    public var expectationResult: ActionResult? {
-        guard case .expectation(_, let result, _) = self else { return nil }
+    public var result: ActionResult? {
+        guard case .completed(let result, _) = self else { return nil }
         return result
     }
 
-    public var checkedExpectation: ExpectationResult? {
-        guard case .expectation(_, _, let expectation) = self else { return nil }
+    public var expectation: ExpectationResult? {
+        guard case .completed(_, let expectation) = self else { return nil }
         return expectation
     }
 
     public var warning: HeistActionWarning? {
-        dispatchResult?.warning
+        result?.warning
     }
 
     public var announcement: String? {
-        checkedExpectation?.matchedAnnouncement ?? reportedResult?.announcement
+        expectation?.matchedAnnouncement ?? result?.announcement
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case type
-        case dispatchResult
-        case expectationResult
+        case result
         case expectation
     }
 
     private enum EvidenceType: String, Codable {
         case commandResolutionFailure = "command_resolution_failure"
-        case dispatch
-        case expectation
+        case completed
     }
 
     public init(from decoder: Decoder) throws {
@@ -71,22 +43,13 @@ public enum HeistActionEvidence: Codable, Sendable, Equatable {
         case .commandResolutionFailure:
             self = .commandResolutionFailure
             try container.rejectIncompatibleFields(allowing: [.type], typeName: typeName)
-        case .dispatch:
-            self = .dispatch(
-                dispatchResult: try container.decode(ActionResult.self, forKey: .dispatchResult)
+        case .completed:
+            self = .completed(
+                result: try container.decode(ActionResult.self, forKey: .result),
+                expectation: try container.decodeIfPresent(ExpectationResult.self, forKey: .expectation)
             )
             try container.rejectIncompatibleFields(
-                allowing: [.type, .dispatchResult],
-                typeName: typeName
-            )
-        case .expectation:
-            self = .expectation(
-                dispatchResult: try container.decode(ActionResult.self, forKey: .dispatchResult),
-                expectationResult: try container.decode(ActionResult.self, forKey: .expectationResult),
-                expectation: try container.decode(ExpectationResult.self, forKey: .expectation)
-            )
-            try container.rejectIncompatibleFields(
-                allowing: [.type, .dispatchResult, .expectationResult, .expectation],
+                allowing: [.type, .result, .expectation],
                 typeName: typeName
             )
         }
@@ -97,17 +60,12 @@ public enum HeistActionEvidence: Codable, Sendable, Equatable {
         switch self {
         case .commandResolutionFailure:
             try container.encode(EvidenceType.commandResolutionFailure, forKey: .type)
-        case .dispatch(let dispatchResult):
-            try container.encode(EvidenceType.dispatch, forKey: .type)
-            try container.encode(dispatchResult, forKey: .dispatchResult)
-        case .expectation(let dispatchResult, let expectationResult, let expectation):
-            try container.encode(EvidenceType.expectation, forKey: .type)
-            try container.encode(dispatchResult, forKey: .dispatchResult)
-            try container.encode(expectationResult, forKey: .expectationResult)
-            try container.encode(expectation, forKey: .expectation)
+        case .completed(let result, let expectation):
+            try container.encode(EvidenceType.completed, forKey: .type)
+            try container.encode(result, forKey: .result)
+            try container.encodeIfPresent(expectation, forKey: .expectation)
         }
     }
-
 }
 
 extension HeistActionEvidence {
@@ -115,7 +73,7 @@ extension HeistActionEvidence {
         switch self {
         case .commandResolutionFailure:
             return true
-        case .dispatch(let result), .expectation(let result, _, _):
+        case .completed(let result, _):
             return command.actionResultMethod == result.method
         }
     }

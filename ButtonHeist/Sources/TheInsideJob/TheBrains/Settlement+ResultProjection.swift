@@ -7,17 +7,13 @@ import TheScore
 extension Settlement {
     internal enum ResultProjector {
         internal static func projectAction(_ result: Result) -> HeistActionEvidence {
-            let dispatchResult = actionResult(from: result)
+            let actionResult = actionResult(from: result)
             guard result.evidence.command.predicate != nil,
                   !result.evidence.trigger.dispatchFailed,
                   let expectation = expectation(from: result) else {
-                return .dispatch(dispatchResult: dispatchResult)
+                return .completed(result: actionResult, expectation: nil)
             }
-            return .expectation(
-                dispatchResult: dispatchResult,
-                expectationResult: waitActionResult(from: result),
-                expectation: expectation
-            )
+            return .completed(result: actionResult, expectation: expectation)
         }
 
         internal static func projectWait(_ result: Result) -> HeistSettlementEvidence {
@@ -28,7 +24,7 @@ extension Settlement {
             guard let expectation = expectation(from: result) else {
                 preconditionFailure("Wait projection requires evaluated predicate evidence")
             }
-            let actionResult = waitActionResult(from: result)
+            let actionResult = standaloneWaitActionResult(from: result)
             if result.outcome == .settled,
                let met = ExpectationResult.Met(expectation),
                let check = HeistSettlementEvidence.MatchedCheck(
@@ -79,11 +75,11 @@ private extension Settlement.ResultProjector {
             )
             switch dispatch.outcome {
             case .success:
-                let settlementFailureMessage = actionSettlementFailureMessage(from: result)
+                let failure = actionFailure(from: result)
                 return ActionResult(
-                    outcome: settlementFailureMessage == nil ? .success : .failure(.actionFailed),
+                    outcome: failure.map { .failure($0.kind) } ?? .success,
                     payload: payload,
-                    message: settlementFailureMessage ?? dispatch.message,
+                    message: failure?.message ?? dispatch.message,
                     observation: observation,
                     subjectEvidence: dispatch.subjectEvidence,
                     activationTrace: dispatch.activationTrace,
@@ -103,11 +99,24 @@ private extension Settlement.ResultProjector {
             }
         case .actionPending:
             let resultAssemblyMs = RuntimeElapsed.milliseconds(since: assemblyStart)
+            let failure: (kind: ActionFailure.Kind, message: String) = switch result.outcome {
+            case .timedOut:
+                (
+                    .timeout,
+                    "action dispatch did not complete before settlement deadline "
+                        + "after \(result.evidence.elapsed)ms"
+                )
+            case .baselineUnavailable:
+                (.accessibilityTreeUnavailable, TheBrains.treeUnavailableMessage)
+            case .cancelled:
+                (.actionFailed, "cancelled after \(result.evidence.elapsed)ms")
+            case .settled, .dispatchFailed:
+                preconditionFailure("Pending action requires a pre-dispatch terminal outcome")
+            }
             return ActionResult.failure(
                 payload: command.actionResultPayload,
-                failureKind: .timeout,
-                message: "action dispatch did not complete before settlement deadline "
-                    + "after \(result.evidence.elapsed)ms",
+                failureKind: failure.kind,
+                message: failure.message,
                 observation: observation,
                 timing: ActionPerformanceTiming(
                     beforeObservationMs: result.evidence.timing.beforeObservationMs,
@@ -124,18 +133,24 @@ private extension Settlement.ResultProjector {
         }
     }
 
-    static func actionSettlementFailureMessage(from result: Settlement.Result) -> String? {
+    static func actionFailure(
+        from result: Settlement.Result
+    ) -> (kind: ActionFailure.Kind, message: String)? {
         switch result.outcome {
         case .cancelled:
-            "cancelled after \(result.evidence.elapsed)ms"
+            (.actionFailed, "cancelled after \(result.evidence.elapsed)ms")
         case .timedOut:
             if case .captureFailed = result.evidence.handoff {
-                "Could not capture accessibility tree after action"
+                (.actionFailed, "Could not capture accessibility tree after action")
             } else {
-                nil
+                (.timeout, renderTimeoutMessage(from: result))
             }
-        case .settled, .dispatchFailed, .baselineUnavailable:
+        case .baselineUnavailable:
+            (.accessibilityTreeUnavailable, TheBrains.treeUnavailableMessage)
+        case .settled:
             nil
+        case .dispatchFailed:
+            preconditionFailure("Successful dispatch cannot have dispatch-failed settlement outcome")
         }
     }
 
@@ -154,21 +169,13 @@ private extension Settlement.ResultProjector {
         return .typeText(value)
     }
 
-    static func waitActionResult(from result: Settlement.Result) -> ActionResult {
+    static func standaloneWaitActionResult(from result: Settlement.Result) -> ActionResult {
         let observation = projectedObservation(from: result)
         let timing = ActionPerformanceTiming(totalMs: result.evidence.elapsed)
         if result.outcome == .settled {
-            let message: String? = switch result.evidence.command {
-            case .observation:
-                standaloneWaitSuccessMessage(from: result)
-            case .action:
-                expectation(from: result)?.actual
-            case .currentState:
-                preconditionFailure("Current-state settlement has no public wait projection")
-            }
             return ActionResult.success(
                 payload: .wait,
-                message: message,
+                message: standaloneWaitSuccessMessage(from: result),
                 observation: observation,
                 timing: timing
             )

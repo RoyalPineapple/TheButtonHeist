@@ -43,7 +43,7 @@ final class AdversarialNavigationTests: XCTestCase {
         }
 
         let failedStep = try XCTUnwrap(failure.result.firstFailedStep)
-        let actionResult = try XCTUnwrap(failedStep.actionEvidence?.dispatchResult)
+        let actionResult = try XCTUnwrap(failedStep.actionEvidence?.result)
         XCTAssertEqual(failure.failedStepKind, .action)
         XCTAssertEqual(failedStep.failure?.category, .targetResolution)
         XCTAssertEqual(actionResult.outcome, .failure(.elementNotFound))
@@ -92,7 +92,7 @@ final class AdversarialNavigationTests: XCTestCase {
         XCTAssertNil(heist.result.firstFailedStep)
         let actionResult = try XCTUnwrap(
             heist.result.outputNodes.lazy
-                .compactMap { $0.actionEvidence?.dispatchResult }
+                .compactMap { $0.actionEvidence?.result }
                 .first { $0.subjectEvidence?.element.label == "Verified by The Vibe Check" }
         )
         let subject = try XCTUnwrap(actionResult.subjectEvidence)
@@ -155,7 +155,7 @@ final class AdversarialNavigationTests: XCTestCase {
 
         XCTAssertNil(heist.result.firstFailedStep)
         let targetActivations = heist.result.outputNodes.lazy
-            .compactMap { $0.actionEvidence?.dispatchResult }
+            .compactMap { $0.actionEvidence?.result }
             .filter { result in
                 guard let subject = result.subjectEvidence,
                       subject.element.label == "Review PR"

@@ -83,22 +83,11 @@ package enum HeistResultFixture {
         path: String = "$.body[0]",
         command: HeistActionCommand = .activate(.predicate(ElementPredicateTemplate(label: "Button"))),
         result: ActionResult = actionResult(),
-        expectationActionResult: ActionResult? = nil,
         expectation: ExpectationResult? = nil,
         durationMs: ElapsedMilliseconds = 1,
         failure: HeistFailureDetail? = nil
     ) -> HeistExecutionStepResult {
-        let evidence: HeistActionEvidence
-        if let expectationActionResult, let expectation {
-            evidence = .expectation(
-                dispatchResult: result,
-                expectationResult: expectationActionResult,
-                expectation: expectation
-            )
-        } else {
-            precondition(expectationActionResult == nil && expectation == nil)
-            evidence = .dispatch(dispatchResult: result)
-        }
+        let evidence = HeistActionEvidence.completed(result: result, expectation: expectation)
 
         let resolvedFailure = failure ?? inferredActionFailure(result)
         if let resolvedFailure {

@@ -27,7 +27,7 @@ extension ElementInflationProductTests {
         guard let actionEvidence = step.actionEvidence else {
             return XCTFail("Expected heist action evidence")
         }
-        let stepResult = try XCTUnwrap(actionEvidence.dispatchResult)
+        let stepResult = try XCTUnwrap(actionEvidence.result)
 
         XCTAssertTrue(single.result.outcome.isSuccess, single.result.message ?? "single activate failed")
         XCTAssertTrue(heist.result.outcome.isSuccess, heistFailureDescription(heist.result))

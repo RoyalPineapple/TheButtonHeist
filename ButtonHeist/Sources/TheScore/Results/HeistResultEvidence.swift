@@ -320,20 +320,9 @@ private extension HeistActionEvidence {
         switch self {
         case .commandResolutionFailure:
             return false
-        case .dispatch(let result):
+        case .completed(let result, let expectation):
+            guard !result.outcome.isSuccess || expectation?.met != false else { return nil }
             return result.outcome.isSuccess
-        case .expectation(let result, let expectationResult, let expectation):
-            guard result.outcome.isSuccess,
-                  expectationResult.method == .wait else { return nil }
-            if expectationResult.outcome.isSuccess {
-                return expectation.met ? true : nil
-            }
-            if !expectation.met {
-                return false
-            }
-            guard let settlement = expectationResult.evidence.settlement,
-                  !settlement.observationHandoffCompleted else { return nil }
-            return false
         }
     }
 }

@@ -9,15 +9,15 @@ internal struct RuntimeActionExecution: Sendable, Equatable {
     internal let result: ActionResult
 
     internal init(evidence: HeistActionEvidence) {
-        guard let result = evidence.dispatchResult else {
-            preconditionFailure("runtime action execution requires dispatch evidence")
+        guard let result = evidence.result else {
+            preconditionFailure("runtime action execution requires action result evidence")
         }
         self.evidence = evidence
         self.result = result
     }
 
     internal init(result: ActionResult) {
-        self.evidence = .dispatch(dispatchResult: result)
+        self.evidence = .completed(result: result, expectation: nil)
         self.result = result
     }
 }
