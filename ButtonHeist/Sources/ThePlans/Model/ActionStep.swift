@@ -112,16 +112,13 @@ extension ActionExpectationPolicy: Codable {
 public struct ActionStep: Codable, Sendable, Equatable {
     public let command: HeistActionCommand
     public let expectationPolicy: ActionExpectationPolicy
-    let expectationValidationDiagnostics: [HeistBuildDiagnostic]
 
     public init(
         command: HeistActionCommand,
-        expectationPolicy: ActionExpectationPolicy = .default,
-        expectationValidationDiagnostics: [HeistBuildDiagnostic] = []
+        expectationPolicy: ActionExpectationPolicy = .default
     ) {
         self.command = command
         self.expectationPolicy = expectationPolicy
-        self.expectationValidationDiagnostics = expectationValidationDiagnostics
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {

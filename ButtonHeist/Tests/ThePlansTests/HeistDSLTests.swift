@@ -1,7 +1,7 @@
 import ButtonHeistTestSupport
 import Foundation
 import Testing
-@_spi(ButtonHeistInternals) import ThePlans
+@_spi(ButtonHeistInternals) @testable import ThePlans
 
 @Test
 func actionConstructorBuildsOneActionStep() throws {
@@ -241,6 +241,20 @@ func `chained screen and state expectations compose into one action expectation`
 }
 
 @Test
+func testAuthoredActionExpectationRejectsConflictingExplicitTimeouts() {
+    let expectation = AuthoredActionExpectation.default
+        .appending(.changed(.screen()), timeout: 1)
+        .appending(.exists(.label("Done")), timeout: 2)
+
+    #expect(expectation.waitStep == WaitStep(predicate: .changed(.screen([
+        .exists(.label("Done")),
+    ])), timeout: 1))
+    #expect(expectation.diagnostics.map(\.message) == [
+        "multiple explicit expectation timeouts in one chain: 1 and 2",
+    ])
+}
+
+@Test
 func `chained root expectations fail canonical validation`() {
     #expect(throws: HeistPlanBuildError.self) {
         try HeistPlan {
@@ -302,18 +316,6 @@ func `different explicit chained expectation timeouts fail validation`() throws 
 
 @Test
 func `unsupported chained change expectations fail validation without replacement`() throws {
-    let diagnostic = HeistBuildDiagnostic(
-        code: .dslInvalidActionExpectation,
-        phase: .dslBuild,
-        path: "activate",
-        message: "unsupported expectation composition: changed(elements(*)) + changed(screen(*))",
-        hint: "Use one canonical predicate per expectation, or add current-tree assertions inside .changed(.screen(...))."
-    )
-    let step = ActionStep(
-        command: .activate(.label("Save")),
-        expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements()), timeout: 1)),
-        expectationValidationDiagnostics: [diagnostic]
-    )
     #expect(throws: HeistPlanBuildError.self) {
         try HeistPlan {
             Activate(.label("Save"))
@@ -321,11 +323,6 @@ func `unsupported chained change expectations fail validation without replacemen
                 .expect(.changed(.screen()))
         }
     }
-    #expect(step == ActionStep(
-        command: .activate(.label("Save")),
-        expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements()), timeout: 1)),
-        expectationValidationDiagnostics: [diagnostic]
-    ))
 }
 @Test
 func `string heist search flow preserves query ref in composed post activation expectation JSON`() throws {

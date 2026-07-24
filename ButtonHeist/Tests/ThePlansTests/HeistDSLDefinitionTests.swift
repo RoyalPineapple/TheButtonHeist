@@ -289,6 +289,49 @@ func runHeistBuildsHeistRunSteps() throws {
 }
 
 @Test
+func `run heist expectation composition preserves timeout semantics and diagnostics`() throws {
+    let definition = HeistDef<Void>("Checkout.pay") { Warn("declared") }
+    let composed = ThePlans.RunHeist("Checkout.pay")
+        .expect(.changed(.screen()), timeout: 3)
+        .expect(.exists(.label("Receipt")), timeout: 3)
+
+    #expect(try admittedSteps(composed, declaredBy: definition) == [
+        .invoke(HeistInvocationStep(
+            path: "Checkout.pay",
+            expectation: WaitStep(
+                predicate: .changed(.screen([.exists(.label("Receipt"))])),
+                timeout: 3
+            )
+        )),
+    ])
+
+    do {
+        _ = try HeistPlan {
+            definition
+            ThePlans.RunHeist("Checkout.pay")
+                .expect(.changed(.screen()), timeout: 1)
+                .expect(.exists(.label("Receipt")), timeout: 2)
+        }
+        Issue.record("Expected HeistPlanBuildError")
+    } catch let error as HeistPlanBuildError {
+        let diagnostic = try #require(error.diagnostics.first)
+        #expect(diagnostic.code == .dslInvalidInvocationExpectation)
+        #expect(diagnostic.path == "Checkout.pay")
+        #expect(diagnostic.message == "multiple explicit expectation timeouts in one chain: 1 and 2")
+        #expect(diagnostic.hint == "Use one explicit timeout for the composed expectation.")
+    }
+
+    #expect(throws: HeistPlanBuildError.self) {
+        try HeistPlan {
+            definition
+            ThePlans.RunHeist("Checkout.pay")
+                .expect(.changed(.elements()))
+                .expect(.changed(.screen()))
+        }
+    }
+}
+
+@Test
 func runHeistResolvesNamedCapabilityThroughValidation() throws {
     _ = try HeistPlan(
         definitions: [

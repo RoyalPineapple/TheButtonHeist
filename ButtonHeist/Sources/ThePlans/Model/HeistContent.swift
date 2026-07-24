@@ -299,29 +299,31 @@ public struct HeistDef<Input>: Sendable {
     fileprivate func invocation(argument: HeistArgument) throws -> HeistInvocationContent {
         let definition = try definitionResult.value(orThrow: HeistPlanBuildError.init(diagnostics:))
         return HeistInvocationContent(
-            invocation: HeistInvocationStep(
-                path: HeistInvocationPath(definitionPath: path),
-                argument: argument
-            ),
+            path: HeistInvocationPath(definitionPath: path),
+            argument: argument,
             definitions: [definition]
         )
     }
 }
 
 public struct HeistInvocationContent {
-    let invocation: HeistInvocationStep
+    let path: HeistInvocationPath
+    let argument: HeistArgument
     let definitions: [HeistPlanAdmissionCandidate]
-    let expectation: ComposedExpectation?
-    let expectationValidationDiagnostics: [HeistBuildDiagnostic]
+    let expectation: AuthoredActionExpectation
 
     var heistContent: HeistContent {
         HeistContent(
-            [.invoke(invocation)],
+            [.invoke(HeistInvocationStep(
+                path: path,
+                argument: argument,
+                expectation: expectation.waitStep
+            ))],
             definitions: definitions,
-            diagnostics: expectationValidationDiagnostics.map {
+            diagnostics: expectation.diagnostics.map {
                 HeistBuildDiagnostic.dslBuild(
                     code: .dslInvalidInvocationExpectation,
-                    path: invocation.path.description,
+                    path: path.description,
                     message: $0.message,
                     hint: $0.hint
                 )
@@ -330,17 +332,15 @@ public struct HeistInvocationContent {
     }
 
     init(
-        invocation: HeistInvocationStep,
+        path: HeistInvocationPath,
+        argument: HeistArgument,
         definitions: [HeistPlanAdmissionCandidate],
-        expectation: ComposedExpectation? = nil,
-        expectationValidationDiagnostics: [HeistBuildDiagnostic] = []
+        expectation: AuthoredActionExpectation = .default
     ) {
-        self.invocation = invocation
+        self.path = path
+        self.argument = argument
         self.definitions = definitions
-        self.expectation = expectation ?? invocation.expectation.map {
-            ComposedExpectation(step: $0, explicitTimeout: nil)
-        }
-        self.expectationValidationDiagnostics = expectationValidationDiagnostics
+        self.expectation = expectation
     }
 }
 
@@ -349,26 +349,13 @@ public extension HeistInvocationContent {
         _ predicate: AccessibilityPredicate,
         timeout: WaitTimeout? = nil
     ) -> HeistInvocationContent {
-        let composition = composeExpectation(
-            existing: expectation,
-            nextPredicate: predicate,
-            nextExplicit: timeout
-        )
-        let validationDiagnostics = expectationValidationDiagnostics
-            + composition.diagnostics
-
         return HeistInvocationContent(
-            invocation: HeistInvocationStep(
-                path: invocation.path,
-                argument: invocation.argument,
-                expectation: composition.expectation.step
-            ),
+            path: path,
+            argument: argument,
             definitions: definitions,
-            expectation: composition.expectation,
-            expectationValidationDiagnostics: validationDiagnostics
+            expectation: expectation.appending(predicate, timeout: timeout)
         )
     }
-
 }
 
 public extension HeistDef where Input == Void {
@@ -430,10 +417,8 @@ public func RunHeist(_ path: HeistInvocationPath, _ input: AccessibilityTarget) 
 
 private func runHeistInvocation(_ path: HeistInvocationPath, argument: HeistArgument) -> HeistInvocationContent {
     HeistInvocationContent(
-        invocation: HeistInvocationStep(
-            path: path,
-            argument: argument
-        ),
+        path: path,
+        argument: argument,
         definitions: []
     )
 }

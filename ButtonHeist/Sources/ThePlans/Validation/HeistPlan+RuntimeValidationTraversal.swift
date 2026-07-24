@@ -266,14 +266,6 @@ struct HeistPlanRuntimeSafetyValidator {
         if let waiver = action.expectationPolicy.waiver?.reason {
             addString(waiver, path: path.child(.withoutExpectation), role: "expectation waiver")
         }
-        for diagnostic in action.expectationValidationDiagnostics {
-            fail(
-                path: path.child(.expectation),
-                contract: "action expectation composition must be supported and unambiguous",
-                observed: diagnostic.message,
-                correction: diagnostic.hint ?? "Use one change predicate plus optional state predicates, or split unrelated waits into explicit WaitFor steps."
-            )
-        }
     }
 
     mutating func validateCommand(
