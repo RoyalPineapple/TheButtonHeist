@@ -43,20 +43,20 @@ run_gate() {
     set -e
 }
 
-run_gate v0.6.30 strict 1
+run_gate v0.6.31 strict 1
 [[ "$STATUS" -eq 0 ]] || fail "scoped architecture baseline waiver failed: $OUTPUT"
 [[ "$OUTPUT" == *"exemption expires"* ]] || fail "waiver did not explain its scope: $OUTPUT"
 
-run_gate v0.6.29 strict 1
+run_gate v0.6.30 strict 1
 [[ "$STATUS" -eq 1 ]] || fail "expired baseline waiver accepted native breakage: $OUTPUT"
 
-run_gate v0.6.30 report 1
+run_gate v0.6.31 report 1
 [[ "$STATUS" -eq 0 ]] || fail "report mode rejected native diagnostics: $OUTPUT"
 
-run_gate v0.6.30 strict 0
+run_gate v0.6.31 strict 0
 [[ "$STATUS" -eq 0 ]] || fail "clean native API result failed: $OUTPUT"
 
-grep -Fq 'package diagnose-api-breaking-changes v0.6.30 --products' \
+grep -Fq 'package diagnose-api-breaking-changes v0.6.31 --products' \
     "$FIXTURE_ROOT/swift-arguments.txt" \
     || fail "gate did not invoke Swift's native API diagnosis"
 
