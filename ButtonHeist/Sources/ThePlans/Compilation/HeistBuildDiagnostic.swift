@@ -261,6 +261,24 @@ public struct HeistPlanBuildError: Error, Sendable, Equatable, CustomStringConve
     }
 }
 
+extension HeistPlanBuildError {
+    static func planStructure(
+        path: String,
+        message: String,
+        hint: String? = nil
+    ) -> HeistPlanBuildError {
+        HeistPlanBuildError(diagnostics: [
+            HeistBuildDiagnostic(
+                code: .planRuntimeSafety,
+                phase: .planValidation,
+                path: path,
+                message: message,
+                hint: hint
+            ),
+        ])
+    }
+}
+
 public extension HeistBuildDiagnosticCode {
     var title: String {
         switch knownCode {

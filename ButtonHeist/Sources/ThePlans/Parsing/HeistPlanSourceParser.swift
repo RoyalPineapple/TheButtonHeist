@@ -10,11 +10,12 @@ struct HeistPlanSourceParser {
         self.tokens = tokens
     }
 
-    mutating func parseProgram() throws -> HeistPlanAdmissionCandidate {
+    mutating func parseProgram() throws -> HeistPlan {
         if startsRootHeistPlan {
             let root = try parseRootHeistPlan()
             try expect(.eof)
-            return root
+            var validator = HeistPlanRuntimeSafetyValidator(limits: .standard)
+            return try validator.admit(root)
         }
 
         try rejectForbiddenStatementSyntax()

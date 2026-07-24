@@ -1,19 +1,19 @@
 import Foundation
 
 extension HeistPlanSourceParser {
-    mutating func parseWaitFor() throws -> HeistStepAdmissionCandidate {
+    mutating func parseWaitFor() throws -> HeistStep {
         try expectSymbol("(")
         let predicate = try parseAccessibilityPredicateExpr()
         let timeout = try parseTrailingTimeout(defaultValue: defaultWaitTimeout) ?? defaultWaitTimeout
         try expectSymbol(")")
-        return .wait(HeistWaitAdmissionCandidate(
+        return .wait(WaitStep(
             predicate: predicate,
             timeout: timeout,
             elseBody: try parseLowercaseElseChainIfPresent(chainContext: "WaitFor")
         ))
     }
 
-    mutating func parseIf() throws -> HeistStepAdmissionCandidate {
+    mutating func parseIf() throws -> HeistStep {
         if consumeSymbol("(") {
             let predicate = try parseScreenAssertion()
             try expectSymbol(")")
@@ -22,7 +22,7 @@ extension HeistPlanSourceParser {
         return .conditional(try parsePredicateBranches())
     }
 
-    mutating func parseForEach() throws -> HeistStepAdmissionCandidate {
+    mutating func parseForEach() throws -> HeistStep {
         try expectSymbol("(")
         if consumeSymbol("[") {
             throw error(previous, #"ForEach string loops use `ForEach("a", "b")`, not array literals"#)
@@ -34,7 +34,7 @@ extension HeistPlanSourceParser {
             } while consumeSymbol(",")
             try expectSymbol(")")
             return try parseScopedClosure(binding: .string) { parameter, body in
-                .forEachString(try HeistForEachStringAdmissionCandidate(
+                .forEachString(try ForEachStringStep(
                     values: values,
                     parameter: parameter,
                     body: body
@@ -53,7 +53,7 @@ extension HeistPlanSourceParser {
         }
         try expectSymbol(")")
         return try parseScopedClosure(binding: .target) { parameter, body in
-            .forEachElement(try HeistForEachElementAdmissionCandidate(
+            .forEachElement(try ForEachElementStep(
                 matching: matching,
                 limit: limit,
                 parameter: parameter,
@@ -62,7 +62,7 @@ extension HeistPlanSourceParser {
         }
     }
 
-    mutating func parseRepeatUntil() throws -> HeistStepAdmissionCandidate {
+    mutating func parseRepeatUntil() throws -> HeistStep {
         try expectSymbol("(")
         let predicate = try parseAccessibilityPredicateExpr()
         guard let timeout = try parseTrailingTimeout(defaultValue: nil) else {
@@ -70,7 +70,7 @@ extension HeistPlanSourceParser {
         }
         try expectSymbol(")")
         let body = try parseHeistBlock()
-        return .repeatUntil(try HeistRepeatUntilAdmissionCandidate(
+        return .repeatUntil(try RepeatUntilStep(
             predicate: predicate,
             timeout: timeout,
             body: body
@@ -168,10 +168,10 @@ extension HeistPlanSourceParser {
         }
     }
 
-    mutating func parsePredicateBranches() throws -> HeistConditionalAdmissionCandidate {
+    mutating func parsePredicateBranches() throws -> ConditionalStep {
         try expectSymbol("{")
-        var cases: [HeistPredicateCaseAdmissionCandidate] = []
-        var elseBody: [HeistStepAdmissionCandidate]?
+        var cases: [PredicateCase] = []
+        var elseBody: [HeistStep]?
         while !consumeSymbol("}") {
             try rejectForbiddenStatementSyntax()
             let token = currentToken
@@ -184,7 +184,7 @@ extension HeistPlanSourceParser {
                 try expectSymbol("(")
                 let predicate = try parseScreenAssertion()
                 try expectSymbol(")")
-                cases.append(HeistPredicateCaseAdmissionCandidate(
+                cases.append(PredicateCase(
                     predicate: predicate,
                     body: try parseHeistBlock()
                 ))
@@ -197,22 +197,22 @@ extension HeistPlanSourceParser {
                 throw error(token, "branch blocks accept only Case(...) and Else")
             }
         }
-        return try HeistConditionalAdmissionCandidate(cases: cases, elseBody: elseBody)
+        return try ConditionalStep(cases: cases, elseBody: elseBody)
     }
 
     mutating func parseSinglePredicateBranches(
         predicate: ChangeDeclaration.ScreenAssertion,
         chainContext: String
-    ) throws -> HeistConditionalAdmissionCandidate {
+    ) throws -> ConditionalStep {
         let body = try parseHeistBlock()
         let elseBody = try parseLowercaseElseChainIfPresent(chainContext: chainContext)
-        return try HeistConditionalAdmissionCandidate(
-            cases: [HeistPredicateCaseAdmissionCandidate(predicate: predicate, body: body)],
+        return try ConditionalStep(
+            cases: [PredicateCase(predicate: predicate, body: body)],
             elseBody: elseBody
         )
     }
 
-    mutating func parseHeistBlock() throws -> [HeistStepAdmissionCandidate] {
+    mutating func parseHeistBlock() throws -> [HeistStep] {
         try expectSymbol("{")
         let body = try parseHeistBody(untilRightBrace: true, allowDefinitions: false)
         return body.steps
@@ -220,7 +220,7 @@ extension HeistPlanSourceParser {
 
     mutating func parseLowercaseElseChainIfPresent(
         chainContext: String
-    ) throws -> [HeistStepAdmissionCandidate]? {
+    ) throws -> [HeistStep]? {
         guard consumeSymbol(".") else { return nil }
         let token = currentToken
         let chain = try parseIdentifier()
@@ -232,7 +232,7 @@ extension HeistPlanSourceParser {
 
     fileprivate mutating func parseScopedClosure<Value>(
         binding: HeistPlanSourceBinding,
-        project: (HeistReferenceName, [HeistStepAdmissionCandidate]) throws -> Value
+        project: (HeistReferenceName, [HeistStep]) throws -> Value
     ) throws -> Value {
         try expectSymbol("{")
         let localName = try parseIdentifier()

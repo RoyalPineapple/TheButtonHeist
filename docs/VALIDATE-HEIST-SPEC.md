@@ -333,15 +333,13 @@ Load the selected source through the same `HeistPlanSourceAdmission` and
 ```text
 inline plan
 → restricted Button Heist source parser
-→ HeistPlanAdmissionCandidate
-→ semantic and runtime-safety validation
-→ HeistPlan
+→ root HeistPlan structural admission
+→ HeistPlan runtime-safety validation
 
 .heist path
 → HeistArtifactCodec
-→ version and strict-decoding checks
-→ semantic and runtime-safety validation
-→ HeistPlan
+→ strict HeistPlan decoding and version checks
+→ HeistPlan runtime-safety validation
 ```
 
 This phase includes all existing plan contracts, including:

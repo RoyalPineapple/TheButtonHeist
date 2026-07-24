@@ -38,7 +38,8 @@ extension TheBrains {
     }
 
     internal struct InvocationExpectationContext {
-        internal let input: ResolvedWaitRuntimeInput
+        internal let predicate: Settlement.Predicate
+        internal let timeout: WaitTimeout
         internal let currentState: Settlement.Result
     }
 
@@ -166,9 +167,9 @@ extension TheBrains {
         runtime: HeistExecutionRuntime
     ) async -> InvocationExpectationPreparation {
         guard let expectation = context.invoke.expectation else { return .none }
-        let input: ResolvedWaitRuntimeInput
+        let resolved: ResolvedWaitStep
         do {
-            input = try ResolvedWaitRuntimeInput(resolving: expectation, in: environment)
+            resolved = try expectation.resolve(in: environment)
         } catch {
             return .failed(invocationExpectationResolutionFailureResult(
                 context: context,
@@ -176,11 +177,16 @@ extension TheBrains {
                 error: error
             ))
         }
+        let predicate = Settlement.Predicate(
+            authored: expectation.predicate,
+            resolved: resolved.predicate
+        )
         let currentState = await runtime.settle(
-            .currentState(scope: input.predicate.observationScope)
+            .currentState(scope: predicate.observationScope)
         )
         return .prepared(InvocationExpectationContext(
-            input: input,
+            predicate: predicate,
+            timeout: resolved.timeout,
             currentState: currentState
         ))
     }
@@ -195,18 +201,20 @@ extension TheBrains {
         if let moment = context.currentState.evidence.handoff.event?.moment {
             baseline = .supplied(.init(moment: moment))
         } else {
-            baseline = switch context.input.predicate {
+            baseline = switch context.predicate.resolved {
             case .exists, .missing: .capture
             case .announcement, .changed, .noChange: .unavailable(.unavailable)
             }
         }
         let settlement = await runtime.settle(Settlement.Command(
-            observing: context.input,
+            observing: context.predicate.authored,
+            resolved: context.predicate.resolved,
+            timeout: context.timeout,
             baseline: baseline
         ))
         let evidence = Settlement.ResultProjector.projectWait(settlement)
         guard let failure = invocationExpectationFailure(
-            predicateExpression: context.input.predicateExpression,
+            predicateExpression: context.predicate.authored,
             evidence: evidence
         ) else {
             return .matched(evidence)

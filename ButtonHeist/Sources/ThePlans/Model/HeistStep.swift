@@ -104,6 +104,10 @@ struct HeistStepTaggedEnvelope {
         try container.decode(payload, forKey: type.payloadKey)
     }
 
+    func payloadDecoder() throws -> Decoder {
+        try container.superDecoder(forKey: type.payloadKey)
+    }
+
     static func encode<Payload: Encodable>(
         _ type: HeistStepWireType,
         payload: Payload,

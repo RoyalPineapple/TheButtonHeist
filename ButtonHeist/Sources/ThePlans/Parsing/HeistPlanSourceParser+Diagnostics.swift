@@ -123,8 +123,8 @@ extension HeistPlanSourceParser {
 }
 
 struct ParsedHeistBody {
-    let definitions: [HeistPlanAdmissionCandidate]
-    let steps: [HeistStepAdmissionCandidate]
+    let definitions: [HeistPlan]
+    let steps: [HeistStep]
 }
 
 struct HeistPlanSourceScope: Equatable {

@@ -3,30 +3,31 @@ import Testing
 @_spi(ButtonHeistInternals) import ThePlans
 @testable import TheScore
 
-private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPlan {
-    try raw.validatedForRuntimeSafety()
+private func validatedPlan(_ raw: HeistPlan) throws -> HeistPlan {
+    var validator = HeistPlanRuntimeSafetyValidator(limits: .standard)
+    return try validator.admit(raw)
 }
 
 @Test
 func runtimeSafetyRejectsInvalidHeistDefinitionsAndInvocations() throws {
     let itemReference: HeistReferenceName = "item"
-    let definition = HeistPlanAdmissionCandidate(
+    let definition = structurallyAdmittedPlan(
         name: "addToCart",
         parameter: .string(name: "item"),
         body: [.action(ActionStep(command: .activate(.predicate(
             ElementPredicate(label: .exact(itemReference))
         ))))]
     )
-    let cases: [(HeistPlanAdmissionCandidate, String)] = [
+    let cases: [(HeistPlan, String)] = [
         (
-            HeistPlanAdmissionCandidate(definitions: [
-                HeistPlanAdmissionCandidate(name: "duplicate", body: [.warn(WarnStep(message: "a"))]),
-                HeistPlanAdmissionCandidate(name: "duplicate", body: [.warn(WarnStep(message: "b"))]),
+            structurallyAdmittedPlan(definitions: [
+                structurallyAdmittedPlan(name: "duplicate", body: [.warn(WarnStep(message: "a"))]),
+                structurallyAdmittedPlan(name: "duplicate", body: [.warn(WarnStep(message: "b"))]),
             ], body: [.warn(WarnStep(message: "body"))]),
             "duplicate heist definition names are not allowed"
         ),
         (
-            HeistPlanAdmissionCandidate(definitions: [definition], body: [
+            structurallyAdmittedPlan(definitions: [definition], body: [
                 .invoke(HeistInvocationStep(
                     path: "missing",
                     argument: .string("Milk")
@@ -35,7 +36,7 @@ func runtimeSafetyRejectsInvalidHeistDefinitionsAndInvocations() throws {
             "heist run path must resolve"
         ),
         (
-            HeistPlanAdmissionCandidate(definitions: [definition], body: [
+            structurallyAdmittedPlan(definitions: [definition], body: [
                 .invoke(HeistInvocationStep(path: "addToCart", argument: .none)),
             ]),
             "heist run argument type must match"
@@ -87,7 +88,7 @@ func admissionDecodingRejectsEmptyPredicates() throws {
     """
 
     #expect(throws: (any Error).self) {
-        _ = try JSONDecoder().decode(HeistPlanAdmissionCandidate.self, from: Data(json.utf8))
+        _ = try JSONDecoder().decode(HeistPlan.self, from: Data(json.utf8))
     }
 }
 
@@ -132,7 +133,7 @@ func admissionDecodingRejectsUnsupportedAndInvalidCommands() throws {
 
     for (payload, expected) in cases {
         do {
-            _ = try JSONDecoder().decode(HeistPlanAdmissionCandidate.self, from: Data(payload.utf8))
+            _ = try JSONDecoder().decode(HeistPlan.self, from: Data(payload.utf8))
             Issue.record("Expected admission decoding to fail")
         } catch {
             #expect("\(error)".contains(expected), "\(error)")
@@ -144,8 +145,8 @@ func admissionDecodingRejectsUnsupportedAndInvalidCommands() throws {
 func runtimeSafetyRejectsDefinitionSelfInvocationOutsideLocalScope() throws {
     let recursiveName: HeistPlanName = "repeatHeist"
     let recursivePath: HeistInvocationPath = "repeatHeist"
-    let raw = HeistPlanAdmissionCandidate(definitions: [
-        HeistPlanAdmissionCandidate(name: recursiveName, body: [
+    let raw = structurallyAdmittedPlan(definitions: [
+        structurallyAdmittedPlan(name: recursiveName, body: [
             .invoke(HeistInvocationStep(path: recursivePath)),
         ]),
     ], body: [
@@ -164,12 +165,12 @@ func runtimeSafetyAcceptsSingularAccessibilityTargetCapability() throws {
     // `target` is singular by type — a predicate for exactly one element.
     // Multiple targets are unrepresentable; a capability run with one target is
     // runtime-valid.
-    let definition = HeistPlanAdmissionCandidate(
+    let definition = structurallyAdmittedPlan(
         name: "deleteItem",
         parameter: .accessibilityTarget(name: "target"),
         body: [.action(ActionStep(command: .activate(.ref("target"))))]
     )
-    let raw = HeistPlanAdmissionCandidate(definitions: [definition], body: [
+    let raw = structurallyAdmittedPlan(definitions: [definition], body: [
         .invoke(HeistInvocationStep(
             path: "deleteItem",
             argument: .accessibilityTarget(.predicate(.label("Row 1")))
@@ -180,7 +181,7 @@ func runtimeSafetyAcceptsSingularAccessibilityTargetCapability() throws {
 
 @Test
 func runtimeSafetyAcceptsParameterizedRootAndScratchRootCaller() throws {
-    let parameterizedRoot = HeistPlanAdmissionCandidate(
+    let parameterizedRoot = structurallyAdmittedPlan(
         name: "search",
         parameter: .string(name: "query"),
         body: [.action(ActionStep(command: .typeText(
@@ -190,9 +191,9 @@ func runtimeSafetyAcceptsParameterizedRootAndScratchRootCaller() throws {
     )
     _ = try validatedPlan(parameterizedRoot)
 
-    let scratchRoot = HeistPlanAdmissionCandidate(
+    let scratchRoot = structurallyAdmittedPlan(
         definitions: [
-            HeistPlanAdmissionCandidate(name: "search", parameter: .string(name: "query"), body: [
+            structurallyAdmittedPlan(name: "search", parameter: .string(name: "query"), body: [
                 .action(ActionStep(command: .typeText(
                     reference: "query",
                     target: .predicate(.label("Search"))
@@ -207,12 +208,12 @@ func runtimeSafetyAcceptsParameterizedRootAndScratchRootCaller() throws {
 @Test
 func runtimeSafetyUsesInvokedDefinitionScopeForHelperDependencies() throws {
     let itemReference: HeistReferenceName = "item"
-    let raw = HeistPlanAdmissionCandidate(definitions: [
-        HeistPlanAdmissionCandidate(
+    let raw = structurallyAdmittedPlan(definitions: [
+        structurallyAdmittedPlan(
             name: "addToCart",
             parameter: .string(name: "item"),
             definitions: [
-                HeistPlanAdmissionCandidate(name: "tapAddButton", body: [
+                structurallyAdmittedPlan(name: "tapAddButton", body: [
                     .action(ActionStep(command: .activate(.predicate(ElementPredicate(label: "Add to Cart"))))),
                 ]),
             ],
@@ -235,11 +236,11 @@ func runtimeSafetyUsesInvokedDefinitionScopeForHelperDependencies() throws {
 
 @Test
 func runtimeSafetyAllowsSameLeafDefinitionNamesInDifferentScopes() throws {
-    let raw = HeistPlanAdmissionCandidate(definitions: [
-        HeistPlanAdmissionCandidate(
+    let raw = structurallyAdmittedPlan(definitions: [
+        structurallyAdmittedPlan(
             name: "setup",
             definitions: [
-                HeistPlanAdmissionCandidate(name: "setup", body: [
+                structurallyAdmittedPlan(name: "setup", body: [
                     .warn(WarnStep(message: "Nested setup")),
                 ]),
             ],
@@ -256,8 +257,8 @@ func runtimeSafetyAllowsSameLeafDefinitionNamesInDifferentScopes() throws {
 
 @Test
 func runtimeSafetyValidatesInvokedBodiesWithBoundArguments() throws {
-    let raw = HeistPlanAdmissionCandidate(definitions: [
-        HeistPlanAdmissionCandidate(
+    let raw = structurallyAdmittedPlan(definitions: [
+        structurallyAdmittedPlan(
             name: "typeSearch",
             parameter: .string(name: "query"),
             body: [

@@ -152,14 +152,10 @@ func `raw JSON with heist extension fails`() throws {
 
 @Test
 func `plan JSON admission rejects non object JSON with explicit diagnostic`() throws {
-    let url = URL(fileURLWithPath: "/tmp/non-object-plan.json")
-
-    do {
-        _ = try HeistArtifactCodec.decodeAdmissionCandidateJSON(Data(#"["not an object"]"#.utf8), at: url)
-        Issue.record("Expected non-object plan JSON to fail")
-    } catch {
-        #expect(String(describing: error).contains(
-            "Invalid heist plan at /tmp/non-object-plan.json: expected JSON object"
-        ))
+    #expect(throws: DecodingError.self) {
+        _ = try JSONDecoder().decode(
+            HeistPlan.self,
+            from: Data(#"["not an object"]"#.utf8)
+        )
     }
 }

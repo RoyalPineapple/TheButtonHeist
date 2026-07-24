@@ -176,12 +176,12 @@ func `canonical Swift renderer preserves composed expectation with string ref`()
 
 @Test
 func canonicalSwiftRendererRejectsRefsOutsideLoopScope() throws {
-    let raw = HeistPlanAdmissionCandidate(body: [
+    let raw = structurallyAdmittedPlan(body: [
         .action(ActionStep(command: .activate(.ref("target")))),
     ])
 
     do {
-        _ = try raw.validatedForRuntimeSafety()
+        _ = try admitRuntimeSafety(raw)
         Issue.record("Expected unresolved ref validation failure")
     } catch let error as HeistPlanRuntimeSafetyError {
         #expect(error.failures.contains { $0.contract == "target ref must resolve in the current heist scope" })
@@ -327,10 +327,10 @@ func nonDurableActionShapeFailsPlanAdmission() throws {
     do {
         _ = try HeistPlan(body: [.action(ActionStep(command: command))])
         Issue.record("Expected non-durable action to fail plan admission")
-    } catch let error as HeistPlanRuntimeSafetyError {
-        expectNonDurableHeistActionFailure(error.failures, observed: reason)
+    } catch let error as HeistPlanBuildError {
+        expectNonDurableHeistActionFailure(error.diagnostics, observed: reason)
     } catch {
-        Issue.record("Expected runtime safety error, got \(error)")
+        Issue.record("Expected plan build error, got \(error)")
     }
 }
 
@@ -354,10 +354,10 @@ func directScrollCommandsAreNotDurableHeistDSL() throws {
         do {
             _ = try HeistPlan(body: [.action(ActionStep(command: command))])
             Issue.record("Expected scroll action to fail plan admission")
-        } catch let error as HeistPlanRuntimeSafetyError {
-            expectNonDurableHeistActionFailure(error.failures, observed: reason)
+        } catch let error as HeistPlanBuildError {
+            expectNonDurableHeistActionFailure(error.diagnostics, observed: reason)
         } catch {
-            Issue.record("Expected runtime safety error, got \(error)")
+            Issue.record("Expected plan build error, got \(error)")
         }
     }
 
@@ -382,13 +382,13 @@ func directScrollCommandsAreNotDurableHeistDSL() throws {
     }
     """.utf8))
         Issue.record("Expected scroll JSON action to fail plan admission")
-    } catch let error as HeistPlanRuntimeSafetyError {
+    } catch let error as HeistPlanBuildError {
         expectNonDurableHeistActionFailure(
-            error.failures,
+            error.diagnostics,
             observed: "scroll is a direct client command, not a durable heist action"
         )
     } catch {
-        Issue.record("Expected runtime safety error, got \(error)")
+        Issue.record("Expected plan build error, got \(error)")
     }
 }
 
@@ -397,16 +397,15 @@ private let nonDurableHeistActionRepairHint =
     "this with a canonical durable DSL action."
 
 private func expectNonDurableHeistActionFailure(
-    _ failures: [HeistPlanRuntimeSafetyFailure],
+    _ diagnostics: [HeistBuildDiagnostic],
     observed: String,
     path: String = "$.body[0].action.command"
 ) {
-    #expect(failures.contains {
-        $0.path.description == path
-            && $0.contract == "durable heist action"
-            && $0.observed == observed
-            && $0.correction == nonDurableHeistActionRepairHint
-    }, "\(failures)")
+    #expect(diagnostics.contains {
+        $0.path == path
+            && $0.message == "durable heist action; observed \(observed)"
+            && $0.hint == nonDurableHeistActionRepairHint
+    }, "\(diagnostics)")
 }
 
 #if SWIFT_PACKAGE && (os(macOS) || os(Linux))

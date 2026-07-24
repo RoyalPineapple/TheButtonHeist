@@ -2,12 +2,12 @@ import Foundation
 
 public struct HeistContent: Sendable {
     let steps: [HeistStep]
-    let definitions: [HeistPlanAdmissionCandidate]
+    let definitions: [HeistPlan]
     let diagnostics: [HeistBuildDiagnostic]
 
     init(
         _ steps: [HeistStep] = [],
-        definitions: [HeistPlanAdmissionCandidate] = [],
+        definitions: [HeistPlan] = [],
         diagnostics: [HeistBuildDiagnostic] = []
     ) {
         self.steps = steps
@@ -78,7 +78,8 @@ private extension HeistPlan {
     ) throws {
         let content = try content()
         try Self.throwIfBuildDiagnostics(content.diagnostics)
-        self = try Self.validatedDSLPlan(
+        self = try HeistPlan(
+            version: HeistPlan.currentVersion,
             name: name,
             definitions: content.definitions,
             body: content.steps
@@ -92,59 +93,18 @@ private extension HeistPlan {
     ) throws {
         let content = try content()
         try Self.throwIfBuildDiagnostics(content.diagnostics)
-        guard !content.steps.isEmpty || !content.definitions.isEmpty else {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: [HeistPlanCodingKey("body")],
-                debugDescription: "HeistPlan requires a non-empty body or definitions"
-            ))
-        }
-        self = try HeistPlanAdmissionCandidate(
+        self = try HeistPlan(
+            version: HeistPlan.currentVersion,
             name: name,
             parameter: parameter,
             definitions: content.definitions,
-            body: content.steps.map(HeistStepAdmissionCandidate.init)
-        ).validatedSemantics()
-    }
-
-    static func validatedDSLPlan(
-        name: HeistPlanName? = nil,
-        definitions: [HeistPlanAdmissionCandidate] = [],
-        body: [HeistStep]
-    ) throws -> HeistPlan {
-        guard !body.isEmpty || !definitions.isEmpty else {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: [HeistPlanCodingKey("body")],
-                debugDescription: "HeistPlan requires a non-empty body or definitions"
-            ))
-        }
-        return try HeistPlanAdmissionCandidate(
-            name: name,
-            definitions: definitions,
-            body: body.map(HeistStepAdmissionCandidate.init)
-        ).validatedSemantics()
+            body: content.steps
+        )
     }
 
     static func throwIfBuildDiagnostics(_ diagnostics: [HeistBuildDiagnostic]) throws {
         guard !diagnostics.isEmpty else { return }
         throw HeistPlanBuildError(diagnostics: diagnostics)
-    }
-}
-
-private struct HeistPlanCodingKey: CodingKey {
-    let stringValue: String
-    let intValue: Int?
-
-    init(_ stringValue: String) {
-        self.stringValue = stringValue
-        self.intValue = nil
-    }
-
-    init?(stringValue: String) {
-        self.init(stringValue)
-    }
-
-    init?(intValue: Int) {
-        return nil
     }
 }
 
@@ -161,7 +121,7 @@ public enum HeistBuilder {
     public static func buildExpression(_ expression: HeistPlan) -> HeistContent {
         HeistContent(
             expression.body,
-            definitions: expression.definitions.map(HeistPlanAdmissionCandidate.init)
+            definitions: expression.definitions
         )
     }
 
@@ -214,9 +174,9 @@ public enum HeistBuilder {
     }
 
     private static func mergeDefinitions(
-        _ definitions: [HeistPlanAdmissionCandidate]
-    ) -> [HeistPlanAdmissionCandidate] {
-        mergeHeistDefinitions(definitions, duplicatePolicy: .discardIdentical)
+        _ definitions: [HeistPlan]
+    ) -> [HeistPlan] {
+        HeistPlan.mergeDefinitions(definitions, duplicatePolicy: .discardIdentical)
     }
 }
 
@@ -274,11 +234,11 @@ public struct HeistDef<Input>: Sendable {
                 return HeistContent(diagnostics: content.diagnostics.map { $0.withPath(renderedPath) })
             }
             return HeistContent(definitions: [
-                nestedHeistDefinition(
+                try HeistPlan.nestedDefinition(
                     path: path,
                     parameter: parameter,
                     definitions: content.definitions,
-                    body: content.steps.map(HeistStepAdmissionCandidate.init)
+                    body: content.steps
                 ),
             ])
         } catch {
@@ -303,7 +263,7 @@ public struct HeistDef<Input>: Sendable {
 public struct HeistInvocationContent {
     let path: HeistInvocationPath
     let argument: HeistArgument
-    let definitions: [HeistPlanAdmissionCandidate]
+    let definitions: [HeistPlan]
     let expectation: AuthoredActionExpectation
 
     var heistContent: HeistContent {
@@ -328,7 +288,7 @@ public struct HeistInvocationContent {
     init(
         path: HeistInvocationPath,
         argument: HeistArgument,
-        definitions: [HeistPlanAdmissionCandidate],
+        definitions: [HeistPlan],
         expectation: AuthoredActionExpectation = .default
     ) {
         self.path = path

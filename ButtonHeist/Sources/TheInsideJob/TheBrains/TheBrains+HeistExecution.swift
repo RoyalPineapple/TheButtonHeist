@@ -31,14 +31,14 @@ extension TheBrains {
     internal struct HeistExecutionRuntime {
         internal let execute: @MainActor (
             ResolvedHeistActionCommand,
-            ResolvedWaitRuntimeInput?
+            Settlement.ActionExpectation?
         ) async -> RuntimeActionExecution
         internal let settle: @MainActor (Settlement.Command) async -> Settlement.Result
 
         internal init(
             execute: @escaping @MainActor (
                 ResolvedHeistActionCommand,
-                ResolvedWaitRuntimeInput?
+                Settlement.ActionExpectation?
             ) async -> RuntimeActionExecution,
             settle: @escaping @MainActor (Settlement.Command) async -> Settlement.Result
         ) {

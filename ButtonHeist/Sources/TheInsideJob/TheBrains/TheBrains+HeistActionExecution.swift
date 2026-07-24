@@ -38,10 +38,15 @@ extension TheBrains {
         }
 
         let expectation = step.expectationPolicy.expectedStep
-        let resolvedExpectation: ResolvedWaitRuntimeInput?
+        let resolvedExpectation: Settlement.ActionExpectation?
         do {
             resolvedExpectation = try expectation.map {
-                try ResolvedWaitRuntimeInput(resolving: $0, in: environment)
+                let resolved = try $0.resolve(in: environment)
+                return Settlement.ActionExpectation(
+                    authored: $0.predicate,
+                    resolved: resolved.predicate,
+                    timeout: resolved.timeout
+                )
             }
         } catch {
             guard let expectation else {

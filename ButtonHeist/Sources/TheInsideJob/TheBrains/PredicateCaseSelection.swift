@@ -5,11 +5,17 @@ import TheScore
 
 @MainActor
 func evaluatePredicateCases(
-    _ cases: [ResolvedPredicateCaseRuntimeInput],
+    _ cases: [PredicateCase],
+    resolved: [ResolvedScreenAssertion],
     in settlement: Settlement.Result
 ) -> HeistCaseSelectionResult {
-    let results = cases.map {
-        Settlement.PredicateEvaluation.caseMatch($0, in: settlement)
+    precondition(cases.count == resolved.count, "resolved predicate case count must match authored cases")
+    let results = cases.indices.map {
+        Settlement.PredicateEvaluation.caseMatch(
+            cases[$0],
+            resolved: resolved[$0],
+            in: settlement
+        )
     }
     return .selectingFirstMatch(
         cases: results,

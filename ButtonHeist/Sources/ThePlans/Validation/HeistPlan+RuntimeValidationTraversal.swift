@@ -5,7 +5,7 @@ import Foundation
 /// Totality rests on three bounds: (a) acyclic call graph
 /// [HeistCallGraph] - structural; (b) bounded ForEach; (c) timeout-floored
 /// RepeatUntil/WaitFor - runtime floors.
-struct HeistPlanRuntimeSafetyValidator {
+package struct HeistPlanRuntimeSafetyValidator {
     private static let nestedCollectionLoopContract = "collection loops must not be nested"
     private static let nestedCollectionLoopCorrection =
         "Flatten this heist so ForEach bodies contain only non-collection steps."
@@ -20,8 +20,16 @@ struct HeistPlanRuntimeSafetyValidator {
     var reportedDefinitionLimit = false
     var reportedTotalStringLimit = false
 
-    init(limits: HeistPlanRuntimeSafetyLimits) {
+    package init(limits: HeistPlanRuntimeSafetyLimits) {
         self.limits = limits
+    }
+
+    package mutating func admit(_ plan: HeistPlan) throws -> HeistPlan {
+        inspect(plan)
+        guard failures.isEmpty else {
+            throw HeistPlanRuntimeSafetyError(failures: failures)
+        }
+        return plan
     }
 
     mutating func inspect(_ plan: HeistPlan) {

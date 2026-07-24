@@ -621,10 +621,9 @@ diagnostic, and response rendering turns them into strings.
 flowchart TD
     SwiftAuthor["Swift DSL authoring"] --> Fragment["Opaque HeistContent<br/>builder fragment"]
     SourceAuthor["Canonical runtime heist source"] --> Parse["Lex and parse source"]
-    Fragment --> Candidate["Package admission shape<br/>HeistPlanAdmissionCandidate"]
-    Parse --> Candidate
-    Candidate --> Validate["Admit once<br/>semantic validation + runtime bounds"]
-    Validate --> Plan["Executable HeistPlan"]
+    Fragment --> Plan["Recursive HeistPlan<br/>root structural admission"]
+    Parse --> Plan
+    Plan --> Validate["HeistPlanRuntimeSafetyValidator<br/>cross-tree bounds + references"]
     Validate --> OfflineReport["validate_heist<br/>plan + invocation + lint report"]
     Plan --> FenceCommand["Fence command<br/>run_heist / perform / wait"]
     FenceCommand --> HandoffSocket["Handoff socket<br/>client version == app version"]

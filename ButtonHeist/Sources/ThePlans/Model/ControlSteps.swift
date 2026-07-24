@@ -11,7 +11,10 @@ public struct ConditionalStep: Codable, Sendable, Equatable {
 
     public init(cases: [PredicateCase], elseBody: [HeistStep]? = nil) throws {
         guard !cases.isEmpty else {
-            throw HeistPlanError.emptyPredicateCases("conditional")
+            throw HeistPlanBuildError.planStructure(
+                path: "$.conditional.cases",
+                message: "conditional requires at least one predicate case"
+            )
         }
         self.cases = cases
         self.elseBody = elseBody

@@ -1,13 +1,11 @@
 import Testing
 @_spi(ButtonHeistInternals) import ThePlans
 
-private func validatedDefinitions(_ definitions: [HeistPlanAdmissionCandidate]) throws -> [HeistPlan] {
-    try HeistPlanAdmissionCandidate(
+private func validatedDefinitions(_ definitions: [HeistPlan]) throws -> [HeistPlan] {
+    try admitRuntimeSafety(structurallyAdmittedPlan(
         definitions: definitions,
         body: [.warn(WarnStep(message: "root"))]
-    )
-    .validatedForRuntimeSafety()
-    .definitions
+    )).definitions
 }
 
 private func admittedSteps<Input>(
@@ -47,8 +45,8 @@ func heistDefinitionsCompileToInvocationsWithLocalDefinitions() throws {
         )),
     ])
     #expect(try heist.definitions == validatedDefinitions([
-        HeistPlanAdmissionCandidate(name: "LibraryScreen", definitions: [
-            HeistPlanAdmissionCandidate(
+        structurallyAdmittedPlan(name: "LibraryScreen", definitions: [
+            structurallyAdmittedPlan(
                 name: "addToCart",
                 parameter: .string(name: "item"),
                 body: [
@@ -78,8 +76,8 @@ func `string heist definitions default parameter to input`() throws {
     }
 
     #expect(try heist.definitions == validatedDefinitions([
-        HeistPlanAdmissionCandidate(name: "SearchScreen", definitions: [
-            HeistPlanAdmissionCandidate(
+        structurallyAdmittedPlan(name: "SearchScreen", definitions: [
+            structurallyAdmittedPlan(
                 name: "search",
                 parameter: .string(name: "input"),
                 body: [
@@ -107,8 +105,8 @@ func `accessibility target heist definitions default parameter to input`() throw
     }
 
     #expect(try heist.definitions == validatedDefinitions([
-        HeistPlanAdmissionCandidate(name: "Rows", definitions: [
-            HeistPlanAdmissionCandidate(
+        structurallyAdmittedPlan(name: "Rows", definitions: [
+            structurallyAdmittedPlan(
                 name: "delete",
                 parameter: .accessibilityTarget(name: "input"),
                 body: [
@@ -136,14 +134,13 @@ func heistDefinitionsRejectConflictingDuplicatesDuringValidation() throws {
             try second("Bread")
         }
         Issue.record("Expected conflicting nested definitions to fail admission")
-    } catch let error as HeistPlanRuntimeSafetyError {
-        let failure = try #require(error.failures.first)
-        #expect(error.failures.count == 1)
-        #expect(failure.path.description == "$.definitions[0].definitions[1].name")
-        #expect(failure.contract == "duplicate heist definition names are not allowed in the same scope")
-        #expect(failure.observed == #""addToCart""#)
+    } catch let error as HeistPlanBuildError {
+        let diagnostic = try #require(error.diagnostics.first)
+        #expect(error.diagnostics.count == 1)
+        #expect(diagnostic.path == "$.definitions[0].definitions[1].name")
+        #expect(diagnostic.message == #"duplicate heist definition names are not allowed in the same scope; observed "addToCart""#)
     } catch {
-        Issue.record("Expected HeistPlanRuntimeSafetyError, got \(error)")
+        Issue.record("Expected HeistPlanBuildError, got \(error)")
     }
 }
 
@@ -164,13 +161,13 @@ func heistDefinitionsCarryLocalDependenciesInDefinitionScope() throws {
         try LibraryScreen.addToCart("Milk")
     }
     #expect(try heist.definitions == validatedDefinitions([
-        HeistPlanAdmissionCandidate(name: "LibraryScreen", definitions: [
-            HeistPlanAdmissionCandidate(
+        structurallyAdmittedPlan(name: "LibraryScreen", definitions: [
+            structurallyAdmittedPlan(
                 name: "addToCart",
                 parameter: .string(name: "item"),
                 definitions: [
-                    HeistPlanAdmissionCandidate(name: "AddButton", definitions: [
-                        HeistPlanAdmissionCandidate(
+                    structurallyAdmittedPlan(name: "AddButton", definitions: [
+                        structurallyAdmittedPlan(
                             name: "tap",
                             body: [
                                 .action(ActionStep(command: .activate(.label("Add to Cart")))),

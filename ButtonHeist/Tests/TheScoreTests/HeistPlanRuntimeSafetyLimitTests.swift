@@ -19,7 +19,7 @@ func runtimeSafetyEnforcesBounds() throws {
         .exists(.label("Nested")),
         .exists(.label("Sibling")),
     ]))
-    let raw = HeistPlanAdmissionCandidate(body: [
+    let raw = structurallyAdmittedPlan(body: [
         .wait(WaitStep(predicate: deepPredicate, timeout: 0.5)),
         .forEachElement(try ForEachElementStep(
             matching: .label("Delete"),
@@ -48,7 +48,7 @@ func runtimeSafetyEnforcesBounds() throws {
 
 @Test
 func runtimeSafetyRequiresForEachElementPositiveLimitUnderConfiguredMax() throws {
-    #expect(throws: HeistPlanError.self) {
+    #expect(throws: HeistPlanBuildError.self) {
         _ = try ForEachElementStep(
             matching: .label("Delete"),
             limit: 0,
@@ -57,7 +57,7 @@ func runtimeSafetyRequiresForEachElementPositiveLimitUnderConfiguredMax() throws
         )
     }
 
-    let raw = HeistPlanAdmissionCandidate(body: [
+    let raw = structurallyAdmittedPlan(body: [
         .forEachElement(try ForEachElementStep(
             matching: .label("Delete"),
             limit: 2,
@@ -80,7 +80,7 @@ func runtimeSafetyRequiresForEachElementPositiveLimitUnderConfiguredMax() throws
 
 @Test
 func runtimeSafetyRequiresForEachStringExplicitValuesUnderConfiguredMax() throws {
-    #expect(throws: HeistPlanError.self) {
+    #expect(throws: HeistPlanBuildError.self) {
         _ = try ForEachStringStep(
             values: [],
             parameter: "item",
@@ -88,7 +88,7 @@ func runtimeSafetyRequiresForEachStringExplicitValuesUnderConfiguredMax() throws
         )
     }
 
-    let raw = HeistPlanAdmissionCandidate(body: [
+    let raw = structurallyAdmittedPlan(body: [
         .forEachString(try ForEachStringStep(
             values: ["Milk", "Eggs"],
             parameter: "item",
@@ -117,7 +117,7 @@ func runtimeSafetyUsesTheAdmittedWaitTimeoutWithoutASecondRepeatUntilCap() throw
         validatingSeconds: configuredMaximum,
         maximumSeconds: configuredMaximum
     )
-    let raw = HeistPlanAdmissionCandidate(body: [
+    let raw = structurallyAdmittedPlan(body: [
         .repeatUntil(try RepeatUntilStep(
             predicate: .exists(.label("Done")),
             timeout: timeout,
@@ -130,7 +130,7 @@ func runtimeSafetyUsesTheAdmittedWaitTimeoutWithoutASecondRepeatUntilCap() throw
 
 @Test
 func runtimeSafetyRejectsNestedStepDepthWithPreciseDiagnostic() throws {
-    let raw = HeistPlanAdmissionCandidate(body: [
+    let raw = structurallyAdmittedPlan(body: [
         .conditional(try ConditionalStep(cases: [
             PredicateCase(predicate: .exists(.label("Home")), body: [.warn(WarnStep(message: "nested"))]),
         ])),
@@ -150,9 +150,9 @@ func runtimeSafetyRejectsNestedStepDepthWithPreciseDiagnostic() throws {
 
 @Test
 func runtimeSafetyRejectsMaxDefinitionsWithPreciseDiagnostic() throws {
-    let raw = HeistPlanAdmissionCandidate(definitions: [
-        HeistPlanAdmissionCandidate(name: "one", body: [.warn(WarnStep(message: "one"))]),
-        HeistPlanAdmissionCandidate(name: "two", body: [.warn(WarnStep(message: "two"))]),
+    let raw = structurallyAdmittedPlan(definitions: [
+        structurallyAdmittedPlan(name: "one", body: [.warn(WarnStep(message: "one"))]),
+        structurallyAdmittedPlan(name: "two", body: [.warn(WarnStep(message: "two"))]),
     ], body: [
         .warn(WarnStep(message: "body")),
     ])
@@ -172,11 +172,11 @@ func runtimeSafetyRejectsMaxDefinitionsWithPreciseDiagnostic() throws {
 @Test
 func runtimeSafetyRejectsStandardDefinitionCapByDefault() throws {
     let definitions = try (0...HeistPlanRuntimeSafetyLimits.standardMaxDefinitions).map { index in
-        HeistPlanAdmissionCandidate(name: try HeistPlanName(validating: "definition\(index)"), body: [
+        structurallyAdmittedPlan(name: try HeistPlanName(validating: "definition\(index)"), body: [
             .warn(WarnStep(message: try HeistWarningMessage(validating: "definition \(index)"))),
         ])
     }
-    let raw = HeistPlanAdmissionCandidate(definitions: definitions, body: [
+    let raw = structurallyAdmittedPlan(definitions: definitions, body: [
         .warn(WarnStep(message: "body")),
     ])
 
@@ -203,13 +203,13 @@ func runtimeSafetyAllowsCollectionLoopsInsideControlFlowButRejectsNestedCollecti
         parameter: "target",
         body: [.action(ActionStep(command: .activate(.ref("target"))))]
     )
-    let allowedCases: [HeistPlanAdmissionCandidate] = [
-        HeistPlanAdmissionCandidate(body: [
+    let allowedCases: [HeistPlan] = [
+        structurallyAdmittedPlan(body: [
             .conditional(try ConditionalStep(cases: [
                 PredicateCase(predicate: .exists(.label("Home")), body: [.forEachString(nestedString)]),
             ])),
         ]),
-        HeistPlanAdmissionCandidate(body: [
+        structurallyAdmittedPlan(body: [
             .wait(WaitStep(
                 predicate: .exists(.label("Home")),
                 timeout: 1,
@@ -217,9 +217,9 @@ func runtimeSafetyAllowsCollectionLoopsInsideControlFlowButRejectsNestedCollecti
             )),
         ]),
     ]
-    let rejectedCases: [(HeistPlanAdmissionCandidate, String, String)] = [
+    let rejectedCases: [(HeistPlan, String, String)] = [
         (
-            HeistPlanAdmissionCandidate(body: [
+            structurallyAdmittedPlan(body: [
                 .forEachElement(try ForEachElementStep(
                     matching: .label("Row"),
                     limit: 1,
@@ -231,7 +231,7 @@ func runtimeSafetyAllowsCollectionLoopsInsideControlFlowButRejectsNestedCollecti
             "for_each_string inside collection loop"
         ),
         (
-            HeistPlanAdmissionCandidate(body: [
+            structurallyAdmittedPlan(body: [
                 .forEachString(try ForEachStringStep(
                     values: ["Row"],
                     parameter: "rowName",
@@ -261,7 +261,7 @@ func runtimeSafetyAllowsCollectionLoopsInsideControlFlowButRejectsNestedCollecti
 
 @Test
 func runtimeSafetyEnforcesBoundsOnCollectionLoopsInsideControlFlow() throws {
-    let raw = HeistPlanAdmissionCandidate(body: [
+    let raw = structurallyAdmittedPlan(body: [
         .conditional(try ConditionalStep(cases: [
             PredicateCase(predicate: .exists(.label("Home")), body: [
                 .forEachString(try ForEachStringStep(

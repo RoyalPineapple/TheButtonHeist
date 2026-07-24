@@ -203,7 +203,7 @@ func `heist artifact validates required entry against root plan name`() throws {
 @Test
 func `heist artifact accepts parameterized root entry through validation contract`() throws {
     let temp = try PlansTemporaryDirectory()
-    let raw = HeistPlanAdmissionCandidate(
+    let raw = structurallyAdmittedPlan(
         name: "search",
         parameter: .string(name: "query"),
         body: [.action(ActionStep(command: .typeText(
@@ -228,11 +228,11 @@ func `heist artifact accepts parameterized root entry through validation contrac
 func `heist artifact loading rejects standard definition cap`() throws {
     let temp = try PlansTemporaryDirectory()
     let definitions = try (0...250).map { index in
-        HeistPlanAdmissionCandidate(name: try HeistPlanName(validating: "definition\(index)"), body: [
+        structurallyAdmittedPlan(name: try HeistPlanName(validating: "definition\(index)"), body: [
             .warn(WarnStep(message: try HeistWarningMessage(validating: "definition \(index)"))),
         ])
     }
-    let raw = HeistPlanAdmissionCandidate(
+    let raw = structurallyAdmittedPlan(
         name: "tooManyDefinitions",
         definitions: definitions,
         body: [.warn(WarnStep(message: "body"))]

@@ -242,7 +242,7 @@ final class HeistPlanTests: XCTestCase {
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("emptyPredicateCases"), "\(error)")
+            XCTAssertTrue("\(error)".contains("conditional requires at least one predicate case"), "\(error)")
         }
     }
 
@@ -424,7 +424,7 @@ final class HeistPlanTests: XCTestCase {
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(zeroJSON.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("invalidForEachLimit"), "\(error)")
+            XCTAssertTrue("\(error)".contains("for_each_element limit must be positive; observed 0"), "\(error)")
         }
 
         let negativeJSON = """
@@ -440,7 +440,7 @@ final class HeistPlanTests: XCTestCase {
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(negativeJSON.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("invalidForEachLimit"), "\(error)")
+            XCTAssertTrue("\(error)".contains("for_each_element limit must be positive; observed -1"), "\(error)")
         }
     }
 

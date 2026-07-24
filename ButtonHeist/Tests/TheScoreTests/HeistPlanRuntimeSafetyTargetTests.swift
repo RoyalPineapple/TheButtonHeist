@@ -8,30 +8,29 @@ private let nonDurableHeistActionRepairHint =
     "this with a canonical durable DSL action."
 
 private func expectNonDurableHeistActionFailure(
-    _ failures: [HeistPlanRuntimeSafetyFailure],
+    _ diagnostics: [HeistBuildDiagnostic],
     observed: String,
     path: String = "$.body[0].action.command"
 ) {
-    #expect(failures.contains {
-        $0.path.description == path
-            && $0.contract == "durable heist action"
-            && $0.observed == observed
-            && $0.correction == nonDurableHeistActionRepairHint
-    }, "\(failures)")
+    #expect(diagnostics.contains {
+        $0.path == path
+            && $0.message == "durable heist action; observed \(observed)"
+            && $0.hint == nonDurableHeistActionRepairHint
+    }, "\(diagnostics)")
 }
 
 @Test
 func runtimeSafetyRejectsInvalidRefs() throws {
     let tooLong = String(repeating: "a", count: HeistPlanRuntimeSafetyLimits.standard.maxParameterBytes + 1)
-    let cases: [(String, HeistPlanAdmissionCandidate, String)] = [
+    let cases: [(String, HeistPlan, String)] = [
         (
             "unknown target ref",
-            HeistPlanAdmissionCandidate(body: [.action(ActionStep(command: .activate(.ref("target"))))]),
+            structurallyAdmittedPlan(body: [.action(ActionStep(command: .activate(.ref("target"))))]),
             "target ref must resolve"
         ),
         (
             "unknown text ref",
-            HeistPlanAdmissionCandidate(body: [.action(ActionStep(command: .typeText(
+            structurallyAdmittedPlan(body: [.action(ActionStep(command: .typeText(
                 reference: "item",
                 target: .predicate(.label("Search"))
             )))]),
@@ -39,7 +38,7 @@ func runtimeSafetyRejectsInvalidRefs() throws {
         ),
         (
             "long target ref",
-            HeistPlanAdmissionCandidate(body: [.action(ActionStep(command: .activate(.ref(
+            structurallyAdmittedPlan(body: [.action(ActionStep(command: .activate(.ref(
                 try HeistReferenceName(validating: tooLong)
             ))))]),
             "max parameter/ref length"
@@ -64,10 +63,10 @@ func heistPlanConstructionRejectsNonDurableActions() throws {
     do {
         _ = try HeistPlan(body: [.action(ActionStep(command: command))])
         Issue.record("Expected non-durable action to fail plan construction")
-    } catch let error as HeistPlanRuntimeSafetyError {
-        expectNonDurableHeistActionFailure(error.failures, observed: expectedFailure)
+    } catch let error as HeistPlanBuildError {
+        expectNonDurableHeistActionFailure(error.diagnostics, observed: expectedFailure)
     } catch {
-        Issue.record("Expected runtime safety error, got \(error)")
+        Issue.record("Expected plan build error, got \(error)")
     }
 }
 
@@ -101,16 +100,16 @@ func heistPlanJSONDecodeRejectsNonDurableActions() throws {
     do {
         _ = try JSONDecoder().decode(HeistPlan.self, from: Data(json.utf8))
         Issue.record("Expected non-durable JSON action to fail plan decode")
-    } catch let error as HeistPlanRuntimeSafetyError {
-        expectNonDurableHeistActionFailure(error.failures, observed: expectedFailure)
+    } catch let error as HeistPlanBuildError {
+        expectNonDurableHeistActionFailure(error.diagnostics, observed: expectedFailure)
     } catch {
-        Issue.record("Expected runtime safety error, got \(error)")
+        Issue.record("Expected plan build error, got \(error)")
     }
 }
 
 @Test
 func runtimeSafetyRejectsRefsOutsideTheirLoopScope() throws {
-    let raw = HeistPlanAdmissionCandidate(body: [
+    let raw = structurallyAdmittedPlan(body: [
         .forEachString(try ForEachStringStep(
             values: ["Milk"],
             parameter: "item",
@@ -143,7 +142,7 @@ func runtimeSafetyRejectsRefsOutsideTheirLoopScope() throws {
 
 @Test
 func runtimeSafetyRejectsStringRefThatLowersToInvalidCommandPayload() throws {
-    let raw = HeistPlanAdmissionCandidate(body: [
+    let raw = structurallyAdmittedPlan(body: [
         .forEachString(try ForEachStringStep(
             values: [""],
             parameter: "item",
@@ -185,7 +184,7 @@ func runtimeSafetyRejectsEmptyBroadConcreteAccessibilityTargets() throws {
     ]
 
     for (label, target) in targets {
-        let raw = HeistPlanAdmissionCandidate(body: [
+        let raw = structurallyAdmittedPlan(body: [
             .action(ActionStep(command: .activate(target))),
         ])
 
@@ -200,10 +199,10 @@ func runtimeSafetyRejectsEmptyBroadConcreteAccessibilityTargets() throws {
 
 @Test
 func runtimeSafetyRejectsNegativeOrdinalsBeforeRuntimeUse() throws {
-    let concreteRaw = HeistPlanAdmissionCandidate(body: [
+    let concreteRaw = structurallyAdmittedPlan(body: [
         .action(ActionStep(command: .activate(.predicate(.label("Save"), ordinal: -1)))),
     ])
-    let expressionRaw = HeistPlanAdmissionCandidate(body: [
+    let expressionRaw = structurallyAdmittedPlan(body: [
         .action(ActionStep(command: .activate(.predicate(.label("Save"), ordinal: -1)))),
     ])
 
@@ -219,7 +218,7 @@ func runtimeSafetyRejectsNegativeOrdinalsBeforeRuntimeUse() throws {
 
 @Test
 func runtimeSafetyRejectsEmptyElementPredicatesBeforeRuntimeUse() throws {
-    let raw = HeistPlanAdmissionCandidate(body: [
+    let raw = structurallyAdmittedPlan(body: [
         .wait(WaitStep(predicate: .exists(.predicate(ElementPredicate())))),
     ])
 

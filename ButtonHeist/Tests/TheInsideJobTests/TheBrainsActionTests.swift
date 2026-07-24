@@ -557,9 +557,9 @@ final class TheBrainsActionTests: XCTestCase {
                 }
                 let settlementCommand = Settlement.Command.action(.init(
                     command: command,
-                    predicate: .init(authored: expectation.predicateExpression, resolved: expectation.predicate),
+                    predicate: expectation.predicate,
                     allowances: .init(readiness: .milliseconds(Int64(SettleSession.defaultTimeoutMs)),
-                        expectation: .milliseconds(Int64((expectation.timeout.seconds * 1_000).rounded(.up)))
+                        expectation: expectation.allowance
                     ),
                     baseline: .capture
                 ))

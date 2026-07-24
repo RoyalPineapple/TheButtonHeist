@@ -741,11 +741,11 @@ func emptyHeistRejectsPlanUsingDecodedHeistPlanContract() {
     do {
         _ = try HeistPlan {}
         Issue.record("Expected empty HeistPlan construction to throw")
-    } catch DecodingError.dataCorrupted(let context) {
-        #expect(context.codingPath.map(\.stringValue) == ["body"])
-        #expect(context.debugDescription == "HeistPlan requires a non-empty body or definitions")
+    } catch let error as HeistPlanBuildError {
+        #expect(error.diagnostics.map(\.path) == ["$.body"])
+        #expect(error.diagnostics.map(\.message) == ["heist plan must contain a body or nested definitions"])
     } catch {
-        Issue.record("Expected DecodingError.dataCorrupted, got \(error)")
+        Issue.record("Expected HeistPlanBuildError, got \(error)")
     }
 }
 

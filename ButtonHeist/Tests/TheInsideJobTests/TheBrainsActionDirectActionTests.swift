@@ -529,7 +529,7 @@ extension TheBrainsActionTests {
 
         let authoredWait = WaitStep(predicate: .exists(target), timeout: 0.01)
         await brains.vault.resetInterfaceForLifecycle()
-        let singleWait = await brains.performWait(step: try resolvedWait(authoredWait))
+        let singleWait = await brains.performWait(step: authoredWait)
         await brains.vault.resetInterfaceForLifecycle()
         let heistWait = try await heistStepResult(for: .wait(authoredWait), label: "wait")
         XCTAssertEqual(heistWait.outcome.isSuccess, singleWait.outcome.isSuccess)
@@ -634,9 +634,8 @@ extension TheBrainsActionTests {
 
     func testWaitReportsUnavailableAccessibilityTreeAtItsBaselineBoundary() async throws {
         let step = WaitStep(predicate: .exists(.label("never")), timeout: try .milliseconds(1))
-        let resolvedStep = try resolvedWait(step)
         let result = await withNoTraversableWindows {
-            await brains.performWait(step: resolvedStep)
+            await brains.performWait(step: step)
         }
 
         XCTAssertFalse(result.outcome.isSuccess)

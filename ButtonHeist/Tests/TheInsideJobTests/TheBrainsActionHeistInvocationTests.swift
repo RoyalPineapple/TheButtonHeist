@@ -11,27 +11,23 @@ import XCTest
 extension TheBrainsActionTests {
 
     func testHeistRuntimeSafetyRejectsInvalidPlanBeforeDispatchOrObservation() async throws {
-        let raw = HeistPlanAdmissionCandidate(body: [
+        XCTAssertThrowsError(try HeistPlan(body: [
             .action(ActionStep(command: .activate(.ref("missing")))),
-        ])
-
-        XCTAssertThrowsError(try raw.validatedForRuntimeSafety()) { error in
+        ])) { error in
             XCTAssertTrue(String(describing: error).contains("$.body[0].action.command.payload.target"))
             XCTAssertTrue(String(describing: error).contains("target ref must resolve"))
         }
     }
 
     func testHeistRuntimeSafetyRejectsOversizedForEachBeforeObservation() async throws {
-        let raw = HeistPlanAdmissionCandidate(body: [
+        XCTAssertThrowsError(try HeistPlan(body: [
             .forEachElement(try ForEachElementStep(
                 matching: .label("Delete"),
                 limit: HeistPlanRuntimeSafetyLimits.standard.maxForEachElementLimit + 1,
                 parameter: "target",
                 body: [.action(ActionStep(command: .activate(.ref("target"))))]
             )),
-        ])
-
-        XCTAssertThrowsError(try raw.validatedForRuntimeSafety()) { error in
+        ])) { error in
             XCTAssertTrue(String(describing: error).contains("max for_each_element limit"))
         }
     }
@@ -45,30 +41,16 @@ extension TheBrainsActionTests {
                 return ActionResult.success(payload: .activate)
             }
         )
-        let plan = try HeistPlanAdmissionCandidate(definitions: [
-            HeistPlanAdmissionCandidate(
-                name: "addToCart",
-                parameter: .string(name: "item"),
-                definitions: [
-                    HeistPlanAdmissionCandidate(name: "tapAddButton", body: [
-                        .action(ActionStep(
-                            command: .activate(.label("Add to Cart"))
-                        )),
-                    ]),
-                ],
-                body: [
-                    .action(ActionStep(command: .activate(.label(
-                        HeistReferenceName(stringLiteral: "item")
-                    )))),
-                    .invoke(HeistInvocationStep(path: "tapAddButton")),
-                ]
-            ),
-        ], body: [
-            .invoke(HeistInvocationStep(
-                path: "addToCart",
-                argument: .string("Milk")
-            )),
-        ]).validatedForRuntimeSafety()
+        let tapAddButton = HeistDef<Void>("tapAddButton") {
+            Activate(.label("Add to Cart"))
+        }
+        let addToCart = HeistDef<String>("addToCart", parameter: "item") { item in
+            Activate(.label(item))
+            try tapAddButton()
+        }
+        let plan = try HeistPlan {
+            try addToCart("Milk")
+        }
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
 
@@ -354,18 +336,15 @@ extension TheBrainsActionTests {
                 return ActionResult.success(payload: .activate)
             }
         )
-        let plan = try HeistPlanAdmissionCandidate(definitions: [
-            HeistPlanAdmissionCandidate(name: "lib", definitions: [
-                HeistPlanAdmissionCandidate(name: "payOpen", body: [
-                    .action(ActionStep(command: .activate(.predicate(.label("Pay"))))),
-                ]),
-                HeistPlanAdmissionCandidate(name: "checkout", body: [
-                    .invoke(HeistInvocationStep(path: "lib.payOpen")),
-                ]),
-            ], body: []),
-        ], body: [
-            .invoke(HeistInvocationStep(path: "lib.checkout")),
-        ]).validatedForRuntimeSafety()
+        let payOpen = HeistDef<Void>("lib.payOpen") {
+            Activate(.label("Pay"))
+        }
+        let checkout = HeistDef<Void>("lib.checkout") {
+            try payOpen()
+        }
+        let plan = try HeistPlan {
+            try checkout()
+        }
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
 

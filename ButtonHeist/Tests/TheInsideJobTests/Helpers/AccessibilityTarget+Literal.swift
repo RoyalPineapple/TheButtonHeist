@@ -17,13 +17,6 @@ extension TheVault.TargetResolution {
     }
 }
 
-func resolvedWait(
-    _ authored: WaitStep,
-    in environment: HeistExecutionEnvironment = .empty
-) throws -> ResolvedWaitRuntimeInput {
-    try ResolvedWaitRuntimeInput(resolving: authored, in: environment)
-}
-
 func resolvedPredicate(
     _ authored: AccessibilityPredicate,
     in environment: HeistExecutionEnvironment = .empty

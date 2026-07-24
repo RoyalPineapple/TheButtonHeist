@@ -1,7 +1,7 @@
 import Foundation
 
 extension HeistPlanSourceParser {
-    mutating func parseRootHeistPlan() throws -> HeistPlanAdmissionCandidate {
+    mutating func parseRootHeistPlan() throws -> HeistPlan {
         let name = try parseCalleeName()
         guard name == ["HeistPlan"] else {
             throw error(previous, "expected `HeistPlan { ... }`")
@@ -13,8 +13,8 @@ extension HeistPlanSourceParser {
         untilRightBrace: Bool,
         allowDefinitions: Bool
     ) throws -> ParsedHeistBody {
-        var definitions: [HeistPlanAdmissionCandidate] = []
-        var steps: [HeistStepAdmissionCandidate] = []
+        var definitions: [HeistPlan] = []
+        var steps: [HeistStep] = []
         var seenStep = false
         while true {
             skipSemicolons()
@@ -42,7 +42,7 @@ extension HeistPlanSourceParser {
         return ParsedHeistBody(definitions: definitions, steps: steps)
     }
 
-    mutating func parseDefinition() throws -> HeistPlanAdmissionCandidate {
+    mutating func parseDefinition() throws -> HeistPlan {
         let callee = try parseCalleeName()
         switch callee {
         case ["HeistDef"]:
@@ -54,7 +54,7 @@ extension HeistPlanSourceParser {
         }
     }
 
-    mutating func parseNamespaceDefinition() throws -> HeistPlanAdmissionCandidate {
+    mutating func parseNamespaceDefinition() throws -> HeistPlan {
         try expectSymbol("(")
         let nameToken = currentToken
         let name = try parseStringLiteral()
@@ -63,7 +63,8 @@ extension HeistPlanSourceParser {
         guard body.steps.isEmpty else {
             throw error(previous, "Namespace blocks may contain HeistDef or Namespace declarations only")
         }
-        return HeistPlanAdmissionCandidate(
+        return try HeistPlan(
+            structuralVersion: HeistPlan.currentVersion,
             name: try parsePlanName(name, token: nameToken),
             parameter: .none,
             definitions: mergeDefinitions(body.definitions),
@@ -89,7 +90,7 @@ extension HeistPlanSourceParser {
 
     fileprivate mutating func parseHeistDef(
         parameterKind: HeistParameterKind
-    ) throws -> HeistPlanAdmissionCandidate {
+    ) throws -> HeistPlan {
         try expectSymbol("(")
         let pathToken = currentToken
         let path = try parseStringLiteral()
@@ -131,7 +132,7 @@ extension HeistPlanSourceParser {
             ))
         }
         let body = try parseHeistClosureBody(parameter: parameter, allowDefinitions: true)
-        return nestedHeistDefinition(
+        return try HeistPlan.nestedDefinition(
             path: definitionPath,
             parameter: parameter,
             definitions: mergeDefinitions(body.definitions),
@@ -139,11 +140,11 @@ extension HeistPlanSourceParser {
         )
     }
 
-    func mergeDefinitions(_ definitions: [HeistPlanAdmissionCandidate]) -> [HeistPlanAdmissionCandidate] {
-        mergeHeistDefinitions(definitions, duplicatePolicy: .preserve)
+    func mergeDefinitions(_ definitions: [HeistPlan]) -> [HeistPlan] {
+        HeistPlan.mergeDefinitions(definitions, duplicatePolicy: .preserve)
     }
 
-    mutating func parseStatement() throws -> [HeistStepAdmissionCandidate] {
+    mutating func parseStatement() throws -> [HeistStep] {
         let tryPrefix = try parseTryPrefixIfPresent()
         if let tryPrefix {
             if let correction = runHeistCorrectionAfterTryPrefix(startingAt: index) {
@@ -159,39 +160,39 @@ extension HeistPlanSourceParser {
 
         switch name {
         case ["Activate"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseElementTargetAction("Activate", makeCommand: HeistActionCommand.activate)))]
+            return [try parseActionStep(command: parseElementTargetAction("Activate", makeCommand: HeistActionCommand.activate))]
         case ["Increment"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseElementTargetAction("Increment", makeCommand: HeistActionCommand.increment)))]
+            return [try parseActionStep(command: parseElementTargetAction("Increment", makeCommand: HeistActionCommand.increment))]
         case ["Decrement"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseElementTargetAction("Decrement", makeCommand: HeistActionCommand.decrement)))]
+            return [try parseActionStep(command: parseElementTargetAction("Decrement", makeCommand: HeistActionCommand.decrement))]
         case ["TypeText"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseTypeTextAction()))]
+            return [try parseActionStep(command: parseTypeTextAction())]
         case ["ClearText"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseClearTextAction()))]
+            return [try parseActionStep(command: parseClearTextAction())]
         case ["CustomAction"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseCustomAction()))]
+            return [try parseActionStep(command: parseCustomAction())]
         case ["Rotor"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseRotorAction()))]
+            return [try parseActionStep(command: parseRotorAction())]
         case ["SetPasteboard"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseSetPasteboardAction()))]
+            return [try parseActionStep(command: parseSetPasteboardAction())]
         case ["TakeScreenshot"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseTakeScreenshotAction()))]
+            return [try parseActionStep(command: parseTakeScreenshotAction())]
         case ["ScreenActions", "Dismiss"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseDismissAction()))]
+            return [try parseActionStep(command: parseDismissAction())]
         case ["ScreenActions", "MagicTap"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseMagicTapAction()))]
+            return [try parseActionStep(command: parseMagicTapAction())]
         case ["Edit"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseEditAction()))]
+            return [try parseActionStep(command: parseEditAction())]
         case ["dismissKeyboard"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseDismissKeyboardAction()))]
+            return [try parseActionStep(command: parseDismissKeyboardAction())]
         case ["oneFingerTap"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseOneFingerTap()))]
+            return [try parseActionStep(command: parseOneFingerTap())]
         case ["longPress"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseLongPress()))]
+            return [try parseActionStep(command: parseLongPress())]
         case ["swipe"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseSwipe()))]
+            return [try parseActionStep(command: parseSwipe())]
         case ["drag"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseDrag()))]
+            return [try parseActionStep(command: parseDrag())]
         case ["WaitFor"]:
             return [try parseWaitFor()]
         case ["If"]:
@@ -204,17 +205,17 @@ extension HeistPlanSourceParser {
             let plan = try parseHeistPlanAfterCallee(allowDefinitions: false)
             return [.heist(plan)]
         case ["RunHeist"]:
-            return [HeistStepAdmissionCandidate(try parseRunHeist())]
+            return [try parseRunHeist()]
         case ["Warn"]:
-            return [HeistStepAdmissionCandidate(try parseWarn())]
+            return [try parseWarn()]
         case ["Fail"]:
-            return [HeistStepAdmissionCandidate(try parseFail())]
+            return [try parseFail()]
         default:
             throw error(previous, "unsupported ButtonHeist source statement '\(name.joined(separator: "."))'")
         }
     }
 
-    mutating func parseHeistPlanAfterCallee(allowDefinitions: Bool) throws -> HeistPlanAdmissionCandidate {
+    mutating func parseHeistPlanAfterCallee(allowDefinitions: Bool) throws -> HeistPlan {
         var name: HeistPlanName?
         var parameter = HeistParameter.none
         if consumeSymbol("(") {
@@ -235,8 +236,8 @@ extension HeistPlanSourceParser {
         }
 
         let body = try parseHeistClosureBody(parameter: parameter, allowDefinitions: allowDefinitions)
-        return HeistPlanAdmissionCandidate(
-            version: HeistPlan.currentVersion,
+        return try HeistPlan(
+            structuralVersion: HeistPlan.currentVersion,
             name: name,
             parameter: parameter,
             definitions: mergeDefinitions(body.definitions),

@@ -17,13 +17,22 @@ public struct ForEachElementStep: Codable, Sendable, Equatable {
         body: [HeistStep]
     ) throws {
         guard matching.hasPredicates else {
-            throw HeistPlanError.emptyForEachPredicate
+            throw HeistPlanBuildError.planStructure(
+                path: "$.for_each_element.matching",
+                message: "for_each_element requires a non-empty predicate"
+            )
         }
         guard limit > 0 else {
-            throw HeistPlanError.invalidForEachLimit(limit)
+            throw HeistPlanBuildError.planStructure(
+                path: "$.for_each_element.limit",
+                message: "for_each_element limit must be positive; observed \(limit)"
+            )
         }
         guard !body.isEmpty else {
-            throw HeistPlanError.emptyForEachSteps
+            throw HeistPlanBuildError.planStructure(
+                path: "$.for_each_element.body",
+                message: "for_each_element requires at least one body step"
+            )
         }
         self.matching = matching
         self.limit = limit
@@ -58,10 +67,16 @@ public struct ForEachStringStep: Codable, Sendable, Equatable {
         body: [HeistStep]
     ) throws {
         guard !values.isEmpty else {
-            throw HeistPlanError.emptyForEachValues
+            throw HeistPlanBuildError.planStructure(
+                path: "$.for_each_string.values",
+                message: "for_each_string requires at least one value"
+            )
         }
         guard !body.isEmpty else {
-            throw HeistPlanError.emptyForEachSteps
+            throw HeistPlanBuildError.planStructure(
+                path: "$.for_each_string.body",
+                message: "for_each_string requires at least one body step"
+            )
         }
         self.values = values
         self.parameter = parameter
@@ -94,7 +109,10 @@ public struct RepeatUntilStep: Codable, Sendable, Equatable {
         body: [HeistStep]
     ) throws {
         guard !body.isEmpty else {
-            throw HeistPlanError.emptyRepeatUntilSteps
+            throw HeistPlanBuildError.planStructure(
+                path: "$.repeat_until.body",
+                message: "repeat_until requires at least one body step"
+            )
         }
         self.predicate = predicate
         self.timeout = timeout

@@ -110,7 +110,7 @@ public func If(
 
 public struct Case {
     fileprivate let predicateCase: PredicateCase
-    fileprivate let definitions: [HeistPlanAdmissionCandidate]
+    fileprivate let definitions: [HeistPlan]
     fileprivate let diagnostics: [HeistBuildDiagnostic]
 
     public init(
@@ -126,7 +126,7 @@ public struct Case {
 
 public struct Else {
     fileprivate let body: [HeistStep]
-    fileprivate let definitions: [HeistPlanAdmissionCandidate]
+    fileprivate let definitions: [HeistPlan]
     fileprivate let diagnostics: [HeistBuildDiagnostic]
 
     public init(
@@ -157,7 +157,7 @@ public struct Fail {
 
 public struct PredicateCases {
     fileprivate let cases: NonEmptyArray<PredicateCase>
-    fileprivate let definitions: [HeistPlanAdmissionCandidate]
+    fileprivate let definitions: [HeistPlan]
     fileprivate let diagnostics: [HeistBuildDiagnostic]
 
     fileprivate init(_ first: Case) {
@@ -176,7 +176,7 @@ public struct PredicateCases {
 
     private init(
         cases: NonEmptyArray<PredicateCase>,
-        definitions: [HeistPlanAdmissionCandidate],
+        definitions: [HeistPlan],
         diagnostics: [HeistBuildDiagnostic]
     ) {
         self.cases = cases
@@ -188,7 +188,7 @@ public struct PredicateCases {
 public struct PredicateBranches {
     fileprivate let cases: NonEmptyArray<PredicateCase>
     fileprivate let elseBody: [HeistStep]?
-    fileprivate let definitions: [HeistPlanAdmissionCandidate]
+    fileprivate let definitions: [HeistPlan]
     fileprivate let diagnostics: [HeistBuildDiagnostic]
 
     fileprivate init(_ cases: PredicateCases, else branch: Else? = nil) {

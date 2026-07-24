@@ -89,28 +89,19 @@ extension TheBrains {
 
     func executeRuntimeActionForHeist(
         _ command: ResolvedHeistActionCommand,
-        expectation: ResolvedWaitRuntimeInput?
+        expectation: Settlement.ActionExpectation?
     ) async -> RuntimeActionExecution {
         guard semanticObservationIsActive else {
             return RuntimeActionExecution(
                 result: runtimeInactiveResult(payload: command.actionResultPayload)
             )
         }
-        let predicate = expectation.map {
-            Settlement.Predicate(
-                authored: $0.predicateExpression,
-                resolved: $0.predicate
-            )
-        }
-        let expectationAllowance = expectation.map {
-            Duration.milliseconds(Int64(($0.timeout.seconds * 1_000).rounded(.up)))
-        }
         let settlementCommand = Settlement.Command.action(.init(
             command: command,
-            predicate: predicate,
+            predicate: expectation?.predicate,
             allowances: .init(
                 readiness: .milliseconds(Int64(SettleSession.defaultTimeoutMs)),
-                expectation: expectationAllowance
+                expectation: expectation?.allowance
             ),
             baseline: .capture
         ))
@@ -205,11 +196,25 @@ extension TheBrains {
             )
         }
     }
-    func performWait(step: ResolvedWaitRuntimeInput) async -> ActionResult {
+    func performWait(step: WaitStep) async -> ActionResult {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(payload: .wait)
         }
-        let result = await executeSettlementCommand(Settlement.Command(observing: step))
+        let resolved: ResolvedWaitStep
+        do {
+            resolved = try step.resolve(in: .empty)
+        } catch {
+            return .failure(
+                payload: .wait,
+                failureKind: .validationError,
+                message: "could not resolve wait predicate: \(error)"
+            )
+        }
+        let result = await executeSettlementCommand(Settlement.Command(
+            observing: step.predicate,
+            resolved: resolved.predicate,
+            timeout: resolved.timeout
+        ))
         return Settlement.ResultProjector.projectWait(result).actionResult
     }
 

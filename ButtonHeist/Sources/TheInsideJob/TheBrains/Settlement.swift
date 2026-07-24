@@ -17,18 +17,20 @@ extension Settlement {
         case action(Action)
 
         internal init(
-            observing input: ResolvedWaitRuntimeInput,
+            observing authored: AccessibilityPredicate,
+            resolved: ResolvedAccessibilityPredicate,
+            timeout: WaitTimeout,
             baseline: Baseline = .capture,
             startedAt: RuntimeElapsed.Instant = RuntimeElapsed.now
         ) {
             self = .observation(
                 predicate: Predicate(
-                    authored: input.predicateExpression,
-                    resolved: input.predicate
+                    authored: authored,
+                    resolved: resolved
                 ),
                 deadline: PhaseDeadline(
                     phase: .observation,
-                    instant: startedAt.advanced(by: .seconds(input.timeout.seconds))
+                    instant: startedAt.advanced(by: .seconds(timeout.seconds))
                 ),
                 baseline: baseline
             )
@@ -102,6 +104,20 @@ extension Settlement {
             }
             self.readiness = readiness
             self.expectation = expectation
+        }
+    }
+
+    internal struct ActionExpectation: Sendable, Equatable {
+        internal let predicate: Predicate
+        internal let allowance: Duration
+
+        internal init(
+            authored: AccessibilityPredicate,
+            resolved: ResolvedAccessibilityPredicate,
+            timeout: WaitTimeout
+        ) {
+            self.predicate = Predicate(authored: authored, resolved: resolved)
+            self.allowance = .milliseconds(Int64((timeout.seconds * 1_000).rounded(.up)))
         }
     }
 

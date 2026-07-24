@@ -131,9 +131,9 @@ import Testing
         #expect(testCase.command.durableHeistActionFailure == testCase.durabilityFailure)
         #expect(testCase.command.reportTarget == testCase.reportTarget)
 
-        let raw = HeistPlanAdmissionCandidate(body: [.action(ActionStep(command: testCase.command))])
+        let raw = structurallyAdmittedPlan(body: [.action(ActionStep(command: testCase.command))])
         if let canonicalLine = testCase.canonicalLine {
-            let plan = try raw.validatedForRuntimeSafety()
+            let plan = try admitRuntimeSafety(raw)
             let expectedSource = canonicalPlanSource(canonicalLine)
             #expect(try plan.canonicalSwiftDSL() == expectedSource)
             #expect(try HeistSourceCompilation.compile(expectedSource) == plan)
@@ -146,9 +146,9 @@ import Testing
 }
 
 @Test func `runtime admission validates every string loop value through invocations`() throws {
-    let candidate = HeistPlanAdmissionCandidate(
+    let candidate = structurallyAdmittedPlan(
         definitions: [
-            HeistPlanAdmissionCandidate(
+            structurallyAdmittedPlan(
                 name: "typeQuery",
                 parameter: .string(name: "query"),
                 body: [.action(ActionStep(command: .typeText(
@@ -618,9 +618,9 @@ private func canonicalPlanSource(_ line: String) -> String {
     """
 }
 
-private func runtimeSafetyFailures(for raw: HeistPlanAdmissionCandidate) -> [HeistPlanRuntimeSafetyFailure] {
+private func runtimeSafetyFailures(for raw: HeistPlan) -> [HeistPlanRuntimeSafetyFailure] {
     do {
-        _ = try raw.validatedForRuntimeSafety()
+        _ = try admitRuntimeSafety(raw)
         return []
     } catch let error as HeistPlanRuntimeSafetyError {
         return error.failures

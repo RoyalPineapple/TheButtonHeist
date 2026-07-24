@@ -18,7 +18,7 @@ extension TheBrainsActionTests {
         XCTAssertFalse(inactiveBrains.vault.semanticObservationStream.isActive)
 
         let step = WaitStep(predicate: .exists(.label("Home")), timeout: try .milliseconds(1))
-        let result = await inactiveBrains.performWait(step: try resolvedWait(step))
+        let result = await inactiveBrains.performWait(step: step)
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.outcome.failureKind, .actionFailed)
@@ -152,22 +152,22 @@ extension TheBrainsActionTests {
             )),
         ]))
         await committedObservations.wait()
-        let appeared = await brains.performWait(step: try resolvedWait(WaitStep(
+        let appeared = await brains.performWait(step: WaitStep(
             predicate: .changed(.elements([.appeared(.label("Saved"))])),
             timeout: .milliseconds(1)
-        )))
-        let disappeared = await brains.performWait(step: try resolvedWait(WaitStep(
+        ))
+        let disappeared = await brains.performWait(step: WaitStep(
             predicate: .changed(.elements([.disappeared(.label("Saved"))])),
             timeout: .milliseconds(1)
-        )))
-        let exists = await brains.performWait(step: try resolvedWait(WaitStep(
+        ))
+        let exists = await brains.performWait(step: WaitStep(
             predicate: .exists(.label("Saved")),
             timeout: .milliseconds(1)
-        )))
-        let announcement = await brains.performWait(step: try resolvedWait(WaitStep(
+        ))
+        let announcement = await brains.performWait(step: WaitStep(
             predicate: .announcement("Saved"),
             timeout: .milliseconds(1)
-        )))
+        ))
 
         XCTAssertTrue(action.outcome.isSuccess, action.message ?? "action heist failed")
         XCTAssertEqual(action.resultPayload?.steps.first?.reportExpectation?.met, true)
@@ -192,10 +192,10 @@ extension TheBrainsActionTests {
         )
         await installSyntheticObservation(ready)
 
-        let result = await brains.performWait(step: try resolvedWait(WaitStep(
+        let result = await brains.performWait(step: WaitStep(
             predicate: .exists(.label("Ready")),
             timeout: .seconds(1)
-        )))
+        ))
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "standalone wait failed")
         XCTAssertEqual(result.method, .wait)
@@ -214,10 +214,10 @@ extension TheBrainsActionTests {
         )
         await installSyntheticObservation(ready)
 
-        let result = await brains.performWait(step: try resolvedWait(WaitStep(
+        let result = await brains.performWait(step: WaitStep(
             predicate: .changed(.elements([.appeared(.label("Ready"))])),
             timeout: .milliseconds(1)
-        )))
+        ))
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.outcome.failureKind, .timeout)

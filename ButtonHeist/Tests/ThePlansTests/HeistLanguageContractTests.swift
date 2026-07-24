@@ -2,6 +2,132 @@ import Foundation
 import Testing
 @testable import ThePlans
 
+@Test func testAllPublicBoundariesAdmitOneHeistPlan() throws {
+    let cases = [
+        PublicBoundaryAdmissionCase(
+            boundary: "JSON",
+            expectedContract: "heist run path must resolve to a local capability"
+        ) {
+            try JSONDecoder().decode(HeistPlan.self, from: Data("""
+            {
+              "version": 2,
+              "body": [
+                {
+                  "type": "invoke",
+                  "invoke": { "path": "Missing" }
+                }
+              ]
+            }
+            """.utf8))
+        },
+        PublicBoundaryAdmissionCase(
+            boundary: "Swift DSL",
+            expectedContract: "heist runs must not be recursive"
+        ) {
+            let first = HeistDef<Void>("lib.first") {
+                RunHeist("lib.second")
+            }
+            let second = HeistDef<Void>("lib.second") {
+                RunHeist("lib.first")
+            }
+            return try HeistPlan {
+                first
+                second
+                try first()
+            }
+        },
+        PublicBoundaryAdmissionCase(
+            boundary: "source compilation",
+            expectedContract: "max nested step depth"
+        ) {
+            try HeistSourceCompilation.compile(deeplyNestedSource)
+        },
+        PublicBoundaryAdmissionCase(
+            boundary: "live composition",
+            expectedContract: "max total heist steps"
+        ) {
+            try HeistPlan(body: Array(
+                repeating: .warn(WarnStep(message: "step")),
+                count: 501
+            ))
+        },
+        PublicBoundaryAdmissionCase(
+            boundary: "Swift DSL expansion",
+            expectedContract: "max total heist steps"
+        ) {
+            let expanded = HeistDef<Void>("expanded") {
+                HeistContent(Array(
+                    repeating: .warn(WarnStep(message: "expanded")),
+                    count: 170
+                ))
+            }
+            return try HeistPlan {
+                expanded
+                try expanded()
+                try expanded()
+            }
+        },
+    ]
+
+    for testCase in cases {
+        do {
+            _ = try testCase.admit()
+            Issue.record("\(testCase.boundary) accepted an unsafe plan")
+        } catch let error as HeistPlanBuildError {
+            #expect(
+                error.diagnostics.contains { $0.message.contains(testCase.expectedContract) },
+                "\(testCase.boundary): \(error)"
+            )
+        } catch {
+            Issue.record("\(testCase.boundary) bypassed canonical diagnostics: \(error)")
+        }
+    }
+}
+
+private struct PublicBoundaryAdmissionCase {
+    let boundary: String
+    let expectedContract: String
+    let admit: () throws -> HeistPlan
+}
+
+private let deeplyNestedSource: String = {
+    let nesting = 17
+    return """
+    HeistPlan {
+    \(String(repeating: "If(.exists(.label(\"Home\"))) {\n", count: nesting))
+    Warn("nested")
+    \(String(repeating: "}\n", count: nesting))
+    }
+    """
+}()
+
+func structurallyAdmittedPlan(
+    name: HeistPlanName? = nil,
+    parameter: HeistParameter = .none,
+    definitions: [HeistPlan] = [],
+    body: [HeistStep] = []
+) -> HeistPlan {
+    do {
+        return try HeistPlan(
+            structuralVersion: HeistPlan.currentVersion,
+            name: name,
+            parameter: parameter,
+            definitions: definitions,
+            body: body
+        )
+    } catch {
+        preconditionFailure("test plan structure must be admitted: \(error)")
+    }
+}
+
+func admitRuntimeSafety(
+    _ plan: HeistPlan,
+    limits: HeistPlanRuntimeSafetyLimits = .standard
+) throws -> HeistPlan {
+    var validator = HeistPlanRuntimeSafetyValidator(limits: limits)
+    return try validator.admit(plan)
+}
+
 @Test func `name and path currencies use one single value wire shape`() throws {
     let planName: HeistPlanName = "Cart"
     let definitionPath: HeistDefinitionPath = "Cart.addItem"
@@ -40,9 +166,9 @@ import Testing
 }
 
 @Test func `semantic validation rejects duplicate unresolved and recursive plans`() throws {
-    let duplicate = HeistPlanAdmissionCandidate(definitions: [
-        HeistPlanAdmissionCandidate(name: "checkout", body: [.warn(WarnStep(message: "one"))]),
-        HeistPlanAdmissionCandidate(name: "checkout", body: [.warn(WarnStep(message: "two"))]),
+    let duplicate = structurallyAdmittedPlan(definitions: [
+        structurallyAdmittedPlan(name: "checkout", body: [.warn(WarnStep(message: "one"))]),
+        structurallyAdmittedPlan(name: "checkout", body: [.warn(WarnStep(message: "two"))]),
     ], body: [.warn(WarnStep(message: "root"))])
     try expectSemanticDiagnostic(
         duplicate,
@@ -50,7 +176,7 @@ import Testing
         message: "duplicate heist definition names are not allowed in the same scope"
     )
 
-    let unresolved = HeistPlanAdmissionCandidate(body: [
+    let unresolved = structurallyAdmittedPlan(body: [
         .invoke(HeistInvocationStep(path: "Missing")),
     ])
     try expectSemanticDiagnostic(
@@ -59,12 +185,12 @@ import Testing
         message: "heist run path must resolve to a local capability"
     )
 
-    let recursive = HeistPlanAdmissionCandidate(definitions: [
-        HeistPlanAdmissionCandidate(name: "lib", definitions: [
-            HeistPlanAdmissionCandidate(name: "a", body: [
+    let recursive = structurallyAdmittedPlan(definitions: [
+        structurallyAdmittedPlan(name: "lib", definitions: [
+            structurallyAdmittedPlan(name: "a", body: [
                 .invoke(HeistInvocationStep(path: "lib.b")),
             ]),
-            HeistPlanAdmissionCandidate(name: "b", body: [
+            structurallyAdmittedPlan(name: "b", body: [
                 .invoke(HeistInvocationStep(path: "lib.a")),
             ]),
         ], body: []),
@@ -88,40 +214,40 @@ import Testing
     }
 }
 
-private func nestedCollectionLoopCases() throws -> [(candidate: HeistPlanAdmissionCandidate, path: String, observed: String)] {
+private func nestedCollectionLoopCases() throws -> [(candidate: HeistPlan, path: String, observed: String)] {
     [
         (
-            HeistPlanAdmissionCandidate(body: [admissionStep(try stringLoop(parameter: "item", body: [
+            structurallyAdmittedPlan(body: [admissionStep(try stringLoop(parameter: "item", body: [
                 try stringLoop(parameter: "size"),
             ]))]),
             "$.body[0].for_each_string.body[0].for_each_string",
             "for_each_string inside collection loop"
         ),
         (
-            HeistPlanAdmissionCandidate(body: [admissionStep(try stringLoop(parameter: "rowName", body: [
+            structurallyAdmittedPlan(body: [admissionStep(try stringLoop(parameter: "rowName", body: [
                 try elementLoop(parameter: "rowTarget"),
             ]))]),
             "$.body[0].for_each_string.body[0].for_each_element",
             "for_each_element inside collection loop"
         ),
         (
-            HeistPlanAdmissionCandidate(body: [admissionStep(try elementLoop(parameter: "section", body: [
+            structurallyAdmittedPlan(body: [admissionStep(try elementLoop(parameter: "section", body: [
                 try stringLoop(parameter: "size"),
             ]))]),
             "$.body[0].for_each_element.body[0].for_each_string",
             "for_each_string inside collection loop"
         ),
         (
-            HeistPlanAdmissionCandidate(body: [admissionStep(try elementLoop(parameter: "section", body: [
+            structurallyAdmittedPlan(body: [admissionStep(try elementLoop(parameter: "section", body: [
                 try elementLoop(parameter: "row"),
             ]))]),
             "$.body[0].for_each_element.body[0].for_each_element",
             "for_each_element inside collection loop"
         ),
         (
-            HeistPlanAdmissionCandidate(
+            structurallyAdmittedPlan(
                 definitions: [
-                    HeistPlanAdmissionCandidate(name: "Inner", body: [admissionStep(try stringLoop(parameter: "size"))]),
+                    structurallyAdmittedPlan(name: "Inner", body: [admissionStep(try stringLoop(parameter: "size"))]),
                 ],
                 body: [admissionStep(try stringLoop(parameter: "item", body: [
                     .invoke(HeistInvocationStep(path: "Inner")),
@@ -133,8 +259,8 @@ private func nestedCollectionLoopCases() throws -> [(candidate: HeistPlanAdmissi
     ]
 }
 
-private func admissionStep(_ step: HeistStep) -> HeistStepAdmissionCandidate {
-    HeistStepAdmissionCandidate(step)
+private func admissionStep(_ step: HeistStep) -> HeistStep {
+    step
 }
 
 private func stringLoop(
@@ -152,7 +278,7 @@ private func elementLoop(
 }
 
 private func expectSemanticDiagnostic(
-    _ candidate: HeistPlanAdmissionCandidate,
+    _ candidate: HeistPlan,
     path expectedPath: String,
     message expectedMessage: String
 ) throws {
@@ -166,9 +292,9 @@ private func expectSemanticDiagnostic(
     #expect(diagnostic.hint != nil)
 }
 
-private func semanticDiagnostic(_ candidate: HeistPlanAdmissionCandidate) throws -> HeistBuildDiagnostic {
+private func semanticDiagnostic(_ candidate: HeistPlan) throws -> HeistBuildDiagnostic {
     do {
-        _ = try candidate.validatedSemantics()
+        _ = try admitRuntimeSafety(candidate)
         throw LanguageContractFailure.expectedSemanticFailure
     } catch let error as HeistPlanRuntimeSafetyError {
         return try #require(error.diagnostics.first)
