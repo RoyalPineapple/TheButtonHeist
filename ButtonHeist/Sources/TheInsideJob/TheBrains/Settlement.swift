@@ -162,6 +162,31 @@ extension Settlement {
         }
     }
 
+    internal struct ActionAllowances: Sendable, Equatable {
+        internal let readiness: Duration
+        internal let expectation: Duration?
+
+        internal init(readiness: Duration, expectation: Duration?) {
+            precondition(readiness >= .zero, "Settlement readiness allowance cannot be negative")
+            if let expectation {
+                precondition(expectation >= .zero, "Settlement expectation allowance cannot be negative")
+            }
+            self.readiness = readiness
+            self.expectation = expectation
+        }
+    }
+
+    internal enum DeadlinePhase: Sendable, Equatable {
+        case observation
+        case actionReadiness
+        case actionExpectation
+    }
+
+    internal struct PhaseDeadline: Sendable, Equatable {
+        internal let phase: DeadlinePhase
+        internal let instant: ContinuousClock.Instant
+    }
+
     internal struct EvidenceBoundary: Sendable, Equatable {
         internal let moment: Observation.Moment
 
@@ -911,6 +936,49 @@ extension Settlement {
         case arm(Arming)
         case dispatchAction(ResolvedHeistActionCommand)
         case evaluatePredicate(Predicate.EvaluationRequest)
+    }
+}
+
+extension Settlement.Command {
+    internal struct Action: Sendable, Equatable {
+        internal let command: ResolvedHeistActionCommand
+        internal let predicate: Settlement.Predicate?
+        internal let allowances: Settlement.ActionAllowances
+        internal let baseline: Settlement.Baseline
+    }
+}
+
+extension Settlement.Session {
+    internal enum Phase: Sendable, Equatable {
+        case observation(Settlement.PhaseDeadline)
+        case awaitingActionDispatch
+        case actionReadiness(Settlement.PhaseDeadline)
+        case actionExpectation(Settlement.PhaseDeadline)
+    }
+}
+
+extension Settlement.Event {
+    internal struct DeadlineReached: Sendable, Equatable {
+        internal let phase: Settlement.DeadlinePhase
+        internal let instant: ContinuousClock.Instant
+    }
+}
+
+extension Settlement.Effect {
+    internal struct ArmDeadline: Sendable, Equatable {
+        internal let deadline: Settlement.PhaseDeadline
+    }
+}
+
+extension Settlement.Outcome {
+    internal struct Timeout: Sendable, Equatable {
+        internal let phase: Settlement.DeadlinePhase
+    }
+}
+
+extension Settlement.Result {
+    internal struct ElapsedEvidence: Sendable, Equatable {
+        internal let elapsed: ElapsedMilliseconds
     }
 }
 
