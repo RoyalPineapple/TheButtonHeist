@@ -11,22 +11,23 @@ Use live adapter surfaces for product command catalogs:
 ## Versioning
 
 There is no separate wire-protocol version. The wire contract is versioned by
-The Button Heist product SemVer carried in `buttonHeistVersion`.
+The Button Heist product SemVer carried in `buttonHeistVersion`. This document
+describes the exact `0.6.32` client, server, CLI, and MCP contract.
 
-Compatibility is exact product-version lockstep:
+Admission is exact product-version lockstep:
 
 - the embedded iOS server, macOS framework, CLI, and MCP server must come from
-  the same product release
-- `buttonHeistVersion` must match exactly during the hello handshake
+  product release `0.6.32`
+- client and server `buttonHeistVersion` must both equal `0.6.32` during the
+  hello handshake
 - malformed semantic versions are rejected while decoding the envelope
 - major, minor, and patch differences are all incompatible on the wire
 - there is no downgrade, feature negotiation, or best-effort compatibility mode
 
 On mismatch, the server returns `protocolMismatch` with both observed product
 versions, then closes the connection before authentication or command dispatch.
-Clients should surface this as an install/build mismatch and ask the caller to
-rebuild or reinstall both sides from the same release. Wire-format changes ship
-with a product version bump, not a parallel protocol version.
+Wire-format changes ship with a product version bump, not a parallel protocol
+version.
 
 ## Command Layers
 
@@ -364,11 +365,6 @@ consume prior action or heist evidence. `exists` and `missing` evaluate current
 state in the returned handoff snapshot. Lifecycle assertions require ordered
 post-baseline Log events and never pass from an implied final state.
 
-An expectation attached to an action enters the same settlement executor with
-an action trigger. Its observation, announcement, readiness, and deadline
-channels are armed before the single dispatch. A transient positive transition
-or matching announcement latches while readiness continues; no second wait is
-started after the action.
 The response is a heist execution result, even for a single wait. Public report
 JSON includes `netDelta` only when the complete accumulated execution trace
 proves a change; not-applicable, incomplete, and complete unchanged evidence do
@@ -419,14 +415,19 @@ Action responses use `actionResult`:
 
 App-side settlement records one `ActionDispatchResult` together with predicate,
 readiness, and observation-handoff evidence. One projector derives the action
-result without another intermediate result shape. Action
-evidence is required and bound to the wire result outcome. Its `observation`
+result without another intermediate result shape.
+`HeistActionEvidence.completed` contains one required `result` and optional
+`expectation` predicate truth. The action result owns the overall terminal
+outcome; the optional predicate evidence does not create another action or wait
+result. Only a standalone wait projects `HeistSettlementEvidence`. Decoders
+reject unknown keys and any non-current evidence shape.
+
+Action evidence is required and bound to the wire result outcome. Its `observation`
 is exactly one tagged case: `none`, `announcement`, `trace`, or `settledTrace`.
 Only `settledTrace` owns the tagged settlement shape
 `{"kind":"settled|timedOut|observationHandoffTimedOut","durationMs":...,"path":"..."}`. Successful
 settlement may include `path` as `semanticStability`, `uikitIdle`, or
-`accessibilityQuietWindow`; the optional field preserves decoding of older
-receipts. Timed-out settlement cannot carry a path.
+`accessibilityQuietWindow`. Timed-out settlement cannot carry a path.
 `observationHandoffTimedOut` requires a path and means readiness was established,
 but no observation eligible for that readiness generation was admitted before
 the deadline. It reports `settled == false` while preserving the readiness proof.
@@ -584,9 +585,3 @@ Clients should send `ping` periodically and tolerate a few delayed responses
 before declaring failure. App main-thread stalls can delay pong handling.
 
 After reconnecting, clients should request fresh interface state before acting.
-
-## Current Shape
-
-The current wire shape is whatever the matching `buttonHeistVersion` ships.
-Older clients are not supported. Clients should update in lockstep with the
-server.

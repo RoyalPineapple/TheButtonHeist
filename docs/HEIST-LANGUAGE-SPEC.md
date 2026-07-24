@@ -274,12 +274,15 @@ equal to 30 to override that maximum; there is no additional fixed policy cap.
 | Site | Default | Notes |
 |------|---------|-------|
 | `WaitFor(_, timeout:)` | 30 seconds | Standalone waits and `WaitFor(...).else` gates. |
-| Action `.expect(_, timeout:)` | 1 second | How long an action expectation polls accumulated settled evidence before reporting the expectation unmet. |
+| Action `.expect(_, timeout:)` | 1 second | Attached action expectations. |
 | `RepeatUntil(_, timeout:)` | none — required | The mandatory bound for a predicate only the run can decide. The configured `WaitTimeout` maximum applies. |
 
-Settlement has its own clock, separate from these: the settle loop and its
-5-second default hard timeout are defined in
-[Scope and limits](SCOPE-AND-LIMITS.md).
+An action `.expect` does not replace the 5-second action-readiness allowance,
+which begins when dispatch completes. If the predicate is unmet at the first
+ready handoff, the full authored `.expect` timeout begins at that handoff.
+Earlier work does not consume it, and later readiness does not restart it.
+
+Standalone `WaitFor` uses its one authored timeout and performs no action.
 
 ## Validation bounds
 
