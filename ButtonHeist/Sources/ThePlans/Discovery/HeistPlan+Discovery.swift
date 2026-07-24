@@ -285,13 +285,8 @@ private extension HeistPlan {
             case .entry(let name):
                 identity = .entry(name)
             case .capability(let nameComponents):
-                guard let first = nameComponents.first else {
-                    preconditionFailure("definition catalog paths must not be empty")
-                }
-                identity = .capability(HeistDefinitionPath(
-                    first: first,
-                    remaining: Array(nameComponents.dropFirst())
-                ))
+                guard let first = nameComponents.first else { preconditionFailure("definition catalog paths must not be empty") }
+                identity = .capability(HeistDefinitionPath(first: first, remaining: Array(nameComponents.dropFirst())))
             }
             identities.append(identity)
 
@@ -303,16 +298,12 @@ private extension HeistPlan {
                 summary += " requiring \(parameterKind.rawValue) argument"
             }
 
-            var tags: [HeistCatalogTag] = [identity.role == .entry ? .entry : .capability]
-            if requiresArgument {
-                tags.append(.parameterized)
-            }
-            if !surface.nestedRunHeists.isEmpty {
-                tags.append(.composed)
-            }
-            if !surface.waits.isEmpty || !surface.expectations.isEmpty {
-                tags.append(.assertion)
-            }
+            var tags = [identity.role == .entry ? HeistCatalogTag.entry : .capability]
+            var tagSet = Set(tags)
+            if requiresArgument, tagSet.insert(.parameterized).inserted { tags.append(.parameterized) }
+            if !surface.nestedRunHeists.isEmpty, tagSet.insert(.composed).inserted { tags.append(.composed) }
+            if !surface.waits.isEmpty || !surface.expectations.isEmpty,
+               tagSet.insert(.assertion).inserted { tags.append(.assertion) }
             for command in surface.actionCommands {
                 let tag: HeistCatalogTag?
                 switch command {
@@ -328,7 +319,7 @@ private extension HeistPlan {
                 case .takeScreenshot:
                     tag = nil
                 }
-                if let tag, !tags.contains(tag) {
+                if let tag, tagSet.insert(tag).inserted {
                     tags.append(tag)
                 }
             }
@@ -371,13 +362,8 @@ private extension HeistPlan {
             case .entry(let name):
                 identity = .entry(name)
             case .capability(let nameComponents):
-                guard let first = nameComponents.first else {
-                    preconditionFailure("definition catalog paths must not be empty")
-                }
-                identity = .capability(HeistDefinitionPath(
-                    first: first,
-                    remaining: Array(nameComponents.dropFirst())
-                ))
+                guard let first = nameComponents.first else { preconditionFailure("definition catalog paths must not be empty") }
+                identity = .capability(HeistDefinitionPath(first: first, remaining: Array(nameComponents.dropFirst())))
             }
             identities.append(identity)
             guard description == nil, identity.lookupPath == requestedPath else { return }
@@ -419,69 +405,13 @@ private extension HeistPlan {
     func semanticSurface(
         for projection: HeistPlanTraversal.CatalogHeistProjection
     ) -> HeistSemanticSurface {
-        var actionCommands: [HeistActionCommandType] = []
+        var actionCommands: [HeistActionCommandType] = [], actionCommandSet = Set<HeistActionCommandType>()
         var targetPredicates: [HeistTargetPredicateFact] = [], targetPredicateSet = Set<HeistTargetPredicateFact>()
-        var waits: [AccessibilityPredicate] = [], expectations: [AccessibilityPredicate] = []
+        var waits: [AccessibilityPredicate] = [], waitIndexes = Set<Int>()
+        var expectations: [AccessibilityPredicate] = [], expectationIndexes = Set<Int>()
         var nestedRunHeists: [HeistInvocationPath] = [], nestedRunHeistSet = Set<HeistInvocationPath>()
-        var expectedEffects: [AccessibilityPredicate] = []
+        var expectedEffects: [AccessibilityPredicate] = [], expectedEffectIndexes = Set<Int>()
         var semanticFacets: [ElementPredicateCheck] = [], semanticFacetSet = Set<ElementPredicateCheck>()
-
-        func appendTargetPredicate(_ target: AccessibilityTarget) {
-            switch target {
-            case .predicate(let predicate, _):
-                let fact = HeistTargetPredicateFact.predicate(predicate)
-                if targetPredicateSet.insert(fact).inserted { targetPredicates.append(fact) }
-                for check in predicate.checks where check.hasPredicateLiteral && semanticFacetSet.insert(check).inserted {
-                    semanticFacets.append(check)
-                }
-            case .container(let predicate, _):
-                let fact = HeistTargetPredicateFact.container(predicate)
-                if targetPredicateSet.insert(fact).inserted { targetPredicates.append(fact) }
-            case .ref(let reference):
-                let fact = HeistTargetPredicateFact.targetReference(reference)
-                if targetPredicateSet.insert(fact).inserted { targetPredicates.append(fact) }
-            case .within(_, let target): appendTargetPredicate(target)
-            }
-        }
-
-        func appendPredicateTargets(_ value: AccessibilityPredicate.Value) {
-            switch value {
-            case .presence(let presence):
-                switch presence {
-                case .exists(let target), .missing(let target): appendTargetPredicate(target)
-                }
-            case .changed(let declaration):
-                switch declaration {
-                case .screen(let assertions):
-                    for assertion in assertions {
-                        switch assertion {
-                        case .exists(let target), .missing(let target): appendTargetPredicate(target)
-                        }
-                    }
-                case .elements(let assertions):
-                    for assertion in assertions {
-                        switch assertion {
-                        case .exists(let target), .missing(let target),
-                             .appeared(let target), .disappeared(let target), .updated(let target, _):
-                            appendTargetPredicate(target)
-                        }
-                    }
-                }
-            case .announcement, .noChange: break
-            }
-        }
-
-        func appendWait(_ predicate: AccessibilityPredicate) {
-            if !waits.contains(predicate) { waits.append(predicate) }
-            if !expectedEffects.contains(predicate) { expectedEffects.append(predicate) }
-            appendPredicateTargets(predicate.core)
-        }
-
-        func appendExpectation(_ predicate: AccessibilityPredicate) {
-            if !expectations.contains(predicate) { expectations.append(predicate) }
-            if !expectedEffects.contains(predicate) { expectedEffects.append(predicate) }
-            appendPredicateTargets(predicate.core)
-        }
 
         let definitionComponents = projection.definitionComponents
         let definitionScope = HeistDefinitionScope(definitions: projection.plan.definitions, pathPrefix: definitionComponents)
@@ -494,24 +424,74 @@ private extension HeistPlan {
             rootDefinitionScope: projection.context.rootDefinitionScope,
             invocationStack: definitionComponents.isEmpty ? [] : [HeistInvocationPath(namePath: definitionComponents)]
         ) { observation in
+            var observedTargets: [AccessibilityTarget] = []
+            var observedPredicate: AccessibilityPredicate?
+            var isWait = false
             switch observation {
             case .action(let action):
-                if !actionCommands.contains(action.command.wireType) { actionCommands.append(action.command.wireType) }
-                for occurrence in action.command.targetOccurrences {
-                    appendTargetPredicate(occurrence.target)
-                }
-                if let expectation = action.expectationPolicy.expectedStep { appendExpectation(expectation.predicate) }
+                if actionCommandSet.insert(action.command.wireType).inserted { actionCommands.append(action.command.wireType) }
+                observedTargets = action.command.targetOccurrences.map(\.target)
+                observedPredicate = action.expectationPolicy.expectedStep?.predicate
             case .wait(let wait, let context):
                 guard !context.path.ends(in: .expectation) else { return }
-                appendWait(wait.predicate)
+                observedPredicate = wait.predicate
+                isWait = true
             case .forEachElement(let step):
-                appendTargetPredicate(.predicate(step.matching))
+                observedTargets = [.predicate(step.matching)]
             case .invoke(let invocation, let context):
-                if let expectation = invocation.expectation { appendExpectation(expectation.predicate) }
-                guard let resolved = context.resolveInvocation(path: invocation.path),
-                      nestedRunHeistSet.insert(resolved.invocationPath).inserted
-                else { return }
-                nestedRunHeists.append(resolved.invocationPath)
+                observedPredicate = invocation.expectation?.predicate
+                if let resolved = context.resolveInvocation(path: invocation.path),
+                   nestedRunHeistSet.insert(resolved.invocationPath).inserted {
+                    nestedRunHeists.append(resolved.invocationPath)
+                }
+            }
+            if let predicate = observedPredicate {
+                if isWait {
+                    if waitIndexes.insert(waits.firstIndex(of: predicate) ?? waits.endIndex).inserted { waits.append(predicate) }
+                } else {
+                    if expectationIndexes.insert(expectations.firstIndex(of: predicate) ?? expectations.endIndex).inserted { expectations.append(predicate) }
+                }
+                if expectedEffectIndexes.insert(expectedEffects.firstIndex(of: predicate) ?? expectedEffects.endIndex).inserted {
+                    expectedEffects.append(predicate)
+                }
+                switch predicate.core {
+                case .presence(.exists(let target)), .presence(.missing(let target)):
+                    observedTargets.append(target)
+                case .changed(.screen(let assertions)):
+                    for assertion in assertions {
+                        switch assertion {
+                        case .exists(let target), .missing(let target): observedTargets.append(target)
+                        }
+                    }
+                case .changed(.elements(let assertions)):
+                    for assertion in assertions {
+                        switch assertion {
+                        case .exists(let target), .missing(let target),
+                             .appeared(let target), .disappeared(let target), .updated(let target, _):
+                            observedTargets.append(target)
+                        }
+                    }
+                case .announcement, .noChange: break
+                }
+            }
+            for var target in observedTargets {
+                targetTraversal: while true {
+                    let fact: HeistTargetPredicateFact
+                    switch target {
+                    case .predicate(let predicate, _):
+                        fact = .predicate(predicate)
+                        for check in predicate.checks where check.hasPredicateLiteral && semanticFacetSet.insert(check).inserted {
+                            semanticFacets.append(check)
+                        }
+                    case .container(let predicate, _): fact = .container(predicate)
+                    case .ref(let reference): fact = .targetReference(reference)
+                    case .within(_, let nestedTarget):
+                        target = nestedTarget
+                        continue targetTraversal
+                    }
+                    if targetPredicateSet.insert(fact).inserted { targetPredicates.append(fact) }
+                    break targetTraversal
+                }
             }
         }
         return HeistSemanticSurface(
