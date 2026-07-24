@@ -27,13 +27,13 @@ extension Settlement.PredicateEvaluation {
         _ predicate: Settlement.Predicate,
         in result: Settlement.Result
     ) -> PredicateEvaluationResult {
-        guard let event = result.evidence.handoff.event else {
+        guard let event = result.currentObservation else {
             return PredicateEvaluationResult(
                 met: false,
                 actual: "settlement did not produce a current observation"
             )
         }
-        let completeness: AccessibilityTraceEvidence.Completeness = switch result.evidence.command {
+        let completeness: AccessibilityTraceEvidence.Completeness = switch result {
         case .currentState:
             .incomplete
         case .observation, .action:

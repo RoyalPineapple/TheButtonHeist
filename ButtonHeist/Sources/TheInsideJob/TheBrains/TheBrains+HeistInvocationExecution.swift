@@ -198,7 +198,7 @@ extension TheBrains {
     ) async -> InvocationExpectationOutcome {
         guard case .passed = childExecution, let context else { return .notEvaluated }
         let baseline: Settlement.Baseline
-        if let moment = context.currentState.evidence.handoff.event?.moment {
+        if let moment = context.currentState.currentObservation?.moment {
             baseline = .supplied(.init(moment: moment))
         } else {
             baseline = switch context.predicate.resolved {

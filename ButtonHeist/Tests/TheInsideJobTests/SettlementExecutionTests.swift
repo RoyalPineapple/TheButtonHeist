@@ -25,15 +25,12 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
             associatedElement: .none
         )
 
-        lifecycle.requestNotificationWindowConsumption()
-        let viewportExit = await lifecycle.quiesce()
-
         XCTAssertEqual(try XCTUnwrap(child.capture()).events.count, 1)
         child.cancel()
+        lifecycle.requestNotificationWindowConsumption()
         let finalizedExit = await lifecycle.finalize()
         let repeatedExit = await lifecycle.finalize()
 
-        XCTAssertEqual(viewportExit, .restored)
         XCTAssertEqual(finalizedExit, .restored)
         XCTAssertEqual(repeatedExit, .restored)
         XCTAssertTrue(
@@ -56,10 +53,11 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
 
         let result = await executor.execute(.currentState(scope: .visible))
 
-        XCTAssertEqual(result.outcome, .settled)
+        guard case .currentState(.captured(let capture)) = result else {
+            return XCTFail("Expected current-state capture")
+        }
         XCTAssertFalse(boundary.operations.contains(.dispatch))
-        XCTAssertEqual(result.evidence.handoff.event?.moment, baseline.moment)
-        XCTAssertEqual(result.evidence.observationHistory, .events([]))
+        XCTAssertEqual(capture.event.moment, baseline.moment)
         XCTAssertEqual(boundary.totalCaptureCount, 1)
         XCTAssertEqual(boundary.operations, [.captureBaseline, .admitBaseline])
     }
@@ -95,10 +93,12 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
             baseline: .capture
         ))
 
-        XCTAssertEqual(result.outcome, .settled)
+        guard case .observation(.settled(let settled)) = result else {
+            return XCTFail("Expected announcement observation to settle")
+        }
         XCTAssertFalse(boundary.operations.contains(.dispatch))
         XCTAssertEqual(
-            result.evidence.predicate.satisfiedTarget,
+            settled.evaluation.target,
             .announcement(sequence: announcement.announcement.sequence)
         )
     }
@@ -116,9 +116,10 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
 
         let result = await Settlement.Executor(boundary: boundary).execute(observationCommand())
 
-        XCTAssertEqual(result.outcome, .settled)
+        guard case .observation(.settled) = result else {
+            return XCTFail("Expected observation to settle")
+        }
         XCTAssertEqual(boundary.operations.filter { $0 == .quiesce }.count, 1)
-        XCTAssertEqual(boundary.operations.filter { $0 == .finalize }.count, 1)
         XCTAssertEqual(
             boundary.operations.filter { $0 == .observationEffectsStopRequested }.count,
             1
@@ -141,9 +142,11 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
 
         let result = await Settlement.Executor(boundary: boundary).execute(observationCommand())
 
-        XCTAssertEqual(result.outcome, .timedOut(.observation))
+        guard case .observation(.failed(let failure)) = result else {
+            return XCTFail("Expected observation timeout")
+        }
+        XCTAssertEqual(failure.reason, .timedOut(.observation))
         XCTAssertEqual(boundary.operations.filter { $0 == .quiesce }.count, 1)
-        XCTAssertEqual(boundary.operations.filter { $0 == .finalize }.count, 1)
         XCTAssertEqual(
             boundary.operations.filter { $0 == .observationEffectsStopRequested }.count,
             1
@@ -200,19 +203,85 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
         execution.cancel()
         let result = await execution.value
 
-        XCTAssertEqual(result.outcome, .cancelled)
+        guard case .observation(.failed(let failure)) = result else {
+            return XCTFail("Expected cancelled observation")
+        }
+        XCTAssertEqual(failure.reason, .cancelled)
         XCTAssertEqual(
             boundary.operations.filter {
                 [.quiesce, .observationEffectsStopRequested, .observationEffectsRestored,
-                 .observationEffectsJoined, .finalize].contains($0)
+                 .observationEffectsJoined].contains($0)
             },
             [.quiesce, .observationEffectsStopRequested, .observationEffectsRestored,
-             .observationEffectsJoined, .finalize]
+             .observationEffectsJoined]
         )
         XCTAssertEqual(boundary.operations.filter { $0 == .observationEffectsStopRequested }.count, 1)
         XCTAssertEqual(boundary.operations.filter { $0 == .observationEffectsRestored }.count, 1)
         XCTAssertEqual(boundary.operations.filter { $0 == .observationEffectsJoined }.count, 1)
         XCTAssertEqual(boundary.viewportMutationCount, 0)
+    }
+
+    func testExecutorWaitsForBoundaryQuiescenceBeforeReturningOrLogging() async {
+        let baseline = await commit(label: "Baseline")
+        let changed = await commit(label: "Changed")
+        let gate = QuiescenceGate()
+        let probe = SettlementCompletionProbe()
+        let boundary = ScriptedSettlementBoundary(
+            baseline: baseline,
+            changed: changed,
+            history: .events([.snapshot(changed)]),
+            observationOnlyEvidence: true,
+            quiescenceGate: gate
+        )
+        let execution = Task {
+            let result = await Settlement.Executor(
+                boundary: boundary,
+                terminalLogSink: probe.record
+            ).execute(observationCommand())
+            probe.recordCompletion()
+            return result
+        }
+
+        await gate.waitUntilEntered()
+
+        XCTAssertEqual(boundary.operations.filter { $0 == .quiesce }.count, 1)
+        XCTAssertFalse(probe.didComplete)
+        XCTAssertTrue(probe.logs.isEmpty)
+
+        await gate.release()
+        let result = await execution.value
+
+        guard case .observation(.settled) = result else {
+            return XCTFail("Expected observation to settle after quiescence")
+        }
+        XCTAssertTrue(probe.didComplete)
+        XCTAssertEqual(probe.logs.count, 1)
+    }
+
+    func testFailedViewportRestorationReplacesSettledObservationTruth() async {
+        let baseline = await commit(label: "Baseline")
+        let changed = await commit(label: "Changed")
+        let probe = SettlementCompletionProbe()
+        let boundary = ScriptedSettlementBoundary(
+            baseline: baseline,
+            changed: changed,
+            history: .events([.snapshot(changed)]),
+            observationOnlyEvidence: true,
+            viewportExit: .failed(.originUnavailable)
+        )
+
+        let result = await Settlement.Executor(
+            boundary: boundary,
+            terminalLogSink: probe.record
+        ).execute(observationCommand())
+
+        guard case .observation(.failed(let failed)) = result else {
+            return XCTFail("Expected failed restoration to replace settled observation")
+        }
+        XCTAssertEqual(failed.reason, .viewportExitFailed(.originUnavailable))
+        XCTAssertEqual(result.currentObservation?.moment, changed.moment)
+        XCTAssertEqual(probe.logs.count, 1)
+        XCTAssertTrue(probe.logs[0].contains("viewportExitFailed(originUnavailable)"))
     }
 
     func testStaleCaptureGenerationIsRejectedBeforeAdmission() async {
@@ -228,8 +297,10 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
 
         let result = await Settlement.Executor(boundary: boundary).execute(observationCommand())
 
-        XCTAssertEqual(result.outcome, .settled)
-        XCTAssertEqual(result.evidence.handoff.event?.moment, current.moment)
+        guard case .observation(.settled(let settled)) = result else {
+            return XCTFail("Expected current capture generation to settle")
+        }
+        XCTAssertEqual(settled.handoff.event.moment, current.moment)
         XCTAssertEqual(boundary.admittedHandoffGenerations, [.init(rawValue: 1)])
     }
 
@@ -246,7 +317,9 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
 
         let result = await Settlement.Executor(boundary: boundary).execute(observationCommand())
 
-        XCTAssertEqual(result.outcome, .settled)
+        guard case .observation(.settled) = result else {
+            return XCTFail("Expected recaptured observation to settle")
+        }
         XCTAssertEqual(boundary.captureGenerations, [.init(rawValue: 0), .init(rawValue: 2)])
         XCTAssertEqual(boundary.admittedHandoffGenerations, [.init(rawValue: 2)])
     }
@@ -264,7 +337,10 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
 
         let result = await Settlement.Executor(boundary: boundary).execute(actionCommand())
 
-        XCTAssertEqual(result.outcome, .timedOut(.actionReadiness))
+        guard case .action(.failed(let failure)) = result else {
+            return XCTFail("Expected action readiness timeout")
+        }
+        XCTAssertEqual(failure.reason, .timedOut(.actionReadiness))
         XCTAssertFalse(boundary.operations.contains(.evaluateObservation))
         XCTAssertTrue(boundary.captureGenerations.isEmpty)
     }
@@ -318,7 +394,10 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
             result: .failure(.dismiss, message: "Action A failed")
         )
 
-        XCTAssertEqual(failed.outcome, .dispatchFailed)
+        guard case .action(.failed(let failedAction)) = failed else {
+            return XCTFail("Expected failed action result")
+        }
+        XCTAssertEqual(failedAction.reason, .dispatchFailed)
         XCTAssertEqual(
             actionVault.accessibilityNotifications
                 .checkpoint(after: .origin, selection: .all)
@@ -333,9 +412,11 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
             result: .success(payload: .dismiss)
         )
 
-        XCTAssertEqual(successful.outcome, .settled)
+        guard case .action(.settled(let settledAction)) = successful else {
+            return XCTFail("Expected successful action settlement")
+        }
         XCTAssertEqual(
-            successful.evidence.handoff.event?
+            settledAction.handoff.event
                 .trace.capturedAnnouncements.map(\.text),
             ["Action B"]
         )
@@ -382,13 +463,15 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
 
         let result = await Settlement.Executor(boundary: boundary).execute(command)
 
-        XCTAssertEqual(result.outcome, .settled)
+        guard case .observation(.settled(let settled)) = result else {
+            return XCTFail("Expected replayed observation to settle")
+        }
         XCTAssertFalse(boundary.operations.contains(.captureBaseline))
         XCTAssertEqual(
-            result.evidence.predicate.satisfiedTarget,
+            settled.evaluation.target,
             .observation(replayed.moment)
         )
-        XCTAssertEqual(result.evidence.handoff.event?.moment, replayed.moment)
+        XCTAssertEqual(settled.handoff.event.moment, replayed.moment)
     }
 
     func testIssue1395SettlesPostReadinessTransitionThroughOrderedSink() async {
@@ -427,10 +510,12 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
             actionCommand(expectation: .seconds(1))
         )
 
-        XCTAssertEqual(result.outcome, .settled)
-        XCTAssertEqual(result.evidence.boundary.moment, baseline.moment)
-        XCTAssertEqual(result.evidence.handoff.event?.moment, ready.moment)
-        XCTAssertEqual(result.evidence.predicate.satisfiedTarget, .observation(changed.moment))
+        guard case .action(.settled(let settled)) = result else {
+            return XCTFail("Expected post-readiness transition to settle")
+        }
+        XCTAssertEqual(settled.boundary.moment, baseline.moment)
+        XCTAssertEqual(settled.handoff.event.moment, ready.moment)
+        XCTAssertEqual(settled.evaluation?.target, .observation(changed.moment))
         XCTAssertEqual(boundary.armedDeadlines.map(\.phase), [
             .actionReadiness,
             .actionExpectation,
@@ -487,12 +572,16 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
                 actionCommand(predicate: predicate, expectation: .seconds(1))
             )
 
-            XCTAssertEqual(
-                result.outcome,
-                eventFirst
-                    ? .settled
-                    : .timedOut(.actionExpectation)
-            )
+            if eventFirst {
+                guard case .action(.settled) = result else {
+                    return XCTFail("Expected in-window announcement to settle")
+                }
+            } else {
+                guard case .action(.failed(let failed)) = result else {
+                    return XCTFail("Expected late announcement to time out")
+                }
+                XCTAssertEqual(failed.reason, .timedOut(.actionExpectation))
+            }
             XCTAssertEqual(boundary.armedDeadlines.map(\.phase), [
                 .actionReadiness,
                 .actionExpectation,
@@ -574,8 +663,10 @@ final class SettlementExecutionPerformanceTests: SemanticObservationStreamTestCa
 
         let result = await Settlement.Executor(boundary: boundary).execute(command)
 
-        XCTAssertEqual(result.outcome, .settled)
-        XCTAssertEqual(result.evidence.handoff.event?.moment, current.moment)
+        guard case .observation(.settled(let settled)) = result else {
+            return XCTFail("Expected coalesced observation to settle")
+        }
+        XCTAssertEqual(settled.handoff.event.moment, current.moment)
         XCTAssertEqual(boundary.totalCaptureCount, 3)
         XCTAssertEqual(boundary.captureGenerations, [.initial, .initial.advanced()])
         XCTAssertEqual(boundary.maximumConcurrentCaptures, 1)
@@ -587,11 +678,11 @@ final class SettlementExecutionPerformanceTests: SemanticObservationStreamTestCa
             finalEvidenceMainActorMs: 1_000
         )
         XCTAssertLessThanOrEqual(
-            try XCTUnwrap(result.evidence.timing.beforeObservationMs).milliseconds,
+            try XCTUnwrap(settled.timing.execution.beforeObservationMs).milliseconds,
             budgets.baselineMainActorMs
         )
         XCTAssertLessThanOrEqual(
-            try XCTUnwrap(result.evidence.timing.finalSemanticEvidenceMs).milliseconds,
+            try XCTUnwrap(settled.timing.execution.finalSemanticEvidenceMs).milliseconds,
             budgets.finalEvidenceMainActorMs
         )
 
@@ -608,6 +699,62 @@ final class SettlementExecutionPerformanceTests: SemanticObservationStreamTestCa
 private struct SettlementPerformanceBudgets {
     let baselineMainActorMs: Int
     let finalEvidenceMainActorMs: Int
+}
+
+private actor QuiescenceGate {
+    private var entered = false
+    private var released = false
+    private var entryWaiters: [CheckedContinuation<Void, Never>] = []
+    private var releaseWaiters: [CheckedContinuation<Void, Never>] = []
+
+    func suspend() async {
+        entered = true
+        entryWaiters.forEach { $0.resume() }
+        entryWaiters.removeAll()
+        guard !released else { return }
+        await withCheckedContinuation { continuation in
+            releaseWaiters.append(continuation)
+        }
+    }
+
+    func waitUntilEntered() async {
+        guard !entered else { return }
+        await withCheckedContinuation { continuation in
+            entryWaiters.append(continuation)
+        }
+    }
+
+    func release() {
+        released = true
+        releaseWaiters.forEach { $0.resume() }
+        releaseWaiters.removeAll()
+    }
+}
+
+private final class SettlementCompletionProbe: @unchecked Sendable {
+    private struct State {
+        var logs: [String] = []
+        var didComplete = false
+    }
+
+    private let lock = NSLock()
+    private var state = State()
+
+    var logs: [String] {
+        lock.withLock { state.logs }
+    }
+
+    var didComplete: Bool {
+        lock.withLock { state.didComplete }
+    }
+
+    func record(_ log: String) {
+        lock.withLock { state.logs.append(log) }
+    }
+
+    func recordCompletion() {
+        lock.withLock { state.didComplete = true }
+    }
 }
 
 /// `NSLock` protects the complete mutable `state` value: operations, sink,
@@ -642,7 +789,6 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         case observationEffectsRestored
         case observationEffectsJoined
         case quiesce
-        case finalize
     }
 
     private struct State {
@@ -679,6 +825,8 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
     private let readinessScript: (@Sendable (Settlement.ExecutionSink, Settlement.PhaseDeadline) -> Void)?
     private let deadlineScript: (@Sendable (Settlement.ExecutionSink, Settlement.PhaseDeadline) -> Void)?
     private let evaluateRequest: (@Sendable (Settlement.Predicate.EvaluationRequest) -> PredicateEvaluationResult)?
+    private let quiescenceGate: QuiescenceGate?
+    private let viewportExit: Navigation.ViewportExit.Outcome
 
     init(
         baseline: Observation.SnapshotEvent,
@@ -693,7 +841,9 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         liveObservationBoundary: LiveSettlementExecutionBoundary? = nil,
         readinessScript: (@Sendable (Settlement.ExecutionSink, Settlement.PhaseDeadline) -> Void)? = nil,
         deadlineScript: (@Sendable (Settlement.ExecutionSink, Settlement.PhaseDeadline) -> Void)? = nil,
-        evaluate: (@Sendable (Settlement.Predicate.EvaluationRequest) -> PredicateEvaluationResult)? = nil
+        evaluate: (@Sendable (Settlement.Predicate.EvaluationRequest) -> PredicateEvaluationResult)? = nil,
+        quiescenceGate: QuiescenceGate? = nil,
+        viewportExit: Navigation.ViewportExit.Outcome = .restored
     ) {
         self.baseline = baseline
         self.changed = changed
@@ -708,6 +858,8 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         self.readinessScript = readinessScript
         self.deadlineScript = deadlineScript
         self.evaluateRequest = evaluate
+        self.quiescenceGate = quiescenceGate
+        self.viewportExit = viewportExit
     }
 
     var operations: [Operation] {
@@ -938,6 +1090,7 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         _ arming: Settlement.Arming
     ) async -> Navigation.ViewportExit.Outcome {
         record(.quiesce)
+        await quiescenceGate?.suspend()
         let (sink, control, observationEffectsTask) = lock.withLock {
             defer {
                 state.finishedSink = state.sink
@@ -971,9 +1124,8 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         let viewportExit = if let liveObservationBoundary {
             await liveObservationBoundary.quiesceSettlement(arming)
         } else {
-            Navigation.ViewportExit.Outcome.restored
+            self.viewportExit
         }
-        record(.finalize)
         return viewportExit
     }
 
@@ -998,7 +1150,7 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
 
     func evaluate(
         _ request: Settlement.Predicate.EvaluationRequest
-    ) async -> PredicateEvaluationResult {
+    ) -> PredicateEvaluationResult {
         if case .announcement = request.evidence {
             record(.evaluateAnnouncement)
             return PredicateEvaluationResult(met: true)
@@ -1006,7 +1158,7 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         record(.evaluateObservation)
         if let evaluateRequest { return evaluateRequest(request) }
         if let liveObservationBoundary {
-            return await liveObservationBoundary.evaluate(request)
+            return liveObservationBoundary.evaluate(request)
         }
         return PredicateEvaluationResult(met: true)
     }

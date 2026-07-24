@@ -27,7 +27,7 @@ extension Settlement {
                 return terminalBeforeBaseline(
                     command: command,
                     boundary: .unavailable(failure),
-                    outcome: .baselineUnavailable,
+                    failure: .baselineUnavailable,
                     timing: ExecutionTiming(),
                     elapsed: 0
                 )
@@ -93,7 +93,7 @@ private extension Settlement.Reducer {
             return terminalBeforeBaseline(
                 command: command,
                 boundary: .unavailable(failure),
-                outcome: .baselineUnavailable,
+                failure: .baselineUnavailable,
                 timing: event.timing,
                 elapsed: event.elapsed
             )
@@ -101,7 +101,7 @@ private extension Settlement.Reducer {
             return terminalBeforeBaseline(
                 command: command,
                 boundary: .pending,
-                outcome: .cancelled,
+                failure: .cancelled,
                 timing: event.timing,
                 elapsed: event.elapsed
             )
@@ -424,7 +424,7 @@ private extension Settlement.Reducer {
 }
 
 private extension Settlement.Reducer {
-    static func completedOutcome(_ session: Settlement.Session) -> Settlement.Outcome? {
+    static func completedOutcome(_ session: Settlement.Session) -> Settlement.TerminalIntent? {
         guard case .established(let readiness) = session.readiness,
               let handoff = session.handoff.admission,
               handoff.belongs(to: readiness) else { return nil }
@@ -461,7 +461,7 @@ private extension Settlement.Reducer {
 private extension Settlement.Reducer {
     static func quiescing(
         _ session: Settlement.Session,
-        outcome: Settlement.Outcome,
+        outcome: Settlement.TerminalIntent,
         elapsed: ElapsedMilliseconds
     ) -> Settlement.Decision {
         Settlement.Decision(
@@ -484,68 +484,103 @@ private extension Settlement.Reducer {
         guard case .quiesced(let viewportExit) = event.fact else {
             return Settlement.Decision(state: .quiescing(quiescence), effects: [])
         }
-        let outcome: Settlement.Outcome = switch viewportExit {
+        switch viewportExit {
         case .restored, .retained, .superseded:
-            quiescence.intendedOutcome
+            return terminal(
+                quiescence.session,
+                intent: quiescence.intendedOutcome,
+                elapsed: quiescence.elapsed
+            )
         case .failed(let failure):
-            .viewportExitFailed(failure)
+            return terminal(
+                quiescence.session,
+                viewportExitFailure: failure,
+                elapsed: quiescence.elapsed
+            )
         }
-        return terminal(
-            quiescence.session,
-            outcome: outcome,
-            elapsed: quiescence.elapsed
-        )
     }
 
     static func terminal(
         _ session: Settlement.Session,
-        outcome: Settlement.Outcome,
+        intent: Settlement.TerminalIntent,
         elapsed: ElapsedMilliseconds
     ) -> Settlement.Decision {
-        let result = Settlement.Result(
-            outcome: outcome,
-            evidence: Settlement.Evidence(
-                command: session.command,
-                boundary: .established(session.boundary),
-                trigger: session.triggerEvidence,
-                predicate: session.requirement.evidence,
-                readiness: session.readiness,
-                handoff: session.handoff,
-                observationHistory: session.observationHistory,
-                timing: session.timing,
-                elapsed: elapsed
-            )
-        )
+        let result = result(session, intent: intent, elapsed: elapsed)
+        return Settlement.Decision(state: .terminal(result), effects: [])
+    }
+
+    static func terminal(
+        _ session: Settlement.Session,
+        viewportExitFailure: Navigation.ViewportExit.Failure,
+        elapsed: ElapsedMilliseconds
+    ) -> Settlement.Decision {
+        let timing = Settlement.Result.Timing(execution: session.timing, elapsed: elapsed)
+        let result: Settlement.Result = switch session.command {
+        case .observation(let predicate, _, _):
+            .observation(.failed(.init(
+                reason: .viewportExitFailed(viewportExitFailure),
+                attempt: observationAttempt(session, predicate: predicate, timing: timing)
+            )))
+        case .action(let command):
+            .action(.failed(.init(
+                reason: .viewportExitFailed(viewportExitFailure),
+                attempt: actionAttempt(session, command: command, timing: timing)
+            )))
+        case .currentState:
+            preconditionFailure("Current-state capture cannot own viewport effects")
+        }
         return Settlement.Decision(state: .terminal(result), effects: [])
     }
 
     static func terminalBeforeBaseline(
         command: Settlement.Command,
         boundary: Settlement.BoundaryEvidence,
-        outcome: Settlement.Outcome,
+        failure: BootstrapFailure,
         timing: Settlement.ExecutionTiming,
         elapsed: ElapsedMilliseconds
     ) -> Settlement.Decision {
-        let trigger: Settlement.TriggerEvidence = switch command {
-        case .action(let action): .actionPending(action.command)
-        case .currentState, .observation: .observation
+        let resultTiming = Settlement.Result.Timing(execution: timing, elapsed: elapsed)
+        let result: Settlement.Result
+        switch command {
+        case .currentState:
+            let reason: Settlement.Result.CurrentStateFailureReason = switch failure {
+            case .baselineUnavailable:
+                .unavailable(boundary.captureFailure ?? .unavailable)
+            case .cancelled:
+                .cancelled
+            }
+            result = .currentState(.failed(.init(
+                reason: reason,
+                timing: resultTiming
+            )))
+        case .observation(let predicate, _, _):
+            result = .observation(.failed(.init(
+                reason: failure.observationReason,
+                attempt: .init(
+                    predicate: predicate,
+                    boundary: boundary,
+                    evaluation: .init(predicate: predicate),
+                    readiness: .pending(.initial),
+                    handoff: .pending(.initial),
+                    history: nil,
+                    timing: resultTiming
+                )
+            )))
+        case .action(let command):
+            result = .action(.failed(.init(
+                reason: failure.actionReason,
+                attempt: .init(
+                    command: command,
+                    boundary: boundary,
+                    dispatch: .pending,
+                    evaluation: .init(predicate: command.predicate),
+                    readiness: .pending(.initial),
+                    handoff: .pending(.initial),
+                    history: nil,
+                    timing: resultTiming
+                )
+            )))
         }
-        let result = Settlement.Result(
-            outcome: outcome,
-            evidence: Settlement.Evidence(
-                command: command,
-                boundary: boundary,
-                trigger: trigger,
-                predicate: Settlement.Predicate.Requirement(
-                    predicate: command.predicate
-                ).evidence,
-                readiness: .pending(.initial),
-                handoff: .pending(.initial),
-                observationHistory: nil,
-                timing: timing,
-                elapsed: elapsed
-            )
-        )
         return Settlement.Decision(state: .terminal(result), effects: [])
     }
 
@@ -555,26 +590,180 @@ private extension Settlement.Reducer {
         timing: Settlement.ExecutionTiming,
         elapsed: ElapsedMilliseconds = RuntimeElapsed.admit(milliseconds: 0)
     ) -> Settlement.Decision {
-        let readiness = Settlement.Readiness.Establishment(
-            generation: .initial,
-            path: .currentStateCapture,
-            observationBoundary: .including(event.moment)
-        )
-        let result = Settlement.Result(
-            outcome: .settled,
-            evidence: Settlement.Evidence(
-                command: command,
-                boundary: .established(.init(moment: event.moment)),
-                trigger: .observation,
-                predicate: Settlement.Predicate.Evidence(predicate: nil),
-                readiness: .established(readiness),
-                handoff: .admitted(.currentState(event)),
-                observationHistory: .events([]),
-                timing: timing,
-                elapsed: elapsed
-            )
-        )
+        guard case .currentState = command else {
+            preconditionFailure("Current-state terminal result requires a current-state command")
+        }
+        let result = Settlement.Result.currentState(.captured(.init(
+            event: event,
+            timing: .init(execution: timing, elapsed: elapsed)
+        )))
         return Settlement.Decision(state: .terminal(result), effects: [])
+    }
+}
+
+private extension Settlement.Reducer {
+    enum BootstrapFailure {
+        case baselineUnavailable
+        case cancelled
+
+        var observationReason: Settlement.Result.ObservationFailureReason {
+            switch self {
+            case .baselineUnavailable: .baselineUnavailable
+            case .cancelled: .cancelled
+            }
+        }
+
+        var actionReason: Settlement.Result.ActionFailureReason {
+            switch self {
+            case .baselineUnavailable: .baselineUnavailable
+            case .cancelled: .cancelled
+            }
+        }
+    }
+
+    static func result(
+        _ session: Settlement.Session,
+        intent: Settlement.TerminalIntent,
+        elapsed: ElapsedMilliseconds
+    ) -> Settlement.Result {
+        let timing = Settlement.Result.Timing(execution: session.timing, elapsed: elapsed)
+        switch session.command {
+        case .observation(let predicate, _, _):
+            let attempt = observationAttempt(session, predicate: predicate, timing: timing)
+            guard intent == .settled else {
+                return .observation(.failed(.init(
+                    reason: observationFailure(intent),
+                    attempt: attempt
+                )))
+            }
+            guard case .established(let readiness) = session.readiness,
+                  let handoff = session.handoff.admission,
+                  handoff.belongs(to: readiness),
+                  let evaluation = session.requirement.evidence.satisfyingResponse(
+                      for: predicate,
+                      at: handoff.event
+                  ) else {
+                preconditionFailure("Settled observation requires admitted terminal evidence")
+            }
+            return .observation(.settled(.init(
+                predicate: predicate,
+                boundary: session.boundary,
+                evaluation: evaluation,
+                readiness: readiness,
+                handoff: handoff,
+                history: session.observationHistory,
+                timing: timing
+            )))
+
+        case .action(let command):
+            let attempt = actionAttempt(session, command: command, timing: timing)
+            guard intent == .settled else {
+                return .action(.failed(.init(
+                    reason: actionFailure(intent),
+                    attempt: attempt
+                )))
+            }
+            guard case .actionDispatched(let dispatch) = session.triggerEvidence,
+                  dispatch.success,
+                  case .established(let readiness) = session.readiness,
+                  let handoff = session.handoff.admission,
+                  handoff.belongs(to: readiness) else {
+                preconditionFailure("Settled action requires dispatch and admitted terminal evidence")
+            }
+            let evaluation = command.predicate.map {
+                guard let response = session.requirement.evidence.satisfyingResponse(
+                    for: $0,
+                    at: handoff.event
+                ) else {
+                    preconditionFailure("Settled action expectation requires predicate evidence")
+                }
+                return response
+            }
+            return .action(.settled(.init(
+                command: command,
+                boundary: session.boundary,
+                dispatch: dispatch,
+                evaluation: evaluation,
+                readiness: readiness,
+                handoff: handoff,
+                history: session.observationHistory,
+                timing: timing
+            )))
+
+        case .currentState:
+            preconditionFailure("Current-state capture cannot create a settlement session")
+        }
+    }
+
+    static func observationAttempt(
+        _ session: Settlement.Session,
+        predicate: Settlement.Predicate,
+        timing: Settlement.Result.Timing
+    ) -> Settlement.Result.ObservationAttempt {
+        .init(
+            predicate: predicate,
+            boundary: .established(session.boundary),
+            evaluation: session.requirement.evidence,
+            readiness: session.readiness,
+            handoff: session.handoff,
+            history: session.observationHistory,
+            timing: timing
+        )
+    }
+
+    static func actionAttempt(
+        _ session: Settlement.Session,
+        command: Settlement.Command.Action,
+        timing: Settlement.Result.Timing
+    ) -> Settlement.Result.ActionAttempt {
+        let dispatch: Settlement.Result.ActionDispatch = switch session.triggerEvidence {
+        case .actionPending:
+            .pending
+        case .actionDispatched(let result):
+            .completed(result)
+        case .observation:
+            preconditionFailure("Action settlement requires action dispatch evidence")
+        }
+        return .init(
+            command: command,
+            boundary: .established(session.boundary),
+            dispatch: dispatch,
+            evaluation: session.requirement.evidence,
+            readiness: session.readiness,
+            handoff: session.handoff,
+            history: session.observationHistory,
+            timing: timing
+        )
+    }
+
+    static func observationFailure(
+        _ intent: Settlement.TerminalIntent
+    ) -> Settlement.Result.ObservationFailureReason {
+        switch intent {
+        case .timedOut(let phase): .timedOut(phase)
+        case .cancelled: .cancelled
+        case .settled, .dispatchFailed:
+            preconditionFailure("Observation terminal intent cannot represent this failure")
+        }
+    }
+
+    static func actionFailure(
+        _ intent: Settlement.TerminalIntent
+    ) -> Settlement.Result.ActionFailureReason {
+        switch intent {
+        case .dispatchFailed: .dispatchFailed
+        case .timedOut(let phase): .timedOut(phase)
+        case .cancelled: .cancelled
+        case .settled:
+            preconditionFailure("Settled action cannot be projected as a failure")
+        }
+    }
+}
+
+private extension Settlement.BoundaryEvidence {
+    var captureFailure: Settlement.Capture.Failure? {
+        guard case .unavailable(let failure) = self else { return nil }
+        return failure
     }
 }
 

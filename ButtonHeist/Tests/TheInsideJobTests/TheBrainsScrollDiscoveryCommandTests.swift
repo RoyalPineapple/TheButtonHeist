@@ -324,250 +324,126 @@ extension TheBrainsScrollTests {
     }
 
     func testPagedHorizontalDiscoveryRestoresStartingPage() async throws {
-        let rootView = UIView()
-        rootView.backgroundColor = .white
-        let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 390, height: 300))
-        scrollView.contentSize = CGSize(width: 1_170, height: 300)
-        scrollView.isPagingEnabled = true
-        scrollView.contentOffset = CGPoint(x: 390, y: 0)
-        rootView.addSubview(scrollView)
-
-        let window = try installModalWindow(rootView: rootView)
-        defer {
-            window.rootViewController?.view.accessibilityViewIsModal = false
-            window.isHidden = true
-        }
-        await brains.tripwire.yieldFrames(3)
-        let initialVisualOrigin = Navigation.visualOrigin(in: scrollView)
-        scrollView.onSetContentOffset = { [unowned self] current in
-            let requestedX = current.requestedContentOffsets.last?.x ?? current.contentOffset.x
+        let fixture = try await explorationViewport(
+            frame: CGRect(x: 0, y: 0, width: 390, height: 300),
+            contentSize: CGSize(width: 1_170, height: 300),
+            contentOffset: CGPoint(x: 390, y: 0),
+            isPagingEnabled: true,
+            label: "Page 1"
+        )
+        defer { fixture.close() }
+        let initialOrigin = Navigation.visualOrigin(in: fixture.scrollView)
+        fixture.scrollView.onSetContentOffset = { [unowned self] scrollView in
+            let requestedX = scrollView.requestedContentOffsets.last?.x ?? scrollView.contentOffset.x
             self.visibleObservationSource.observation = self.explorationObservation(
                 label: "Page \(Int((requestedX / 390).rounded()))",
-                scrollView: current
+                scrollView: scrollView
             )
         }
-        await installSyntheticObservation(explorationObservation(
-            label: "Page 1",
-            scrollView: scrollView
-        ))
 
-        guard let exploration = await brains.navigation.exploreScreen(
-            baseline: .currentViewport(brains.vault.latestObservation),
-            exitPosition: .origin,
-            maxScrollsPerContainer: 8,
-            maxScrollsPerDiscovery: 8
-        ) else {
+        guard let exploration = await exploreViewport(maxScrolls: 8) else {
             return XCTFail("Expected paged discovery to complete")
         }
 
         XCTAssertEqual(exploration.viewportExit, .restored)
         XCTAssertTrue(exploration.didMoveViewport)
-        XCTAssertEqual(Navigation.visualOrigin(in: scrollView).x, initialVisualOrigin.x, accuracy: 0.01)
+        XCTAssertEqual(Navigation.visualOrigin(in: fixture.scrollView).x, initialOrigin.x, accuracy: 0.01)
     }
 
     func testStopRequestObservedDuringScanningRestoresOrigin() async throws {
-        let rootView = UIView()
-        rootView.backgroundColor = .white
-        let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 300))
-        scrollView.contentSize = CGSize(width: 320, height: 900)
-        rootView.addSubview(scrollView)
-
-        let window = try installModalWindow(rootView: rootView)
-        defer {
-            window.rootViewController?.view.accessibilityViewIsModal = false
-            window.isHidden = true
-        }
-        await brains.tripwire.yieldFrames(3)
-        scrollView.onSetContentOffset = { [unowned self] current in
-            let requestedY = current.requestedContentOffsets.last?.y ?? current.contentOffset.y
-            self.visibleObservationSource.observation = self.explorationObservation(
-                label: requestedY > 0 ? "Scrolled" : "Origin",
-                scrollView: current
-            )
-        }
-        await installSyntheticObservation(explorationObservation(
-            label: "Origin",
-            scrollView: scrollView
-        ))
+        let fixture = try await explorationViewport()
+        defer { fixture.close() }
+        publishVerticalOffsetObservations(from: fixture.scrollView)
         var stopRequested = false
 
-        guard let exploration = await brains.navigation.exploreScreen(
-            baseline: .currentViewport(brains.vault.latestObservation),
-            exitPosition: .origin,
-            maxScrollsPerContainer: 3,
-            maxScrollsPerDiscovery: 3,
-            onObservation: { _ in
-                stopRequested = stopRequested || scrollView.contentOffset.y > 0
-                return stopRequested ? .goalSatisfied : .continue
-            }
-        ) else {
+        guard let exploration = await exploreViewport(onObservation: { _ in
+            stopRequested = stopRequested || fixture.scrollView.contentOffset.y > 0
+            return stopRequested ? .goalSatisfied : .continue
+        }) else {
             return XCTFail("Expected stopped discovery to report its viewport exit")
         }
 
         XCTAssertTrue(stopRequested)
         XCTAssertEqual(exploration.viewportExit, .restored)
-        XCTAssertEqual(Navigation.visualOrigin(in: scrollView).y, 0, accuracy: 0.01)
+        XCTAssertEqual(Navigation.visualOrigin(in: fixture.scrollView).y, 0, accuracy: 0.01)
     }
 
     func testExpiredBusinessDeadlineStillPermitsBoundedRestoration() async throws {
-        let rootView = UIView()
-        rootView.backgroundColor = .white
-        let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 300))
-        scrollView.contentSize = CGSize(width: 320, height: 900)
-        rootView.addSubview(scrollView)
-
-        let window = try installModalWindow(rootView: rootView)
-        defer {
-            window.rootViewController?.view.accessibilityViewIsModal = false
-            window.isHidden = true
-        }
-        await brains.tripwire.yieldFrames(3)
-        scrollView.onSetContentOffset = { [unowned self] current in
-            let requestedY = current.requestedContentOffsets.last?.y ?? current.contentOffset.y
-            self.visibleObservationSource.observation = self.explorationObservation(
-                label: requestedY > 0 ? "Scrolled" : "Origin",
-                scrollView: current
-            )
-        }
+        let fixture = try await explorationViewport()
+        defer { fixture.close() }
+        publishVerticalOffsetObservations(from: fixture.scrollView)
+        fixture.scrollView.setContentOffset(CGPoint(x: 0, y: 300), animated: false)
         await installSyntheticObservation(explorationObservation(
-            label: "Origin",
-            scrollView: scrollView
+            label: "Scrolled",
+            scrollView: fixture.scrollView
         ))
         let businessDeadline = SemanticObservationDeadline(
             start: RuntimeElapsed.now,
-            timeoutMs: 500
+            timeoutMs: 0
         )
-        var deadlineExpiredBeforeCompletion = false
 
-        guard let exploration = await brains.navigation.exploreScreen(
-            baseline: .currentViewport(brains.vault.latestObservation),
-            exitPosition: .origin,
-            deadline: businessDeadline,
-            maxScrollsPerContainer: 3,
-            maxScrollsPerDiscovery: 3,
-            onObservation: { _ in
-                guard scrollView.contentOffset.y > 0 else { return .continue }
-                while businessDeadline.hasTimeRemaining(at: RuntimeElapsed.now) {
-                    await Task.yield()
-                }
-                deadlineExpiredBeforeCompletion = true
-                return .goalSatisfied
-            }
-        ) else {
-            return XCTFail("Expected cleanup to outlive the business deadline")
-        }
+        XCTAssertFalse(businessDeadline.hasTimeRemaining(at: RuntimeElapsed.now))
+        let cleanup = await brains.navigation.performViewportTransition(
+            .restoreVisualOrigin(.zero, in: .original(fixture.scrollView)),
+            deadline: SemanticObservationDeadline(
+                start: RuntimeElapsed.now,
+                timeoutMs: SettleSession.viewportTransitionTimeoutMs
+            ),
+            discoveryCommitPolicy: .replaceInterface
+        )
 
-        XCTAssertTrue(deadlineExpiredBeforeCompletion)
-        XCTAssertEqual(exploration.viewportExit, .restored)
-        XCTAssertEqual(Navigation.visualOrigin(in: scrollView).y, 0, accuracy: 0.01)
+        XCTAssertEqual(cleanup.outcome, .moved)
+        XCTAssertEqual(Navigation.visualOrigin(in: fixture.scrollView).y, 0, accuracy: 0.01)
     }
 
     func testCurrentExitRetainsReachedViewport() async throws {
-        let rootView = UIView()
-        rootView.backgroundColor = .white
-        let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 300))
-        scrollView.contentSize = CGSize(width: 320, height: 900)
-        rootView.addSubview(scrollView)
+        let fixture = try await explorationViewport()
+        defer { fixture.close() }
+        publishVerticalOffsetObservations(from: fixture.scrollView, movedLabel: "Reached")
 
-        let window = try installModalWindow(rootView: rootView)
-        defer {
-            window.rootViewController?.view.accessibilityViewIsModal = false
-            window.isHidden = true
-        }
-        await brains.tripwire.yieldFrames(3)
-        scrollView.onSetContentOffset = { [unowned self] current in
-            self.visibleObservationSource.observation = self.explorationObservation(
-                label: "Reached",
-                scrollView: current
-            )
-        }
-        await installSyntheticObservation(explorationObservation(
-            label: "Origin",
-            scrollView: scrollView
-        ))
-
-        guard let exploration = await brains.navigation.exploreScreen(
-            baseline: .currentViewport(brains.vault.latestObservation),
-            exitPosition: .current,
-            maxScrollsPerContainer: 3,
-            maxScrollsPerDiscovery: 3,
-            onObservation: { _ in
-                scrollView.contentOffset.y > 0 ? .goalSatisfied : .continue
-            }
-        ) else {
+        guard let exploration = await exploreViewport(exitPosition: .current, onObservation: { _ in
+            fixture.scrollView.contentOffset.y > 0 ? .goalSatisfied : .continue
+        }) else {
             return XCTFail("Expected retained discovery to complete")
         }
 
         XCTAssertEqual(exploration.viewportExit, .retained)
-        XCTAssertGreaterThan(Navigation.visualOrigin(in: scrollView).y, 0)
+        XCTAssertGreaterThan(Navigation.visualOrigin(in: fixture.scrollView).y, 0)
     }
 
     func testScreenReplacementSupersedesOriginWithoutMovingReplacementViewport() async throws {
-        let rootView = UIView()
-        rootView.backgroundColor = .white
-        let originalScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 300))
-        originalScrollView.contentSize = CGSize(width: 320, height: 900)
-        let replacementScrollView = RecordingScrollView(frame: originalScrollView.frame)
-        replacementScrollView.contentSize = originalScrollView.contentSize
-        rootView.addSubview(originalScrollView)
-
-        let window = try installModalWindow(rootView: rootView)
-        defer {
-            window.rootViewController?.view.accessibilityViewIsModal = false
-            window.isHidden = true
-        }
-        await brains.tripwire.yieldFrames(3)
-        await installSyntheticObservation(explorationObservation(
-            label: "Original",
-            scrollView: originalScrollView
-        ))
+        let fixture = try await explorationViewport(label: "Original")
+        defer { fixture.close() }
+        let replacement = RecordingScrollView(frame: fixture.scrollView.frame)
+        replacement.contentSize = fixture.scrollView.contentSize
         var replaced = false
-        originalScrollView.onSetContentOffset = { [unowned self] _ in
+        fixture.scrollView.onSetContentOffset = { [unowned self] _ in
             guard !replaced else { return }
             replaced = true
-            originalScrollView.removeFromSuperview()
-            rootView.addSubview(replacementScrollView)
+            fixture.scrollView.removeFromSuperview()
+            fixture.rootView.addSubview(replacement)
             self.visibleObservationSource.observation = self.explorationObservation(
                 label: "Replacement Back",
                 traits: [.button, .backButton],
-                scrollView: replacementScrollView,
+                scrollView: replacement,
                 heistId: "replacement_back"
             )
         }
 
-        guard let exploration = await brains.navigation.exploreScreen(
-            baseline: .currentViewport(brains.vault.latestObservation),
-            exitPosition: .origin,
-            maxScrollsPerContainer: 3,
-            maxScrollsPerDiscovery: 3
-        ) else {
+        guard let exploration = await exploreViewport() else {
             return XCTFail("Expected replacement discovery to report supersession")
         }
 
         XCTAssertTrue(replaced)
         XCTAssertEqual(exploration.viewportExit, .superseded)
-        XCTAssertTrue(replacementScrollView.requestedContentOffsets.isEmpty)
+        XCTAssertTrue(replacement.requestedContentOffsets.isEmpty)
     }
 
     func testSemanticOmissionRestoresThroughOriginalViewportEvidence() async throws {
-        let rootView = UIView()
-        rootView.backgroundColor = .white
-        let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 300))
-        scrollView.contentSize = CGSize(width: 320, height: 900)
-        rootView.addSubview(scrollView)
-
-        let window = try installModalWindow(rootView: rootView)
-        defer {
-            window.rootViewController?.view.accessibilityViewIsModal = false
-            window.isHidden = true
-        }
-        await brains.tripwire.yieldFrames(3)
-        await installSyntheticObservation(explorationObservation(
-            label: "Origin",
-            scrollView: scrollView
-        ))
-        scrollView.onSetContentOffset = { [unowned self] current in
-            let requestedY = current.requestedContentOffsets.last?.y ?? current.contentOffset.y
+        let fixture = try await explorationViewport()
+        defer { fixture.close() }
+        fixture.scrollView.onSetContentOffset = { [unowned self] scrollView in
+            let requestedY = scrollView.requestedContentOffsets.last?.y ?? scrollView.contentOffset.y
             self.visibleObservationSource.observation = .makeForTests(elements: [
                 (
                     self.makeElement(label: requestedY > 0 ? "Viewport Omitted" : "Origin Restored"),
@@ -576,21 +452,15 @@ extension TheBrainsScrollTests {
             ])
         }
 
-        guard let exploration = await brains.navigation.exploreScreen(
-            baseline: .currentViewport(brains.vault.latestObservation),
-            exitPosition: .origin,
-            maxScrollsPerContainer: 3,
-            maxScrollsPerDiscovery: 3,
-            onObservation: { _ in
-                scrollView.contentOffset.y > 0 ? .goalSatisfied : .continue
-            }
-        ) else {
+        guard let exploration = await exploreViewport(onObservation: { _ in
+            fixture.scrollView.contentOffset.y > 0 ? .goalSatisfied : .continue
+        }) else {
             return XCTFail("Expected weak viewport evidence to restore the omitted semantic target")
         }
 
         XCTAssertEqual(exploration.viewportExit, .restored)
-        XCTAssertGreaterThanOrEqual(scrollView.requestedContentOffsets.count, 2)
-        XCTAssertEqual(Navigation.visualOrigin(in: scrollView).y, 0, accuracy: 0.01)
+        XCTAssertGreaterThanOrEqual(fixture.scrollView.requestedContentOffsets.count, 2)
+        XCTAssertEqual(Navigation.visualOrigin(in: fixture.scrollView).y, 0, accuracy: 0.01)
     }
 
     func testScrollToVisibleDiscoversTargetAboveCurrentViewport() async throws {
@@ -878,6 +748,65 @@ extension TheBrainsScrollTests {
             "Expected offscreen guidance, got \(String(describing: result.message))"
         )
         XCTAssertTrue(result.message?.contains("scroll_to_visible") == true)
+    }
+
+    private struct ExplorationViewportFixture {
+        let rootView: UIView
+        let scrollView: RecordingScrollView
+        let window: UIWindow
+
+        @MainActor
+        func close() {
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
+        }
+    }
+
+    private func explorationViewport(
+        frame: CGRect = CGRect(x: 0, y: 0, width: 320, height: 300),
+        contentSize: CGSize = CGSize(width: 320, height: 900),
+        contentOffset: CGPoint = .zero,
+        isPagingEnabled: Bool = false,
+        label: String = "Origin"
+    ) async throws -> ExplorationViewportFixture {
+        let rootView = UIView()
+        rootView.backgroundColor = .white
+        let scrollView = RecordingScrollView(frame: frame)
+        scrollView.contentSize = contentSize
+        scrollView.contentOffset = contentOffset
+        scrollView.isPagingEnabled = isPagingEnabled
+        rootView.addSubview(scrollView)
+        let window = try installModalWindow(rootView: rootView)
+        await brains.tripwire.yieldFrames(3)
+        await installSyntheticObservation(explorationObservation(label: label, scrollView: scrollView))
+        return ExplorationViewportFixture(rootView: rootView, scrollView: scrollView, window: window)
+    }
+
+    private func publishVerticalOffsetObservations(
+        from scrollView: RecordingScrollView,
+        movedLabel: String = "Scrolled"
+    ) {
+        scrollView.onSetContentOffset = { [unowned self] scrollView in
+            let requestedY = scrollView.requestedContentOffsets.last?.y ?? scrollView.contentOffset.y
+            self.visibleObservationSource.observation = self.explorationObservation(
+                label: requestedY > 0 ? movedLabel : "Origin",
+                scrollView: scrollView
+            )
+        }
+    }
+
+    private func exploreViewport(
+        exitPosition: Navigation.ViewportExitPosition = .origin,
+        maxScrolls: Int = 3,
+        onObservation: ((Observation.SnapshotEvent) async -> Navigation.ViewportExplorationDecision)? = nil
+    ) async -> Navigation.InterfaceExplorationResult? {
+        await brains.navigation.exploreScreen(
+            baseline: .currentViewport(brains.vault.latestObservation),
+            exitPosition: exitPosition,
+            maxScrollsPerContainer: maxScrolls,
+            maxScrollsPerDiscovery: maxScrolls,
+            onObservation: onObservation
+        )
     }
 
     private func explorationObservation(

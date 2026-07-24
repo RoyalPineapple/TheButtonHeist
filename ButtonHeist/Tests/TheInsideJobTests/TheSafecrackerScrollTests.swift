@@ -334,17 +334,23 @@ final class TheSafecrackerScrollTests: XCTestCase {
         let scrollView = makeScrollView(
             frame: CGRect(x: 0, y: 0, width: 390, height: 800),
             contentSize: CGSize(width: 1_170, height: 800),
-            contentOffset: CGPoint(x: 780, y: 0)
+            contentOffset: CGPoint(x: 123.5, y: 0)
         )
         scrollView.isPagingEnabled = true
+        let capturedOrigin = Navigation.visualOrigin(in: scrollView)
+        scrollView.setContentOffset(CGPoint(x: 780, y: 0), animated: false)
 
         let result = safecracker.restoreVisualOrigin(
-            CGPoint(x: 123.5, y: 0),
+            capturedOrigin,
             in: scrollView
         )
 
         XCTAssertEqual(result, .moved)
-        XCTAssertEqual(scrollView.contentOffset.x, 123.5, accuracy: 0.01)
+        XCTAssertEqual(
+            Navigation.visualOrigin(in: scrollView).x,
+            capturedOrigin.x,
+            accuracy: 0.01
+        )
     }
 }
 #endif

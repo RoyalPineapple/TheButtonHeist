@@ -110,7 +110,7 @@ extension Observation {
             read(store.log)
         }
 
-        internal func commit(_ admission: Admission) throws -> CommittedDelivery {
+        internal func commitAdmission(_ admission: Admission) throws -> CommittedDelivery {
             let committed = try store.commitObservation(admission)
             nextDeliveryOrder += 1
             let token = DeliveryToken(
@@ -134,7 +134,7 @@ extension Observation {
             guard token.generation != deliveryGeneration,
                   nextDeliveryOrder == 0,
                   let admission else { return .superseded }
-            return .readmitted(try commit(admission))
+            return .readmitted(try commitAdmission(admission))
         }
 
         internal func settlementDidArm(at moment: Moment) {

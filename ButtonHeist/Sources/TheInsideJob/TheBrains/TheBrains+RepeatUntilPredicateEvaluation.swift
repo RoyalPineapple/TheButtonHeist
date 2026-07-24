@@ -10,7 +10,7 @@ extension TheBrains.RepeatUntil {
         internal let settlement: Settlement.Result
 
         internal var summary: String? {
-            settlement.evidence.handoff.event?.summary
+            settlement.currentObservation?.summary
         }
 
         internal init(_ settlement: Settlement.Result) {
@@ -143,8 +143,8 @@ extension TheBrains {
                 observing: authored,
                 resolved: resolved,
                 timeout: progressTimeout,
-                baseline: observation.settlement.evidence.handoff.event.map {
-                    .supplied(.init(moment: $0.moment))
+                baseline: observation.settlement.currentObservation.map {
+                    Settlement.Baseline.supplied(.init(moment: $0.moment))
                 } ?? .unavailable(.unavailable)
             )
         } else {
@@ -162,7 +162,7 @@ extension TheBrains {
             in: settlement
         )
         let observation = RepeatUntil.ObservedState(settlement)
-        guard settlement.evidence.handoff.event != nil else {
+        guard settlement.currentObservation != nil else {
             let noProgressExpectation: ExpectationResult.Unmet
             switch stopCheck {
             case .met(let metExpectation):

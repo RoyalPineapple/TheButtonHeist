@@ -213,7 +213,7 @@ extension Navigation {
                 stopWhen() ? .goalSatisfied : .continue
             }
         ) else {
-            return .failed(.originUnavailable)
+            return .restored
         }
         return exploration.viewportExit
     }

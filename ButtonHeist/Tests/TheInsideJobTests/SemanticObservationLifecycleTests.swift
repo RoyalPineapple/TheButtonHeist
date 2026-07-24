@@ -166,7 +166,6 @@ final class SemanticObservationLifecycleTests: SemanticObservationStreamTestCase
             associatedElement: .none
         )
 
-        _ = await lifecycle.quiesce()
         let viewportExit = await lifecycle.finalize()
         XCTAssertEqual(viewportExit, .restored)
         XCTAssertEqual(

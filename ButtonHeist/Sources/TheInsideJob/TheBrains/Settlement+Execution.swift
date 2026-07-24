@@ -25,8 +25,6 @@ extension Settlement.Readiness {
 }
 
 extension Settlement {
-    internal typealias DiagnosisSink = @Sendable (Diagnosis) -> Void
-
     internal enum ObservationEffectState: Sendable, Equatable {
         case active
         case stopRequested
@@ -86,7 +84,6 @@ extension Settlement {
         case deadlineReached(PhaseDeadline)
         case cancelled
         case dispatchCompleted(TheSafecracker.ActionDispatchResult, ContinuousClock.Instant)
-        case predicateEvaluated(Predicate.EvaluationResponse)
         case captureCompleted(Capture.Request, CaptureCompletion, ContinuousClock.Instant)
 
     }
@@ -140,7 +137,7 @@ internal protocol SettlementExecutionBoundary: Sendable {
 
     func evaluate(
         _ request: Settlement.Predicate.EvaluationRequest
-    ) async -> PredicateEvaluationResult
+    ) -> PredicateEvaluationResult
 
     func elapsed() async -> ElapsedMilliseconds
 }
@@ -207,10 +204,6 @@ extension Settlement {
             at instant: ContinuousClock.Instant
         ) {
             record(.dispatchCompleted(result, instant))
-        }
-
-        fileprivate func completeEvaluation(_ response: Predicate.EvaluationResponse) {
-            record(.predicateEvaluated(response))
         }
 
         fileprivate func completeCapture(
@@ -326,7 +319,6 @@ private extension Settlement.ExecutionInput {
              .deadlineReached,
              .cancelled,
              .dispatchCompleted,
-             .predicateEvaluated,
              .captureCompleted:
             nil
         }
@@ -359,20 +351,20 @@ private struct AdmittedSettlementFact {
 extension Settlement {
     internal struct Executor<Boundary: SettlementExecutionBoundary>: Sendable {
         internal let boundary: Boundary
-        private let diagnosisSink: Settlement.DiagnosisSink
+        private let terminalLogSink: Settlement.TerminalLogSink
 
         internal init(boundary: Boundary) {
             self.init(boundary: boundary) {
-                insideJobLogger.debug("\($0.description, privacy: .public)")
+                insideJobLogger.debug("\($0, privacy: .public)")
             }
         }
 
         internal init(
             boundary: Boundary,
-            diagnosisSink: @escaping Settlement.DiagnosisSink
+            terminalLogSink: @escaping Settlement.TerminalLogSink
         ) {
             self.boundary = boundary
-            self.diagnosisSink = diagnosisSink
+            self.terminalLogSink = terminalLogSink
         }
 
         internal func execute(_ command: Command) async -> Result {
@@ -422,9 +414,7 @@ extension Settlement {
                         drainsArmingInputs = false
                     }
 
-                    if case .terminal(let result) = state {
-                        return finish(result, sink: sink)
-                    }
+                    if case .terminal(let result) = state { return finish(result, sink: sink) }
 
                     if !effects.isEmpty {
                         let effect = effects.removeFirst()
@@ -466,10 +456,12 @@ extension Settlement {
                             }
 
                         case .evaluatePredicate(let request):
-                            tasks.addTask {
-                                let result = await boundary.evaluate(request)
-                                sink.completeEvaluation(.init(target: request.target, result: result))
-                            }
+                            let decision = await resolvePredicateEvaluation(.init(
+                                state: state,
+                                effects: [.evaluatePredicate(request)] + effects
+                            ))
+                            state = decision.state
+                            effects = decision.effects
 
                         case .quiesce(let arming):
                             let decision = await quiesce(arming, state: state, sink: sink, tasks: &tasks)
@@ -517,7 +509,7 @@ extension Settlement {
             sink: ExecutionSink
         ) -> Result {
             sink.finish()
-            diagnosisSink(Diagnosis.project(result))
+            terminalLogSink(TerminalLog.render(result))
             return result
         }
 
@@ -573,16 +565,30 @@ extension Settlement {
 
         private func resolvePredicateEvaluation(_ initial: Decision) async -> Decision {
             var decision = initial
-            while decision.effects.count == 1,
-                  case .evaluatePredicate(let request) = decision.effects[0] {
-                let result = await boundary.evaluate(request)
-                decision = await reduce(
+            while let index = decision.effects.firstIndex(where: {
+                if case .evaluatePredicate = $0 { return true }
+                return false
+            }) {
+                guard case .evaluatePredicate(let request) = decision.effects[index] else {
+                    preconditionFailure("Predicate evaluation effect index changed")
+                }
+                var remainingEffects = decision.effects
+                remainingEffects.remove(at: index)
+                let result = boundary.evaluate(request)
+                let evaluated = await reduce(
                     decision.state,
                     fact: .predicateEvaluated(.init(
                         target: request.target,
                         result: result
                     ))
                 )
+                switch evaluated.state {
+                case .quiescing, .terminal:
+                    return evaluated
+                case .awaitingBaseline, .armed, .active:
+                    remainingEffects.insert(contentsOf: evaluated.effects, at: index)
+                    decision = Decision(state: evaluated.state, effects: remainingEffects)
+                }
             }
             return decision
         }
@@ -739,11 +745,6 @@ extension Settlement {
                     fact: .dispatchCompleted(result),
                     instant: instant
                 )
-            case .predicateEvaluated(let response):
-                return AdmittedSettlementFact(
-                    fact: .predicateEvaluated(response),
-                    instant: RuntimeElapsed.now
-                )
             case .captureCompleted(.baseline, _, _):
                 preconditionFailure("Baseline capture completion cannot enter armed delivery")
             case .captureCompleted(.handoff(let request), let completion, let instant):
@@ -809,8 +810,8 @@ private extension Settlement.State {
             session.handoff
         case .quiescing(let quiescence):
             quiescence.session.handoff
-        case .terminal(let result):
-            result.evidence.handoff
+        case .terminal:
+            nil
         case .awaitingBaseline:
             nil
         }
@@ -840,7 +841,7 @@ private extension Settlement.State {
                 elapsed: quiescence.elapsed
             ))
         case .terminal(let result):
-            return .terminal(result.recording(timing))
+            return .terminal(result)
         case .awaitingBaseline:
             preconditionFailure("Final semantic evidence cannot precede baseline admission")
         }
@@ -868,27 +869,6 @@ private extension Settlement.Event.Fact {
              .handoffCaptureFailed:
             false
         }
-    }
-}
-
-private extension Settlement.Result {
-    func recording(_ timing: Settlement.ExecutionTiming) -> Settlement.Result {
-        var mergedTiming = evidence.timing
-        mergedTiming.merge(timing)
-        return Settlement.Result(
-            outcome: outcome,
-            evidence: Settlement.Evidence(
-                command: evidence.command,
-                boundary: evidence.boundary,
-                trigger: evidence.trigger,
-                predicate: evidence.predicate,
-                readiness: evidence.readiness,
-                handoff: evidence.handoff,
-                observationHistory: evidence.observationHistory,
-                timing: mergedTiming,
-                elapsed: evidence.elapsed
-            )
-        )
     }
 }
 
@@ -1133,7 +1113,7 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
 
     internal func evaluate(
         _ request: Settlement.Predicate.EvaluationRequest
-    ) async -> PredicateEvaluationResult {
+    ) -> PredicateEvaluationResult {
         Settlement.PredicateEvaluation.evaluate(request)
     }
 

@@ -365,6 +365,21 @@ extension Settlement.Predicate {
             }
         }
 
+        internal func satisfyingResponse(
+            for predicate: Settlement.Predicate,
+            at handoff: Observation.SnapshotEvent
+        ) -> EvaluationResponse? {
+            switch predicate.semantics {
+            case .currentState, .completeHistory:
+                return responses.first {
+                    $0.target == .observation(handoff.moment) && $0.result.met
+                }
+            case .positiveTransition, .announcement:
+                guard case .satisfied(let response) = status else { return nil }
+                return response
+            }
+        }
+
         private mutating func recordLatest(_ response: EvaluationResponse) {
             responses.append(response)
             guard let latest = latestObservationResponse else {
@@ -689,6 +704,11 @@ extension Settlement {
         case pending
         case established(EvidenceBoundary)
         case unavailable(Capture.Failure)
+
+        internal var established: EvidenceBoundary? {
+            guard case .established(let boundary) = self else { return nil }
+            return boundary
+        }
     }
 
     internal struct ExecutionTiming: Sendable, Equatable {
@@ -720,81 +740,135 @@ extension Settlement {
         }
     }
 
-    internal struct Evidence: Sendable {
-        internal let command: Command
-        internal let boundary: BoundaryEvidence
-        internal let trigger: TriggerEvidence
-        internal let predicate: Predicate.Evidence
-        internal let readiness: Readiness.Evidence
-        internal let handoff: Handoff.Evidence
-        internal let observationHistory: Observation.EventsSince?
-        internal let timing: ExecutionTiming
-        internal let elapsed: ElapsedMilliseconds
+    internal enum Result: Sendable {
+        case currentState(CurrentStateOutcome)
+        case observation(ObservationOutcome)
+        case action(ActionOutcome)
+    }
+}
 
-        internal init(
-            command: Command,
-            boundary: BoundaryEvidence,
-            trigger: TriggerEvidence,
-            predicate: Predicate.Evidence,
-            readiness: Readiness.Evidence,
-            handoff: Handoff.Evidence,
-            observationHistory: Observation.EventsSince?,
-            timing: ExecutionTiming = ExecutionTiming(),
-            elapsed: ElapsedMilliseconds
-        ) {
-            self.command = command
-            self.boundary = boundary
-            self.trigger = trigger
-            self.predicate = predicate
-            self.readiness = readiness
-            self.handoff = handoff
-            self.observationHistory = observationHistory
-            self.timing = timing
-            self.elapsed = elapsed
-        }
+extension Settlement.Result {
+    internal struct Timing: Sendable, Equatable {
+        internal var execution: Settlement.ExecutionTiming
+        internal let elapsed: ElapsedMilliseconds
     }
 
-    internal enum Outcome: Sendable, Equatable {
-        case settled
-        case dispatchFailed
+    internal enum CurrentStateOutcome: Sendable {
+        case captured(CurrentStateCapture)
+        case failed(CurrentStateFailure)
+    }
+
+    internal struct CurrentStateCapture: Sendable {
+        internal let event: Observation.SnapshotEvent
+        internal var timing: Timing
+    }
+
+    internal enum CurrentStateFailureReason: Sendable, Equatable {
+        case unavailable(Settlement.Capture.Failure)
+        case cancelled
+    }
+
+    internal struct CurrentStateFailure: Sendable {
+        internal let reason: CurrentStateFailureReason
+        internal var timing: Timing
+    }
+
+    internal enum ObservationOutcome: Sendable {
+        case settled(SettledObservation)
+        case failed(FailedObservation)
+    }
+
+    internal struct SettledObservation: Sendable {
+        internal let predicate: Settlement.Predicate
+        internal let boundary: Settlement.EvidenceBoundary
+        internal let evaluation: Settlement.Predicate.EvaluationResponse
+        internal let readiness: Settlement.Readiness.Establishment
+        internal let handoff: Settlement.Handoff.Admission
+        internal let history: Observation.EventsSince?
+        internal var timing: Timing
+    }
+
+    internal struct ObservationAttempt: Sendable {
+        internal let predicate: Settlement.Predicate
+        internal let boundary: Settlement.BoundaryEvidence
+        internal let evaluation: Settlement.Predicate.Evidence
+        internal let readiness: Settlement.Readiness.Evidence
+        internal let handoff: Settlement.Handoff.Evidence
+        internal let history: Observation.EventsSince?
+        internal var timing: Timing
+    }
+
+    internal enum ObservationFailureReason: Sendable, Equatable {
         case baselineUnavailable
-        case timedOut(DeadlinePhase)
+        case timedOut(Settlement.DeadlinePhase)
         case cancelled
         case viewportExitFailed(Navigation.ViewportExit.Failure)
     }
 
-    internal struct Result: Sendable {
-        internal let outcome: Outcome
-        internal let evidence: Evidence
+    internal struct FailedObservation: Sendable {
+        internal let reason: ObservationFailureReason
+        internal var attempt: ObservationAttempt
+    }
 
-        internal init(outcome: Outcome, evidence: Evidence) {
-            if outcome == .settled {
-                precondition(evidence.trigger.permitsCompletion, "Settlement success requires a completed trigger")
-                guard case .established(let readiness) = evidence.readiness else {
-                    preconditionFailure("Settlement success requires readiness")
-                }
-                guard let handoff = evidence.handoff.admission else {
-                    preconditionFailure("Settlement success requires an admitted handoff")
-                }
-                precondition(
-                    handoff.belongs(to: readiness),
-                    "Settlement success requires a handoff admitted for its readiness generation"
-                )
-                switch evidence.command {
-                case .currentState:
-                    precondition(
-                        evidence.predicate.status == .notRequired,
-                        "Current-state settlement cannot carry a predicate"
-                    )
-                case .observation, .action:
-                    precondition(
-                        evidence.predicate.satisfies(evidence.command.predicate, at: handoff.event),
-                        "Settlement success requires its predicate at the admitted handoff"
-                    )
-                }
-            }
-            self.outcome = outcome
-            self.evidence = evidence
+    internal enum ActionOutcome: Sendable {
+        case settled(SettledAction)
+        case failed(FailedAction)
+    }
+
+    internal enum ActionDispatch: Sendable {
+        case pending
+        case completed(TheSafecracker.ActionDispatchResult)
+    }
+
+    internal struct SettledAction: Sendable {
+        internal let command: Settlement.Command.Action
+        internal let boundary: Settlement.EvidenceBoundary
+        internal let dispatch: TheSafecracker.ActionDispatchResult
+        internal let evaluation: Settlement.Predicate.EvaluationResponse?
+        internal let readiness: Settlement.Readiness.Establishment
+        internal let handoff: Settlement.Handoff.Admission
+        internal let history: Observation.EventsSince?
+        internal var timing: Timing
+    }
+
+    internal struct ActionAttempt: Sendable {
+        internal let command: Settlement.Command.Action
+        internal let boundary: Settlement.BoundaryEvidence
+        internal let dispatch: ActionDispatch
+        internal let evaluation: Settlement.Predicate.Evidence
+        internal let readiness: Settlement.Readiness.Evidence
+        internal let handoff: Settlement.Handoff.Evidence
+        internal let history: Observation.EventsSince?
+        internal var timing: Timing
+    }
+
+    internal enum ActionFailureReason: Sendable, Equatable {
+        case dispatchFailed
+        case baselineUnavailable
+        case timedOut(Settlement.DeadlinePhase)
+        case cancelled
+        case viewportExitFailed(Navigation.ViewportExit.Failure)
+    }
+
+    internal struct FailedAction: Sendable {
+        internal let reason: ActionFailureReason
+        internal var attempt: ActionAttempt
+    }
+
+    internal var currentObservation: Observation.SnapshotEvent? {
+        switch self {
+        case .currentState(.captured(let capture)):
+            capture.event
+        case .currentState(.failed):
+            nil
+        case .observation(.settled(let settled)):
+            settled.handoff.event
+        case .observation(.failed(let failed)):
+            failed.attempt.handoff.event
+        case .action(.settled(let settled)):
+            settled.handoff.event
+        case .action(.failed(let failed)):
+            failed.attempt.handoff.event
         }
     }
 }
@@ -819,8 +893,15 @@ extension Settlement {
 
     internal struct Quiescence: Sendable {
         internal let session: Session
-        internal let intendedOutcome: Outcome
+        internal let intendedOutcome: TerminalIntent
         internal let elapsed: ElapsedMilliseconds
+    }
+
+    internal enum TerminalIntent: Sendable, Equatable {
+        case settled
+        case dispatchFailed
+        case timedOut(DeadlinePhase)
+        case cancelled
     }
 
     internal struct Session: Sendable {

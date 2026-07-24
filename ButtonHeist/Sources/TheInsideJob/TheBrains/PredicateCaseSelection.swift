@@ -21,7 +21,7 @@ func evaluatePredicateCases(
         cases: results,
         ifNone: .noMatch,
         elapsedMs: 0,
-        lastObservedSummary: settlement.evidence.handoff.event?.summary
+        lastObservedSummary: settlement.currentObservation?.summary
     )
 }
 
