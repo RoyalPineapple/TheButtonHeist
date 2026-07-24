@@ -95,6 +95,7 @@ func `canonical matcher and target forms compile through the public module`() th
         .within(container: .label("Checkout"), .label("Pay")),
         .ref(reference),
     ]
+    #expect(matches[0].mode == .exact)
     #expect(
         !matches.isEmpty
             && !checks.isEmpty

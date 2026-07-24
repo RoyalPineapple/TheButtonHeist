@@ -288,7 +288,7 @@ public struct ElementPredicate: Codable, Sendable, Equatable, Hashable {
     }
 
     public init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element predicate template")
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element predicate")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try self.init(container: container, requiresNonEmpty: true)
     }

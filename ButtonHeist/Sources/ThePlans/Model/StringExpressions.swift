@@ -77,7 +77,7 @@ public struct StringMatch: Codable, Sendable, Equatable, Hashable {
         case isEmpty
     }
 
-    package let mode: Mode
+    public let mode: Mode
     package let value: AuthoredString?
 
     private enum CodingKeys: String, CodingKey, CaseIterable {

@@ -44,6 +44,15 @@ func `repeat until JSON rejects else body`() {
 }
 
 @Test
+func `element predicate reports its canonical diagnostic name`() {
+    expectUnknownField("element predicate", contains: #"Unknown element predicate field "unexpected""#) {
+        _ = try JSONDecoder().decode(ElementPredicate.self, from: Data("""
+        { "checks": [{ "kind": "label", "match": { "mode": "exact", "value": "Receipt" } }], "unexpected": true }
+        """.utf8))
+    }
+}
+
+@Test
 func `target parameter kind uses accessibility target spelling`() throws {
     let parameter = HeistParameter.accessibilityTarget(name: "row")
     let argument = HeistArgument.accessibilityTarget(.ref("row"))
