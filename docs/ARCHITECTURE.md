@@ -593,10 +593,11 @@ in-app server.
 The Button Heist has one current-tree projection and one retained ordered history.
 Actions, `get_interface` subtree queries, waits, expectations, and repeat-loop
 stop conditions use one `AccessibilityTarget` language. Authored conditions use
-the concrete `AccessibilityPredicate` root and `ChangeDeclaration` assertion
-types; expression, core, and resolved representations remain package
-implementation details. For a single action's end-to-end sequence, see the
-[action pipeline diagram](diagrams/action-pipeline.md).
+the concrete `AccessibilityPredicate` root, `ElementPredicate`, `StringMatch`,
+and `ChangeDeclaration` assertion types. Resolution produces package-only
+concrete values for execution; no generic predicate phase or alternate
+evaluator sits between authoring and execution. For a single action's
+end-to-end sequence, see the [action pipeline diagram](diagrams/action-pipeline.md).
 
 `InteractionRequestExecutor`, owned by `TheBrains`, provides the single FIFO for
 UI-facing requests. Transport submits admitted UI work with its client identity,
@@ -617,14 +618,37 @@ Compiler entry symbols reuse that parser as `HeistEntrySymbol`. Structural
 plan locations are component-backed `HeistPlanPath` values; only source,
 diagnostic, and response rendering turns them into strings.
 
+Swift DSL construction, JSON decoding, source compilation, and live command
+composition each return one root-admitted `HeistPlan`. Recursive source
+assembly is private to `HeistPlanSourceProgramParser.swift`; it never becomes a
+stored, returned, package-visible, or cross-file architectural currency.
+`HeistPlan` owns root structural admission, and one
+`HeistPlanRuntimeSafetyValidator` owns cross-tree bounds, references, expansion,
+and cycle safety before the root crosses its boundary. There is no candidate
+tree or node, graph projection, runtime-input wrapper, validation alias, or
+second admission route.
+
+After admission, `HeistPlanTraversal` owns the semantic walk.
+`HeistCallGraph` alone owns graph nodes and edges by reducing traversal events;
+traversal observes invocation cycles from its own invocation stack, never from
+graph state. Catalogs, descriptions, and semantic surfaces are local reductions
+over the same traversal observations and do not create another plan
+representation. This converges on the existing execution boundary; result,
+observation, and settlement ownership below is unchanged.
+
 ```mermaid
 flowchart TD
     SwiftAuthor["Swift DSL authoring"] --> Fragment["Opaque HeistContent<br/>builder fragment"]
-    SourceAuthor["Canonical runtime heist source"] --> Parse["Lex and parse source"]
-    Fragment --> Plan["Recursive HeistPlan<br/>root structural admission"]
-    Parse --> Plan
-    Plan --> Validate["HeistPlanRuntimeSafetyValidator<br/>cross-tree bounds + references"]
-    Validate --> OfflineReport["validate_heist<br/>plan + invocation + lint report"]
+    SourceAuthor["Canonical runtime heist source"] --> Parse["Lex and parse source<br/>file-private recursive assembly"]
+    JSONAuthor["HeistPlan JSON"] --> RootAdmission
+    Fragment --> RootAdmission["HeistPlan root<br/>structural admission"]
+    Parse --> RootAdmission
+    RootAdmission --> Validate["HeistPlanRuntimeSafetyValidator<br/>one cross-tree safety pass"]
+    Validate --> Plan["Canonical admitted HeistPlan"]
+    Plan --> Walk["HeistPlanTraversal<br/>semantic walk + stack-owned cycle observation"]
+    Walk --> Graph["HeistCallGraph<br/>owns node + edge reduction"]
+    Walk --> Discovery["Catalog + descriptions + semantic surfaces<br/>local observation reduction"]
+    Plan --> OfflineReport["validate_heist<br/>plan + invocation + lint report"]
     Plan --> FenceCommand["Fence command<br/>run_heist / perform / wait"]
     FenceCommand --> HandoffSocket["Handoff socket<br/>client version == app version"]
     HandoffSocket --> Executor["TheBrains-owned InteractionRequestExecutor<br/>one UI FIFO"]
