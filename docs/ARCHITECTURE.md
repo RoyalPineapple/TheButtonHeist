@@ -11,6 +11,25 @@ contract and conformance cases live in [Accessibility Contract](ACCESSIBILITY-CO
 For exhaustive command shapes, wire payloads, and per-module implementation
 notes, use the generated or reference docs linked at the end.
 
+## Visual Architecture
+
+The architecture is maintained as executable Mermaid source, one concern per
+diagram. Start with the [system topology](diagrams/system-topology.md), then
+follow the part of the pipeline you are changing:
+
+| Concern | Canonical diagram |
+| --- | --- |
+| Modules, processes, and the wire | [System topology](diagrams/system-topology.md), [crew map](diagrams/crew-map.md), and [process boundaries](diagrams/process-boundaries.md) |
+| Plan authoring, admission, and traversal | [Heist lifecycle](diagrams/heist-lifecycle.md) and [DSL grammar](diagrams/dsl-grammar.md) |
+| Actions, waits, and terminal evidence | [Action pipeline](diagrams/action-pipeline.md) and [settlement loop](diagrams/settle-loop.md) |
+| Current truth and ordered change | [Observation pipeline](diagrams/observation-pipeline.md) |
+| Target resolution and viewport exploration | [Element inflation](diagrams/element-inflation.md) |
+| Test orchestration and simulator admission | [Test runner](diagrams/test-runner.md) |
+
+These are architectural contracts, not review snapshots. A responsibility,
+state-machine, wire, result, language, or runner change updates its diagram in
+the same pull request.
+
 ## Product Contracts
 
 ### Strings Only at Edges
