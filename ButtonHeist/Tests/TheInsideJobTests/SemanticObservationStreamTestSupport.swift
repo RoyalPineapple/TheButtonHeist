@@ -170,15 +170,13 @@ func scriptedSettlement(
     if case .currentState = command {
         return scriptedCurrentStateSettlement(command, event: event)
     }
-    guard let predicate = command.predicate,
-          let baseline = command.baseline,
-          let deadline = command.deadline else {
+    guard case .observation(let predicate, _, let baseline) = command else {
         preconditionFailure("Scripted observation settlement requires a predicate")
     }
     var predicateEvidence = Settlement.Predicate.Evidence(predicate: predicate)
     guard let event else {
         return Settlement.Result(
-            outcome: .timedOut,
+            outcome: .timedOut(.init(phase: .observation)),
             evidence: Settlement.Evidence(
                 command: command,
                 boundary: scriptedBoundary(baseline, fallback: nil),
@@ -187,7 +185,7 @@ func scriptedSettlement(
                 readiness: .pending(.initial),
                 handoff: .pending(.initial),
                 observationHistory: nil,
-                deadline: .bounded(deadline: deadline, elapsed: 1, reached: true)
+                elapsed: 1
             )
         )
     }
@@ -239,7 +237,9 @@ func scriptedSettlement(
         preconditionFailure("Scripted settlement handoff was not admitted")
     }
     return Settlement.Result(
-        outcome: expectation.met ? .settled : .timedOut,
+        outcome: expectation.met
+            ? .settled
+            : .timedOut(.init(phase: .observation)),
         evidence: Settlement.Evidence(
             command: command,
             boundary: scriptedBoundary(baseline, fallback: event.moment),
@@ -248,11 +248,7 @@ func scriptedSettlement(
             readiness: .established(readiness),
             handoff: .admitted(handoff),
             observationHistory: history,
-            deadline: .bounded(
-                deadline: deadline,
-                elapsed: 1,
-                reached: !expectation.met
-            )
+            elapsed: 1
         )
     )
 }
@@ -272,7 +268,7 @@ private func scriptedCurrentStateSettlement(
                 readiness: .pending(.initial),
                 handoff: .pending(.initial),
                 observationHistory: nil,
-                deadline: .notApplicable(elapsed: 0)
+                elapsed: 0
             )
         )
     }
@@ -291,7 +287,7 @@ private func scriptedCurrentStateSettlement(
             readiness: .established(readiness),
             handoff: .admitted(.currentState(event)),
             observationHistory: .events([]),
-            deadline: .notApplicable(elapsed: 0)
+            elapsed: 0
         )
     )
 }

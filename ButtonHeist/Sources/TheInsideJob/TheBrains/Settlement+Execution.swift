@@ -78,16 +78,16 @@ extension Settlement {
     }
 
     fileprivate enum ExecutionInput: Sendable {
-        case observation(Observation.Event)
+        case observation(Observation.Event, ContinuousClock.Instant)
         case observationHistoryUnavailable(Observation.EventsSince)
         case announcement(Observation.AnnouncementEvent)
         case announcementHistoryUnavailable(AccessibilityNotificationGap)
         case readiness(Readiness.Signal)
-        case deadlineReached
+        case deadlineReached(Event.DeadlineReached)
         case cancelled
-        case dispatchCompleted(TheSafecracker.ActionDispatchResult)
+        case dispatchCompleted(TheSafecracker.ActionDispatchResult, ContinuousClock.Instant)
         case predicateEvaluated(Predicate.EvaluationResponse)
-        case captureCompleted(Capture.Request, CaptureCompletion)
+        case captureCompleted(Capture.Request, CaptureCompletion, ContinuousClock.Instant)
 
     }
 
@@ -116,9 +116,15 @@ internal protocol SettlementExecutionBoundary: Sendable {
     @MainActor
     func armAnnouncements(_ arming: Settlement.Arming, sink: Settlement.ExecutionSink) async
     @MainActor
-    func armReadiness(_ arming: Settlement.Arming, sink: Settlement.ExecutionSink) async
+    func armReadiness(
+        _ deadline: Settlement.PhaseDeadline,
+        sink: Settlement.ExecutionSink
+    ) async
     @MainActor
-    func armDeadline(_ arming: Settlement.Arming, sink: Settlement.ExecutionSink) async
+    func armDeadline(
+        _ request: Settlement.Effect.ArmDeadline,
+        sink: Settlement.ExecutionSink
+    ) async
     @MainActor
     func armObservationEffects(_ arming: Settlement.Arming) async
     @MainActor
@@ -157,8 +163,11 @@ extension Settlement {
         private var isFinished = false
         private var readinessGeneration = Readiness.Generation.initial
 
-        internal func observe(_ event: Observation.Event) {
-            record(.observation(event))
+        internal func observe(
+            _ event: Observation.Event,
+            at instant: ContinuousClock.Instant = RuntimeElapsed.now
+        ) {
+            record(.observation(event, instant))
         }
 
         internal func observeAnnouncement(_ event: Observation.AnnouncementEvent) {
@@ -187,16 +196,19 @@ extension Settlement {
             continuation?.resume(returning: input)
         }
 
-        internal func reachDeadline() {
-            record(.deadlineReached)
+        internal func reachDeadline(_ deadline: Event.DeadlineReached) {
+            record(.deadlineReached(deadline))
         }
 
         fileprivate func cancel() {
             record(.cancelled)
         }
 
-        fileprivate func completeDispatch(_ result: TheSafecracker.ActionDispatchResult) {
-            record(.dispatchCompleted(result))
+        fileprivate func completeDispatch(
+            _ result: TheSafecracker.ActionDispatchResult,
+            at instant: ContinuousClock.Instant
+        ) {
+            record(.dispatchCompleted(result, instant))
         }
 
         fileprivate func completeEvaluation(_ response: Predicate.EvaluationResponse) {
@@ -205,9 +217,10 @@ extension Settlement {
 
         fileprivate func completeCapture(
             _ request: Capture.Request,
-            completion: CaptureCompletion
+            completion: CaptureCompletion,
+            at instant: ContinuousClock.Instant = RuntimeElapsed.now
         ) {
-            record(.captureCompleted(request, completion))
+            record(.captureCompleted(request, completion, instant))
         }
 
         fileprivate func next() async -> ExecutionInput? {
@@ -340,6 +353,11 @@ private enum FinalSemanticEvidenceMeasurement {
     }
 }
 
+private struct AdmittedSettlementFact {
+    let fact: Settlement.Event.Fact
+    let instant: ContinuousClock.Instant
+}
+
 extension Settlement {
     internal struct Executor<Boundary: SettlementExecutionBoundary>: Sendable {
         internal let boundary: Boundary
@@ -408,13 +426,7 @@ extension Settlement {
                     }
 
                     if case .terminal(let result) = state {
-                        sink.finish()
-                        if let arming { await boundary.quiesceSettlement(arming) }
-                        tasks.cancelAll()
-                        await tasks.waitForAll()
-                        if let arming { await boundary.finalizeSettlement(arming) }
-                        diagnosisSink(Diagnosis.project(result))
-                        return result
+                        return await finish(result, arming: arming, sink: sink, tasks: &tasks)
                     }
 
                     if !effects.isEmpty {
@@ -443,11 +455,18 @@ extension Settlement {
                             effects += decision.effects
                             drainsArmingInputs = true
 
+                        case .armReadiness(let deadline):
+                            await boundary.armReadiness(deadline, sink: sink)
+
+                        case .armDeadline(let request):
+                            await boundary.armDeadline(request, sink: sink)
+
                         case .dispatchAction(let action):
                             tasks.addTask {
                                 let result = await boundary.dispatch(action)
-                                sink.completeDispatch(result)
+                                let instant = RuntimeElapsed.now
                                 await boundary.dispatchDidComplete()
+                                sink.completeDispatch(result, at: instant)
                             }
 
                         case .evaluatePredicate(let request):
@@ -479,6 +498,21 @@ extension Settlement {
             }
         }
 
+        private func finish(
+            _ result: Result,
+            arming: Arming?,
+            sink: ExecutionSink,
+            tasks: inout TaskGroup<Void>
+        ) async -> Result {
+            sink.finish()
+            if let arming { await boundary.quiesceSettlement(arming) }
+            tasks.cancelAll()
+            await tasks.waitForAll()
+            if let arming { await boundary.finalizeSettlement(arming) }
+            diagnosisSink(Diagnosis.project(result))
+            return result
+        }
+
         private func arm(
             _ arming: Arming,
             state: State,
@@ -487,8 +521,6 @@ extension Settlement {
             await boundary.beginSettlement(arming)
             await boundary.armObservations(arming, sink: sink)
             await boundary.armAnnouncements(arming, sink: sink)
-            await boundary.armReadiness(arming, sink: sink)
-            await boundary.armDeadline(arming, sink: sink)
             await boundary.armObservationEffects(arming)
             return await reduce(state, fact: .channelsArmed)
         }
@@ -500,7 +532,7 @@ extension Settlement {
             admittedMoments: inout [Observation.Moment],
             finalSemanticEvidence: inout FinalSemanticEvidenceMeasurement
         ) async -> Decision {
-            guard let fact = await fact(
+            guard let admitted = await fact(
                 for: input,
                 state: state,
                 sink: sink,
@@ -508,11 +540,16 @@ extension Settlement {
             ) else {
                 return Decision(state: state, effects: [])
             }
+            let fact = admitted.fact
             if case .readinessEstablished = fact,
                state.session?.readiness.isEstablished == false {
                 finalSemanticEvidence.begin()
             }
-            var decision = await reduce(state, fact: fact)
+            var decision = await reduce(
+                state,
+                fact: fact,
+                instant: admitted.instant
+            )
             decision = await resolvePredicateEvaluation(decision)
             if decision.state.concludesFinalSemanticEvidence
                 || fact.endsFinalSemanticEvidenceAttempt {
@@ -581,7 +618,7 @@ extension Settlement {
             sink: ExecutionSink,
             tasks: inout TaskGroup<Void>
         ) {
-            guard case .captureCompleted(let request, _) = input,
+            guard case .captureCompleted(let request, _, _) = input,
                   active == request else { return }
             active = nil
             guard state.result == nil, let next = pending else {
@@ -632,60 +669,95 @@ extension Settlement {
             state: State,
             sink: ExecutionSink,
             admittedMoments: inout [Observation.Moment]
-        ) async -> Event.Fact? {
+        ) async -> AdmittedSettlementFact? {
             switch input {
-            case .observation(.snapshot(let event)):
+            case .observation(.snapshot(let event), let instant):
                 guard let baseline = state.session?.boundary.moment,
                       event.moment != baseline,
                       event.moment.isSameOrAfter(baseline),
                       !admittedMoments.contains(event.moment) else { return nil }
                 admittedMoments.append(event.moment)
-                return .observationAdmitted(.init(
-                    event: event,
-                    history: await boundary.events(since: baseline)
-                ))
+                return AdmittedSettlementFact(
+                    fact: .observationAdmitted(.init(
+                        event: event,
+                        history: await boundary.events(since: baseline),
+                        instant: instant
+                    )),
+                    instant: instant
+                )
             case .observationHistoryUnavailable(let history):
-                return .observationHistoryUnavailable(history)
-            case .observation(.announcement(let event)), .announcement(let event):
-                return .announcementObserved(event)
+                return AdmittedSettlementFact(
+                    fact: .observationHistoryUnavailable(history),
+                    instant: RuntimeElapsed.now
+                )
+            case .observation(.announcement(let event), _), .announcement(let event):
+                return AdmittedSettlementFact(
+                    fact: .announcementObserved(event),
+                    instant: RuntimeElapsed.now
+                )
             case .announcementHistoryUnavailable(let gap):
-                return .announcementHistoryUnavailable(gap)
+                return AdmittedSettlementFact(
+                    fact: .announcementHistoryUnavailable(gap),
+                    instant: RuntimeElapsed.now
+                )
             case .readiness(.established(let path, let observationBoundary)):
                 guard let generation = state.session?.readiness.generation else { return nil }
-                return .readinessEstablished(.init(
-                    generation: generation,
-                    path: path,
-                    observationBoundary: observationBoundary
-                ))
+                return AdmittedSettlementFact(
+                    fact: .readinessEstablished(.init(
+                        generation: generation,
+                        path: path,
+                        observationBoundary: observationBoundary
+                    )),
+                    instant: RuntimeElapsed.now
+                )
             case .readiness(.invalidated):
                 guard let session = state.session,
                       case .established(let readiness) = session.readiness else { return nil }
                 let generation = readiness.generation.advanced()
                 sink.advanceCaptureGeneration(to: generation)
-                return .readinessInvalidated(generation)
-            case .deadlineReached:
-                return .deadlineReached
+                return AdmittedSettlementFact(
+                    fact: .readinessInvalidated(generation),
+                    instant: RuntimeElapsed.now
+                )
+            case .deadlineReached(let deadline):
+                return AdmittedSettlementFact(
+                    fact: .deadlineReached(deadline),
+                    instant: deadline.instant
+                )
             case .cancelled:
-                return .cancelled
-            case .dispatchCompleted(let result):
-                return .dispatchCompleted(result)
+                return AdmittedSettlementFact(fact: .cancelled, instant: RuntimeElapsed.now)
+            case .dispatchCompleted(let result, let instant):
+                return AdmittedSettlementFact(
+                    fact: .dispatchCompleted(result),
+                    instant: instant
+                )
             case .predicateEvaluated(let response):
-                return .predicateEvaluated(response)
-            case .captureCompleted(.baseline, _):
+                return AdmittedSettlementFact(
+                    fact: .predicateEvaluated(response),
+                    instant: RuntimeElapsed.now
+                )
+            case .captureCompleted(.baseline, _, _):
                 preconditionFailure("Baseline capture completion cannot enter armed delivery")
-            case .captureCompleted(.handoff(let request), let completion):
+            case .captureCompleted(.handoff(let request), let completion, let instant):
                 switch completion.outcome {
                 case .admitted(let event):
                     guard let baseline = state.session?.boundary.moment,
                           !admittedMoments.contains(event.moment) else { return nil }
                     admittedMoments.append(event.moment)
-                    return .observationAdmitted(.init(
-                        event: event,
-                        history: await boundary.events(since: baseline),
-                        source: .handoffCapture(request.readinessGeneration)
-                    ))
+                    return AdmittedSettlementFact(
+                        fact: .observationAdmitted(.init(
+                            event: event,
+                            history: await boundary.events(since: baseline),
+                            source: .handoffCapture(request.readinessGeneration),
+                            instant: instant
+                        )),
+                        instant: instant
+                    )
                 case .failed(let failure):
-                    return .handoffCaptureFailed(request.readinessGeneration, failure)
+                    return AdmittedSettlementFact(
+                        fact: .handoffCaptureFailed(request.readinessGeneration, failure),
+                        instant: instant
+                    )
                 }
             }
         }
@@ -693,14 +765,16 @@ extension Settlement {
         private func reduce(
             _ state: State,
             fact: Event.Fact,
-            timing: ExecutionTiming = ExecutionTiming()
+            timing: ExecutionTiming = ExecutionTiming(),
+            instant: ContinuousClock.Instant = RuntimeElapsed.now
         ) async -> Decision {
             Reducer.reduce(
                 state,
                 event: Event(
                     fact: fact,
                     timing: timing,
-                    elapsed: await boundary.elapsed()
+                    elapsed: await boundary.elapsed(),
+                    instant: instant
                 )
             )
         }
@@ -791,7 +865,7 @@ private extension Settlement.Result {
                 handoff: evidence.handoff,
                 observationHistory: evidence.observationHistory,
                 timing: mergedTiming,
-                deadline: evidence.deadline
+                elapsed: evidence.elapsed
             )
         )
     }
@@ -889,7 +963,8 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
         )
         lifecycle.begin(
             demand: vault.semanticObservationStream.beginActiveObservationDemand(),
-            notificationWindow: vault.accessibilityNotifications.beginActionWindow()
+            notificationWindow: vault.accessibilityNotifications.beginActionWindow(),
+            boundary: arming.boundary.moment
         )
     }
 
@@ -901,7 +976,7 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
         let subscription = await vault.semanticObservationStream.subscribe(
             scope: arming.observationScope,
             replayingAfter: arming.boundary.moment,
-            receive: sink.observe,
+            receive: { sink.observe($0) },
             historyUnavailable: sink.observeHistoryUnavailable
         )
         lifecycle.retain(subscription)
@@ -916,21 +991,15 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
               case .announcement(let announcement) = predicate.resolved.core else { return }
         let notifications = vault.accessibilityNotifications
         lifecycle.retain(Task {
-            guard let deadline = await lifecycle.resolveDeadline(arming.deadline) else { return }
-            let timeout = max(
-                0,
-                ContinuousClock.now.duration(to: deadline) / .seconds(1)
-            )
             switch await notifications.waitForAnnouncement(
                 after: arming.boundary.announcementCursor,
-                matching: announcement,
-                timeout: timeout
+                matching: announcement
             ) {
             case .matched(let announcement):
                 sink.observeAnnouncement(.init(announcement: announcement))
             case .historyUnavailable(let gap):
                 sink.observeAnnouncementHistoryUnavailable(gap)
-            case .timedOut:
+            case .cancelled:
                 break
             }
         })
@@ -938,42 +1007,34 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
 
     @MainActor
     internal func armReadiness(
-        _ arming: Settlement.Arming,
+        _ deadline: Settlement.PhaseDeadline,
         sink: Settlement.ExecutionSink
     ) async {
-        if command.waitsForObservation || arming.observationScope == .discovery {
-            lifecycle.armReadiness(
-                startAfterDispatch: false,
-                operation: { [tripwire, vault] in
-                    guard let deadline = await lifecycle.resolveDeadline(arming.deadline) else {
-                        return
-                    }
-                    let timeout = ContinuousClock.now.duration(to: deadline)
+        if command.waitsForObservation || command.observationScope == .discovery {
+            lifecycle.armReadiness { [tripwire, vault] in
+                    let timeout = ContinuousClock.now.duration(to: deadline.instant)
                     guard timeout > .zero,
                           await tripwire.uikitIdleTracker.waitUntilIdle(timeout: timeout) else {
                         return
                     }
                     let latest = await vault.semanticObservationStream.latestCommittedObservationMoment(
-                        scope: arming.observationScope
+                        scope: command.observationScope
                     )
+                    guard let baseline = lifecycle.boundaryMoment else { return }
                     sink.observeReadiness(.established(
                         path: .uikitIdle,
-                        observationBoundary: .after(latest ?? arming.boundary.moment)
+                        observationBoundary: .including(latest ?? baseline)
                     ))
                 }
-            )
             return
         }
 
         let baselineTripwireSignal = tripwire.tripwireSignal()
-        lifecycle.armReadiness(
-            startAfterDispatch: true,
-            operation: { [vault] in
-                guard let deadline = await lifecycle.resolveDeadline(arming.deadline) else { return }
+        lifecycle.armReadiness { [vault] in
                 guard let refreshBoundary = lifecycle.visibleRefreshBoundaryAfterDispatch() else {
                     return
                 }
-                let timeout = ContinuousClock.now.duration(to: deadline)
+                let timeout = ContinuousClock.now.duration(to: deadline.instant)
                 guard timeout > .zero else { return }
                 let settlement = await vault.semanticObservationStream
                     .refreshVisibleObservation(
@@ -997,19 +1058,21 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
                     observationBoundary: .including(event.moment)
                 ))
             }
-        )
     }
 
     @MainActor
     internal func armDeadline(
-        _ arming: Settlement.Arming,
+        _ request: Settlement.Effect.ArmDeadline,
         sink: Settlement.ExecutionSink
     ) async {
-        lifecycle.retain(Task {
-            guard let deadline = await lifecycle.resolveDeadline(arming.deadline) else { return }
+        let deadline = request.deadline
+        lifecycle.replaceDeadline(Task {
             do {
-                try await ContinuousClock().sleep(until: deadline)
-                sink.reachDeadline()
+                try await ContinuousClock().sleep(until: deadline.instant)
+                sink.reachDeadline(.init(
+                    phase: deadline.phase,
+                    instant: deadline.instant
+                ))
             } catch {}
         })
     }
@@ -1073,11 +1136,13 @@ internal final class LiveSettlementLifecycle {
     private struct ActiveResources {
         var demand: SemanticObservationDemand
         var notificationWindow: AccessibilityNotificationScopeLease?
+        let boundary: Observation.Moment
         var notificationOutcome = AccessibilityNotificationScopeOutcome.released
         var observationSubscription: SemanticObservationSubscription?
         var tasks: [Task<Void, Never>] = []
         var observationEffect: ObservationEffect?
         var readinessTask: Task<Void, Never>?
+        var deadlineTask: Task<Void, Never>?
         var dispatchVisibleRefreshBoundary: Observation.Stream.VisibleRefreshBoundary?
     }
 
@@ -1101,30 +1166,19 @@ internal final class LiveSettlementLifecycle {
     }
 
     private var phase = Phase.idle
-    private let dispatchCompletion: Task<ContinuousClock.Instant?, Never>
-    private let dispatchCompletionContinuation: AsyncStream<ContinuousClock.Instant>.Continuation
-
-    internal init() {
-        let dispatchCompletion = AsyncStream<ContinuousClock.Instant>.makeStream()
-        self.dispatchCompletion = Task {
-            for await instant in dispatchCompletion.stream {
-                return instant
-            }
-            return nil
-        }
-        self.dispatchCompletionContinuation = dispatchCompletion.continuation
-    }
 
     func begin(
         demand: SemanticObservationDemand,
-        notificationWindow: AccessibilityNotificationScopeLease
+        notificationWindow: AccessibilityNotificationScopeLease,
+        boundary: Observation.Moment
     ) {
         guard case .idle = phase else {
             preconditionFailure("Settlement lifecycle is already active")
         }
         phase = .active(ActiveResources(
             demand: demand,
-            notificationWindow: notificationWindow
+            notificationWindow: notificationWindow,
+            boundary: boundary
         ))
     }
 
@@ -1163,33 +1217,21 @@ internal final class LiveSettlementLifecycle {
     }
 
     internal func armReadiness(
-        startAfterDispatch: Bool,
         operation: @escaping @MainActor @Sendable () async -> Void
     ) {
         guard case .active(var resources) = phase else { return }
         precondition(resources.readinessTask == nil, "Settlement readiness is already armed")
-        let dispatchCompletion = self.dispatchCompletion
-        let task = Task {
-            if startAfterDispatch {
-                guard await dispatchCompletion.value != nil,
-                      !Task.isCancelled else { return }
-            }
-            await operation()
-        }
+        let task = Task { await operation() }
         resources.readinessTask = task
-        resources.tasks.append(task)
         phase = .active(resources)
     }
 
     internal func dispatchDidComplete(
-        visibleRefreshBoundary: Observation.Stream.VisibleRefreshBoundary,
-        at instant: ContinuousClock.Instant = ContinuousClock.now
+        visibleRefreshBoundary: Observation.Stream.VisibleRefreshBoundary
     ) {
         guard case .active(var resources) = phase else { return }
         resources.dispatchVisibleRefreshBoundary = visibleRefreshBoundary
         phase = .active(resources)
-        dispatchCompletionContinuation.yield(instant)
-        dispatchCompletionContinuation.finish()
     }
 
     internal func visibleRefreshBoundaryAfterDispatch() -> Observation.Stream.VisibleRefreshBoundary? {
@@ -1197,14 +1239,19 @@ internal final class LiveSettlementLifecycle {
         return resources.dispatchVisibleRefreshBoundary
     }
 
-    internal func resolveDeadline(
-        _ deadline: Settlement.Deadline
-    ) async -> ContinuousClock.Instant? {
-        guard deadline.startsAfterActionDispatch else {
-            return deadline.resolve(dispatchCompletedAt: nil)
+    internal var boundaryMoment: Observation.Moment? {
+        guard case .active(let resources) = phase else { return nil }
+        return resources.boundary
+    }
+
+    internal func replaceDeadline(_ task: Task<Void, Never>) {
+        guard case .active(var resources) = phase else {
+            task.cancel()
+            return
         }
-        guard let dispatchCompletedAt = await dispatchCompletion.value else { return nil }
-        return deadline.resolve(dispatchCompletedAt: dispatchCompletedAt)
+        resources.deadlineTask?.cancel()
+        resources.deadlineTask = task
+        phase = .active(resources)
     }
 
     internal func captureNotificationBatch() -> AccessibilityNotificationBatch? {
@@ -1222,12 +1269,15 @@ internal final class LiveSettlementLifecycle {
         let quiescence: Quiescence
         switch phase {
         case .active(let resources):
-            dispatchCompletionContinuation.finish()
             resources.tasks.forEach { $0.cancel() }
+            resources.readinessTask?.cancel()
+            resources.deadlineTask?.cancel()
             resources.observationSubscription?.cancel()
             resources.observationEffect?.control.requestStop()
             let completion = Task {
                 await resources.observationEffect?.task.value
+                await resources.readinessTask?.value
+                await resources.deadlineTask?.value
                 for task in resources.tasks {
                     await task.value
                 }

@@ -141,7 +141,9 @@ extension TheBrains {
             waitInput = .changedElements(timeout: progressTimeout)
             command = Settlement.Command(
                 observing: waitInput,
-                after: observation.settlement
+                baseline: observation.settlement.evidence.handoff.event.map {
+                    .supplied(.init(moment: $0.moment))
+                } ?? .unavailable(.unavailable)
             )
         } else {
             waitInput = ResolvedWaitRuntimeInput(repeatUntil: step, timeout: progressTimeout)

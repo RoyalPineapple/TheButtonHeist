@@ -559,8 +559,7 @@ final class TheBrainsActionTests: XCTestCase {
                 }
                 guard result.outcome.isSuccess, let expectation else {
                     return RuntimeActionExecution(
-                        result: result,
-                        actionExpectationContext: nil
+                        result: result
                     )
                 }
                 let settlement = await self.scriptedSettlement(
@@ -600,7 +599,7 @@ final class TheBrainsActionTests: XCTestCase {
                         payload: command.resultPayload
                     )
                 }
-                return RuntimeActionExecution(result: result, actionExpectationContext: nil)
+                return RuntimeActionExecution(result: result)
             },
             settle: settle
         )
@@ -618,11 +617,18 @@ final class TheBrainsActionTests: XCTestCase {
            case .unavailable = baseline {
             return TheInsideJobTests.scriptedSettlement(command, observation: nil)
         }
+        let timeout: Double?
+        switch command {
+        case .currentState:
+            timeout = nil
+        case .observation(_, let deadline, _):
+            timeout = deadline.remainingDuration(at: RuntimeElapsed.now) / .seconds(1)
+        case .action(let action):
+            timeout = action.allowances.readiness / .seconds(1)
+        }
         let observation = observationSource.next(
             scope: command.observationScope,
-            timeout: command.deadline.map {
-                $0.remainingDuration(at: RuntimeElapsed.now) / .seconds(1)
-            }
+            timeout: timeout
         )
         return TheInsideJobTests.scriptedSettlement(command, observation: observation)
     }

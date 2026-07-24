@@ -343,7 +343,7 @@ final class TheGetaway {
         generation: ClientDelivery.Generation
     ) async {
         switch await brains.captureScreenPayload(mode: mode) {
-        case .success(let payload, context: _):
+        case .success(let payload):
             await sendMessage(
                 .screen(payload),
                 requestId: requestId,

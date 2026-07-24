@@ -4,28 +4,9 @@ import Foundation
 import ThePlans
 import TheScore
 
-internal struct ActionExpectationContext: Sendable, Equatable {
-    internal let preActionMoment: Observation.Moment
-    internal let throughMoment: Observation.Moment
-    internal let announcementCursor: AccessibilityNotificationCursor
-
-    internal func bounded(through moment: Observation.Moment) -> ActionExpectationContext {
-        precondition(
-            moment.isSameOrAfter(preActionMoment),
-            "action expectation observation bound cannot precede its baseline"
-        )
-        return ActionExpectationContext(
-            preActionMoment: preActionMoment,
-            throughMoment: moment,
-            announcementCursor: announcementCursor
-        )
-    }
-}
-
 internal struct RuntimeActionExecution: Sendable, Equatable {
     internal let evidence: HeistActionEvidence
     internal let result: ActionResult
-    internal let actionExpectationContext: ActionExpectationContext?
 
     internal init(evidence: HeistActionEvidence) {
         guard let result = evidence.dispatchResult else {
@@ -33,16 +14,11 @@ internal struct RuntimeActionExecution: Sendable, Equatable {
         }
         self.evidence = evidence
         self.result = result
-        self.actionExpectationContext = nil
     }
 
-    internal init(
-        result: ActionResult,
-        actionExpectationContext: ActionExpectationContext?
-    ) {
+    internal init(result: ActionResult) {
         self.evidence = .dispatch(dispatchResult: result)
         self.result = result
-        self.actionExpectationContext = actionExpectationContext
     }
 }
 
@@ -113,8 +89,7 @@ extension TheBrains {
     ) async -> RuntimeActionExecution {
         guard semanticObservationIsActive else {
             return RuntimeActionExecution(
-                result: runtimeInactiveResult(payload: command.actionResultPayload),
-                actionExpectationContext: nil
+                result: runtimeInactiveResult(payload: command.actionResultPayload)
             )
         }
         let predicate = expectation.map {
@@ -123,17 +98,18 @@ extension TheBrains {
                 resolved: $0.predicate
             )
         }
-        let timeoutMilliseconds = expectation.map {
-            Int64(($0.timeout.seconds * 1_000).rounded(.up))
-        } ?? Int64(SettleSession.defaultTimeoutMs)
-        let settlementCommand = Settlement.Command.action(
-            command,
+        let expectationAllowance = expectation.map {
+            Duration.milliseconds(Int64(($0.timeout.seconds * 1_000).rounded(.up)))
+        }
+        let settlementCommand = Settlement.Command.action(.init(
+            command: command,
             predicate: predicate,
-            deadline: Settlement.Deadline(
-                afterActionDispatch: .milliseconds(timeoutMilliseconds)
+            allowances: .init(
+                readiness: .milliseconds(Int64(SettleSession.defaultTimeoutMs)),
+                expectation: expectationAllowance
             ),
             baseline: .capture
-        )
+        ))
         let result = await executeSettlementCommand(settlementCommand)
         return RuntimeActionExecution(
             evidence: Settlement.ResultProjector.projectAction(result)

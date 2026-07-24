@@ -52,7 +52,6 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
             XCTAssertEqual(diagnosis.predicate.status, expected.predicate, name)
             XCTAssertEqual(diagnosis.readiness, expected.readiness, name)
             XCTAssertEqual(diagnosis.handoff, expected.handoff, name)
-            XCTAssertEqual(diagnosis.deadline.reached, expected.deadlineReached, name)
             XCTAssertEqual(
                 diagnosis.observationMoments.baselineSequence,
                 name == "tree unavailable" ? nil : baseline.sequence,
@@ -80,10 +79,12 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
         let baseline = await commit(label: "Baseline")
         let boundary = AutomaticTimeoutDiagnosisBoundary(baseline: baseline)
         let recorder = SettlementDiagnosisRecorder(boundary: boundary)
-        let command = Settlement.Command.action(
-            .dismiss,
-            predicate: nil,
-            deadline: .init(instant: .now),
+        let command = Settlement.Command.observation(
+            predicate: Settlement.Predicate(
+                authored: .changed(.elements()),
+                resolved: ResolvedAccessibilityPredicate(core: .changed(.elements([])))
+            ),
+            deadline: .init(phase: .observation, instant: .now),
             baseline: .capture
         )
 
@@ -92,9 +93,12 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
             diagnosisSink: recorder.record
         ).execute(command)
 
-        XCTAssertEqual(result.outcome, .timedOut)
+        XCTAssertEqual(result.outcome, .timedOut(.init(phase: .observation)))
         XCTAssertEqual(recorder.diagnoses.count, 1)
-        XCTAssertEqual(recorder.diagnoses.first?.outcome, .timedOut)
+        XCTAssertEqual(
+            recorder.diagnoses.first?.outcome,
+            .timedOut(.init(phase: .observation))
+        )
         XCTAssertEqual(recorder.snapshotAtEmission, .init(
             captures: 1,
             admissions: 1,
@@ -181,8 +185,7 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
                     handoff: .admitted(
                         generation: .initial,
                         observationSequence: observed.sequence
-                    ),
-                    deadlineReached: false
+                    )
                 )
             ),
             (
@@ -194,12 +197,15 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
                         message: "dismiss failed",
                         failureKind: .actionFailed
                     )),
-                    command: .action(
-                        .dismiss,
+                    command: .action(.init(
+                        command: .dismiss,
                         predicate: predicate,
-                        deadline: .init(instant: .now),
+                        allowances: .init(
+                            readiness: .seconds(5),
+                            expectation: .seconds(1)
+                        ),
                         baseline: .capture
-                    ),
+                    )),
                     predicate: predicate,
                     predicateEvidence: dispatchFailureEvidence(predicate),
                     readiness: .established(readiness),
@@ -215,8 +221,7 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
                     handoff: .admitted(
                         generation: .initial,
                         observationSequence: observed.sequence
-                    ),
-                    deadlineReached: false
+                    )
                 )
             ),
             (
@@ -235,8 +240,7 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
                     dispatch: .notApplicable,
                     predicate: .pending,
                     readiness: .pending(generation: .initial),
-                    handoff: .pending(generation: .initial),
-                    deadlineReached: false
+                    handoff: .pending(generation: .initial)
                 )
             ),
         ]
@@ -263,28 +267,26 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
             (
                 "readiness timeout",
                 result(
-                    outcome: .timedOut,
+                    outcome: .timedOut(.init(phase: .observation)),
                     predicate: predicate,
                     predicateEvidence: metEvidence,
                     readiness: .pending(.initial),
                     handoff: .pending(.initial),
                     history: history,
-                    baseline: baseline,
-                    deadlineReached: true
+                    baseline: baseline
                 ),
                 DiagnosisExpectation(
-                    outcome: .timedOut,
+                    outcome: .timedOut(.init(phase: .observation)),
                     dispatch: .notApplicable,
                     predicate: .satisfied(target, actual: "Saved"),
                     readiness: .pending(generation: .initial),
-                    handoff: .pending(generation: .initial),
-                    deadlineReached: true
+                    handoff: .pending(generation: .initial)
                 )
             ),
             (
                 "predicate timeout",
                 result(
-                    outcome: .timedOut,
+                    outcome: .timedOut(.init(phase: .observation)),
                     predicate: predicate,
                     predicateEvidence: predicateEvidence(
                         predicate,
@@ -294,25 +296,23 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
                     readiness: .established(readiness),
                     handoff: .admitted(handoff),
                     history: history,
-                    baseline: baseline,
-                    deadlineReached: true
+                    baseline: baseline
                 ),
                 DiagnosisExpectation(
-                    outcome: .timedOut,
+                    outcome: .timedOut(.init(phase: .observation)),
                     dispatch: .notApplicable,
                     predicate: .unmet(target, actual: "Saved"),
                     readiness: .established(generation: .initial, path: .uikitIdle),
                     handoff: .admitted(
                         generation: .initial,
                         observationSequence: observed.sequence
-                    ),
-                    deadlineReached: true
+                    )
                 )
             ),
             (
                 "handoff timeout",
                 result(
-                    outcome: .timedOut,
+                    outcome: .timedOut(.init(phase: .observation)),
                     predicate: predicate,
                     predicateEvidence: metEvidence,
                     readiness: .established(readiness),
@@ -321,16 +321,14 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
                         readinessGeneration: .initial
                     )),
                     history: history,
-                    baseline: baseline,
-                    deadlineReached: true
+                    baseline: baseline
                 ),
                 DiagnosisExpectation(
-                    outcome: .timedOut,
+                    outcome: .timedOut(.init(phase: .observation)),
                     dispatch: .notApplicable,
                     predicate: .satisfied(target, actual: "Saved"),
                     readiness: .established(generation: .initial, path: .uikitIdle),
-                    handoff: .captureRequested(generation: .initial),
-                    deadlineReached: true
+                    handoff: .captureRequested(generation: .initial)
                 )
             ),
         ]
@@ -359,36 +357,36 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
                     dispatch: .notApplicable,
                     predicate: .pending,
                     readiness: .pending(generation: .initial),
-                    handoff: .pending(generation: .initial),
-                    deadlineReached: false
+                    handoff: .pending(generation: .initial)
                 )
             ),
             (
                 "unresponsive action",
                 result(
-                    outcome: .timedOut,
+                    outcome: .timedOut(.init(phase: .actionReadiness)),
                     trigger: .actionPending(.dismiss),
-                    command: .action(
-                        .dismiss,
+                    command: .action(.init(
+                        command: .dismiss,
                         predicate: predicate,
-                        deadline: .init(instant: .now),
+                        allowances: .init(
+                            readiness: .seconds(5),
+                            expectation: .seconds(1)
+                        ),
                         baseline: .capture
-                    ),
+                    )),
                     predicate: predicate,
                     predicateEvidence: Settlement.Predicate.Evidence(predicate: predicate),
                     readiness: .pending(.initial),
                     handoff: .pending(.initial),
                     history: history,
-                    baseline: baseline,
-                    deadlineReached: true
+                    baseline: baseline
                 ),
                 DiagnosisExpectation(
-                    outcome: .timedOut,
+                    outcome: .timedOut(.init(phase: .actionReadiness)),
                     dispatch: .pending,
                     predicate: .pending,
                     readiness: .pending(generation: .initial),
-                    handoff: .pending(generation: .initial),
-                    deadlineReached: true
+                    handoff: .pending(generation: .initial)
                 )
             ),
         ]
@@ -404,10 +402,9 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
         handoff: Settlement.Handoff.Evidence,
         history: Observation.EventsSince?,
         boundary: Settlement.BoundaryEvidence? = nil,
-        baseline: Observation.SnapshotEvent,
-        deadlineReached: Bool = false
+        baseline: Observation.SnapshotEvent
     ) -> Settlement.Result {
-        let deadline = Settlement.Deadline(instant: .now)
+        let deadline = Settlement.PhaseDeadline(phase: .observation, instant: .now)
         let command = command ?? Settlement.Command.observation(
             predicate: predicate,
             deadline: deadline,
@@ -423,11 +420,7 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
                 readiness: readiness,
                 handoff: handoff,
                 observationHistory: history,
-                deadline: .bounded(
-                    deadline: command.deadline ?? deadline,
-                    elapsed: 25,
-                    reached: deadlineReached
-                )
+                elapsed: 25
             )
         )
     }
@@ -480,7 +473,6 @@ private struct DiagnosisExpectation {
     let predicate: Settlement.DiagnosisPredicateStatus
     let readiness: Settlement.DiagnosisReadiness
     let handoff: Settlement.DiagnosisHandoff
-    let deadlineReached: Bool
 }
 
 private struct AutomaticTimeoutBoundarySnapshot: Sendable, Equatable {
@@ -539,10 +531,19 @@ private final class AutomaticTimeoutDiagnosisBoundary: SettlementExecutionBounda
 
     func armAnnouncements(_: Settlement.Arming, sink _: Settlement.ExecutionSink) async {}
 
-    func armReadiness(_: Settlement.Arming, sink _: Settlement.ExecutionSink) async {}
+    func armReadiness(
+        _: Settlement.PhaseDeadline,
+        sink _: Settlement.ExecutionSink
+    ) async {}
 
-    func armDeadline(_: Settlement.Arming, sink: Settlement.ExecutionSink) async {
-        sink.reachDeadline()
+    func armDeadline(
+        _ request: Settlement.Effect.ArmDeadline,
+        sink: Settlement.ExecutionSink
+    ) async {
+        sink.reachDeadline(.init(
+            phase: request.deadline.phase,
+            instant: request.deadline.instant
+        ))
     }
 
     func armObservationEffects(_: Settlement.Arming) async {}
@@ -576,7 +577,7 @@ private final class AutomaticTimeoutDiagnosisBoundary: SettlementExecutionBounda
 
     func publishAfterTerminal() {
         let sink = lock.withLock { state.sink }
-        sink?.reachDeadline()
+        sink?.reachDeadline(.init(phase: .observation, instant: .now))
         sink?.observe(.snapshot(baseline))
         sink?.observeReadiness(.established(
             path: .uikitIdle,

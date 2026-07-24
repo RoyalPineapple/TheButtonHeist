@@ -323,8 +323,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             after: cursor,
             matching: ResolvedAnnouncementPredicate(
                 match: ResolvedStringMatch(core: .exact("Expected announcement"))
-            ),
-            timeout: 60
+            )
         )
 
         XCTAssertEqual(
@@ -358,8 +357,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             after: cursor,
             matching: ResolvedAnnouncementPredicate(
                 match: ResolvedStringMatch(core: .exact("Expected announcement"))
-            ),
-            timeout: 60
+            )
         )
 
         guard case .matched(let announcement) = outcome else {
@@ -434,8 +432,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             after: cursor,
             matching: ResolvedAnnouncementPredicate(
                 match: ResolvedStringMatch(core: .contains("selected"))
-            ),
-            timeout: 1.0
+            )
         )
         bus.recordForTesting(
             code: 1001,
@@ -460,8 +457,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
                 after: announcementCursor,
                 matching: ResolvedAnnouncementPredicate(
                     match: ResolvedStringMatch(core: .exact("Done"))
-                ),
-                timeout: 1
+                )
             )
         }
         await waitForAnnouncementWaiterCount(1, in: bus)
@@ -506,8 +502,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
                 after: bus.cursor(),
                 matching: ResolvedAnnouncementPredicate(
                     match: ResolvedStringMatch(core: .exact("Never"))
-                ),
-                timeout: 60
+                )
             )
         }
         await waitForAnnouncementWaiterCount(1, in: bus)
@@ -515,7 +510,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         task.cancel()
         let result = await task.value
 
-        XCTAssertEqual(result, .timedOut)
+        XCTAssertEqual(result, .cancelled)
         XCTAssertEqual(bus.announcementWaiterCount, 0)
     }
 

@@ -63,9 +63,10 @@ private extension Settlement.ResultProjector {
     }
 
     static func actionResult(from result: Settlement.Result) -> ActionResult {
-        guard case .action(let command, _, _, _) = result.evidence.command else {
+        guard case .action(let action) = result.evidence.command else {
             preconditionFailure("Action projection requires an action settlement trigger")
         }
+        let command = action.command
         let assemblyStart = RuntimeElapsed.now
         let observation = projectedObservation(from: result)
         switch result.evidence.trigger {
@@ -106,14 +107,14 @@ private extension Settlement.ResultProjector {
                 payload: command.actionResultPayload,
                 failureKind: .timeout,
                 message: "action dispatch did not complete before settlement deadline "
-                    + "after \(result.evidence.deadline.elapsed)ms",
+                    + "after \(result.evidence.elapsed)ms",
                 observation: observation,
                 timing: ActionPerformanceTiming(
                     beforeObservationMs: result.evidence.timing.beforeObservationMs,
                     finalSemanticEvidenceMs: result.evidence.timing.finalSemanticEvidenceMs,
                     resultAssemblyMs: resultAssemblyMs,
                     totalMs: RuntimeElapsed.admit(
-                        milliseconds: result.evidence.deadline.elapsed.milliseconds
+                        milliseconds: result.evidence.elapsed.milliseconds
                             + resultAssemblyMs.milliseconds
                     )
                 )
@@ -126,7 +127,7 @@ private extension Settlement.ResultProjector {
     static func actionSettlementFailureMessage(from result: Settlement.Result) -> String? {
         switch result.outcome {
         case .cancelled:
-            "cancelled after \(result.evidence.deadline.elapsed)ms"
+            "cancelled after \(result.evidence.elapsed)ms"
         case .timedOut:
             if case .captureFailed = result.evidence.handoff {
                 "Could not capture accessibility tree after action"
@@ -155,7 +156,7 @@ private extension Settlement.ResultProjector {
 
     static func waitActionResult(from result: Settlement.Result) -> ActionResult {
         let observation = projectedObservation(from: result)
-        let timing = ActionPerformanceTiming(totalMs: result.evidence.deadline.elapsed)
+        let timing = ActionPerformanceTiming(totalMs: result.evidence.elapsed)
         if result.outcome == .settled {
             let message: String? = switch result.evidence.command {
             case .observation:
@@ -189,7 +190,7 @@ private extension Settlement.ResultProjector {
         }
         let elapsed = String(
             format: "%.1f",
-            Double(result.evidence.deadline.elapsed.milliseconds) / 1_000
+            Double(result.evidence.elapsed.milliseconds) / 1_000
         )
         if case .presence(.missing) = predicate.resolved.core {
             return "absent confirmed after \(elapsed)s"
@@ -245,14 +246,14 @@ private extension Settlement.ResultProjector {
             finalSemanticEvidenceMs: result.evidence.timing.finalSemanticEvidenceMs,
             resultAssemblyMs: resultAssemblyMs,
             totalMs: RuntimeElapsed.admit(
-                milliseconds: result.evidence.deadline.elapsed.milliseconds
+                milliseconds: result.evidence.elapsed.milliseconds
                     + resultAssemblyMs.milliseconds
             )
         )
     }
 
     static func settlementEvidence(from result: Settlement.Result) -> ActionSettlementEvidence {
-        let duration = result.evidence.deadline.elapsed
+        let duration = result.evidence.elapsed
         guard case .established(let readiness) = result.evidence.readiness else {
             return .timedOut(duration: duration)
         }
@@ -309,7 +310,7 @@ private extension Settlement.ResultProjector {
         case .dispatchFailed:
             "observation settlement cannot fail action dispatch"
         case .cancelled:
-            "settlement cancelled after \(result.evidence.deadline.elapsed)ms"
+            "settlement cancelled after \(result.evidence.elapsed)ms"
         case .settled:
             preconditionFailure("Settled wait has no failure message")
         }
@@ -318,7 +319,7 @@ private extension Settlement.ResultProjector {
     static func renderTimeoutMessage(
         from result: Settlement.Result
     ) -> String {
-        let headline = "settlement timed out after \(result.evidence.deadline.elapsed)ms"
+        let headline = "settlement timed out after \(result.evidence.elapsed)ms"
         guard let predicate = result.evidence.command.predicate else { return headline }
         if case .satisfied = result.evidence.predicate.status {
             let incompleteAxis = if !result.evidence.readiness.isEstablished {

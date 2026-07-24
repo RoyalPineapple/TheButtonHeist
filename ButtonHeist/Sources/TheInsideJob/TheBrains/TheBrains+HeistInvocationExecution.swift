@@ -191,9 +191,17 @@ extension TheBrains {
         childExecution: HeistExecutedChildren
     ) async -> InvocationExpectationOutcome {
         guard case .passed = childExecution, let context else { return .notEvaluated }
+        let baseline: Settlement.Baseline
+        if let moment = context.currentState.evidence.handoff.event?.moment {
+            baseline = .supplied(.init(moment: moment))
+        } else if case .presence = context.input.predicate.core {
+            baseline = .capture
+        } else {
+            baseline = .unavailable(.unavailable)
+        }
         let settlement = await runtime.settle(Settlement.Command(
             observing: context.input,
-            after: context.currentState
+            baseline: baseline
         ))
         let evidence = Settlement.ResultProjector.projectWait(settlement)
         guard let failure = invocationExpectationFailure(

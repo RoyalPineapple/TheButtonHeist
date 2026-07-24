@@ -117,39 +117,6 @@ extension TheBrainsActionTests {
         XCTAssertEqual(steps.last?.actionEvidence?.expectationResult?.announcement, "Confirmed")
     }
 
-    func testHeistActionExpectationUsesWaitFailureDiagnostic() async throws {
-        let observed = await observedState(labels: ["Loading"])
-        var projectedActual: String?
-        let runtime = heistRuntime(
-            observations: [],
-            execute: { _ in ActionResult.success(payload: .activate) },
-            settle: { command in
-                let settlement = scriptedSettlement(command, observation: observed)
-                projectedActual = Settlement.ResultProjector.projectWait(settlement).expectation.actual
-                return settlement
-            }
-        )
-        let expectation = WaitStep(
-            predicate: .missing(.label("Loading")),
-            timeout: 0.2
-        )
-        let plan = try HeistPlan(body: [
-            .action(ActionStep(
-                command: .activate(.label("Submit")),
-                expectationPolicy: .expect(try ActionExpectation(expectation))
-            )),
-        ])
-
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let step = try XCTUnwrap(result.resultPayload?.steps.first)
-
-        XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(step.actionEvidence?.expectationResult?.outcome.failureKind, .timeout)
-        XCTAssertEqual(step.reportExpectation?.met, false)
-        XCTAssertEqual(step.reportExpectation?.actual, projectedActual)
-        XCTAssertNotNil(projectedActual)
-    }
-
     func testStandaloneWaitStartsAtItsOwnFirstObservation() async throws {
         let saveObject = ActionActivationOverrideView()
         let saveElement = makeElement(label: "Save", traits: .button)
@@ -298,7 +265,7 @@ extension TheBrainsActionTests {
             execute: { command, _ in
                 demandDuringAction = self.brains.vault.semanticObservationStream.hasActiveObservationDemand
                 let result = ActionResult.success(payload: command.resultPayload)
-                return RuntimeActionExecution(result: result, actionExpectationContext: nil)
+                return RuntimeActionExecution(result: result)
             },
             settle: { command in
                 XCTAssertEqual(command.observationScope, .visible)
