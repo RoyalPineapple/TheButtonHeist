@@ -343,18 +343,12 @@ private extension Settlement.ResultProjector {
             TimeoutTraceProjection(trace: $0.trace, target: target)
         }
         switch (predicate.resolved, target, traceProjection?.interfaceElementCount) {
-        case (.exists, let target?, let count?):
-            parts[0] += " waiting for element to appear"
-            parts += [
-                "expected: \(renderExpectedTarget(target))",
-                "interface: \(count) elements",
-                "last result: element not found",
-            ]
-        case (.missing, let target?, let count?):
-            let expectation: String
-            let reason: String
-            expectation = "element to disappear"
-            reason = "element still present"
+        case (.exists, let target?, let count?), (.missing, let target?, let count?):
+            let (expectation, reason) = if case .exists = predicate.resolved {
+                ("element to appear", "element not found")
+            } else {
+                ("element to disappear", "element still present")
+            }
             parts[0] += " waiting for \(expectation)"
             parts += [
                 "expected: \(renderExpectedTarget(target))",
