@@ -29,6 +29,7 @@ package enum AuthoredString: Codable, Sendable, Equatable, Hashable {
             try container.encode(reference, forKey: .ref)
         }
     }
+
     package func resolve(in environment: HeistExecutionEnvironment) throws -> String {
         switch self {
         case .literal(let literal):
@@ -39,6 +40,11 @@ package enum AuthoredString: Codable, Sendable, Equatable, Hashable {
             }
             return string
         }
+    }
+
+    package var literalIsEmpty: Bool? {
+        guard case .literal(let value) = self else { return nil }
+        return value.isEmpty
     }
 }
 
@@ -61,108 +67,76 @@ package struct InvalidResolvedPredicateError: Error, Sendable, Equatable, Custom
     }
 }
 
-// MARK: - String Match Core
-
-package protocol StringMatchLeaf {
-    var stringMatchLiteralIsEmpty: Bool? { get }
-}
-
-extension String: StringMatchLeaf {
-    package var stringMatchLiteralIsEmpty: Bool? { isEmpty }
-}
-
-extension AuthoredString: StringMatchLeaf {
-    package var stringMatchLiteralIsEmpty: Bool? {
-        switch self {
-        case .literal(let value):
-            return value.isEmpty
-        case .ref:
-            return nil
-        }
-    }
-}
-
-package enum StringMatchCore<Value> {
-    case exact(Value)
-    case contains(Value)
-    case prefix(Value)
-    case suffix(Value)
-    case isEmpty
-
-    package var mode: StringMatch.Mode {
-        switch self {
-        case .exact:
-            return .exact
-        case .contains:
-            return .contains
-        case .prefix:
-            return .prefix
-        case .suffix:
-            return .suffix
-        case .isEmpty:
-            return .isEmpty
-        }
+/// A string match that accepts literals or typed references.
+public struct StringMatch: Codable, Sendable, Equatable, Hashable {
+    public enum Mode: String, Codable, CaseIterable, Sendable {
+        case exact
+        case contains
+        case prefix
+        case suffix
+        case isEmpty
     }
 
-    package var payload: Value? {
-        switch self {
-        case .exact(let value), .contains(let value), .prefix(let value), .suffix(let value):
-            return value
-        case .isEmpty:
-            return nil
-        }
-    }
+    package let mode: Mode
+    package let value: AuthoredString?
 
-    package func map<NewValue>(
-        _ transform: (Value) throws -> NewValue
-    ) rethrows -> StringMatchCore<NewValue> {
-        switch self {
-        case .exact(let value):
-            return try .exact(transform(value))
-        case .contains(let value):
-            return try .contains(transform(value))
-        case .prefix(let value):
-            return try .prefix(transform(value))
-        case .suffix(let value):
-            return try .suffix(transform(value))
-        case .isEmpty:
-            return .isEmpty
-        }
-    }
-}
-
-extension StringMatchCore: Sendable where Value: Sendable {}
-extension StringMatchCore: Equatable where Value: Equatable {}
-extension StringMatchCore: Hashable where Value: Hashable {}
-
-package extension StringMatchCore where Value: StringMatchLeaf {
-    var invalidEmptyBroadMode: StringMatch.Mode? {
-        hasInvalidEmptyBroadLiteral ? mode : nil
-    }
-
-    var hasInvalidEmptyBroadLiteral: Bool {
-        switch self {
-        case .contains(let value), .prefix(let value), .suffix(let value):
-            return value.stringMatchLiteralIsEmpty == true
-        case .exact, .isEmpty:
-            return false
-        }
-    }
-
-    var hasPredicateLiteral: Bool {
-        payload?.stringMatchLiteralIsEmpty != true
-    }
-}
-
-extension StringMatchCore: Codable where Value: Codable & StringMatchLeaf {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case mode, value
     }
 
-    package init(from decoder: Decoder) throws {
+    package init(mode: Mode, value: AuthoredString?) {
+        self.mode = mode
+        self.value = value
+    }
+
+    public init(_ value: String) {
+        self.init(mode: .exact, value: .literal(value))
+    }
+
+    public static func exact(_ value: String) -> Self {
+        Self(mode: .exact, value: .literal(value))
+    }
+
+    @_disfavoredOverload
+    public static func exact(_ reference: HeistReferenceName) -> Self {
+        Self(mode: .exact, value: .ref(reference))
+    }
+
+    public static func contains(_ value: String) -> Self {
+        Self(mode: .contains, value: .literal(value))
+    }
+
+    @_disfavoredOverload
+    public static func contains(_ reference: HeistReferenceName) -> Self {
+        Self(mode: .contains, value: .ref(reference))
+    }
+
+    public static func prefix(_ value: String) -> Self {
+        Self(mode: .prefix, value: .literal(value))
+    }
+
+    @_disfavoredOverload
+    public static func prefix(_ reference: HeistReferenceName) -> Self {
+        Self(mode: .prefix, value: .ref(reference))
+    }
+
+    public static func suffix(_ value: String) -> Self {
+        Self(mode: .suffix, value: .literal(value))
+    }
+
+    @_disfavoredOverload
+    public static func suffix(_ reference: HeistReferenceName) -> Self {
+        Self(mode: .suffix, value: .ref(reference))
+    }
+
+    public static var isEmpty: Self {
+        Self(mode: .isEmpty, value: nil)
+    }
+
+    public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "string match")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let mode = try container.decode(StringMatch.Mode.self, forKey: .mode)
+        mode = try container.decode(Mode.self, forKey: .mode)
         if mode == .isEmpty {
             if container.contains(.value) {
                 throw DecodingError.dataCorruptedError(
@@ -171,12 +145,99 @@ extension StringMatchCore: Codable where Value: Codable & StringMatchLeaf {
                     debugDescription: "isEmpty string match must not include value"
                 )
             }
-            self = .isEmpty
+            value = nil
             return
         }
-        let value = try container.decode(Value.self, forKey: .value)
-        self = Self(mode: mode, value: value)
+        value = try container.decode(AuthoredString.self, forKey: .value)
         if hasInvalidEmptyBroadLiteral {
+            throw DecodingError.dataCorruptedError(
+                forKey: .value,
+                in: container,
+                debugDescription: "\(mode.rawValue) string match value must not be empty"
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(mode, forKey: .mode)
+        try container.encodeIfPresent(value, forKey: .value)
+    }
+
+    package var hasInvalidEmptyBroadLiteral: Bool {
+        mode != .exact && mode != .isEmpty && value?.literalIsEmpty == true
+    }
+
+    package var hasPredicateLiteral: Bool {
+        value?.literalIsEmpty != true
+    }
+
+    package func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedStringMatch {
+        let resolvedValue = try value?.resolve(in: environment)
+        if mode != .exact, mode != .isEmpty, resolvedValue?.isEmpty == true {
+            throw HeistExpressionError.invalidStringMatch(mode: mode.rawValue)
+        }
+        return ResolvedStringMatch(mode: mode, value: resolvedValue)
+    }
+}
+
+extension StringMatch: ExpressibleByStringLiteral {
+    public init(stringLiteral value: String) {
+        self.init(value)
+    }
+}
+
+extension StringMatch: CustomStringConvertible {
+    public var description: String {
+        switch mode {
+        case .exact:
+            return value?.description ?? "isEmpty"
+        case .contains:
+            return "contains(\(value?.description ?? ""))"
+        case .prefix:
+            return "prefix(\(value?.description ?? ""))"
+        case .suffix:
+            return "suffix(\(value?.description ?? ""))"
+        case .isEmpty:
+            return "isEmpty"
+        }
+    }
+}
+
+package struct ResolvedStringMatch: Codable, Sendable, Equatable, Hashable {
+    package let mode: StringMatch.Mode
+    package let value: String?
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case mode, value
+    }
+
+    package init(mode: StringMatch.Mode, value: String?) {
+        self.mode = mode
+        self.value = value
+    }
+
+    package static func exact(_ value: String) -> Self {
+        Self(mode: .exact, value: value)
+    }
+
+    package init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "string match")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        mode = try container.decode(StringMatch.Mode.self, forKey: .mode)
+        if mode == .isEmpty {
+            if container.contains(.value) {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .value,
+                    in: container,
+                    debugDescription: "isEmpty string match must not include value"
+                )
+            }
+            value = nil
+            return
+        }
+        value = try container.decode(String.self, forKey: .value)
+        if mode != .exact, value?.isEmpty == true {
             throw DecodingError.dataCorruptedError(
                 forKey: .value,
                 in: container,
@@ -188,144 +249,19 @@ extension StringMatchCore: Codable where Value: Codable & StringMatchLeaf {
     package func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(mode, forKey: .mode)
-        if let payload {
-            try container.encode(payload, forKey: .value)
-        }
+        try container.encodeIfPresent(value, forKey: .value)
     }
 
-    private init(mode: StringMatch.Mode, value: Value) {
-        switch mode {
-        case .exact:
-            self = .exact(value)
-        case .contains:
-            self = .contains(value)
-        case .prefix:
-            self = .prefix(value)
-        case .suffix:
-            self = .suffix(value)
-        case .isEmpty:
-            self = .isEmpty
-        }
-    }
-}
-
-extension StringMatchCore: CustomStringConvertible {
-    package var description: String {
-        switch self {
-        case .exact(let value):
-            return String(describing: value)
-        case .contains(let value):
-            return "contains(\(value))"
-        case .prefix(let value):
-            return "prefix(\(value))"
-        case .suffix(let value):
-            return "suffix(\(value))"
-        case .isEmpty:
-            return "isEmpty"
-        }
-    }
-}
-
-// MARK: - Authored String Match
-
-/// A string match that accepts literals or typed references.
-public struct StringMatch: Codable, Sendable, Equatable, Hashable {
-    public enum Mode: String, Codable, CaseIterable, Sendable {
-        case exact
-        case contains
-        case prefix
-        case suffix
-        case isEmpty
+    package var hasPredicateLiteral: Bool {
+        value?.isEmpty != true
     }
 
-    package let core: StringMatchCore<AuthoredString>
-
-    package init(core: StringMatchCore<AuthoredString>) {
-        self.core = core
-    }
-
-    public init(_ value: String) {
-        core = .exact(.literal(value))
-    }
-
-    public static func exact(_ value: String) -> Self {
-        Self(core: .exact(.literal(value)))
-    }
-
-    @_disfavoredOverload
-    public static func exact(_ reference: HeistReferenceName) -> Self {
-        Self(core: .exact(.ref(reference)))
-    }
-
-    public static func contains(_ value: String) -> Self {
-        Self(core: .contains(.literal(value)))
-    }
-
-    @_disfavoredOverload
-    public static func contains(_ reference: HeistReferenceName) -> Self {
-        Self(core: .contains(.ref(reference)))
-    }
-
-    public static func prefix(_ value: String) -> Self {
-        Self(core: .prefix(.literal(value)))
-    }
-
-    @_disfavoredOverload
-    public static func prefix(_ reference: HeistReferenceName) -> Self {
-        Self(core: .prefix(.ref(reference)))
-    }
-
-    public static func suffix(_ value: String) -> Self {
-        Self(core: .suffix(.literal(value)))
-    }
-
-    @_disfavoredOverload
-    public static func suffix(_ reference: HeistReferenceName) -> Self {
-        Self(core: .suffix(.ref(reference)))
-    }
-
-    public static var isEmpty: Self {
-        Self(core: .isEmpty)
-    }
-
-    public var mode: Mode { core.mode }
-
-    public init(from decoder: Decoder) throws {
-        core = try StringMatchCore(from: decoder)
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        try core.encode(to: encoder)
-    }
-
-    package func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedStringMatch {
-        let resolved = try core.map { try $0.resolve(in: environment) }
-        if resolved.hasInvalidEmptyBroadLiteral {
-            throw HeistExpressionError.invalidStringMatch(mode: resolved.mode.rawValue)
-        }
-        return ResolvedStringMatch(core: resolved)
-    }
-}
-
-extension StringMatch: ExpressibleByStringLiteral {
-    public init(stringLiteral value: String) {
-        self.init(value)
-    }
-}
-
-extension StringMatch: CustomStringConvertible {
-    public var description: String { core.description }
-}
-
-package struct ResolvedStringMatch: Sendable, Equatable, Hashable {
-    package let core: StringMatchCore<String>
-
-    package init(core: StringMatchCore<String>) {
-        self.core = core
+    package var invalidEmptyBroadMode: StringMatch.Mode? {
+        mode != .exact && mode != .isEmpty && value?.isEmpty == true ? mode : nil
     }
 
     package func matches(optional candidate: String?) -> Bool {
-        if case .isEmpty = core {
+        if mode == .isEmpty {
             return (candidate ?? "").isEmpty
         }
         guard let candidate else { return false }
@@ -333,17 +269,34 @@ package struct ResolvedStringMatch: Sendable, Equatable, Hashable {
     }
 
     package func matches(_ candidate: String) -> Bool {
-        switch core {
-        case .exact(let pattern):
-            return !pattern.isEmpty && ElementPredicate.stringEquals(candidate, pattern)
-        case .contains(let pattern):
-            return !pattern.isEmpty && ElementPredicate.stringContains(candidate, pattern)
-        case .prefix(let pattern):
-            return !pattern.isEmpty && ElementPredicate.stringHasPrefix(candidate, pattern)
-        case .suffix(let pattern):
-            return !pattern.isEmpty && ElementPredicate.stringHasSuffix(candidate, pattern)
+        switch mode {
+        case .exact:
+            return value.map { !$0.isEmpty && ElementPredicate.stringEquals(candidate, $0) } ?? false
+        case .contains:
+            return value.map { !$0.isEmpty && ElementPredicate.stringContains(candidate, $0) } ?? false
+        case .prefix:
+            return value.map { !$0.isEmpty && ElementPredicate.stringHasPrefix(candidate, $0) } ?? false
+        case .suffix:
+            return value.map { !$0.isEmpty && ElementPredicate.stringHasSuffix(candidate, $0) } ?? false
         case .isEmpty:
             return candidate.isEmpty
+        }
+    }
+}
+
+extension ResolvedStringMatch: CustomStringConvertible {
+    package var description: String {
+        switch mode {
+        case .exact:
+            return value.map(CanonicalValueDescription.quoted) ?? "isEmpty"
+        case .contains:
+            return "contains(\(value.map(CanonicalValueDescription.quoted) ?? ""))"
+        case .prefix:
+            return "prefix(\(value.map(CanonicalValueDescription.quoted) ?? ""))"
+        case .suffix:
+            return "suffix(\(value.map(CanonicalValueDescription.quoted) ?? ""))"
+        case .isEmpty:
+            return "isEmpty"
         }
     }
 }

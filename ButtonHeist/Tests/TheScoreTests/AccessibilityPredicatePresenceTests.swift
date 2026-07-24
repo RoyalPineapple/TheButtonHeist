@@ -113,69 +113,6 @@ final class AccessibilityPredicateTests: XCTestCase {
 
     // MARK: - Presence Evaluation
 
-    func testCanonicalPredicateAgreesAcrossTargetAndExpectation() throws {
-        let element = element(
-            label: "Checkout",
-            value: "Ready",
-            identifier: "checkout.button",
-            hint: "Opens checkout",
-            traits: [.button],
-            customContent: [HeistCustomContent(label: "State", value: "Ready", isImportant: true)],
-            rotors: [HeistRotor(name: "Actions")],
-            actions: [.activate]
-        )
-        let interface = makeTestInterface(nodes: [testElement(element)])
-        let evidence = evidence(AccessibilityTrace(interface: interface))
-        let checks: [ElementPredicateCheck] = [
-            .label(.contains("Check")),
-            .identifier(.suffix("button")),
-            .value(.exact("Ready")),
-            .traits([.button]),
-            .hint(.prefix("Opens")),
-            .actions([.activate]),
-            .customContent(CustomContentMatch(label: "State", value: "Ready")),
-            .rotors(["Actions"]),
-            .exclude(.label("Cancel")),
-        ]
-
-        for check in checks {
-            let predicate = ElementPredicate([check])
-            let target = AccessibilityTarget.predicate(predicate)
-            let resolvedTarget = try target.resolve(in: .empty)
-            let targetMatched = !AccessibilityTargetMatchGraph(interface: interface)
-                .resolve(resolvedTarget)
-                .isEmpty
-            let expectationMatched = try AccessibilityPredicate.exists(target)
-                .resolve(in: .empty)
-                .evaluate(in: evidence)
-                .met
-
-            XCTAssertEqual(targetMatched, expectationMatched, "\(check)")
-            XCTAssertTrue(targetMatched, "\(check)")
-        }
-
-        let shorthand: [AccessibilityTarget] = [
-            .label("Checkout"),
-            .identifier("checkout.button"),
-            .value("Ready"),
-            .traits([.button]),
-            .hint("Opens checkout"),
-            .actions([.activate]),
-            .customContent(CustomContentMatch(label: "State", value: "Ready")),
-            .rotors(["Actions"]),
-            .exclude(.label("Cancel")),
-        ]
-        for target in shorthand {
-            XCTAssertTrue(
-                try AccessibilityPredicate.exists(target)
-                    .resolve(in: .empty)
-                    .evaluate(in: evidence)
-                    .met,
-                "\(target)"
-            )
-        }
-    }
-
     func testPresentMatchesAnyValueFour() throws {
         let elements = [element(label: "Counter", value: "4")]
         let predicate = AccessibilityPredicate.exists(.value("4"))

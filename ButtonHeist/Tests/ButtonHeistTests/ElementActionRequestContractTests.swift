@@ -273,7 +273,7 @@ private func assertPredicateChecksSchema(
     }
     XCTAssertEqual(properties["kind"], .object([
         "type": .string("string"),
-        "enum": .array(ElementPredicateCheckCore<AuthoredString>.Kind.allCases.map { .string($0.rawValue) }),
+        "enum": .array(ElementPredicateCheck.Kind.allCases.map { .string($0.rawValue) }),
     ]), file: file, line: line)
 
     guard case .object? = properties["match"] else {
@@ -365,7 +365,7 @@ private func canonicalSemanticContainerPredicateKindValues() -> [String] {
     [
         SemanticContainerPredicate.label("sample"),
         SemanticContainerPredicate.value("sample"),
-    ].map { $0.core.wireKindValue }
+    ].map(\.wireKindValue)
 }
 
 private func assertArraySchema(

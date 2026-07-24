@@ -156,8 +156,8 @@ extension Settlement.Predicate {
 
 extension Settlement.Predicate.Semantics {
     fileprivate init(resolved predicate: ResolvedAccessibilityPredicate) {
-        switch predicate.core {
-        case .presence:
+        switch predicate {
+        case .exists, .missing:
             self = .currentState
         case .changed:
             self = .positiveTransition

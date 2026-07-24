@@ -34,7 +34,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     func render(container: ContainerPredicate, environment: RenderEnvironment) throws -> String {
-        let checks = container.core.checks
+        let checks = container.authoredChecks
         if let shorthand = try renderSingleContainerCheck(checks, environment: environment) {
             return shorthand
         }
@@ -48,7 +48,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     private func renderSingleContainerCheck(
-        _ checks: NonEmptyArray<ContainerPredicateCheckCore<AuthoredString>>,
+        _ checks: NonEmptyArray<ContainerPredicateCheck>,
         environment: RenderEnvironment
     ) throws -> String? {
         guard checks.count == 1 else { return nil }
@@ -81,7 +81,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     private func renderDataTable(
-        _ checks: NonEmptyArray<ContainerPredicateCheckCore<AuthoredString>>
+        _ checks: NonEmptyArray<ContainerPredicateCheck>
     ) -> String? {
         let hasDataTableType = checks.contains {
             if case .type(.dataTable) = $0 { return true }
@@ -114,7 +114,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     private func renderContainerCheck(
-        _ check: ContainerPredicateCheckCore<AuthoredString>,
+        _ check: ContainerPredicateCheck,
         environment: RenderEnvironment
     ) throws -> String {
         switch check {
@@ -138,7 +138,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     private func renderSemanticContainerPredicate(
-        _ predicate: SemanticContainerPredicateCore<AuthoredString>,
+        _ predicate: SemanticContainerPredicate,
         environment: RenderEnvironment
     ) throws -> String {
         switch predicate {
@@ -158,7 +158,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         predicate: ElementPredicate,
         environment: RenderEnvironment
     ) throws -> String {
-        let checks = predicate.core.checks
+        let checks = predicate.checks
         if let shorthand = try renderSingleCheckTarget(checks, environment: environment) {
             return shorthand
         }
@@ -169,7 +169,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     private func renderSingleCheckTarget(
-        _ checks: [ElementPredicateCheckCore<AuthoredString>],
+        _ checks: [ElementPredicateCheck],
         environment: RenderEnvironment
     ) throws -> String? {
         guard checks.count == 1 else { return nil }
@@ -196,7 +196,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     private func renderPredicateCheck(
-        _ check: ElementPredicateCheckCore<AuthoredString>,
+        _ check: ElementPredicateCheck,
         environment: RenderEnvironment
     ) throws -> String {
         switch check {
@@ -226,27 +226,26 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     func renderStringArgument(
-        _ match: StringMatchCore<AuthoredString>,
+        _ match: StringMatch,
         environment: RenderEnvironment
     ) throws -> String {
         try renderStringMatch(match, environment: environment)
     }
 
     private func renderStringMatch(
-        _ match: StringMatchCore<AuthoredString>,
+        _ match: StringMatch,
         environment: RenderEnvironment
     ) throws -> String {
-        switch match {
-        case .exact(let value):
-            return try render(string: value, environment: environment)
-        case .contains(let value):
-            return try ".contains(\(render(string: value, environment: environment)))"
-        case .prefix(let value):
-            return try ".prefix(\(render(string: value, environment: environment)))"
-        case .suffix(let value):
-            return try ".suffix(\(render(string: value, environment: environment)))"
-        case .isEmpty:
+        guard let value = match.value else {
             return ".isEmpty"
+        }
+        let rendered = try render(string: value, environment: environment)
+        switch match.mode {
+        case .exact: return rendered
+        case .contains: return ".contains(\(rendered))"
+        case .prefix: return ".prefix(\(rendered))"
+        case .suffix: return ".suffix(\(rendered))"
+        case .isEmpty: return ".isEmpty"
         }
     }
 

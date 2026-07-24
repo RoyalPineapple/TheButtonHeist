@@ -197,7 +197,7 @@ private extension Settlement.ResultProjector {
             format: "%.1f",
             Double(result.evidence.elapsed.milliseconds) / 1_000
         )
-        if case .presence(.missing) = predicate.resolved.core {
+        if case .missing = predicate.resolved {
             return "absent confirmed after \(elapsed)s"
         }
         return "matched after \(elapsed)s"
@@ -342,18 +342,19 @@ private extension Settlement.ResultProjector {
         let traceProjection = traceEvidence(from: result).map {
             TimeoutTraceProjection(trace: $0.trace, target: target)
         }
-        switch (predicate.resolved.core, target, traceProjection?.interfaceElementCount) {
-        case (.presence(let presence), let target?, let count?):
+        switch (predicate.resolved, target, traceProjection?.interfaceElementCount) {
+        case (.exists, let target?, let count?):
+            parts[0] += " waiting for element to appear"
+            parts += [
+                "expected: \(renderExpectedTarget(target))",
+                "interface: \(count) elements",
+                "last result: element not found",
+            ]
+        case (.missing, let target?, let count?):
             let expectation: String
             let reason: String
-            switch presence {
-            case .exists:
-                expectation = "element to appear"
-                reason = "element not found"
-            case .missing:
-                expectation = "element to disappear"
-                reason = "element still present"
-            }
+            expectation = "element to disappear"
+            reason = "element still present"
             parts[0] += " waiting for \(expectation)"
             parts += [
                 "expected: \(renderExpectedTarget(target))",

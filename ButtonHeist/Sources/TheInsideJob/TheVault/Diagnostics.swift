@@ -30,11 +30,11 @@ extension TheVault {
     ) -> String? {
         let target: ResolvedAccessibilityTarget
         let absent: Bool
-        switch predicate.core {
-        case .presence(.exists(let accessibilityTarget)):
+        switch predicate {
+        case .exists(let accessibilityTarget):
             target = accessibilityTarget
             absent = false
-        case .presence(.missing(let accessibilityTarget)):
+        case .missing(let accessibilityTarget):
             target = accessibilityTarget
             absent = true
         default:
@@ -107,14 +107,14 @@ extension TheVault {
 
     /// Format a predicate's fields as a human-readable query string.
     static func formatMatcher(_ predicate: ResolvedElementPredicate) -> String {
-        predicate.core.checks.compactMap(formatCheck).joined(separator: " ")
+        predicate.checks.compactMap(formatCheck).joined(separator: " ")
     }
 
-    private static func formatCheck(_ check: ElementPredicateCheckCore<String>) -> String? {
+    private static func formatCheck(_ check: ResolvedElementPredicateCheck) -> String? {
         CanonicalValueDescription.predicateCheckField(check)
     }
 
-    private static func checkName(_ check: ElementPredicateCheckCore<String>) -> String {
+    private static func checkName(_ check: ResolvedElementPredicateCheck) -> String {
         switch check {
         case .label:
             return "label"
@@ -138,7 +138,7 @@ extension TheVault {
     }
 
     private static func actualValueReader(
-        for check: ElementPredicateCheckCore<String>
+        for check: ResolvedElementPredicateCheck
     ) -> (AccessibilityElement) -> String {
         switch check {
         case .label:
@@ -187,11 +187,11 @@ extension TheVault {
         in treeElements: [InterfaceTree.Element],
         visibleHeistIds: Set<HeistId>
     ) -> String? {
-        let relaxations = predicate.core.checks.enumerated().compactMap { index, check -> Relaxation? in
+        let relaxations = predicate.checks.enumerated().compactMap { index, check -> Relaxation? in
             guard check.hasPredicateLiteral else { return nil }
             return Relaxation(
                 field: "check \(index + 1) (\(checkName(check)))",
-                relaxed: ResolvedElementPredicate(predicate.core.checks.enumerated().compactMap { offset, candidate in
+                relaxed: ResolvedElementPredicate(predicate.checks.enumerated().compactMap { offset, candidate in
                     offset == index ? nil : candidate
                 }),
                 actual: actualValueReader(for: check)
@@ -243,7 +243,7 @@ extension TheVault {
     }
 
     private static func diagnosticContainsPredicate(from predicate: ResolvedElementPredicate) -> ResolvedElementPredicate? {
-        let diagnostic = ResolvedElementPredicate(predicate.core.checks.map { check in
+        let diagnostic = ResolvedElementPredicate(predicate.checks.map { check in
             switch check {
             case .label(let match):
                 return .label(diagnosticContainsMatch(from: match))
@@ -269,14 +269,10 @@ extension TheVault {
     }
 
     private static func diagnosticContainsMatch(
-        from match: StringMatchCore<String>
-    ) -> StringMatchCore<String> {
-        switch match {
-        case .exact(let value), .contains(let value), .prefix(let value), .suffix(let value):
-            return value.isEmpty ? match : .contains(value)
-        case .isEmpty:
-            return match
-        }
+        from match: ResolvedStringMatch
+    ) -> ResolvedStringMatch {
+        guard let value = match.value, !value.isEmpty else { return match }
+        return ResolvedStringMatch(mode: .contains, value: value)
     }
 
     private static func failureInterfaceSuggestionValue(
@@ -296,7 +292,7 @@ extension TheVault {
     }
 
     private static func exactPredicateDescription(_ failedPredicate: ResolvedElementPredicate, element: HeistElement) -> String {
-        ResolvedElementPredicate(failedPredicate.core.checks.compactMap { check in
+        ResolvedElementPredicate(failedPredicate.checks.compactMap { check in
             switch check {
             case .label:
                 return element.label.map { .label(.exact($0)) }

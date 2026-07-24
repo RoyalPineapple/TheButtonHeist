@@ -18,13 +18,16 @@ public struct MatcherAtom: Sendable, Equatable {
     public let predicate: ResolvedElementPredicate
     public let stability: AccessibilityFactStability
     public let priority: Int
+    package let authoredCheck: ElementPredicateCheck
 
-    public init(
+    package init(
         predicate: ResolvedElementPredicate,
+        authoredCheck: ElementPredicateCheck,
         stability: AccessibilityFactStability,
         priority: Int
     ) {
         self.predicate = predicate
+        self.authoredCheck = authoredCheck
         self.stability = stability
         self.priority = priority
     }
@@ -266,7 +269,7 @@ public enum MinimumPredicateSelector {
             if matches.count == 1 {
                 return MinimumPredicateSelection(
                     contextElementId: contextElementId,
-                    target: .predicate(authoredTemplate(candidate.predicate)),
+                    target: .predicate(authoredPredicate(from: candidate.atoms)),
                     candidate: candidate
                 )
             }
@@ -288,7 +291,7 @@ public enum MinimumPredicateSelector {
         )
         return MinimumPredicateSelection(
             contextElementId: contextElementId,
-            target: .predicate(authoredTemplate(strongestSemanticCandidate.predicate), ordinal: ordinal),
+            target: .predicate(authoredPredicate(from: strongestSemanticCandidate.atoms), ordinal: ordinal),
             candidate: ordinalCandidate
         )
     }
@@ -299,11 +302,29 @@ public enum MinimumPredicateSelector {
         atoms.reserveCapacity(facts.count)
 
         for fact in facts {
-            guard let stability = AccessibilityPolicy.matcherFactStability(fact),
-                  let predicate = predicate(for: fact)
-            else { continue }
+            guard let stability = AccessibilityPolicy.matcherFactStability(fact) else { continue }
+            let authoredCheck: ElementPredicateCheck
+            let resolvedCheck: ResolvedElementPredicateCheck
+            switch fact {
+            case .identifier(let identifier):
+                authoredCheck = .identifier(identifier)
+                resolvedCheck = .identifier(.exact(identifier))
+            case .label(let label):
+                authoredCheck = .label(label)
+                resolvedCheck = .label(.exact(label))
+            case .value(let value):
+                authoredCheck = .value(value)
+                resolvedCheck = .value(.exact(value))
+            case .trait(let trait):
+                authoredCheck = .traits([trait])
+                resolvedCheck = .traits([trait])
+            case .excludedTrait(let trait):
+                authoredCheck = .exclude(.traits([trait]))
+                resolvedCheck = .exclude(.traits([trait]))
+            }
             atoms.append(MatcherAtom(
-                predicate: predicate,
+                predicate: ResolvedElementPredicate([resolvedCheck]),
+                authoredCheck: authoredCheck,
                 stability: stability,
                 priority: AccessibilityPolicy.matcherFactPriority(fact)
             ))
@@ -312,27 +333,12 @@ public enum MinimumPredicateSelector {
         return atoms.sorted { $0.sortKey < $1.sortKey }
     }
 
-    private static func predicate(for fact: AccessibilityMatcherFact) -> ResolvedElementPredicate? {
-        switch fact {
-        case .identifier(let identifier):
-            return .identifier(identifier)
-        case .label(let label):
-            return .label(label)
-        case .value(let value):
-            return .value(value)
-        case .trait(let trait):
-            return .traits([trait])
-        case .excludedTrait(let trait):
-            return ResolvedElementPredicate([.exclude(.traits([trait]))])
-        }
-    }
-
     private static func combinedPredicate(from atoms: [MatcherAtom]) -> ResolvedElementPredicate {
-        ResolvedElementPredicate(atoms.flatMap { $0.predicate.core.checks })
+        ResolvedElementPredicate(atoms.flatMap { $0.predicate.checks })
     }
 
-    private static func authoredTemplate(_ predicate: ResolvedElementPredicate) -> ElementPredicate {
-        ElementPredicate(core: predicate.core.map { .literal($0) })
+    private static func authoredPredicate(from atoms: [MatcherAtom]) -> ElementPredicate {
+        ElementPredicate(atoms.map(\.authoredCheck))
     }
 
     private static func tier(for atoms: [MatcherAtom]) -> CandidateTier {

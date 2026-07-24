@@ -32,14 +32,14 @@ extension AccessibilityElement: PredicateSelectionSubject {
         required.isSubset(of: projectedActionSet.actions)
     }
 
-    package func containsCustomContent(matching match: CustomContentMatchCore<String>) -> Bool {
+    package func containsCustomContent(matching match: ResolvedCustomContentMatch) -> Bool {
         projectedCustomContent.contains { match.matches($0) }
     }
 
-    package func satisfiesRequiredRotors(_ required: [StringMatchCore<String>]) -> Bool {
+    package func satisfiesRequiredRotors(_ required: [ResolvedStringMatch]) -> Bool {
         let names = customRotors.map(\.name).filter { !$0.isEmpty }
         return required.allSatisfy { match in
-            names.contains { ResolvedStringMatch(core: match).matches($0) }
+            names.contains { match.matches($0) }
         }
     }
 
@@ -61,7 +61,7 @@ extension InterfaceTree.Element: ElementPredicateSubjectBacked {
     package var predicateSubject: AccessibilityElement { element }
 }
 
-private extension CustomContentMatchCore where Text == String {
+private extension ResolvedCustomContentMatch {
     func matches(_ content: HeistCustomContent) -> Bool {
         label.matches(content.label)
             && value.matches(content.value)
@@ -69,9 +69,9 @@ private extension CustomContentMatchCore where Text == String {
     }
 }
 
-private extension Optional where Wrapped == StringMatchCore<String> {
+private extension Optional where Wrapped == ResolvedStringMatch {
     func matches(_ text: String) -> Bool {
-        map { ResolvedStringMatch(core: $0).matches(text) } ?? true
+        map { $0.matches(text) } ?? true
     }
 }
 

@@ -148,7 +148,7 @@ public indirect enum AccessibilityTarget: Codable, Sendable, Equatable, Hashable
     private func appending(_ checks: [ElementPredicateCheck]) -> AccessibilityTarget {
         guard case .predicate(let predicate, let ordinal) = self else { return self }
         return .predicate(
-            ElementPredicate(core: ElementPredicateCore(predicate.core.checks + checks.map(\.core))),
+            ElementPredicate(predicate.checks + checks),
             ordinal: ordinal
         )
     }
@@ -245,12 +245,12 @@ public indirect enum ResolvedAccessibilityTarget: Codable, Sendable, Equatable, 
             typeName: "resolved accessibility target"
         )
         let predicateContainer = try decoder.container(keyedBy: ElementPredicateCodingKeys.self)
-        let predicate = ResolvedElementPredicate(core: ElementPredicateCore(
+        let predicate = ResolvedElementPredicate(
             try predicateContainer.decodeIfPresent(
-                [ElementPredicateCheckCore<String>].self,
+                [ResolvedElementPredicateCheck].self,
                 forKey: .checks
             ) ?? []
-        ))
+        )
         guard predicate.hasPredicates else {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: container.codingPath,

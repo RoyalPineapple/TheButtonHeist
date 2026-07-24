@@ -5,38 +5,38 @@ extension HeistCanonicalSwiftDSLRenderer {
         predicate: AccessibilityPredicate,
         environment: RenderEnvironment
     ) throws -> String {
-        try render(predicateCore: predicate.core, environment: environment)
+        try render(predicateValue: predicate.core, environment: environment)
     }
 
     func render(
         predicate: ChangeDeclaration.ScreenAssertion,
         environment: RenderEnvironment
     ) throws -> String {
-        try render(screenAssertionCore: predicate.core, environment: environment)
+        try render(screenAssertion: predicate, environment: environment)
     }
 
     private func render(
-        predicateCore core: AccessibilityPredicateCore<AuthoredAccessibilityPredicatePhase>,
+        predicateValue value: AccessibilityPredicate.Value,
         environment: RenderEnvironment
     ) throws -> String {
-        switch core {
+        switch value {
         case .presence(let presence):
-            return try render(presenceCore: presence, environment: environment)
+            return try render(presence: presence, environment: environment)
         case .announcement(let announcement):
             guard let match = announcement.match else { return ".announcement" }
-            return try ".announcement(\(renderStringArgument(match.core, environment: environment)))"
+            return try ".announcement(\(renderStringArgument(match, environment: environment)))"
         case .changed(let declaration):
-            return try ".changed(\(render(changeCore: declaration, environment: environment)))"
+            return try ".changed(\(render(change: declaration, environment: environment)))"
         case .noChange:
             return ".noChange"
         }
     }
 
     private func render(
-        presenceCore core: PresencePredicateCore<AuthoredAccessibilityPredicatePhase>,
+        presence: AccessibilityPredicate.Presence,
         environment: RenderEnvironment
     ) throws -> String {
-        switch core {
+        switch presence {
         case .exists(let target):
             return try ".exists(\(render(target: target, environment: environment)))"
         case .missing(let target):
@@ -45,42 +45,46 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     private func render(
-        changeCore core: ChangeDeclarationCore<AuthoredAccessibilityPredicatePhase>,
+        change: ChangeDeclaration,
         environment: RenderEnvironment
     ) throws -> String {
-        switch core {
+        switch change {
         case .screen(let assertions):
             guard !assertions.isEmpty else { return ".screen()" }
             let rendered = try assertions.map {
-                try render(screenAssertionCore: $0, environment: environment)
+                try render(screenAssertion: $0, environment: environment)
             }
             return ".screen([\(rendered.joined(separator: ", "))])"
         case .elements(let assertions):
             guard !assertions.isEmpty else { return ".elements()" }
             let rendered = try assertions.map {
-                try render(elementAssertionCore: $0, environment: environment)
+                try render(elementAssertion: $0, environment: environment)
             }
             return ".elements([\(rendered.joined(separator: ", "))])"
         }
     }
 
     private func render(
-        screenAssertionCore core: ScreenAssertionCore<AuthoredAccessibilityPredicatePhase>,
+        screenAssertion assertion: ChangeDeclaration.ScreenAssertion,
         environment: RenderEnvironment
     ) throws -> String {
-        switch core {
-        case .presence(let presence):
-            return try render(presenceCore: presence, environment: environment)
+        switch assertion {
+        case .exists(let target):
+            return try ".exists(\(render(target: target, environment: environment)))"
+        case .missing(let target):
+            return try ".missing(\(render(target: target, environment: environment)))"
         }
     }
 
     private func render(
-        elementAssertionCore core: ElementAssertionCore<AuthoredAccessibilityPredicatePhase>,
+        elementAssertion assertion: ChangeDeclaration.ElementAssertion,
         environment: RenderEnvironment
     ) throws -> String {
-        switch core {
-        case .presence(let presence):
-            return try render(presenceCore: presence, environment: environment)
+        switch assertion {
+        case .exists(let target):
+            return try ".exists(\(render(target: target, environment: environment)))"
+        case .missing(let target):
+            return try ".missing(\(render(target: target, environment: environment)))"
         case .appeared(let target):
             return try ".appeared(\(render(target: target, environment: environment)))"
         case .disappeared(let target):
@@ -95,7 +99,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         propertyChange change: ElementPropertyChange,
         environment: RenderEnvironment
     ) throws -> String {
-        switch change.core {
+        switch change.value {
         case .value(let change):
             return try renderStringPropertyChange(
                 "value",
@@ -167,8 +171,8 @@ extension HeistCanonicalSwiftDSLRenderer {
 
     private func renderStringPropertyChange(
         _ name: String,
-        before: StringMatchCore<AuthoredString>?,
-        after: StringMatchCore<AuthoredString>?,
+        before: StringMatch?,
+        after: StringMatch?,
         environment: RenderEnvironment
     ) throws -> String {
         if name == "value", before == nil, let after {
@@ -224,7 +228,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     func render(
-        customContent match: CustomContentMatchCore<AuthoredString>,
+        customContent match: CustomContentMatch,
         environment: RenderEnvironment
     ) throws -> String {
         let fields = try renderCustomContentFields(
@@ -236,7 +240,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     private func render(
-        rotorSet match: RotorSetMatchCore<AuthoredString>,
+        rotorSet match: RotorSetMatch,
         environment: RenderEnvironment
     ) throws -> String {
         let include = match.include.isEmpty
@@ -296,7 +300,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     func renderStringMatchArray(
-        _ matches: [StringMatchCore<AuthoredString>],
+        _ matches: [StringMatch],
         environment: RenderEnvironment
     ) throws -> String {
         let rendered = try matches.map {

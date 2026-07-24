@@ -55,7 +55,7 @@ public struct HeistSemanticCustomContentMatch: Sendable, Equatable, Hashable {
         self.isImportant = isImportant
     }
 
-    init(_ match: CustomContentMatchCore<AuthoredString>) {
+    init(_ match: CustomContentMatch) {
         self.label = match.label.map(HeistSemanticStringMatch.init)
         self.value = match.value.map(HeistSemanticStringMatch.init)
         self.isImportant = match.isImportant
@@ -71,20 +71,9 @@ public struct HeistSemanticStringMatch: Sendable, Equatable, Hashable {
         self.value = value
     }
 
-    init(_ match: StringMatchCore<AuthoredString>) {
-        switch match.mode {
-        case .exact:
-            self.mode = .exact
-        case .contains:
-            self.mode = .contains
-        case .prefix:
-            self.mode = .prefix
-        case .suffix:
-            self.mode = .suffix
-        case .isEmpty:
-            self.mode = .isEmpty
-        }
-        self.value = match.payload.map(HeistSemanticStringValue.init)
+    init(_ match: StringMatch) {
+        mode = match.mode
+        value = match.value.map(HeistSemanticStringValue.init)
     }
 }
 
@@ -466,7 +455,7 @@ private struct HeistSemanticSurfaceCollector {
     private var expectations: [AccessibilityPredicate] = []
     private var nestedRunHeists: [HeistInvocationPath] = []
     private var expectedEffects: [AccessibilityPredicate] = []
-    private var semanticFacets: [ElementPredicateCheckCore<AuthoredString>] = []
+    private var semanticFacets: [ElementPredicateCheck] = []
 
     static func surface(for resolved: ResolvedCatalogHeist) -> HeistSemanticSurface {
         var collector = Self()
@@ -555,7 +544,7 @@ private struct HeistSemanticSurfaceCollector {
     }
 
     mutating func appendSemanticSurfaces(_ predicate: ElementPredicate) {
-        for check in predicate.core.checks where check.hasPredicateLiteral {
+        for check in predicate.checks where check.hasPredicateLiteral {
             semanticFacets.appendIfMissing(check)
         }
     }
@@ -565,69 +554,43 @@ private struct HeistSemanticSurfaceCollector {
     }
 
     mutating func appendPredicateTargets(
-        _ core: AccessibilityPredicateCore<AuthoredAccessibilityPredicatePhase>
+        _ value: AccessibilityPredicate.Value
     ) {
-        switch core {
+        switch value {
         case .presence(let presence):
-            appendPredicateTargets(presence)
+            switch presence {
+            case .exists(let target), .missing(let target):
+                appendTargetPredicate(target)
+            }
         case .announcement:
             break
         case .changed(let declaration):
-            appendPredicateTargets(declaration)
+            switch declaration {
+            case .screen(let assertions):
+                for assertion in assertions {
+                    switch assertion {
+                    case .exists(let target), .missing(let target):
+                        appendTargetPredicate(target)
+                    }
+                }
+            case .elements(let assertions):
+                for assertion in assertions {
+                    switch assertion {
+                    case .exists(let target), .missing(let target),
+                         .appeared(let target), .disappeared(let target), .updated(let target, _):
+                        appendTargetPredicate(target)
+                    }
+                }
+            }
         case .noChange:
             break
         }
     }
 
-    mutating func appendPredicateTargets(
-        _ core: PresencePredicateCore<AuthoredAccessibilityPredicatePhase>
-    ) {
-        switch core {
-        case .exists(let target), .missing(let target):
-            appendTargetPredicate(target)
-        }
-    }
-
-    mutating func appendPredicateTargets(
-        _ core: ChangeDeclarationCore<AuthoredAccessibilityPredicatePhase>
-    ) {
-        switch core {
-        case .screen(let assertions):
-            for assertion in assertions {
-                appendPredicateTargets(assertion)
-            }
-        case .elements(let assertions):
-            for assertion in assertions {
-                appendPredicateTargets(assertion)
-            }
-        }
-    }
-
-    mutating func appendPredicateTargets(
-        _ core: ScreenAssertionCore<AuthoredAccessibilityPredicatePhase>
-    ) {
-        switch core {
-        case .presence(let presence):
-            appendPredicateTargets(presence)
-        }
-    }
-
-    mutating func appendPredicateTargets(
-        _ core: ElementAssertionCore<AuthoredAccessibilityPredicatePhase>
-    ) {
-        switch core {
-        case .presence(let presence):
-            appendPredicateTargets(presence)
-        case .appeared(let target), .disappeared(let target):
-            appendTargetPredicate(target)
-        case .updated(let target, _):
-            appendTargetPredicate(target)
-        }
-    }
 }
 
 private extension HeistSemanticSurfaceFact {
-    init(_ check: ElementPredicateCheckCore<AuthoredString>) {
+    init(_ check: ElementPredicateCheck) {
         switch check {
         case .label(let match):
             self = .label(HeistSemanticStringMatch(match))

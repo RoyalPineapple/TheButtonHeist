@@ -7,7 +7,19 @@ extension HeistPlanRuntimeSafetyValidator {
         depth: Int,
         scope: HeistReferenceScope
     ) {
-        validatePredicateCore(predicate.core, path: path, depth: depth, scope: scope)
+        checkPredicateDepth(depth, path: path)
+        switch predicate.core {
+        case .presence(let presence):
+            validatePresence(presence, path: path, scope: scope)
+        case .announcement(let announcement):
+            if let match = announcement.match {
+                validateString(match, path: path.child(.match), scope: scope)
+            }
+        case .changed(let declaration):
+            validateChange(declaration, path: path.child(.changed), depth: depth + 1, scope: scope)
+        case .noChange:
+            break
+        }
     }
 
     mutating func validatePredicate(
@@ -16,58 +28,41 @@ extension HeistPlanRuntimeSafetyValidator {
         depth: Int,
         scope: HeistReferenceScope
     ) {
-        validateScreenAssertionCore(predicate.core, path: path, depth: depth, scope: scope)
-    }
-
-    private mutating func validatePredicateCore(
-        _ core: AccessibilityPredicateCore<AuthoredAccessibilityPredicatePhase>,
-        path: HeistPlanPath,
-        depth: Int,
-        scope: HeistReferenceScope
-    ) {
         checkPredicateDepth(depth, path: path)
-        switch core {
-        case .presence(let presence):
-            validatePresenceCore(presence, path: path, scope: scope)
-        case .announcement(let announcement):
-            if let match = announcement.match {
-                validateString(match.core, path: path.child(.match), scope: scope)
-            }
-        case .changed(let declaration):
-            validateChangeCore(declaration, path: path.child(.changed), depth: depth + 1, scope: scope)
-        case .noChange:
-            break
-        }
-    }
-
-    private mutating func validatePresenceCore(
-        _ core: PresencePredicateCore<AuthoredAccessibilityPredicatePhase>,
-        path: HeistPlanPath,
-        scope: HeistReferenceScope
-    ) {
-        switch core {
+        switch predicate {
         case .exists(let target), .missing(let target):
             validateTarget(target, path: path.child(.target), scope: scope)
         }
     }
 
-    private mutating func validateChangeCore(
-        _ core: ChangeDeclarationCore<AuthoredAccessibilityPredicatePhase>,
+    private mutating func validatePresence(
+        _ presence: AccessibilityPredicate.Presence,
+        path: HeistPlanPath,
+        scope: HeistReferenceScope
+    ) {
+        switch presence {
+        case .exists(let target), .missing(let target):
+            validateTarget(target, path: path.child(.target), scope: scope)
+        }
+    }
+
+    private mutating func validateChange(
+        _ declaration: ChangeDeclaration,
         path: HeistPlanPath,
         depth: Int,
         scope: HeistReferenceScope
     ) {
         checkPredicateDepth(depth, path: path)
-        switch core {
+        switch declaration {
         case .screen(let assertions):
             validateAllChildCount(assertions.count, path: path.child(.assertions))
         case .elements(let assertions):
             validateAllChildCount(assertions.count, path: path.child(.assertions))
         }
-        switch core {
+        switch declaration {
         case .screen(let assertions):
             for (index, assertion) in assertions.enumerated() {
-                validateScreenAssertionCore(
+                validateScreenAssertion(
                     assertion,
                     path: path.child(.assertions).index(index),
                     depth: depth + 1,
@@ -76,7 +71,7 @@ extension HeistPlanRuntimeSafetyValidator {
             }
         case .elements(let assertions):
             for (index, assertion) in assertions.enumerated() {
-                validateElementAssertionCore(
+                validateElementAssertion(
                     assertion,
                     path: path.child(.assertions).index(index),
                     depth: depth + 1,
@@ -86,30 +81,28 @@ extension HeistPlanRuntimeSafetyValidator {
         }
     }
 
-    private mutating func validateScreenAssertionCore(
-        _ core: ScreenAssertionCore<AuthoredAccessibilityPredicatePhase>,
+    private mutating func validateScreenAssertion(
+        _ assertion: ChangeDeclaration.ScreenAssertion,
         path: HeistPlanPath,
         depth: Int,
         scope: HeistReferenceScope
     ) {
         checkPredicateDepth(depth, path: path)
-        switch core {
-        case .presence(let presence):
-            validatePresenceCore(presence, path: path, scope: scope)
+        switch assertion {
+        case .exists(let target), .missing(let target):
+            validateTarget(target, path: path.child(.target), scope: scope)
         }
     }
 
-    private mutating func validateElementAssertionCore(
-        _ core: ElementAssertionCore<AuthoredAccessibilityPredicatePhase>,
+    private mutating func validateElementAssertion(
+        _ assertion: ChangeDeclaration.ElementAssertion,
         path: HeistPlanPath,
         depth: Int,
         scope: HeistReferenceScope
     ) {
         checkPredicateDepth(depth, path: path)
-        switch core {
-        case .presence(let presence):
-            validatePresenceCore(presence, path: path, scope: scope)
-        case .appeared(let target), .disappeared(let target):
+        switch assertion {
+        case .exists(let target), .missing(let target), .appeared(let target), .disappeared(let target):
             validateTarget(target, path: path.child(.target), scope: scope)
         case .updated(let target, let change):
             validateTarget(target, path: path.child(.target), scope: scope)
@@ -122,7 +115,7 @@ extension HeistPlanRuntimeSafetyValidator {
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
-        switch change.core {
+        switch change.value {
         case .value(let change), .hint(let change):
             validateStringPropertyChange(change, path: path, scope: scope)
         case .traits, .actions, .frame, .activationPoint:
@@ -135,7 +128,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func validateStringPropertyChange(
-        _ change: PropertyChangeCore<StringMatchCore<AuthoredString>>,
+        _ change: PropertyChangeCore<StringMatch>,
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
@@ -148,7 +141,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func validateCustomContentPropertyChange(
-        _ change: PropertyChangeCore<CustomContentMatchCore<AuthoredString>>,
+        _ change: PropertyChangeCore<CustomContentMatch>,
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
@@ -161,7 +154,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func validateCustomContent(
-        _ match: CustomContentMatchCore<AuthoredString>,
+        _ match: CustomContentMatch,
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
@@ -174,7 +167,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func validateRotorPropertyChange(
-        _ change: PropertyChangeCore<RotorSetMatchCore<AuthoredString>>,
+        _ change: PropertyChangeCore<RotorSetMatch>,
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
@@ -187,7 +180,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func validateRotorSet(
-        _ match: RotorSetMatchCore<AuthoredString>,
+        _ match: RotorSetMatch,
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {

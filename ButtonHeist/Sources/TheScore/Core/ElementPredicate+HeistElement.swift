@@ -20,7 +20,7 @@ extension HeistElement: PredicateSelectionSubject {
         required.isSubset(of: Set(actions))
     }
 
-    package func containsCustomContent(matching match: CustomContentMatchCore<String>) -> Bool {
+    package func containsCustomContent(matching match: ResolvedCustomContentMatch) -> Bool {
         guard let customContent else { return false }
         return customContent.contains { content in
             match.label.matches(content.label)
@@ -29,10 +29,10 @@ extension HeistElement: PredicateSelectionSubject {
         }
     }
 
-    package func satisfiesRequiredRotors(_ required: [StringMatchCore<String>]) -> Bool {
+    package func satisfiesRequiredRotors(_ required: [ResolvedStringMatch]) -> Bool {
         let names = rotors?.map(\.name) ?? []
         return required.allSatisfy { match in
-            names.contains { ResolvedStringMatch(core: match).matches($0) }
+            names.contains { match.matches($0) }
         }
     }
 
@@ -46,9 +46,9 @@ extension HeistElement: PredicateSelectionSubject {
     }
 }
 
-private extension Optional where Wrapped == StringMatchCore<String> {
+private extension Optional where Wrapped == ResolvedStringMatch {
     func matches(_ text: String) -> Bool {
-        map { ResolvedStringMatch(core: $0).matches(text) } ?? true
+        map { $0.matches(text) } ?? true
     }
 }
 

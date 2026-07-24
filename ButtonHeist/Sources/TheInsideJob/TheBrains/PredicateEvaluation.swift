@@ -150,7 +150,7 @@ extension Settlement.PredicateEvaluation {
         _ predicate: Settlement.Predicate,
         event: Observation.AnnouncementEvent
     ) -> PredicateEvaluationResult {
-        guard case .announcement(let announcement) = predicate.resolved.core else {
+        guard case .announcement(let announcement) = predicate.resolved else {
             preconditionFailure("Announcement evidence requires an announcement predicate")
         }
         return PredicateEvaluationResult(

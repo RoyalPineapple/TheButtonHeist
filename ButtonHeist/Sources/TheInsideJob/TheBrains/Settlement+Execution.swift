@@ -988,7 +988,7 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
         sink: Settlement.ExecutionSink
     ) async {
         guard let predicate = command.predicate,
-              case .announcement(let announcement) = predicate.resolved.core else { return }
+              case .announcement(let announcement) = predicate.resolved else { return }
         let notifications = vault.accessibilityNotifications
         lifecycle.retain(Task {
             switch await notifications.waitForAnnouncement(
@@ -1328,7 +1328,7 @@ extension TheBrains {
                 timeoutSeconds: deadline.remainingDuration(at: start) / .seconds(1)
             )
             observationEffects = { control in
-                if case .announcement = predicate.resolved.core { return }
+                if case .announcement = predicate.resolved { return }
                 await self.navigation.exploreForWait(
                     target: predicate.resolved.singularTarget,
                     deadline: discoveryDeadline,

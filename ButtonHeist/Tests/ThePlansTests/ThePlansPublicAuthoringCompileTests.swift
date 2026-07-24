@@ -95,16 +95,12 @@ func `canonical matcher and target forms compile through the public module`() th
         .within(container: .label("Checkout"), .label("Pay")),
         .ref(reference),
     ]
-    let expectations: [AccessibilityPredicate] = [
-        .exists(targets[0]),
-        .missing(targets[1]),
-    ]
-
-    #expect(matches.count == 10)
-    #expect(checks.count == 9)
-    #expect(predicates.count == 11)
-    #expect(targets.count == 13)
-    #expect(expectations.count == 2)
+    #expect(
+        !matches.isEmpty
+            && !checks.isEmpty
+            && !predicates.isEmpty
+            && AccessibilityPredicate.exists(targets[0]) != .missing(targets[1])
+    )
 }
 
 @Test

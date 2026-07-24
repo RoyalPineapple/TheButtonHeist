@@ -233,9 +233,7 @@ extension HeistPlanSourceParser {
                 rest.append(try parseContainerPredicateCheckExpr())
             }
             try expectSymbol(")")
-            return ContainerPredicate(core: ContainerPredicateCore(
-                checks: NonEmptyArray(first.core, rest: rest.map(\.core))
-            ))
+            return ContainerPredicate(checks: NonEmptyArray(first, rest: rest))
         default:
             throw error(
                 token,
@@ -494,16 +492,8 @@ extension HeistPlanSourceParser {
         token: HeistPlanSourceToken,
         emptyLiteralPolicy: StringMatchEmptyLiteralPolicy = .reject
     ) throws -> StringMatch {
-        let core: StringMatchCore<AuthoredString>
-        switch mode {
-        case .exact: core = .exact(value)
-        case .contains: core = .contains(value)
-        case .prefix: core = .prefix(value)
-        case .suffix: core = .suffix(value)
-        case .isEmpty: core = .isEmpty
-        }
-        let match = StringMatch(core: core)
-        if match.core.payload?.stringMatchLiteralIsEmpty == true,
+        let match = StringMatch(mode: mode, value: mode == .isEmpty ? nil : value)
+        if match.value?.literalIsEmpty == true,
            !(emptyLiteralPolicy == .allowExact && mode == .exact) {
             throw error(token, "\(field) match value must not be empty")
         }
