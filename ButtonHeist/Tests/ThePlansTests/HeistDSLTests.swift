@@ -1,7 +1,7 @@
 import ButtonHeistTestSupport
 import Foundation
 import Testing
-@_spi(ButtonHeistInternals) @testable import ThePlans
+@_spi(ButtonHeistInternals) import ThePlans
 
 @Test
 func actionConstructorBuildsOneActionStep() throws {
@@ -241,20 +241,6 @@ func `chained screen and state expectations compose into one action expectation`
 }
 
 @Test
-func testAuthoredActionExpectationRejectsConflictingExplicitTimeouts() {
-    let expectation = AuthoredActionExpectation.default
-        .appending(.changed(.screen()), timeout: 1)
-        .appending(.exists(.label("Done")), timeout: 2)
-
-    #expect(expectation.waitStep == WaitStep(predicate: .changed(.screen([
-        .exists(.label("Done")),
-    ])), timeout: 1))
-    #expect(expectation.diagnostics.map(\.message) == [
-        "multiple explicit expectation timeouts in one chain: 1 and 2",
-    ])
-}
-
-@Test
 func `chained root expectations fail canonical validation`() {
     #expect(throws: HeistPlanBuildError.self) {
         try HeistPlan {
@@ -292,7 +278,7 @@ func `chained state expectation joins existing screen where clause`() throws {
 }
 
 @Test
-func `different explicit chained expectation timeouts fail validation`() throws {
+func testAuthoredActionExpectationRejectsConflictingExplicitTimeouts() throws {
     do {
         _ = try HeistPlan {
             Activate(.label("Save"))

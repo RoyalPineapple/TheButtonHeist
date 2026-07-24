@@ -115,28 +115,14 @@ enum AuthoredActionExpectation: Sendable, Equatable {
         _ nextPredicate: AccessibilityPredicate,
         timeout nextExplicitTimeout: WaitTimeout?
     ) -> Self {
-        let existingStep: WaitStep?
-        let existingExplicitTimeout: WaitTimeout?
-        var diagnostics: [HeistBuildDiagnostic]
-        switch self {
-        case .expect(let step, let explicitTimeout, let existingDiagnostics):
-            existingStep = step
-            existingExplicitTimeout = explicitTimeout
-            diagnostics = existingDiagnostics
-        case .default, .waived:
-            existingStep = nil
-            existingExplicitTimeout = nil
-            diagnostics = []
-        }
-
-        guard let existingStep else {
+        guard case .expect(let existingStep, let existingExplicitTimeout, var diagnostics) = self else {
             return .expect(
                 WaitStep(
                     predicate: nextPredicate,
                     timeout: nextExplicitTimeout ?? defaultActionExpectationTimeout
                 ),
                 explicitTimeout: nextExplicitTimeout,
-                diagnostics: diagnostics
+                diagnostics: []
             )
         }
 
