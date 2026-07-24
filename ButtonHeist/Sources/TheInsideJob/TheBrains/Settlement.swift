@@ -742,7 +742,7 @@ extension Settlement {
         case settled
         case dispatchFailed
         case baselineUnavailable
-        case timedOut(Timeout)
+        case timedOut(DeadlinePhase)
         case cancelled
     }
 
@@ -865,7 +865,7 @@ extension Settlement {
         case capture(Capture.Request)
         case arm(Arming)
         case armReadiness(PhaseDeadline)
-        case armDeadline(ArmDeadline)
+        case armDeadline(PhaseDeadline)
         case dispatchAction(ResolvedHeistActionCommand)
         case evaluatePredicate(Predicate.EvaluationRequest)
     }
@@ -906,25 +906,6 @@ extension Settlement.Session {
 }
 
 extension Settlement.Event {
-    internal struct DeadlineReached: Sendable, Equatable {
-        internal let phase: Settlement.DeadlinePhase
-        internal let instant: ContinuousClock.Instant
-    }
-}
-
-extension Settlement.Effect {
-    internal struct ArmDeadline: Sendable, Equatable {
-        internal let deadline: Settlement.PhaseDeadline
-    }
-}
-
-extension Settlement.Outcome {
-    internal struct Timeout: Sendable, Equatable {
-        internal let phase: Settlement.DeadlinePhase
-    }
-}
-
-extension Settlement.Event {
     internal enum Fact: Sendable {
         case baselineAdmitted(Observation.SnapshotEvent)
         case baselineUnavailable(Settlement.Capture.Failure)
@@ -938,7 +919,7 @@ extension Settlement.Event {
         case readinessEstablished(Settlement.Readiness.Establishment)
         case readinessInvalidated(Settlement.Readiness.Generation)
         case handoffCaptureFailed(Settlement.Readiness.Generation, Settlement.Capture.Failure)
-        case deadlineReached(DeadlineReached)
+        case deadlineReached(Settlement.PhaseDeadline)
         case cancelled
     }
 }

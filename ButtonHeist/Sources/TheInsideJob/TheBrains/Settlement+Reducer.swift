@@ -139,7 +139,7 @@ private extension Settlement.Reducer {
                     state: .active(session),
                     effects: [
                         .armReadiness(deadline),
-                        .armDeadline(.init(deadline: deadline)),
+                        .armDeadline(deadline),
                     ]
                 )
             case .currentState:
@@ -190,7 +190,7 @@ private extension Settlement.Reducer {
             session.phase = .actionReadiness(deadline)
             effects = [
                 .armReadiness(deadline),
-                .armDeadline(.init(deadline: deadline)),
+                .armDeadline(deadline),
             ]
         case .observationAdmitted(let admission):
             effects += admit(admission, to: &session)
@@ -209,10 +209,7 @@ private extension Settlement.Reducer {
         case .handoffCaptureFailed(let generation, let failure):
             recordHandoffCaptureFailure(failure, generation: generation, in: &session)
         case .deadlineReached(let reached):
-            guard session.phase.deadline == Settlement.PhaseDeadline(
-                phase: reached.phase,
-                instant: reached.instant
-            ) else {
+            guard session.phase.deadline == reached else {
                 return Settlement.Decision(state: .active(session), effects: [])
             }
             if session.triggerEvidence.dispatchFailed {
@@ -224,7 +221,7 @@ private extension Settlement.Reducer {
             }
             return terminal(
                 session,
-                outcome: .timedOut(.init(phase: reached.phase)),
+                outcome: .timedOut(reached.phase),
                 elapsed: event.elapsed
             )
         case .cancelled:
@@ -451,7 +448,7 @@ private extension Settlement.Reducer {
             instant: handoff.instant.advanced(by: allowance)
         )
         session.phase = .actionExpectation(deadline)
-        return [.armDeadline(.init(deadline: deadline))]
+        return [.armDeadline(deadline)]
     }
 }
 

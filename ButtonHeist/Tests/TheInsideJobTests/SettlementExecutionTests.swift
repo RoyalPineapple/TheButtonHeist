@@ -140,7 +140,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
 
         let result = await Settlement.Executor(boundary: boundary).execute(observationCommand())
 
-        XCTAssertEqual(result.outcome, .timedOut(.init(phase: .observation)))
+        XCTAssertEqual(result.outcome, .timedOut(.observation))
         XCTAssertEqual(boundary.operations.filter { $0 == .quiesce }.count, 1)
         XCTAssertEqual(boundary.operations.filter { $0 == .finalize }.count, 1)
         XCTAssertEqual(
@@ -263,7 +263,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
 
         let result = await Settlement.Executor(boundary: boundary).execute(actionCommand())
 
-        XCTAssertEqual(result.outcome, .timedOut(.init(phase: .actionReadiness)))
+        XCTAssertEqual(result.outcome, .timedOut(.actionReadiness))
         XCTAssertFalse(boundary.operations.contains(.evaluateObservation))
         XCTAssertTrue(boundary.captureGenerations.isEmpty)
     }
@@ -490,7 +490,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
                 result.outcome,
                 eventFirst
                     ? .settled
-                    : .timedOut(.init(phase: .actionExpectation))
+                    : .timedOut(.actionExpectation)
             )
             XCTAssertEqual(boundary.armedDeadlines.map(\.phase), [
                 .actionReadiness,
@@ -890,25 +890,22 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
     }
 
     func armDeadline(
-        _ request: Settlement.Effect.ArmDeadline,
+        _ deadline: Settlement.PhaseDeadline,
         sink: Settlement.ExecutionSink
     ) async {
         let waiters = lock.withLock {
             state.operations.append(.armDeadline)
-            state.armedDeadlines.append(request.deadline)
+            state.armedDeadlines.append(deadline)
             defer { state.armingWaiters.removeAll() }
             return state.armingWaiters
         }
         waiters.forEach { $0.resume() }
-        if let deadlineScript, request.deadline.phase == .actionExpectation {
-            deadlineScript(sink, request.deadline)
+        if let deadlineScript, deadline.phase == .actionExpectation {
+            deadlineScript(sink, deadline)
             return
         }
         if deadlineOnArm {
-            sink.reachDeadline(.init(
-                phase: request.deadline.phase,
-                instant: request.deadline.instant
-            ))
+            sink.reachDeadline(deadline)
         }
     }
 

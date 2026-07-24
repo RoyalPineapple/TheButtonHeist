@@ -415,32 +415,7 @@ extension TheBrainsActionTests {
                     preconditionFailure("Attached expectation requires an action settlement")
                 }
                 waitedPredicates.append(predicate)
-                let evaluated = Settlement.PredicateEvaluation.evaluate(
-                    predicate.resolved, expression: predicate.authored, in: waitObservedState
-                )
-                let request = Settlement.Predicate.EvaluationRequest(
-                    predicate: predicate, target: .observation(waitObservedState.moment),
-                    evidence: .currentState(waitObservedState)
-                )
-                var predicateEvidence = Settlement.Predicate.Evidence(predicate: predicate)
-                precondition(predicateEvidence.schedule(request))
-                predicateEvidence.record(.init(
-                    target: request.target, result: .init(met: evaluated.met, actual: evaluated.actual)
-                ))
-                let readiness = Settlement.Readiness.Establishment(
-                    generation: .initial, path: .semanticStability,
-                    observationBoundary: .including(waitObservedState.moment)
-                )
-                return Settlement.Result(
-                    outcome: evaluated.met ? .settled : .timedOut(.init(phase: .actionExpectation)),
-                    evidence: .init(
-                        command: command, boundary: .established(.init(moment: waitObservedState.moment)),
-                        trigger: .actionDispatched(.success(payload: action.command.resultPayload)),
-                        predicate: predicateEvidence, readiness: .established(readiness),
-                        handoff: .admitted(.currentState(waitObservedState)),
-                        observationHistory: .events([.snapshot(waitObservedState)]), elapsed: 1
-                    )
-                )
+                return scriptedSettlement(command, observation: waitObservedState)
             }
         )
         let plan = try HeistPlan(body: [

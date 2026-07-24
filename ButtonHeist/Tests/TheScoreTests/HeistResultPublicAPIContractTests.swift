@@ -35,17 +35,7 @@ import TheScore
             """
             {
               "type": "expectation",
-              "dispatchResult": {
-                "outcome": {"kind": "success"},
-                "method": "dismiss",
-                "evidence": {"observation": {"kind": "none"}}
-              },
-              "expectationResult": {
-                "outcome": {"kind": "success"},
-                "method": "wait",
-                "evidence": {"observation": {"kind": "none"}}
-              },
-              "expectation": {"met": true}
+              "expectationResult": {}
             }
             """.utf8
         )

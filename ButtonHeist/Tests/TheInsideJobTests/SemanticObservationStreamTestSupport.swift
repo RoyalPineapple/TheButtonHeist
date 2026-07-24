@@ -170,17 +170,36 @@ func scriptedSettlement(
     if case .currentState = command {
         return scriptedCurrentStateSettlement(command, event: event)
     }
-    guard case .observation(let predicate, _, let baseline) = command else {
-        preconditionFailure("Scripted observation settlement requires a predicate")
+
+    let predicate: Settlement.Predicate
+    let baseline: Settlement.Baseline
+    let trigger: Settlement.TriggerEvidence
+    let timeoutPhase: Settlement.DeadlinePhase
+    switch command {
+    case .action(let action):
+        guard let actionPredicate = action.predicate else {
+            preconditionFailure("Scripted action settlement requires a predicate")
+        }
+        predicate = actionPredicate
+        baseline = action.baseline
+        trigger = .actionDispatched(.success(payload: action.command.actionResultPayload))
+        timeoutPhase = event == nil ? .actionReadiness : .actionExpectation
+    case .observation(let observationPredicate, _, let observationBaseline):
+        predicate = observationPredicate
+        baseline = observationBaseline
+        trigger = .observation
+        timeoutPhase = .observation
+    case .currentState:
+        preconditionFailure("Current-state settlement must use its capture path")
     }
     var predicateEvidence = Settlement.Predicate.Evidence(predicate: predicate)
     guard let event else {
         return Settlement.Result(
-            outcome: .timedOut(.init(phase: .observation)),
+            outcome: .timedOut(timeoutPhase),
             evidence: Settlement.Evidence(
                 command: command,
                 boundary: scriptedBoundary(baseline, fallback: nil),
-                trigger: .observation,
+                trigger: trigger,
                 predicate: predicateEvidence,
                 readiness: .pending(.initial),
                 handoff: .pending(.initial),
@@ -226,24 +245,18 @@ func scriptedSettlement(
         observationBoundary: .including(event.moment)
     )
     let history = Observation.EventsSince.events([.snapshot(event)])
-    let admission = Settlement.ObservationAdmission(
-        event: event,
-        history: history
-    )
-    guard let handoff = Settlement.Handoff.Admission.admit(
-        admission,
-        for: readiness
-    ) else {
+    let admission = Settlement.ObservationAdmission(event: event, history: history)
+    guard let handoff = Settlement.Handoff.Admission.admit(admission, for: readiness) else {
         preconditionFailure("Scripted settlement handoff was not admitted")
     }
     return Settlement.Result(
         outcome: expectation.met
             ? .settled
-            : .timedOut(.init(phase: .observation)),
+            : .timedOut(timeoutPhase),
         evidence: Settlement.Evidence(
             command: command,
             boundary: scriptedBoundary(baseline, fallback: event.moment),
-            trigger: .observation,
+            trigger: trigger,
             predicate: predicateEvidence,
             readiness: .established(readiness),
             handoff: .admitted(handoff),

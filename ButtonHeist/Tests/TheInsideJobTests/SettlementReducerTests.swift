@@ -97,6 +97,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
                 continue
             }
             XCTAssertEqual(result.outcome, .settled)
+            XCTAssertEqual(result.evidence.boundary, .established(.init(moment: baseline.moment)))
             XCTAssertEqual(result.evidence.handoff.event?.moment, handoff.moment)
         }
     }
@@ -479,7 +480,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected the current-state mismatch at handoff to time out")
         }
-        XCTAssertEqual(result.outcome, .timedOut(.init(phase: .observation)))
+        XCTAssertEqual(result.outcome, .timedOut(.observation))
         XCTAssertTrue(result.evidence.readiness.isEstablished)
         XCTAssertEqual(result.evidence.handoff.event?.moment, handoff.moment)
         XCTAssertFalse(result.evidence.predicate.isSatisfied)
@@ -827,7 +828,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected incomplete history to prevent settlement")
         }
-        XCTAssertEqual(result.outcome, .timedOut(.init(phase: .observation)))
+        XCTAssertEqual(result.outcome, .timedOut(.observation))
         XCTAssertEqual(result.evidence.predicate.unavailability, .historyExpired(gap))
         XCTAssertEqual(result.evidence.handoff.event?.moment, handoff.moment)
     }
@@ -862,7 +863,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected failed handoff capture to time out")
         }
-        XCTAssertEqual(result.outcome, .timedOut(.init(phase: .actionReadiness)))
+        XCTAssertEqual(result.outcome, .timedOut(.actionReadiness))
         XCTAssertTrue(result.evidence.readiness.isEstablished)
         XCTAssertEqual(
             result.evidence.handoff,
@@ -967,7 +968,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         let baseline = await commit(label: "Baseline")
         let ready = await commit(label: "Ready")
         let dispatchAt = ContinuousClock.now
-        let staleDeadline = Settlement.Event.DeadlineReached(
+        let staleDeadline = Settlement.PhaseDeadline(
             phase: .actionReadiness,
             instant: dispatchAt.advanced(by: .milliseconds(5_000))
         )
@@ -988,33 +989,6 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
 
         XCTAssertNil(decision.state.result)
         XCTAssertTrue(decision.effects.isEmpty)
-    }
-
-    func testNoExpectationActionKeepsExistingTerminalContract() async {
-        let baseline = await commit(label: "Baseline")
-        let ready = await commit(label: "Ready")
-        var decision = armedPredicateFreeActionDecision(baseline: baseline)
-        decision = reduce(
-            decision,
-            .readinessEstablished(.init(
-                generation: .initial,
-                path: .semanticStability,
-                observationBoundary: .including(ready.moment)
-            ))
-        )
-        decision = reduce(
-            decision,
-            .observationAdmitted(await admission(
-                ready,
-                after: baseline,
-                source: .handoffCapture(.initial)
-            ))
-        )
-
-        let result = decision.state.result
-        XCTAssertEqual(result?.outcome, .settled)
-        XCTAssertEqual(result?.evidence.boundary, .established(.init(moment: baseline.moment)))
-        XCTAssertEqual(result?.evidence.handoff.event, ready)
     }
 
     private lazy var deadline = Settlement.PhaseDeadline(
@@ -1327,8 +1301,8 @@ private extension Array where Element == Settlement.Effect {
     var phaseDeadline: Settlement.PhaseDeadline? {
         lazy.compactMap {
             switch $0 {
-            case .armDeadline(let request):
-                request.deadline
+            case .armDeadline(let deadline):
+                deadline
             case .capture,
                  .arm,
                  .armReadiness,

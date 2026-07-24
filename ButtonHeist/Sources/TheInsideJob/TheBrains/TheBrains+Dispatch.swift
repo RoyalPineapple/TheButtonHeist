@@ -6,19 +6,23 @@ import TheScore
 
 internal struct RuntimeActionExecution: Sendable, Equatable {
     internal let evidence: HeistActionEvidence
-    internal let result: ActionResult
 
-    internal init(evidence: HeistActionEvidence) {
+    internal var result: ActionResult {
         guard let result = evidence.result else {
             preconditionFailure("runtime action execution requires action result evidence")
         }
+        return result
+    }
+
+    internal init(evidence: HeistActionEvidence) {
+        guard evidence.result != nil else {
+            preconditionFailure("runtime action execution requires action result evidence")
+        }
         self.evidence = evidence
-        self.result = result
     }
 
     internal init(result: ActionResult) {
         self.evidence = .completed(result: result, expectation: nil)
-        self.result = result
     }
 }
 

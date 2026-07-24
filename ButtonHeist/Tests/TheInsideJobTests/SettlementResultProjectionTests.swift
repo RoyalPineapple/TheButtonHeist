@@ -95,7 +95,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
             result: PredicateEvaluationResult(met: false, actual: "no matching change")
         ))
         let settlement = Settlement.Result(
-            outcome: .timedOut(.init(phase: .actionExpectation)),
+            outcome: .timedOut(.actionExpectation),
             evidence: Settlement.Evidence(
                 command: .action(.init(
                     command: .dismiss,
@@ -192,7 +192,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
             baseline: .capture
         ))
         let result = Settlement.Result(
-            outcome: .timedOut(.init(phase: .actionReadiness)),
+            outcome: .timedOut(.actionReadiness),
             evidence: Settlement.Evidence(
                 command: command,
                 boundary: .established(.init(moment: baseline.moment)),
@@ -219,11 +219,11 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
             "action dispatch did not complete before settlement deadline after 25ms"
         )
         XCTAssertEqual(settlement, .observationHandoffTimedOut(duration: 25, path: .uikitIdle))
-        XCTAssertEqual(projection.expectation?.met, false)
+        XCTAssertNil(projection.expectation)
         XCTAssertEqual(diagnosis.dispatch, .pending)
         XCTAssertEqual(diagnosis.readiness, .established(generation: .initial, path: .uikitIdle))
         XCTAssertEqual(diagnosis.handoff, .captureRequested(generation: .initial))
-        XCTAssertEqual(diagnosis.outcome, .timedOut(.init(phase: .actionReadiness)))
+        XCTAssertEqual(diagnosis.outcome, .timedOut(.actionReadiness))
     }
 
     func testSuccessfulDispatchFailsWhenSettlementCancelsOrHandoffCaptureFails() async throws {
@@ -244,7 +244,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
             dispatch: dispatch,
             baseline: baseline,
             observed: baseline,
-            outcome: .timedOut(.init(phase: .actionReadiness)),
+            outcome: .timedOut(.actionReadiness),
             readinessEvidence: .established(readiness(at: baseline)),
             handoffEvidence: .captureFailed(.initial, .unavailable),
             elapsed: 300
@@ -291,7 +291,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
             predicateMet: false,
             readiness: .established(readiness(at: observed)),
             handoff: await admittedHandoff(observed, baseline: baseline),
-            outcome: .timedOut(.init(phase: .observation))
+            outcome: .timedOut(.observation)
         )
 
         let message = try XCTUnwrap(
@@ -337,7 +337,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
             predicateMet: false,
             readiness: .established(readiness(at: observed)),
             handoff: await admittedHandoff(observed, baseline: baseline),
-            outcome: .timedOut(.init(phase: .observation))
+            outcome: .timedOut(.observation)
         )
 
         let message = try XCTUnwrap(
@@ -364,7 +364,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
             predicateMet: true,
             readiness: .pending(.initial),
             handoff: .pending(.initial),
-            outcome: .timedOut(.init(phase: .observation))
+            outcome: .timedOut(.observation)
         )
 
         let message = try XCTUnwrap(
@@ -395,7 +395,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
             predicateMet: false,
             readiness: .established(readiness(at: observed)),
             handoff: await admittedHandoff(observed, baseline: baseline),
-            outcome: .timedOut(.init(phase: .observation))
+            outcome: .timedOut(.observation)
         )
 
         let message = try XCTUnwrap(

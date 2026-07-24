@@ -93,11 +93,11 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
             diagnosisSink: recorder.record
         ).execute(command)
 
-        XCTAssertEqual(result.outcome, .timedOut(.init(phase: .observation)))
+        XCTAssertEqual(result.outcome, .timedOut(.observation))
         XCTAssertEqual(recorder.diagnoses.count, 1)
         XCTAssertEqual(
             recorder.diagnoses.first?.outcome,
-            .timedOut(.init(phase: .observation))
+            .timedOut(.observation)
         )
         XCTAssertEqual(recorder.snapshotAtEmission, .init(
             captures: 1,
@@ -267,7 +267,7 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
             (
                 "readiness timeout",
                 result(
-                    outcome: .timedOut(.init(phase: .observation)),
+                    outcome: .timedOut(.observation),
                     predicate: predicate,
                     predicateEvidence: metEvidence,
                     readiness: .pending(.initial),
@@ -276,7 +276,7 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
                     baseline: baseline
                 ),
                 DiagnosisExpectation(
-                    outcome: .timedOut(.init(phase: .observation)),
+                    outcome: .timedOut(.observation),
                     dispatch: .notApplicable,
                     predicate: .satisfied(target, actual: "Saved"),
                     readiness: .pending(generation: .initial),
@@ -286,7 +286,7 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
             (
                 "predicate timeout",
                 result(
-                    outcome: .timedOut(.init(phase: .observation)),
+                    outcome: .timedOut(.observation),
                     predicate: predicate,
                     predicateEvidence: predicateEvidence(
                         predicate,
@@ -299,7 +299,7 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
                     baseline: baseline
                 ),
                 DiagnosisExpectation(
-                    outcome: .timedOut(.init(phase: .observation)),
+                    outcome: .timedOut(.observation),
                     dispatch: .notApplicable,
                     predicate: .unmet(target, actual: "Saved"),
                     readiness: .established(generation: .initial, path: .uikitIdle),
@@ -312,7 +312,7 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
             (
                 "handoff timeout",
                 result(
-                    outcome: .timedOut(.init(phase: .observation)),
+                    outcome: .timedOut(.observation),
                     predicate: predicate,
                     predicateEvidence: metEvidence,
                     readiness: .established(readiness),
@@ -324,7 +324,7 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
                     baseline: baseline
                 ),
                 DiagnosisExpectation(
-                    outcome: .timedOut(.init(phase: .observation)),
+                    outcome: .timedOut(.observation),
                     dispatch: .notApplicable,
                     predicate: .satisfied(target, actual: "Saved"),
                     readiness: .established(generation: .initial, path: .uikitIdle),
@@ -363,7 +363,7 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
             (
                 "unresponsive action",
                 result(
-                    outcome: .timedOut(.init(phase: .actionReadiness)),
+                    outcome: .timedOut(.actionReadiness),
                     trigger: .actionPending(.dismiss),
                     command: .action(.init(
                         command: .dismiss,
@@ -382,7 +382,7 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
                     baseline: baseline
                 ),
                 DiagnosisExpectation(
-                    outcome: .timedOut(.init(phase: .actionReadiness)),
+                    outcome: .timedOut(.actionReadiness),
                     dispatch: .pending,
                     predicate: .pending,
                     readiness: .pending(generation: .initial),
@@ -537,13 +537,10 @@ private final class AutomaticTimeoutDiagnosisBoundary: SettlementExecutionBounda
     ) async {}
 
     func armDeadline(
-        _ request: Settlement.Effect.ArmDeadline,
+        _ deadline: Settlement.PhaseDeadline,
         sink: Settlement.ExecutionSink
     ) async {
-        sink.reachDeadline(.init(
-            phase: request.deadline.phase,
-            instant: request.deadline.instant
-        ))
+        sink.reachDeadline(deadline)
     }
 
     func armObservationEffects(_: Settlement.Arming) async {}

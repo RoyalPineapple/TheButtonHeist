@@ -83,7 +83,7 @@ extension Settlement {
         case announcement(Observation.AnnouncementEvent)
         case announcementHistoryUnavailable(AccessibilityNotificationGap)
         case readiness(Readiness.Signal)
-        case deadlineReached(Event.DeadlineReached)
+        case deadlineReached(PhaseDeadline)
         case cancelled
         case dispatchCompleted(TheSafecracker.ActionDispatchResult, ContinuousClock.Instant)
         case predicateEvaluated(Predicate.EvaluationResponse)
@@ -122,7 +122,7 @@ internal protocol SettlementExecutionBoundary: Sendable {
     ) async
     @MainActor
     func armDeadline(
-        _ request: Settlement.Effect.ArmDeadline,
+        _ deadline: Settlement.PhaseDeadline,
         sink: Settlement.ExecutionSink
     ) async
     @MainActor
@@ -196,7 +196,7 @@ extension Settlement {
             continuation?.resume(returning: input)
         }
 
-        internal func reachDeadline(_ deadline: Event.DeadlineReached) {
+        internal func reachDeadline(_ deadline: PhaseDeadline) {
             record(.deadlineReached(deadline))
         }
 
@@ -1062,17 +1062,13 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
 
     @MainActor
     internal func armDeadline(
-        _ request: Settlement.Effect.ArmDeadline,
+        _ deadline: Settlement.PhaseDeadline,
         sink: Settlement.ExecutionSink
     ) async {
-        let deadline = request.deadline
         lifecycle.replaceDeadline(Task {
             do {
                 try await ContinuousClock().sleep(until: deadline.instant)
-                sink.reachDeadline(.init(
-                    phase: deadline.phase,
-                    instant: deadline.instant
-                ))
+                sink.reachDeadline(deadline)
             } catch {}
         })
     }

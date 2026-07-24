@@ -8,11 +8,9 @@ extension Settlement {
     internal enum ResultProjector {
         internal static func projectAction(_ result: Result) -> HeistActionEvidence {
             let actionResult = actionResult(from: result)
-            guard result.evidence.command.predicate != nil,
-                  !result.evidence.trigger.dispatchFailed,
-                  let expectation = expectation(from: result) else {
-                return .completed(result: actionResult, expectation: nil)
-            }
+            let expectation = result.evidence.trigger.permitsCompletion
+                ? expectation(from: result)
+                : nil
             return .completed(result: actionResult, expectation: expectation)
         }
 
