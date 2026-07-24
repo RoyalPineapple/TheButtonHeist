@@ -24,8 +24,12 @@ def load_json(cmd: list[str]) -> Any:
 
 
 def version_key(version: str) -> tuple[int, ...]:
-    parts = re.findall(r"\d+", version)
-    return tuple(int(part) for part in parts)
+    if re.fullmatch(r"\d+(?:\.\d+)*", version) is None:
+        raise ValueError(f"Invalid platform version: {version}")
+    parts = [int(part) for part in version.split(".")]
+    while len(parts) > 1 and parts[-1] == 0:
+        parts.pop()
+    return tuple(parts)
 
 
 def sanitize(value: str) -> str:
@@ -41,12 +45,23 @@ def default_sim_name(preferred_device: str) -> str:
     return f"buttonheist-ci-{job}-{run_id}-{attempt}-{device}"
 
 
-def ios_runtimes(runtimes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def ios_runtimes(
+    runtimes: list[dict[str, Any]],
+    maximum_runtime: str,
+    requested_runtime: str | None = None,
+) -> list[dict[str, Any]]:
+    maximum = version_key(maximum_runtime)
+    requested = version_key(requested_runtime) if requested_runtime else None
     return sorted(
         [
             runtime
             for runtime in runtimes
             if runtime.get("platform") == "iOS" and runtime.get("isAvailable") is True
+            and version_key(str(runtime.get("version", ""))) <= maximum
+            and (
+                requested is None
+                or version_key(str(runtime.get("version", ""))) == requested
+            )
         ],
         key=lambda runtime: version_key(str(runtime.get("version", ""))),
         reverse=True,
@@ -119,10 +134,35 @@ def create_candidates(runtimes: list[dict[str, Any]], preferred: str) -> tuple[l
     return preferred_types, fallback_types
 
 
-def select_or_create_simulator(preferred: str, sim_name: str) -> dict[str, str]:
-    runtimes = ios_runtimes(load_json(["xcrun", "simctl", "list", "runtimes", "-j"])["runtimes"])
+def select_or_create_simulator(
+    preferred: str,
+    sim_name: str,
+    maximum_runtime: str,
+    requested_runtime: str | None = None,
+) -> dict[str, str]:
+    if (
+        requested_runtime
+        and version_key(requested_runtime) > version_key(maximum_runtime)
+    ):
+        raise RuntimeError(
+            f"requested iOS simulator runtime {requested_runtime} "
+            f"exceeds active SDK {maximum_runtime}"
+        )
+    runtimes = ios_runtimes(
+        load_json(["xcrun", "simctl", "list", "runtimes", "-j"])["runtimes"],
+        maximum_runtime,
+        requested_runtime,
+    )
     if not runtimes:
-        raise RuntimeError("No available iOS simulator runtime found")
+        if requested_runtime:
+            raise RuntimeError(
+                f"Requested iOS simulator runtime {requested_runtime} "
+                "is not installed and available"
+            )
+        raise RuntimeError(
+            "No available iOS simulator runtime at or below "
+            f"active SDK {maximum_runtime}"
+        )
 
     devices = load_json(["xcrun", "simctl", "list", "devices", "available", "-j"])["devices"]
     existing = existing_simulator(runtimes, devices, sim_name)
@@ -167,6 +207,7 @@ def parse_args() -> argparse.Namespace:
         default=os.environ.get("BUTTONHEIST_CI_PREFERRED_SIMULATOR", DEFAULT_PREFERRED_DEVICE),
     )
     parser.add_argument("--sim-name", default=os.environ.get("BUTTONHEIST_CI_SIM_NAME"))
+    parser.add_argument("--runtime")
     parser.add_argument("--github-env", default=os.environ.get("GITHUB_ENV"))
     parser.add_argument("--github-output", default=os.environ.get("GITHUB_OUTPUT"))
     parser.add_argument("--wait", action="store_true", help="Wait for the selected simulator to finish booting")
@@ -176,7 +217,15 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     sim_name = args.sim_name or default_sim_name(args.preferred_device)
-    selected = select_or_create_simulator(args.preferred_device, sim_name)
+    sdk_version = run(
+        ["xcrun", "--sdk", "iphonesimulator", "--show-sdk-version"]
+    ).stdout.strip()
+    selected = select_or_create_simulator(
+        args.preferred_device,
+        sim_name,
+        sdk_version,
+        args.runtime,
+    )
     try:
         boot = run(["xcrun", "simctl", "boot", selected["udid"]], check=False)
         if boot.returncode != 0:
@@ -192,6 +241,7 @@ def main() -> None:
             "SIM_OS": selected["runtime_version"],
             "SIM_NAME": selected["name"],
             "SIM_DEVICE_TYPE": selected["device_type"],
+            "SIM_SDK": sdk_version,
         }
         write_env(args.github_env, env)
         write_env(args.github_output, {key.lower(): value for key, value in env.items()})

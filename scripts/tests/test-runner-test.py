@@ -68,10 +68,19 @@ class TestRunnerTests(unittest.TestCase):
 
     def test_arguments_expand_suites_in_source_order(self) -> None:
         args = RUNNER["parse_args"](
-            ["run", "TheScoreTests", "ButtonHeistTests", "--selection", "full"]
+            [
+                "run",
+                "TheScoreTests",
+                "ButtonHeistTests",
+                "--selection",
+                "full",
+                "--simulator-runtime",
+                "26.3",
+            ]
         )
         self.assertEqual(args.suites, ["TheScoreTests", "ButtonHeistTests"])
         self.assertEqual(args.selection, "full")
+        self.assertEqual(args.simulator_runtime, "26.3")
 
     def test_arguments_accept_focus_instead_of_suites(self) -> None:
         args = RUNNER["parse_args"]([
@@ -120,6 +129,102 @@ class TestRunnerTests(unittest.TestCase):
                 "TheScoreTests",
                 "--retain-simulator",
             ])
+
+    def test_simulator_runtime_precedence_is_cli_then_env_then_automatic(self) -> None:
+        suite = SUITES["TheInsideJobTests"]
+
+        def select(command: list[str], **_kwargs: object) -> mock.Mock:
+            output = Path(command[command.index("--github-output") + 1])
+            output.write_text(
+                "sim_udid=TEST-UDID\n"
+                "sim_name=test-simulator\n"
+                "sim_device_type=iPhone 16 Pro\n"
+                "sim_os=26.3\n"
+                "sim_sdk=26.5\n",
+                encoding="utf-8",
+            )
+            return mock.Mock(returncode=0)
+
+        cases = (
+            ("26.4", "26.3", "26.3"),
+            ("26.4", None, "26.4"),
+            (None, None, None),
+        )
+        for environment, argument, expected in cases:
+            with self.subTest(environment=environment, argument=argument), \
+                 mock.patch.dict(
+                     os.environ,
+                     {"BUTTONHEIST_TEST_SIMULATOR_RUNTIME": environment}
+                     if environment
+                     else {},
+                     clear=True,
+                 ), mock.patch.object(
+                     RUNNER["subprocess"],
+                     "run",
+                     side_effect=select,
+                 ) as run:
+                RUNNER["select_simulator"]("run", suite, None, argument)
+
+            command = run.call_args.args[0]
+            if expected is None:
+                self.assertNotIn("--runtime", command)
+            else:
+                index = command.index("--runtime")
+                self.assertEqual(command[index + 1], expected)
+
+    def test_macos_simulator_selection_does_not_query_ios_sdk(self) -> None:
+        with mock.patch.object(RUNNER["subprocess"], "run") as run:
+            selected = RUNNER["select_simulator"](
+                "run",
+                SUITES["MacFrameworkTests"],
+                None,
+                "26.3",
+            )
+
+        self.assertIsNone(selected)
+        run.assert_not_called()
+
+    def test_too_new_selector_result_is_deleted_before_returning(self) -> None:
+        def select(command: list[str], **_kwargs: object) -> mock.Mock:
+            output = Path(command[command.index("--github-output") + 1])
+            output.write_text(
+                "sim_udid=TOO-NEW\n"
+                "sim_name=test-simulator\n"
+                "sim_device_type=iPhone 16 Pro\n"
+                "sim_os=27.0\n"
+                "sim_sdk=26.5\n",
+                encoding="utf-8",
+            )
+            return mock.Mock(returncode=0)
+
+        with mock.patch.object(
+            RUNNER["subprocess"],
+            "run",
+            side_effect=select,
+        ), mock.patch.dict(
+            RUNNER["select_simulator"].__globals__,
+            {"delete_simulator": mock.Mock(return_value=True)},
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "selected iOS simulator runtime 27.0 exceeds active SDK 26.5",
+            ):
+                RUNNER["select_simulator"](
+                    "run",
+                    SUITES["TheInsideJobTests"],
+                    None,
+                    None,
+                )
+            delete = RUNNER["select_simulator"].__globals__["delete_simulator"]
+
+        delete.assert_called_once_with(
+            {
+                "udid": "TOO-NEW",
+                "name": "test-simulator",
+                "device": "iPhone 16 Pro",
+                "os": "27.0",
+            }
+        )
 
     def test_focus_expansion_merges_tests_per_suite_without_duplicates(self) -> None:
         selected = RUNNER["focus_runs"]([

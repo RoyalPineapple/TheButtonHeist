@@ -70,6 +70,56 @@ class SimulatorSelectionTests(unittest.TestCase):
         self.assertEqual(preferred[0]["device_type_identifier"], "iphone-16-pro")
         self.assertEqual(fallback, [])
 
+    def test_automatic_runtime_is_capped_by_active_sdk(self) -> None:
+        newer = {
+            **self.runtimes[0],
+            "identifier": "ios-27-0",
+            "version": "27.0",
+        }
+
+        runtimes = SELECTOR.ios_runtimes([newer, *self.runtimes], "26.5")
+
+        self.assertEqual(
+            [runtime["version"] for runtime in runtimes],
+            ["26.3"],
+        )
+
+    def test_too_new_explicit_runtime_fails_before_simctl_selection(self) -> None:
+        with mock.patch.object(SELECTOR, "load_json") as load:
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "requested iOS simulator runtime 27.0 exceeds active SDK 26.5",
+            ):
+                SELECTOR.select_or_create_simulator(
+                    "iPhone 16 Pro",
+                    "accra-created",
+                    "26.5",
+                    "27.0",
+                )
+
+        load.assert_not_called()
+
+    def test_no_compatible_runtime_does_not_fall_forward(self) -> None:
+        newer = {
+            **self.runtimes[0],
+            "identifier": "ios-27-0",
+            "version": "27.0",
+        }
+        with mock.patch.object(
+            SELECTOR,
+            "load_json",
+            return_value={"runtimes": [newer]},
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "No available iOS simulator runtime at or below active SDK 26.5",
+            ):
+                SELECTOR.select_or_create_simulator(
+                    "iPhone 16 Pro",
+                    "accra-created",
+                    "26.5",
+                )
+
     def test_failed_boot_deletes_the_selected_simulator(self) -> None:
         selected = {
             "source": "existing",
@@ -87,6 +137,7 @@ class SimulatorSelectionTests(unittest.TestCase):
             return_value=mock.Mock(
                 sim_name="accra-created",
                 preferred_device="iPhone 16 Pro",
+                runtime=None,
                 wait=True,
                 github_env=None,
                 github_output=None,
@@ -115,6 +166,12 @@ class SimulatorSelectionTests(unittest.TestCase):
                     check=False,
                 ),
             ],
+        )
+        self.assertEqual(
+            run.call_args_list[0],
+            mock.call(
+                ["xcrun", "--sdk", "iphonesimulator", "--show-sdk-version"]
+            ),
         )
 
 
