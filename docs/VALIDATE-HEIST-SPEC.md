@@ -6,10 +6,11 @@ Status: Implemented
 
 Add a `validate_heist` command to MCP, the top-level CLI, and JSON-lines. It
 validates a durable Button Heist plan without discovering, connecting to, or
-communicating with an app. Every surface uses the same parsing, semantic
-admission, runtime-safety, root-argument, linting, and response pipeline. The
-command returns deterministic diagnostics and canonical Button Heist source
-that a human, agent, or CI job can repair before calling `run_heist`.
+communicating with an app. Every surface uses the same source loading, root
+`HeistPlan` admission, runtime-safety, root-argument, linting, and response
+pipeline. The command returns deterministic diagnostics and canonical Button
+Heist source that a human, agent, or CI job can repair before calling
+`run_heist`.
 
 The intended agent loop is:
 
@@ -31,8 +32,8 @@ an expectation will pass.
 - Give agents and CLI users a deterministic validation step before UI
   mutation.
 - Require no active or configured Button Heist session.
-- Reuse the canonical `HeistPlan` admission pipeline. Do not create a second
-  validator for MCP.
+- Reuse direct root `HeistPlan` admission and the single
+  `HeistPlanRuntimeSafetyValidator`. Do not create another validator for MCP.
 - Return domain diagnostics as structured data suitable for an automated
   generate-and-repair loop.
 - Return canonical source for every admitted plan.
@@ -69,8 +70,8 @@ For this feature, offline means that the result depends only on:
 
 - the CLI, MCP, or JSON-lines argument envelope;
 - inline canonical Button Heist source, or a local `.heist` artifact;
-- Button Heist's parser, artifact decoder, semantic validator, linter, and
-  canonical renderer.
+- Button Heist's parser, artifact decoder, root `HeistPlan` admission,
+  `HeistPlanRuntimeSafetyValidator`, linter, and canonical renderer.
 
 The command MUST NOT call `TheFence.start()`, `DeviceDiscovery`,
 `DeviceConnection`, `TheHandoff`, Bonjour, `NWConnection`, simulator tools, or
@@ -257,7 +258,7 @@ Rejection has two public forms:
 | Unknown field, wrong JSON type, or unknown lint value | `true` | Ordinary request error |
 | Argument object cannot decode as any `HeistArgument` | `true` | Ordinary request error |
 | Empty inline source or unsupported path extension | `false` | Validation report with `plan.valid: false` |
-| Inline syntax, semantic admission, or runtime-safety rejection | `false` | Validation report with build diagnostics |
+| Inline syntax, root structural admission, or runtime-safety rejection | `false` | Validation report with build diagnostics |
 | Artifact read, format, or version rejection | `false` | Validation report with build diagnostics |
 | Decoded argument kind does not bind to the admitted root parameter | `false` | Validation report with `invocation.status: invalid` |
 
@@ -273,7 +274,8 @@ load a dynamic library, or evaluate arbitrary Swift.
 
 Validation has three independent outcomes:
 
-1. **Plan validity**: source parsed and produced a runtime-safe `HeistPlan`.
+1. **Plan validity**: source parsed or artifact JSON decoded and produced one
+   root-admitted, runtime-safe `HeistPlan`.
 2. **Invocation validity**: the supplied argument, or the default `.none`
    argument, binds to the root plan parameter.
 3. **Lint result**: the admitted plan satisfies the requested authoring mode.
@@ -316,7 +318,7 @@ are request errors.
 Use the existing plan-source parameter types and enforce exactly one source.
 Continue to reject public raw JSON IR fields.
 
-Failures that mean the caller did not identify one candidate are request
+Failures that mean the caller did not identify one plan source are request
 errors:
 
 - missing both source fields;
@@ -324,7 +326,7 @@ errors:
 - unknown fields;
 - schema-invalid values.
 
-### 3. Plan loading and semantic admission
+### 3. Plan loading and root admission
 
 Load the selected source through the same `HeistPlanSourceAdmission` and
 `HeistPlanLoading` path used by
@@ -333,14 +335,30 @@ Load the selected source through the same `HeistPlanSourceAdmission` and
 ```text
 inline plan
 → restricted Button Heist source parser
-→ root HeistPlan structural admission
-→ HeistPlan runtime-safety validation
+→ direct root HeistPlan structural admission
+→ one HeistPlanRuntimeSafetyValidator pass
+→ admitted HeistPlan
 
 .heist path
 → HeistArtifactCodec
-→ strict HeistPlan decoding and version checks
-→ HeistPlan runtime-safety validation
+→ strict JSON decoding and version checks
+→ direct root HeistPlan structural admission
+→ one HeistPlanRuntimeSafetyValidator pass
+→ admitted HeistPlan
 ```
+
+The source parser and JSON decoder may assemble recursive values only in
+private stack-local scope inside their owning boundary. That assembly is an
+implementation detail: it is never stored, returned, package-visible, or
+observable before the complete root is admitted. It is not another plan or
+validation currency. Swift DSL construction enters the same throwing root
+`HeistPlan` initializer. Source, generated artifact JSON, and Swift DSL
+construction therefore expose exactly one admitted value: `HeistPlan`.
+
+Root structural admission runs once, followed by the single
+`HeistPlanRuntimeSafetyValidator`. There is no validation alias, adapter,
+parallel result, alternate admitted representation, or second runtime-safety
+route.
 
 This phase includes all existing plan contracts, including:
 
@@ -357,6 +375,33 @@ This phase includes all existing plan contracts, including:
 - target and predicate grammar validation.
 
 Do not reproduce these checks in `TheFence` or the MCP package.
+
+Admission failures throw `HeistPlanBuildError`. Its diagnostics retain the
+canonical order in which the parser, decoder, or runtime-safety traversal
+produced them. Source syntax failures preserve their exact code, message,
+source name, offset, line, column, and length. Structural and runtime-safety
+failures preserve their exact canonical plan path. Equivalent nested source
+and artifact JSON must report the same code, message, and full path; for
+example:
+
+```text
+$.body[0].conditional.cases[0].body[0].heist.body[0].invoke.path
+```
+
+The validation command catches `HeistPlanBuildError` only to project those
+ordered diagnostics into its public report. It does not normalize, regroup, or
+revalidate them.
+
+Trusted Swift compilation is not a `validate_heist` input and is never invoked
+by this command. Its lower-level contract still converges on the same admitted
+plan: `compileFile(_:)` returns `HeistPlan`, while failure throws
+`HeistPlanBuildError` with ordered diagnostics. `compileDirectory(_:)` returns
+`HeistCatalogCompilationResult`; its `catalog` is the successful value and its
+`diagnostics` retain ordered non-error diagnostics. A single anonymous
+capability succeeds with `catalogAnonymousCapability` as a warning. The same
+condition in a multi-source catalog is an error and throws
+`HeistPlanBuildError`. Compiler arguments flow directly from artifact
+resolution to execution without a second artifact or validation result shape.
 
 ### 4. Root invocation validation
 
@@ -402,11 +447,11 @@ three similar response shapes independently.
 
 ## Result semantics
 
-### Candidate rejection is a successful tool operation
+### Plan rejection is a successful tool operation
 
-An invalid candidate is the expected result of a validation tool. When a
-well-shaped call identifies one candidate but the candidate cannot parse,
-decode, or pass semantic admission:
+An invalid plan is the expected result of a validation tool. When a
+well-shaped call identifies one source but its plan cannot parse, decode, pass
+root structural admission, or pass runtime-safety validation:
 
 - MCP `isError` MUST be `false`;
 - public `status` MUST be `ok`;
@@ -783,9 +828,9 @@ contract from `HeistValidation.Report`.
 
 ### Ownership
 
-- `ThePlans` continues to own source compilation, artifact decoding,
-  `HeistPlan` admission, root-argument validation, lint, and canonical
-  rendering.
+- `ThePlans` continues to own source compilation, artifact decoding, root
+  `HeistPlan` admission, the single `HeistPlanRuntimeSafetyValidator`,
+  root-argument validation, lint, and canonical rendering.
 - `TheFence` owns public command admission, phase orchestration, the typed
   report, and response projection.
 - `ButtonHeistCLI` owns option parsing, output selection, and the one-shot
@@ -813,7 +858,7 @@ when `report.admissible` is false. The validation operation completed normally.
 The handler should be a pure read pipeline after request decoding:
 
 ```text
-load source
+load one root-admitted HeistPlan
 → validate invocation if a plan exists
 → lint if requested and a plan exists
 → render canonical source if a plan exists
@@ -877,14 +922,16 @@ TheFence.
 validation, but have different terminal effects:
 
 ```text
-                         ┌→ validate_heist → lint → canonical report
-source → plan admission ─┤
-                         └→ run_heist → connect → wire dispatch → result
+source or artifact
+→ root HeistPlan admission
+  ├→ validate_heist → lint → canonical report
+  └→ run_heist → connect → wire dispatch → result
 ```
 
 The common prefix MUST remain one implementation pipeline. If validation rules
 change, both commands pick them up through `HeistPlanSourceAdmission`,
-`HeistPlanLoading`, and `HeistArgumentAdmission`.
+`HeistPlanLoading`, direct root `HeistPlan` admission, the single
+`HeistPlanRuntimeSafetyValidator`, and `HeistArgumentAdmission`.
 
 `run_heist` MUST always repeat admission. A client may change the source or
 artifact between calls, and a validation report carries no authority.
@@ -928,7 +975,7 @@ Add handler and response tests for:
 7. missing both sources is a request error;
 8. both sources is a request error;
 9. raw public JSON IR fields are rejected;
-10. non-`.heist` path is rejected as candidate validation output;
+10. non-`.heist` path is rejected as plan validation output;
 11. parameterless plan plus omitted argument is admissible;
 12. parameterized plan plus omitted argument has valid plan and invalid
     invocation;
@@ -942,7 +989,7 @@ Add handler and response tests for:
 20. invalid plans omit canonical source;
 21. compact text summarizes diagnostics without duplicating canonical source;
 22. public JSON omits absent optional fields;
-23. invalid candidate reports make `FenceResponse.isFailure == false`;
+23. invalid plan reports make `FenceResponse.isFailure == false`;
 24. malformed requests make `FenceResponse.isFailure == true`.
 
 Add an isolation test that supplies a fence whose discovery and connection
@@ -962,7 +1009,7 @@ Update tool and routing tests to prove:
 - its schema is closed and has no top-level combinators;
 - `lint` advertises all three values and the correct default;
 - routing forwards source text and arguments opaquely to TheFence;
-- an invalid candidate renders `isError: false` with structured diagnostics;
+- an invalid plan renders `isError: false` with structured diagnostics;
 - a malformed tool request renders `isError: true`;
 - canonical source is present in `structuredContent`, not duplicated in compact
   text.
@@ -981,12 +1028,12 @@ Add CLI contract and command tests that prove:
 - `.swift` and non-`.heist` paths are rejected, and no surface exposes an
   `entry` field;
 - human, compact, and JSON formats project from the same response;
-- invalid candidate diagnostics are printed before exit status `1`;
+- invalid plan diagnostics are printed before exit status `1`;
 - strict-test error findings produce exit status `1`;
 - warning-only findings produce exit status `0`;
 - an admissible plan with no lint errors produces exit status `0`;
 - JSON-lines returns the normal report and continues after an inadmissible
-  candidate.
+  plan.
 
 ### Contract fixtures
 
@@ -1044,7 +1091,8 @@ When the feature ships:
 - document the CLI invocation, output, and exit-status contract in
   `docs/API.md` and `docs/CI.md`;
 - state in `docs/HEIST-LANGUAGE-SPEC.md` that CLI, JSON-lines, and MCP
-  validation use the same semantic admission as execution;
+  validation use the same root `HeistPlan` admission and runtime-safety pass as
+  execution;
 - update generated MCP tool documentation or fixtures;
 - add a README section only if the shipped feature has no existing README
   coverage. Do not rewrite existing README prose.
