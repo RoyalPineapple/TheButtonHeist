@@ -45,8 +45,45 @@ public struct HeistCallGraph: Sendable, Equatable {
     // MARK: - Init
 
     public init(plan: HeistPlan) {
-        let projection = HeistPlanTraversal().callGraphProjection(for: plan)
-        self.init(nodes: projection.nodes, edges: projection.edges)
+        var nodes: Set<HeistInvocationPath> = []
+        var edges: Set<Edge> = []
+        HeistPlanTraversal(expandsInvocations: false).walk(plan) { event in
+            switch event {
+            case .enterDefinition(let plan, let context):
+                guard let name = plan.name else {
+                    preconditionFailure("admitted heist definitions must have names")
+                }
+                nodes.insert(HeistInvocationPath(namePath: context.definitionScope.pathPrefix + [name]))
+            case .invoke(let invocation, let context):
+                guard let caller = context.invocationStack.last,
+                      let resolved = context.resolveInvocation(path: invocation.path)
+                else { return }
+                nodes.insert(resolved.invocationPath)
+                edges.insert(Edge(caller: caller, callee: resolved.invocationPath))
+            case .enterPlan,
+                 .leavePlan,
+                 .enterDefinitions,
+                 .leaveDefinitions,
+                 .leaveDefinition,
+                 .enterSteps,
+                 .leaveSteps,
+                 .enterStep,
+                 .leaveStep,
+                 .action,
+                 .wait,
+                 .conditional,
+                 .predicateCase,
+                 .elseBody,
+                 .forEachElement,
+                 .forEachString,
+                 .repeatUntil,
+                 .warn,
+                 .fail,
+                 .heist:
+                break
+            }
+        }
+        self.init(nodes: nodes, edges: edges)
     }
 
     public init(nodes: Set<HeistInvocationPath>, edges: Set<Edge>) {
@@ -66,17 +103,18 @@ public struct HeistCallGraph: Sendable, Equatable {
         edges.forEach { incomingCounts[$0.callee, default: 0] += 1 }
 
         let outgoing = Dictionary(grouping: edges, by: \.caller)
-        var ready = Self.sorted(incomingCounts.filter { $0.value == 0 }.map(\.key))
+        var ready = incomingCounts.filter { $0.value == 0 }.map(\.key).sorted { $0.description < $1.description }
         var order: [HeistInvocationPath] = []
 
         while let node = ready.first {
             ready.removeFirst()
             order.append(node)
-            for callee in Self.sorted((outgoing[node] ?? []).map(\.callee)) {
+            for callee in (outgoing[node] ?? []).map(\.callee)
+                .sorted(by: { $0.description < $1.description }) {
                 incomingCounts[callee, default: 0] -= 1
                 if incomingCounts[callee] == 0 {
                     ready.append(callee)
-                    ready = Self.sorted(ready)
+                    ready.sort { $0.description < $1.description }
                 }
             }
         }
@@ -88,18 +126,6 @@ public struct HeistCallGraph: Sendable, Equatable {
     }
 
     // MARK: - Cycle Witnesses
-
-    func nodeCycle(closing callee: HeistInvocationPath, in invocationStack: [HeistInvocationPath]) -> Cycle? {
-        guard let caller = invocationStack.last,
-              edges.contains(Edge(caller: caller, callee: callee))
-        else { return nil }
-        return Self.nodeCycle(closing: callee, in: invocationStack)
-    }
-
-    static func nodeCycle(closing callee: HeistInvocationPath, in invocationStack: [HeistInvocationPath]) -> Cycle? {
-        guard let startIndex = invocationStack.firstIndex(of: callee) else { return nil }
-        return Cycle(path: Array(invocationStack[startIndex...]) + [callee])
-    }
 
     private func witnessCycle() -> Cycle {
         enum VisitState {
@@ -119,7 +145,8 @@ public struct HeistCallGraph: Sendable, Equatable {
         func visit(_ node: HeistInvocationPath) -> Cycle? {
             states[node] = .visiting
             stack.append(node)
-            for callee in Self.sorted((outgoing[node] ?? []).map(\.callee)) {
+            for callee in (outgoing[node] ?? []).map(\.callee)
+                .sorted(by: { $0.description < $1.description }) {
                 switch states[callee] {
                 case .visiting:
                     return Cycle(path: cyclePath(closing: callee))
@@ -136,16 +163,12 @@ public struct HeistCallGraph: Sendable, Equatable {
             return nil
         }
 
-        for node in Self.sorted(nodes) where states[node] == nil {
+        for node in nodes.sorted(by: { $0.description < $1.description }) where states[node] == nil {
             if let cycle = visit(node) {
                 return cycle
             }
         }
 
         return Cycle(path: [])
-    }
-
-    private static func sorted<S: Sequence>(_ paths: S) -> [HeistInvocationPath] where S.Element == HeistInvocationPath {
-        paths.sorted { $0.description < $1.description }
     }
 }

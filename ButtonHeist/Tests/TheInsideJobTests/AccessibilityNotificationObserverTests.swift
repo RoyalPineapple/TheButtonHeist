@@ -306,7 +306,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertTrue(scoped.events.isEmpty)
     }
 
-    func testAnnouncementWaitOutcomeReportsRetainedHistoryGap() async {
+    func testAnnouncementWaitOutcomeReportsRetainedHistoryGap() async throws {
         let bus = AccessibilityNotificationBus()
         let cursor = bus.cursor()
         for index in 0..<65 {
@@ -321,10 +321,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         let outcome = await bus.waitForAnnouncement(
             after: cursor,
-            matching: ResolvedAnnouncementPredicate(
-                match: ResolvedStringMatch(core: .exact("Expected announcement"))
-            ),
-            timeout: 60
+            matching: try AnnouncementPredicate("Expected announcement").resolve(in: .empty)
         )
 
         XCTAssertEqual(
@@ -334,7 +331,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(bus.announcementWaiterCount, 0)
     }
 
-    func testAnnouncementWaitOutcomePrefersRetainedMatchOverEarlierGap() async {
+    func testAnnouncementWaitOutcomePrefersRetainedMatchOverEarlierGap() async throws {
         let bus = AccessibilityNotificationBus()
         let cursor = bus.cursor()
         for index in 0..<64 {
@@ -356,10 +353,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         let outcome = await bus.waitForAnnouncement(
             after: cursor,
-            matching: ResolvedAnnouncementPredicate(
-                match: ResolvedStringMatch(core: .exact("Expected announcement"))
-            ),
-            timeout: 60
+            matching: try AnnouncementPredicate("Expected announcement").resolve(in: .empty)
         )
 
         guard case .matched(let announcement) = outcome else {
@@ -426,16 +420,16 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(announcements.map(\.kind), [.announcement, .elementChanged(.layout), .screenChanged])
     }
 
-    func testAnnouncementWaiterMatchesLayoutChangedStringPayload() async {
+    func testAnnouncementWaiterMatchesLayoutChangedStringPayload() async throws {
         let bus = AccessibilityNotificationBus()
         let cursor = bus.cursor()
+        let announcementPredicate = try AnnouncementPredicate(
+            match: .contains("selected")
+        ).resolve(in: .empty)
 
         async let result = bus.waitForAnnouncement(
             after: cursor,
-            matching: ResolvedAnnouncementPredicate(
-                match: ResolvedStringMatch(core: .contains("selected"))
-            ),
-            timeout: 1.0
+            matching: announcementPredicate
         )
         bus.recordForTesting(
             code: 1001,
@@ -455,13 +449,11 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         let heist = bus.beginHeistScope()
         let action = bus.beginActionWindow()
         let announcementCursor = bus.cursor()
+        let announcementPredicate = try AnnouncementPredicate("Done").resolve(in: .empty)
         let announcementTask = Task {
             await bus.waitForAnnouncement(
                 after: announcementCursor,
-                matching: ResolvedAnnouncementPredicate(
-                    match: ResolvedStringMatch(core: .exact("Done"))
-                ),
-                timeout: 1
+                matching: announcementPredicate
             )
         }
         await waitForAnnouncementWaiterCount(1, in: bus)
@@ -499,15 +491,13 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         )
     }
 
-    func testCancellingAnnouncementWaitRemovesOnlyItsWaiter() async {
+    func testCancellingAnnouncementWaitRemovesOnlyItsWaiter() async throws {
         let bus = AccessibilityNotificationBus()
+        let announcementPredicate = try AnnouncementPredicate("Never").resolve(in: .empty)
         let task = Task {
             await bus.waitForAnnouncement(
                 after: bus.cursor(),
-                matching: ResolvedAnnouncementPredicate(
-                    match: ResolvedStringMatch(core: .exact("Never"))
-                ),
-                timeout: 60
+                matching: announcementPredicate
             )
         }
         await waitForAnnouncementWaiterCount(1, in: bus)
@@ -515,7 +505,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         task.cancel()
         let result = await task.value
 
-        XCTAssertEqual(result, .timedOut)
+        XCTAssertEqual(result, .cancelled)
         XCTAssertEqual(bus.announcementWaiterCount, 0)
     }
 

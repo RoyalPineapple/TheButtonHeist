@@ -6,11 +6,13 @@ import TheScore
 
 @Suite struct HeistResultPublicAPIContractTests {
     @Test func `evidence admission permits only its legal completion polarity`() {
-        let passedAction = HeistActionEvidence.dispatch(
-            dispatchResult: .success(payload: .dismiss)
+        let passedAction = HeistActionEvidence.completed(
+            result: .success(payload: .dismiss),
+            expectation: nil
         )
-        let failedAction = HeistActionEvidence.dispatch(
-            dispatchResult: .failure(payload: .dismiss, failureKind: .actionFailed)
+        let failedAction = HeistActionEvidence.completed(
+            result: .failure(payload: .dismiss, failureKind: .actionFailed),
+            expectation: nil
         )
 
         #expect(HeistPassedActionEvidence(passedAction) != nil)
@@ -28,45 +30,19 @@ import TheScore
         #expect(step.status == .passed)
     }
 
-    @Test func `met predicate with incomplete settlement is failed action evidence`() {
-        let settlement = ActionSettlementEvidence.observationHandoffTimedOut(
-            duration: 10,
-            path: .uikitIdle
-        )
-        let trace = AccessibilityTrace.noChangeForTests(elementCount: 0)
-        let traceEvidence = makeTestTraceEvidence(trace, completeness: .incomplete)
-        let expectationResult = ActionResult.failure(
-            payload: .wait,
-            failureKind: .timeout,
-            observation: .settledTrace(traceEvidence, settlement)
-        )
-        let evidence = HeistActionEvidence.expectation(
-            dispatchResult: .success(payload: .dismiss),
-            expectationResult: expectationResult,
-            expectation: ExpectationResult(met: true, predicate: .announcement("Saved"))
+    @Test func `strict decoder rejects removed expectationResult form`() {
+        let oldForm = Data(
+            """
+            {
+              "type": "expectation",
+              "expectationResult": {}
+            }
+            """.utf8
         )
 
-        #expect(HeistPassedActionEvidence(evidence) == nil)
-        #expect(HeistFailedActionEvidence(evidence) != nil)
-    }
-
-    @Test func `matched announcement is authoritative over unrelated trace announcement`() {
-        let expectationResult = ActionResult.success(
-            payload: .wait,
-            observation: .announcement("AXPerformElementUpdateImmediatelyToken")
-        )
-        let evidence = HeistActionEvidence.expectation(
-            dispatchResult: .success(payload: .activate),
-            expectationResult: expectationResult,
-            expectation: ExpectationResult(
-                met: true,
-                predicate: .announcement("Ticket saved."),
-                actual: "Ticket saved."
-            )
-        )
-
-        #expect(expectationResult.announcement == "AXPerformElementUpdateImmediatelyToken")
-        #expect(evidence.announcement == "Ticket saved.")
+        #expect(throws: (any Error).self) {
+            try JSONDecoder().decode(HeistActionEvidence.self, from: oldForm)
+        }
     }
 
     @Test func `failed result exposes derived failure facts`() {

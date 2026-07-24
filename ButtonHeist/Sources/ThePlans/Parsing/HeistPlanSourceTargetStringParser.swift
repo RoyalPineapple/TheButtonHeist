@@ -13,11 +13,11 @@ extension HeistPlanSourceParser {
         if case .string = currentToken.kind {
             throw error(currentToken, "target expression requires an explicit accessibility property such as .label(...)")
         }
-        let name = try parseDotCallName(allowedPrefixes: [])
+        let name = try parseDotCallName()
         switch name {
         case "label", "identifier", "value", "hint", "traits",
              "actions", "customContent", "rotors", "exclude", "element":
-            return .predicate(try parseElementPredicateTemplate(named: name))
+            return .predicate(try parseElementPredicate(named: name))
         case "container":
             try expectSymbol("(")
             let predicate = try parseContainerPredicate()
@@ -37,7 +37,7 @@ extension HeistPlanSourceParser {
             return .container(predicate, ordinal: ordinal)
         case "target":
             try expectSymbol("(")
-            let predicate = try parseElementPredicateTemplate()
+            let predicate = try parseElementPredicate()
             try expectSymbol(",")
             try expectIdentifier("ordinal")
             try expectSymbol(":")
@@ -53,7 +53,7 @@ extension HeistPlanSourceParser {
             try expectSymbol(":")
             let container = try parseContainerPredicate()
             try expectSymbol(",")
-            if lookaheadLabel("target") {
+            if currentToken.kind == .identifier("target"), nextToken.isSymbol(":") {
                 throw error(currentToken, ".within(...) target argument is unlabeled")
             }
             let target = try parseTargetExpr()
@@ -64,38 +64,32 @@ extension HeistPlanSourceParser {
         }
     }
 
-    mutating func parseElementPredicateTemplate() throws -> ElementPredicateTemplate {
-        let name = try parseDotCallName(allowedPrefixes: [])
-        return try parseElementPredicateTemplate(named: name)
+    mutating func parseElementPredicate() throws -> ElementPredicate {
+        let name = try parseDotCallName()
+        return try parseElementPredicate(named: name)
     }
 
-    mutating func parseElementPredicateTemplate(named name: String) throws -> ElementPredicateTemplate {
+    mutating func parseElementPredicate(named name: String) throws -> ElementPredicate {
         if name == "element" {
             try expectSymbol("(")
-            let predicate = try parseElementPredicateTemplateFields()
+            let predicate = try parseElementPredicateFields()
             try expectSymbol(")")
             return predicate
         }
-        return ElementPredicateTemplate([
+        return ElementPredicate([
             try parseElementPredicateCheck(named: name, token: previous),
         ])
     }
 
-    mutating func parseElementPredicateTemplateFields() throws -> ElementPredicateTemplate {
+    mutating func parseElementPredicateFields() throws -> ElementPredicate {
         var checks: [ElementPredicateCheck] = []
         if currentToken.isSymbol(")") {
             throw error(currentToken, ".element(...) requires at least one non-empty predicate check")
         }
         while true {
             if currentToken.isSymbol("."),
-               lookaheadIdentifier(in: Set([
-                   "label", "identifier", "value", "hint",
-                   "traits",
-                   "actions",
-                   "customContent",
-                   "rotors",
-                   "exclude",
-               ])) {
+               case .identifier(let name) = nextToken.kind,
+               Self.elementPredicateCheckNames.contains(name) {
                 checks.append(try parseElementPredicateCheck())
             } else {
                 throw error(
@@ -108,12 +102,12 @@ extension HeistPlanSourceParser {
             }
             guard consumeSymbol(",") else { break }
         }
-        return ElementPredicateTemplate(checks)
+        return ElementPredicate(checks)
     }
 
     mutating func parseElementPredicateCheck() throws -> ElementPredicateCheck {
         let token = currentToken
-        let name = try parseDotCallName(allowedPrefixes: [])
+        let name = try parseDotCallName()
         return try parseElementPredicateCheck(named: name, token: token)
     }
 
@@ -177,7 +171,7 @@ extension HeistPlanSourceParser {
 
     mutating func parseContainerPredicate() throws -> ContainerPredicate {
         let token = currentToken
-        switch try parseDotCallName(allowedPrefixes: []) {
+        switch try parseDotCallName() {
         case "label":
             try expectSymbol("(")
             let label = try parseStringMatchCallArgument(field: "container label")
@@ -233,9 +227,7 @@ extension HeistPlanSourceParser {
                 rest.append(try parseContainerPredicateCheckExpr())
             }
             try expectSymbol(")")
-            return ContainerPredicate(core: ContainerPredicateCore(
-                checks: NonEmptyArray(first.core, rest: rest.map(\.core))
-            ))
+            return ContainerPredicate(checks: NonEmptyArray(first, rest: rest))
         default:
             throw error(
                 token,
@@ -248,7 +240,7 @@ extension HeistPlanSourceParser {
 
     mutating func parseSemanticContainerPredicate() throws -> SemanticContainerPredicate {
         let token = currentToken
-        switch try parseDotCallName(allowedPrefixes: []) {
+        switch try parseDotCallName() {
         case "label":
             try expectSymbol("(")
             let label = try parseStringMatchCallArgument(field: "container label")
@@ -266,7 +258,7 @@ extension HeistPlanSourceParser {
 
     mutating func parseContainerPredicateCheckExpr() throws -> ContainerPredicateCheck {
         let token = currentToken
-        switch try parseDotCallName(allowedPrefixes: []) {
+        switch try parseDotCallName() {
         case "type":
             try expectSymbol("(")
             let type = try parseEnumCase(AccessibilityContainerKind.self, role: "container kind")
@@ -322,13 +314,9 @@ extension HeistPlanSourceParser {
         var columnCount: ContainerPredicateCount?
         if !consumeSymbol(")") {
             repeat {
-                if lookaheadLabel("rowCount") {
-                    try expectIdentifier("rowCount")
-                    try expectSymbol(":")
+                if consumeLabel("rowCount") {
                     rowCount = try parseContainerPredicateCount(role: "container rowCount")
-                } else if lookaheadLabel("columnCount") {
-                    try expectIdentifier("columnCount")
-                    try expectSymbol(":")
+                } else if consumeLabel("columnCount") {
                     columnCount = try parseContainerPredicateCount(role: "container columnCount")
                 } else {
                     throw error(currentToken, "dataTable accepts rowCount and columnCount")
@@ -395,13 +383,13 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseStringMatchCallArgument(field: String) throws -> StringMatch {
-        if lookaheadExactStringMatchCall {
+        if currentToken.isSymbol("."), nextToken.kind == .identifier("exact") {
             throw error(currentToken, "exact \(field) matches use the literal form: .\(field)(\"...\")")
         }
         if let label = stringMatchModeLabelIfPresent() {
             throw error(currentToken, "StringMatch modes use enum-case syntax; use `.\(field)(.\(label)(\"...\"))`")
         }
-        if startsStringMatchDotCall {
+        if nextStringMatchMode != nil {
             return try parseStringMatchDotCall(field: field)
         }
         return try validatedStringMatch(.exact, value: try parseStringExpr(), field: field, token: previous)
@@ -419,13 +407,13 @@ extension HeistPlanSourceParser {
         field: String,
         emptyLiteralPolicy: StringMatchEmptyLiteralPolicy
     ) throws -> StringMatch {
-        if lookaheadExactStringMatchCall {
+        if currentToken.isSymbol("."), nextToken.kind == .identifier("exact") {
             throw error(currentToken, "exact \(field) matches use the literal form: \(field): \"...\"")
         }
         if let label = stringMatchModeLabelIfPresent() {
             throw error(currentToken, "StringMatch modes use enum-case syntax; use `\(field): .\(label)(\"...\")`")
         }
-        if startsStringMatchDotCall {
+        if nextStringMatchMode != nil {
             return try parseStringMatchDotCall(field: field, emptyLiteralPolicy: emptyLiteralPolicy)
         }
         return try validatedStringMatch(
@@ -442,7 +430,7 @@ extension HeistPlanSourceParser {
         emptyLiteralPolicy: StringMatchEmptyLiteralPolicy = .reject
     ) throws -> StringMatch {
         let token = currentToken
-        let name = try parseDotCallName(allowedPrefixes: [])
+        let name = try parseDotCallName()
         guard let mode = stringMatchMode(named: name) else {
             throw error(token, "unsupported string match '.\(name)'")
         }
@@ -462,25 +450,20 @@ extension HeistPlanSourceParser {
     }
 
     func stringMatchModeLabelIfPresent() -> String? {
-        for name in stringMatchModeNames where lookaheadLabel(name) {
-            return name
-        }
-        return nil
+        guard case .identifier(let name) = currentToken.kind,
+              nextToken.isSymbol(":"),
+              StringMatch.Mode.sourceCallModes.contains(where: { $0.rawValue == name })
+        else { return nil }
+        return name
     }
 
-    var startsStringMatchDotCall: Bool {
-        if currentToken.isSymbol(".") {
-            return lookaheadIdentifier(in: stringMatchModeNames)
-        }
-        return false
-    }
-
-    var lookaheadExactStringMatchCall: Bool {
-        currentToken.isSymbol(".") && lookaheadIdentifier(in: ["exact"])
-    }
-
-    var stringMatchModeNames: Set<String> {
-        Set(StringMatch.Mode.sourceCallModes.map(\.rawValue))
+    var nextStringMatchMode: StringMatch.Mode? {
+        guard currentToken.isSymbol("."),
+              case .identifier(let name) = nextToken.kind,
+              let mode = StringMatch.Mode(rawValue: name),
+              StringMatch.Mode.sourceCallModes.contains(mode)
+        else { return nil }
+        return mode
     }
 
     func stringMatchMode(named name: String) -> StringMatch.Mode? {
@@ -489,32 +472,24 @@ extension HeistPlanSourceParser {
 
     private func validatedStringMatch(
         _ mode: StringMatch.Mode,
-        value: Expr<String>,
+        value: AuthoredString,
         field: String,
         token: HeistPlanSourceToken,
         emptyLiteralPolicy: StringMatchEmptyLiteralPolicy = .reject
     ) throws -> StringMatch {
-        let core: StringMatchCore<Expr<String>>
-        switch mode {
-        case .exact: core = .exact(value)
-        case .contains: core = .contains(value)
-        case .prefix: core = .prefix(value)
-        case .suffix: core = .suffix(value)
-        case .isEmpty: core = .isEmpty
-        }
-        let match = StringMatch(core: core)
-        if match.core.payload?.stringMatchLiteralIsEmpty == true,
+        let match = StringMatch(mode: mode, value: mode == .isEmpty ? nil : value)
+        if match.value?.literalIsEmpty == true,
            !(emptyLiteralPolicy == .allowExact && mode == .exact) {
             throw error(token, "\(field) match value must not be empty")
         }
         return match
     }
 
-    mutating func parseStringExpr() throws -> Expr<String> {
+    mutating func parseStringExpr() throws -> AuthoredString {
         if let string = try parseStringExprIfPresent() {
             return string
         }
-        if currentTokenIsIdentifier, nextTokenIsSymbol("(") {
+        if case .identifier = currentToken.kind, nextToken.isSymbol("(") {
             throw error(
                 currentToken,
                 "arbitrary calls are not supported inside ButtonHeist DSL bodies; wrap the heist in Swift and pass values through parameters or RunHeist"
@@ -523,7 +498,7 @@ extension HeistPlanSourceParser {
         throw error(currentToken, "expected a string literal or scoped string reference")
     }
 
-    mutating func parseStringExprIfPresent() throws -> Expr<String>? {
+    mutating func parseStringExprIfPresent() throws -> AuthoredString? {
         if case .string(let value) = currentToken.kind {
             advance()
             return .literal(value)
@@ -548,7 +523,7 @@ extension HeistPlanSourceParser {
             return true
         }
         if currentToken.isSymbol(".") {
-            return lookaheadIdentifier(in: ["target", "within"])
+            return nextToken.kind == .identifier("target") || nextToken.kind == .identifier("within")
         }
         return false
     }
@@ -557,29 +532,36 @@ extension HeistPlanSourceParser {
         if currentToken.isSymbol(".") {
             return try parseCustomContentMatch(role: role)
         }
+        return try parseCustomContentFields(role: role)
+    }
 
+    mutating func parseCustomContentMatch(role: String) throws -> CustomContentMatch {
+        try expectContextualInitializer(role: "custom content match")
+        let match = try parseCustomContentFields(role: role)
+        try expectSymbol(")")
+        guard match.hasPredicateLiteral else {
+            throw error(previous, "\(role) match must include label, value, or isImportant")
+        }
+        return match
+    }
+
+    private mutating func parseCustomContentFields(role: String) throws -> CustomContentMatch {
         var label: StringMatch?
         var value: StringMatch?
         var isImportant: Bool?
         if !currentToken.isSymbol(")") {
             while true {
-                if lookaheadLabel("label") {
-                    try expectIdentifier("label")
-                    try expectSymbol(":")
+                if consumeLabel("label") {
                     guard label == nil else {
                         throw error(previous, "\(role) accepts label only once")
                     }
                     label = try parseStringMatchFieldValue(field: "\(role) label")
-                } else if lookaheadLabel("value") {
-                    try expectIdentifier("value")
-                    try expectSymbol(":")
+                } else if consumeLabel("value") {
                     guard value == nil else {
                         throw error(previous, "\(role) accepts value only once")
                     }
                     value = try parseStringMatchFieldValue(field: "\(role) value")
-                } else if lookaheadLabel("isImportant") {
-                    try expectIdentifier("isImportant")
-                    try expectSymbol(":")
+                } else if consumeLabel("isImportant") {
                     guard isImportant == nil else {
                         throw error(previous, "\(role) accepts isImportant only once")
                     }
@@ -592,6 +574,10 @@ extension HeistPlanSourceParser {
         }
         return CustomContentMatch(label: label, value: value, isImportant: isImportant)
     }
+
+    private static let elementPredicateCheckNames: Set<String> = [
+        "label", "identifier", "value", "hint", "traits", "actions", "customContent", "rotors", "exclude",
+    ]
 
 }
 

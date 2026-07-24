@@ -53,7 +53,7 @@ extension TheFence {
     func singleStepHeistPlan(for execution: SingleStepHeistExecution) throws -> HeistPlan {
         switch execution {
         case .wait(let step):
-            return try HeistPlan(body: [.wait(step)])
+            return try HeistPlan(version: HeistPlan.currentVersion, body: [.wait(step)])
         case .action(let action, let expectationPayload, _):
             let expectationStep = expectationPayload.expectation.map {
                 WaitStep(
@@ -65,7 +65,7 @@ extension TheFence {
             let expectationPolicy: ActionExpectationPolicy = try expectationStep.map {
                 .expect(try ActionExpectation($0))
             } ?? .default
-            return try HeistPlan(body: [
+            return try HeistPlan(version: HeistPlan.currentVersion, body: [
                 .action(ActionStep(command: action.action, expectationPolicy: expectationPolicy))
             ])
         }

@@ -1,13 +1,11 @@
 import Testing
 @_spi(ButtonHeistInternals) import ThePlans
 
-private func validatedDefinitions(_ definitions: [HeistPlanAdmissionCandidate]) throws -> [HeistPlan] {
-    try HeistPlanAdmissionCandidate(
+private func validatedDefinitions(_ definitions: [HeistPlan]) throws -> [HeistPlan] {
+    try HeistPlan(
         definitions: definitions,
         body: [.warn(WarnStep(message: "root"))]
-    )
-    .validatedForRuntimeSafety()
-    .definitions
+    ).definitions
 }
 
 private func admittedSteps<Input>(
@@ -47,8 +45,8 @@ func heistDefinitionsCompileToInvocationsWithLocalDefinitions() throws {
         )),
     ])
     #expect(try heist.definitions == validatedDefinitions([
-        HeistPlanAdmissionCandidate(name: "LibraryScreen", definitions: [
-            HeistPlanAdmissionCandidate(
+        HeistPlan(name: "LibraryScreen", definitions: [
+            HeistPlan(
                 name: "addToCart",
                 parameter: .string(name: "item"),
                 body: [
@@ -78,8 +76,8 @@ func `string heist definitions default parameter to input`() throws {
     }
 
     #expect(try heist.definitions == validatedDefinitions([
-        HeistPlanAdmissionCandidate(name: "SearchScreen", definitions: [
-            HeistPlanAdmissionCandidate(
+        HeistPlan(name: "SearchScreen", definitions: [
+            HeistPlan(
                 name: "search",
                 parameter: .string(name: "input"),
                 body: [
@@ -107,8 +105,8 @@ func `accessibility target heist definitions default parameter to input`() throw
     }
 
     #expect(try heist.definitions == validatedDefinitions([
-        HeistPlanAdmissionCandidate(name: "Rows", definitions: [
-            HeistPlanAdmissionCandidate(
+        HeistPlan(name: "Rows", definitions: [
+            HeistPlan(
                 name: "delete",
                 parameter: .accessibilityTarget(name: "input"),
                 body: [
@@ -136,14 +134,13 @@ func heistDefinitionsRejectConflictingDuplicatesDuringValidation() throws {
             try second("Bread")
         }
         Issue.record("Expected conflicting nested definitions to fail admission")
-    } catch let error as HeistPlanRuntimeSafetyError {
-        let failure = try #require(error.failures.first)
-        #expect(error.failures.count == 1)
-        #expect(failure.path.description == "$.definitions[0].definitions[1].name")
-        #expect(failure.contract == "duplicate heist definition names are not allowed in the same scope")
-        #expect(failure.observed == #""addToCart""#)
+    } catch let error as HeistPlanBuildError {
+        let diagnostic = try #require(error.diagnostics.first)
+        #expect(error.diagnostics.count == 1)
+        #expect(diagnostic.path == "$.definitions[0].definitions[1].name")
+        #expect(diagnostic.message == #"duplicate heist definition names are not allowed in the same scope; observed "addToCart""#)
     } catch {
-        Issue.record("Expected HeistPlanRuntimeSafetyError, got \(error)")
+        Issue.record("Expected HeistPlanBuildError, got \(error)")
     }
 }
 
@@ -164,13 +161,13 @@ func heistDefinitionsCarryLocalDependenciesInDefinitionScope() throws {
         try LibraryScreen.addToCart("Milk")
     }
     #expect(try heist.definitions == validatedDefinitions([
-        HeistPlanAdmissionCandidate(name: "LibraryScreen", definitions: [
-            HeistPlanAdmissionCandidate(
+        HeistPlan(name: "LibraryScreen", definitions: [
+            HeistPlan(
                 name: "addToCart",
                 parameter: .string(name: "item"),
                 definitions: [
-                    HeistPlanAdmissionCandidate(name: "AddButton", definitions: [
-                        HeistPlanAdmissionCandidate(
+                    HeistPlan(name: "AddButton", definitions: [
+                        HeistPlan(
                             name: "tap",
                             body: [
                                 .action(ActionStep(command: .activate(.label("Add to Cart")))),
@@ -286,6 +283,49 @@ func runHeistBuildsHeistRunSteps() throws {
             expectation: expectation
         )),
     ])
+}
+
+@Test
+func `run heist expectation composition preserves timeout semantics and diagnostics`() throws {
+    let definition = HeistDef<Void>("Checkout.pay") { Warn("declared") }
+    let composed = ThePlans.RunHeist("Checkout.pay")
+        .expect(.changed(.screen()), timeout: 3)
+        .expect(.exists(.label("Receipt")), timeout: 3)
+
+    #expect(try admittedSteps(composed, declaredBy: definition) == [
+        .invoke(HeistInvocationStep(
+            path: "Checkout.pay",
+            expectation: WaitStep(
+                predicate: .changed(.screen([.exists(.label("Receipt"))])),
+                timeout: 3
+            )
+        )),
+    ])
+
+    do {
+        _ = try HeistPlan {
+            definition
+            ThePlans.RunHeist("Checkout.pay")
+                .expect(.changed(.screen()), timeout: 1)
+                .expect(.exists(.label("Receipt")), timeout: 2)
+        }
+        Issue.record("Expected HeistPlanBuildError")
+    } catch let error as HeistPlanBuildError {
+        let diagnostic = try #require(error.diagnostics.first)
+        #expect(diagnostic.code == .dslInvalidInvocationExpectation)
+        #expect(diagnostic.path == "Checkout.pay")
+        #expect(diagnostic.message == "multiple explicit expectation timeouts in one chain: 1 and 2")
+        #expect(diagnostic.hint == "Use one explicit timeout for the composed expectation.")
+    }
+
+    #expect(throws: HeistPlanBuildError.self) {
+        try HeistPlan {
+            definition
+            ThePlans.RunHeist("Checkout.pay")
+                .expect(.changed(.elements()))
+                .expect(.changed(.screen()))
+        }
+    }
 }
 
 @Test

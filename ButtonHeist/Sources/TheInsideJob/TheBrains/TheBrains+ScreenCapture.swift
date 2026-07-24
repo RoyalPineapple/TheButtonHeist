@@ -31,13 +31,7 @@ extension TheBrains {
         }
 
         var actionFailureKind: ActionFailure.Kind {
-            switch self {
-            case .inactiveRuntime, .accessibilityTreeUnavailable:
-                return .accessibilityTreeUnavailable
-            case .appWindowUnavailable, .accessibilitySnapshotRenderingFailed, .pngEncodingFailed,
-                 .invalidScreenDimensions:
-                return .actionFailed
-            }
+            TheBrains.actionFailureKind(for: dispatchFailureKind)
         }
 
         var dispatchFailureKind: TheSafecracker.FailureKind {
@@ -52,13 +46,12 @@ extension TheBrains {
     }
 
     enum ScreenCaptureGatewayResult {
-        case success(ScreenPayload, context: ActionExpectationContext?)
+        case success(ScreenPayload)
         case failure(ScreenCaptureFailure)
     }
 
     func captureScreenPayload(
-        mode: ScreenCaptureMode = .raw,
-        capturesExpectationContext: Bool = false
+        mode: ScreenCaptureMode = .raw
     ) async -> ScreenCaptureGatewayResult {
         guard semanticObservationIsActive else {
             return .failure(.inactiveRuntime)
@@ -67,22 +60,6 @@ extension TheBrains {
             return .failure(.accessibilityTreeUnavailable)
         }
         let moment = observation.event.moment
-
-        let notificationWindow: AccessibilityNotificationScopeLease?
-        let actionExpectationContext: ActionExpectationContext?
-        if capturesExpectationContext {
-            let window = vault.accessibilityNotifications.beginActionWindow()
-            notificationWindow = window
-            actionExpectationContext = ActionExpectationContext(
-                preActionMoment: moment,
-                throughMoment: moment,
-                announcementCursor: window.cursor
-            )
-        } else {
-            notificationWindow = nil
-            actionExpectationContext = nil
-        }
-        defer { notificationWindow?.cancel() }
 
         guard let screenCapture = vault.captureScreen() else {
             return .failure(.appWindowUnavailable)
@@ -96,7 +73,7 @@ extension TheBrains {
             ) else {
                 return .failure(.accessibilitySnapshotRenderingFailed)
             }
-            return .success(payload, context: actionExpectationContext)
+            return .success(payload)
         }
 
         guard let pngData = screenCapture.image.pngData() else {
@@ -111,26 +88,21 @@ extension TheBrains {
         ) else {
             return .failure(.invalidScreenDimensions)
         }
-        return .success(payload, context: actionExpectationContext)
+        return .success(payload)
     }
 
     func executeTakeScreenshot(
-        mode: ScreenCaptureMode = .raw,
-        capturesExpectationContext: Bool = false
+        mode: ScreenCaptureMode = .raw
     ) async -> RuntimeActionExecution {
         let timing = ActionTiming()
-        switch await captureScreenPayload(
-            mode: mode,
-            capturesExpectationContext: capturesExpectationContext
-        ) {
-        case .success(let payload, let context):
+        switch await captureScreenPayload(mode: mode) {
+        case .success(let payload):
             return RuntimeActionExecution(
                 result: .success(
                     payload: .screenshot(payload),
                     message: "Captured screenshot \(Int(payload.width))x\(Int(payload.height))",
                     timing: timing.freeze()
-                ),
-                actionExpectationContext: context
+                )
             )
         case .failure(let failure):
             return RuntimeActionExecution(
@@ -139,8 +111,7 @@ extension TheBrains {
                     failureKind: failure.actionFailureKind,
                     message: failure.message,
                     timing: timing.freeze()
-                ),
-                actionExpectationContext: nil
+                )
             )
         }
     }
@@ -149,7 +120,7 @@ extension TheBrains {
         mode: ScreenCaptureMode = .raw
     ) async -> TheSafecracker.ActionDispatchResult {
         switch await captureScreenPayload(mode: mode) {
-        case .success(let payload, context: _):
+        case .success(let payload):
             return .success(
                 payload: .screenshot(payload),
                 message: "Captured screenshot \(Int(payload.width))x\(Int(payload.height))"

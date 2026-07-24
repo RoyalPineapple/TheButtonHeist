@@ -197,7 +197,7 @@ extension TheFenceHandlerTests {
             .updated(.identifier("counter"), .value(after: "5")),
         ]))
         let sourceStep = HeistStep.action(ActionStep(
-            command: .activate(.predicate(ElementPredicateTemplate(identifier: .exact("counter")))),
+            command: .activate(.predicate(ElementPredicate(identifier: .exact("counter")))),
             expectationPolicy: .expect(ActionExpectation(predicate: expectation, timeout: 10))))
         let plan = try HeistPlan(body: [sourceStep])
         guard case .action(let action)? = plan.body.first else {
@@ -267,7 +267,7 @@ extension TheFenceHandlerTests {
         ]))
         XCTAssertEqual(
             result,
-            .exists(.predicate(ElementPredicateTemplate(label: "Cart", identifier: "cart.button")))
+            .exists(.predicate(ElementPredicate(label: "Cart", identifier: "cart.button")))
         )
     }
 

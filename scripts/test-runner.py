@@ -7,6 +7,7 @@ import argparse
 import json
 import math
 import os
+import runpy
 import signal
 import shutil
 import subprocess
@@ -24,6 +25,7 @@ WRAPPER = ROOT / "scripts/run-with-heist-results.sh"
 COLLECTOR = ROOT / "scripts/collect-ios-heist-results.sh"
 SELECTOR = ROOT / "scripts/select-ios-ci-simulator.py"
 IOS_DEVICE = "iPhone 16 Pro"
+VERSION_KEY = runpy.run_path(str(SELECTOR))["version_key"]
 
 # The only test-driving catalog: public name, scheme, platform, and CI behavior.
 SUITES = {
@@ -215,6 +217,7 @@ def select_simulator(
     mode: str,
     suite: dict[str, object],
     requested_name: str | None,
+    requested_runtime: str | None = None,
 ) -> dict[str, str] | None:
     if suite["platform"] != "ios":
         return None
@@ -231,6 +234,9 @@ def select_simulator(
         ]
         if name:
             command.extend(("--sim-name", name))
+        runtime = requested_runtime or os.environ.get("BUTTONHEIST_TEST_SIMULATOR_RUNTIME")
+        if runtime:
+            command.extend(("--runtime", runtime))
         if mode in ("run", "test-without-building"):
             command.append("--wait")
         subprocess.run(command, check=True)
@@ -238,12 +244,20 @@ def select_simulator(
             line.split("=", 1)
             for line in output.read_text(encoding="utf-8").splitlines()
         )
-    return {
+    simulator = {
         "udid": values["sim_udid"],
         "name": values["sim_name"],
         "device": values["sim_device_type"],
         "os": values["sim_os"],
     }
+    sdk_version = values["sim_sdk"]
+    if VERSION_KEY(simulator["os"]) > VERSION_KEY(sdk_version):
+        cleanup_failed = not delete_simulator(simulator)
+        raise RuntimeError(
+            f"selected iOS simulator runtime {simulator['os']} exceeds active SDK {sdk_version}"
+            + ("; cleanup failed to delete selected simulator" if cleanup_failed else "")
+        )
+    return simulator
 
 
 def test_command(
@@ -483,7 +497,7 @@ def execute(
         publish(paths, None)
         collect(suite, paths, include_diagnostics=True)
         return 0
-    simulator = select_simulator(args.mode, suite, args.simulator_name)
+    simulator = select_simulator(args.mode, suite, args.simulator_name, args.simulator_runtime)
     if simulator is not None and selected_simulators is not None:
         selected_simulators.append(simulator)
     publish(paths, simulator)
@@ -575,6 +589,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--focus", action="append", choices=tuple(FOCUSES), default=[])
     parser.add_argument("--selection", choices=("selective", "full"), default="selective")
     parser.add_argument("--simulator-name")
+    parser.add_argument("--simulator-runtime")
     parser.add_argument("--retain-simulator", action="store_true")
     parser.add_argument("--timeout-seconds", type=float, default=1_800)
     parser.add_argument("--install-dependencies", action="store_true")

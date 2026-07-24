@@ -121,7 +121,7 @@ extension HeistExecutionStepNode {
     ) throws -> Self {
         guard let declaration = HeistForEachElementDeclaration(
             parameter: try container.decode(HeistReferenceName.self, forKey: .parameter),
-            matching: try container.decode(ElementPredicateTemplate.self, forKey: .matching),
+            matching: try container.decode(ElementPredicate.self, forKey: .matching),
             limit: try container.decode(Int.self, forKey: .limit)
         ) else {
             throw invalidNode(forKey: .limit, in: container, "for_each_element limit must be positive")

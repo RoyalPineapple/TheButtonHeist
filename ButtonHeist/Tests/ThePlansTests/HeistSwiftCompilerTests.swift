@@ -46,9 +46,8 @@ struct HeistSwiftCompilerTests {
             """
         )
 
-        let (plan, diagnostics) = try await requireSuccess(HeistSwiftCompiler().compileFile(source))
+        let plan = try await HeistSwiftCompiler().compileFile(source)
 
-        #expect(diagnostics.isEmpty)
         #expect(plan.name == "NamedPlan")
         #expect(plan.body == [.warn(WarnStep(message: "ok"))])
     }
@@ -67,7 +66,9 @@ struct HeistSwiftCompilerTests {
             """
         )
 
-        let diagnostics = try await requireFailure(HeistSwiftCompiler().compileFile(source))
+        let diagnostics = try await buildDiagnostics {
+            try await HeistSwiftCompiler().compileFile(source)
+        }
         let text = diagnostics.map(\.description).joined(separator: "\n")
 
         #expect(text.contains("cannot call value of non-function type"))
@@ -85,7 +86,9 @@ struct HeistSwiftCompilerTests {
             """
         )
 
-        let diagnostics = try await requireFailure(HeistSwiftCompiler().compileFile(source))
+        let diagnostics = try await buildDiagnostics {
+            try await HeistSwiftCompiler().compileFile(source)
+        }
         let diagnostic = try #require(diagnostics.first)
 
         #expect(diagnostic.code.rawValue == "heist.swift_compilation.compile_failed")
@@ -114,7 +117,9 @@ struct HeistSwiftCompilerTests {
             """
         )
 
-        let diagnostics = try await requireFailure(HeistSwiftCompiler().compileFile(source))
+        let diagnostics = try await buildDiagnostics {
+            try await HeistSwiftCompiler().compileFile(source)
+        }
         let diagnostic = try #require(diagnostics.first)
 
         #expect(diagnostic.code.rawValue == "heist.swift_compilation.invalid_output")
@@ -122,6 +127,39 @@ struct HeistSwiftCompilerTests {
         #expect(diagnostic.message.contains("valid HeistPlan JSON"))
         #expect(diagnostic.renderedMessage.count < 2_500)
     }
+
+    @Test
+    func `compileFile cancellation throws canonical build diagnostic`() async throws {
+        let temp = try CompilerTemporaryDirectory()
+        let source = try temp.writeSwiftSource(named: "Cancelled.swift", namedPlan: "Cancelled")
+        let task = Task {
+            try await HeistSwiftCompiler().compileFile(source)
+        }
+        task.cancel()
+
+        do {
+            _ = try await task.value
+            Issue.record("Expected compilation cancellation to throw")
+        } catch {
+            let buildError = try #require(error as? HeistPlanBuildError)
+            #expect(buildError.diagnostics.map(\.code.knownCode) == [.swiftCompilationCancelled])
+        }
+    }
+
+#if !(os(macOS) || os(Linux))
+    @Test
+    func `compileFile unsupported platform throws canonical build diagnostic`() async throws {
+        let source = URL(fileURLWithPath: "/tmp/Unsupported.swift")
+
+        do {
+            _ = try await HeistSwiftCompiler().compileFile(source)
+            Issue.record("Expected unsupported platform compilation to throw")
+        } catch {
+            let buildError = try #require(error as? HeistPlanBuildError)
+            #expect(buildError.diagnostics.map(\.code.knownCode) == [.swiftCompilationUnsupportedPlatform])
+        }
+    }
+#endif
 
     @Test
     func `compiler plan JSON maps typed version admission failure`() {
@@ -152,7 +190,7 @@ struct HeistSwiftCompilerTests {
             """
         )
 
-        let (plan, _) = try await requireSuccess(HeistSwiftCompiler().compileFile(source))
+        let plan = try await HeistSwiftCompiler().compileFile(source)
 
         #expect(plan.lint(.strictTest).isEmpty)
         #expect(try JSONDecoder().decode(HeistPlan.self, from: plan.canonicalHeistJSONData()) == plan)
@@ -180,9 +218,8 @@ struct HeistSwiftCompilerTests {
             """
         )
 
-        let (plan, diagnostics) = try await requireSuccess(HeistSwiftCompiler().compileFile(source))
+        let plan = try await HeistSwiftCompiler().compileFile(source)
 
-        #expect(diagnostics.isEmpty)
         #expect(plan.name == "Checkout")
         #expect(plan.body == [.warn(WarnStep(message: "ok"))])
     }
@@ -211,9 +248,8 @@ struct HeistSwiftCompilerTests {
             """#
         )
 
-        let (plan, diagnostics) = try await requireSuccess(HeistSwiftCompiler().compileFile(source))
+        let plan = try await HeistSwiftCompiler().compileFile(source)
 
-        #expect(diagnostics.isEmpty)
         #expect(plan.name == "WrapperStrings")
         #expect(plan.body == [.warn(WarnStep(message: "ok"))])
     }
@@ -247,9 +283,8 @@ struct HeistSwiftCompilerTests {
             """
         )
 
-        let (plan, diagnostics) = try await requireSuccess(HeistSwiftCompiler().compileFile(source))
+        let plan = try await HeistSwiftCompiler().compileFile(source)
 
-        #expect(diagnostics.isEmpty)
         #expect(plan.name == "WrapperComments")
         #expect(plan.body == [.warn(WarnStep(message: "ok"))])
     }
@@ -273,9 +308,8 @@ struct HeistSwiftCompilerTests {
             """
         )
 
-        let (plan, diagnostics) = try await requireSuccess(HeistSwiftCompiler().compileFile(source))
+        let plan = try await HeistSwiftCompiler().compileFile(source)
 
-        #expect(diagnostics.isEmpty)
         #expect(plan.name == "TrustedFrontend")
         #expect(plan.body == [
             .action(ActionStep(
@@ -300,9 +334,8 @@ struct HeistSwiftCompilerTests {
             """
         )
 
-        let (plan, diagnostics) = try await requireSuccess(HeistSwiftCompiler().compileFile(source))
+        let plan = try await HeistSwiftCompiler().compileFile(source)
 
-        #expect(diagnostics.isEmpty)
         #expect(plan.name == "RawBody")
         #expect(plan.body == [.warn(WarnStep(message: "raw"))])
     }
@@ -353,7 +386,9 @@ struct HeistSwiftCompilerTests {
             """
         )
 
-        let diagnostics = try await requireFailure(HeistSwiftCompiler().compileFile(source))
+        let diagnostics = try await buildDiagnostics {
+            try await HeistSwiftCompiler().compileFile(source)
+        }
         let text = diagnostics.map(\.description).joined(separator: "\n")
 
         #expect(text.contains("Failed to compile Swift heist source"))
@@ -381,7 +416,9 @@ struct HeistSwiftCompilerTests {
             """
         )
 
-        let diagnostics = try await requireFailure(HeistSwiftCompiler().compileFile(source))
+        let diagnostics = try await buildDiagnostics {
+            try await HeistSwiftCompiler().compileFile(source)
+        }
         let text = diagnostics.map(\.description).joined(separator: "\n")
 
         #expect(text.contains("Failed to compile Swift heist source"))
@@ -414,7 +451,7 @@ struct HeistSwiftCompilerTests {
             }
             """
         )
-        let (plan, _) = try await requireSuccess(HeistSwiftCompiler().compileFile(validSource))
+        let plan = try await HeistSwiftCompiler().compileFile(validSource)
         #expect(plan.body.count == 2)
     }
 
@@ -441,7 +478,7 @@ struct HeistSwiftCompilerTests {
             }
             """
         )
-        let (plan, _) = try await requireSuccess(HeistSwiftCompiler().compileFile(validSource))
+        let plan = try await HeistSwiftCompiler().compileFile(validSource)
         #expect(plan.body.count == 4)
     }
 
@@ -451,11 +488,37 @@ struct HeistSwiftCompilerTests {
         _ = try temp.writeSwiftSource(named: "Alpha.swift", namedPlan: "Alpha")
         _ = try temp.writeSwiftSource(named: "Beta.swift", namedPlan: "Beta")
 
-        let (catalog, diagnostics) = try await requireSuccess(HeistSwiftCompiler().compileDirectory(temp.url))
+        let result = try await HeistSwiftCompiler().compileDirectory(temp.url)
 
-        #expect(diagnostics.isEmpty)
-        #expect(catalog.source == HeistCatalogSource(url: temp.url.standardizedFileURL))
-        #expect(catalog.capabilities.map(\.name) == ["Alpha", "Beta"])
+        #expect(result.diagnostics.isEmpty)
+        #expect(result.catalog.source == HeistCatalogSource(url: temp.url.standardizedFileURL))
+        #expect(result.catalog.capabilities.map(\.name) == ["Alpha", "Beta"])
+    }
+
+    @Test
+    func `compileDirectory returns catalog with non-error diagnostics`() async throws {
+        let temp = try CompilerTemporaryDirectory()
+        _ = try temp.writeSwiftSource(
+            named: "Anonymous.swift",
+            """
+            import ThePlans
+
+            func heist() throws -> HeistPlan {
+                try HeistPlan {
+                    Warn("anonymous")
+                }
+            }
+            """
+        )
+
+        let result = try await HeistSwiftCompiler().compileDirectory(temp.url)
+
+        #expect(result.catalog.capabilities.count == 1)
+        #expect(result.diagnostics.map(\.code.knownCode) == [.catalogAnonymousCapability])
+        #expect(result.diagnostics.map(\.kind) == [.warning])
+        #expect(result.diagnostics.map { $0.sourceSpan?.sourceName } == [
+            temp.url.appendingPathComponent("Anonymous.swift").path,
+        ])
     }
 
     @Test
@@ -464,7 +527,9 @@ struct HeistSwiftCompilerTests {
         _ = try temp.writeSwiftSource(named: "First.swift", namedPlan: "Duplicate")
         _ = try temp.writeSwiftSource(named: "Second.swift", namedPlan: "Duplicate")
 
-        let diagnostics = try await requireFailure(HeistSwiftCompiler().compileDirectory(temp.url))
+        let diagnostics = try await buildDiagnostics {
+            try await HeistSwiftCompiler().compileDirectory(temp.url)
+        }
         let diagnostic = try #require(diagnostics.first)
 
         #expect(diagnostic.code.rawValue == "heist.catalog.duplicate_capability")
@@ -477,10 +542,10 @@ struct HeistSwiftCompilerTests {
         let temp = try CompilerTemporaryDirectory()
         _ = try temp.writeSwiftSource(named: "Filename.swift", namedPlan: "PlanName")
 
-        let (catalog, _) = try await requireSuccess(HeistSwiftCompiler().compileDirectory(temp.url))
+        let result = try await HeistSwiftCompiler().compileDirectory(temp.url)
 
-        #expect(catalog.capabilities.map(\.name) == ["PlanName"])
-        #expect(!catalog.capabilities.map { $0.name ?? "" }.contains("Filename"))
+        #expect(result.catalog.capabilities.map(\.name) == ["PlanName"])
+        #expect(!result.catalog.capabilities.map { $0.name ?? "" }.contains("Filename"))
     }
 
     @Test
@@ -489,9 +554,9 @@ struct HeistSwiftCompilerTests {
         _ = try temp.writeSwiftSource(named: ".Hidden.swift", "this is not Swift")
         _ = try temp.writeSwiftSource(named: "Visible.swift", namedPlan: "Visible")
 
-        let (catalog, _) = try await requireSuccess(HeistSwiftCompiler().compileDirectory(temp.url))
+        let result = try await HeistSwiftCompiler().compileDirectory(temp.url)
 
-        #expect(catalog.capabilities.map(\.name) == ["Visible"])
+        #expect(result.catalog.capabilities.map(\.name) == ["Visible"])
     }
 
     @Test
@@ -511,10 +576,69 @@ struct HeistSwiftCompilerTests {
         )
         _ = try temp.writeSwiftSource(named: "Named.swift", namedPlan: "Named")
 
-        let diagnostics = try await requireFailure(HeistSwiftCompiler().compileDirectory(temp.url))
+        let diagnostics = try await buildDiagnostics {
+            try await HeistSwiftCompiler().compileDirectory(temp.url)
+        }
 
         #expect(diagnostics.map(\.description).joined(separator: "\n").contains("anonymous capability"))
     }
+
+    @Test
+    func testCompilerThrowsOrderedBuildDiagnostics() async throws {
+        let temp = try CompilerTemporaryDirectory()
+        _ = try temp.writeSwiftSource(named: "A.swift", namedPlan: "Valid")
+        _ = try temp.writeSwiftSource(named: "B.swift", "not valid Swift")
+        _ = try temp.writeSwiftSource(named: "C.swift", "also not valid Swift")
+
+        do {
+            _ = try await HeistSwiftCompiler().compileDirectory(temp.url)
+            Issue.record("Expected directory compilation to throw")
+        } catch let error {
+            #expect(error.diagnostics.map { $0.sourceSpan?.sourceName }.compactMap { $0 } == [
+                temp.url.appendingPathComponent("B.swift").path,
+                temp.url.appendingPathComponent("C.swift").path,
+            ])
+            #expect(error.diagnostics.allSatisfy { $0.kind == .error })
+        }
+    }
+
+#if os(macOS) || os(Linux)
+    @Test
+    func `compiler command preserves exact argument contract`() {
+        let compileDirectory = URL(fileURLWithPath: "/tmp/heist/Sources/PlanCompiler", isDirectory: true)
+        let moduleCache = URL(fileURLWithPath: "/tmp/heist/module-cache", isDirectory: true)
+        let executable = URL(fileURLWithPath: "/tmp/heist/Build/plan-compiler")
+        let thePlansArguments = ["-I", "/tmp/heist/Modules", "/tmp/heist/ThePlans.o"]
+
+        let command = HeistSwiftFileCompilation.planCompilerCommand(
+            compileDirectory: compileDirectory,
+            moduleCache: moduleCache,
+            executableURL: executable,
+            thePlansSwiftcArguments: thePlansArguments
+        )
+
+        #expect(command == HeistCompilerProcess.Command(
+            executable: URL(fileURLWithPath: "/usr/bin/env"),
+            arguments: [
+                "swiftc",
+                "-j",
+                "1",
+                "-num-threads",
+                "1",
+                "-swift-version",
+                "6",
+                "-module-cache-path",
+                moduleCache.path,
+                "-o",
+                executable.path,
+                compileDirectory.appendingPathComponent("main.swift").path,
+                "-I",
+                "/tmp/heist/Modules",
+                "/tmp/heist/ThePlans.o",
+            ]
+        ))
+    }
+#endif
 
     @Test
     func `swiftPM metadata extraction selects active object files`() throws {
@@ -556,22 +680,15 @@ struct HeistSwiftCompilerTests {
 
 }
 
-private func requireSuccess<Value>(
-    _ result: ValidationResult<Value, HeistBuildDiagnostic>
-) async throws -> (Value, [HeistBuildDiagnostic]) {
-    let value = try result.value(orThrow: {
-        CompilerTestFailure($0.map(\.description).joined(separator: "\n"))
-    })
-    return (value, result.diagnostics)
-}
-
-private func requireFailure<Value>(
-    _ result: ValidationResult<Value, HeistBuildDiagnostic>
+private func buildDiagnostics<Value>(
+    _ operation: () async throws -> Value
 ) async throws -> [HeistBuildDiagnostic] {
-    guard let diagnostics = result.failureDiagnostics else {
+    do {
+        _ = try await operation()
         throw CompilerTestFailure("Expected compilation to fail")
+    } catch let error as HeistPlanBuildError {
+        return error.diagnostics
     }
-    return diagnostics
 }
 
 private final class CompilerTemporaryDirectory {

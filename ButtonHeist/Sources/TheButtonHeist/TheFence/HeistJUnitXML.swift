@@ -90,7 +90,7 @@ extension HeistJUnitXML {
             var parts: [String] = []
             if case .predicate(let template, _) = target,
                let predicate = try? template.resolve(in: .empty) {
-                parts = predicate.core.checks.compactMap(CanonicalValueDescription.predicateCheckField)
+                parts = predicate.checks.compactMap(CanonicalValueDescription.predicateCheckField)
             }
             if !parts.isEmpty {
                 body += "target: \(parts.joined(separator: ", "))\n"

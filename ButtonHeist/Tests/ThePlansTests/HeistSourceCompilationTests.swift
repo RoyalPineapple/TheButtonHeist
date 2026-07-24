@@ -26,14 +26,11 @@ func compileDiagnostic(_ source: String) -> HeistBuildDiagnostic {
             phase: .sourceCompilation,
             message: "Expected source to fail"
         )
-    } catch let error as HeistSourceCompilationError {
-        return error.diagnostic
-    } catch {
-        Issue.record("Expected HeistSourceCompilationError, got \(error)")
-        return HeistBuildDiagnostic(
-            externalBoundaryRawCode: "test.unexpected_error",
+    } catch let error {
+        return error.diagnostics.first ?? HeistBuildDiagnostic(
+            externalBoundaryRawCode: "test.missing_diagnostic",
             phase: .sourceCompilation,
-            message: String(describing: error)
+            message: "Source compilation failed without diagnostics"
         )
     }
 }
@@ -65,14 +62,17 @@ func expect(_ string: String, contains substring: String) {
 }
 
 @Test func `non-durable action admission exposes source diagnostic code and path`() throws {
-    let raw = HeistPlanAdmissionCandidate(body: [
-        .action(ActionStep(command: .scroll(ScrollTarget(direction: .down)))),
-    ])
-    guard case .failure(let diagnostics) = raw.runtimeSafetyValidationResult(),
-          let diagnostic = diagnostics.first else {
+    let diagnostics: [HeistBuildDiagnostic]
+    do {
+        _ = try HeistPlan(body: [
+            .action(ActionStep(command: .scroll(ScrollTarget(direction: .down)))),
+        ])
         Issue.record("Expected non-durable action to fail runtime safety admission")
         return
+    } catch let error as HeistPlanBuildError {
+        diagnostics = error.diagnostics
     }
+    let diagnostic = try #require(diagnostics.first)
 
     #expect(diagnostics.count == 1)
     #expect(diagnostic.code == .nonDurableAction)
@@ -95,7 +95,7 @@ func expect(_ string: String, contains substring: String) {
         "Process()",
         #"await Warn("x")"#,
     ] {
-        #expect(throws: HeistSourceCompilationError.self) {
+        #expect(throws: HeistPlanBuildError.self) {
             _ = try HeistSourceCompilation.compile(source)
         }
     }
@@ -117,14 +117,153 @@ func expect(_ string: String, contains substring: String) {
     #expect(diagnostic.sourceSpan?.column == 5)
 }
 
-@Test func `planning admission exposes typed diagnostics before rendering`() {
-    let result = HeistPlanSourceAdmission.rejectRawStructuredJSONIRSourceFields(
-        commandName: "run_heist",
-        fields: [.body, .version]
-    )
+private func assertCanonicalSourceRoundTripPreservesBranchSemantics() throws {
+    let source = """
+    HeistPlan {
+        If {
+            Case(.exists(.label("Pay"))) {
+                Warn("primary")
+            }
+            Case(.missing(.label("Pay"))) {
+                Fail("missing")
+            }
+            Else {
+                Warn("fallback")
+            }
+        }
+    }
+    """
+    let plan = try HeistSourceCompilation.compile(source)
+    let reparsed = try HeistSourceCompilation.compile(plan.canonicalSwiftDSL())
 
-    guard let diagnostic = result.failureDiagnostics?.first else {
+    #expect(reparsed == plan)
+    guard case .conditional(let branches) = plan.body.first else {
+        Issue.record("Expected the canonical source to preserve its conditional")
+        return
+    }
+    #expect(branches.cases.map(\.predicate) == [.exists(.label("Pay")), .missing(.label("Pay"))])
+    #expect(branches.cases.map(\.body) == [
+        [.warn(WarnStep(message: "primary"))],
+        [.fail(FailStep(message: "missing"))],
+    ])
+    #expect(branches.elseBody == [.warn(WarnStep(message: "fallback"))])
+}
+
+@Test func testCanonicalSourceRoundTripPreservesDiagnosticSpan() throws {
+    try assertCanonicalSourceRoundTripPreservesBranchSemantics()
+    let removedSpellings: [(String, String, Int)] = [
+        (
+            #"WaitFor(.present(.label("Receipt")))"#,
+            "unsupported accessibility predicate '.present'",
+            21
+        ),
+        ("WaitFor(.screenChanged())", "unsupported accessibility predicate '.screenChanged'", 21),
+        ("WaitFor(.change(.screen()))", "unsupported accessibility predicate '.change'", 21),
+        ("WaitFor(.announcement())", "empty announcement predicate must use .announcement", 34),
+        (
+            #"WaitFor(.announcement(containing: "done"))"#,
+            "expected a string literal or scoped string reference",
+            34
+        ),
+        (
+            #"WaitFor(.changed(.elements([.updated(.label("Total"), .label(before: "Old", after: "New"))])))"#,
+            "unsupported element update property '.label'. Valid: value, traits, hint, actions, frame, activationPoint, customContent, rotors",
+            72
+        ),
+        (
+            #"WaitFor(.changed(.elements([.updated(.label("Total"), .identifier(before: "old", after: "new"))])))"#,
+            "unsupported element update property '.identifier'. Valid: value, traits, hint, actions, frame, activationPoint, customContent, rotors",
+            77
+        ),
+        (
+            #"WaitFor(.changed(.elements([.updated(.label("Total"), .value(from: "$2", to: "$3"))])))"#,
+            "value update predicate accepts before and after",
+            73
+        ),
+        (
+            #"WaitFor(.changed(.elements([.updated(.label("Total"), .traits(after: .include([.selected])))])))"#,
+            "trait set match must use .init(...)",
+            82
+        ),
+        (
+            #"WaitFor(.changed(.elements([.updated(.label("Total"), .activationPoint(after: .match(x: 1)))])))"#,
+            "activation point match must use .init(...)",
+            91
+        ),
+        (
+            #"WaitFor(.changed(.elements([.updated(.identifier("item"), .actions(after: .exclude([.activate])))])))"#,
+            "action set match must use .init(...)",
+            87
+        ),
+        (
+            #"WaitFor(.changed(.elements([.updated(.identifier("item"), .frame(after: .exact(x: 0, y: 0, width: 10, height: 10)))])))"#,
+            "frame match must use .init(...)",
+            85
+        ),
+        (
+            #"WaitFor(.changed(.elements([.updated(.identifier("item"), .customContent(after: .match(label: "Status")))])))"#,
+            "custom content match must use .init(...)",
+            93
+        ),
+        (
+            #"WaitFor(.changed(.elements([.updated(.identifier("item"), .rotors(after: .include(["Headings"])))])))"#,
+            "rotor set match must use .init(...)",
+            86
+        ),
+        (#"WaitFor(.change(.appeared(.label("Toast"))))"#, "unsupported accessibility predicate '.change'", 21),
+        (
+            #"Activate(.label(.exact("Search")))"#,
+            #"exact label matches use the literal form: .label("...")"#,
+            28
+        ),
+        (
+            #"Activate(.element(label: "Pay", traits: [.button]))"#,
+            #".element(...) accepts ordered checks like .label("Pay"), .identifier("id"), "# +
+                #".traits([.button]), .actions([.activate]), .exclude(.traits([.notEnabled]))"#,
+            30
+        ),
+        (#"Tap(.label("Pay"))"#, "unsupported ButtonHeist source statement 'Tap'", 12),
+        (
+            #"Activate("Pay")"#,
+            "target expression requires an explicit accessibility property such as .label(...)",
+            21
+        ),
+        (
+            #"WaitFor("Receipt")"#,
+            "expected a ButtonHeist expression beginning with '.'",
+            20
+        ),
+    ]
+
+    for (statement, message, offset) in removedSpellings {
+        let invalidSource = "HeistPlan { \(statement) }"
+        let diagnostic = compileDiagnostic(invalidSource)
+        #expect(diagnostic.code == .sourceInvalidSyntax)
+        #expect(diagnostic.message == message)
+        #expect(diagnostic.sourceSpan == HeistBuildSourceSpan(
+            sourceName: "inline-heist-plan",
+            offset: offset,
+            line: 1,
+            column: offset + 1,
+            length: 1
+        ))
+    }
+}
+
+@Test func `planning admission exposes typed diagnostics before rendering`() {
+    let diagnostics: [HeistBuildDiagnostic]
+    do {
+        try HeistPlanSourceAdmission.rejectRawStructuredJSONIRSourceFields(
+            commandName: "run_heist",
+            fields: [.body, .version]
+        )
         Issue.record("Expected raw JSON IR fields to fail planning admission")
+        return
+    } catch let error {
+        diagnostics = error.diagnostics
+    }
+    guard let diagnostic = diagnostics.first else {
+        Issue.record("Expected raw JSON IR fields to report a diagnostic")
         return
     }
 
@@ -154,7 +293,7 @@ func expect(_ string: String, contains substring: String) {
 }
 
 @Test func `inline plan source import Foundation is rejected`() throws {
-    #expect(throws: HeistSourceCompilationError.self) {
+    #expect(throws: HeistPlanBuildError.self) {
         _ = try HeistSourceCompilation.compile("""
         import Foundation
         Activate(.label("Pay"))
@@ -163,7 +302,7 @@ func expect(_ string: String, contains substring: String) {
 }
 
 @Test func `inline plan source while true is rejected`() throws {
-    #expect(throws: HeistSourceCompilationError.self) {
+    #expect(throws: HeistPlanBuildError.self) {
         _ = try HeistSourceCompilation.compile("""
         while true {
             Activate(.label("Pay"))
@@ -173,7 +312,7 @@ func expect(_ string: String, contains substring: String) {
 }
 
 @Test func `inline plan source arbitrary function declaration is rejected`() throws {
-    #expect(throws: HeistSourceCompilationError.self) {
+    #expect(throws: HeistPlanBuildError.self) {
         _ = try HeistSourceCompilation.compile("""
         func pay() {
             Activate(.label("Pay"))

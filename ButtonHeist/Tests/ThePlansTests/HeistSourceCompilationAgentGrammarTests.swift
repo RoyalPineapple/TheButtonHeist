@@ -167,26 +167,6 @@ import Testing
     ))
     expect(beforeOnlyUpdate, contains: "value update predicate requires after when before is set")
 
-    let fromToUpdate = compileError(root(
-        #"Activate(.label("Pay")).expect("# +
-            #".changed(.elements([.updated(.label("Total"), .value(from: "$2", to: "$3"))])))"#
-    ))
-    expect(fromToUpdate, contains: "value update predicate accepts before and after")
-
-    let labelUpdate = compileError(root(
-        #"Activate(.label("Pay")).expect("# +
-            #".changed(.elements([.updated(.label("Total"), "# +
-            #".label(before: "Old", after: "New"))])))"#
-    ))
-    expect(labelUpdate, contains: "unsupported element update property '.label'")
-
-    let identifierUpdate = compileError(root(
-        #"Activate(.label("Pay")).expect("# +
-            #".changed(.elements([.updated(.label("Total"), "# +
-            #".identifier(before: "old", after: "new"))])))"#
-    ))
-    expect(identifierUpdate, contains: "unsupported element update property '.identifier'")
-
     let screenChangedAppeared = compileError(root(
         #"Activate(.label("Pay")).expect(.changed(.screen([.appeared(.label("Receipt"))])))"#
     ))
@@ -198,14 +178,9 @@ import Testing
     ))
     expect(screenChangedUpdated, contains: "screen assertions accept only .exists and .missing")
 
-    let bareActionString = compileError(root(#"Activate("Pay")"#))
-    expect(bareActionString, contains: "target expression requires an explicit accessibility property")
-
-    let presentAlias = compileError(root(#"WaitFor(.present(.label("Receipt")))"#))
-    expect(presentAlias, contains: "unsupported accessibility predicate '.present'")
 }
 
-@Test func `runtime parser rejects empty predicates and bare wait strings`() throws {
+@Test func `runtime parser rejects empty predicates`() throws {
     let emptyExists = compileError(root(#"WaitFor(.exists())"#))
     expect(emptyExists, contains: "expected a ButtonHeist expression beginning with '.'")
 
@@ -218,8 +193,6 @@ import Testing
     let emptyDisappeared = compileError(root(#"WaitFor(.changed(.elements([.disappeared()])))"#))
     expect(emptyDisappeared, contains: "expected a ButtonHeist expression beginning with '.'")
 
-    let bareWaitString = compileError(root(#"WaitFor("Receipt")"#))
-    expect(bareWaitString, contains: "expected a ButtonHeist expression beginning with '.'")
 }
 
 @Test func `runtime parser rejects transition predicates in conditionals`() throws {

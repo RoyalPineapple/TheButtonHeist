@@ -221,7 +221,7 @@ final class CLICommandSyncTests: XCTestCase {
         let prepared = try await RunHeistCommand.prepareInput(
             path: "Flow.swift",
             entry: "makeHeist",
-            compileSwiftSource: { _, _ in .success(plan, diagnostics: []) }
+            compileSwiftSource: { _, _ in plan }
         )
         defer { prepared.cleanup() }
 
@@ -511,7 +511,7 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testCommandArgumentFieldsProjectCanonicalTargetEnvelope() throws {
-        let expectedTarget = AccessibilityTarget.predicate(ElementPredicateTemplate(
+        let expectedTarget = AccessibilityTarget.predicate(ElementPredicate(
                 [
                     .label("Rotor Host"),
                     .identifier("rotor.host"),

@@ -97,7 +97,7 @@ extension WireTypeRoundTripTests {
 
     func testCustomActionTargetRoundTrip() throws {
         let target = CustomActionTarget(
-            target: .predicate(ElementPredicateTemplate(label: "btn_save")),
+            target: .predicate(ElementPredicate(label: "btn_save")),
             actionName: "Delete Item"
         )
         let data = try encoder.encode(target)
@@ -105,7 +105,7 @@ extension WireTypeRoundTripTests {
         XCTAssertEqual(
             decoded,
             CustomActionTarget(
-                target: .predicate(ElementPredicateTemplate(label: "btn_save")),
+                target: .predicate(ElementPredicate(label: "btn_save")),
                 actionName: "Delete Item"
             )
         )
@@ -114,13 +114,13 @@ extension WireTypeRoundTripTests {
 
     func testCustomActionTargetWithMatcher() throws {
         let target = CustomActionTarget(
-            target: .predicate(ElementPredicateTemplate(label: "Menu")),
+            target: .predicate(ElementPredicate(label: "Menu")),
             actionName: "Open Submenu"
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(CustomActionTarget.self, from: data)
         XCTAssertEqual(decoded, CustomActionTarget(
-            target: .predicate(ElementPredicateTemplate(label: "Menu")),
+            target: .predicate(ElementPredicate(label: "Menu")),
             actionName: "Open Submenu"
         ))
         XCTAssertEqual(decoded.actionName, "Open Submenu")
@@ -143,12 +143,12 @@ extension WireTypeRoundTripTests {
 
     func testLongPressTargetRoundTrip() throws {
         let target = LongPressTarget(
-            selection: .element(.predicate(ElementPredicateTemplate(label: "cell_1"))),
+            selection: .element(.predicate(ElementPredicate(label: "cell_1"))),
             duration: 1.5
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(LongPressTarget.self, from: data)
-        XCTAssertEqual(decoded.selection, .element(.predicate(ElementPredicateTemplate(label: "cell_1"))))
+        XCTAssertEqual(decoded.selection, .element(.predicate(ElementPredicate(label: "cell_1"))))
         XCTAssertEqual(decoded.duration.seconds, 1.5)
     }
 
@@ -216,13 +216,13 @@ extension WireTypeRoundTripTests {
 
     func testDragTargetRoundTrip() throws {
         let target = DragTarget(
-            start: .element(.predicate(ElementPredicateTemplate(label: "handle"))),
+            start: .element(.predicate(ElementPredicate(label: "handle"))),
             end: ScreenPoint(x: 200, y: 300),
             duration: 0.8
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(DragTarget.self, from: data)
-        XCTAssertEqual(decoded.start, .element(.predicate(ElementPredicateTemplate(label: "handle"))))
+        XCTAssertEqual(decoded.start, .element(.predicate(ElementPredicate(label: "handle"))))
         XCTAssertEqual(decoded.end, ScreenPoint(x: 200, y: 300))
         XCTAssertEqual(decoded.duration?.seconds, 0.8)
     }
@@ -315,12 +315,12 @@ extension WireTypeRoundTripTests {
 
     func testScrollTargetRoundTrip() throws {
         let target = ScrollTarget(
-            selection: .element(.predicate(ElementPredicateTemplate(label: "list"))),
+            selection: .element(.predicate(ElementPredicate(label: "list"))),
             direction: .down
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(ScrollTarget.self, from: data)
-        XCTAssertEqual(decoded.selection, .element(.predicate(ElementPredicateTemplate(label: "list"))))
+        XCTAssertEqual(decoded.selection, .element(.predicate(ElementPredicate(label: "list"))))
         XCTAssertEqual(decoded.direction, .down)
     }
 
@@ -387,13 +387,13 @@ extension WireTypeRoundTripTests {
     func testScrollToEdgeTargetAllEdges() throws {
         for edge in ScrollEdge.allCases {
             let target = ScrollToEdgeTarget(
-                selection: .element(.predicate(ElementPredicateTemplate(label: "scroll_view"))),
+                selection: .element(.predicate(ElementPredicate(label: "scroll_view"))),
                 edge: edge
             )
             let data = try encoder.encode(target)
             let decoded = try decoder.decode(ScrollToEdgeTarget.self, from: data)
             XCTAssertEqual(decoded.edge, edge)
-            XCTAssertEqual(decoded.selection, .element(.predicate(ElementPredicateTemplate(label: "scroll_view"))))
+            XCTAssertEqual(decoded.selection, .element(.predicate(ElementPredicate(label: "scroll_view"))))
         }
     }
 

@@ -67,13 +67,19 @@ extension ElementInflationProductTests {
             label: "Committed Refresh Target",
             identifier: heistId.rawValue
         )
+        let refreshObservationSource = VisibleObservationSourceFixture()
+        let refreshBrains = TheBrains(
+            tripwire: TheTripwire(),
+            visibleObservationSource: refreshObservationSource.capture
+        )
         let staleObject = UIButton(frame: CGRect(x: 20, y: 20, width: 160, height: 44))
-        await brains.vault.installObservationForTesting(.makeForTests([
+        await refreshBrains.vault.installObservationForTesting(.makeForTests([
             .init(element, heistId: heistId, object: staleObject),
         ]))
-        let treeElement = try XCTUnwrap(brains.vault.interfaceElement(heistId: heistId))
-        guard case .resolved(let liveTarget) = brains.vault.resolveLiveActionTarget(for: treeElement) else {
-            return XCTFail("Expected committed refresh fixture to have a live target")
+        let treeElement = try XCTUnwrap(refreshBrains.vault.interfaceElement(heistId: heistId))
+        let staleResolution = refreshBrains.vault.resolveLiveActionTarget(for: treeElement)
+        guard case .resolved(let liveTarget) = staleResolution else {
+            return XCTFail("Expected committed refresh fixture to have a live target, got \(staleResolution)")
         }
         let completedInflation = ElementInflation.InflatedElementTarget(
             target: try AccessibilityTarget.identifier(heistId.rawValue).resolve(in: .empty),
@@ -82,14 +88,13 @@ extension ElementInflationProductTests {
             deadline: SemanticObservationDeadline(start: RuntimeElapsed.now, timeoutSeconds: 0),
             resolution: ActionSubjectResolution(origin: .visible)
         )
-        brains.stopSemanticObservation()
         let replacementObject = UIButton(frame: CGRect(x: 20, y: 20, width: 160, height: 44))
-        visibleObservationSource.observation = .makeForTests([
+        refreshObservationSource.observation = .makeForTests([
             .init(element, heistId: heistId, object: replacementObject),
         ])
         var now = RuntimeElapsed.now
         let deadlineStart = now
-        brains.navigation.elementInflation.geometryEnvironment = .init(
+        refreshBrains.navigation.elementInflation.geometryEnvironment = .init(
             now: { now },
             awaitFrame: { _ in
                 now = now.advanced(by: .milliseconds(10))
@@ -97,7 +102,7 @@ extension ElementInflationProductTests {
             }
         )
 
-        let result = await brains.navigation.elementInflation.refreshCommittedTarget(
+        let result = await refreshBrains.navigation.elementInflation.refreshCommittedTarget(
             completedInflation.committedTarget,
             method: .activate
         )

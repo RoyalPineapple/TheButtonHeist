@@ -4,15 +4,18 @@ This document defines the public Button Heist authoring boundary.
 
 ## Durable boundary
 
-`HeistPlan` is the durable DSL artifact boundary. A behavior that must survive
-storage, `.heist` packaging, catalog discovery, MCP composition, canonical
-rendering, or replay MUST be represented as a validated `HeistPlan`.
+`HeistPlan` is the sole public recursive plan model and the durable DSL artifact
+boundary. A behavior that must survive storage, `.heist` packaging, catalog
+discovery, MCP composition, canonical rendering, or replay MUST be represented
+as a root-admitted `HeistPlan`.
 
 Durable heists MAY be authored through canonical ButtonHeist source, trusted
-local Swift DSL that compiles to a `HeistPlan`, or generated `.heist` artifacts.
-The durable artifact format is described in [Heist format](HEIST-FORMAT.md).
-The authoring surface — step types, passables, target forms, and the concrete
-predicate grammar — is drawn in the
+local Swift DSL, or generated `.heist` artifacts whose JSON decodes directly to
+`HeistPlan`. Every successful boundary returns that same runtime-safe value; no
+second recursive plan representation crosses a boundary. The durable artifact
+format is described in [Heist format](HEIST-FORMAT.md). The authoring surface —
+step types, passables, target forms, and the concrete predicate grammar — is
+drawn in the
 [DSL grammar diagram](diagrams/dsl-grammar.md); the termination guarantees are
 drawn in the [totality diagram](diagrams/totality.md).
 
@@ -24,7 +27,7 @@ language.
 
 Heist plan names and reference names are distinct typed currencies over one
 exact identifier grammar. `HeistPlanName` names a root plan or one local
-definition; `HeistReferenceName` names a parameter or expression reference.
+definition; `HeistReferenceName` names a parameter or authored value reference.
 `HeistDefinitionPath` names where a reusable definition is declared;
 `HeistInvocationPath` names the capability a `RunHeist` step invokes. The two
 path types remain distinct even though both delegate to one canonical path
@@ -45,10 +48,10 @@ than the dot separator, start with a digit, or use Swift reserved words.
 Swift string literals are contextual authoring sugar because all three types
 conform to `ExpressibleByStringLiteral`; the resulting value is still typed.
 Dynamic source, JSON, and CLI text MUST enter through the role type's throwing
-validating initializer at that boundary. Public plan APIs do not accept raw-string paths,
-component arrays, aliases, or alternate spellings. All three types use
-single-value string encoding, so generated JSON stores a name or dotted path as
-one string rather than exposing component bookkeeping.
+validating initializer at that boundary. Public plan APIs do not accept
+raw-string paths, component arrays, aliases, or alternate spellings. All three
+types use single-value string encoding, so generated JSON stores a name or
+dotted path as one string rather than exposing component bookkeeping.
 
 ## Execution entry points
 
@@ -70,26 +73,36 @@ multi-step source, raw wire IR, direct viewport/debug/session command text, and
 
 ## Compilation and validation
 
-Canonical ButtonHeist source and trusted local Swift DSL are authoring
-frontends, not executable products. Both frontends MUST lower through the same
-semantic validation boundary before producing a durable `HeistPlan`.
+Canonical ButtonHeist source, trusted local Swift DSL, and generated plan JSON
+are construction boundaries, not alternate plan models. Each MUST return one
+root-admitted `HeistPlan` or throw canonical diagnostics.
 
-The checked-plan pipeline is:
+Each boundary owns its recursive assembly:
 
-1. Parse or build syntax into an admission candidate.
-2. Validate syntax-local contracts such as typed paths, supported step shapes,
-   parameter names, and expectation composition.
-3. Run semantic validation for duplicate sibling definitions, unresolved
-   `RunHeist` targets, argument arity/type mismatches, unsupported recursion,
-   non-durable actions, bounded loops, bounded nesting, and payload contracts.
-4. Admit only a validated `HeistPlan` to storage, catalog discovery, rendering,
-   replay, or execution.
+- JSON decoding assembles and structurally admits the complete root inside
+  `HeistPlan.swift`.
+- The Swift DSL collects `HeistContent` and calls the throwing `HeistPlan` root
+  initializer.
+- The source parser keeps recursive plan, step, branch, and definition assembly
+  private and file-local to `HeistPlanSourceProgramParser.swift`. After the
+  parser consumes the complete root, `parseProgram()` invokes runtime-safety
+  validation once.
+
+Unchecked recursive assembly MUST NOT be stored, returned, package-visible, or
+observed outside its owning boundary. Root admission validates typed paths,
+supported step shapes, parameter names, expectation composition, version, and
+local structure. One `HeistPlanRuntimeSafetyValidator` pass then validates
+duplicate sibling definitions, unresolved `RunHeist` targets, argument
+arity/type mismatches, unsupported recursion, non-durable actions, bounded
+loops, bounded nesting, expansion, cycles, and payload contracts. Only the
+resulting `HeistPlan` may enter storage, catalog discovery, rendering, replay,
+or execution.
 
 `validate_heist` exposes this admission boundary without opening a device
 connection or creating a session. It accepts exactly one canonical source:
 inline ButtonHeist `plan` text or a generated `.heist` `path`. It separately
 reports plan admission, root invocation argument validity, and optional lint.
-An invalid candidate is a successful validation response with
+An inadmissible plan is a successful validation response with
 `admissible: false`; malformed command arguments remain request errors.
 
 Validation cannot prove that a live accessibility target exists or that an
@@ -102,6 +115,20 @@ drawn in the [heist lifecycle diagram](diagrams/heist-lifecycle.md).
 Invalid syntax MUST NOT become a different valid program. In particular,
 invalid dotted paths MUST NOT be repaired by dropping empty components or
 otherwise canonicalizing user input.
+
+Compression changes ownership, not retained source or wire meaning. Generated
+JSON retains the `version`, `name`, `parameter`, `definitions`, and `body` plan
+fields; `StringMatch` retains `mode` and `value`; element predicates retain
+their ordered `checks`; and root accessibility predicates retain `exists`,
+`missing`, `announcement`, `changed`, and `no_change`, including `screen` and
+`elements` change scopes. Existing omission defaults, strict unknown-key
+rejection, source spans, diagnostic messages, and canonical rendering remain
+part of the contract.
+
+Canonical spellings are the only accepted spellings. Unsupported source forms
+fail at the source boundary, and removed wire fields or values fail strict
+decoding. The compiler and decoder MUST NOT translate them through aliases,
+deprecated overloads, adapters, or fallback branches.
 
 ## Diagnostics
 
@@ -152,6 +179,21 @@ when it can be re-resolved after storage, packaging, canonical rendering, and
 replay. How a target resolves at runtime — exact-or-miss matching, ordinals,
 container scope, and diagnostics — is drawn in the
 [element inflation diagram](diagrams/element-inflation.md).
+
+The public authored predicate language is concrete:
+`StringMatch` → `ElementPredicateCheck` → `ElementPredicate` →
+`AccessibilityTarget` → `AccessibilityPredicate`. `ChangeDeclaration` supplies
+the valid change-assertion contexts. Resolved values are package-only execution
+state. No public expression, template, phase, or generic predicate core is part
+of the language.
+
+Direct target forms are syntax sugar over that pipeline. For example,
+`.label("Pay")` immediately constructs an `AccessibilityTarget` containing
+`ElementPredicate.label("Pay")`, and `.element(.label("Pay"),
+.traits([.button]))` constructs one `ElementPredicate` with two checks. The
+sugar does not create another matcher, evaluator, or wire spelling. Actions and
+expectations therefore resolve the same target through the same predicate
+semantics.
 
 The durable target forms are:
 
@@ -224,8 +266,9 @@ returns structured diagnostics with near-miss suggestions; it never silently
 widens the match. Broad matching is explicit and opt-in: `.contains`,
 `.prefix`, and `.suffix` apply the same normalization and require non-empty
 patterns. `StringMatch` is expressible by string literal, so a string passed to
-a matcher-bearing API means `.exact(string)`. Expression storage and resolved
-matcher types are implementation details, not authored API.
+a matcher-bearing API means exact matching. Canonical source writes that exact
+match as the string literal itself; broader modes use `.contains`, `.prefix`,
+or `.suffix`.
 
 ## Accessibility predicate grammar
 
@@ -259,6 +302,24 @@ Screen, layout, value, and announcement notifications are edge evidence and
 prevent `noChange`. A transition assertion never passes solely because its
 implied final state is true.
 
+## Expectation composition
+
+Actions and `RunHeist` invocations use one expectation-composition path.
+`AuthoredActionExpectation` owns chaining, timeout intent, conflict
+diagnostics, and conversion to the retained `WaitStep` wire shape. Source and
+Swift DSL authoring both route through that owner.
+
+A single `.expect(predicate, timeout:)` accepts any root
+`AccessibilityPredicate`. Chaining is supported only to combine one
+`.changed(.screen(...))` declaration with one current-tree `.exists(...)` or
+`.missing(...)` assertion, in either order; the current-tree assertion becomes
+a screen assertion. Any other pair is rejected as unsupported composition.
+
+With no explicit timeout, the action-expectation default is 1 second. One
+explicit timeout applies to the composition, and two equal explicit timeouts
+are accepted. Two different explicit timeouts are rejected. Chaining does not
+create another predicate or wire representation.
+
 ## Timeouts
 
 Every timeout in the language is a `Double` in **seconds**. DSL source spells
@@ -274,12 +335,15 @@ equal to 30 to override that maximum; there is no additional fixed policy cap.
 | Site | Default | Notes |
 |------|---------|-------|
 | `WaitFor(_, timeout:)` | 30 seconds | Standalone waits and `WaitFor(...).else` gates. |
-| Action `.expect(_, timeout:)` | 1 second | How long an action expectation polls accumulated settled evidence before reporting the expectation unmet. |
+| Action `.expect(_, timeout:)` | 1 second | Attached action expectations. |
 | `RepeatUntil(_, timeout:)` | none — required | The mandatory bound for a predicate only the run can decide. The configured `WaitTimeout` maximum applies. |
 
-Settlement has its own clock, separate from these: the settle loop and its
-5-second default hard timeout are defined in
-[Scope and limits](SCOPE-AND-LIMITS.md).
+An action `.expect` does not replace the 5-second action-readiness allowance,
+which begins when dispatch completes. If the predicate is unmet at the first
+ready handoff, the full authored `.expect` timeout begins at that handoff.
+Earlier work does not consume it, and later readiness does not restart it.
+
+Standalone `WaitFor` uses its one authored timeout and performs no action.
 
 ## Validation bounds
 
@@ -291,6 +355,10 @@ a diagnostic, not truncated. Collection `ForEach` loops MUST NOT contain another
 collection `ForEach` loop, directly or through expanded `RunHeist` bodies.
 
 ## Durable DSL examples
+
+The examples in this section are canonical ButtonHeist source. Trusted local
+Swift DSL uses the same constructs and calls the throwing `HeistPlan`
+initializer with `try`.
 
 Use `HeistPlan` for reusable or multi-step behavior:
 
@@ -363,6 +431,11 @@ HeistPlan("cart") {
 Durable heist source MUST use Button Heist DSL constructs: actions, targets,
 expectations, expectation waivers, `WaitFor`, `RepeatUntil`, `If`, `Case`,
 `Else`, `ForEach`, `RunHeist`, `HeistDef`, `Warn`, and `Fail`.
+
+Durable heist source MUST use the canonical rendered spelling for each
+construct. Unsupported historical property wrappers, labeled element fields,
+exact-match wrappers, change wrappers, and include/exclude wrappers are syntax
+errors. Source compilation MUST NOT reinterpret them as a retained construct.
 
 Durable heist source MUST NOT depend on viewport position, current pixels,
 runtime IDs, capture-local IDs, generated container names, or session state as

@@ -2,12 +2,12 @@ import Foundation
 
 public struct HeistContent: Sendable {
     let steps: [HeistStep]
-    let definitions: [HeistPlanAdmissionCandidate]
+    let definitions: [HeistPlan]
     let diagnostics: [HeistBuildDiagnostic]
 
     init(
         _ steps: [HeistStep] = [],
-        definitions: [HeistPlanAdmissionCandidate] = [],
+        definitions: [HeistPlan] = [],
         diagnostics: [HeistBuildDiagnostic] = []
     ) {
         self.steps = steps
@@ -78,7 +78,8 @@ private extension HeistPlan {
     ) throws {
         let content = try content()
         try Self.throwIfBuildDiagnostics(content.diagnostics)
-        self = try Self.validatedDSLPlan(
+        self = try HeistPlan(
+            version: HeistPlan.currentVersion,
             name: name,
             definitions: content.definitions,
             body: content.steps
@@ -92,67 +93,18 @@ private extension HeistPlan {
     ) throws {
         let content = try content()
         try Self.throwIfBuildDiagnostics(content.diagnostics)
-        guard !content.steps.isEmpty || !content.definitions.isEmpty else {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: [HeistPlanCodingKey("body")],
-                debugDescription: "HeistPlan requires a non-empty body or definitions"
-            ))
-        }
-        self = try HeistPlanAdmissionCandidate(
+        self = try HeistPlan(
+            version: HeistPlan.currentVersion,
             name: name,
             parameter: parameter,
             definitions: content.definitions,
-            body: content.steps.map(HeistStepAdmissionCandidate.init)
-        ).validatedSemantics()
-    }
-
-    static func validatedDSLPlan(
-        name: HeistPlanName? = nil,
-        definitions: [HeistPlanAdmissionCandidate] = [],
-        body: [HeistStep]
-    ) throws -> HeistPlan {
-        guard !body.isEmpty || !definitions.isEmpty else {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: [HeistPlanCodingKey("body")],
-                debugDescription: "HeistPlan requires a non-empty body or definitions"
-            ))
-        }
-        return try HeistPlanAdmissionCandidate(
-            name: name,
-            definitions: definitions,
-            body: body.map(HeistStepAdmissionCandidate.init)
-        ).validatedSemantics()
+            body: content.steps
+        )
     }
 
     static func throwIfBuildDiagnostics(_ diagnostics: [HeistBuildDiagnostic]) throws {
         guard !diagnostics.isEmpty else { return }
         throw HeistPlanBuildError(diagnostics: diagnostics)
-    }
-}
-
-public struct HeistPlanBuildError: Error, Sendable, Equatable, CustomStringConvertible {
-    public let diagnostics: [HeistBuildDiagnostic]
-
-    public var description: String {
-        "ButtonHeist plan build failed: \(diagnostics.renderedMessages)"
-    }
-}
-
-private struct HeistPlanCodingKey: CodingKey {
-    let stringValue: String
-    let intValue: Int?
-
-    init(_ stringValue: String) {
-        self.stringValue = stringValue
-        self.intValue = nil
-    }
-
-    init?(stringValue: String) {
-        self.init(stringValue)
-    }
-
-    init?(intValue: Int) {
-        return nil
     }
 }
 
@@ -169,7 +121,7 @@ public enum HeistBuilder {
     public static func buildExpression(_ expression: HeistPlan) -> HeistContent {
         HeistContent(
             expression.body,
-            definitions: expression.definitions.map(HeistPlanAdmissionCandidate.init)
+            definitions: expression.definitions
         )
     }
 
@@ -214,24 +166,31 @@ public enum HeistBuilder {
     }
 
     public static func buildBlock(_ components: HeistContent...) -> HeistContent {
-        HeistContent(
-            components.flatMap(\.steps),
-            definitions: mergeDefinitions(components.flatMap(\.definitions)),
-            diagnostics: components.flatMap(\.diagnostics)
-        )
-    }
-
-    private static func mergeDefinitions(
-        _ definitions: [HeistPlanAdmissionCandidate]
-    ) -> [HeistPlanAdmissionCandidate] {
-        mergeHeistDefinitions(definitions, duplicatePolicy: .discardIdentical)
+        let diagnostics = components.flatMap(\.diagnostics)
+        do {
+            return try HeistContent(
+                components.flatMap(\.steps),
+                definitions: HeistPlan.mergeDefinitions(
+                    components.flatMap(\.definitions),
+                    duplicatePolicy: .discardIdentical
+                ),
+                diagnostics: diagnostics
+            )
+        } catch let error as HeistPlanBuildError {
+            return HeistContent(diagnostics: diagnostics + error.diagnostics)
+        } catch {
+            return HeistContent(diagnostics: diagnostics + [.dslBuild(
+                code: .dslInvalidDefinition,
+                message: String(describing: error)
+            )])
+        }
     }
 }
 
 public struct HeistDef<Input>: Sendable {
     let path: HeistDefinitionPath
     let parameter: HeistParameter
-    private let definitionResult: ValidationResult<HeistPlanAdmissionCandidate, HeistBuildDiagnostic>
+    private let content: HeistContent
 
     public init(
         _ path: HeistDefinitionPath,
@@ -239,7 +198,7 @@ public struct HeistDef<Input>: Sendable {
     ) where Input == Void {
         self.parameter = .none
         self.path = path
-        self.definitionResult = Self.buildDefinition(path: path, parameter: self.parameter) {
+        self.content = Self.definitionContent(path: path, parameter: self.parameter) {
             try content()
         }
     }
@@ -252,7 +211,7 @@ public struct HeistDef<Input>: Sendable {
         let reference = parameter
         self.parameter = .string(name: reference)
         self.path = path
-        self.definitionResult = Self.buildDefinition(path: path, parameter: self.parameter) {
+        self.content = Self.definitionContent(path: path, parameter: self.parameter) {
             try content(reference)
         }
     }
@@ -265,30 +224,32 @@ public struct HeistDef<Input>: Sendable {
         let reference = parameter
         self.parameter = .accessibilityTarget(name: reference)
         self.path = path
-        self.definitionResult = Self.buildDefinition(path: path, parameter: self.parameter) {
+        self.content = Self.definitionContent(path: path, parameter: self.parameter) {
             try content(AccessibilityTarget(ref: reference))
         }
     }
 
-    private static func buildDefinition(
+    private static func definitionContent(
         path: HeistDefinitionPath,
         parameter: HeistParameter,
         _ content: () throws -> HeistContent
-    ) -> ValidationResult<HeistPlanAdmissionCandidate, HeistBuildDiagnostic> {
+    ) -> HeistContent {
         let renderedPath = path.description
         do {
             let content = try content()
             guard content.diagnostics.isEmpty else {
-                return .failure(content.diagnostics.map { $0.withPath(renderedPath) })
+                return HeistContent(diagnostics: content.diagnostics.map { $0.withPath(renderedPath) })
             }
-            return .success(nestedHeistDefinition(
-                path: path,
-                parameter: parameter,
-                definitions: content.definitions,
-                body: content.steps.map(HeistStepAdmissionCandidate.init)
-            ), diagnostics: [])
+            return HeistContent(definitions: [
+                try HeistPlan.nestedDefinition(
+                    path: path,
+                    parameter: parameter,
+                    definitions: content.definitions,
+                    body: content.steps
+                ),
+            ])
         } catch {
-            return .failure([.dslBuild(
+            return HeistContent(diagnostics: [.dslBuild(
                 code: .dslInvalidDefinition,
                 path: renderedPath,
                 message: String(describing: error)
@@ -297,31 +258,33 @@ public struct HeistDef<Input>: Sendable {
     }
 
     fileprivate func invocation(argument: HeistArgument) throws -> HeistInvocationContent {
-        let definition = try definitionResult.value(orThrow: HeistPlanBuildError.init(diagnostics:))
+        try HeistPlan.throwIfBuildDiagnostics(content.diagnostics)
         return HeistInvocationContent(
-            invocation: HeistInvocationStep(
-                path: HeistInvocationPath(definitionPath: path),
-                argument: argument
-            ),
-            definitions: [definition]
+            path: HeistInvocationPath(definitionPath: path),
+            argument: argument,
+            definitions: content.definitions
         )
     }
 }
 
 public struct HeistInvocationContent {
-    let invocation: HeistInvocationStep
-    let definitions: [HeistPlanAdmissionCandidate]
-    let expectation: ComposedExpectation?
-    let expectationValidationDiagnostics: [HeistBuildDiagnostic]
+    let path: HeistInvocationPath
+    let argument: HeistArgument
+    let definitions: [HeistPlan]
+    let expectation: AuthoredActionExpectation
 
     var heistContent: HeistContent {
         HeistContent(
-            [.invoke(invocation)],
+            [.invoke(HeistInvocationStep(
+                path: path,
+                argument: argument,
+                expectation: expectation.waitStep
+            ))],
             definitions: definitions,
-            diagnostics: expectationValidationDiagnostics.map {
+            diagnostics: expectation.diagnostics.map {
                 HeistBuildDiagnostic.dslBuild(
                     code: .dslInvalidInvocationExpectation,
-                    path: invocation.path.description,
+                    path: path.description,
                     message: $0.message,
                     hint: $0.hint
                 )
@@ -330,17 +293,15 @@ public struct HeistInvocationContent {
     }
 
     init(
-        invocation: HeistInvocationStep,
-        definitions: [HeistPlanAdmissionCandidate],
-        expectation: ComposedExpectation? = nil,
-        expectationValidationDiagnostics: [HeistBuildDiagnostic] = []
+        path: HeistInvocationPath,
+        argument: HeistArgument,
+        definitions: [HeistPlan],
+        expectation: AuthoredActionExpectation = .default
     ) {
-        self.invocation = invocation
+        self.path = path
+        self.argument = argument
         self.definitions = definitions
-        self.expectation = expectation ?? invocation.expectation.map {
-            ComposedExpectation(step: $0, explicitTimeout: nil)
-        }
-        self.expectationValidationDiagnostics = expectationValidationDiagnostics
+        self.expectation = expectation
     }
 }
 
@@ -349,26 +310,13 @@ public extension HeistInvocationContent {
         _ predicate: AccessibilityPredicate,
         timeout: WaitTimeout? = nil
     ) -> HeistInvocationContent {
-        let composition = composeExpectation(
-            existing: expectation,
-            nextPredicate: predicate,
-            nextExplicit: timeout
-        )
-        let validationDiagnostics = expectationValidationDiagnostics
-            + composition.diagnostics
-
         return HeistInvocationContent(
-            invocation: HeistInvocationStep(
-                path: invocation.path,
-                argument: invocation.argument,
-                expectation: composition.expectation.step
-            ),
+            path: path,
+            argument: argument,
             definitions: definitions,
-            expectation: composition.expectation,
-            expectationValidationDiagnostics: validationDiagnostics
+            expectation: expectation.appending(predicate, timeout: timeout)
         )
     }
-
 }
 
 public extension HeistDef where Input == Void {
@@ -379,10 +327,7 @@ public extension HeistDef where Input == Void {
 
 extension HeistDef {
     var heistContent: HeistContent {
-        HeistContent(
-            definitions: definitionResult.value.map { [$0] } ?? [],
-            diagnostics: definitionResult.failureDiagnostics ?? []
-        )
+        content
     }
 }
 
@@ -430,10 +375,8 @@ public func RunHeist(_ path: HeistInvocationPath, _ input: AccessibilityTarget) 
 
 private func runHeistInvocation(_ path: HeistInvocationPath, argument: HeistArgument) -> HeistInvocationContent {
     HeistInvocationContent(
-        invocation: HeistInvocationStep(
-            path: path,
-            argument: argument
-        ),
+        path: path,
+        argument: argument,
         definitions: []
     )
 }
@@ -475,7 +418,7 @@ public struct ForEach {
     }
 
     public init(
-        _ predicate: ElementPredicateTemplate,
+        _ predicate: ElementPredicate,
         limit: Int = 20,
         parameter: HeistReferenceName = "target",
         @HeistBuilder _ content: (AccessibilityTarget) throws -> HeistContent
@@ -500,11 +443,5 @@ public struct ForEach {
                 message: "ForEach element loop is invalid: \(String(describing: error))"
             )])
         }
-    }
-}
-
-private extension Array where Element == HeistBuildDiagnostic {
-    var renderedMessages: String {
-        map(\.renderedMessage).joined(separator: "; ")
     }
 }

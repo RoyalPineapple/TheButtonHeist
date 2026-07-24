@@ -86,11 +86,11 @@ extension TheBrains {
         }
         guard failedStep.kind == .action,
               failedStep.failure?.category == .action,
-              failedStep.actionEvidence?.dispatchResult?.outcome.isSuccess == false else {
+              failedStep.actionEvidence?.result?.outcome.isSuccess == false else {
             return .abort
         }
         let shouldCheck: Bool
-        switch failedStep.actionEvidence?.dispatchResult?.outcome.failureKind {
+        switch failedStep.actionEvidence?.result?.outcome.failureKind {
         case nil, .some(.actionFailed):
             shouldCheck = true
         case .some(.accessibilityTreeUnavailable),
@@ -135,17 +135,24 @@ extension TheBrains {
                 actual: String(describing: error)
             ))
         }
-        let waitInput: ResolvedWaitRuntimeInput
         let command: Settlement.Command
         if let observation {
-            waitInput = .changedElements(timeout: progressTimeout)
+            let authored = AccessibilityPredicate.changed(.elements())
+            let resolved = ResolvedAccessibilityPredicate.changed(.elements([]))
             command = Settlement.Command(
-                observing: waitInput,
-                after: observation.settlement
+                observing: authored,
+                resolved: resolved,
+                timeout: progressTimeout,
+                baseline: observation.settlement.evidence.handoff.event.map {
+                    .supplied(.init(moment: $0.moment))
+                } ?? .unavailable(.unavailable)
             )
         } else {
-            waitInput = ResolvedWaitRuntimeInput(repeatUntil: step, timeout: progressTimeout)
-            command = Settlement.Command(observing: waitInput)
+            command = Settlement.Command(
+                observing: step.predicateExpression,
+                resolved: step.predicate,
+                timeout: progressTimeout
+            )
         }
         let settlement = await context.runtime.settle(command)
         let evidence = Settlement.ResultProjector.projectWait(settlement)

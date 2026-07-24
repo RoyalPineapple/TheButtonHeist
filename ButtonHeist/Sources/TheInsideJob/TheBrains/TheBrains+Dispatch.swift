@@ -4,45 +4,25 @@ import Foundation
 import ThePlans
 import TheScore
 
-internal struct ActionExpectationContext: Sendable, Equatable {
-    internal let preActionMoment: Observation.Moment
-    internal let throughMoment: Observation.Moment
-    internal let announcementCursor: AccessibilityNotificationCursor
-
-    internal func bounded(through moment: Observation.Moment) -> ActionExpectationContext {
-        precondition(
-            moment.isSameOrAfter(preActionMoment),
-            "action expectation observation bound cannot precede its baseline"
-        )
-        return ActionExpectationContext(
-            preActionMoment: preActionMoment,
-            throughMoment: moment,
-            announcementCursor: announcementCursor
-        )
-    }
-}
-
 internal struct RuntimeActionExecution: Sendable, Equatable {
     internal let evidence: HeistActionEvidence
-    internal let result: ActionResult
-    internal let actionExpectationContext: ActionExpectationContext?
 
-    internal init(evidence: HeistActionEvidence) {
-        guard let result = evidence.dispatchResult else {
-            preconditionFailure("runtime action execution requires dispatch evidence")
+    internal var result: ActionResult {
+        guard let result = evidence.result else {
+            preconditionFailure("runtime action execution requires action result evidence")
         }
-        self.evidence = evidence
-        self.result = result
-        self.actionExpectationContext = nil
+        return result
     }
 
-    internal init(
-        result: ActionResult,
-        actionExpectationContext: ActionExpectationContext?
-    ) {
-        self.evidence = .dispatch(dispatchResult: result)
-        self.result = result
-        self.actionExpectationContext = actionExpectationContext
+    internal init(evidence: HeistActionEvidence) {
+        guard evidence.result != nil else {
+            preconditionFailure("runtime action execution requires action result evidence")
+        }
+        self.evidence = evidence
+    }
+
+    internal init(result: ActionResult) {
+        self.evidence = .completed(result: result, expectation: nil)
     }
 }
 
@@ -109,31 +89,22 @@ extension TheBrains {
 
     func executeRuntimeActionForHeist(
         _ command: ResolvedHeistActionCommand,
-        expectation: ResolvedWaitRuntimeInput?
+        expectation: Settlement.ActionExpectation?
     ) async -> RuntimeActionExecution {
         guard semanticObservationIsActive else {
             return RuntimeActionExecution(
-                result: runtimeInactiveResult(payload: command.actionResultPayload),
-                actionExpectationContext: nil
+                result: runtimeInactiveResult(payload: command.actionResultPayload)
             )
         }
-        let predicate = expectation.map {
-            Settlement.Predicate(
-                authored: $0.predicateExpression,
-                resolved: $0.predicate
-            )
-        }
-        let timeoutMilliseconds = expectation.map {
-            Int64(($0.timeout.seconds * 1_000).rounded(.up))
-        } ?? Int64(SettleSession.defaultTimeoutMs)
-        let settlementCommand = Settlement.Command.action(
-            command,
-            predicate: predicate,
-            deadline: Settlement.Deadline(
-                afterActionDispatch: .milliseconds(timeoutMilliseconds)
+        let settlementCommand = Settlement.Command.action(.init(
+            command: command,
+            predicate: expectation?.predicate,
+            allowances: .init(
+                readiness: .milliseconds(Int64(SettleSession.defaultTimeoutMs)),
+                expectation: expectation?.allowance
             ),
             baseline: .capture
-        )
+        ))
         let result = await executeSettlementCommand(settlementCommand)
         return RuntimeActionExecution(
             evidence: Settlement.ResultProjector.projectAction(result)
@@ -225,11 +196,25 @@ extension TheBrains {
             )
         }
     }
-    func performWait(step: ResolvedWaitRuntimeInput) async -> ActionResult {
+    func performWait(step: WaitStep) async -> ActionResult {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(payload: .wait)
         }
-        let result = await executeSettlementCommand(Settlement.Command(observing: step))
+        let resolved: ResolvedWaitStep
+        do {
+            resolved = try step.resolve(in: .empty)
+        } catch {
+            return .failure(
+                payload: .wait,
+                failureKind: .validationError,
+                message: "could not resolve wait predicate: \(error)"
+            )
+        }
+        let result = await executeSettlementCommand(Settlement.Command(
+            observing: step.predicate,
+            resolved: resolved.predicate,
+            timeout: resolved.timeout
+        ))
         return Settlement.ResultProjector.projectWait(result).actionResult
     }
 

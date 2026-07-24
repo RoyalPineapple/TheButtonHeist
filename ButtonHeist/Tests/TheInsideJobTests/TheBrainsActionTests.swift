@@ -533,7 +533,6 @@ final class TheBrainsActionTests: XCTestCase {
         observedScopes: (@MainActor (SemanticObservationScope) -> Void)? = nil,
         observedTimeouts: (@MainActor (Double?) -> Void)? = nil,
         observedSettlementCommands: (@MainActor (Settlement.Command) -> Void)? = nil,
-        expectationContextScopes: (@MainActor (SemanticObservationScope?) -> Void)? = nil,
         unavailableObservationCount: Int = 0,
         file: StaticString = #filePath,
         line: UInt = #line
@@ -548,32 +547,29 @@ final class TheBrainsActionTests: XCTestCase {
         )
         return TheBrains.HeistExecutionRuntime(
             execute: { command, expectation in
-                expectationContextScopes?(expectation?.predicate.observationScope)
-                let result: ActionResult
-                if let execute {
-                    result = await execute(command)
+                let result = if let execute {
+                    await execute(command)
                 } else {
-                    result = ActionResult.success(
-                        payload: command.resultPayload
-                    )
+                    ActionResult.success(payload: command.resultPayload)
                 }
                 guard result.outcome.isSuccess, let expectation else {
-                    return RuntimeActionExecution(
-                        result: result,
-                        actionExpectationContext: nil
-                    )
+                    return RuntimeActionExecution(result: result)
                 }
-                let settlement = await self.scriptedSettlement(
-                    Settlement.Command(observing: expectation),
-                    settle: settle,
-                    observationSource: observationSource
-                )
-                let settlementEvidence = Settlement.ResultProjector.projectWait(settlement)
-                return RuntimeActionExecution(evidence: .expectation(
-                    dispatchResult: result,
-                    expectationResult: settlementEvidence.actionResult,
-                    expectation: settlementEvidence.expectation
+                let settlementCommand = Settlement.Command.action(.init(
+                    command: command,
+                    predicate: expectation.predicate,
+                    allowances: .init(readiness: .milliseconds(Int64(SettleSession.defaultTimeoutMs)),
+                        expectation: expectation.allowance
+                    ),
+                    baseline: .capture
                 ))
+                observedSettlementCommands?(settlementCommand)
+                guard let settle else {
+                    preconditionFailure("Scripted attached expectation requires action settlement")
+                }
+                return RuntimeActionExecution(
+                    evidence: Settlement.ResultProjector.projectAction(await settle(settlementCommand))
+                )
             },
             settle: { command in
                 observedSettlementCommands?(command)
@@ -600,7 +596,7 @@ final class TheBrainsActionTests: XCTestCase {
                         payload: command.resultPayload
                     )
                 }
-                return RuntimeActionExecution(result: result, actionExpectationContext: nil)
+                return RuntimeActionExecution(result: result)
             },
             settle: settle
         )
@@ -618,11 +614,18 @@ final class TheBrainsActionTests: XCTestCase {
            case .unavailable = baseline {
             return TheInsideJobTests.scriptedSettlement(command, observation: nil)
         }
+        let timeout: Double?
+        switch command {
+        case .currentState:
+            timeout = nil
+        case .observation(_, let deadline, _):
+            timeout = deadline.remainingDuration(at: RuntimeElapsed.now) / .seconds(1)
+        case .action(let action):
+            timeout = action.allowances.readiness / .seconds(1)
+        }
         let observation = observationSource.next(
             scope: command.observationScope,
-            timeout: command.deadline.map {
-                $0.remainingDuration(at: RuntimeElapsed.now) / .seconds(1)
-            }
+            timeout: timeout
         )
         return TheInsideJobTests.scriptedSettlement(command, observation: observation)
     }

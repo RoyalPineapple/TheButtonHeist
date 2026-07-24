@@ -15,21 +15,21 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         let predicate = transitionPredicate()
         let rows = [
             ProductRow(
-                command: .action(
-                    .dismiss,
+                command: .action(.init(
+                    command: .dismiss,
                     predicate: nil,
-                    deadline: deadline,
+                    allowances: .init(readiness: .seconds(5), expectation: nil),
                     baseline: .capture
-                ),
+                )),
                 dispatchCount: 1
             ),
             ProductRow(
-                command: .action(
-                    .dismiss,
+                command: .action(.init(
+                    command: .dismiss,
                     predicate: predicate,
-                    deadline: deadline,
+                    allowances: .init(readiness: .seconds(5), expectation: .seconds(1)),
                     baseline: .capture
-                ),
+                )),
                 dispatchCount: 1
             ),
             ProductRow(
@@ -92,11 +92,12 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
 
             dispatchCount += decision.effects.filter(\.isDispatch).count
             XCTAssertEqual(dispatchCount, row.dispatchCount)
-            guard case .completed(let result) = decision.state else {
+            guard case .terminal(let result) = decision.state else {
                 XCTFail("Expected readiness and an admitted handoff to complete \(row)")
                 continue
             }
             XCTAssertEqual(result.outcome, .settled)
+            XCTAssertEqual(result.evidence.boundary, .established(.init(moment: baseline.moment)))
             XCTAssertEqual(result.evidence.handoff.event?.moment, handoff.moment)
         }
     }
@@ -108,20 +109,12 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         XCTAssertEqual(decision.effects.filter(\.capturesBaseline).count, 1)
         decision = reduce(decision, .baselineAdmitted(current))
 
-        guard case .completed(let result) = decision.state else {
+        guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected one current-state capture to complete")
         }
         XCTAssertEqual(result.outcome, .settled)
         XCTAssertEqual(result.evidence.boundary, .established(.init(moment: current.moment)))
         XCTAssertEqual(result.evidence.handoff.event, current)
-        let wait = try resolvedWait(WaitStep(
-            predicate: .changed(.elements()),
-            timeout: 1
-        ))
-        XCTAssertEqual(
-            Settlement.Command(observing: wait, after: result).baseline,
-            .supplied(.init(moment: current.moment))
-        )
         XCTAssertEqual(
             result.evidence.readiness,
             .established(.init(
@@ -131,11 +124,10 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             ))
         )
         XCTAssertFalse(decision.effects.contains(where: \.armsChannels))
-        XCTAssertEqual(decision.effects.filter(\.isFinish).count, 1)
     }
 
     func testPredicateSemanticsAreDerivedFromResolvedCore() async throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Save"))
         let authored = [
             AccessibilityPredicate.exists(target),
             .changed(.elements([.appeared(target)])),
@@ -187,47 +179,13 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
 
         let decision = Settlement.Reducer.begin(command)
 
-        guard case .failed(let result) = decision.state else {
+        guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected unavailable supplied evidence to fail before arming")
         }
         XCTAssertEqual(result.outcome, .baselineUnavailable)
         XCTAssertEqual(result.evidence.boundary, .unavailable(.unavailable))
         XCTAssertFalse(decision.effects.contains(where: \.capturesBaseline))
         XCTAssertFalse(decision.effects.contains(where: \.armsChannels))
-        XCTAssertEqual(decision.effects.filter(\.isFinish).count, 1)
-    }
-
-    func testUnavailableCurrentStateRecapturesOnlyPresencePredicates() throws {
-        var decision = Settlement.Reducer.begin(.currentState(scope: .visible))
-        decision = reduce(decision, .baselineUnavailable(.unavailable))
-        guard let currentStateResult = decision.state.result else {
-            return XCTFail("Expected typed current-state capture failure")
-        }
-        let presence = try resolvedWait(WaitStep(
-            predicate: .exists(.label("Save")),
-            timeout: 1
-        ))
-        let transition = try resolvedWait(WaitStep(
-            predicate: .changed(.elements()),
-            timeout: 1
-        ))
-        let announcement = try resolvedWait(WaitStep(
-            predicate: .announcement("Saved"),
-            timeout: 1
-        ))
-
-        XCTAssertEqual(
-            Settlement.Command(observing: presence, after: currentStateResult).baseline,
-            .capture
-        )
-        XCTAssertEqual(
-            Settlement.Command(observing: transition, after: currentStateResult).baseline,
-            .unavailable(.unavailable)
-        )
-        XCTAssertEqual(
-            Settlement.Command(observing: announcement, after: currentStateResult).baseline,
-            .unavailable(.unavailable)
-        )
     }
 
     func testPositiveTransitionEvaluationEventBelongsToRetainedHistory() async throws {
@@ -409,7 +367,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         XCTAssertFalse(exists.met)
     }
 
-    func testTransitionEvidenceLatchesAcrossReadinessInvalidation() async throws {
+    func testPreReadinessEvidenceSettlesFromOriginalBaseline() async throws {
         let baseline = await commit(label: "Baseline")
         var decision = armedObservationDecision(
             baseline: baseline,
@@ -458,11 +416,17 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
 
         let final = await commit(label: "Final")
         decision = reduce(decision, .observationAdmitted(await admission(final, after: baseline)))
-        guard case .completed(let result) = decision.state else {
+        guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected the latched transition to survive readiness invalidation")
         }
+        XCTAssertEqual(result.outcome, .settled)
+        XCTAssertEqual(result.evidence.boundary, .established(.init(moment: baseline.moment)))
         XCTAssertEqual(result.evidence.predicate.satisfiedTarget, evaluation.target)
         XCTAssertEqual(result.evidence.handoff.event?.moment, final.moment)
+        XCTAssertEqual(result.evidence.observationHistory?.events, [
+            .snapshot(transient),
+            .snapshot(final),
+        ])
     }
 
     func testCurrentStateMatchMustBelongToReturnedHandoff() async throws {
@@ -505,14 +469,60 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
                 result: PredicateEvaluationResult(met: false, actual: "missing Save")
             ))
         )
-        decision = reduce(decision, .deadlineReached)
+        decision = reduce(
+            decision,
+            .deadlineReached(.init(
+                phase: .observation,
+                instant: deadline.instant
+            ))
+        )
 
-        guard case .timedOut(let result) = decision.state else {
+        guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected the current-state mismatch at handoff to time out")
         }
+        XCTAssertEqual(result.outcome, .timedOut(.observation))
         XCTAssertTrue(result.evidence.readiness.isEstablished)
         XCTAssertEqual(result.evidence.handoff.event?.moment, handoff.moment)
         XCTAssertFalse(result.evidence.predicate.isSatisfied)
+    }
+
+    func testActionCurrentStateMatchPromotesReturnedHandoff() async throws {
+        let baseline = await commit(label: "Baseline")
+        let ready = await commit(label: "Ready")
+        let dispatchAt = ContinuousClock.now
+        var decision = try await actionAwaitingEvidence(
+            baseline: baseline,
+            ready: ready,
+            dispatchAt: dispatchAt,
+            readyAt: dispatchAt.advanced(by: .milliseconds(100)),
+            predicate: try currentStatePredicate()
+        )
+
+        let matching = await commit(label: "Save")
+        decision = reduce(
+            decision,
+            .observationAdmitted(await admission(matching, after: baseline))
+        )
+        let matchingEvaluation = try XCTUnwrap(
+            decision.effects.compactMap(\.predicateEvaluation).first
+        )
+        decision = reduce(
+            decision,
+            .predicateEvaluated(.init(
+                target: matchingEvaluation.target,
+                result: PredicateEvaluationResult(met: true)
+            ))
+        )
+
+        guard case .terminal(let result) = decision.state else {
+            return XCTFail("Expected the matching current-state observation to settle the action")
+        }
+        XCTAssertEqual(result.outcome, .settled)
+        XCTAssertEqual(result.evidence.handoff.event?.moment, matching.moment)
+        XCTAssertEqual(
+            result.evidence.predicate.satisfiedTarget,
+            .observation(matching.moment)
+        )
     }
 
     func testTerminalStateEmitsNoFurtherEffects() async {
@@ -528,15 +538,20 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
                 observationBoundary: .including(ready.moment)
             ))
         )
-        guard case .completed = decision.state else {
-            return XCTFail("Expected terminal settlement")
-        }
+        let result = decision.state.result
+        XCTAssertEqual(result?.outcome, .settled)
+        let handoffMoment = result?.evidence.handoff.event?.moment
 
-        decision = reduce(decision, .deadlineReached)
+        decision = reduce(
+            decision,
+            .deadlineReached(.init(
+                phase: .actionReadiness,
+                instant: RuntimeElapsed.now
+            ))
+        )
 
-        guard case .completed = decision.state else {
-            return XCTFail("Terminal state must not change")
-        }
+        XCTAssertEqual(decision.state.result?.outcome, .settled)
+        XCTAssertEqual(decision.state.result?.evidence.handoff.event?.moment, handoffMoment)
         XCTAssertTrue(decision.effects.isEmpty)
     }
 
@@ -700,21 +715,22 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             ))
         )
 
-        guard case .completed(let result) = decision.state else {
+        guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected only the active readiness generation to admit a handoff")
         }
+        XCTAssertEqual(result.outcome, .settled)
         XCTAssertEqual(result.evidence.handoff.event?.moment, current.moment)
         XCTAssertEqual(result.evidence.handoff.generation, .initial.advanced())
     }
 
     func testDispatchFailureCannotEvaluatePredicateAndPreservesReadyHandoff() async throws {
         let baseline = await commit(label: "Baseline")
-        let command = Settlement.Command.action(
-            .dismiss,
+        let command = Settlement.Command.action(.init(
+            command: .dismiss,
             predicate: transitionPredicate(),
-            deadline: deadline,
+            allowances: .init(readiness: .seconds(5), expectation: .seconds(1)),
             baseline: .capture
-        )
+        ))
         var decision = armedDecision(command: command, baseline: baseline)
         decision = reduce(
             decision,
@@ -732,7 +748,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             ))
         )
 
-        guard case .failed(let result) = decision.state else {
+        guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected failed dispatch to finish with diagnostic handoff")
         }
         XCTAssertEqual(result.outcome, .dispatchFailed)
@@ -758,14 +774,20 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         )
         decision = reduce(decision, .cancelled)
 
-        guard case .cancelled(let result) = decision.state else {
+        guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected cancellation to terminate settlement")
         }
+        XCTAssertEqual(result.outcome, .cancelled)
         XCTAssertTrue(result.evidence.predicate.isSatisfied)
         XCTAssertFalse(result.evidence.readiness.isEstablished)
-        XCTAssertEqual(decision.effects.filter(\.isFinish).count, 1)
 
-        decision = reduce(decision, .deadlineReached)
+        decision = reduce(
+            decision,
+            .deadlineReached(.init(
+                phase: .observation,
+                instant: deadline.instant
+            ))
+        )
         XCTAssertTrue(decision.effects.isEmpty)
     }
 
@@ -834,11 +856,18 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             ))
         )
         XCTAssertTrue(decision.effects.compactMap(\.predicateEvaluation).isEmpty)
-        decision = reduce(decision, .deadlineReached)
+        decision = reduce(
+            decision,
+            .deadlineReached(.init(
+                phase: .observation,
+                instant: deadline.instant
+            ))
+        )
 
-        guard case .timedOut(let result) = decision.state else {
+        guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected incomplete history to prevent settlement")
         }
+        XCTAssertEqual(result.outcome, .timedOut(.observation))
         XCTAssertEqual(result.evidence.predicate.unavailability, .historyExpired(gap))
         XCTAssertEqual(result.evidence.handoff.event?.moment, handoff.moment)
     }
@@ -858,11 +887,22 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             decision,
             .handoffCaptureFailed(.initial, .admissionRejected)
         )
-        decision = reduce(decision, .deadlineReached)
+        guard let session = try? activeSession(in: decision),
+              case .actionReadiness(let deadline) = session.phase else {
+            return XCTFail("Expected action readiness deadline")
+        }
+        decision = reduce(
+            decision,
+            .deadlineReached(.init(
+                phase: deadline.phase,
+                instant: deadline.instant
+            ))
+        )
 
-        guard case .timedOut(let result) = decision.state else {
+        guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected failed handoff capture to time out")
         }
+        XCTAssertEqual(result.outcome, .timedOut(.actionReadiness))
         XCTAssertTrue(result.evidence.readiness.isEstablished)
         XCTAssertEqual(
             result.evidence.handoff,
@@ -870,104 +910,141 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         )
     }
 
-    func testDeadlinePreservesReadinessPredicateAndHandoffAxesIndependently() async throws {
+    func testActionReadinessDeadlineIgnoresExpectationTimeout() async {
         let baseline = await commit(label: "Baseline")
+        let dispatchAt = ContinuousClock.now
+        let rows: [Duration?] = [
+            nil,
+            .milliseconds(1_000),
+            .milliseconds(5_000),
+            .milliseconds(8_000),
+        ]
 
-        var predicateOnly = armedObservationDecision(
-            baseline: baseline,
-            predicate: transitionPredicate()
-        )
-        let transient = await commit(label: "Transient")
-        predicateOnly = reduce(
-            predicateOnly,
-            .observationAdmitted(await admission(transient, after: baseline))
-        )
-        let evaluation = try XCTUnwrap(predicateOnly.effects.compactMap(\.predicateEvaluation).first)
-        predicateOnly = reduce(
-            predicateOnly,
-            .predicateEvaluated(.init(
-                target: evaluation.target,
-                result: PredicateEvaluationResult(met: true)
-            ))
-        )
-        let predicateOnlyResult = try timedOutResult(from: reduce(predicateOnly, .deadlineReached))
-        XCTAssertTrue(predicateOnlyResult.evidence.predicate.isSatisfied)
-        XCTAssertFalse(predicateOnlyResult.evidence.readiness.isEstablished)
-        XCTAssertNil(predicateOnlyResult.evidence.handoff.event)
+        for expectationAllowance in rows {
+            let predicate = expectationAllowance == nil ? nil : transitionPredicate()
+            let action = Settlement.Command.Action(
+                command: .dismiss,
+                predicate: predicate,
+                allowances: .init(
+                    readiness: .milliseconds(5_000),
+                    expectation: expectationAllowance
+                ),
+                baseline: .capture
+            )
+            var decision = armedDecision(
+                command: .action(action),
+                baseline: baseline
+            )
+            decision = reduce(
+                decision,
+                .dispatchCompleted(.success(payload: .dismiss)),
+                elapsed: 0,
+                instant: dispatchAt
+            )
 
-        var readinessAndHandoff = armedObservationDecision(
-            baseline: baseline,
-            predicate: transitionPredicate()
-        )
+            XCTAssertEqual(
+                decision.effects.phaseDeadline,
+                Settlement.PhaseDeadline(
+                    phase: .actionReadiness,
+                    instant: dispatchAt.advanced(by: action.allowances.readiness)
+                ),
+                "expectation allowance \(String(describing: expectationAllowance))"
+            )
+        }
+    }
+
+    func testPendingAnnouncementArmsExpectationDeadlineOnceAtFirstReadyHandoff() async throws {
+        let baseline = await commit(label: "Baseline")
         let ready = await commit(label: "Ready")
-        readinessAndHandoff = reduce(
-            readinessAndHandoff,
-            .observationAdmitted(await admission(ready, after: baseline))
+        let nextReady = await commit(label: "Next Ready")
+        let dispatchAt = ContinuousClock.now
+        let readyAt = dispatchAt.advanced(by: .milliseconds(3_200))
+        let deadline = Settlement.PhaseDeadline(
+            phase: .actionExpectation,
+            instant: readyAt.advanced(by: .milliseconds(1_000))
         )
-        let unmetEvaluation = try XCTUnwrap(
-            readinessAndHandoff.effects.compactMap(\.predicateEvaluation).first
+        var decision = try await actionAwaitingEvidence(
+            baseline: baseline,
+            ready: ready,
+            dispatchAt: dispatchAt,
+            readyAt: readyAt,
+            predicate: try announcementPredicate()
         )
-        readinessAndHandoff = reduce(
-            readinessAndHandoff,
-            .predicateEvaluated(.init(
-                target: unmetEvaluation.target,
-                result: PredicateEvaluationResult(met: false)
-            ))
-        )
-        readinessAndHandoff = reduce(
-            readinessAndHandoff,
-            .readinessEstablished(.init(
-                generation: .initial,
-                path: .semanticStability,
-                observationBoundary: .including(ready.moment)
-            ))
-        )
-        let readinessAndHandoffResult = try timedOutResult(
-            from: reduce(readinessAndHandoff, .deadlineReached)
-        )
-        XCTAssertTrue(readinessAndHandoffResult.evidence.readiness.isEstablished)
-        XCTAssertNotNil(readinessAndHandoffResult.evidence.handoff.event)
-        XCTAssertFalse(readinessAndHandoffResult.evidence.predicate.isSatisfied)
 
-        var readyPredicateWithoutHandoff = predicateOnly
-        readyPredicateWithoutHandoff = reduce(
-            readyPredicateWithoutHandoff,
-            .readinessEstablished(.init(
-                generation: .initial,
-                path: .uikitIdle,
-                observationBoundary: .after(transient.moment)
-            ))
-        )
-        let readyPredicateResult = try timedOutResult(
-            from: reduce(readyPredicateWithoutHandoff, .deadlineReached)
-        )
-        XCTAssertTrue(readyPredicateResult.evidence.readiness.isEstablished)
-        XCTAssertTrue(readyPredicateResult.evidence.predicate.isSatisfied)
-        XCTAssertNil(readyPredicateResult.evidence.handoff.event)
+        XCTAssertEqual(decision.effects.phaseDeadline, deadline)
 
-        let neitherResult = try timedOutResult(from: reduce(
-            armedObservationDecision(baseline: baseline, predicate: transitionPredicate()),
-            .deadlineReached
-        ))
-        XCTAssertFalse(neitherResult.evidence.readiness.isEstablished)
-        XCTAssertFalse(neitherResult.evidence.predicate.isSatisfied)
-        XCTAssertNil(neitherResult.evidence.handoff.event)
+        decision = reduce(
+            decision,
+            .readinessInvalidated(.initial.advanced()),
+            elapsed: 3_500
+        )
+        decision = reduce(
+            decision,
+            .readinessEstablished(.init(
+                generation: .initial.advanced(),
+                path: .accessibilityQuietWindow,
+                observationBoundary: .including(nextReady.moment)
+            )),
+            elapsed: 3_500
+        )
+        decision = reduce(
+            decision,
+            .observationAdmitted(await admission(
+                nextReady,
+                after: baseline,
+                source: .handoffCapture(.initial.advanced()),
+                instant: dispatchAt.advanced(by: .milliseconds(3_500))
+            )),
+            elapsed: 3_500
+        )
+
+        XCTAssertNil(decision.state.result)
+        XCTAssertNil(decision.effects.phaseDeadline)
+        XCTAssertEqual(try activeSession(in: decision).phase, .actionExpectation(deadline))
     }
 
-    private var deadline: Settlement.Deadline {
-        Settlement.Deadline(instant: ContinuousClock.now.advanced(by: .seconds(1)))
+    func testStaleReadinessDeadlineIsIgnoredInExpectationPhase() async throws {
+        let baseline = await commit(label: "Baseline")
+        let ready = await commit(label: "Ready")
+        let dispatchAt = ContinuousClock.now
+        let staleDeadline = Settlement.PhaseDeadline(
+            phase: .actionReadiness,
+            instant: dispatchAt.advanced(by: .milliseconds(5_000))
+        )
+        var decision = try await actionAwaitingEvidence(
+            baseline: baseline,
+            ready: ready,
+            dispatchAt: dispatchAt,
+            readyAt: dispatchAt.advanced(by: .milliseconds(3_200)),
+            predicate: transitionPredicate()
+        )
+
+        decision = reduce(
+            decision,
+            .deadlineReached(staleDeadline),
+            elapsed: 5_000,
+            instant: staleDeadline.instant
+        )
+
+        XCTAssertNil(decision.state.result)
+        XCTAssertTrue(decision.effects.isEmpty)
     }
+
+    private lazy var deadline = Settlement.PhaseDeadline(
+        phase: .observation,
+        instant: ContinuousClock.now.advanced(by: .seconds(1))
+    )
 
     private func transitionPredicate() -> Settlement.Predicate {
         Settlement.Predicate(
             authored: .changed(.elements()),
-            resolved: ResolvedAccessibilityPredicate(core: .changed(.elements([])))
+            resolved: .changed(.elements([]))
         )
     }
 
     private func currentStatePredicate() throws -> Settlement.Predicate {
         let authored = AccessibilityPredicate.exists(
-            .predicate(ElementPredicateTemplate(label: "Save"))
+            .predicate(ElementPredicate(label: "Save"))
         )
         return Settlement.Predicate(
             authored: authored,
@@ -986,7 +1063,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
     private func completeHistoryPredicate() -> Settlement.Predicate {
         Settlement.Predicate(
             authored: .noChange,
-            resolved: ResolvedAccessibilityPredicate(core: .noChange)
+            resolved: .noChange
         )
     }
 
@@ -1022,12 +1099,12 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         baseline: Observation.SnapshotEvent
     ) -> Settlement.Decision {
         var decision = armedDecision(
-            command: .action(
-                .dismiss,
+            command: .action(.init(
+                command: .dismiss,
                 predicate: nil,
-                deadline: deadline,
+                allowances: .init(readiness: .seconds(5), expectation: nil),
                 baseline: .capture
-            ),
+            )),
             baseline: baseline
         )
         decision = reduce(
@@ -1037,17 +1114,81 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         return decision
     }
 
+    private func actionAwaitingEvidence(
+        baseline: Observation.SnapshotEvent,
+        ready: Observation.SnapshotEvent,
+        dispatchAt: ContinuousClock.Instant,
+        readyAt: ContinuousClock.Instant,
+        predicate: Settlement.Predicate
+    ) async throws -> Settlement.Decision {
+        var decision = armedDecision(
+            command: .action(.init(
+                command: .dismiss,
+                predicate: predicate,
+                allowances: .init(
+                    readiness: .milliseconds(5_000),
+                    expectation: .milliseconds(1_000)
+                ),
+                baseline: .capture
+            )),
+            baseline: baseline
+        )
+        decision = reduce(
+            decision,
+            .dispatchCompleted(.success(payload: .dismiss)),
+            elapsed: 0,
+            instant: dispatchAt
+        )
+        let readyElapsed = Int(
+            (dispatchAt.duration(to: readyAt) / .milliseconds(1)).rounded()
+        )
+        decision = reduce(
+            decision,
+            .readinessEstablished(.init(
+                generation: .initial,
+                path: .uikitIdle,
+                observationBoundary: .including(ready.moment)
+            )),
+            elapsed: readyElapsed
+        )
+        decision = reduce(
+            decision,
+            .observationAdmitted(await admission(
+                ready,
+                after: baseline,
+                source: .handoffCapture(.initial),
+                instant: readyAt
+            )),
+            elapsed: readyElapsed,
+            instant: readyAt
+        )
+        guard predicate.semantics != .announcement else { return decision }
+        let evaluation = try XCTUnwrap(
+            decision.effects.compactMap(\.predicateEvaluation).first
+        )
+        return reduce(
+            decision,
+            .predicateEvaluated(.init(
+                target: evaluation.target,
+                result: PredicateEvaluationResult(met: false)
+            )),
+            elapsed: readyElapsed
+        )
+    }
+
     private func admission(
         _ event: Observation.SnapshotEvent,
         after baseline: Observation.SnapshotEvent,
-        source: Settlement.ObservationAdmissionSource = .observation
+        source: Settlement.ObservationAdmissionSource = .observation,
+        instant: ContinuousClock.Instant = RuntimeElapsed.now
     ) async -> Settlement.ObservationAdmission {
         Settlement.ObservationAdmission(
             event: event,
             history: .events(Array(await vault.semanticObservationStream.storeOwner.readLog {
                 $0.events(since: baseline.moment).events
             })),
-            source: source
+            source: source,
+            instant: instant
         )
     }
 
@@ -1061,22 +1202,10 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
     }
 
     private func activeSession(in decision: Settlement.Decision) throws -> Settlement.Session {
-        switch decision.state {
-        case .armed(let session),
-             .dispatching(let session),
-             .observing(let session),
-             .needHandoff(let session):
-            return session
-        case .awaitingBaseline, .completed, .failed, .timedOut, .cancelled:
+        guard case .active(let session) = decision.state else {
             throw ActiveSessionError.unavailable
         }
-    }
-
-    private func timedOutResult(from decision: Settlement.Decision) throws -> Settlement.Result {
-        guard case .timedOut(let result) = decision.state else {
-            throw TimedOutResultError.unavailable
-        }
-        return result
+        return session
     }
 
     private func commit(label: String) async -> Observation.SnapshotEvent {
@@ -1120,7 +1249,10 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         }
         let command = Settlement.Command.observation(
             predicate: predicate,
-            deadline: .init(instant: ContinuousClock.now.advanced(by: .seconds(1))),
+            deadline: .init(
+                phase: .observation,
+                instant: ContinuousClock.now.advanced(by: .seconds(1))
+            ),
             baseline: .capture
         )
         let boundary = LiveSettlementExecutionBoundary(
@@ -1139,23 +1271,22 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
 
     private func reduce(
         _ decision: Settlement.Decision,
-        _ fact: Settlement.Event.Fact
+        _ fact: Settlement.Event.Fact,
+        elapsed: Int = 1,
+        instant: ContinuousClock.Instant = RuntimeElapsed.now
     ) -> Settlement.Decision {
         Settlement.Reducer.reduce(
             decision.state,
             event: Settlement.Event(
                 fact: fact,
-                elapsed: RuntimeElapsed.admit(milliseconds: 1)
+                elapsed: RuntimeElapsed.admit(milliseconds: elapsed),
+                instant: instant
             )
         )
     }
 }
 
 private enum ActiveSessionError: Error {
-    case unavailable
-}
-
-private enum TimedOutResultError: Error {
     case unavailable
 }
 
@@ -1203,9 +1334,22 @@ private extension Settlement.Effect {
         return request
     }
 
-    var isFinish: Bool {
-        guard case .finish = self else { return false }
-        return true
+}
+
+private extension Array where Element == Settlement.Effect {
+    var phaseDeadline: Settlement.PhaseDeadline? {
+        lazy.compactMap {
+            switch $0 {
+            case .armDeadline(let deadline):
+                deadline
+            case .capture,
+                 .arm,
+                 .armReadiness,
+                 .dispatchAction,
+                 .evaluatePredicate:
+                nil
+            }
+        }.first
     }
 }
 

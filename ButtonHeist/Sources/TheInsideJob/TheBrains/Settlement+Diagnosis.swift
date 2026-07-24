@@ -99,7 +99,7 @@ extension Settlement {
         internal let readiness: DiagnosisReadiness
         internal let handoff: DiagnosisHandoff
         internal let outcome: Settlement.Outcome
-        internal let deadline: Settlement.DeadlineEvidence
+        internal let elapsed: ElapsedMilliseconds
 
         internal static func project(_ result: Settlement.Result) -> Diagnosis {
             Diagnosis(
@@ -113,7 +113,7 @@ extension Settlement {
                 readiness: readiness(from: result.evidence.readiness),
                 handoff: handoff(from: result.evidence.handoff),
                 outcome: result.outcome,
-                deadline: result.evidence.deadline
+                elapsed: result.evidence.elapsed
             )
         }
 
@@ -130,9 +130,7 @@ extension Settlement {
                 "handoff=\(handoff.rendered)",
                 "history=\(observationHistory.rendered)",
                 "outcome=\(outcome.rendered)",
-                "elapsedMs=\(deadline.elapsed)",
-                "deadlineReached=\(deadline.reached)",
-                "deadline=\(deadline.renderedDeadline)",
+                "elapsedMs=\(elapsed)",
             ].joined(separator: " ")
         }
     }
@@ -382,17 +380,6 @@ private extension Settlement.DiagnosisCommand {
         case .currentState: "currentState"
         case .action: "action"
         case .observation: "observation"
-        }
-    }
-}
-
-private extension Settlement.DeadlineEvidence {
-    var renderedDeadline: String {
-        switch self {
-        case .notApplicable:
-            "none"
-        case .bounded(let deadline, _, _):
-            deadline.diagnosisDescription
         }
     }
 }

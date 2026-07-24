@@ -340,7 +340,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
 
     private func weakActivationSubjectEvidence() throws -> ActionSubjectEvidence {
         let target = try AccessibilityTarget
-            .predicate(ElementPredicateTemplate(label: "Checkout"))
+            .predicate(ElementPredicate(label: "Checkout"))
             .resolve(in: .empty)
         return ActionSubjectEvidence(
             source: .resolvedSemanticTarget,

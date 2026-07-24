@@ -92,7 +92,7 @@ final class TheVaultCustomRotorTests: XCTestCase {
         await vault.installObservationForTesting(observation)
 
         let resolvedHost = vault.resolveTarget(
-            literalTarget(ElementPredicate.identifier("rotor_host"))
+            literalTarget(ResolvedElementPredicate.identifier("rotor_host"))
         ).resolvedElement
         guard let resolvedHost else {
             XCTFail("Expected rotor host to resolve")
@@ -154,7 +154,7 @@ final class TheVaultCustomRotorTests: XCTestCase {
         await vault.installObservationForTesting(observation)
 
         let resolvedHost = vault.resolveTarget(
-            literalTarget(ElementPredicate.identifier("system_rotor_host"))
+            literalTarget(ResolvedElementPredicate.identifier("system_rotor_host"))
         ).resolvedElement
         guard let resolvedHost else {
             XCTFail("Expected rotor host to resolve")
@@ -225,7 +225,7 @@ final class TheVaultCustomRotorTests: XCTestCase {
         }
         let searchResult = await brains.executeRuntimeAction(.rotor(
             selection: .named("Primary Action"),
-            target: literalTarget(ElementPredicate.identifier("virtual_activation_rotor_host")),
+            target: literalTarget(ResolvedElementPredicate.identifier("virtual_activation_rotor_host")),
             direction: .next
         ))
 
@@ -298,7 +298,7 @@ final class TheVaultCustomRotorTests: XCTestCase {
 
         let search = await brains.actions.executeRotor(
             selection: .named("Cached Items"),
-            target: literalTarget(ElementPredicate.identifier("cached_rotor_host")),
+            target: literalTarget(ResolvedElementPredicate.identifier("cached_rotor_host")),
             direction: .next,
             timing: &timing
         )

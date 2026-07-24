@@ -21,7 +21,10 @@ public struct ActionExpectation: Codable, Sendable, Equatable {
 
     public init(_ step: WaitStep) throws {
         guard step.elseBody == nil else {
-            throw HeistPlanError.expectationElseBodyUnsupported
+            throw HeistPlanBuildError.planStructure(
+                path: "$.expectation.else_body",
+                message: "action expectations do not support an else body"
+            )
         }
         self.step = step
     }
@@ -112,16 +115,13 @@ extension ActionExpectationPolicy: Codable {
 public struct ActionStep: Codable, Sendable, Equatable {
     public let command: HeistActionCommand
     public let expectationPolicy: ActionExpectationPolicy
-    let expectationValidationDiagnostics: [HeistBuildDiagnostic]
 
     public init(
         command: HeistActionCommand,
-        expectationPolicy: ActionExpectationPolicy = .default,
-        expectationValidationDiagnostics: [HeistBuildDiagnostic] = []
+        expectationPolicy: ActionExpectationPolicy = .default
     ) {
         self.command = command
         self.expectationPolicy = expectationPolicy
-        self.expectationValidationDiagnostics = expectationValidationDiagnostics
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -136,7 +136,10 @@ public struct ActionStep: Codable, Sendable, Equatable {
             from: container,
             expectationKey: .expectation,
             waiverKey: .expectationWaiver,
-            ambiguousError: HeistPlanError.ambiguousExpectationContract
+            ambiguousError: DecodingError.dataCorrupted(.init(
+                codingPath: container.codingPath,
+                debugDescription: "action step cannot include both expectation and without_expectation"
+            ))
         )
         self.init(
             command: try container.decode(HeistActionCommand.self, forKey: .command),

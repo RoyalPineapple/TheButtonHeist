@@ -23,7 +23,7 @@ package func expectHeistFailure(
 
 package enum DogfoodHome {
     package static let openScreen = HeistDef<String>("DemoHome.openScreen", parameter: "screen") { screen in
-        let destinationTitle = ElementPredicateTemplate(label: .exact(screen), traits: [.header])
+        let destinationTitle = ElementPredicate(label: .exact(screen), traits: [.header])
         let backToRoot = try DemoNavigation.backToRootIfNeeded()
 
         If {
@@ -33,7 +33,7 @@ package enum DogfoodHome {
             Else {
                 backToRoot
 
-                Activate(.predicate(ElementPredicateTemplate(label: .exact(screen), traits: [.button])))
+                Activate(.predicate(ElementPredicate(label: .exact(screen), traits: [.button])))
                     .expect(.changed(.screen([.exists(.predicate(destinationTitle))])), timeout: 8)
             }
         }
@@ -42,7 +42,7 @@ package enum DogfoodHome {
 
 package enum ControlsDemoScreen {
     package static let openScreen = HeistDef<String>("ControlsDemo.openScreen", parameter: "screen") { screen in
-        Activate(.predicate(ElementPredicateTemplate(label: .exact(screen), traits: [.button])))
+        Activate(.predicate(ElementPredicate(label: .exact(screen), traits: [.button])))
             .expect(.changed(.screen([.exists(.label(screen))])), timeout: 8)
     }
 }
@@ -69,11 +69,11 @@ package enum TextInputScreen {
 
 package enum TodoScreen {
     package static let completeItem = HeistDef<String>("TodoScreen.completeItem", parameter: "item") { item in
-        let completedItem = ElementPredicateTemplate(
+        let completedItem = ElementPredicate(
             label: .exact(item),
             value: .exact("Completed")
         )
-        let visibleItem = ElementPredicateTemplate(label: .exact(item))
+        let visibleItem = ElementPredicate(label: .exact(item))
 
         WaitFor(.exists(.predicate(visibleItem)), timeout: 4)
 

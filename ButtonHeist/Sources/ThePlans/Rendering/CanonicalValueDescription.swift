@@ -41,7 +41,7 @@ package enum CanonicalValueDescription {
         nonEmpty(value).map { "\(name)=\(quoted($0))" }
     }
 
-    package static func stringMatchFields(_ name: String, _ values: [StringMatchCore<String>]) -> String? {
+    package static func stringMatchFields(_ name: String, _ values: [ResolvedStringMatch]) -> String? {
         let fields = values.compactMap { value -> String? in
             guard value.hasPredicateLiteral else { return nil }
             return "\(name)=\(stringMatch(value))"
@@ -50,22 +50,18 @@ package enum CanonicalValueDescription {
         return fields.joined(separator: " ")
     }
 
-    package static func stringMatch(_ value: StringMatchCore<String>) -> String {
-        switch value {
-        case .exact(let string):
-            return quoted(string)
-        case .contains(let string):
-            return "contains(\(quoted(string)))"
-        case .prefix(let string):
-            return "prefix(\(quoted(string)))"
-        case .suffix(let string):
-            return "suffix(\(quoted(string)))"
-        case .isEmpty:
-            return "isEmpty"
+    package static func stringMatch(_ value: ResolvedStringMatch) -> String {
+        guard let string = value.value else { return "isEmpty" }
+        switch value.mode {
+        case .exact: return quoted(string)
+        case .contains: return "contains(\(quoted(string)))"
+        case .prefix: return "prefix(\(quoted(string)))"
+        case .suffix: return "suffix(\(quoted(string)))"
+        case .isEmpty: return "isEmpty"
         }
     }
 
-    package static func predicateCheckField(_ check: ElementPredicateCheckCore<String>) -> String? {
+    package static func predicateCheckField(_ check: ResolvedElementPredicateCheck) -> String? {
         switch check {
         case .label(let match):
             guard match.hasPredicateLiteral else { return nil }

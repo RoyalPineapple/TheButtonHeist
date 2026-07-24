@@ -120,7 +120,7 @@ final class AccessibilityTraceInteractionDiffTests: AccessibilityTraceDiffTestCa
             sequence: 1,
             interface: interface,
             context: AccessibilityTrace.Context(
-                firstResponder: .predicate(ElementPredicateTemplate(label: "Email")),
+                firstResponder: .predicate(ElementPredicate(label: "Email")),
                 screenId: "login"
             )
         )
@@ -129,7 +129,7 @@ final class AccessibilityTraceInteractionDiffTests: AccessibilityTraceDiffTestCa
             interface: interface,
             parentHash: before.hash,
             context: AccessibilityTrace.Context(
-                firstResponder: .predicate(ElementPredicateTemplate(label: "Password")),
+                firstResponder: .predicate(ElementPredicate(label: "Password")),
                 screenId: "signup"
             )
         )
@@ -146,7 +146,7 @@ final class AccessibilityTraceInteractionDiffTests: AccessibilityTraceDiffTestCa
 
     func testInteractionDigestTreatsKeyboardVisibilityChangeAsFirstResponderChange() throws {
         let interface = makeInterface()
-        let firstResponder = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Search"))
+        let firstResponder = AccessibilityTarget.predicate(ElementPredicate(label: "Search"))
         let before = AccessibilityTrace.Capture(
             sequence: 1,
             interface: interface,

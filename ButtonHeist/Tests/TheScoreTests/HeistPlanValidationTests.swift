@@ -65,7 +65,7 @@ func actionStepRejectsExpectationAndWaiverTogether() {
         _ = try JSONDecoder().decode(ActionStep.self, from: Data(json.utf8))
         Issue.record("Expected action step with expectation and waiver to fail")
     } catch {
-        #expect("\(error)".contains("ambiguousExpectationContract"))
+        #expect("\(error)".contains("action step cannot include both expectation and without_expectation"))
     }
 }
 
@@ -158,7 +158,7 @@ func admissionDecodingRejectsInvalidLoopParameters() throws {
         let data = try invalidForEachElementJSON(parameter: parameter)
 
         #expect(throws: (any Error).self) {
-            _ = try JSONDecoder().decode(HeistPlanAdmissionCandidate.self, from: data)
+            _ = try JSONDecoder().decode(HeistPlan.self, from: data)
         }
     }
 }

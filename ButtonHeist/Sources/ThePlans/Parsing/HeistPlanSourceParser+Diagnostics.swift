@@ -62,11 +62,7 @@ extension HeistPlanSourceParser {
               tokens[cursor].isSymbol("(") else {
             return nil
         }
-        return "RunHeist(\(quote(names.joined(separator: "."))))"
-    }
-
-    func quote(_ value: String) -> String {
-        CanonicalValueDescription.quoted(value)
+        return "RunHeist(\(CanonicalValueDescription.quoted(names.joined(separator: "."))))"
     }
 
     func error(
@@ -82,18 +78,6 @@ extension HeistPlanSourceParser {
             column: span.column,
             length: span.length
         )
-    }
-
-    func sourceSpan(for token: HeistPlanSourceToken) -> HeistBuildSourceSpan {
-        token.sourceSpan
-    }
-
-    func currentScope() -> HeistPlanSourceScope {
-        scope
-    }
-
-    mutating func restoreScope(_ previousScope: HeistPlanSourceScope) {
-        scope = previousScope
     }
 
     mutating func bindScopedParameter(_ parameter: HeistParameter, localName: String) {
@@ -120,11 +104,6 @@ extension HeistPlanSourceParser {
             scope.bindTarget(localName: localName, referenceName: referenceName)
         }
     }
-}
-
-struct ParsedHeistBody {
-    let definitions: [HeistPlanAdmissionCandidate]
-    let steps: [HeistStepAdmissionCandidate]
 }
 
 struct HeistPlanSourceScope: Equatable {

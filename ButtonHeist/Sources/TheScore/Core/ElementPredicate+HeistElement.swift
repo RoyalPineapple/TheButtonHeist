@@ -20,7 +20,7 @@ extension HeistElement: PredicateSelectionSubject {
         required.isSubset(of: Set(actions))
     }
 
-    package func containsCustomContent(matching match: CustomContentMatchCore<String>) -> Bool {
+    package func containsCustomContent(matching match: ResolvedCustomContentMatch) -> Bool {
         guard let customContent else { return false }
         return customContent.contains { content in
             match.label.matches(content.label)
@@ -29,10 +29,10 @@ extension HeistElement: PredicateSelectionSubject {
         }
     }
 
-    package func satisfiesRequiredRotors(_ required: [StringMatchCore<String>]) -> Bool {
+    package func satisfiesRequiredRotors(_ required: [ResolvedStringMatch]) -> Bool {
         let names = rotors?.map(\.name) ?? []
         return required.allSatisfy { match in
-            names.contains { ResolvedStringMatch(core: match).matches($0) }
+            names.contains { match.matches($0) }
         }
     }
 
@@ -40,19 +40,19 @@ extension HeistElement: PredicateSelectionSubject {
         AccessibilityPolicy.matcherFacts(for: self)
     }
 
-    /// Match this wire element against an `ElementPredicate`.
-    public func matches(_ predicate: ElementPredicate) -> Bool {
+    /// Match this wire element against a resolved element predicate.
+    package func matches(_ predicate: ResolvedElementPredicate) -> Bool {
         predicate.matches(self)
     }
 }
 
-private extension Optional where Wrapped == StringMatchCore<String> {
+private extension Optional where Wrapped == ResolvedStringMatch {
     func matches(_ text: String) -> Bool {
-        map { ResolvedStringMatch(core: $0).matches(text) } ?? true
+        map { $0.matches(text) } ?? true
     }
 }
 
-public extension ElementPredicate {
+package extension ResolvedElementPredicate {
     /// Whether any observed element in the collection satisfies this predicate.
     func anyMatch(in elements: [HeistElement]) -> Bool {
         !AccessibilityTargetMatchGraph(elements: elements).resolve(self).isEmpty
@@ -190,7 +190,7 @@ package extension AccessibilityTargetMatchInput {
 }
 
 package enum AccessibilityTargetTerminalSelection: Sendable {
-    case element(predicate: ElementPredicate, ordinal: Int?)
+    case element(predicate: ResolvedElementPredicate, ordinal: Int?)
     case container(predicate: ResolvedContainerPredicate, ordinal: Int?)
 
     fileprivate var ordinal: Int? {
@@ -243,7 +243,7 @@ where Subject: ElementPredicateSubject & Sendable & Equatable {
         self.parentContainerPathByPath = parentContainerPathByPath
     }
 
-    package func resolve(_ predicate: ElementPredicate) -> AccessibilityTargetElementMatchSet<Subject> {
+    package func resolve(_ predicate: ResolvedElementPredicate) -> AccessibilityTargetElementMatchSet<Subject> {
         AccessibilityTargetElementMatchSet(predicateGraph.resolve(predicate).matches.map(\.subject))
     }
 

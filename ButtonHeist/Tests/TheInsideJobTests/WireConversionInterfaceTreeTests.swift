@@ -220,7 +220,7 @@ extension WireConverterTests {
         let vault = TheVault(tripwire: TheTripwire())
         await vault.installObservationForTesting(screen)
         let selected = try vault.selectInterface(InterfaceQuery(
-            subtree: .predicate(ElementPredicateTemplate(label: "Second"))
+            subtree: .predicate(ElementPredicate(label: "Second"))
         ))
         let record = try XCTUnwrap(selected.projectedElementRecords.single)
 
@@ -330,7 +330,7 @@ extension WireConverterTests {
         let vault = TheVault(tripwire: TheTripwire())
         await vault.installObservationForTesting(screen)
         let selectedInterface = try vault.selectInterface(InterfaceQuery(
-            subtree: .predicate(ElementPredicateTemplate(label: "zymurgy"))
+            subtree: .predicate(ElementPredicate(label: "zymurgy"))
         ))
         let selectedProjection = try XCTUnwrap(selectedInterface.projectedElements.first)
         XCTAssertEqual(selectedProjection.label, "zymurgy")

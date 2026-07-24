@@ -8,47 +8,48 @@ private let nonDurableHeistActionRepairHint =
     "this with a canonical durable DSL action."
 
 private func expectNonDurableHeistActionFailure(
-    _ failures: [HeistPlanRuntimeSafetyFailure],
+    _ diagnostics: [HeistBuildDiagnostic],
     observed: String,
     path: String = "$.body[0].action.command"
 ) {
-    #expect(failures.contains {
-        $0.path.description == path
-            && $0.contract == "durable heist action"
-            && $0.observed == observed
-            && $0.correction == nonDurableHeistActionRepairHint
-    }, "\(failures)")
+    #expect(diagnostics.contains {
+        $0.path == path
+            && $0.message == "durable heist action; observed \(observed)"
+            && $0.hint == nonDurableHeistActionRepairHint
+    }, "\(diagnostics)")
 }
 
 @Test
 func runtimeSafetyRejectsInvalidRefs() throws {
     let tooLong = String(repeating: "a", count: HeistPlanRuntimeSafetyLimits.standard.maxParameterBytes + 1)
-    let cases: [(String, HeistPlanAdmissionCandidate, String)] = [
+    let cases: [(String, () throws -> HeistPlan, String)] = [
         (
             "unknown target ref",
-            HeistPlanAdmissionCandidate(body: [.action(ActionStep(command: .activate(.ref("target"))))]),
+            { try HeistPlan(body: [.action(ActionStep(command: .activate(.ref("target"))))]) },
             "target ref must resolve"
         ),
         (
             "unknown text ref",
-            HeistPlanAdmissionCandidate(body: [.action(ActionStep(command: .typeText(
+            { try HeistPlan(body: [.action(ActionStep(command: .typeText(
                 reference: "item",
                 target: .predicate(.label("Search"))
-            )))]),
+            )))]) },
             "text_ref must resolve"
         ),
         (
             "long target ref",
-            HeistPlanAdmissionCandidate(body: [.action(ActionStep(command: .activate(.ref(
-                try HeistReferenceName(validating: tooLong)
-            ))))]),
+            {
+                try HeistPlan(body: [.action(ActionStep(command: .activate(.ref(
+                    HeistReferenceName(validating: tooLong)
+                ))))])
+            },
             "max parameter/ref length"
         ),
     ]
 
-    for (label, raw, expected) in cases {
-        let failures = runtimeSafetyFailures(for: raw)
-        #expect(failures.contains { $0.contract.contains(expected) }, "\(label): \(failures)")
+    for (label, operation, expected) in cases {
+        let diagnostics = runtimeSafetyDiagnostics(operation)
+        #expect(diagnostics.contains { $0.message.contains(expected) }, "\(label): \(diagnostics)")
     }
 }
 
@@ -64,10 +65,10 @@ func heistPlanConstructionRejectsNonDurableActions() throws {
     do {
         _ = try HeistPlan(body: [.action(ActionStep(command: command))])
         Issue.record("Expected non-durable action to fail plan construction")
-    } catch let error as HeistPlanRuntimeSafetyError {
-        expectNonDurableHeistActionFailure(error.failures, observed: expectedFailure)
+    } catch let error as HeistPlanBuildError {
+        expectNonDurableHeistActionFailure(error.diagnostics, observed: expectedFailure)
     } catch {
-        Issue.record("Expected runtime safety error, got \(error)")
+        Issue.record("Expected plan build error, got \(error)")
     }
 }
 
@@ -101,65 +102,65 @@ func heistPlanJSONDecodeRejectsNonDurableActions() throws {
     do {
         _ = try JSONDecoder().decode(HeistPlan.self, from: Data(json.utf8))
         Issue.record("Expected non-durable JSON action to fail plan decode")
-    } catch let error as HeistPlanRuntimeSafetyError {
-        expectNonDurableHeistActionFailure(error.failures, observed: expectedFailure)
+    } catch let error as HeistPlanBuildError {
+        expectNonDurableHeistActionFailure(error.diagnostics, observed: expectedFailure)
     } catch {
-        Issue.record("Expected runtime safety error, got \(error)")
+        Issue.record("Expected plan build error, got \(error)")
     }
 }
 
 @Test
 func runtimeSafetyRejectsRefsOutsideTheirLoopScope() throws {
-    let raw = HeistPlanAdmissionCandidate(body: [
-        .forEachString(try ForEachStringStep(
-            values: ["Milk"],
-            parameter: "item",
-            body: [.warn(WarnStep(message: "inside string loop"))]
-        )),
-        .action(ActionStep(command: .typeText(
-            reference: "item",
-            target: .predicate(.label("Search"))
-        ))),
-        .forEachElement(try ForEachElementStep(
-            matching: .label("Delete"),
-            limit: 1,
-            parameter: "target",
-            body: [.warn(WarnStep(message: "inside element loop"))]
-        )),
-        .action(ActionStep(command: .activate(.ref("target")))),
-    ])
+    let diagnostics = runtimeSafetyDiagnostics {
+        try HeistPlan(body: [
+            .forEachString(try ForEachStringStep(
+                values: ["Milk"],
+                parameter: "item",
+                body: [.warn(WarnStep(message: "inside string loop"))]
+            )),
+            .action(ActionStep(command: .typeText(
+                reference: "item",
+                target: .predicate(.label("Search"))
+            ))),
+            .forEachElement(try ForEachElementStep(
+                matching: .label("Delete"),
+                limit: 1,
+                parameter: "target",
+                body: [.warn(WarnStep(message: "inside element loop"))]
+            )),
+            .action(ActionStep(command: .activate(.ref("target")))),
+        ])
+    }
 
-    let failures = runtimeSafetyFailures(for: raw)
-
-    #expect(failures.contains {
-        $0.path.description == "$.body[1].action.command.payload.text_ref"
-            && $0.contract == "text_ref must resolve in the current heist scope"
+    #expect(diagnostics.contains {
+        $0.path == "$.body[1].action.command.payload.text_ref"
+            && $0.message.contains("text_ref must resolve in the current heist scope")
     })
-    #expect(failures.contains {
-        $0.path.description == "$.body[3].action.command.payload.target"
-            && $0.contract == "target ref must resolve in the current heist scope"
+    #expect(diagnostics.contains {
+        $0.path == "$.body[3].action.command.payload.target"
+            && $0.message.contains("target ref must resolve in the current heist scope")
     })
 }
 
 @Test
 func runtimeSafetyRejectsStringRefThatLowersToInvalidCommandPayload() throws {
-    let raw = HeistPlanAdmissionCandidate(body: [
-        .forEachString(try ForEachStringStep(
-            values: [""],
-            parameter: "item",
-            body: [
-                .action(ActionStep(command: .typeText(
-                    reference: "item",
-                    target: .predicate(.label("Search"))
-                ))),
-            ]
-        )),
-    ])
+    let diagnostics = runtimeSafetyDiagnostics {
+        try HeistPlan(body: [
+            .forEachString(try ForEachStringStep(
+                values: [""],
+                parameter: "item",
+                body: [
+                    .action(ActionStep(command: .typeText(
+                        reference: "item",
+                        target: .predicate(.label("Search"))
+                    ))),
+                ]
+            )),
+        ])
+    }
 
-    let failures = runtimeSafetyFailures(for: raw)
-
-    #expect(failures.contains { $0.contract.contains("admissible action command") })
-    #expect(failures.contains { $0.observed.contains("text to append must be non-empty") })
+    #expect(diagnostics.contains { $0.message.contains("admissible action command") })
+    #expect(diagnostics.contains { $0.message.contains("text to append must be non-empty") })
 }
 
 @Test
@@ -185,48 +186,57 @@ func runtimeSafetyRejectsEmptyBroadConcreteAccessibilityTargets() throws {
     ]
 
     for (label, target) in targets {
-        let raw = HeistPlanAdmissionCandidate(body: [
-            .action(ActionStep(command: .activate(target))),
-        ])
-
-        let failures = runtimeSafetyFailures(for: raw)
+        let diagnostics = runtimeSafetyDiagnostics {
+            try HeistPlan(body: [.action(ActionStep(command: .activate(target)))])
+        }
 
         #expect(
-            failures.contains { $0.contract.contains("element predicate") },
-            "\(label): \(failures)"
+            diagnostics.contains { $0.message.contains("element predicate") },
+            "\(label): \(diagnostics)"
         )
     }
 }
 
 @Test
 func runtimeSafetyRejectsNegativeOrdinalsBeforeRuntimeUse() throws {
-    let concreteRaw = HeistPlanAdmissionCandidate(body: [
-        .action(ActionStep(command: .activate(.predicate(.label("Save"), ordinal: -1)))),
-    ])
-    let expressionRaw = HeistPlanAdmissionCandidate(body: [
-        .action(ActionStep(command: .activate(.predicate(.label("Save"), ordinal: -1)))),
-    ])
+    for _ in 0..<2 {
+        let diagnostics = runtimeSafetyDiagnostics {
+            try HeistPlan(body: [
+                .action(ActionStep(command: .activate(.predicate(.label("Save"), ordinal: -1)))),
+            ])
+        }
 
-    for raw in [concreteRaw, expressionRaw] {
-        let failures = runtimeSafetyFailures(for: raw)
-
-        #expect(failures.contains {
-            $0.contract == "ordinal must be non-negative"
-                && $0.observed == "-1"
-        }, "\(failures)")
+        #expect(diagnostics.contains {
+            $0.message.contains("ordinal must be non-negative")
+                && $0.message.contains("observed -1")
+        }, "\(diagnostics)")
     }
 }
 
 @Test
 func runtimeSafetyRejectsEmptyElementPredicatesBeforeRuntimeUse() throws {
-    let raw = HeistPlanAdmissionCandidate(body: [
-        .wait(WaitStep(predicate: .exists(.predicate(ElementPredicateTemplate())))),
-    ])
+    let diagnostics = runtimeSafetyDiagnostics {
+        try HeistPlan(body: [
+            .wait(WaitStep(predicate: .exists(.predicate(ElementPredicate())))),
+        ])
+    }
 
-    let failures = runtimeSafetyFailures(for: raw)
+    #expect(diagnostics.contains {
+        $0.message.contains("element predicate must not be empty")
+            && $0.message.contains("AccessibilityTarget predicate requires")
+    }, "\(diagnostics)")
+}
 
-    #expect(failures.contains {
-        $0.contract == "element predicate must not be empty"
-            && $0.observed.contains("AccessibilityTarget predicate requires")
-    }, "\(failures)")
+private func runtimeSafetyDiagnostics(
+    _ operation: () throws -> HeistPlan
+) -> [HeistBuildDiagnostic] {
+    do {
+        _ = try operation()
+        return []
+    } catch let error as HeistPlanBuildError {
+        return error.diagnostics
+    } catch {
+        Issue.record("Expected plan build error, got \(error)")
+        return []
+    }
 }

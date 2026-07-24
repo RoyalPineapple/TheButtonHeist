@@ -77,9 +77,9 @@ extension TheVaultResolutionTests {
         let diagnostic = InterfaceObservation.makeForTests(elements: [(element(label: "Timeout Action"), "timeout_action")])
         await bagman.recordFailedSettleDiagnosticEvidence(diagnostic)
 
-        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Settled Action"))).resolvedElement)
+        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Settled Action"))).resolvedElement)
         XCTAssertNil(
-            bagman.resolveTarget(literalTarget(ElementPredicate.label("Timeout Action"), ordinal: 0)).resolvedElement
+            bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Timeout Action"), ordinal: 0)).resolvedElement
         )
         XCTAssertEqual(bagman.interfaceTree.orderedElements.first?.element.label, "Settled Action")
         XCTAssertEqual(

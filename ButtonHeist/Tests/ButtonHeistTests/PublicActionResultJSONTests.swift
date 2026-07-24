@@ -139,7 +139,7 @@ final class PublicActionResultJSONTests: XCTestCase {
         ActionSubjectEvidence(
             source: .resolvedSemanticTarget,
             target: try AccessibilityTarget
-                .predicate(ElementPredicateTemplate(label: "Continue"))
+                .predicate(ElementPredicate(label: "Continue"))
                 .resolve(in: .empty),
             element: makeTestHeistElement(label: "Continue", traits: [.staticText]),
             resolution: ActionSubjectResolution(origin: .visible)
@@ -171,7 +171,7 @@ final class PublicActionResultJSONTests: XCTestCase {
         let result = try nestedHeistActionResultJSON(
             command: .rotor(
                 selection: .named("Headings"),
-                target: .predicate(ElementPredicateTemplate(label: "Chapter 1")),
+                target: .predicate(ElementPredicate(label: "Chapter 1")),
                 direction: .next
             ),
             result: rotorActionResult(),
@@ -306,7 +306,7 @@ final class PublicActionResultJSONTests: XCTestCase {
             subjectEvidence: ActionSubjectEvidence(
                 source: .resolvedSemanticTarget,
                 target: try AccessibilityTarget
-                    .predicate(ElementPredicateTemplate(label: "Pay"))
+                    .predicate(ElementPredicate(label: "Pay"))
                     .resolve(in: .empty),
                 element: subject,
                 resolution: ActionSubjectResolution(origin: .visible)
@@ -506,7 +506,7 @@ final class PublicActionResultJSONTests: XCTestCase {
     }
 
     private func nestedHeistActionResultJSON(
-        command: HeistActionCommand = .activate(.predicate(ElementPredicateTemplate(label: "Button"))),
+        command: HeistActionCommand = .activate(.predicate(ElementPredicate(label: "Button"))),
         result: ActionResult,
         status: HeistExecutionStepStatus,
         failure: HeistFailureDetail? = nil
@@ -586,7 +586,7 @@ final class PublicActionResultJSONTests: XCTestCase {
 
     private func minimalPlan() throws -> HeistPlan {
         try HeistPlan(body: [
-            .action(ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: "Button"))))),
+            .action(ActionStep(command: .activate(.predicate(ElementPredicate(label: "Button"))))),
         ])
     }
 

@@ -25,7 +25,7 @@ final class AccessibilityTargetOptionsTests: XCTestCase {
         XCTAssertEqual(
             try command.element.parsedTarget(),
             .predicate(
-                ElementPredicateTemplate(
+                ElementPredicate(
                     [
                         .label("Save"),
                         .identifier("saveButton"),

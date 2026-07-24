@@ -15,10 +15,10 @@ extension TheBrains {
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
-        let resolvedCases: [ResolvedPredicateCaseRuntimeInput]
+        let resolvedCases: [ResolvedScreenAssertion]
         do {
             resolvedCases = try step.cases.map {
-                try ResolvedPredicateCaseRuntimeInput(resolving: $0, in: environment)
+                try $0.predicate.resolve(in: environment)
             }
         } catch {
             return caseResolutionFailure(index: index, path: path, start: start, error: error)
@@ -27,11 +27,15 @@ extension TheBrains {
         let currentState = await runtime.settle(
             .currentState(scope: resolvedCases.observationScope)
         )
-        let selection = evaluatePredicateCases(resolvedCases, in: currentState)
+        let selection = evaluatePredicateCases(
+            step.cases,
+            resolved: resolvedCases,
+            in: currentState
+        )
         return await dispatchPredicateCases(
             PredicateCaseDispatch(
                 selection: selection,
-                cases: resolvedCases,
+                cases: step.cases,
                 elseBody: step.elseBody,
                 path: path,
                 start: start
@@ -133,15 +137,15 @@ extension TheBrains {
 
 }
 
-extension Array where Element == ResolvedPredicateCaseRuntimeInput {
+extension Array where Element == ResolvedScreenAssertion {
     var observationScope: SemanticObservationScope {
-        map(\.predicate.observationScope).max() ?? .visible
+        map(\.observationScope).max() ?? .visible
     }
 }
 
 private struct PredicateCaseDispatch {
     let selection: HeistCaseSelectionResult
-    let cases: [ResolvedPredicateCaseRuntimeInput]
+    let cases: [PredicateCase]
     let elseBody: [HeistStep]?
     let path: HeistExecutionPath
     let start: RuntimeElapsed.Instant

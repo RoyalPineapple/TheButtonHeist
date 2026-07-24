@@ -56,7 +56,6 @@ enum PublicHeistActionJSONFixture {
         "action": FixtureJSON.object([
             "commandName": FixtureJSON.string("dismiss"),
             "result": FixtureJSON.actionResult(method: "dismiss", message: "dismissed"),
-            "expectationResult": FixtureJSON.actionResult(method: "wait", message: "matched"),
             "expectation": FixtureJSON.doneExpectation,
         ]),
     ])

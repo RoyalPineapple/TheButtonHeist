@@ -27,7 +27,7 @@ public enum HeistCatalogTag: String, Codable, Sendable, Equatable {
 }
 
 public enum HeistTargetPredicateFact: Sendable, Equatable, Hashable {
-    case predicate(ElementPredicateTemplate)
+    case predicate(ElementPredicate)
     case container(ContainerPredicate)
     case targetReference(HeistReferenceName)
 }
@@ -55,7 +55,7 @@ public struct HeistSemanticCustomContentMatch: Sendable, Equatable, Hashable {
         self.isImportant = isImportant
     }
 
-    init(_ match: CustomContentMatchCore<Expr<String>>) {
+    init(_ match: CustomContentMatch) {
         self.label = match.label.map(HeistSemanticStringMatch.init)
         self.value = match.value.map(HeistSemanticStringMatch.init)
         self.isImportant = match.isImportant
@@ -71,20 +71,9 @@ public struct HeistSemanticStringMatch: Sendable, Equatable, Hashable {
         self.value = value
     }
 
-    init(_ match: StringMatchCore<Expr<String>>) {
-        switch match.mode {
-        case .exact:
-            self.mode = .exact
-        case .contains:
-            self.mode = .contains
-        case .prefix:
-            self.mode = .prefix
-        case .suffix:
-            self.mode = .suffix
-        case .isEmpty:
-            self.mode = .isEmpty
-        }
-        self.value = match.payload.map(HeistSemanticStringValue.init)
+    init(_ match: StringMatch) {
+        mode = match.mode
+        value = match.value.map(HeistSemanticStringValue.init)
     }
 }
 
@@ -92,7 +81,7 @@ public enum HeistSemanticStringValue: Sendable, Equatable, Hashable {
     case literal(String)
     case reference(HeistReferenceName)
 
-    init(_ expression: Expr<String>) {
+    init(_ expression: AuthoredString) {
         switch expression {
         case .literal(let literal):
             self = .literal(literal)
@@ -278,100 +267,126 @@ public struct HeistCatalogError: Error, Sendable, Equatable, CustomStringConvert
 
 public extension HeistPlan {
     func heistCatalog(detail: HeistCatalogDetail = .summary) throws -> [HeistCatalogEntry] {
-        return try uncheckedHeistCatalog(detail: detail)
+        var identities: [HeistCatalogIdentity] = []
+        var entries: [HeistCatalogEntry] = []
+        HeistPlanTraversal().walkCatalogHeists(self) { projection in
+            let identity: HeistCatalogIdentity
+            switch projection.kind {
+            case .entry(let name):
+                identity = .entry(name)
+            case .capability(let nameComponents):
+                guard let first = nameComponents.first else { preconditionFailure("definition catalog paths must not be empty") }
+                identity = .capability(HeistDefinitionPath(first: first, remaining: Array(nameComponents.dropFirst())))
+            }
+            identities.append(identity)
+
+            let parameterKind = projection.plan.parameter.kind
+            let requiresArgument = parameterKind != .none
+            let surface = semanticSurface(for: projection)
+            var summary = identity.role == .entry ? "Root entry heist" : "Reusable heist capability"
+            if requiresArgument {
+                summary += " requiring \(parameterKind.rawValue) argument"
+            }
+
+            var tags = [identity.role == .entry ? HeistCatalogTag.entry : .capability]
+            var tagSet = Set(tags)
+            if requiresArgument, tagSet.insert(.parameterized).inserted { tags.append(.parameterized) }
+            if !surface.nestedRunHeists.isEmpty, tagSet.insert(.composed).inserted { tags.append(.composed) }
+            if !surface.waits.isEmpty || !surface.expectations.isEmpty,
+               tagSet.insert(.assertion).inserted { tags.append(.assertion) }
+            for command in surface.actionCommands {
+                let tag: HeistCatalogTag?
+                switch command {
+                case .typeText:
+                    tag = .textInput
+                case .scroll, .scrollToVisible, .scrollToEdge:
+                    tag = .scroll
+                case .oneFingerTap, .longPress, .swipe, .drag:
+                    tag = .gesture
+                case .activate, .increment, .decrement, .performCustomAction, .rotor, .dismiss, .magicTap,
+                        .editAction, .setPasteboard, .dismissKeyboard:
+                    tag = .semanticAction
+                case .takeScreenshot:
+                    tag = nil
+                }
+                if let tag, tagSet.insert(tag).inserted {
+                    tags.append(tag)
+                }
+            }
+
+            guard detail == .detailed else {
+                entries.append(HeistCatalogEntry(
+                    identity: identity,
+                    parameterKind: parameterKind,
+                    requiresArgument: requiresArgument,
+                    summary: summary,
+                    tags: tags
+                ))
+                return
+            }
+            entries.append(HeistCatalogEntry(
+                identity: identity,
+                parameterKind: parameterKind,
+                requiresArgument: requiresArgument,
+                summary: summary,
+                tags: tags,
+                parameterName: projection.plan.parameter.name,
+                nestedRunHeists: surface.nestedRunHeists.isEmpty ? nil : surface.nestedRunHeists,
+                actionCommands: surface.actionCommands.isEmpty ? nil : surface.actionCommands,
+                waitCount: surface.waits.count,
+                expectationCount: surface.expectations.count,
+                semanticSurfaces: surface.semanticSurfaces.isEmpty ? nil : surface.semanticSurfaces,
+                validationStatus: .validated
+            ))
+        }
+        try validateUniqueCatalogPaths(identities)
+        return entries
     }
 
     func describeHeist(at requestedPath: HeistDefinitionPath) throws -> HeistDescription {
-        return try uncheckedDescribeHeist(at: requestedPath)
+        var identities: [HeistCatalogIdentity] = []
+        var description: HeistDescription?
+        HeistPlanTraversal().walkCatalogHeists(self) { projection in
+            let identity: HeistCatalogIdentity
+            switch projection.kind {
+            case .entry(let name):
+                identity = .entry(name)
+            case .capability(let nameComponents):
+                guard let first = nameComponents.first else { preconditionFailure("definition catalog paths must not be empty") }
+                identity = .capability(HeistDefinitionPath(first: first, remaining: Array(nameComponents.dropFirst())))
+            }
+            identities.append(identity)
+            guard description == nil, identity.lookupPath == requestedPath else { return }
+            description = HeistDescription(
+                identity: identity,
+                parameterKind: projection.plan.parameter.kind,
+                parameterName: projection.plan.parameter.name,
+                requiresArgument: projection.plan.parameter.kind != .none,
+                summary: nil,
+                validationStatus: .validated,
+                semanticSurface: semanticSurface(for: projection)
+            )
+        }
+        try validateUniqueCatalogPaths(identities)
+        guard let description else {
+            throw HeistDescriptionLookupError(
+                requestedPath: requestedPath,
+                availableIdentities: identities
+            )
+        }
+        return description
     }
 }
 
 private extension HeistPlan {
-    func uncheckedHeistCatalog(detail: HeistCatalogDetail = .summary) throws -> [HeistCatalogEntry] {
-        let resolved = try catalogResolvedHeists()
-        return resolved.map { catalogEntry(for: $0, detail: detail) }
-    }
-
-    func uncheckedDescribeHeist(at requestedPath: HeistDefinitionPath) throws -> HeistDescription {
-        let resolved = try catalogResolvedHeists()
-        guard let heist = resolved.first(where: { $0.entry.identity.lookupPath == requestedPath }) else {
-            throw HeistDescriptionLookupError(
-                requestedPath: requestedPath,
-                availableIdentities: resolved.map(\.entry.identity)
-            )
-        }
-        return HeistDescription(
-            identity: heist.entry.identity,
-            parameterKind: heist.entry.parameterKind,
-            parameterName: heist.entry.parameterName,
-            requiresArgument: heist.entry.requiresArgument,
-            summary: nil,
-            validationStatus: .validated,
-            semanticSurface: HeistSemanticSurfaceCollector.surface(for: heist)
-        )
-    }
-
-    func catalogResolvedHeists() throws -> [ResolvedCatalogHeist] {
-        var heists: [ResolvedCatalogHeist] = []
-
-        func append(
-            _ plan: HeistPlan,
-            identity: HeistCatalogIdentity,
-            definitionComponents: [HeistPlanName],
-            context: HeistTraversalContext
-        ) {
-            let invocationStack = definitionComponents.isEmpty
-                ? []
-                : [HeistInvocationPath(namePath: definitionComponents)]
-            heists.append(ResolvedCatalogHeist(
-                entry: HeistCatalogEntry(
-                    identity: identity,
-                    parameterKind: plan.parameter.kind,
-                    requiresArgument: plan.parameter.kind != .none,
-                    parameterName: plan.parameter.name
-                ),
-                plan: plan,
-                definitionScope: HeistDefinitionScope(
-                    definitions: plan.definitions,
-                    pathPrefix: definitionComponents
-                ),
-                rootDefinitionScope: context.rootDefinitionScope,
-                referenceBindings: context.referenceBindings,
-                invocationStack: invocationStack
-            ))
-        }
-
-        HeistPlanTraversal().walkCatalogHeists(self) { projection in
-            append(
-                projection.plan,
-                identity: catalogIdentity(for: projection),
-                definitionComponents: projection.definitionComponents,
-                context: projection.context
-            )
-        }
-        try validateUniqueCatalogPaths(heists.map(\.entry.identity))
-        return heists
-    }
-
-    func catalogIdentity(for projection: HeistPlanTraversal.CatalogHeistProjection) -> HeistCatalogIdentity {
-        switch projection.kind {
-        case .entry(let name):
-            return .entry(name)
-        case .capability(let nameComponents):
-            guard let first = nameComponents.first else {
-                preconditionFailure("definition catalog paths must not be empty")
-            }
-            return .capability(HeistDefinitionPath(first: first, remaining: Array(nameComponents.dropFirst())))
-        }
-    }
-
     func validateUniqueCatalogPaths(_ identities: [HeistCatalogIdentity]) throws {
         var seen = Set<HeistDefinitionPath>()
+        var duplicateSet = Set<HeistCatalogIdentity>()
         var duplicates: [HeistCatalogIdentity] = []
         for identity in identities {
             guard let path = identity.lookupPath else { continue }
-            if !seen.insert(path).inserted {
-                duplicates.appendIfMissing(identity)
+            if !seen.insert(path).inserted, duplicateSet.insert(identity).inserted {
+                duplicates.append(identity)
             }
         }
         guard duplicates.isEmpty else {
@@ -379,113 +394,99 @@ private extension HeistPlan {
         }
     }
 
-    func catalogEntry(
-        for resolved: ResolvedCatalogHeist,
-        detail: HeistCatalogDetail
-    ) -> HeistCatalogEntry {
-        let base = resolved.entry
-        let surface = HeistSemanticSurfaceCollector.surface(for: resolved)
-        let tags = catalogTags(for: base, surface: surface)
-        guard detail == .detailed else {
-            return HeistCatalogEntry(
-                identity: base.identity,
-                parameterKind: base.parameterKind,
-                requiresArgument: base.requiresArgument,
-                summary: catalogSummary(for: base),
-                tags: tags
-            )
-        }
-        return HeistCatalogEntry(
-            identity: base.identity,
-            parameterKind: base.parameterKind,
-            requiresArgument: base.requiresArgument,
-            summary: catalogSummary(for: base),
-            tags: tags,
-            parameterName: base.parameterName,
-            nestedRunHeists: surface.nestedRunHeists.isEmpty ? nil : surface.nestedRunHeists,
-            actionCommands: surface.actionCommands.isEmpty ? nil : surface.actionCommands,
-            waitCount: surface.waits.count,
-            expectationCount: surface.expectations.count,
-            semanticSurfaces: surface.semanticSurfaces.isEmpty ? nil : surface.semanticSurfaces,
-            validationStatus: .validated
-        )
-    }
+    func semanticSurface(
+        for projection: HeistPlanTraversal.CatalogHeistProjection
+    ) -> HeistSemanticSurface {
+        var actionCommands: [HeistActionCommandType] = [], actionCommandSet = Set<HeistActionCommandType>()
+        var targetPredicates: [HeistTargetPredicateFact] = [], targetPredicateSet = Set<HeistTargetPredicateFact>()
+        var waits: [AccessibilityPredicate] = [], waitIndexes = Set<Int>()
+        var expectations: [AccessibilityPredicate] = [], expectationIndexes = Set<Int>()
+        var nestedRunHeists: [HeistInvocationPath] = [], nestedRunHeistSet = Set<HeistInvocationPath>()
+        var expectedEffects: [AccessibilityPredicate] = [], expectedEffectIndexes = Set<Int>()
+        var semanticFacets: [ElementPredicateCheck] = [], semanticFacetSet = Set<ElementPredicateCheck>()
 
-    func catalogSummary(for entry: HeistCatalogEntry) -> String {
-        var summary = entry.role == .entry ? "Root entry heist" : "Reusable heist capability"
-        if entry.requiresArgument {
-            summary += " requiring \(entry.parameterKind.rawValue) argument"
-        }
-        return summary
-    }
-
-    func catalogTags(for entry: HeistCatalogEntry, surface: HeistSemanticSurface) -> [HeistCatalogTag] {
-        var tags: [HeistCatalogTag] = []
-        tags.appendIfMissing(entry.role == .entry ? .entry : .capability)
-        if entry.requiresArgument {
-            tags.appendIfMissing(.parameterized)
-        }
-        if !surface.nestedRunHeists.isEmpty {
-            tags.appendIfMissing(.composed)
-        }
-        if !surface.waits.isEmpty || !surface.expectations.isEmpty {
-            tags.appendIfMissing(.assertion)
-        }
-        for command in surface.actionCommands {
-            switch command {
-            case .typeText:
-                tags.appendIfMissing(.textInput)
-            case .scroll, .scrollToVisible, .scrollToEdge:
-                tags.appendIfMissing(.scroll)
-            case .oneFingerTap, .longPress, .swipe, .drag:
-                tags.appendIfMissing(.gesture)
-            case .activate, .increment, .decrement, .performCustomAction, .rotor, .dismiss, .magicTap,
-                    .editAction, .setPasteboard, .dismissKeyboard:
-                tags.appendIfMissing(.semanticAction)
-            case .takeScreenshot:
-                break
-            }
-        }
-        return tags
-    }
-}
-
-struct ResolvedCatalogHeist {
-    let entry: HeistCatalogEntry
-    let plan: HeistPlan
-    let definitionScope: HeistDefinitionScope
-    let rootDefinitionScope: HeistDefinitionScope
-    let referenceBindings: HeistReferenceBindingContext
-    let invocationStack: [HeistInvocationPath]
-}
-
-private struct HeistSemanticSurfaceCollector {
-    private var actionCommands: [HeistActionCommandType] = []
-    private var targetPredicates: [HeistTargetPredicateFact] = []
-    private var waits: [AccessibilityPredicate] = []
-    private var expectations: [AccessibilityPredicate] = []
-    private var nestedRunHeists: [HeistInvocationPath] = []
-    private var expectedEffects: [AccessibilityPredicate] = []
-    private var semanticFacets: [ElementPredicateCheckCore<Expr<String>>] = []
-
-    static func surface(for resolved: ResolvedCatalogHeist) -> HeistSemanticSurface {
-        var collector = Self()
+        let definitionComponents = projection.definitionComponents
+        let definitionScope = HeistDefinitionScope(definitions: projection.plan.definitions, pathPrefix: definitionComponents)
         HeistPlanTraversal().walkSemanticSurfaceObservations(
-            steps: resolved.plan.body,
+            steps: projection.plan.body,
             path: .root.child(.body),
             depth: 1,
-            referenceBindings: resolved.referenceBindings,
-            definitionScope: resolved.definitionScope,
-            rootDefinitionScope: resolved.rootDefinitionScope,
-            invocationStack: resolved.invocationStack
+            referenceBindings: projection.context.referenceBindings,
+            definitionScope: definitionScope,
+            rootDefinitionScope: projection.context.rootDefinitionScope,
+            invocationStack: definitionComponents.isEmpty ? [] : [HeistInvocationPath(namePath: definitionComponents)]
         ) { observation in
-            collector.collect(observation)
+            var observedTargets: [AccessibilityTarget] = []
+            var observedPredicate: AccessibilityPredicate?
+            var isWait = false
+            switch observation {
+            case .action(let action):
+                if actionCommandSet.insert(action.command.wireType).inserted { actionCommands.append(action.command.wireType) }
+                observedTargets = action.command.targetOccurrences.map(\.target)
+                observedPredicate = action.expectationPolicy.expectedStep?.predicate
+            case .wait(let wait, let context):
+                guard !context.path.ends(in: .expectation) else { return }
+                observedPredicate = wait.predicate
+                isWait = true
+            case .forEachElement(let step):
+                observedTargets = [.predicate(step.matching)]
+            case .invoke(let invocation, let context):
+                observedPredicate = invocation.expectation?.predicate
+                if let resolved = context.resolveInvocation(path: invocation.path),
+                   nestedRunHeistSet.insert(resolved.invocationPath).inserted {
+                    nestedRunHeists.append(resolved.invocationPath)
+                }
+            }
+            if let predicate = observedPredicate {
+                if isWait {
+                    if waitIndexes.insert(waits.firstIndex(of: predicate) ?? waits.endIndex).inserted { waits.append(predicate) }
+                } else {
+                    if expectationIndexes.insert(expectations.firstIndex(of: predicate) ?? expectations.endIndex).inserted { expectations.append(predicate) }
+                }
+                if expectedEffectIndexes.insert(expectedEffects.firstIndex(of: predicate) ?? expectedEffects.endIndex).inserted {
+                    expectedEffects.append(predicate)
+                }
+                switch predicate.core {
+                case .presence(.exists(let target)), .presence(.missing(let target)):
+                    observedTargets.append(target)
+                case .changed(.screen(let assertions)):
+                    for assertion in assertions {
+                        switch assertion {
+                        case .exists(let target), .missing(let target): observedTargets.append(target)
+                        }
+                    }
+                case .changed(.elements(let assertions)):
+                    for assertion in assertions {
+                        switch assertion {
+                        case .exists(let target), .missing(let target),
+                             .appeared(let target), .disappeared(let target), .updated(let target, _):
+                            observedTargets.append(target)
+                        }
+                    }
+                case .announcement, .noChange: break
+                }
+            }
+            for var target in observedTargets {
+                targetTraversal: while true {
+                    let fact: HeistTargetPredicateFact
+                    switch target {
+                    case .predicate(let predicate, _):
+                        fact = .predicate(predicate)
+                        for check in predicate.checks where check.hasPredicateLiteral && semanticFacetSet.insert(check).inserted {
+                            semanticFacets.append(check)
+                        }
+                    case .container(let predicate, _): fact = .container(predicate)
+                    case .ref(let reference): fact = .targetReference(reference)
+                    case .within(_, let nestedTarget):
+                        target = nestedTarget
+                        continue targetTraversal
+                    }
+                    if targetPredicateSet.insert(fact).inserted { targetPredicates.append(fact) }
+                    break targetTraversal
+                }
+            }
         }
-        return collector.surface
-    }
-
-    var surface: HeistSemanticSurface {
-        HeistSemanticSurface(
+        return HeistSemanticSurface(
             actionCommands: actionCommands,
             targetPredicates: targetPredicates,
             waits: waits,
@@ -495,139 +496,10 @@ private struct HeistSemanticSurfaceCollector {
             semanticSurfaces: semanticFacets.map(HeistSemanticSurfaceFact.init)
         )
     }
-
-    mutating func collect(_ observation: HeistPlanTraversal.SemanticSurfaceObservation) {
-        switch observation {
-        case .action(let action):
-            actionCommands.appendIfMissing(action.command.wireType)
-            collectTargets(from: action.command)
-            if let expectation = action.expectationPolicy.expectedStep {
-                collectExpectation(expectation.predicate)
-            }
-        case .wait(let wait, let context):
-            guard !context.path.ends(in: .expectation) else { return }
-            collectWait(wait.predicate)
-        case .forEachElement(let step):
-            appendTargetPredicate(.predicate(step.matching))
-        case .invoke(let invocation, let context):
-            if let expectation = invocation.expectation {
-                collectExpectation(expectation.predicate)
-            }
-            guard let resolved = context.resolveInvocation(path: invocation.path) else { return }
-            nestedRunHeists.appendIfMissing(resolved.invocationPath)
-        }
-    }
-
-    mutating func collectTargets(from command: HeistActionCommand) {
-        for occurrence in command.targetOccurrences {
-            appendTargetPredicate(occurrence)
-        }
-    }
-
-    mutating func collectWait(_ predicate: AccessibilityPredicate) {
-        waits.appendIfMissing(predicate)
-        expectedEffects.appendIfMissing(predicate)
-        appendPredicateTargets(predicate)
-    }
-
-    mutating func collectExpectation(_ predicate: AccessibilityPredicate) {
-        expectations.appendIfMissing(predicate)
-        expectedEffects.appendIfMissing(predicate)
-        appendPredicateTargets(predicate)
-    }
-
-    mutating func appendTargetPredicate(_ target: AccessibilityTarget) {
-        switch target {
-        case .predicate(let predicate, _):
-            targetPredicates.appendIfMissing(.predicate(predicate))
-            appendSemanticSurfaces(predicate)
-        case .container(let predicate, _):
-            targetPredicates.appendIfMissing(.container(predicate))
-        case .ref(let reference):
-            targetPredicates.appendIfMissing(.targetReference(reference))
-        case .within(_, let target):
-            appendTargetPredicate(target)
-        }
-    }
-
-    mutating func appendTargetPredicate(_ occurrence: HeistActionCommandTargetOccurrence) {
-        appendTargetPredicate(occurrence.target)
-    }
-
-    mutating func appendSemanticSurfaces(_ predicate: ElementPredicateTemplate) {
-        for check in predicate.core.checks where check.hasPredicateLiteral {
-            semanticFacets.appendIfMissing(check)
-        }
-    }
-
-    mutating func appendPredicateTargets(_ predicate: AccessibilityPredicate) {
-        appendPredicateTargets(predicate.core)
-    }
-
-    mutating func appendPredicateTargets(
-        _ core: AccessibilityPredicateCore<AuthoredAccessibilityPredicatePhase>
-    ) {
-        switch core {
-        case .presence(let presence):
-            appendPredicateTargets(presence)
-        case .announcement:
-            break
-        case .changed(let declaration):
-            appendPredicateTargets(declaration)
-        case .noChange:
-            break
-        }
-    }
-
-    mutating func appendPredicateTargets(
-        _ core: PresencePredicateCore<AuthoredAccessibilityPredicatePhase>
-    ) {
-        switch core {
-        case .exists(let target), .missing(let target):
-            appendTargetPredicate(target)
-        }
-    }
-
-    mutating func appendPredicateTargets(
-        _ core: ChangeDeclarationCore<AuthoredAccessibilityPredicatePhase>
-    ) {
-        switch core {
-        case .screen(let assertions):
-            for assertion in assertions {
-                appendPredicateTargets(assertion)
-            }
-        case .elements(let assertions):
-            for assertion in assertions {
-                appendPredicateTargets(assertion)
-            }
-        }
-    }
-
-    mutating func appendPredicateTargets(
-        _ core: ScreenAssertionCore<AuthoredAccessibilityPredicatePhase>
-    ) {
-        switch core {
-        case .presence(let presence):
-            appendPredicateTargets(presence)
-        }
-    }
-
-    mutating func appendPredicateTargets(
-        _ core: ElementAssertionCore<AuthoredAccessibilityPredicatePhase>
-    ) {
-        switch core {
-        case .presence(let presence):
-            appendPredicateTargets(presence)
-        case .appeared(let target), .disappeared(let target):
-            appendTargetPredicate(target)
-        case .updated(let target, _):
-            appendTargetPredicate(target)
-        }
-    }
 }
 
 private extension HeistSemanticSurfaceFact {
-    init(_ check: ElementPredicateCheckCore<Expr<String>>) {
+    init(_ check: ElementPredicateCheck) {
         switch check {
         case .label(let match):
             self = .label(HeistSemanticStringMatch(match))
@@ -648,12 +520,5 @@ private extension HeistSemanticSurfaceFact {
         case .exclude(let check):
             self = .exclude(HeistSemanticSurfaceFact(check))
         }
-    }
-}
-
-private extension Array where Element: Equatable {
-    mutating func appendIfMissing(_ value: Element) {
-        guard !contains(value) else { return }
-        append(value)
     }
 }

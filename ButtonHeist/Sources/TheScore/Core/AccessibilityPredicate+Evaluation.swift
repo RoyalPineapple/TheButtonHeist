@@ -3,7 +3,7 @@ import Foundation
 
 package extension ResolvedAccessibilityPredicate {
     func evaluate(in evidence: AccessibilityTraceEvidence) -> PredicateEvaluationResult {
-        evaluateNode(core, evidence: evidence)
+        evaluateNode(self, evidence: evidence)
     }
 
     func validate(against result: ActionResult) -> PredicateEvaluationResult {
@@ -15,19 +15,15 @@ package extension ResolvedAccessibilityPredicate {
 }
 
 private extension ResolvedAccessibilityPredicate {
-    typealias Node = AccessibilityPredicateCore<ResolvedAccessibilityPredicatePhase>
-    typealias ScreenAssertion = ScreenAssertionCore<ResolvedAccessibilityPredicatePhase>
-    typealias ElementAssertion = ElementAssertionCore<ResolvedAccessibilityPredicatePhase>
-
     func evaluateNode(
-        _ node: Node,
+        _ node: ResolvedAccessibilityPredicate,
         evidence: AccessibilityTraceEvidence
     ) -> PredicateEvaluationResult {
         let current = AccessibilityTargetMatchGraph(interface: evidence.currentInterface)
         switch node {
-        case .presence(.exists(let target)):
+        case .exists(let target):
             return currentResult(target, shouldExist: true, graph: current)
-        case .presence(.missing(let target)):
+        case .missing(let target):
             return currentResult(target, shouldExist: false, graph: current)
         case .changed(.screen(let assertions)):
             return evaluateScreen(assertions, evidence: evidence, current: current)
@@ -51,7 +47,7 @@ private extension ResolvedAccessibilityPredicate {
     }
 
     func evaluateScreen(
-        _ assertions: [ScreenAssertion],
+        _ assertions: [ResolvedScreenAssertion],
         evidence: AccessibilityTraceEvidence,
         current: AccessibilityTargetMatchGraph<HeistElement>
     ) -> PredicateEvaluationResult {
@@ -70,7 +66,7 @@ private extension ResolvedAccessibilityPredicate {
     }
 
     func evaluateElements(
-        _ assertions: [ElementAssertion],
+        _ assertions: [ResolvedElementAssertion],
         evidence: AccessibilityTraceEvidence,
         current: AccessibilityTargetMatchGraph<HeistElement>
     ) -> PredicateEvaluationResult {
@@ -95,27 +91,27 @@ private extension ResolvedAccessibilityPredicate {
     }
 
     func evaluateCurrentAssertion(
-        _ assertion: ScreenAssertion,
+        _ assertion: ResolvedScreenAssertion,
         graph: AccessibilityTargetMatchGraph<HeistElement>
     ) -> PredicateEvaluationResult {
         switch assertion {
-        case .presence(.exists(let target)):
+        case .exists(let target):
             return currentResult(target, shouldExist: true, graph: graph)
-        case .presence(.missing(let target)):
+        case .missing(let target):
             return currentResult(target, shouldExist: false, graph: graph)
         }
     }
 
     func evaluateElementAssertion(
-        _ assertion: ElementAssertion,
+        _ assertion: ResolvedElementAssertion,
         facts: [AccessibilityTrace.ElementsChangeFact],
         evidence: AccessibilityTraceEvidence,
         current: AccessibilityTargetMatchGraph<HeistElement>
     ) -> PredicateEvaluationResult {
         switch assertion {
-        case .presence(.exists(let target)):
+        case .exists(let target):
             return currentResult(target, shouldExist: true, graph: current)
-        case .presence(.missing(let target)):
+        case .missing(let target):
             return currentResult(target, shouldExist: false, graph: current)
         case .appeared(let target):
             let met = facts.contains {

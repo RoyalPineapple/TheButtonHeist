@@ -3,11 +3,12 @@ import Testing
 @testable import TheScore
 
 func runtimeSafetyFailures(
-    for raw: HeistPlanAdmissionCandidate,
+    for plan: HeistPlan,
     limits: HeistPlanRuntimeSafetyLimits = .standard
 ) -> [HeistPlanRuntimeSafetyFailure] {
     do {
-        _ = try raw.validatedForRuntimeSafety(limits: limits)
+        var validator = HeistPlanRuntimeSafetyValidator(limits: limits)
+        try validator.validate(plan)
         return []
     } catch let error as HeistPlanRuntimeSafetyError {
         return error.failures

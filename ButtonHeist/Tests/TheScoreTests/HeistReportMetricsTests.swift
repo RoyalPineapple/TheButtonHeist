@@ -37,9 +37,9 @@ import TheScore
         #expect(values(in: metrics, named: .heistDurationMs) == [1234])
         #expect(values(in: metrics, named: .actionPipelineTargetResolutionMs) == [1])
         #expect(values(in: metrics, named: .actionPipelineTotalMs) == [15])
-        #expect(values(in: metrics, named: .waitPipelineTargetResolutionMs) == [6, 11, 21, 21])
-        #expect(values(in: metrics, named: .waitPipelineTotalMs) == [40, 95, 60, 60])
-        #expect(values(in: metrics, named: .expectationWaitMs) == [40])
+        #expect(values(in: metrics, named: .waitPipelineTargetResolutionMs) == [11, 21, 21])
+        #expect(values(in: metrics, named: .waitPipelineTotalMs) == [95, 60, 60])
+        #expect(values(in: metrics, named: .expectationWaitMs).isEmpty)
         #expect(metrics.measurements.filter { $0.path?.description == "$.body[0]" }.allSatisfy {
             $0.kind == .action && $0.status == .passed
         })
@@ -166,7 +166,7 @@ import TheScore
     }
 
     private func actionStep(predicate: AccessibilityPredicate) -> HeistExecutionStepResult {
-        let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Pay")))
+        let command = HeistActionCommand.activate(.predicate(ElementPredicate(label: "Pay")))
         return HeistResultFixture.action(
             path: "$.body[0]",
             command: command,
@@ -180,17 +180,6 @@ import TheScore
                     .settled(duration: 3)
                 ),
                 timing: actionTiming
-            ),
-            expectationActionResult: .success(
-                payload: .wait,
-                observation: .settledTrace(
-                    makeTestTraceEvidence(
-                        .noChangeForTests(elementCount: 0),
-                        completeness: .complete
-                    ),
-                    .settled(duration: 8)
-                ),
-                timing: expectationTiming
             ),
             expectation: ExpectationResult(met: true, predicate: predicate),
             durationMs: 15
@@ -276,16 +265,6 @@ import TheScore
             actionDispatchMs: 2,
             finalSemanticEvidenceMs: 5,
             totalMs: 15
-        )
-    }
-
-    private var expectationTiming: ActionPerformanceTiming {
-        ActionPerformanceTiming(
-            beforeObservationMs: 9,
-            targetResolutionMs: 6,
-            actionDispatchMs: 7,
-            finalSemanticEvidenceMs: 10,
-            totalMs: 40
         )
     }
 

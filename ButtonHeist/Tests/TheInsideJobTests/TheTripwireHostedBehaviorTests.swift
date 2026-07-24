@@ -145,11 +145,11 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
             matching: TransientFlowScreen.lifecycle,
             in: heist.result
         )
-        let result = try XCTUnwrap(evidence.expectationResult)
+        let result = try XCTUnwrap(evidence.result)
         let trace = try XCTUnwrap(result.accessibilityTrace)
         let settlement = try XCTUnwrap(result.evidence.settlement)
 
-        XCTAssertEqual(evidence.checkedExpectation?.met, true)
+        XCTAssertEqual(evidence.expectation?.met, true)
         XCTAssertTrue(trace.hostedAppearedLabels.contains("Processing"))
         XCTAssertTrue(trace.hostedDisappearedLabels.contains("Submit"))
         XCTAssertTrue(settlement.readinessEstablished)
@@ -167,10 +167,10 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
             matching: TransientFlowScreen.announcement,
             in: heist.result
         )
-        let result = try XCTUnwrap(evidence.expectationResult)
+        let result = try XCTUnwrap(evidence.result)
         let settlement = try XCTUnwrap(result.evidence.settlement)
 
-        XCTAssertEqual(evidence.checkedExpectation?.met, true)
+        XCTAssertEqual(evidence.expectation?.met, true)
         XCTAssertEqual(evidence.announcement, "Ticket saved.")
         XCTAssertTrue(settlement.readinessEstablished)
         XCTAssertTrue(settlement.observationHandoffCompleted)
@@ -184,7 +184,7 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
     ) throws -> HeistActionEvidence {
         try XCTUnwrap(
             result.outputNodes.lazy.compactMap(\.actionEvidence)
-                .first { $0.checkedExpectation?.predicate == predicate },
+                .first { $0.expectation?.predicate == predicate },
             "Missing action evidence for \(predicate)",
             file: file,
             line: line

@@ -3,6 +3,37 @@ import Testing
 @_spi(ButtonHeistInternals) import ThePlans
 
 @Test
+func `thePlans exposes no unchecked HeistPlan construction seam`() throws {
+    let thePlans = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appendingPathComponent("Sources/ThePlans")
+    let swiftFiles = try #require(
+        FileManager.default.enumerator(
+            at: thePlans,
+            includingPropertiesForKeys: nil
+        )?.allObjects as? [URL]
+    ).filter { $0.pathExtension == "swift" }
+    let forbiddenSpelling = "structural" + "Version"
+    let uncheckedInitializer = try NSRegularExpression(
+        pattern: #"(?:package|public)\s+init\s*\(\s*(?:stackVersion|sourceStackVersion)"#
+    )
+
+    for file in swiftFiles {
+        let source = try String(contentsOf: file, encoding: .utf8)
+        #expect(!source.contains(forbiddenSpelling), "\(file.path) exposes unchecked plan construction")
+        #expect(
+            uncheckedInitializer.firstMatch(
+                in: source,
+                range: NSRange(source.startIndex..., in: source)
+            ) == nil,
+            "\(file.path) exposes package-visible unchecked plan construction"
+        )
+    }
+}
+
+@Test
 func `JSONDecoder decode of heist plan still runs runtime safety validation`() {
     let unresolvedInvocation = Data("""
     {
@@ -18,31 +49,17 @@ func `JSONDecoder decode of heist plan still runs runtime safety validation`() {
     }
     """.utf8)
 
-    #expect(throws: HeistPlanRuntimeSafetyError.self) {
+    #expect(throws: HeistPlanBuildError.self) {
         _ = try JSONDecoder().decode(HeistPlan.self, from: unresolvedInvocation)
     }
 }
 
 @Test
-func `invalid external plan remains a candidate until runtime safety admission`() throws {
-    let data = Data(#"{"version":2,"body":[{"type":"invoke","invoke":{"path":"MissingCapability"}}]}"#.utf8)
-    let candidate = try JSONDecoder().decode(HeistPlanAdmissionCandidate.self, from: data)
-
-    #expect(throws: HeistPlanRuntimeSafetyError.self) {
-        _ = try candidate.validatedForRuntimeSafety()
-    }
-}
-
-@Test
-func `external plan version remains candidate data until semantic admission`() throws {
+func `external plan version is rejected during root admission`() throws {
     let data = Data(#"{"version":3,"body":[{"type":"warn","warn":{"message":"future"}}]}"#.utf8)
-    let sourceURL = URL(fileURLWithPath: "/tmp/future-plan.json")
 
-    let candidate = try HeistArtifactCodec.decodeAdmissionCandidateJSON(data, at: sourceURL)
-
-    #expect(candidate.version == 3)
     #expect(throws: HeistPlanVersionAdmissionError.self) {
-        _ = try candidate.validatedSemantics()
+        _ = try JSONDecoder().decode(HeistPlan.self, from: data)
     }
 }
 
@@ -83,12 +100,11 @@ func `JSONDecoder decode of nested collection loops is rejected by runtime safet
     do {
         _ = try JSONDecoder().decode(HeistPlan.self, from: nestedCollectionLoop)
         Issue.record("Expected nested collection loop JSON to fail runtime safety validation")
-    } catch let error as HeistPlanRuntimeSafetyError {
-        let failure = try #require(error.failures.first)
-        #expect(failure.path.description == "$.body[0].for_each_string.body[0].for_each_element")
-        #expect(failure.contract == "collection loops must not be nested")
-        #expect(failure.observed == "for_each_element inside collection loop")
-        #expect(failure.correction == "Flatten this heist so ForEach bodies contain only non-collection steps.")
+    } catch let error as HeistPlanBuildError {
+        let diagnostic = try #require(error.diagnostics.first)
+        #expect(diagnostic.path == "$.body[0].for_each_string.body[0].for_each_element")
+        #expect(diagnostic.message == "collection loops must not be nested; observed for_each_element inside collection loop")
+        #expect(diagnostic.hint == "Flatten this heist so ForEach bodies contain only non-collection steps.")
     }
 }
 
@@ -141,14 +157,14 @@ func `predicate case wire boundary decodes only snapshot predicates`() throws {
 @Test
 func `durable element predicate JSON requires canonical checks`() throws {
     #expect(throws: DecodingError.self) {
-        _ = try JSONDecoder().decode(ElementPredicateTemplate.self, from: Data("""
+        _ = try JSONDecoder().decode(ElementPredicate.self, from: Data("""
         {
           "label": "Receipt"
         }
         """.utf8))
     }
 
-    let predicate = try JSONDecoder().decode(ElementPredicateTemplate.self, from: Data("""
+    let predicate = try JSONDecoder().decode(ElementPredicate.self, from: Data("""
     {
       "checks": [
         { "kind": "label", "match": { "mode": "exact", "value": "Receipt" } }

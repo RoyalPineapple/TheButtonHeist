@@ -6,7 +6,7 @@ import TheScore
 @Suite struct HeistReportTests {
     @Test func `skipped action report preserves declaration identity without evidence`() throws {
         let command = HeistActionCommand.activate(
-            .predicate(ElementPredicateTemplate(label: "Checkout"))
+            .predicate(ElementPredicate(label: "Checkout"))
         )
         let step = HeistExecutionStepResult.action(
             path: try HeistExecutionPath(validating: "$.body[0]"),

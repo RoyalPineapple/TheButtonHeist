@@ -3,10 +3,10 @@ import UIKit
 import ButtonHeistTesting
 
 package enum DemoNavigation {
-    private static let anyBackTarget = ElementPredicateTemplate(traits: [.backButton])
-    private static let rootBackTarget = ElementPredicateTemplate(label: .exact("ButtonHeist Demo"), traits: [.button])
-    private static let rootTitle = ElementPredicateTemplate(label: .exact("ButtonHeist Demo"), traits: [.header])
-    private static let longListFirstRow = ElementPredicateTemplate(label: .exact("Widget 0, Hardware"))
+    private static let anyBackTarget = ElementPredicate(traits: [.backButton])
+    private static let rootBackTarget = ElementPredicate(label: .exact("ButtonHeist Demo"), traits: [.button])
+    private static let rootTitle = ElementPredicate(label: .exact("ButtonHeist Demo"), traits: [.header])
+    private static let longListFirstRow = ElementPredicate(label: .exact("Widget 0, Hardware"))
     private static let backChromeSettleTimeout = 0.25
 
     package static let backToRootIfNeeded = HeistDef<Void>("DemoNavigation.backToRootIfNeeded") {
@@ -33,9 +33,9 @@ package enum DemoNavigation {
     }
 
     package static let backTo = HeistDef<String>("DemoNavigation.backTo", parameter: "title") { title in
-        let destinationTitle = ElementPredicateTemplate(label: .exact(title), traits: [.header])
+        let destinationTitle = ElementPredicate(label: .exact(title), traits: [.header])
 
-        Activate(.predicate(ElementPredicateTemplate(label: .exact(title), traits: [.backButton])))
+        Activate(.predicate(ElementPredicate(label: .exact(title), traits: [.backButton])))
             .withoutExpectation("Back navigation is proven by the destination title wait")
 
         WaitFor(.exists(.predicate(destinationTitle)), timeout: 8)

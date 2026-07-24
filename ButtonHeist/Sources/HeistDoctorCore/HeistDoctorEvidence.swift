@@ -12,10 +12,10 @@ extension HeistDoctor {
         guard let target = step.reportTarget else {
             throw HeistDoctorError.missingTarget(path: step.path)
         }
-        guard let dispatchResult = actionEvidence.dispatchResult else {
+        guard let result = actionEvidence.result else {
             throw HeistDoctorError.missingActionResult(path: step.path)
         }
-        guard let trace = dispatchResult.accessibilityTrace,
+        guard let trace = result.accessibilityTrace,
               let before = trace.captures.first?.interface
         else {
             throw HeistDoctorError.missingTrace(path: step.path)
@@ -27,7 +27,7 @@ extension HeistDoctor {
             outcome = .passed
         case .failed:
             outcome = .failed(
-                failureKind: actionEvidence.reportedResult?.outcome.failureKind,
+                failureKind: result.outcome.failureKind,
                 message: repairMessage(step: step, evidence: actionEvidence)
             )
         case .skipped:
@@ -40,8 +40,8 @@ extension HeistDoctor {
             target: target,
             beforeSnapshot: before,
             changeFacts: trace.changeFacts,
-            method: dispatchResult.method,
-            expectation: actionEvidence.checkedExpectation,
+            method: result.method,
+            expectation: actionEvidence.expectation,
             outcome: outcome
         )
     }
@@ -51,7 +51,7 @@ extension HeistDoctor {
         evidence: HeistActionEvidence
     ) -> String? {
         step.failure?.observed
-            ?? evidence.reportedResult?.message
-            ?? evidence.checkedExpectation?.actual
+            ?? evidence.result?.message
+            ?? evidence.expectation?.actual
     }
 }

@@ -14,17 +14,20 @@ public enum CandidateTier: Int, Sendable, Equatable, Comparable {
     }
 }
 
-public struct MatcherAtom: Sendable, Equatable {
-    public let predicate: ElementPredicate
-    public let stability: AccessibilityFactStability
-    public let priority: Int
+package struct MatcherAtom: Sendable, Equatable {
+    package let predicate: ResolvedElementPredicate
+    package let stability: AccessibilityFactStability
+    package let priority: Int
+    package let authoredCheck: ElementPredicateCheck
 
-    public init(
-        predicate: ElementPredicate,
+    package init(
+        predicate: ResolvedElementPredicate,
+        authoredCheck: ElementPredicateCheck,
         stability: AccessibilityFactStability,
         priority: Int
     ) {
         self.predicate = predicate
+        self.authoredCheck = authoredCheck
         self.stability = stability
         self.priority = priority
     }
@@ -67,13 +70,13 @@ package struct PredicateSelectionSubjectElement<Subject: PredicateSelectionSubje
     package var predicateSubject: Subject { element }
 }
 
-public struct PredicateCandidate: Sendable, Equatable {
-    public let predicate: ElementPredicate
-    public let atoms: [MatcherAtom]
-    public let tier: CandidateTier
+package struct PredicateCandidate: Sendable, Equatable {
+    package let predicate: ResolvedElementPredicate
+    package let atoms: [MatcherAtom]
+    package let tier: CandidateTier
 
-    public init(
-        predicate: ElementPredicate,
+    package init(
+        predicate: ResolvedElementPredicate,
         atoms: [MatcherAtom],
         tier: CandidateTier
     ) {
@@ -196,9 +199,9 @@ public struct PredicateSelectionContext: Sendable, Equatable {
 public struct MinimumPredicateSelection: Sendable, Equatable {
     public let contextElementId: PredicateSelectionElementId
     public let target: AccessibilityTarget
-    public let candidate: PredicateCandidate
+    package let candidate: PredicateCandidate
 
-    public init(
+    package init(
         contextElementId: PredicateSelectionElementId,
         target: AccessibilityTarget,
         candidate: PredicateCandidate
@@ -210,7 +213,7 @@ public struct MinimumPredicateSelection: Sendable, Equatable {
 }
 
 public enum MinimumPredicateSelector {
-    public static func predicateCandidates(for element: HeistElement) -> [PredicateCandidate] {
+    package static func predicateCandidates(for element: HeistElement) -> [PredicateCandidate] {
         predicateCandidates(forSubject: element)
     }
 
@@ -222,7 +225,7 @@ public enum MinimumPredicateSelector {
         candidates.reserveCapacity(atoms.count)
 
         var accumulated: [MatcherAtom] = []
-        var seen = Set<ElementPredicate>()
+        var seen = Set<ResolvedElementPredicate>()
         for atom in atoms {
             accumulated.append(atom)
             let predicate = combinedPredicate(from: accumulated)
@@ -266,7 +269,7 @@ public enum MinimumPredicateSelector {
             if matches.count == 1 {
                 return MinimumPredicateSelection(
                     contextElementId: contextElementId,
-                    target: .predicate(authoredTemplate(candidate.predicate)),
+                    target: .predicate(authoredPredicate(from: candidate.atoms)),
                     candidate: candidate
                 )
             }
@@ -288,7 +291,7 @@ public enum MinimumPredicateSelector {
         )
         return MinimumPredicateSelection(
             contextElementId: contextElementId,
-            target: .predicate(authoredTemplate(strongestSemanticCandidate.predicate), ordinal: ordinal),
+            target: .predicate(authoredPredicate(from: strongestSemanticCandidate.atoms), ordinal: ordinal),
             candidate: ordinalCandidate
         )
     }
@@ -299,11 +302,29 @@ public enum MinimumPredicateSelector {
         atoms.reserveCapacity(facts.count)
 
         for fact in facts {
-            guard let stability = AccessibilityPolicy.matcherFactStability(fact),
-                  let predicate = predicate(for: fact)
-            else { continue }
+            guard let stability = AccessibilityPolicy.matcherFactStability(fact) else { continue }
+            let authoredCheck: ElementPredicateCheck
+            let resolvedCheck: ResolvedElementPredicateCheck
+            switch fact {
+            case .identifier(let identifier):
+                authoredCheck = .identifier(identifier)
+                resolvedCheck = .identifier(.exact(identifier))
+            case .label(let label):
+                authoredCheck = .label(label)
+                resolvedCheck = .label(.exact(label))
+            case .value(let value):
+                authoredCheck = .value(value)
+                resolvedCheck = .value(.exact(value))
+            case .trait(let trait):
+                authoredCheck = .traits([trait])
+                resolvedCheck = .traits([trait])
+            case .excludedTrait(let trait):
+                authoredCheck = .exclude(.traits([trait]))
+                resolvedCheck = .exclude(.traits([trait]))
+            }
             atoms.append(MatcherAtom(
-                predicate: predicate,
+                predicate: ResolvedElementPredicate([resolvedCheck]),
+                authoredCheck: authoredCheck,
                 stability: stability,
                 priority: AccessibilityPolicy.matcherFactPriority(fact)
             ))
@@ -312,27 +333,12 @@ public enum MinimumPredicateSelector {
         return atoms.sorted { $0.sortKey < $1.sortKey }
     }
 
-    private static func predicate(for fact: AccessibilityMatcherFact) -> ElementPredicate? {
-        switch fact {
-        case .identifier(let identifier):
-            return .identifier(identifier)
-        case .label(let label):
-            return .label(label)
-        case .value(let value):
-            return .value(value)
-        case .trait(let trait):
-            return .traits([trait])
-        case .excludedTrait(let trait):
-            return ElementPredicate([.exclude(.traits([trait]))])
-        }
+    private static func combinedPredicate(from atoms: [MatcherAtom]) -> ResolvedElementPredicate {
+        ResolvedElementPredicate(atoms.flatMap { $0.predicate.checks })
     }
 
-    private static func combinedPredicate(from atoms: [MatcherAtom]) -> ElementPredicate {
-        ElementPredicate(atoms.flatMap { $0.predicate.core.checks })
-    }
-
-    private static func authoredTemplate(_ predicate: ElementPredicate) -> ElementPredicateTemplate {
-        ElementPredicateTemplate(core: predicate.core.map { .literal($0) })
+    private static func authoredPredicate(from atoms: [MatcherAtom]) -> ElementPredicate {
+        ElementPredicate(atoms.map(\.authoredCheck))
     }
 
     private static func tier(for atoms: [MatcherAtom]) -> CandidateTier {

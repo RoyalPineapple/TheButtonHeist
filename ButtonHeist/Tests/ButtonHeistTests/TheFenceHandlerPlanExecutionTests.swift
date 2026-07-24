@@ -91,7 +91,7 @@ extension TheFenceHandlerTests {
         let definition = try HeistPlan(
             name: "addToCart",
             parameter: .string(name: "item"),
-            body: [.action(ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(item))))))]
+            body: [.action(ActionStep(command: .activate(.predicate(ElementPredicate(label: .exact(item))))))]
         )
         let plan = try HeistPlan(definitions: [definition], body: [
             .invoke(HeistInvocationStep(path: "addToCart", argument: .string("Milk"))),
@@ -252,7 +252,7 @@ extension TheFenceHandlerTests {
         let definition = try HeistPlan(
             name: "addToCart",
             parameter: .string(name: "item"),
-            body: [.action(ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(item))))))]
+            body: [.action(ActionStep(command: .activate(.predicate(ElementPredicate(label: .exact(item))))))]
         )
         let plan = try HeistPlan(
             name: "shop",

@@ -7,59 +7,32 @@ import TheScore
 internal enum Settlement {}
 
 extension Settlement {
-    private enum DeadlineStart: Sendable, Equatable {
-        case immediate(ContinuousClock.Instant)
-        case afterActionDispatch(Duration)
-    }
-
     internal enum Command: Sendable, Equatable {
         case currentState(scope: SemanticObservationScope)
         case observation(
             predicate: Predicate,
-            deadline: Deadline,
+            deadline: PhaseDeadline,
             baseline: Baseline
         )
-        case action(
-            ResolvedHeistActionCommand,
-            predicate: Predicate?,
-            deadline: Deadline,
-            baseline: Baseline
-        )
+        case action(Action)
 
         internal init(
-            observing input: ResolvedWaitRuntimeInput,
+            observing authored: AccessibilityPredicate,
+            resolved: ResolvedAccessibilityPredicate,
+            timeout: WaitTimeout,
             baseline: Baseline = .capture,
             startedAt: RuntimeElapsed.Instant = RuntimeElapsed.now
         ) {
             self = .observation(
                 predicate: Predicate(
-                    authored: input.predicateExpression,
-                    resolved: input.predicate
+                    authored: authored,
+                    resolved: resolved
                 ),
-                deadline: Deadline(
-                    instant: startedAt.advanced(by: .seconds(input.timeout.seconds))
+                deadline: PhaseDeadline(
+                    phase: .observation,
+                    instant: startedAt.advanced(by: .seconds(timeout.seconds))
                 ),
                 baseline: baseline
-            )
-        }
-
-        internal init(
-            observing input: ResolvedWaitRuntimeInput,
-            after priorResult: Settlement.Result,
-            startedAt: RuntimeElapsed.Instant = RuntimeElapsed.now
-        ) {
-            let baseline: Baseline
-            if let moment = priorResult.evidence.handoff.event?.moment {
-                baseline = .supplied(EvidenceBoundary(moment: moment))
-            } else if case .presence = input.predicate.core {
-                baseline = .capture
-            } else {
-                baseline = .unavailable(.unavailable)
-            }
-            self.init(
-                observing: input,
-                baseline: baseline,
-                startedAt: startedAt
             )
         }
 
@@ -69,8 +42,8 @@ extension Settlement {
                 nil
             case .observation(let predicate, _, _):
                 predicate
-            case .action(_, let predicate, _, _):
-                predicate
+            case .action(let action):
+                action.predicate
             }
         }
 
@@ -80,18 +53,8 @@ extension Settlement {
                 scope
             case .observation(let predicate, _, _):
                 predicate.observationScope
-            case .action(_, let predicate, _, _):
-                predicate?.observationScope ?? .visible
-            }
-        }
-
-        internal var deadline: Deadline? {
-            switch self {
-            case .currentState:
-                nil
-            case .observation(_, let deadline, _),
-                 .action(_, _, let deadline, _):
-                deadline
+            case .action(let action):
+                action.predicate?.observationScope ?? .visible
             }
         }
 
@@ -99,9 +62,10 @@ extension Settlement {
             switch self {
             case .currentState:
                 nil
-            case .observation(_, _, let baseline),
-                 .action(_, _, _, let baseline):
+            case .observation(_, _, let baseline):
                 baseline
+            case .action(let action):
+                action.baseline
             }
         }
 
@@ -117,49 +81,50 @@ extension Settlement {
         case unavailable(Capture.Failure)
     }
 
-    internal struct Deadline: Sendable, Equatable {
-        private let start: DeadlineStart
-
-        internal init(instant: ContinuousClock.Instant) {
-            self.start = .immediate(instant)
-        }
-
-        internal init(afterActionDispatch timeout: Duration) {
-            precondition(timeout >= .zero, "Settlement timeout cannot be negative")
-            self.start = .afterActionDispatch(timeout)
-        }
-
-        internal var startsAfterActionDispatch: Bool {
-            if case .afterActionDispatch = start { return true }
-            return false
-        }
+    internal struct PhaseDeadline: Sendable, Equatable {
+        internal let phase: DeadlinePhase
+        internal let instant: ContinuousClock.Instant
 
         internal func remainingDuration(
             at now: ContinuousClock.Instant = RuntimeElapsed.now
         ) -> Duration {
-            guard let instant = resolve(dispatchCompletedAt: nil) else { return .zero }
             return max(.zero, now.duration(to: instant))
         }
 
-        internal func resolve(
-            dispatchCompletedAt: ContinuousClock.Instant?
-        ) -> ContinuousClock.Instant? {
-            switch start {
-            case .immediate(let instant):
-                instant
-            case .afterActionDispatch(let timeout):
-                dispatchCompletedAt?.advanced(by: timeout)
-            }
-        }
+    }
 
-        internal var diagnosisDescription: String {
-            switch start {
-            case .immediate(let instant):
-                "at(\(instant))"
-            case .afterActionDispatch(let timeout):
-                "afterActionDispatch(\(timeout))"
+    internal struct ActionAllowances: Sendable, Equatable {
+        internal let readiness: Duration
+        internal let expectation: Duration?
+
+        internal init(readiness: Duration, expectation: Duration?) {
+            precondition(readiness >= .zero, "Settlement readiness allowance cannot be negative")
+            if let expectation {
+                precondition(expectation >= .zero, "Settlement expectation allowance cannot be negative")
             }
+            self.readiness = readiness
+            self.expectation = expectation
         }
+    }
+
+    internal struct ActionExpectation: Sendable, Equatable {
+        internal let predicate: Predicate
+        internal let allowance: Duration
+
+        internal init(
+            authored: AccessibilityPredicate,
+            resolved: ResolvedAccessibilityPredicate,
+            timeout: WaitTimeout
+        ) {
+            self.predicate = Predicate(authored: authored, resolved: resolved)
+            self.allowance = .milliseconds(Int64((timeout.seconds * 1_000).rounded(.up)))
+        }
+    }
+
+    internal enum DeadlinePhase: Sendable, Equatable {
+        case observation
+        case actionReadiness
+        case actionExpectation
     }
 
     internal struct EvidenceBoundary: Sendable, Equatable {
@@ -207,8 +172,8 @@ extension Settlement.Predicate {
 
 extension Settlement.Predicate.Semantics {
     fileprivate init(resolved predicate: ResolvedAccessibilityPredicate) {
-        switch predicate.core {
-        case .presence:
+        switch predicate {
+        case .exists, .missing:
             self = .currentState
         case .changed:
             self = .positiveTransition
@@ -589,13 +554,16 @@ extension Settlement.Handoff {
     internal struct Admission: Sendable, Equatable {
         internal let event: Observation.SnapshotEvent
         internal let generation: Settlement.Readiness.Generation
+        internal let instant: ContinuousClock.Instant
 
         private init(
             event: Observation.SnapshotEvent,
-            generation: Settlement.Readiness.Generation
+            generation: Settlement.Readiness.Generation,
+            instant: ContinuousClock.Instant
         ) {
             self.event = event
             self.generation = generation
+            self.instant = instant
         }
 
         internal static func admit(
@@ -607,13 +575,21 @@ extension Settlement.Handoff {
                 return nil
             }
             guard readiness.observationBoundary.admits(admission.event.moment) else { return nil }
-            return Admission(event: admission.event, generation: readiness.generation)
+            return Admission(
+                event: admission.event,
+                generation: readiness.generation,
+                instant: admission.instant
+            )
         }
 
         internal static func currentState(
             _ event: Observation.SnapshotEvent
         ) -> Admission {
-            Admission(event: event, generation: .initial)
+            Admission(
+                event: event,
+                generation: .initial,
+                instant: RuntimeElapsed.now
+            )
         }
 
         internal func belongs(to readiness: Settlement.Readiness.Establishment) -> Bool {
@@ -661,11 +637,13 @@ extension Settlement {
         internal let event: Observation.SnapshotEvent
         internal let history: Observation.EventsSince
         internal let source: ObservationAdmissionSource
+        internal let instant: ContinuousClock.Instant
 
         internal init(
             event: Observation.SnapshotEvent,
             history: Observation.EventsSince,
-            source: ObservationAdmissionSource = .observation
+            source: ObservationAdmissionSource = .observation,
+            instant: ContinuousClock.Instant = RuntimeElapsed.now
         ) {
             if case .events(let events) = history {
                 precondition(
@@ -676,13 +654,13 @@ extension Settlement {
             self.event = event
             self.history = history
             self.source = source
+            self.instant = instant
         }
     }
 
     internal struct Arming: Sendable, Equatable {
         internal let boundary: EvidenceBoundary
         internal let observationScope: SemanticObservationScope
-        internal let deadline: Deadline
     }
 
     internal enum TriggerEvidence: Sendable {
@@ -711,23 +689,6 @@ extension Settlement {
         case pending
         case established(EvidenceBoundary)
         case unavailable(Capture.Failure)
-    }
-
-    internal enum DeadlineEvidence: Sendable, Equatable {
-        case notApplicable(elapsed: ElapsedMilliseconds)
-        case bounded(deadline: Deadline, elapsed: ElapsedMilliseconds, reached: Bool)
-
-        internal var elapsed: ElapsedMilliseconds {
-            switch self {
-            case .notApplicable(let elapsed), .bounded(_, let elapsed, _):
-                elapsed
-            }
-        }
-
-        internal var reached: Bool {
-            guard case .bounded(_, _, let reached) = self else { return false }
-            return reached
-        }
     }
 
     internal struct ExecutionTiming: Sendable, Equatable {
@@ -768,7 +729,7 @@ extension Settlement {
         internal let handoff: Handoff.Evidence
         internal let observationHistory: Observation.EventsSince?
         internal let timing: ExecutionTiming
-        internal let deadline: DeadlineEvidence
+        internal let elapsed: ElapsedMilliseconds
 
         internal init(
             command: Command,
@@ -779,7 +740,7 @@ extension Settlement {
             handoff: Handoff.Evidence,
             observationHistory: Observation.EventsSince?,
             timing: ExecutionTiming = ExecutionTiming(),
-            deadline: DeadlineEvidence
+            elapsed: ElapsedMilliseconds
         ) {
             self.command = command
             self.boundary = boundary
@@ -789,7 +750,7 @@ extension Settlement {
             self.handoff = handoff
             self.observationHistory = observationHistory
             self.timing = timing
-            self.deadline = deadline
+            self.elapsed = elapsed
         }
     }
 
@@ -797,7 +758,7 @@ extension Settlement {
         case settled
         case dispatchFailed
         case baselineUnavailable
-        case timedOut
+        case timedOut(DeadlinePhase)
         case cancelled
     }
 
@@ -841,22 +802,14 @@ extension Settlement {
     internal enum State: Sendable {
         case awaitingBaseline(Command)
         case armed(Session)
-        case dispatching(Session)
-        case observing(Session)
-        case needHandoff(Session)
-        case completed(Result)
-        case failed(Result)
-        case timedOut(Result)
-        case cancelled(Result)
+        case active(Session)
+        case terminal(Result)
 
         internal var result: Result? {
             switch self {
-            case .completed(let result),
-                 .failed(let result),
-                 .timedOut(let result),
-                 .cancelled(let result):
+            case .terminal(let result):
                 result
-            case .awaitingBaseline, .armed, .dispatching, .observing, .needHandoff:
+            case .awaitingBaseline, .armed, .active:
                 nil
             }
         }
@@ -871,20 +824,18 @@ extension Settlement {
         internal var handoff: Handoff.Evidence
         internal var observationHistory: Observation.EventsSince?
         internal var latestObservation: ObservationAdmission?
-        internal var latestMoment: Observation.Moment
         internal var timing: ExecutionTiming
-        internal var elapsed: ElapsedMilliseconds
+        internal var phase: Phase
 
         internal init(
             command: Command,
             boundary: EvidenceBoundary,
-            timing: ExecutionTiming,
-            elapsed: ElapsedMilliseconds
+            timing: ExecutionTiming
         ) {
             self.command = command
             self.boundary = boundary
             self.triggerEvidence = switch command {
-            case .action(let action, _, _, _): .actionPending(action)
+            case .action(let action): .actionPending(action.command)
             case .currentState, .observation: .observation
             }
             self.requirement = Predicate.Requirement(predicate: command.predicate)
@@ -892,9 +843,13 @@ extension Settlement {
             self.handoff = .pending(.initial)
             self.observationHistory = nil
             self.latestObservation = nil
-            self.latestMoment = boundary.moment
             self.timing = timing
-            self.elapsed = elapsed
+            self.phase = switch command {
+            case .observation(_, let deadline, _): .observation(deadline)
+            case .action: .awaitingActionDispatch
+            case .currentState:
+                preconditionFailure("Current-state capture cannot create a settlement session")
+            }
         }
     }
 
@@ -902,15 +857,18 @@ extension Settlement {
         internal let fact: Fact
         internal let timing: ExecutionTiming
         internal let elapsed: ElapsedMilliseconds
+        internal let instant: ContinuousClock.Instant
 
         internal init(
             fact: Fact,
             timing: ExecutionTiming = ExecutionTiming(),
-            elapsed: ElapsedMilliseconds
+            elapsed: ElapsedMilliseconds,
+            instant: ContinuousClock.Instant = RuntimeElapsed.now
         ) {
             self.fact = fact
             self.timing = timing
             self.elapsed = elapsed
+            self.instant = instant
         }
     }
 
@@ -922,9 +880,44 @@ extension Settlement {
     internal enum Effect: Sendable {
         case capture(Capture.Request)
         case arm(Arming)
+        case armReadiness(PhaseDeadline)
+        case armDeadline(PhaseDeadline)
         case dispatchAction(ResolvedHeistActionCommand)
         case evaluatePredicate(Predicate.EvaluationRequest)
-        case finish(Result)
+    }
+}
+
+extension Settlement.Command {
+    internal struct Action: Sendable, Equatable {
+        internal let command: ResolvedHeistActionCommand
+        internal let predicate: Settlement.Predicate?
+        internal let allowances: Settlement.ActionAllowances
+        internal let baseline: Settlement.Baseline
+
+        internal init(
+            command: ResolvedHeistActionCommand,
+            predicate: Settlement.Predicate?,
+            allowances: Settlement.ActionAllowances,
+            baseline: Settlement.Baseline
+        ) {
+            precondition(
+                (predicate == nil) == (allowances.expectation == nil),
+                "Settlement action expectation requires one authored allowance"
+            )
+            self.command = command
+            self.predicate = predicate
+            self.allowances = allowances
+            self.baseline = baseline
+        }
+    }
+}
+
+extension Settlement.Session {
+    internal enum Phase: Sendable, Equatable {
+        case observation(Settlement.PhaseDeadline)
+        case awaitingActionDispatch
+        case actionReadiness(Settlement.PhaseDeadline)
+        case actionExpectation(Settlement.PhaseDeadline)
     }
 }
 
@@ -942,7 +935,7 @@ extension Settlement.Event {
         case readinessEstablished(Settlement.Readiness.Establishment)
         case readinessInvalidated(Settlement.Readiness.Generation)
         case handoffCaptureFailed(Settlement.Readiness.Generation, Settlement.Capture.Failure)
-        case deadlineReached
+        case deadlineReached(Settlement.PhaseDeadline)
         case cancelled
     }
 }

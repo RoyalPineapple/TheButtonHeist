@@ -59,15 +59,14 @@ extension TheFenceCompactFormattingContractTests {
             duration: 25,
             path: .uikitIdle
         )
-        let expectationResult = ActionResult.failure(
-            payload: .wait,
+        let actionResult = ActionResult.failure(
+            payload: .dismiss,
             failureKind: .timeout,
             observation: .settledTrace(traceEvidence, settlement)
         )
         let step = HeistResultFixture.action(
             command: .dismiss,
-            result: .success(payload: .dismiss),
-            expectationActionResult: expectationResult,
+            result: actionResult,
             expectation: ExpectationResult(met: true, predicate: predicate, actual: "Saved"),
             failure: HeistFailureDetail(
                 category: .wait,
@@ -94,7 +93,7 @@ extension TheFenceCompactFormattingContractTests {
     func testHumanHeistFormattingCountsNestedProjectedExpectations() throws {
         let expected = AccessibilityPredicate.exists(.label("Done"))
         let childAction = try HeistStep.action(ActionStep(
-            command: .activate(.predicate(ElementPredicateTemplate(label: .exact("Submit")))),
+            command: .activate(.predicate(ElementPredicate(label: .exact("Submit")))),
             expectationPolicy: .expect(ActionExpectation(predicate: expected, timeout: 1))))
         let casePredicate = ChangeDeclaration.ScreenAssertion.exists(.label("Home"))
         let casePredicateRuntime = AccessibilityPredicate.exists(.label("Home"))
@@ -105,7 +104,6 @@ extension TheFenceCompactFormattingContractTests {
         let childResult = HeistResultFixture.action(
             path: "$.body[0].conditional.cases[0].body[0]",
             result: ActionResult.success(payload: .activate),
-            expectationActionResult: ActionResult.success(payload: .wait),
             expectation: ExpectationResult(met: true, predicate: expected)
         )
         let result = try HeistResult(
@@ -137,7 +135,7 @@ extension TheFenceCompactFormattingContractTests {
     func testHeistExpectationCountsAgreeAcrossPublicFormats() throws {
         let expected = AccessibilityPredicate.exists(.label("Done"))
         let action = try HeistStep.action(ActionStep(
-            command: .activate(.predicate(ElementPredicateTemplate(label: "Submit"))),
+            command: .activate(.predicate(ElementPredicate(label: "Submit"))),
             expectationPolicy: .expect(ActionExpectation(predicate: expected, timeout: 1))))
         let plan = try HeistPlan(body: [
             .warn(WarnStep(message: "starting checkout")),
@@ -148,9 +146,8 @@ extension TheFenceCompactFormattingContractTests {
                 HeistResultFixture.warning(path: "$.body[0]", message: "starting checkout"),
                 HeistResultFixture.action(
                     path: "$.body[1]",
-                    command: .activate(.predicate(ElementPredicateTemplate(label: "Submit"))),
+                    command: .activate(.predicate(ElementPredicate(label: "Submit"))),
                     result: ActionResult.success(payload: .activate),
-                    expectationActionResult: ActionResult.success(payload: .wait),
                     expectation: ExpectationResult(met: true, predicate: expected, actual: "matched")
                 ),
             ],
@@ -181,7 +178,7 @@ extension TheFenceCompactFormattingContractTests {
 
     func testPublicHeistJSONIncludesScoreMetricProjection() throws {
         let expected = AccessibilityPredicate.exists(.label("Done"))
-        let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Submit")))
+        let command = HeistActionCommand.activate(.predicate(ElementPredicate(label: "Submit")))
         let plan = try HeistPlan(body: [
             .action(ActionStep(command: command, expectationPolicy: .expect(ActionExpectation(
                 predicate: expected,
@@ -194,11 +191,6 @@ extension TheFenceCompactFormattingContractTests {
                     command: command,
                     result: ActionResult.success(
                         payload: .activate,
-                        observation: .none,
-                        timing: ActionPerformanceTiming(targetResolutionMs: 1, totalMs: 5)
-                    ),
-                    expectationActionResult: ActionResult.success(
-                        payload: .wait,
                         observation: .settledTrace(
                             makeTestTraceEvidence(
                                 .noChangeForTests(elementCount: 0),
@@ -206,7 +198,7 @@ extension TheFenceCompactFormattingContractTests {
                             ),
                             .settled(duration: 7)
                         ),
-                        timing: ActionPerformanceTiming(totalMs: 9)
+                        timing: ActionPerformanceTiming(targetResolutionMs: 1, totalMs: 9)
                     ),
                     expectation: ExpectationResult(met: true, predicate: expected)
                 ),
@@ -221,21 +213,19 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertEqual(metrics.measurements.map(MeasurementExpectation.init(measurement:)), [
             MeasurementExpectation(name: "heistDurationMs", valueMs: 12, path: nil),
             MeasurementExpectation(name: "actionPipeline.targetResolutionMs", valueMs: 1, path: "$.body[0]"),
-            MeasurementExpectation(name: "actionPipeline.totalMs", valueMs: 5, path: "$.body[0]"),
-            MeasurementExpectation(name: "waitPipeline.settleMs", valueMs: 7, path: "$.body[0]"),
-            MeasurementExpectation(name: "waitPipeline.totalMs", valueMs: 9, path: "$.body[0]"),
-            MeasurementExpectation(name: "expectationWaitMs", valueMs: 9, path: "$.body[0]"),
+            MeasurementExpectation(name: "actionPipeline.settleMs", valueMs: 7, path: "$.body[0]"),
+            MeasurementExpectation(name: "actionPipeline.totalMs", valueMs: 9, path: "$.body[0]"),
         ])
     }
 
     func testExplicitSingleActionHeistKeepsReportShapeAcrossPublicFormats() throws {
         let plan = try HeistPlan(body: [
-            .action(ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: "Pay"))))),
+            .action(ActionStep(command: .activate(.predicate(ElementPredicate(label: "Pay"))))),
         ])
         let result = try HeistResult(
             steps: [
                 HeistResultFixture.action(
-                    command: .activate(.predicate(ElementPredicateTemplate(label: "Pay"))),
+                    command: .activate(.predicate(ElementPredicate(label: "Pay"))),
                     result: ActionResult.success(payload: .activate)
                 ),
             ],
@@ -255,7 +245,7 @@ extension TheFenceCompactFormattingContractTests {
 
     func testPublicHeistJSONProjectsNetDeltaInsideReport() throws {
         let plan = try HeistPlan(body: [
-            .action(ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: "Pay"))))),
+            .action(ActionStep(command: .activate(.predicate(ElementPredicate(label: "Pay"))))),
         ])
         let trace = makeTestTrace(
             before: makeTestInterface(elementCount: 0),
@@ -266,7 +256,7 @@ extension TheFenceCompactFormattingContractTests {
             report: HeistReport.project(result: try HeistResult(
                 steps: [
                     HeistResultFixture.action(
-                        command: .activate(.predicate(ElementPredicateTemplate(label: "Pay"))),
+                        command: .activate(.predicate(ElementPredicate(label: "Pay"))),
                         result: ActionResult.success(
                             payload: .activate,
                             observation: .trace(makeTestTraceEvidence(trace, completeness: .complete))
@@ -408,7 +398,7 @@ extension TheFenceCompactFormattingContractTests {
 
     func testPublicHeistJSONReportsNestedSelectedCaseFailureAsTreeNodes() throws {
         let childAction = try HeistStep.action(ActionStep(
-            command: .activate(.predicate(ElementPredicateTemplate(label: "Continue")))
+            command: .activate(.predicate(ElementPredicate(label: "Continue")))
         ))
         let casePredicate = ChangeDeclaration.ScreenAssertion.exists(.label("Ready"))
         let casePredicateRuntime = AccessibilityPredicate.exists(.label("Ready"))
@@ -419,7 +409,7 @@ extension TheFenceCompactFormattingContractTests {
         let childPath = "$.body[0].conditional.cases[0].body[0]"
         let childResult = HeistResultFixture.action(
             path: childPath,
-            command: .activate(.predicate(ElementPredicateTemplate(label: "Continue"))),
+            command: .activate(.predicate(ElementPredicate(label: "Continue"))),
             result: ActionResult.failure(
                 payload: .activate,
                 failureKind: .actionFailed,
@@ -484,7 +474,7 @@ extension TheFenceCompactFormattingContractTests {
 
     func testPublicHeistJSONReportsSelectedElsePathAsTreeNodes() throws {
         let elseStep = try HeistStep.action(ActionStep(
-            command: .activate(.predicate(ElementPredicateTemplate(label: "Fallback")))
+            command: .activate(.predicate(ElementPredicate(label: "Fallback")))
         ))
         let predicate = ChangeDeclaration.ScreenAssertion.exists(.label("Home"))
         let runtimePredicate = AccessibilityPredicate.exists(.label("Home"))
@@ -492,7 +482,7 @@ extension TheFenceCompactFormattingContractTests {
             cases: [
                 PredicateCase(
                     predicate: predicate,
-                    body: [try HeistStep.action(ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: "Home")))))]
+                    body: [try HeistStep.action(ActionStep(command: .activate(.predicate(ElementPredicate(label: "Home")))))]
                 ),
             ],
             elseBody: [elseStep]
@@ -501,7 +491,7 @@ extension TheFenceCompactFormattingContractTests {
         let childPath = "$.body[0].conditional.else_body[0]"
         let childResult = HeistResultFixture.action(
             path: childPath,
-            command: .activate(.predicate(ElementPredicateTemplate(label: "Fallback"))),
+            command: .activate(.predicate(ElementPredicate(label: "Fallback"))),
             result: ActionResult.success(payload: .activate)
         )
         let result = try HeistResult(

@@ -22,30 +22,14 @@ extension Settlement {
                     effects: [.capture(.baseline(command.observationScope))]
                 )
             case .supplied(let boundary):
-                guard let deadline = command.deadline else {
-                    preconditionFailure("Supplied settlement baseline requires a deadline")
-                }
-                return Decision(
-                    state: .armed(Settlement.Session(
-                        command: command,
-                        boundary: boundary,
-                        timing: Settlement.ExecutionTiming(),
-                        elapsed: 0
-                    )),
-                    effects: [.arm(Settlement.Arming(
-                        boundary: boundary,
-                        observationScope: command.observationScope,
-                        deadline: deadline
-                    ))]
-                )
+                return armed(command, boundary: boundary)
             case .unavailable(let failure):
                 return terminalBeforeBaseline(
                     command: command,
                     boundary: .unavailable(failure),
                     outcome: .baselineUnavailable,
-                    timing: Settlement.ExecutionTiming(),
-                    elapsed: 0,
-                    deadlineReached: false
+                    timing: ExecutionTiming(),
+                    elapsed: 0
                 )
             }
         }
@@ -56,26 +40,34 @@ extension Settlement {
                 reduceAwaitingBaseline(command, event: event)
             case .armed(let session):
                 reduceArmed(session, event: event)
-            case .dispatching(let session):
-                reduceActive(session, phase: .dispatching, event: event)
-            case .observing(let session):
-                reduceActive(session, phase: .observing, event: event)
-            case .needHandoff(let session):
-                reduceActive(session, phase: .needHandoff, event: event)
-            case .completed, .failed, .timedOut, .cancelled:
+            case .active(let session):
+                reduceActive(session, event: event)
+            case .terminal:
                 Decision(state: state, effects: [])
             }
+        }
+
+        private static func armed(
+            _ command: Command,
+            boundary: EvidenceBoundary,
+            timing: ExecutionTiming = ExecutionTiming()
+        ) -> Decision {
+            Decision(
+                state: .armed(Session(
+                    command: command,
+                    boundary: boundary,
+                    timing: timing
+                )),
+                effects: [.arm(Arming(
+                    boundary: boundary,
+                    observationScope: command.observationScope
+                ))]
+            )
         }
     }
 }
 
 private extension Settlement.Reducer {
-    enum ActivePhase: Equatable {
-        case dispatching
-        case observing
-        case needHandoff
-    }
-
     static func reduceAwaitingBaseline(
         _ command: Settlement.Command,
         event: Settlement.Event
@@ -90,23 +82,10 @@ private extension Settlement.Reducer {
                     elapsed: event.elapsed
                 )
             }
-            let boundary = Settlement.EvidenceBoundary(moment: snapshot.moment)
-            guard let deadline = command.deadline else {
-                preconditionFailure("Armed settlement command requires a deadline")
-            }
-            let session = Settlement.Session(
-                command: command,
-                boundary: boundary,
-                timing: event.timing,
-                elapsed: event.elapsed
-            )
-            return Settlement.Decision(
-                state: .armed(session),
-                effects: [.arm(Settlement.Arming(
-                    boundary: boundary,
-                    observationScope: command.observationScope,
-                    deadline: deadline
-                ))]
+            return armed(
+                command,
+                boundary: Settlement.EvidenceBoundary(moment: snapshot.moment),
+                timing: event.timing
             )
         case .baselineUnavailable(let failure):
             return terminalBeforeBaseline(
@@ -114,17 +93,7 @@ private extension Settlement.Reducer {
                 boundary: .unavailable(failure),
                 outcome: .baselineUnavailable,
                 timing: event.timing,
-                elapsed: event.elapsed,
-                deadlineReached: false
-            )
-        case .deadlineReached:
-            return terminalBeforeBaseline(
-                command: command,
-                boundary: .pending,
-                outcome: .timedOut,
-                timing: event.timing,
-                elapsed: event.elapsed,
-                deadlineReached: true
+                elapsed: event.elapsed
             )
         case .cancelled:
             return terminalBeforeBaseline(
@@ -132,9 +101,10 @@ private extension Settlement.Reducer {
                 boundary: .pending,
                 outcome: .cancelled,
                 timing: event.timing,
-                elapsed: event.elapsed,
-                deadlineReached: false
+                elapsed: event.elapsed
             )
+        case .deadlineReached:
+            return Settlement.Decision(state: .awaitingBaseline(command), effects: [])
         case .channelsArmed,
              .dispatchCompleted,
              .observationAdmitted,
@@ -156,20 +126,29 @@ private extension Settlement.Reducer {
         switch event.fact {
         case .channelsArmed:
             switch session.command {
-            case .action(let command, _, _, _):
+            case .action(let action):
                 return Settlement.Decision(
-                    state: .dispatching(session),
-                    effects: [.dispatchAction(command)]
+                    state: .active(session),
+                    effects: [.dispatchAction(action.command)]
                 )
             case .observation:
-                return Settlement.Decision(state: .observing(session), effects: [])
+                guard let deadline = session.phase.deadline else {
+                    preconditionFailure("Observation settlement requires a deadline")
+                }
+                return Settlement.Decision(
+                    state: .active(session),
+                    effects: [
+                        .armReadiness(deadline),
+                        .armDeadline(deadline),
+                    ]
+                )
             case .currentState:
                 preconditionFailure("Current-state capture cannot enter channel arming")
             }
         case .deadlineReached:
-            return terminal(session, outcome: .timedOut, elapsed: event.elapsed, deadlineReached: true)
+            return Settlement.Decision(state: .armed(session), effects: [])
         case .cancelled:
-            return terminal(session, outcome: .cancelled, elapsed: event.elapsed, deadlineReached: false)
+            return terminal(session, outcome: .cancelled, elapsed: event.elapsed)
         case .baselineAdmitted,
              .baselineUnavailable,
              .dispatchCompleted,
@@ -187,27 +166,36 @@ private extension Settlement.Reducer {
 
     static func reduceActive(
         _ original: Settlement.Session,
-        phase: ActivePhase,
         event: Settlement.Event
     ) -> Settlement.Decision {
         var session = original
         session.timing.merge(event.timing)
-        session.elapsed = event.elapsed
         var effects: [Settlement.Effect] = []
 
         switch event.fact {
         case .dispatchCompleted(let result):
-            guard case .actionPending = session.triggerEvidence else {
-                return Settlement.Decision(state: activeState(session, phase: phase), effects: [])
+            guard case .awaitingActionDispatch = session.phase,
+                  case .actionPending = session.triggerEvidence,
+                  case .action(let action) = session.command else {
+                return Settlement.Decision(state: .active(session), effects: [])
             }
             session.triggerEvidence = .actionDispatched(result)
             if !result.success {
                 session.requirement.evidence.recordDispatchFailure()
             }
+            let deadline = Settlement.PhaseDeadline(
+                phase: .actionReadiness,
+                instant: event.instant.advanced(by: action.allowances.readiness)
+            )
+            session.phase = .actionReadiness(deadline)
+            effects = [
+                .armReadiness(deadline),
+                .armDeadline(deadline),
+            ]
         case .observationAdmitted(let admission):
             effects += admit(admission, to: &session)
-        case .announcementObserved(let event):
-            effects += observe(event, in: &session)
+        case .announcementObserved(let announcement):
+            effects += observe(announcement, in: &session)
         case .observationHistoryUnavailable(let history):
             recordUnavailableHistory(history, in: &session)
         case .announcementHistoryUnavailable(let gap):
@@ -220,21 +208,33 @@ private extension Settlement.Reducer {
             invalidateReadiness(through: generation, in: &session)
         case .handoffCaptureFailed(let generation, let failure):
             recordHandoffCaptureFailure(failure, generation: generation, in: &session)
-        case .deadlineReached:
-            return terminal(session, outcome: .timedOut, elapsed: event.elapsed, deadlineReached: true)
+        case .deadlineReached(let reached):
+            guard session.phase.deadline == reached else {
+                return Settlement.Decision(state: .active(session), effects: [])
+            }
+            if session.triggerEvidence.dispatchFailed {
+                return terminal(
+                    session,
+                    outcome: .dispatchFailed,
+                    elapsed: event.elapsed
+                )
+            }
+            return terminal(
+                session,
+                outcome: .timedOut(reached.phase),
+                elapsed: event.elapsed
+            )
         case .cancelled:
-            return terminal(session, outcome: .cancelled, elapsed: event.elapsed, deadlineReached: false)
+            return terminal(session, outcome: .cancelled, elapsed: event.elapsed)
         case .baselineAdmitted, .baselineUnavailable, .channelsArmed:
             preconditionFailure("Settlement received a bootstrap event after channel arming")
         }
 
         if let outcome = completedOutcome(session) {
-            return terminal(session, outcome: outcome, elapsed: event.elapsed, deadlineReached: false)
+            return terminal(session, outcome: outcome, elapsed: event.elapsed)
         }
-        return Settlement.Decision(
-            state: activeState(session, phase: phase),
-            effects: effects
-        )
+        effects += admitExpectationPhaseIfNeeded(in: &session)
+        return Settlement.Decision(state: .active(session), effects: effects)
     }
 }
 
@@ -243,10 +243,12 @@ private extension Settlement.Reducer {
         _ admission: Settlement.ObservationAdmission,
         to session: inout Settlement.Session
     ) -> [Settlement.Effect] {
-        session.latestMoment = admission.event.moment
         session.observationHistory = admission.history
         session.latestObservation = admission
         if case .established(let readiness) = session.readiness,
+           session.command.waitsForObservation
+               || session.requirement.predicate?.semantics == .currentState
+               || session.handoff.admission == nil,
            let handoff = Settlement.Handoff.Admission.admit(admission, for: readiness) {
             session.handoff = .admitted(handoff)
         }
@@ -348,10 +350,7 @@ private extension Settlement.Reducer {
            session.requirement.predicate?.semantics == .completeHistory,
            let latestObservation = session.latestObservation,
            latestObservation.event.moment == handoff.moment {
-            return evaluationEffect(
-                for: latestObservation,
-                session: &session
-            )
+            return evaluationEffect(for: latestObservation, session: &session)
         }
         guard case .captureRequested(let request) = session.handoff else { return [] }
         return [.capture(.handoff(request))]
@@ -434,17 +433,24 @@ private extension Settlement.Reducer {
         return .settled
     }
 
-    static func activeState(
-        _ session: Settlement.Session,
-        phase: ActivePhase
-    ) -> Settlement.State {
-        if case .actionPending = session.triggerEvidence, phase == .dispatching {
-            return .dispatching(session)
-        }
-        if session.readiness.isEstablished, session.handoff.event == nil {
-            return .needHandoff(session)
-        }
-        return .observing(session)
+    static func admitExpectationPhaseIfNeeded(
+        in session: inout Settlement.Session
+    ) -> [Settlement.Effect] {
+        guard case .actionReadiness = session.phase,
+              case .action(let action) = session.command,
+              let allowance = action.allowances.expectation,
+              session.triggerEvidence.permitsCompletion,
+              let handoff = session.handoff.admission,
+              !session.requirement.evidence.satisfies(
+                  session.requirement.predicate,
+                  at: handoff.event
+              ) else { return [] }
+        let deadline = Settlement.PhaseDeadline(
+            phase: .actionExpectation,
+            instant: handoff.instant.advanced(by: allowance)
+        )
+        session.phase = .actionExpectation(deadline)
+        return [.armDeadline(deadline)]
     }
 }
 
@@ -452,8 +458,7 @@ private extension Settlement.Reducer {
     static func terminal(
         _ session: Settlement.Session,
         outcome: Settlement.Outcome,
-        elapsed: ElapsedMilliseconds,
-        deadlineReached: Bool
+        elapsed: ElapsedMilliseconds
     ) -> Settlement.Decision {
         let result = Settlement.Result(
             outcome: outcome,
@@ -466,24 +471,10 @@ private extension Settlement.Reducer {
                 handoff: session.handoff,
                 observationHistory: session.observationHistory,
                 timing: session.timing,
-                deadline: .bounded(
-                    deadline: deadline(for: session.command),
-                    elapsed: elapsed,
-                    reached: deadlineReached
-                )
+                elapsed: elapsed
             )
         )
-        let state: Settlement.State = switch outcome {
-        case .settled:
-            .completed(result)
-        case .dispatchFailed, .baselineUnavailable:
-            .failed(result)
-        case .timedOut:
-            .timedOut(result)
-        case .cancelled:
-            .cancelled(result)
-        }
-        return Settlement.Decision(state: state, effects: [.finish(result)])
+        return Settlement.Decision(state: .terminal(result), effects: [])
     }
 
     static func terminalBeforeBaseline(
@@ -491,18 +482,11 @@ private extension Settlement.Reducer {
         boundary: Settlement.BoundaryEvidence,
         outcome: Settlement.Outcome,
         timing: Settlement.ExecutionTiming,
-        elapsed: ElapsedMilliseconds,
-        deadlineReached: Bool
+        elapsed: ElapsedMilliseconds
     ) -> Settlement.Decision {
         let trigger: Settlement.TriggerEvidence = switch command {
-        case .action(let action, _, _, _): .actionPending(action)
+        case .action(let action): .actionPending(action.command)
         case .currentState, .observation: .observation
-        }
-        let requirement = Settlement.Predicate.Requirement(predicate: command.predicate)
-        let deadlineEvidence: Settlement.DeadlineEvidence = if let deadline = command.deadline {
-            .bounded(deadline: deadline, elapsed: elapsed, reached: deadlineReached)
-        } else {
-            .notApplicable(elapsed: elapsed)
         }
         let result = Settlement.Result(
             outcome: outcome,
@@ -510,25 +494,17 @@ private extension Settlement.Reducer {
                 command: command,
                 boundary: boundary,
                 trigger: trigger,
-                predicate: requirement.evidence,
+                predicate: Settlement.Predicate.Requirement(
+                    predicate: command.predicate
+                ).evidence,
                 readiness: .pending(.initial),
                 handoff: .pending(.initial),
                 observationHistory: nil,
                 timing: timing,
-                deadline: deadlineEvidence
+                elapsed: elapsed
             )
         )
-        let state: Settlement.State = switch outcome {
-        case .baselineUnavailable, .dispatchFailed:
-            .failed(result)
-        case .timedOut:
-            .timedOut(result)
-        case .cancelled:
-            .cancelled(result)
-        case .settled:
-            preconditionFailure("Settlement cannot succeed before baseline admission")
-        }
-        return Settlement.Decision(state: state, effects: [.finish(result)])
+        return Settlement.Decision(state: .terminal(result), effects: [])
     }
 
     static func terminalCurrentState(
@@ -553,17 +529,23 @@ private extension Settlement.Reducer {
                 handoff: .admitted(.currentState(event)),
                 observationHistory: .events([]),
                 timing: timing,
-                deadline: .notApplicable(elapsed: elapsed)
+                elapsed: elapsed
             )
         )
-        return Settlement.Decision(state: .completed(result), effects: [.finish(result)])
+        return Settlement.Decision(state: .terminal(result), effects: [])
     }
+}
 
-    static func deadline(for command: Settlement.Command) -> Settlement.Deadline {
-        guard let deadline = command.deadline else {
-            preconditionFailure("Timed settlement evidence requires a deadline")
+private extension Settlement.Session.Phase {
+    var deadline: Settlement.PhaseDeadline? {
+        switch self {
+        case .observation(let deadline),
+             .actionReadiness(let deadline),
+             .actionExpectation(let deadline):
+            deadline
+        case .awaitingActionDispatch:
+            nil
         }
-        return deadline
     }
 }
 

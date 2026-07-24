@@ -7,17 +7,11 @@ import TheScore
 extension Settlement {
     internal enum ResultProjector {
         internal static func projectAction(_ result: Result) -> HeistActionEvidence {
-            let dispatchResult = actionResult(from: result)
-            guard result.evidence.command.predicate != nil,
-                  !result.evidence.trigger.dispatchFailed,
-                  let expectation = expectation(from: result) else {
-                return .dispatch(dispatchResult: dispatchResult)
-            }
-            return .expectation(
-                dispatchResult: dispatchResult,
-                expectationResult: waitActionResult(from: result),
-                expectation: expectation
-            )
+            let actionResult = actionResult(from: result)
+            let expectation = result.evidence.trigger.permitsCompletion
+                ? expectation(from: result)
+                : nil
+            return .completed(result: actionResult, expectation: expectation)
         }
 
         internal static func projectWait(_ result: Result) -> HeistSettlementEvidence {
@@ -28,7 +22,7 @@ extension Settlement {
             guard let expectation = expectation(from: result) else {
                 preconditionFailure("Wait projection requires evaluated predicate evidence")
             }
-            let actionResult = waitActionResult(from: result)
+            let actionResult = standaloneWaitActionResult(from: result)
             if result.outcome == .settled,
                let met = ExpectationResult.Met(expectation),
                let check = HeistSettlementEvidence.MatchedCheck(
@@ -63,9 +57,10 @@ private extension Settlement.ResultProjector {
     }
 
     static func actionResult(from result: Settlement.Result) -> ActionResult {
-        guard case .action(let command, _, _, _) = result.evidence.command else {
+        guard case .action(let action) = result.evidence.command else {
             preconditionFailure("Action projection requires an action settlement trigger")
         }
+        let command = action.command
         let assemblyStart = RuntimeElapsed.now
         let observation = projectedObservation(from: result)
         switch result.evidence.trigger {
@@ -78,11 +73,11 @@ private extension Settlement.ResultProjector {
             )
             switch dispatch.outcome {
             case .success:
-                let settlementFailureMessage = actionSettlementFailureMessage(from: result)
+                let failure = actionFailure(from: result)
                 return ActionResult(
-                    outcome: settlementFailureMessage == nil ? .success : .failure(.actionFailed),
+                    outcome: failure.map { .failure($0.kind) } ?? .success,
                     payload: payload,
-                    message: settlementFailureMessage ?? dispatch.message,
+                    message: failure?.message ?? dispatch.message,
                     observation: observation,
                     subjectEvidence: dispatch.subjectEvidence,
                     activationTrace: dispatch.activationTrace,
@@ -102,18 +97,31 @@ private extension Settlement.ResultProjector {
             }
         case .actionPending:
             let resultAssemblyMs = RuntimeElapsed.milliseconds(since: assemblyStart)
+            let failure: (kind: ActionFailure.Kind, message: String) = switch result.outcome {
+            case .timedOut:
+                (
+                    .timeout,
+                    "action dispatch did not complete before settlement deadline "
+                        + "after \(result.evidence.elapsed)ms"
+                )
+            case .baselineUnavailable:
+                (.accessibilityTreeUnavailable, TheBrains.treeUnavailableMessage)
+            case .cancelled:
+                (.actionFailed, "cancelled after \(result.evidence.elapsed)ms")
+            case .settled, .dispatchFailed:
+                preconditionFailure("Pending action requires a pre-dispatch terminal outcome")
+            }
             return ActionResult.failure(
                 payload: command.actionResultPayload,
-                failureKind: .timeout,
-                message: "action dispatch did not complete before settlement deadline "
-                    + "after \(result.evidence.deadline.elapsed)ms",
+                failureKind: failure.kind,
+                message: failure.message,
                 observation: observation,
                 timing: ActionPerformanceTiming(
                     beforeObservationMs: result.evidence.timing.beforeObservationMs,
                     finalSemanticEvidenceMs: result.evidence.timing.finalSemanticEvidenceMs,
                     resultAssemblyMs: resultAssemblyMs,
                     totalMs: RuntimeElapsed.admit(
-                        milliseconds: result.evidence.deadline.elapsed.milliseconds
+                        milliseconds: result.evidence.elapsed.milliseconds
                             + resultAssemblyMs.milliseconds
                     )
                 )
@@ -123,18 +131,24 @@ private extension Settlement.ResultProjector {
         }
     }
 
-    static func actionSettlementFailureMessage(from result: Settlement.Result) -> String? {
+    static func actionFailure(
+        from result: Settlement.Result
+    ) -> (kind: ActionFailure.Kind, message: String)? {
         switch result.outcome {
         case .cancelled:
-            "cancelled after \(result.evidence.deadline.elapsed)ms"
+            (.actionFailed, "cancelled after \(result.evidence.elapsed)ms")
         case .timedOut:
             if case .captureFailed = result.evidence.handoff {
-                "Could not capture accessibility tree after action"
+                (.actionFailed, "Could not capture accessibility tree after action")
             } else {
-                nil
+                (.timeout, renderTimeoutMessage(from: result))
             }
-        case .settled, .dispatchFailed, .baselineUnavailable:
+        case .baselineUnavailable:
+            (.accessibilityTreeUnavailable, TheBrains.treeUnavailableMessage)
+        case .settled:
             nil
+        case .dispatchFailed:
+            preconditionFailure("Successful dispatch cannot have dispatch-failed settlement outcome")
         }
     }
 
@@ -153,21 +167,13 @@ private extension Settlement.ResultProjector {
         return .typeText(value)
     }
 
-    static func waitActionResult(from result: Settlement.Result) -> ActionResult {
+    static func standaloneWaitActionResult(from result: Settlement.Result) -> ActionResult {
         let observation = projectedObservation(from: result)
-        let timing = ActionPerformanceTiming(totalMs: result.evidence.deadline.elapsed)
+        let timing = ActionPerformanceTiming(totalMs: result.evidence.elapsed)
         if result.outcome == .settled {
-            let message: String? = switch result.evidence.command {
-            case .observation:
-                standaloneWaitSuccessMessage(from: result)
-            case .action:
-                expectation(from: result)?.actual
-            case .currentState:
-                preconditionFailure("Current-state settlement has no public wait projection")
-            }
             return ActionResult.success(
                 payload: .wait,
-                message: message,
+                message: standaloneWaitSuccessMessage(from: result),
                 observation: observation,
                 timing: timing
             )
@@ -189,9 +195,9 @@ private extension Settlement.ResultProjector {
         }
         let elapsed = String(
             format: "%.1f",
-            Double(result.evidence.deadline.elapsed.milliseconds) / 1_000
+            Double(result.evidence.elapsed.milliseconds) / 1_000
         )
-        if case .presence(.missing) = predicate.resolved.core {
+        if case .missing = predicate.resolved {
             return "absent confirmed after \(elapsed)s"
         }
         return "matched after \(elapsed)s"
@@ -245,14 +251,14 @@ private extension Settlement.ResultProjector {
             finalSemanticEvidenceMs: result.evidence.timing.finalSemanticEvidenceMs,
             resultAssemblyMs: resultAssemblyMs,
             totalMs: RuntimeElapsed.admit(
-                milliseconds: result.evidence.deadline.elapsed.milliseconds
+                milliseconds: result.evidence.elapsed.milliseconds
                     + resultAssemblyMs.milliseconds
             )
         )
     }
 
     static func settlementEvidence(from result: Settlement.Result) -> ActionSettlementEvidence {
-        let duration = result.evidence.deadline.elapsed
+        let duration = result.evidence.elapsed
         guard case .established(let readiness) = result.evidence.readiness else {
             return .timedOut(duration: duration)
         }
@@ -309,7 +315,7 @@ private extension Settlement.ResultProjector {
         case .dispatchFailed:
             "observation settlement cannot fail action dispatch"
         case .cancelled:
-            "settlement cancelled after \(result.evidence.deadline.elapsed)ms"
+            "settlement cancelled after \(result.evidence.elapsed)ms"
         case .settled:
             preconditionFailure("Settled wait has no failure message")
         }
@@ -318,7 +324,7 @@ private extension Settlement.ResultProjector {
     static func renderTimeoutMessage(
         from result: Settlement.Result
     ) -> String {
-        let headline = "settlement timed out after \(result.evidence.deadline.elapsed)ms"
+        let headline = "settlement timed out after \(result.evidence.elapsed)ms"
         guard let predicate = result.evidence.command.predicate else { return headline }
         if case .satisfied = result.evidence.predicate.status {
             let incompleteAxis = if !result.evidence.readiness.isEstablished {
@@ -336,17 +342,12 @@ private extension Settlement.ResultProjector {
         let traceProjection = traceEvidence(from: result).map {
             TimeoutTraceProjection(trace: $0.trace, target: target)
         }
-        switch (predicate.resolved.core, target, traceProjection?.interfaceElementCount) {
-        case (.presence(let presence), let target?, let count?):
-            let expectation: String
-            let reason: String
-            switch presence {
-            case .exists:
-                expectation = "element to appear"
-                reason = "element not found"
-            case .missing:
-                expectation = "element to disappear"
-                reason = "element still present"
+        switch (predicate.resolved, target, traceProjection?.interfaceElementCount) {
+        case (.exists, let target?, let count?), (.missing, let target?, let count?):
+            let (expectation, reason) = if case .exists = predicate.resolved {
+                ("element to appear", "element not found")
+            } else {
+                ("element to disappear", "element still present")
             }
             parts[0] += " waiting for \(expectation)"
             parts += [
@@ -360,7 +361,7 @@ private extension Settlement.ResultProjector {
             if let actual = expectation(from: result)?.actual {
                 parts.append("last observed: \(actual)")
             }
-        case (.presence, _, _):
+        case (.exists, _, _), (.missing, _, _):
             break
         }
         if case .unmet = result.evidence.predicate.status {

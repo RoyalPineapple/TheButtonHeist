@@ -18,7 +18,7 @@ extension TheBrainsActionTests {
         XCTAssertFalse(inactiveBrains.vault.semanticObservationStream.isActive)
 
         let step = WaitStep(predicate: .exists(.label("Home")), timeout: try .milliseconds(1))
-        let result = await inactiveBrains.performWait(step: try resolvedWait(step))
+        let result = await inactiveBrains.performWait(step: step)
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.outcome.failureKind, .actionFailed)
@@ -96,7 +96,7 @@ extension TheBrainsActionTests {
         let result = await brains.executeHeistPlan(plan)
         await committedObservations.wait()
         let steps = try XCTUnwrap(result.resultPayload?.steps)
-        let elementTrace = try XCTUnwrap(steps.first?.actionEvidence?.expectationResult?.accessibilityTrace)
+        let elementTrace = try XCTUnwrap(steps.first?.actionEvidence?.result?.accessibilityTrace)
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "heist failed")
         XCTAssertEqual(saveObject.activationCount, 1)
@@ -114,40 +114,7 @@ extension TheBrainsActionTests {
             elementTrace.captures.last?.interface.projectedElements.compactMap(\.label),
             ["Save", "Announce"]
         )
-        XCTAssertEqual(steps.last?.actionEvidence?.expectationResult?.announcement, "Confirmed")
-    }
-
-    func testHeistActionExpectationUsesWaitFailureDiagnostic() async throws {
-        let observed = await observedState(labels: ["Loading"])
-        var projectedActual: String?
-        let runtime = heistRuntime(
-            observations: [],
-            execute: { _ in ActionResult.success(payload: .activate) },
-            settle: { command in
-                let settlement = scriptedSettlement(command, observation: observed)
-                projectedActual = Settlement.ResultProjector.projectWait(settlement).expectation.actual
-                return settlement
-            }
-        )
-        let expectation = WaitStep(
-            predicate: .missing(.label("Loading")),
-            timeout: 0.2
-        )
-        let plan = try HeistPlan(body: [
-            .action(ActionStep(
-                command: .activate(.label("Submit")),
-                expectationPolicy: .expect(try ActionExpectation(expectation))
-            )),
-        ])
-
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let step = try XCTUnwrap(result.resultPayload?.steps.first)
-
-        XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(step.actionEvidence?.expectationResult?.outcome.failureKind, .timeout)
-        XCTAssertEqual(step.reportExpectation?.met, false)
-        XCTAssertEqual(step.reportExpectation?.actual, projectedActual)
-        XCTAssertNotNil(projectedActual)
+        XCTAssertEqual(steps.last?.actionEvidence?.announcement, "Confirmed")
     }
 
     func testStandaloneWaitStartsAtItsOwnFirstObservation() async throws {
@@ -185,22 +152,22 @@ extension TheBrainsActionTests {
             )),
         ]))
         await committedObservations.wait()
-        let appeared = await brains.performWait(step: try resolvedWait(WaitStep(
+        let appeared = await brains.performWait(step: WaitStep(
             predicate: .changed(.elements([.appeared(.label("Saved"))])),
-            timeout: .milliseconds(1)
-        )))
-        let disappeared = await brains.performWait(step: try resolvedWait(WaitStep(
+            timeout: try .milliseconds(1)
+        ))
+        let disappeared = await brains.performWait(step: WaitStep(
             predicate: .changed(.elements([.disappeared(.label("Saved"))])),
-            timeout: .milliseconds(1)
-        )))
-        let exists = await brains.performWait(step: try resolvedWait(WaitStep(
+            timeout: try .milliseconds(1)
+        ))
+        let exists = await brains.performWait(step: WaitStep(
             predicate: .exists(.label("Saved")),
-            timeout: .milliseconds(1)
-        )))
-        let announcement = await brains.performWait(step: try resolvedWait(WaitStep(
+            timeout: try .milliseconds(1)
+        ))
+        let announcement = await brains.performWait(step: WaitStep(
             predicate: .announcement("Saved"),
-            timeout: .milliseconds(1)
-        )))
+            timeout: try .milliseconds(1)
+        ))
 
         XCTAssertTrue(action.outcome.isSuccess, action.message ?? "action heist failed")
         XCTAssertEqual(action.resultPayload?.steps.first?.reportExpectation?.met, true)
@@ -225,10 +192,10 @@ extension TheBrainsActionTests {
         )
         await installSyntheticObservation(ready)
 
-        let result = await brains.performWait(step: try resolvedWait(WaitStep(
+        let result = await brains.performWait(step: WaitStep(
             predicate: .exists(.label("Ready")),
-            timeout: .seconds(1)
-        )))
+            timeout: try .seconds(1)
+        ))
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "standalone wait failed")
         XCTAssertEqual(result.method, .wait)
@@ -247,10 +214,10 @@ extension TheBrainsActionTests {
         )
         await installSyntheticObservation(ready)
 
-        let result = await brains.performWait(step: try resolvedWait(WaitStep(
+        let result = await brains.performWait(step: WaitStep(
             predicate: .changed(.elements([.appeared(.label("Ready"))])),
-            timeout: .milliseconds(1)
-        )))
+            timeout: try .milliseconds(1)
+        ))
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.outcome.failureKind, .timeout)
@@ -279,12 +246,12 @@ extension TheBrainsActionTests {
 
         let result = await brains.executeHeistPlan(plan)
         let step = try XCTUnwrap(result.resultPayload?.steps.first)
-        let expectationResult = try XCTUnwrap(step.actionEvidence?.expectationResult)
+        let actionResult = try XCTUnwrap(step.actionEvidence?.result)
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "heist failed")
         XCTAssertEqual(targetObject.activationCount, 1)
-        XCTAssertTrue(expectationResult.evidence.settlement?.settled == true)
-        let labels = expectationResult.accessibilityTrace?.captures.last?.interface.projectedElements.map(\.label)
+        XCTAssertTrue(actionResult.evidence.settlement?.settled == true)
+        let labels = actionResult.accessibilityTrace?.captures.last?.interface.projectedElements.map(\.label)
         XCTAssertEqual(labels, ["Target", "Long List"])
     }
 
@@ -298,7 +265,7 @@ extension TheBrainsActionTests {
             execute: { command, _ in
                 demandDuringAction = self.brains.vault.semanticObservationStream.hasActiveObservationDemand
                 let result = ActionResult.success(payload: command.resultPayload)
-                return RuntimeActionExecution(result: result, actionExpectationContext: nil)
+                return RuntimeActionExecution(result: result)
             },
             settle: { command in
                 XCTAssertEqual(command.observationScope, .visible)

@@ -91,39 +91,41 @@ extension Settlement.PredicateEvaluation {
     }
 
     static func caseMatch(
-        _ predicateCase: ResolvedPredicateCaseRuntimeInput,
+        _ predicateCase: PredicateCase,
+        resolved: ResolvedScreenAssertion,
         in event: Observation.SnapshotEvent
     ) -> HeistCaseMatchResult {
         caseMatchResult(
             predicateCase,
             result: evaluate(
-                predicateCase.predicate.rootPredicate,
-                expression: predicateCase.predicateExpression.rootPredicate,
+                resolved.rootPredicate,
+                expression: predicateCase.predicate.rootPredicate,
                 in: event
             )
         )
     }
 
     static func caseMatch(
-        _ predicateCase: ResolvedPredicateCaseRuntimeInput,
+        _ predicateCase: PredicateCase,
+        resolved: ResolvedScreenAssertion,
         in result: Settlement.Result
     ) -> HeistCaseMatchResult {
         caseMatchResult(
             predicateCase,
             result: evaluate(
-                predicateCase.predicate.rootPredicate,
-                expression: predicateCase.predicateExpression.rootPredicate,
+                resolved.rootPredicate,
+                expression: predicateCase.predicate.rootPredicate,
                 in: result
             )
         )
     }
 
     private static func caseMatchResult(
-        _ predicateCase: ResolvedPredicateCaseRuntimeInput,
+        _ predicateCase: PredicateCase,
         result: ExpectationResult
     ) -> HeistCaseMatchResult {
         HeistCaseMatchResult(
-            predicate: predicateCase.predicateExpression.rootPredicate,
+            predicate: predicateCase.predicate.rootPredicate,
             met: result.met,
             actual: result.actual
         )
@@ -150,7 +152,7 @@ extension Settlement.PredicateEvaluation {
         _ predicate: Settlement.Predicate,
         event: Observation.AnnouncementEvent
     ) -> PredicateEvaluationResult {
-        guard case .announcement(let announcement) = predicate.resolved.core else {
+        guard case .announcement(let announcement) = predicate.resolved else {
             preconditionFailure("Announcement evidence requires an announcement predicate")
         }
         return PredicateEvaluationResult(

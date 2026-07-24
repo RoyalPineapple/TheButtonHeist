@@ -110,10 +110,10 @@ final class DiagnosticsTests: XCTestCase {
         .make(label: label, respondsToUserInteraction: false)
     }
 
-    private func resolvedPredicate(_ authored: AccessibilityTarget) throws -> ElementPredicate {
+    private func resolvedPredicate(_ authored: AccessibilityTarget) throws -> ResolvedElementPredicate {
         let resolved = try authored.resolve(in: .empty)
         guard case .predicate(let predicate, ordinal: nil) = resolved else {
-            return try XCTUnwrap(nil as ElementPredicate?, "Expected an unqualified element predicate")
+            return try XCTUnwrap(nil as ResolvedElementPredicate?, "Expected an unqualified element predicate")
         }
         return predicate
     }

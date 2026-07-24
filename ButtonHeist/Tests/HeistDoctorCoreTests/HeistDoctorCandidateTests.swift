@@ -23,13 +23,13 @@ private func reportElement(label: String) -> HeistElement {
 private let repairSuggestionFixture = HeistRepairSuggestion(
     stepPath: "$.body[0]",
     failureKind: .missingTarget,
-    oldTarget: .predicate(ElementPredicateTemplate(label: "Delete")),
+    oldTarget: .predicate(ElementPredicate(label: "Delete")),
     oldResolvedElement: HeistRepairElementEvidence(
         element: reportElement(label: "Delete"),
         siblingText: ["Milk"],
         headerText: []
     ),
-    newTarget: .predicate(ElementPredicateTemplate(label: "Remove")),
+    newTarget: .predicate(ElementPredicate(label: "Remove")),
     newResolvedElement: HeistRepairElementEvidence(
         element: reportElement(label: "Remove"),
         siblingText: ["Milk"],
@@ -80,7 +80,7 @@ private let repairJSONDiagnosisFixture = HeistRepairDiagnosis.suggested(
 
     @Test("Repair request round trips one evidence body and rejects reversed outcomes")
     func repairRequestRoundTripsOneEvidenceBodyAndRejectsReversedOutcomes() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Pay"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Pay"))
         let interface = makeTestInterface(elements: [
             element(label: "Pay", traits: [.button], actions: [.activate]),
         ])
@@ -101,7 +101,7 @@ private let repairJSONDiagnosisFixture = HeistRepairDiagnosis.suggested(
 
     @Test("Candidate scoring rejects compatible-only successors without continuity")
     func candidateScoringRejectsCompatibleOnlySuccessorsWithoutContinuity() {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: makeTestInterface(elements: [
@@ -122,7 +122,7 @@ private let repairJSONDiagnosisFixture = HeistRepairDiagnosis.suggested(
 
     @Test("Candidate generation preserves tied best score order")
     func candidateGenerationPreservesTiedBestScoreOrder() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: listInterface(rows: [
@@ -154,7 +154,7 @@ private let repairJSONDiagnosisFixture = HeistRepairDiagnosis.suggested(
             ("Milk", "Remove"),
             ("Bread", "Remove"),
         ]))
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Remove"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Remove"))
 
         guard case .ambiguous(let matches, let matchCount) = screen.resolve(target) else {
             Issue.record("Expected duplicate labels to remain ambiguous")
@@ -173,7 +173,7 @@ private let repairJSONDiagnosisFixture = HeistRepairDiagnosis.suggested(
         }
 
         #expect(selection.target == .predicate(
-            ElementPredicateTemplate(label: "Remove", traits: [.button]),
+            ElementPredicate(label: "Remove", traits: [.button]),
             ordinal: 1
         ))
         #expect(selectedMatchCount == 2)
@@ -201,7 +201,7 @@ private let repairJSONDiagnosisFixture = HeistRepairDiagnosis.suggested(
         #expect(scopedMatch.path == TreePath([0, 0]))
 
         guard case .resolved(let ordinalMatch, let ordinalCount) = screen.resolve(
-            .predicate(ElementPredicateTemplate(label: "Pay"), ordinal: 1)
+            .predicate(ElementPredicate(label: "Pay"), ordinal: 1)
         ) else {
             Issue.record("Expected ordinal target to resolve")
             return
@@ -210,7 +210,7 @@ private let repairJSONDiagnosisFixture = HeistRepairDiagnosis.suggested(
         #expect(ordinalMatch.path == TreePath([1, 0]))
 
         guard case .notFound(let matchCount) = screen.resolve(
-            .predicate(ElementPredicateTemplate(label: "Pay"), ordinal: 2)
+            .predicate(ElementPredicate(label: "Pay"), ordinal: 2)
         ) else {
             Issue.record("Expected out-of-range ordinal to preserve candidate cardinality")
             return
@@ -229,7 +229,7 @@ private let repairJSONDiagnosisFixture = HeistRepairDiagnosis.suggested(
 
     @Test("One screen context preserves scoring and output order across repair rules")
     func oneScreenContextPreservesScoringAndOutputOrderAcrossRepairRules() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete item"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Delete item"))
         let last = passedEvidence(
             target: target,
             before: sectionInterface(primaryAction: "Delete item")

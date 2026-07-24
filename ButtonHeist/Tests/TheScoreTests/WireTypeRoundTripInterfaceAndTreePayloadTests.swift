@@ -97,7 +97,7 @@ extension WireTypeRoundTripTests {
 
     func testInterfaceQueryElementSubtreeUsesCanonicalTargetShape() throws {
         let query = InterfaceQuery(
-            subtree: .predicate(ElementPredicateTemplate(label: "Save", traits: [.button]), ordinal: 2)
+            subtree: .predicate(ElementPredicate(label: "Save", traits: [.button]), ordinal: 2)
         )
 
         let data = try encoder.encode(query)

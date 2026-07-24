@@ -252,16 +252,16 @@ public enum HeistArtifactCodec {
         )
 
         let manifestPayload = try readManifestPayload(from: manifestData, packageURL: packageURL)
-        let planCandidate = try decodePlanCandidate(planData, at: planURL)
+        let planVersion = try decodePlanVersion(planData, at: planURL)
         try validateArtifactEnvelope(manifest: manifestPayload, packageURL: packageURL)
-        guard manifestPayload.planVersion == planCandidate.version else {
+        guard manifestPayload.planVersion == planVersion else {
             throw HeistArtifactCodecError.versionMismatch(
                 path: packageURL.path,
                 manifestPlanVersion: manifestPayload.planVersion,
-                planVersion: planCandidate.version
+                planVersion: planVersion
             )
         }
-        let plan = try admitPlan(planCandidate, at: planURL)
+        let plan = try decodePlan(planData, at: planURL)
         let entry = try validateArtifactEntry(
             manifestEntry: manifestPayload.entry,
             plan: plan,
@@ -316,13 +316,6 @@ public enum HeistArtifactCodec {
         let fileURL = url.standardizedFileURL
         try requireHeistOutputExtension(fileURL)
         try write(HeistArtifact(plan: plan), to: fileURL)
-    }
-
-    package static func decodeAdmissionCandidateJSON(
-        _ data: Data,
-        at url: URL
-    ) throws -> HeistPlanAdmissionCandidate {
-        try decodePlanCandidate(data, at: url)
     }
 
     public static func canonicalManifestJSONData(_ manifest: HeistArtifactManifest) throws -> Data {
@@ -467,9 +460,9 @@ public enum HeistArtifactCodec {
         }
     }
 
-    private static func decodePlanCandidate(_ data: Data, at url: URL) throws -> HeistPlanAdmissionCandidate {
+    private static func decodePlanVersion(_ data: Data, at url: URL) throws -> Int {
         do {
-            return try JSONDecoder().decode(HeistPlanAdmissionCandidate.self, from: data)
+            return try JSONDecoder().decode(HeistPlanVersionEnvelope.self, from: data).version
         } catch DecodingError.typeMismatch(_, let context) where context.codingPath.isEmpty {
             throw HeistArtifactCodecError.invalidPlan(path: url.path, reason: "expected JSON object")
         } catch DecodingError.keyNotFound(let key, _) where key.stringValue == "version" {
@@ -481,9 +474,9 @@ public enum HeistArtifactCodec {
         }
     }
 
-    private static func admitPlan(_ candidate: HeistPlanAdmissionCandidate, at url: URL) throws -> HeistPlan {
+    private static func decodePlan(_ data: Data, at url: URL) throws -> HeistPlan {
         do {
-            return try candidate.validatedSemantics()
+            return try JSONDecoder().decode(HeistPlan.self, from: data)
         } catch let error as HeistPlanVersionAdmissionError {
             throw HeistArtifactCodecError.unsupportedPlanVersion(path: url.path, observed: error.observed)
         } catch {
@@ -660,6 +653,10 @@ public enum HeistArtifactCodecError: Error, Sendable, CustomStringConvertible, L
     }
 
     public var errorDescription: String? { description }
+}
+
+private struct HeistPlanVersionEnvelope: Decodable {
+    let version: Int
 }
 
 private extension String {

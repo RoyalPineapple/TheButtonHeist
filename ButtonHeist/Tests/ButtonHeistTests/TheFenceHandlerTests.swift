@@ -476,19 +476,6 @@ final class TheFenceHandlerTests: XCTestCase {
         ])
     }
 
-    static func inlineArguments(for plan: HeistPlanAdmissionCandidate) throws -> TheFence.CommandArgumentEnvelope {
-        let data = try JSONEncoder().encode(plan)
-        let value = try JSONDecoder().decode(HeistValue.self, from: data)
-        let fields: [String: HeistValue] = try XCTUnwrap(
-            { () -> [String: HeistValue]? in
-                guard case .object(let fields) = value else { return nil }
-                return fields
-            }(),
-            "Expected the plan admission candidate to encode as a JSON object"
-        )
-        return TheFence.CommandArgumentEnvelope(values: fields)
-    }
-
 }
 
 struct ExpectedDiagnosticFailure {

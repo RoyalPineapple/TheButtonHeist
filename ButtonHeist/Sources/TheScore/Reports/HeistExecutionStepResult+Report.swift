@@ -52,12 +52,11 @@ public extension HeistExecutionStepResult {
         failure?.observed ?? reportSuccessMessage
     }
 
-    /// Action result surfaced to human/report adapters. For an action with an
-    /// expectation, the expectation wait result wins over the dispatch result.
+    /// Action result surfaced to human/report adapters.
     var reportActionResult: ActionResult? {
         switch node {
         case .action:
-            actionEvidence?.reportedResult
+            actionEvidence?.result
         case .wait:
             waitEvidence?.actionResult
         case .repeatUntil, .repeatUntilIteration:
@@ -76,13 +75,11 @@ public extension HeistExecutionStepResult {
         }
     }
 
-    /// Expectation to surface for this step. Action dispatch failure suppresses
-    /// expectation details so the dispatch failure remains the headline.
+    /// Expectation to surface for this step.
     var reportExpectation: ExpectationResult? {
         switch node {
         case .action:
-            guard actionEvidence?.dispatchResult?.outcome.isSuccess != false else { return nil }
-            return actionEvidence?.checkedExpectation
+            return actionEvidence?.expectation
         case .wait:
             return waitEvidence?.expectation
         case .repeatUntil, .repeatUntilIteration:

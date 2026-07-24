@@ -227,7 +227,7 @@ internal func predicateChecksParam(_ key: FenceParameterKey) -> FenceParameterSp
             properties: [
                 param(
                     .kind, .string, required: true,
-                    enumValues: ElementPredicateCheckCore<Expr<String>>.Kind.allCases.map(\.rawValue)
+                    enumValues: ElementPredicateCheck.Kind.allCases.map(\.rawValue)
                 ),
                 stringMatchParam(.match),
                 arrayParam(.values, items: .unconstrained),
@@ -246,7 +246,7 @@ private let semanticContainerPredicateProperties: [FenceParameterSpec] = [
 private let semanticContainerPredicateKindValues: [String] = [
     SemanticContainerPredicate.label("sample"),
     SemanticContainerPredicate.value("sample"),
-].map { $0.core.wireKindValue }
+].map(\.wireKindValue)
 
 private let containerPredicateCheckProperties: [FenceParameterSpec] = [
     param(

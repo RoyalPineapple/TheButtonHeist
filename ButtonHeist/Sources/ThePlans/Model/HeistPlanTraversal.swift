@@ -61,7 +61,6 @@ struct HeistTraversalContext {
     let definitionScope: HeistDefinitionScope
     let rootDefinitionScope: HeistDefinitionScope
     let invocationStack: [HeistInvocationPath]
-    let callGraph: HeistCallGraph?
 
     var scope: HeistReferenceScope {
         referenceBindings.scope
@@ -96,11 +95,6 @@ struct HeistTraversalBindingSample {
 }
 
 struct HeistPlanTraversal {
-    struct CallGraphProjection {
-        let nodes: Set<HeistInvocationPath>
-        let edges: Set<HeistCallGraph.Edge>
-    }
-
     enum CatalogHeistKind {
         case entry(HeistPlanName?)
         case capability([HeistPlanName])
@@ -176,11 +170,9 @@ struct HeistPlanTraversal {
         case invoke(HeistInvocationStep, context: HeistTraversalContext)
     }
 
-    let callGraph: HeistCallGraph?
     let expandsInvocations: Bool
 
-    init(callGraph: HeistCallGraph? = nil, expandsInvocations: Bool = true) {
-        self.callGraph = callGraph
+    init(expandsInvocations: Bool = true) {
         self.expandsInvocations = expandsInvocations
     }
 
@@ -198,8 +190,7 @@ struct HeistPlanTraversal {
             bindingSamples: [],
             definitionScope: definitionScope,
             rootDefinitionScope: definitionScope,
-            invocationStack: [],
-            callGraph: nil
+            invocationStack: []
         )
         try HeistPlanTraversal(expandsInvocations: false).walk(
             step: step,
@@ -212,7 +203,6 @@ struct HeistPlanTraversal {
         _ plan: HeistPlan,
         observe: (Event) throws -> Void
     ) rethrows {
-        let callGraph = callGraph ?? (expandsInvocations ? HeistCallGraph(plan: plan) : nil)
         let rootBindings = plan.parameterReferenceBindings
         let rootDefinitionScope = HeistDefinitionScope(definitions: plan.definitions)
         let context = HeistTraversalContext(
@@ -224,8 +214,7 @@ struct HeistPlanTraversal {
             bindingSamples: [],
             definitionScope: rootDefinitionScope,
             rootDefinitionScope: rootDefinitionScope,
-            invocationStack: [],
-            callGraph: callGraph
+            invocationStack: []
         )
         try observe(.enterPlan(plan, context: context))
         try walkDefinitions(
@@ -246,53 +235,9 @@ struct HeistPlanTraversal {
             definitionScope: context.definitionScope,
             rootDefinitionScope: context.rootDefinitionScope,
             invocationStack: [],
-            callGraph: callGraph,
             observe: observe
         )
         try observe(.leavePlan(plan, context: context))
-    }
-
-    func callGraphProjection(for plan: HeistPlan) -> CallGraphProjection {
-        var nodes: Set<HeistInvocationPath> = []
-        var edges: Set<HeistCallGraph.Edge> = []
-        HeistPlanTraversal(expandsInvocations: false).walk(plan) { event in
-            switch event {
-            case .enterDefinition(let plan, let context):
-                guard let name = plan.name else {
-                    preconditionFailure("admitted heist definitions must have names")
-                }
-                nodes.insert(HeistInvocationPath(namePath: context.definitionScope.pathPrefix + [name]))
-            case .invoke(let invocation, let context):
-                guard let caller = context.invocationStack.last,
-                      let resolved = context.resolveInvocation(path: invocation.path)
-                else { return }
-                let callee = resolved.invocationPath
-                nodes.insert(callee)
-                edges.insert(HeistCallGraph.Edge(caller: caller, callee: callee))
-            case .enterPlan,
-                 .leavePlan,
-                 .enterDefinitions,
-                 .leaveDefinitions,
-                 .leaveDefinition,
-                 .enterSteps,
-                 .leaveSteps,
-                 .enterStep,
-                 .leaveStep,
-                 .action,
-                 .wait,
-                 .conditional,
-                 .predicateCase,
-                 .elseBody,
-                 .forEachElement,
-                 .forEachString,
-                 .repeatUntil,
-                 .warn,
-                 .fail,
-                 .heist:
-                break
-            }
-        }
-        return CallGraphProjection(nodes: nodes, edges: edges)
     }
 
     func walkCatalogHeists(
@@ -486,7 +431,6 @@ struct HeistPlanTraversal {
         definitionScope: HeistDefinitionScope,
         rootDefinitionScope: HeistDefinitionScope,
         invocationStack: [HeistInvocationPath] = [],
-        callGraph: HeistCallGraph? = nil,
         observe: (Event) throws -> Void
     ) rethrows {
         let bodyContext = HeistTraversalContext(
@@ -498,8 +442,7 @@ struct HeistPlanTraversal {
             bindingSamples: bindingSamples,
             definitionScope: definitionScope,
             rootDefinitionScope: rootDefinitionScope,
-            invocationStack: invocationStack,
-            callGraph: callGraph
+            invocationStack: invocationStack
         )
         try observe(.enterSteps(steps, context: bodyContext))
         for (index, step) in steps.enumerated() {
@@ -512,8 +455,7 @@ struct HeistPlanTraversal {
                 bindingSamples: bindingSamples,
                 definitionScope: definitionScope,
                 rootDefinitionScope: rootDefinitionScope,
-                invocationStack: invocationStack,
-                callGraph: callGraph
+                invocationStack: invocationStack
             )
             try walk(step: step, context: context, observe: observe)
         }
@@ -592,7 +534,6 @@ struct HeistPlanTraversal {
             definitionScope: context.definitionScope,
             rootDefinitionScope: context.rootDefinitionScope,
             invocationStack: context.invocationStack,
-            callGraph: context.callGraph,
             observe: observe
         )
     }
@@ -621,7 +562,6 @@ struct HeistPlanTraversal {
             definitionScope: context.definitionScope,
             rootDefinitionScope: context.rootDefinitionScope,
             invocationStack: context.invocationStack,
-            callGraph: context.callGraph,
             observe: observe
         )
     }
@@ -655,7 +595,6 @@ struct HeistPlanTraversal {
             definitionScope: context.definitionScope,
             rootDefinitionScope: context.rootDefinitionScope,
             invocationStack: context.invocationStack,
-            callGraph: context.callGraph,
             observe: observe
         )
     }
@@ -680,7 +619,6 @@ struct HeistPlanTraversal {
             definitionScope: context.definitionScope,
             rootDefinitionScope: context.rootDefinitionScope,
             invocationStack: context.invocationStack,
-            callGraph: context.callGraph,
             observe: observe
         )
     }
@@ -715,7 +653,6 @@ struct HeistPlanTraversal {
             definitionScope: heistContext.definitionScope,
             rootDefinitionScope: heistContext.rootDefinitionScope,
             invocationStack: context.invocationStack,
-            callGraph: context.callGraph,
             observe: observe
         )
     }
@@ -759,7 +696,6 @@ struct HeistPlanTraversal {
             definitionScope: HeistDefinitionScope(definitions: resolved.definition.definitions, pathPrefix: resolved.namePath),
             rootDefinitionScope: context.rootDefinitionScope,
             invocationStack: context.invocationStack + [resolvedNode],
-            callGraph: context.callGraph,
             observe: observe
         )
     }
@@ -785,7 +721,6 @@ struct HeistPlanTraversal {
                 definitionScope: branchContext.definitionScope,
                 rootDefinitionScope: branchContext.rootDefinitionScope,
                 invocationStack: branchContext.invocationStack,
-                callGraph: branchContext.callGraph,
                 observe: observe
             )
         }
@@ -801,7 +736,6 @@ struct HeistPlanTraversal {
                 definitionScope: branchContext.definitionScope,
                 rootDefinitionScope: branchContext.rootDefinitionScope,
                 invocationStack: branchContext.invocationStack,
-                callGraph: branchContext.callGraph,
                 observe: observe
             )
         }
@@ -834,8 +768,7 @@ struct HeistPlanTraversal {
                 bindingSamples: [],
                 definitionScope: definitionScope,
                 rootDefinitionScope: rootDefinitionScope,
-                invocationStack: [],
-                callGraph: parentContext.callGraph
+                invocationStack: []
             )
             try observe(.enterDefinition(definition, context: definitionContext))
             try walkDefinitions(
@@ -856,7 +789,6 @@ struct HeistPlanTraversal {
                 definitionScope: HeistDefinitionScope(definitions: definition.definitions, pathPrefix: currentDefinitionPath),
                 rootDefinitionScope: rootDefinitionScope,
                 invocationStack: [currentDefinitionNode],
-                callGraph: parentContext.callGraph,
                 observe: observe
             )
             try observe(.leaveDefinition(definition, context: definitionContext))
@@ -881,8 +813,7 @@ extension HeistTraversalContext {
             bindingSamples: bindingSamples,
             definitionScope: definitionScope ?? self.definitionScope,
             rootDefinitionScope: rootDefinitionScope ?? self.rootDefinitionScope,
-            invocationStack: invocationStack,
-            callGraph: callGraph
+            invocationStack: invocationStack
         )
     }
 
@@ -896,8 +827,7 @@ extension HeistTraversalContext {
             bindingSamples: bindingSamples,
             definitionScope: definitionScope,
             rootDefinitionScope: rootDefinitionScope,
-            invocationStack: invocationStack,
-            callGraph: callGraph
+            invocationStack: invocationStack
         )
     }
 
@@ -906,9 +836,8 @@ extension HeistTraversalContext {
     }
 
     func callGraphCycle(closing resolvedNode: HeistInvocationPath) -> HeistCallGraph.Cycle? {
-        let cycle = callGraph?.nodeCycle(closing: resolvedNode, in: invocationStack)
-            ?? HeistCallGraph.nodeCycle(closing: resolvedNode, in: invocationStack)
-        return cycle
+        guard let startIndex = invocationStack.firstIndex(of: resolvedNode) else { return nil }
+        return HeistCallGraph.Cycle(path: Array(invocationStack[startIndex...]) + [resolvedNode])
     }
 }
 

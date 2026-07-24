@@ -1,28 +1,15 @@
 import Foundation
 
 #if os(macOS) || os(Linux)
-private struct HeistSwiftFileCompilationEnvironmentKey: RawRepresentable, Hashable, Sendable, CustomStringConvertible {
-    let rawValue: String
+private enum HeistSwiftFileCompilationEnvironmentKey: String, Sendable, CustomStringConvertible {
+    case thePlansBuildDirectory = "HEIST_THEPLANS_BUILD_DIR"
+    case path = "PATH"
+    case builtProductsDirectory = "BUILT_PRODUCTS_DIR"
+    case targetBuildDirectory = "TARGET_BUILD_DIR"
+    case configurationBuildDirectory = "CONFIGURATION_BUILD_DIR"
+    case sourceCompilerTrace = "HEIST_SOURCE_COMPILER_TRACE"
 
-    init(rawValue: String) {
-        precondition(!rawValue.isEmpty, "Environment key must not be empty")
-        self.rawValue = rawValue
-    }
-
-    private init(_ rawValue: String) {
-        self.init(rawValue: rawValue)
-    }
-
-    var description: String {
-        rawValue
-    }
-
-    static let thePlansBuildDirectory = Self("HEIST_THEPLANS_BUILD_DIR")
-    static let path = Self("PATH")
-    static let builtProductsDirectory = Self("BUILT_PRODUCTS_DIR")
-    static let targetBuildDirectory = Self("TARGET_BUILD_DIR")
-    static let configurationBuildDirectory = Self("CONFIGURATION_BUILD_DIR")
-    static let sourceCompilerTrace = Self("HEIST_SOURCE_COMPILER_TRACE")
+    var description: String { rawValue }
 
     static let xcodeProductsDirectories: [HeistSwiftFileCompilationEnvironmentKey] = [
         .builtProductsDirectory,
@@ -68,8 +55,7 @@ struct HeistSwiftFileCompilation: Sendable {
             throw HeistSwiftFileCompilationError.sourceFileNotFound(source.path)
         }
         HeistSwiftFileCompilationTrace.write("preparing Swift heist compile")
-        let artifacts = try ThePlansBuildArtifacts.resolve(explicitPackageRoot: packageRoot)
-        HeistSwiftFileCompilationTrace.write("using built ThePlans artifacts at \(artifacts.buildDirectory.path)")
+        let thePlansSwiftcArguments = try Self.resolveThePlansSwiftcArguments(explicitPackageRoot: packageRoot)
 
         let tempURL = temporaryDirectory
             .appendingPathComponent("heist-source-\(UUID().uuidString)", isDirectory: true)
@@ -98,7 +84,7 @@ struct HeistSwiftFileCompilation: Sendable {
             compileDirectory: compileDirectory,
             buildDirectory: buildDirectory,
             moduleCache: moduleCache,
-            artifacts: artifacts
+            thePlansSwiftcArguments: thePlansSwiftcArguments
         )
     }
 
@@ -107,19 +93,16 @@ struct HeistSwiftFileCompilation: Sendable {
         compileDirectory: URL,
         buildDirectory: URL,
         moduleCache: URL,
-        artifacts: ThePlansBuildArtifacts
+        thePlansSwiftcArguments: [String]
     ) async throws -> HeistPlan {
         let executableURL = buildDirectory.appendingPathComponent("plan-compiler")
         HeistSwiftFileCompilationTrace.write("compiling Swift heist wrapper against built ThePlans artifacts")
         let compilerResult = try await HeistCompilerProcess.Runner.shared.execute(
-            HeistCompilerProcess.Command(
-                executable: URL(fileURLWithPath: "/usr/bin/env"),
-                arguments: swiftcPlanCompilerArguments(
-                    compileDirectory: compileDirectory,
-                    moduleCache: moduleCache,
-                    executableURL: executableURL,
-                    artifacts: artifacts
-                )
+            Self.planCompilerCommand(
+                compileDirectory: compileDirectory,
+                moduleCache: moduleCache,
+                executableURL: executableURL,
+                thePlansSwiftcArguments: thePlansSwiftcArguments
             ),
             purpose: .compilation,
             limits: processLimits
@@ -200,12 +183,12 @@ struct HeistSwiftFileCompilation: Sendable {
         return sourcesURL
     }
 
-    private func swiftcPlanCompilerArguments(
+    package static func planCompilerCommand(
         compileDirectory: URL,
         moduleCache: URL,
         executableURL: URL,
-        artifacts: ThePlansBuildArtifacts
-    ) -> [String] {
+        thePlansSwiftcArguments: [String]
+    ) -> HeistCompilerProcess.Command {
         var arguments = [
             "swiftc",
             "-j",
@@ -220,8 +203,11 @@ struct HeistSwiftFileCompilation: Sendable {
             executableURL.path,
             compileDirectory.appendingPathComponent("main.swift").path,
         ]
-        arguments.append(contentsOf: artifacts.swiftcArguments)
-        return arguments
+        arguments.append(contentsOf: thePlansSwiftcArguments)
+        return HeistCompilerProcess.Command(
+            executable: URL(fileURLWithPath: "/usr/bin/env"),
+            arguments: arguments
+        )
     }
 
     private func sourceLocationDirective(for source: URL) -> String {
@@ -299,26 +285,20 @@ private enum LocalThePlansPackage {
     }
 }
 
-/// The single resolution path for built ThePlans artifacts used by Swift heist
-/// compilation. `HEIST_THEPLANS_BUILD_DIR` is the deterministic override; absent
-/// it, installed artifacts next to the compiler and local package `.build`
-/// directories are searched. Every route feeds the same compile path, and a miss
-/// reports what was searched and how to fix it.
-private struct ThePlansBuildArtifacts {
+private extension HeistSwiftFileCompilation {
     static let environmentOverrideKey = HeistSwiftFileCompilationEnvironmentKey.thePlansBuildDirectory
 
-    let buildDirectory: URL
-    let swiftcArguments: [String]
-
-    static func resolve(explicitPackageRoot: URL?) throws -> ThePlansBuildArtifacts {
+    static func resolveThePlansSwiftcArguments(explicitPackageRoot: URL?) throws -> [String] {
         if let override = environmentOverridePath() {
             HeistSwiftFileCompilationTrace.write("resolving \(environmentOverrideKey) override at \(override)")
             let buildDirectory = URL(fileURLWithPath: override, isDirectory: true)
-            if let artifacts = try resolveSwiftPMBuildDirectory(buildDirectory) {
-                return artifacts
+            if let arguments = try resolveSwiftPMBuildDirectory(buildDirectory) {
+                HeistSwiftFileCompilationTrace.write("using built ThePlans artifacts at \(buildDirectory.path)")
+                return arguments
             }
-            if let artifacts = resolveXcodeProductsDirectory(buildDirectory) {
-                return artifacts
+            if let arguments = resolveXcodeProductsDirectory(buildDirectory) {
+                HeistSwiftFileCompilationTrace.write("using built ThePlans artifacts at \(buildDirectory.path)")
+                return arguments
             }
             throw HeistSwiftFileCompilationError.buildArtifactsNotFound(
                 searched: [buildDirectory.path],
@@ -337,8 +317,9 @@ private struct ThePlansBuildArtifacts {
         searched.append(contentsOf: installedCandidates.map(\.path))
         for buildDirectory in installedCandidates {
             HeistSwiftFileCompilationTrace.write("checking installed ThePlans artifacts: \(buildDirectory.path)")
-            if let artifacts = try resolveSwiftPMBuildDirectory(buildDirectory) {
-                return artifacts
+            if let arguments = try resolveSwiftPMBuildDirectory(buildDirectory) {
+                HeistSwiftFileCompilationTrace.write("using built ThePlans artifacts at \(buildDirectory.path)")
+                return arguments
             }
         }
 
@@ -358,16 +339,20 @@ private struct ThePlansBuildArtifacts {
             let swiftPMCandidates = try candidateBuildDirectories(in: packageRoot)
             searched.append(contentsOf: swiftPMCandidates.map(\.path))
             for buildDirectory in swiftPMCandidates {
-                if let artifacts = try resolveSwiftPMBuildDirectory(buildDirectory) {
-                    return artifacts
+                if let arguments = try resolveSwiftPMBuildDirectory(buildDirectory) {
+                    HeistSwiftFileCompilationTrace.write("using built ThePlans artifacts at \(buildDirectory.path)")
+                    return arguments
                 }
             }
 
             let xcodeCandidates = candidateXcodeProductsDirectories(packageRoot: packageRoot)
             searched.append(contentsOf: xcodeCandidates.map(\.path))
             for productsDirectory in xcodeCandidates {
-                if let artifacts = resolveXcodeProductsDirectory(productsDirectory) {
-                    return artifacts
+                if let arguments = resolveXcodeProductsDirectory(productsDirectory) {
+                    HeistSwiftFileCompilationTrace.write(
+                        "using built ThePlans artifacts at \(productsDirectory.path)"
+                    )
+                    return arguments
                 }
             }
         }
@@ -475,7 +460,7 @@ private struct ThePlansBuildArtifacts {
         return result
     }
 
-    private static func resolveSwiftPMBuildDirectory(_ buildDirectory: URL) throws -> ThePlansBuildArtifacts? {
+    private static func resolveSwiftPMBuildDirectory(_ buildDirectory: URL) throws -> [String]? {
         let modulesDirectory = buildDirectory.appendingPathComponent("Modules", isDirectory: true)
         let binaryModule = modulesDirectory.appendingPathComponent("ThePlans.swiftmodule")
         let textualModuleInterface = modulesDirectory.appendingPathComponent("ThePlans.swiftinterface")
@@ -491,16 +476,13 @@ private struct ThePlansBuildArtifacts {
         guard !objectFiles.isEmpty else {
             return nil
         }
-        return ThePlansBuildArtifacts(
-            buildDirectory: buildDirectory,
-            swiftcArguments: [
-                "-I",
-                modulesDirectory.path,
-            ] + objectFiles.map(\.path)
-        )
+        return [
+            "-I",
+            modulesDirectory.path,
+        ] + objectFiles.map(\.path)
     }
 
-    private static func resolveXcodeProductsDirectory(_ productsDirectory: URL) -> ThePlansBuildArtifacts? {
+    private static func resolveXcodeProductsDirectory(_ productsDirectory: URL) -> [String]? {
         let frameworkDirectory = productsDirectory.appendingPathComponent("ThePlans.framework", isDirectory: true)
         let binary = frameworkDirectory.appendingPathComponent("ThePlans")
         let swiftModuleDirectory = frameworkDirectory
@@ -510,19 +492,16 @@ private struct ThePlansBuildArtifacts {
               FileManager.default.fileExists(atPath: swiftModuleDirectory.path) else {
             return nil
         }
-        return ThePlansBuildArtifacts(
-            buildDirectory: productsDirectory,
-            swiftcArguments: [
-                "-F",
-                productsDirectory.path,
-                "-Xlinker",
-                "-rpath",
-                "-Xlinker",
-                productsDirectory.path,
-                "-framework",
-                "ThePlans",
-            ]
-        )
+        return [
+            "-F",
+            productsDirectory.path,
+            "-Xlinker",
+            "-rpath",
+            "-Xlinker",
+            productsDirectory.path,
+            "-framework",
+            "ThePlans",
+        ]
     }
 
     private static func candidateBuildDirectories(in packageRoot: URL) throws -> [URL] {

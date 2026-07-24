@@ -36,14 +36,9 @@ extension TheBrains {
         start: RuntimeElapsed.Instant
     ) -> HeistExecutionStepResult {
         let observed = "could not resolve heist expectation: \(failure.errorDescription)"
-        let expectationResult = ActionResult.failure(
-            payload: .wait,
-            failureKind: .actionFailed
-        )
         let expectation = ExpectationResult.Unmet(predicate: nil, actual: observed)
-        let evidence = HeistActionEvidence.expectation(
-            dispatchResult: actionResult,
-            expectationResult: expectationResult,
+        let evidence = HeistActionEvidence.completed(
+            result: actionResult,
             expectation: expectation.result
         )
         let execution = HeistActionExecution.failed(
@@ -102,12 +97,12 @@ extension TheBrains {
         wait: WaitStep,
         evidence: HeistActionEvidence
     ) -> HeistFailureDetail {
-        let expectationResult = evidence.expectationResult
+        let result = evidence.result
         let observed = [
-            evidence.checkedExpectation?.actual,
-            expectationResult?.message,
-            expectationResult?.outcome.failureKind.map { "failureKind=\($0.rawValue)" },
-            expectationResult?.settled.map { "settled=\($0)" },
+            evidence.expectation?.actual,
+            result?.message,
+            result?.outcome.failureKind.map { "failureKind=\($0.rawValue)" },
+            result?.settled.map { "settled=\($0)" },
         ].compactMap { $0 }.joined(separator: "; ")
         return HeistFailureDetail(
             category: .expectation,
@@ -185,7 +180,7 @@ extension TheBrains {
         return TheVault.Diagnostics.failureInterfaceSuggestion(for: predicate, elements: elements)
     }
 
-    private func failureSuggestionPredicate(for target: AccessibilityTarget) -> ElementPredicate? {
+    private func failureSuggestionPredicate(for target: AccessibilityTarget) -> ResolvedElementPredicate? {
         switch target {
         case .predicate(let template, _):
             return try? template.resolve(in: .empty)

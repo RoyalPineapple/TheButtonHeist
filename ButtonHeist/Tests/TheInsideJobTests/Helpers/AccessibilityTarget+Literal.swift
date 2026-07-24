@@ -2,7 +2,7 @@ import ThePlans
 @testable import TheInsideJob
 
 func literalTarget(
-    _ predicate: ElementPredicate,
+    _ predicate: ResolvedElementPredicate,
     ordinal: Int? = nil
 ) -> ResolvedAccessibilityTarget {
     .predicate(predicate, ordinal: ordinal)
@@ -15,13 +15,6 @@ extension TheVault.TargetResolution {
         }
         return element
     }
-}
-
-func resolvedWait(
-    _ authored: WaitStep,
-    in environment: HeistExecutionEnvironment = .empty
-) throws -> ResolvedWaitRuntimeInput {
-    try ResolvedWaitRuntimeInput(resolving: authored, in: environment)
 }
 
 func resolvedPredicate(

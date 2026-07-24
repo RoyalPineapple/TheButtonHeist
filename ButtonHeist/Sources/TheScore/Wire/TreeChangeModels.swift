@@ -434,9 +434,9 @@ extension PropertyChange: Codable {
 
 extension PropertyChange {
     package func satisfies(_ expected: ResolvedElementPropertyChange) -> Bool {
-        switch (self, expected.core) {
+        switch (self, expected.value) {
         case (.value(let observed), .value(let change)), (.hint(let observed), .hint(let change)):
-            return observed.satisfies(change) { ResolvedStringMatch(core: $0).matches(optional: $1) }
+            return observed.satisfies(change) { $0.matches(optional: $1) }
         case (.traits(let observed), .traits(let change)):
             return observed.satisfies(change, matches: Self.matchesTraits)
         case (.actions(let observed), .actions(let change)):
@@ -481,14 +481,14 @@ extension PropertyChange {
     }
 
     private static func matchesCustomContent(
-        _ checker: CustomContentMatchCore<String>,
+        _ checker: ResolvedCustomContentMatch,
         _ value: [HeistCustomContent]?
     ) -> Bool {
         guard let value else { return false }
         return value.contains { checker.matches($0) }
     }
 
-    private static func matchesRotors(_ checker: RotorSetMatchCore<String>, _ value: [HeistRotor]?) -> Bool {
+    private static func matchesRotors(_ checker: ResolvedRotorSetMatch, _ value: [HeistRotor]?) -> Bool {
         guard let value else { return false }
         let rotorNames = value.map(\.name)
         return checker.include.allSatisfy { rotorNames.contains(matching: $0) }
@@ -496,7 +496,7 @@ extension PropertyChange {
     }
 }
 
-private extension CustomContentMatchCore where Text == String {
+private extension ResolvedCustomContentMatch {
     func matches(_ content: HeistCustomContent) -> Bool {
         label.matches(content.label)
             && value.matches(content.value)
@@ -504,15 +504,15 @@ private extension CustomContentMatchCore where Text == String {
     }
 }
 
-private extension Optional where Wrapped == StringMatchCore<String> {
+private extension Optional where Wrapped == ResolvedStringMatch {
     func matches(_ text: String) -> Bool {
-        map { ResolvedStringMatch(core: $0).matches(text) } ?? true
+        map { $0.matches(text) } ?? true
     }
 }
 
 private extension Collection where Element == String {
-    func contains(matching match: StringMatchCore<String>) -> Bool {
-        contains { ResolvedStringMatch(core: match).matches($0) }
+    func contains(matching match: ResolvedStringMatch) -> Bool {
+        contains { match.matches($0) }
     }
 }
 

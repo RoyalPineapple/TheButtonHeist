@@ -1,27 +1,36 @@
 import Foundation
 
 extension HeistPlanSourceParser {
-    mutating func parseRootHeistPlan() throws -> HeistPlanAdmissionCandidate {
+    mutating func parseProgram() throws -> HeistPlan {
+        guard startsRootHeistPlan else {
+            try rejectForbiddenStatementSyntax()
+            throw error(currentToken, "ButtonHeist source must be a canonical root plan: `HeistPlan { ... }`")
+        }
+
         let name = try parseCalleeName()
         guard name == ["HeistPlan"] else {
             throw error(previous, "expected `HeistPlan { ... }`")
         }
-        return try parseHeistPlanAfterCallee(allowDefinitions: true)
+        let root = try parseHeistPlanAfterCallee(allowDefinitions: true)
+        try expect(.eof)
+        var validator = HeistPlanRuntimeSafetyValidator(limits: .standard)
+        try validator.validate(root)
+        return root
     }
 
-    mutating func parseHeistBody(
+    private mutating func parseHeistBody(
         untilRightBrace: Bool,
         allowDefinitions: Bool
-    ) throws -> ParsedHeistBody {
-        var definitions: [HeistPlanAdmissionCandidate] = []
-        var steps: [HeistStepAdmissionCandidate] = []
+    ) throws -> (definitions: [HeistPlan], steps: [HeistStep]) {
+        var definitions: [HeistPlan] = []
+        var steps: [HeistStep] = []
         var seenStep = false
         while true {
             skipSemicolons()
             if atEnd { break }
             if consumeSymbol("}") {
                 if untilRightBrace {
-                    return ParsedHeistBody(definitions: definitions, steps: steps)
+                    return (definitions, steps)
                 }
                 throw error(previous, "unexpected '}'")
             }
@@ -39,10 +48,10 @@ extension HeistPlanSourceParser {
         if untilRightBrace {
             throw error(currentToken, "expected '}' to close ButtonHeist source block")
         }
-        return ParsedHeistBody(definitions: definitions, steps: steps)
+        return (definitions, steps)
     }
 
-    mutating func parseDefinition() throws -> HeistPlanAdmissionCandidate {
+    private mutating func parseDefinition() throws -> HeistPlan {
         let callee = try parseCalleeName()
         switch callee {
         case ["HeistDef"]:
@@ -54,7 +63,7 @@ extension HeistPlanSourceParser {
         }
     }
 
-    mutating func parseNamespaceDefinition() throws -> HeistPlanAdmissionCandidate {
+    private mutating func parseNamespaceDefinition() throws -> HeistPlan {
         try expectSymbol("(")
         let nameToken = currentToken
         let name = try parseStringLiteral()
@@ -63,15 +72,16 @@ extension HeistPlanSourceParser {
         guard body.steps.isEmpty else {
             throw error(previous, "Namespace blocks may contain HeistDef or Namespace declarations only")
         }
-        return HeistPlanAdmissionCandidate(
+        return try HeistPlan(
+            sourceStackVersion: HeistPlan.currentVersion,
             name: try parsePlanName(name, token: nameToken),
             parameter: .none,
-            definitions: mergeDefinitions(body.definitions),
+            definitions: try HeistPlan.mergeSourceDefinitions(body.definitions),
             body: []
         )
     }
 
-    mutating func parseHeistDefGeneric() throws -> HeistParameterKind {
+    private mutating func parseHeistDefGeneric() throws -> HeistParameterKind {
         try expectSymbol("<")
         let type = try parseIdentifier()
         try expectSymbol(">")
@@ -87,9 +97,9 @@ extension HeistPlanSourceParser {
         }
     }
 
-    fileprivate mutating func parseHeistDef(
+    private mutating func parseHeistDef(
         parameterKind: HeistParameterKind
-    ) throws -> HeistPlanAdmissionCandidate {
+    ) throws -> HeistPlan {
         try expectSymbol("(")
         let pathToken = currentToken
         let path = try parseStringLiteral()
@@ -127,71 +137,89 @@ extension HeistPlanSourceParser {
                 path,
                 error: error,
                 phase: .sourceCompilation,
-                sourceSpan: sourceSpan(for: pathToken)
+                sourceSpan: pathToken.sourceSpan
             ))
         }
         let body = try parseHeistClosureBody(parameter: parameter, allowDefinitions: true)
-        return nestedHeistDefinition(
-            path: definitionPath,
+        return try sourceDefinition(
+            components: definitionPath.components[...],
             parameter: parameter,
-            definitions: mergeDefinitions(body.definitions),
+            definitions: try HeistPlan.mergeSourceDefinitions(body.definitions),
             body: body.steps
         )
     }
 
-    func mergeDefinitions(_ definitions: [HeistPlanAdmissionCandidate]) -> [HeistPlanAdmissionCandidate] {
-        mergeHeistDefinitions(definitions, duplicatePolicy: .preserve)
+    private func sourceDefinition(
+        components: ArraySlice<HeistPlanName>,
+        parameter: HeistParameter,
+        definitions: [HeistPlan],
+        body: [HeistStep]
+    ) throws -> HeistPlan {
+        guard let name = components.first else {
+            preconditionFailure("validated heist definition path must not be empty")
+        }
+        guard components.count > 1 else {
+            return try HeistPlan(
+                sourceStackVersion: HeistPlan.currentVersion,
+                name: name,
+                parameter: parameter,
+                definitions: definitions,
+                body: body
+            )
+        }
+        return try HeistPlan(
+            sourceStackVersion: HeistPlan.currentVersion,
+            name: name,
+            definitions: [
+                sourceDefinition(
+                    components: components.dropFirst(),
+                    parameter: parameter,
+                    definitions: definitions,
+                    body: body
+                ),
+            ],
+            body: []
+        )
     }
 
-    mutating func parseStatement() throws -> [HeistStepAdmissionCandidate] {
-        let tryPrefix = try parseTryPrefixIfPresent()
-        if let tryPrefix {
-            if let correction = runHeistCorrectionAfterTryPrefix(startingAt: index) {
-                throw error(
-                    tryPrefix,
-                    "`try` is only allowed in Swift wrapper code, not inside ButtonHeist DSL bodies. Use \(correction)."
-                )
-            }
-            throw error(tryPrefix, "`try` is only allowed in Swift wrapper code, not inside ButtonHeist DSL bodies")
-        }
-
+    private mutating func parseStatement() throws -> [HeistStep] {
         let name = try parseCalleeName()
 
         switch name {
         case ["Activate"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseElementTargetAction("Activate", makeCommand: HeistActionCommand.activate)))]
+            return [try parseActionStep(command: parseElementTargetAction("Activate", makeCommand: HeistActionCommand.activate))]
         case ["Increment"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseElementTargetAction("Increment", makeCommand: HeistActionCommand.increment)))]
+            return [try parseActionStep(command: parseElementTargetAction("Increment", makeCommand: HeistActionCommand.increment))]
         case ["Decrement"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseElementTargetAction("Decrement", makeCommand: HeistActionCommand.decrement)))]
+            return [try parseActionStep(command: parseElementTargetAction("Decrement", makeCommand: HeistActionCommand.decrement))]
         case ["TypeText"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseTypeTextAction()))]
+            return [try parseActionStep(command: parseTypeTextAction())]
         case ["ClearText"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseClearTextAction()))]
+            return [try parseActionStep(command: parseClearTextAction())]
         case ["CustomAction"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseCustomAction()))]
+            return [try parseActionStep(command: parseCustomAction())]
         case ["Rotor"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseRotorAction()))]
+            return [try parseActionStep(command: parseRotorAction())]
         case ["SetPasteboard"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseSetPasteboardAction()))]
+            return [try parseActionStep(command: parseSetPasteboardAction())]
         case ["TakeScreenshot"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseTakeScreenshotAction()))]
+            return [try parseActionStep(command: parseTakeScreenshotAction())]
         case ["ScreenActions", "Dismiss"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseDismissAction()))]
+            return [try parseActionStep(command: parseDismissAction())]
         case ["ScreenActions", "MagicTap"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseMagicTapAction()))]
+            return [try parseActionStep(command: parseMagicTapAction())]
         case ["Edit"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseEditAction()))]
+            return [try parseActionStep(command: parseEditAction())]
         case ["dismissKeyboard"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseDismissKeyboardAction()))]
+            return [try parseActionStep(command: parseDismissKeyboardAction())]
         case ["oneFingerTap"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseOneFingerTap()))]
+            return [try parseActionStep(command: parseOneFingerTap())]
         case ["longPress"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseLongPress()))]
+            return [try parseActionStep(command: parseLongPress())]
         case ["swipe"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseSwipe()))]
+            return [try parseActionStep(command: parseSwipe())]
         case ["drag"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseDrag()))]
+            return [try parseActionStep(command: parseDrag())]
         case ["WaitFor"]:
             return [try parseWaitFor()]
         case ["If"]:
@@ -204,17 +232,17 @@ extension HeistPlanSourceParser {
             let plan = try parseHeistPlanAfterCallee(allowDefinitions: false)
             return [.heist(plan)]
         case ["RunHeist"]:
-            return [HeistStepAdmissionCandidate(try parseRunHeist())]
+            return [try parseRunHeist()]
         case ["Warn"]:
-            return [HeistStepAdmissionCandidate(try parseWarn())]
+            return [try parseWarn()]
         case ["Fail"]:
-            return [HeistStepAdmissionCandidate(try parseFail())]
+            return [try parseFail()]
         default:
             throw error(previous, "unsupported ButtonHeist source statement '\(name.joined(separator: "."))'")
         }
     }
 
-    mutating func parseHeistPlanAfterCallee(allowDefinitions: Bool) throws -> HeistPlanAdmissionCandidate {
+    private mutating func parseHeistPlanAfterCallee(allowDefinitions: Bool) throws -> HeistPlan {
         var name: HeistPlanName?
         var parameter = HeistParameter.none
         if consumeSymbol("(") {
@@ -222,7 +250,7 @@ extension HeistPlanSourceParser {
                 throw error(currentToken, "empty HeistPlan parentheses are not canonical; use `HeistPlan { ... }`")
             }
 
-            if lookaheadLabel("parameter") || lookaheadLabel("targetParameter") {
+            if currentToken.kind == .identifier("parameter") || currentToken.kind == .identifier("targetParameter") {
                 parameter = try parseRootHeistParameter()
             } else {
                 let nameToken = currentToken
@@ -235,16 +263,17 @@ extension HeistPlanSourceParser {
         }
 
         let body = try parseHeistClosureBody(parameter: parameter, allowDefinitions: allowDefinitions)
-        return HeistPlanAdmissionCandidate(
-            version: HeistPlan.currentVersion,
+        let definitions = try HeistPlan.mergeSourceDefinitions(body.definitions)
+        return try HeistPlan(
+            sourceStackVersion: HeistPlan.currentVersion,
             name: name,
             parameter: parameter,
-            definitions: mergeDefinitions(body.definitions),
+            definitions: definitions,
             body: body.steps
         )
     }
 
-    func parsePlanName(_ value: String, token: HeistPlanSourceToken) throws -> HeistPlanName {
+    private func parsePlanName(_ value: String, token: HeistPlanSourceToken) throws -> HeistPlanName {
         do {
             return try HeistPlanName(validating: value)
         } catch {
@@ -252,7 +281,7 @@ extension HeistPlanSourceParser {
         }
     }
 
-    mutating func parseRootHeistParameter() throws -> HeistParameter {
+    private mutating func parseRootHeistParameter() throws -> HeistParameter {
         if consumeIdentifier("parameter") != nil {
             try expectSymbol(":")
             return .string(name: try parseReferenceNameLiteral(role: "parameter"))
@@ -264,13 +293,13 @@ extension HeistPlanSourceParser {
         throw error(currentToken, "expected parameter: or targetParameter:")
     }
 
-    mutating func parseHeistClosureBody(
+    private mutating func parseHeistClosureBody(
         parameter: HeistParameter,
         allowDefinitions: Bool
-    ) throws -> ParsedHeistBody {
+    ) throws -> (definitions: [HeistPlan], steps: [HeistStep]) {
         try expectSymbol("{")
-        let previousScope = currentScope()
-        defer { restoreScope(previousScope) }
+        let previousScope = scope
+        defer { scope = previousScope }
         if parameter.name != nil {
             let localName = try parseIdentifier()
             try expectIdentifier("in")
@@ -279,4 +308,306 @@ extension HeistPlanSourceParser {
         return try parseHeistBody(untilRightBrace: true, allowDefinitions: allowDefinitions)
     }
 
+}
+
+private extension HeistPlanSourceParser {
+    mutating func parseWaitFor() throws -> HeistStep {
+        try expectSymbol("(")
+        let predicate = try parseAccessibilityPredicateExpr()
+        let timeout = try parseTrailingTimeout(defaultValue: defaultWaitTimeout) ?? defaultWaitTimeout
+        try expectSymbol(")")
+        return .wait(WaitStep(
+            predicate: predicate,
+            timeout: timeout,
+            elseBody: try parseLowercaseElseChainIfPresent(chainContext: "WaitFor")
+        ))
+    }
+
+    mutating func parseIf() throws -> HeistStep {
+        if consumeSymbol("(") {
+            let predicate = try parseScreenAssertion()
+            try expectSymbol(")")
+            return .conditional(try parseSinglePredicateBranches(predicate: predicate, chainContext: "If"))
+        }
+        return .conditional(try parsePredicateBranches())
+    }
+
+    mutating func parseForEach() throws -> HeistStep {
+        try expectSymbol("(")
+        if consumeSymbol("[") {
+            throw error(previous, #"ForEach string loops use `ForEach("a", "b")`, not array literals"#)
+        }
+        if case .string = currentToken.kind {
+            var values: [String] = []
+            repeat {
+                values.append(try parseStringLiteral())
+            } while consumeSymbol(",")
+            try expectSymbol(")")
+            return try parseScopedClosure(binding: .string) { parameter, body in
+                .forEachString(try ForEachStringStep(
+                    values: values,
+                    parameter: parameter,
+                    body: body
+                ))
+            }
+        }
+        let matching = try parseElementLoopPredicate()
+        var limit = 20
+        while consumeSymbol(",") {
+            if consumeIdentifier("limit") != nil {
+                try expectSymbol(":")
+                limit = try parseInteger()
+            } else {
+                throw error(currentToken, "ForEach element loop accepts only limit:")
+            }
+        }
+        try expectSymbol(")")
+        return try parseScopedClosure(binding: .target) { parameter, body in
+            .forEachElement(try ForEachElementStep(
+                matching: matching,
+                limit: limit,
+                parameter: parameter,
+                body: body
+            ))
+        }
+    }
+
+    mutating func parseRepeatUntil() throws -> HeistStep {
+        try expectSymbol("(")
+        let predicate = try parseAccessibilityPredicateExpr()
+        guard let timeout = try parseTrailingTimeout(defaultValue: nil) else {
+            throw error(currentToken, "RepeatUntil requires timeout in seconds")
+        }
+        try expectSymbol(")")
+        let body = try parseHeistBlock()
+        return .repeatUntil(try RepeatUntilStep(
+            predicate: predicate,
+            timeout: timeout,
+            body: body
+        ))
+    }
+
+    mutating func parseElementLoopPredicate() throws -> ElementPredicate {
+        try expectSymbol(".")
+        let name = try parseIdentifier()
+        if name == "matching" {
+            throw error(previous, #"ForEach element loops use direct predicates like `ForEach(.label("x"))`, not `.matching(...)`"#)
+        }
+        return try parseElementPredicate(named: name)
+    }
+
+    mutating func parseRunHeist() throws -> HeistStep {
+        try expectSymbol("(")
+        let nameToken = currentToken
+        let name = try parseStringLiteral()
+        let invocationPath: HeistInvocationPath
+        do {
+            invocationPath = try HeistInvocationPath(validating: name)
+        } catch let validationError {
+            throw HeistSourceCompilationError(diagnostic: .invalidInvocationPath(
+                name,
+                error: validationError,
+                phase: .sourceCompilation,
+                sourceSpan: nameToken.sourceSpan
+            ))
+        }
+        var argument = HeistArgument.none
+        if consumeSymbol(",") {
+            argument = try parseHeistArgument()
+        }
+        try expectSymbol(")")
+        var expectation = AuthoredActionExpectation.default
+        while consumeSymbol(".") {
+            let chainToken = currentToken
+            let chain = try parseIdentifier()
+            switch chain {
+            case "expect":
+                try expectSymbol("(")
+                let predicate: AccessibilityPredicate
+                let timeout: WaitTimeout?
+                if currentToken.isSymbol(")") {
+                    throw error(currentToken, ".expect(...) requires a canonical predicate")
+                } else {
+                    predicate = try parseAccessibilityPredicateExpr()
+                    timeout = try parseTrailingTimeout(defaultValue: nil)
+                }
+                try expectSymbol(")")
+                expectation = expectation.appending(predicate, timeout: timeout)
+                if let diagnostic = expectation.diagnostics.first {
+                    throw error(chainToken, diagnostic.message)
+                }
+            default:
+                throw error(chainToken, "unsupported RunHeist chain '.\(chain)'")
+            }
+        }
+        return .invoke(HeistInvocationStep(
+            path: invocationPath,
+            argument: argument,
+            expectation: expectation.waitStep
+        ))
+    }
+
+    mutating func parseHeistArgument() throws -> HeistArgument {
+        if let string = try parseStringExprIfPresent() {
+            return HeistArgument(core: .string(string))
+        }
+        return .accessibilityTarget(try parseTargetExpr())
+    }
+
+    mutating func parseWarn() throws -> HeistStep {
+        try expectSymbol("(")
+        let messageToken = currentToken
+        let message = try parseStringLiteral()
+        try expectSymbol(")")
+        do {
+            return .warn(WarnStep(message: try HeistWarningMessage(validating: message)))
+        } catch let validationError {
+            throw error(messageToken, String(describing: validationError))
+        }
+    }
+
+    mutating func parseFail() throws -> HeistStep {
+        try expectSymbol("(")
+        let messageToken = currentToken
+        let message = try parseStringLiteral()
+        try expectSymbol(")")
+        do {
+            return .fail(FailStep(message: try HeistFailureMessage(validating: message)))
+        } catch let validationError {
+            throw error(messageToken, String(describing: validationError))
+        }
+    }
+
+    mutating func parsePredicateBranches() throws -> ConditionalStep {
+        try expectSymbol("{")
+        var cases: [PredicateCase] = []
+        var elseBody: [HeistStep]?
+        while !consumeSymbol("}") {
+            try rejectForbiddenStatementSyntax()
+            let token = currentToken
+            let name = try parseIdentifier()
+            switch name {
+            case "Case":
+                guard elseBody == nil else {
+                    throw error(token, "Case must appear before Else")
+                }
+                try expectSymbol("(")
+                let predicate = try parseScreenAssertion()
+                try expectSymbol(")")
+                cases.append(PredicateCase(
+                    predicate: predicate,
+                    body: try parseHeistBlock()
+                ))
+            case "Else":
+                guard elseBody == nil else {
+                    throw error(token, "a branch block accepts at most one Else")
+                }
+                elseBody = try parseHeistBlock()
+            default:
+                throw error(token, "branch blocks accept only Case(...) and Else")
+            }
+        }
+        return try ConditionalStep(cases: cases, elseBody: elseBody)
+    }
+
+    mutating func parseSinglePredicateBranches(
+        predicate: ChangeDeclaration.ScreenAssertion,
+        chainContext: String
+    ) throws -> ConditionalStep {
+        let body = try parseHeistBlock()
+        let elseBody = try parseLowercaseElseChainIfPresent(chainContext: chainContext)
+        return try ConditionalStep(
+            cases: [PredicateCase(predicate: predicate, body: body)],
+            elseBody: elseBody
+        )
+    }
+
+    mutating func parseHeistBlock() throws -> [HeistStep] {
+        try expectSymbol("{")
+        return try parseHeistBody(untilRightBrace: true, allowDefinitions: false).steps
+    }
+
+    mutating func parseLowercaseElseChainIfPresent(
+        chainContext: String
+    ) throws -> [HeistStep]? {
+        guard consumeSymbol(".") else { return nil }
+        let token = currentToken
+        let chain = try parseIdentifier()
+        guard chain == "else" else {
+            throw error(token, "unsupported \(chainContext) chain '.\(chain)'")
+        }
+        return try parseHeistBlock()
+    }
+
+    mutating func parseScopedClosure(
+        binding: HeistPlanSourceBinding,
+        project: (HeistReferenceName, [HeistStep]) throws -> HeistStep
+    ) throws -> HeistStep {
+        try expectSymbol("{")
+        let localName = try parseIdentifier()
+        try expectIdentifier("in")
+        let referenceName = try HeistReferenceName(validating: localName)
+        let previousScope = scope
+        defer { scope = previousScope }
+        bindScopedReference(binding, localName: localName, referenceName: referenceName)
+        return try project(
+            referenceName,
+            parseHeistBody(untilRightBrace: true, allowDefinitions: false).steps
+        )
+    }
+}
+
+private extension HeistPlan {
+    static func mergeSourceDefinitions(_ definitions: [HeistPlan]) throws -> [HeistPlan] {
+        try definitions.reduce(into: []) { merged, definition in
+            guard let name = definition.name,
+                  let existingIndex = merged.firstIndex(where: { $0.name == name })
+            else {
+                merged.append(definition)
+                return
+            }
+            let existing = merged[existingIndex]
+            guard existing.parameter == .none,
+                  existing.body.isEmpty,
+                  !existing.definitions.isEmpty,
+                  definition.parameter == .none,
+                  definition.body.isEmpty,
+                  !definition.definitions.isEmpty
+            else {
+                merged.append(definition)
+                return
+            }
+            merged[existingIndex] = try HeistPlan(
+                sourceStackVersion: existing.version,
+                name: existing.name,
+                parameter: existing.parameter,
+                definitions: try mergeSourceDefinitions(existing.definitions + definition.definitions),
+                body: existing.body
+            )
+        }
+    }
+
+    init(
+        sourceStackVersion version: Int,
+        name: HeistPlanName? = nil,
+        parameter: HeistParameter = .none,
+        definitions: [HeistPlan] = [],
+        body: [HeistStep]
+    ) throws {
+        guard version == Self.currentVersion else {
+            throw HeistPlanVersionAdmissionError(observed: version)
+        }
+        guard !body.isEmpty || !definitions.isEmpty else {
+            throw HeistPlanBuildError.planStructure(
+                path: "$.body",
+                message: "heist plan must contain a body or nested definitions",
+                hint: "Add body steps, or use this plan only as a namespace with nested definitions."
+            )
+        }
+        self.version = version
+        self.name = name
+        self.parameter = parameter
+        self.definitions = definitions
+        self.body = body
+    }
 }

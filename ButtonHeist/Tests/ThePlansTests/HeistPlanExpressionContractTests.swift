@@ -2,15 +2,16 @@ import Foundation
 import Testing
 import ThePlans
 
-@Test func `typed expression leaves resolve through the environment`() throws {
+@Test func `typed references resolve through canonical public predicates`() throws {
     let title = try HeistReferenceName(validating: "title")
     #expect(title.rawValue == "title")
 
-    let expression = Expr<String>.ref(title)
-    #expect(try expression.resolve(in: HeistExecutionEnvironment(strings: [title: "Dashboard"])) == "Dashboard")
+    let predicate = ElementPredicate(label: .exact(title))
+    let environment = HeistExecutionEnvironment(strings: [title: "Dashboard"])
+    #expect(try predicate.resolve(in: environment) == ResolvedElementPredicate.label("Dashboard"))
 
     expectExpressionError(.unresolvedStringReference("title")) {
-        try expression.resolve(in: .empty)
+        try predicate.resolve(in: .empty)
     }
 
     let targetReference = try HeistReferenceName(validating: "cta")
@@ -40,7 +41,7 @@ import ThePlans
         contains: "Swift-style identifier"
     )
     expectDecodingError(
-        ElementPredicateTemplate.self,
+        ElementPredicate.self,
         #"{"checks":[{"kind":"label","match":{"mode":"exact","value":{"ref":"   "}}}]}"#,
         contains: "Swift-style identifier"
     )
@@ -48,7 +49,7 @@ import ThePlans
 
 @Test func `broad string matches reject references that resolve empty`() throws {
     let needle: HeistReferenceName = "needle"
-    let labelPredicate = ElementPredicateTemplate(label: .contains(needle))
+    let labelPredicate = ElementPredicate(label: .contains(needle))
     expectExpressionError(.invalidStringMatch(mode: "contains")) {
         try labelPredicate.resolve(in: HeistExecutionEnvironment(strings: [needle: ""]))
     }
@@ -177,7 +178,7 @@ import ThePlans
 
 @Test func `authored expression wire shapes remain canonical`() throws {
     let titleReference: HeistReferenceName = "title"
-    let template = ElementPredicateTemplate(
+    let template = ElementPredicate(
         label: .exact(titleReference),
         identifier: .contains("field"),
         value: .exact("Ready")
@@ -223,7 +224,7 @@ import ThePlans
 @Test func `target construction and refinement preserve authored semantics`() throws {
     let targetBacked = AccessibilityTarget.target(.label("Save"), ordinal: 1)
     let templateBacked = AccessibilityTarget.predicate(
-        ElementPredicateTemplate(label: .exact("Save")),
+        ElementPredicate(label: .exact("Save")),
         ordinal: 1
     )
     #expect(targetBacked == templateBacked)
@@ -231,7 +232,7 @@ import ThePlans
     let refined = targetBacked
         .and(.traits([.isEditing]))
         .excluding(.traits([.textEntry]))
-    let expected = AccessibilityTarget.predicate(ElementPredicateTemplate([
+    let expected = AccessibilityTarget.predicate(ElementPredicate([
         .label("Save"),
         .traits([.isEditing]),
         .exclude(.traits([.textEntry])),

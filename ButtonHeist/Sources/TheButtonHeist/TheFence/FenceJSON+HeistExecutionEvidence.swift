@@ -48,7 +48,7 @@ private extension HeistReport.Evidence {
     }
 
     private enum ActionCodingKeys: String, CodingKey {
-        case commandName, target, result, expectationResult, expectation
+        case commandName, target, result, expectation
     }
 
     private func encode(
@@ -63,19 +63,20 @@ private extension HeistReport.Evidence {
         switch evidence {
         case .commandResolutionFailure:
             break
-        case .dispatch(let result):
-            try container.encode(PublicHeistOutput.action(result, method: .heist(command), profile: profile), forKey: .result)
-        case .expectation(let result, let expectationResult, let expectation):
-            try container.encode(PublicHeistOutput.action(result, method: .heist(command), profile: profile), forKey: .result)
+        case .completed(let result, let expectation):
             try container.encode(
-                PublicHeistOutput.actionResult(
-                    expectationResult,
+                PublicHeistOutput.action(
+                    result,
+                    method: .heist(command),
                     expectation: expectation,
                     profile: profile
                 ),
-                forKey: .expectationResult
+                forKey: .result
             )
-            try container.encode(PublicHeistOutput.expectation(expectation), forKey: .expectation)
+            try container.encodeIfPresent(
+                PublicHeistOutput.expectation(expectation),
+                forKey: .expectation
+            )
         }
     }
 

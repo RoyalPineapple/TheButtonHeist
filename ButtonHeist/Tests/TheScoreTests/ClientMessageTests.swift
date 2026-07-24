@@ -110,7 +110,7 @@ final class ClientMessageTests: XCTestCase {
             .requestScreen(),
             .heistPlan(HeistPlanRun(plan: try HeistPlan(body: [
                 .action(ActionStep(
-                    command: .activate(.predicate(ElementPredicateTemplate(label: "Save")))
+                    command: .activate(.predicate(ElementPredicate(label: "Save")))
                 )),
             ]))),
         ]
@@ -183,7 +183,7 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testHeistPlanClientMessageRoundTrip() throws {
-        let saveTarget = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save", traits: [.button]))
+        let saveTarget = AccessibilityTarget.predicate(ElementPredicate(label: "Save", traits: [.button]))
         let plan = try HeistPlan(body: [
                 .action(ActionStep(
                     command: .activate(saveTarget),
@@ -247,7 +247,7 @@ final class ClientMessageTests: XCTestCase {
             .action(ActionStep(
                 command: .typeText(
                     text: "hello",
-                    target: .predicate(ElementPredicateTemplate(identifier: "nameField"))
+                    target: .predicate(ElementPredicate(identifier: "nameField"))
                 )
             )),
         ])
@@ -276,7 +276,7 @@ final class ClientMessageTests: XCTestCase {
 
     func testHeistActionDescriptionUsesNormalCommandIdentity() throws {
         let step = ActionStep(
-            command: .activate(.predicate(ElementPredicateTemplate(label: "Save"))),
+            command: .activate(.predicate(ElementPredicate(label: "Save"))),
             expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 10)))
 
         XCTAssertEqual(
@@ -329,7 +329,7 @@ final class ClientMessageTests: XCTestCase {
     func testSingleActivateWireShapeIsHeistPlan() throws {
         let plan = try HeistPlan(body: [
             .action(ActionStep(
-                command: .activate(.predicate(ElementPredicateTemplate(label: "Log In")))
+                command: .activate(.predicate(ElementPredicate(label: "Log In")))
             )),
         ])
         let message = ClientMessage.heistPlan(HeistPlanRun(plan: plan))
@@ -403,7 +403,7 @@ final class ClientMessageTests: XCTestCase {
     func testTypeTextReplacingExistingAllowsEmptyText() throws {
         let target = TypeTextTarget(
             text: .replacing(""),
-            target: .predicate(ElementPredicateTemplate(identifier: "nameField"))
+            target: .predicate(ElementPredicate(identifier: "nameField"))
         )
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(TypeTextTarget.self, from: data)
@@ -425,7 +425,7 @@ final class ClientMessageTests: XCTestCase {
     func testTypeTextWithAccessibilityTarget() throws {
         let target = TypeTextTarget(
             text: "Hello",
-            target: .predicate(ElementPredicateTemplate(identifier: "nameField"))
+            target: .predicate(ElementPredicate(identifier: "nameField"))
         )
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(TypeTextTarget.self, from: data)
@@ -605,7 +605,7 @@ final class ClientMessageTests: XCTestCase {
     // MARK: - AccessibilityTarget Ordinal Tests
 
     func testAccessibilityTargetMatcherWithoutOrdinalRoundTrip() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Save"))
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(AccessibilityTarget.self, from: data)
 
@@ -617,7 +617,7 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testAccessibilityTargetMatcherWithOrdinalRoundTrip() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save", traits: [.button]), ordinal: 2)
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Save", traits: [.button]), ordinal: 2)
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(AccessibilityTarget.self, from: data)
 
@@ -694,13 +694,13 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testAccessibilityTargetOrdinalEquality() {
-        let withOrdinal = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save"), ordinal: 1)
-        let withoutOrdinal = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save"))
-        let differentOrdinal = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save"), ordinal: 2)
+        let withOrdinal = AccessibilityTarget.predicate(ElementPredicate(label: "Save"), ordinal: 1)
+        let withoutOrdinal = AccessibilityTarget.predicate(ElementPredicate(label: "Save"))
+        let differentOrdinal = AccessibilityTarget.predicate(ElementPredicate(label: "Save"), ordinal: 2)
 
         XCTAssertNotEqual(withOrdinal, withoutOrdinal)
         XCTAssertNotEqual(withOrdinal, differentOrdinal)
-        XCTAssertEqual(withOrdinal, AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save"), ordinal: 1))
+        XCTAssertEqual(withOrdinal, AccessibilityTarget.predicate(ElementPredicate(label: "Save"), ordinal: 1))
     }
 
     // MARK: - UnitPoint Tests
@@ -708,7 +708,7 @@ final class ClientMessageTests: XCTestCase {
     func testUnitPointRoundTrip() throws {
         let swipe = SwipeTarget(
             selection: .unitElement(
-                .predicate(ElementPredicateTemplate(identifier: "scrollable")),
+                .predicate(ElementPredicate(identifier: "scrollable")),
                 start: UnitPoint(x: 0.8, y: 0.5),
                 end: UnitPoint(x: 0.2, y: 0.5)
             )
@@ -719,7 +719,7 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertEqual(
             decoded.selection,
             .unitElement(
-                .predicate(ElementPredicateTemplate(identifier: "scrollable")),
+                .predicate(ElementPredicate(identifier: "scrollable")),
                 start: UnitPoint(x: 0.8, y: 0.5),
                 end: UnitPoint(x: 0.2, y: 0.5)
             )

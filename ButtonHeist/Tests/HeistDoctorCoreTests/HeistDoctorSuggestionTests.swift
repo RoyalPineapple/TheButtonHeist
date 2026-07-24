@@ -7,7 +7,7 @@ import TheScore
 @Suite struct HeistDoctorSuggestionTests {
     @Test("Missing target suggests renamed equivalent using row context")
     func missingTargetSuggestsRenamedEquivalentUsingRowContext() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: listInterface(rows: [
@@ -30,7 +30,7 @@ import TheScore
         let suggestion = try #require(HeistDoctor.diagnosis(for: request(last, current)).suggestions.first)
 
         #expect(suggestion.failureKind == .missingTarget)
-        #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Remove")))
+        #expect(suggestion.newTarget == .predicate(ElementPredicate(label: "Remove")))
         #expect(suggestion.newResolvedElement.element.label == "Remove")
         #expect(suggestion.newResolvedElement.siblingText == ["Milk"])
         #expect(suggestion.confidence == .medium)
@@ -38,7 +38,7 @@ import TheScore
     }
 
     @Test func `diagnosis exposes validated suggestion pipeline`() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: listInterface(rows: [
@@ -64,7 +64,7 @@ import TheScore
 
         #expect(diagnosis.failureKind == .missingTarget)
         #expect(diagnosis.currentMatchCount == 0)
-        #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Remove")))
+        #expect(suggestion.newTarget == .predicate(ElementPredicate(label: "Remove")))
         #expect(candidate.source == .semanticContinuityScan)
         #expect(candidate.validation == .suggested(target: suggestion.newTarget, confidence: suggestion.confidence))
         #expect(result.suggestions == diagnosis.suggestions)
@@ -72,7 +72,7 @@ import TheScore
     }
 
     @Test func `diagnosis exposes typed candidate ranking refusal`() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: makeTestInterface(elements: [
@@ -106,7 +106,7 @@ import TheScore
 
     @Test("Missing target chooses renamed duplicate by neighbor context")
     func missingTargetChoosesRenamedDuplicateByNeighborContext() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: listInterface(rows: [
@@ -132,7 +132,7 @@ import TheScore
 
     @Test("Missing target does not guess from the only compatible role")
     func missingTargetDoesNotGuessFromTheOnlyCompatibleRole() {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: makeTestInterface(elements: [
@@ -151,7 +151,7 @@ import TheScore
 
     @Test("Missing target does not use traversal ordinal without matching neighbors")
     func missingTargetDoesNotUseTraversalOrdinalWithoutMatchingNeighbors() {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: listInterface(rows: [
@@ -171,7 +171,7 @@ import TheScore
 
     @Test("Missing target prefers contained label rename over broad screen context")
     func missingTargetPrefersContainedLabelRenameOverBroadScreenContext() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Checkout"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Checkout"))
         let last = passedEvidence(
             target: target,
             before: broadMenuInterface(primaryAction: "Checkout")
@@ -183,14 +183,14 @@ import TheScore
 
         let suggestion = try #require(HeistDoctor.diagnosis(for: request(last, current)).suggestions.first)
 
-        #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Go to Checkout")))
+        #expect(suggestion.newTarget == .predicate(ElementPredicate(label: "Go to Checkout")))
         #expect(suggestion.newResolvedElement.element.label == "Go to Checkout")
         #expect(suggestion.reasons.contains(.scoring(.labelSemanticRename)))
     }
 
     @Test("Missing target rejects broad screen context without semantic successor")
     func missingTargetRejectsBroadScreenContextWithoutSemanticSuccessor() {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Checkout"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Checkout"))
         let last = passedEvidence(
             target: target,
             before: broadMenuInterface(primaryAction: "Checkout")
@@ -205,7 +205,7 @@ import TheScore
 
     @Test("Ambiguous duplicate labels produce minimum disambiguating matcher")
     func ambiguousDuplicateLabelsProduceMinimumDisambiguatingMatcher() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: listInterface(rows: [
@@ -226,7 +226,7 @@ import TheScore
         let suggestion = try #require(HeistDoctor.diagnosis(for: request(last, current)).suggestions.first)
 
         #expect(suggestion.failureKind == .ambiguousTarget)
-        #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Delete", traits: [.button]), ordinal: 0))
+        #expect(suggestion.newTarget == .predicate(ElementPredicate(label: "Delete", traits: [.button]), ordinal: 0))
         #expect(suggestion.newResolvedElement.siblingText == ["Milk"])
         #expect(suggestion.confidence == .low)
         #expect(suggestion.caveats.contains(.ordinalDisambiguation))
@@ -236,7 +236,7 @@ import TheScore
 
     @Test("Wrong action capability blocks unsupported suggestions")
     func wrongActionCapabilityBlocksUnsupportedSuggestions() {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Quantity"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Quantity"))
         let last = passedEvidence(
             command: .increment(target),
             target: target,
@@ -257,7 +257,7 @@ import TheScore
 
     @Test("Wrong action capability can suggest a compatible successor with lowered confidence")
     func wrongActionCapabilityCanSuggestACompatibleSuccessorWithLoweredConfidence() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Quantity"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Quantity"))
         let last = passedEvidence(
             command: .increment(target),
             target: target,
@@ -277,7 +277,7 @@ import TheScore
         let suggestion = try #require(HeistDoctor.diagnosis(for: request(last, current)).suggestions.first)
 
         #expect(suggestion.failureKind == .wrongCapability)
-        #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Quantity stepper")))
+        #expect(suggestion.newTarget == .predicate(ElementPredicate(label: "Quantity stepper")))
         #expect(suggestion.confidence == .low)
         #expect(suggestion.reasons.contains(.scoring(.elementSupportsSameActionFamily)))
         #expect(resolvedCount(suggestion.newTarget, in: current.beforeSnapshot) == 1)
@@ -285,7 +285,7 @@ import TheScore
 
     @Test("Ordered change facts explain value changes without requiring full after snapshot")
     func changeFactsExplainValueChangesWithoutRequiringFullAfterSnapshot() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Quantity"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Quantity"))
         let quantityBefore = element(
             label: "Quantity",
             value: "1",
@@ -318,7 +318,7 @@ import TheScore
 
         let suggestion = try #require(HeistDoctor.diagnosis(for: request(last, current)).suggestions.first)
 
-        #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Amount")))
+        #expect(suggestion.newTarget == .predicate(ElementPredicate(label: "Amount")))
         #expect(suggestion.reasons.contains(.changeFact(.lastSuccess, .valueChange(old: "1", new: "2"))))
         #expect(suggestion.reasons.contains(.changeFact(.currentFailure, .noSemanticChange)))
         #expect(suggestion.reasons.contains(.lastSuccessfulExpectationMet))
@@ -328,7 +328,7 @@ import TheScore
 
     @Test("Screen-boundary repair reasons preserve canonical fact order")
     func screenBoundaryRepairReasonsPreserveCanonicalFactOrder() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Delete"))
         let oldScreen = makeTestInterface(elements: [
             element(label: "Delete", traits: [.button], actions: [.activate]),
         ])
@@ -368,7 +368,7 @@ import TheScore
 
     @Test("Empty change facts mean no semantic change")
     func emptyChangeFactsMeanNoSemanticChange() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: listInterface(rows: [
@@ -386,7 +386,7 @@ import TheScore
 
         let suggestion = try #require(HeistDoctor.diagnosis(for: request(last, current)).suggestions.first)
 
-        #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Remove")))
+        #expect(suggestion.newTarget == .predicate(ElementPredicate(label: "Remove")))
         #expect(suggestion.reasons.contains(.changeFact(.lastSuccess, .noSemanticChange)))
         #expect(suggestion.caveats.isEmpty)
     }

@@ -131,49 +131,50 @@ import Testing
         #expect(testCase.command.durableHeistActionFailure == testCase.durabilityFailure)
         #expect(testCase.command.reportTarget == testCase.reportTarget)
 
-        let raw = HeistPlanAdmissionCandidate(body: [.action(ActionStep(command: testCase.command))])
         if let canonicalLine = testCase.canonicalLine {
-            let plan = try raw.validatedForRuntimeSafety()
+            let plan = try HeistPlan(body: [.action(ActionStep(command: testCase.command))])
             let expectedSource = canonicalPlanSource(canonicalLine)
             #expect(try plan.canonicalSwiftDSL() == expectedSource)
             #expect(try HeistSourceCompilation.compile(expectedSource) == plan)
         } else {
             let expectedFailure = try #require(testCase.durabilityFailure)
-            let failures = runtimeSafetyFailures(for: raw)
-            expectNonDurableHeistActionFailure(failures, observed: expectedFailure)
-            #expect(raw.semanticValidationResult().value == nil)
+            let diagnostics = runtimeSafetyDiagnostics {
+                try HeistPlan(body: [.action(ActionStep(command: testCase.command))])
+            }
+            expectNonDurableHeistActionFailure(diagnostics, observed: expectedFailure)
         }
     }
 }
 
 @Test func `runtime admission validates every string loop value through invocations`() throws {
-    let candidate = HeistPlanAdmissionCandidate(
-        definitions: [
-            HeistPlanAdmissionCandidate(
-                name: "typeQuery",
-                parameter: .string(name: "query"),
-                body: [.action(ActionStep(command: .typeText(
-                    reference: "query",
-                    target: .label("Search")
-                )))])
-        ],
-        body: [.forEachString(try ForEachStringStep(
-            values: ["Milk", ""],
-            parameter: "item",
-            body: [.invoke(HeistInvocationStep(
-                path: "typeQuery",
-                argument: .string(reference: "item")
+    let definition = try HeistPlan(
+        name: "typeQuery",
+        parameter: .string(name: "query"),
+        body: [.action(ActionStep(command: .typeText(
+            reference: "query",
+            target: .label("Search")
+        )))])
+    let diagnostics = runtimeSafetyDiagnostics {
+        try HeistPlan(
+            definitions: [
+                definition,
+            ],
+            body: [.forEachString(try ForEachStringStep(
+                values: ["Milk", ""],
+                parameter: "item",
+                body: [.invoke(HeistInvocationStep(
+                    path: "typeQuery",
+                    argument: .string(reference: "item")
+                ))]
             ))]
-        ))]
-    )
+        )
+    }
 
-    let failures = runtimeSafetyFailures(for: candidate)
-
-    #expect(failures.contains {
-        $0.contract == "string loop value must resolve to an admissible action command"
-            && $0.observed.contains("$.body[0].for_each_string.values[1] resolved to")
-            && $0.observed.contains("text to append must be non-empty")
-    }, "\(failures)")
+    #expect(diagnostics.contains {
+        $0.message.contains("string loop value must resolve to an admissible action command")
+            && $0.message.contains("$.body[0].for_each_string.values[1] resolved to")
+            && $0.message.contains("text to append must be non-empty")
+    }, "\(diagnostics)")
 }
 
 @Test func `rotor index admits dynamic values before command construction`() throws {
@@ -619,12 +620,14 @@ private func canonicalPlanSource(_ line: String) -> String {
     """
 }
 
-private func runtimeSafetyFailures(for raw: HeistPlanAdmissionCandidate) -> [HeistPlanRuntimeSafetyFailure] {
+private func runtimeSafetyDiagnostics(
+    _ operation: () throws -> HeistPlan
+) -> [HeistBuildDiagnostic] {
     do {
-        _ = try raw.validatedForRuntimeSafety()
+        _ = try operation()
         return []
-    } catch let error as HeistPlanRuntimeSafetyError {
-        return error.failures
+    } catch let error as HeistPlanBuildError {
+        return error.diagnostics
     } catch {
         Issue.record("Expected runtime safety error, got \(error)")
         return []
@@ -636,16 +639,15 @@ private let nonDurableHeistActionRepairHint =
     "this with a canonical durable DSL action."
 
 private func expectNonDurableHeistActionFailure(
-    _ failures: [HeistPlanRuntimeSafetyFailure],
+    _ diagnostics: [HeistBuildDiagnostic],
     observed: String,
     path: String = "$.body[0].action.command"
 ) {
-    #expect(failures.contains {
-        $0.path.description == path
-            && $0.contract == "durable heist action"
-            && $0.observed == observed
-            && $0.correction == nonDurableHeistActionRepairHint
-    }, "\(failures)")
+    #expect(diagnostics.contains {
+        $0.path == path
+            && $0.message == "durable heist action; observed \(observed)"
+            && $0.hint == nonDurableHeistActionRepairHint
+    }, "\(diagnostics)")
 }
 
 private func expectDataCorrupted(

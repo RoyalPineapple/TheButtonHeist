@@ -24,7 +24,7 @@ extension WireTypeRoundTripTests {
         let plan = try HeistPlan(body: [
                 .action(ActionStep(
                     command: .activate(.predicate(
-                        ElementPredicateTemplate(label: "Settings", traits: [.button]),
+                        ElementPredicate(label: "Settings", traits: [.button]),
                         ordinal: 1
                     )),
                     expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 2.5)))),
@@ -70,7 +70,7 @@ extension WireTypeRoundTripTests {
     }
 
     func testHeistExecutionResultRoundTripKeepsActivationTraceOnlyInActionEvidence() throws {
-        let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Save")))
+        let command = HeistActionCommand.activate(.predicate(ElementPredicate(label: "Save")))
         let activationTrace = ActivationTrace(.activationPointFallback(
             axActivateReturned: false,
             tapActivationPoint: ScreenPoint(x: 195, y: 139),
@@ -100,7 +100,7 @@ extension WireTypeRoundTripTests {
 
         XCTAssertEqual(decoded, result)
         XCTAssertEqual(decoded.abortedAtPath?.description, "$.body[0]")
-        XCTAssertEqual(decoded.steps[0].actionEvidence?.dispatchResult?.activationTrace, activationTrace)
+        XCTAssertEqual(decoded.steps[0].actionEvidence?.result?.activationTrace, activationTrace)
 
         let payload = try JSONProbe(data: data)
         let encodedStep = try payload.array("steps")[0]

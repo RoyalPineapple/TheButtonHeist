@@ -27,7 +27,7 @@ import TheScore
 
     @Test("Last success must resolve exactly once")
     func lastSuccessMustResolveExactlyOnce() {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: makeTestInterface(elements: [
@@ -47,7 +47,7 @@ import TheScore
 
     @Test("Last success missing target returns no suggestion")
     func lastSuccessMissingTargetReturnsNoSuggestion() {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: makeTestInterface(elements: [
@@ -66,7 +66,7 @@ import TheScore
 
     @Test("Evidence must belong to the same failing step")
     func evidenceMustBelongToTheSameFailingStep() {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Delete"))
         let last = passedEvidence(
             stepPath: "$.body[0]",
             target: target,
@@ -87,7 +87,7 @@ import TheScore
 
     @Test("Incompatible heist fingerprints return no suggestion")
     func incompatibleHeistFingerprintsReturnNoSuggestion() {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Delete"))
         let last = passedEvidence(
             heistFingerprint: "last-plan",
             target: target,
@@ -108,7 +108,7 @@ import TheScore
 
     @Test("Current target that still resolves needs no target repair")
     func currentTargetThatStillResolvesNeedsNoTargetRepair() {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Delete"))
         let before = listInterface(rows: [
             ("Milk", "Delete"),
         ])
@@ -127,7 +127,7 @@ import TheScore
 
     @Test("No suggestion reason reports no target repair needed")
     func noSuggestionReasonReportsNoTargetRepairNeeded() {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Delete"))
         let before = listInterface(rows: [
             ("Milk", "Delete"),
         ])
@@ -147,7 +147,7 @@ import TheScore
 
     @Test("No suggestion reason reports missing target without a safe successor")
     func noSuggestionReasonReportsMissingTargetWithoutASafeSuccessor() {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: makeTestInterface(elements: [

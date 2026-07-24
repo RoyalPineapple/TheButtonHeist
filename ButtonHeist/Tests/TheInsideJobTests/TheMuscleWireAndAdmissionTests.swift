@@ -91,6 +91,40 @@ final class TheMuscleWireTests: TheMuscleTestCase {
 
 @MainActor
 final class ClientAdmissionRateLimitTests: XCTestCase {
+    func testExactVersionMismatchIsRejectedBeforeHelloAdmission() throws {
+        var admission = try admissionReducer()
+        admission.registerClientAddress(1, address: "127.0.0.1")
+        let oldVersion: ButtonHeistVersion = "0.6.31"
+        let data = try JSONEncoder().encode(RequestEnvelope(
+            buttonHeistVersion: oldVersion,
+            message: .clientHello
+        ))
+
+        guard case .handled(let effects) = admission.admit(
+            1,
+            data: data,
+            respond: { _ in .delivered }
+        ) else {
+            return XCTFail("Expected mismatched client version to be rejected")
+        }
+        guard effects.count == 3,
+              case .log(.versionMismatch(
+                  let clientId,
+                  let serverVersion,
+                  let clientVersion
+              )) = effects[0],
+              case .sendResponse(.protocolMismatch(let payload), nil, _) = effects[1],
+              case .delayedDisconnect(let disconnectedClientId) = effects[2] else {
+            return XCTFail("Expected exact mismatch log, response, and disconnect")
+        }
+        XCTAssertEqual(clientId, 1)
+        XCTAssertEqual(disconnectedClientId, 1)
+        XCTAssertEqual(serverVersion, "0.6.32")
+        XCTAssertEqual(clientVersion, oldVersion)
+        XCTAssertEqual(payload.serverButtonHeistVersion, "0.6.32")
+        XCTAssertEqual(payload.clientButtonHeistVersion, oldVersion)
+    }
+
     func testMessageRateAdmissionReturnsGeneralErrorForFirstOverLimitFrame() throws {
         var admission = try admissionReducer()
         let data = try JSONEncoder().encode(RequestEnvelope(message: .ping))

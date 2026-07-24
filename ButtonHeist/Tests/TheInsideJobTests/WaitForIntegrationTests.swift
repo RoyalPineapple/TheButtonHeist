@@ -127,10 +127,10 @@ final class WaitForIntegrationTests: XCTestCase {
             ? .missing(target)
             : .exists(target)
         let waitTarget = WaitTarget(predicate: predicate, timeout: timeout)
-        let step = try resolvedWait(WaitStep(
+        let step = WaitStep(
             predicate: waitTarget.predicate,
             timeout: waitTarget.resolvedTimeout
-        ))
+        )
         return await insideJob.brains.performWait(step: step)
     }
 
@@ -265,10 +265,16 @@ final class WaitForIntegrationTests: XCTestCase {
         let command = try HeistActionCommand.activate(
             .label("Action-RepeatingAnimation")
         ).resolve(in: .empty)
-        let expectation = try resolvedWait(WaitStep(
+        let authoredExpectation = WaitStep(
             predicate: .exists(.label("Action-RepeatingAnimation")),
-            timeout: .seconds(1)
-        ))
+            timeout: try .seconds(1)
+        )
+        let resolvedExpectation = try authoredExpectation.resolve(in: .empty)
+        let expectation = Settlement.ActionExpectation(
+            authored: authoredExpectation.predicate,
+            resolved: resolvedExpectation.predicate,
+            timeout: resolvedExpectation.timeout
+        )
         let execution = await insideJob.brains.executeRuntimeActionForHeist(
             command,
             expectation: expectation

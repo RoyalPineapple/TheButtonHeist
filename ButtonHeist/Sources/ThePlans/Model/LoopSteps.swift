@@ -5,25 +5,34 @@ public struct ForEachElementStep: Codable, Sendable, Equatable {
         case matching, limit, parameter, body
     }
 
-    public let matching: ElementPredicateTemplate
+    public let matching: ElementPredicate
     public let limit: Int
     public let parameter: HeistReferenceName
     public let body: [HeistStep]
 
     public init(
-        matching: ElementPredicateTemplate,
+        matching: ElementPredicate,
         limit: Int,
         parameter: HeistReferenceName,
         body: [HeistStep]
     ) throws {
         guard matching.hasPredicates else {
-            throw HeistPlanError.emptyForEachPredicate
+            throw HeistPlanBuildError.planStructure(
+                path: "$.for_each_element.matching",
+                message: "for_each_element requires a non-empty predicate"
+            )
         }
         guard limit > 0 else {
-            throw HeistPlanError.invalidForEachLimit(limit)
+            throw HeistPlanBuildError.planStructure(
+                path: "$.for_each_element.limit",
+                message: "for_each_element limit must be positive; observed \(limit)"
+            )
         }
         guard !body.isEmpty else {
-            throw HeistPlanError.emptyForEachSteps
+            throw HeistPlanBuildError.planStructure(
+                path: "$.for_each_element.body",
+                message: "for_each_element requires at least one body step"
+            )
         }
         self.matching = matching
         self.limit = limit
@@ -35,7 +44,7 @@ public struct ForEachElementStep: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "for_each_element step")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try self.init(
-            matching: try container.decode(ElementPredicateTemplate.self, forKey: .matching),
+            matching: try container.decode(ElementPredicate.self, forKey: .matching),
             limit: try container.decode(Int.self, forKey: .limit),
             parameter: try HeistReferenceName.decode(from: container, forKey: .parameter, type: "for_each_element parameter"),
             body: try container.decode([HeistStep].self, forKey: .body)
@@ -58,10 +67,16 @@ public struct ForEachStringStep: Codable, Sendable, Equatable {
         body: [HeistStep]
     ) throws {
         guard !values.isEmpty else {
-            throw HeistPlanError.emptyForEachValues
+            throw HeistPlanBuildError.planStructure(
+                path: "$.for_each_string.values",
+                message: "for_each_string requires at least one value"
+            )
         }
         guard !body.isEmpty else {
-            throw HeistPlanError.emptyForEachSteps
+            throw HeistPlanBuildError.planStructure(
+                path: "$.for_each_string.body",
+                message: "for_each_string requires at least one body step"
+            )
         }
         self.values = values
         self.parameter = parameter
@@ -94,7 +109,10 @@ public struct RepeatUntilStep: Codable, Sendable, Equatable {
         body: [HeistStep]
     ) throws {
         guard !body.isEmpty else {
-            throw HeistPlanError.emptyRepeatUntilSteps
+            throw HeistPlanBuildError.planStructure(
+                path: "$.repeat_until.body",
+                message: "repeat_until requires at least one body step"
+            )
         }
         self.predicate = predicate
         self.timeout = timeout

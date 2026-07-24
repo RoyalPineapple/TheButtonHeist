@@ -8,7 +8,7 @@ import ThePlans
 final class ClientMessageActionRoundTripTests: XCTestCase {
 
     func testHeistPlanCarriesSemanticActionCommands() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(identifier: "btn"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(identifier: "btn"))
         let plan = try HeistPlan(body: [
             .action(ActionStep(command: .activate(target))),
             .action(ActionStep(command: .rotor(
@@ -34,7 +34,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     }
 
     func testHeistPlanCarriesGestureCommands() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Canvas"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Canvas"))
         let point = GesturePointSelection.coordinate(ScreenPoint(x: 10, y: 20))
         let plan = try HeistPlan(body: [
             .action(ActionStep(command: .oneFingerTap(TapTarget(selection: point)))),

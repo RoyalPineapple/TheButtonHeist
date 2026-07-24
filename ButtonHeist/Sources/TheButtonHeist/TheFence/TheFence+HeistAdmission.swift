@@ -96,22 +96,19 @@ extension TheFence {
         try CommandArgumentEnvelopeLimits.validateHeistPlanSource(arguments, field: Command.validateHeist.rawValue)
         let path = try arguments.value(FenceParameters.planPath)
         let inlineDSL = try arguments.value(FenceParameters.inlinePlan)
-        let sourceResult = HeistPlanSourceAdmission.rejectRawStructuredJSONIRSourceFields(
-            commandName: Command.validateHeist.rawValue,
-            fields: rawStructuredJSONIRSourceFields(in: arguments, dropping: [.argument, .lint])
-        ).flatMap {
-            HeistPlanSourceAdmission.admit(
+        let source: HeistPlanLoadRequest
+        do {
+            try HeistPlanSourceAdmission.rejectRawStructuredJSONIRSourceFields(
+                commandName: Command.validateHeist.rawValue,
+                fields: rawStructuredJSONIRSourceFields(in: arguments, dropping: [.argument, .lint])
+            )
+            source = try HeistPlanSourceAdmission.admit(
                 commandName: Command.validateHeist.rawValue,
                 path: path,
                 inlineDSL: inlineDSL
             )
-        }
-        let source: HeistPlanLoadRequest
-        switch sourceResult {
-        case .success(let request, _):
-            source = request
-        case .failure(let diagnostics):
-            throw buildDiagnosticFenceError(diagnostics)
+        } catch let error {
+            throw buildDiagnosticFenceError(error.diagnostics)
         }
         return ValidateHeistRequest(
             source: source,
@@ -125,20 +122,19 @@ extension TheFence {
     }
 
     func loadInlinePerformStepSource(_ source: String) throws -> HeistPlan {
-        switch HeistPlanLoading.loadValidated(from: HeistPlanLoadRequest(
-            commandName: Command.perform.rawValue,
-            source: .inlineDSL(
-                """
-                HeistPlan {
-                \(source)
-                }
-                """
-            )
-        )) {
-        case .success(let plan, _):
-            return plan
-        case .failure(let diagnostics):
-            throw performStepSourceLoadError(for: diagnostics)
+        do {
+            return try HeistPlanLoading.loadValidated(from: HeistPlanLoadRequest(
+                commandName: Command.perform.rawValue,
+                source: .inlineDSL(
+                    """
+                    HeistPlan {
+                    \(source)
+                    }
+                    """
+                )
+            ))
+        } catch let error {
+            throw performStepSourceLoadError(for: error.diagnostics)
         }
     }
 
@@ -235,23 +231,19 @@ private extension TheFence {
         try CommandArgumentEnvelopeLimits.validateHeistPlanSource(arguments, field: commandName)
         let path = try arguments.value(FenceParameters.planPath)
         let inlineDSL = try arguments.value(FenceParameters.inlinePlan)
-        let requestResult = HeistPlanSourceAdmission.rejectRawStructuredJSONIRSourceFields(
-            commandName: commandName,
-            fields: rawStructuredJSONIRSourceFields(in: arguments, dropping: droppingPlanKeys)
-        )
-        .flatMap {
-            HeistPlanSourceAdmission.admit(
+        do {
+            try HeistPlanSourceAdmission.rejectRawStructuredJSONIRSourceFields(
+                commandName: commandName,
+                fields: rawStructuredJSONIRSourceFields(in: arguments, dropping: droppingPlanKeys)
+            )
+            let request = try HeistPlanSourceAdmission.admit(
                 commandName: commandName,
                 path: path,
                 inlineDSL: inlineDSL
             )
-        }
-        .flatMap { HeistPlanLoading.loadValidated(from: $0) }
-        switch requestResult {
-        case .success(let plan, _):
-            return plan
-        case .failure(let diagnostics):
-            throw buildDiagnosticFenceError(diagnostics)
+            return try HeistPlanLoading.loadValidated(from: request)
+        } catch let error {
+            throw buildDiagnosticFenceError(error.diagnostics)
         }
     }
 
@@ -267,23 +259,21 @@ private extension TheFence {
     func decodeRootHeistArgument(from arguments: CommandArgumentEnvelope) throws -> HeistArgument {
         guard let value = arguments.value(for: .argument) else { return .none }
         let data = try JSONEncoder().encode(value)
-        switch HeistArgumentAdmission.decodeJSON(
-            data,
-            sourceURL: URL(fileURLWithPath: "run_heist-argument.json")
-        ) {
-        case .success(let argument, _):
-            return argument
-        case .failure(let diagnostics):
-            throw buildDiagnosticFenceError(diagnostics)
+        do {
+            return try HeistArgumentAdmission.decodeJSON(
+                data,
+                sourceURL: URL(fileURLWithPath: "run_heist-argument.json")
+            )
+        } catch let error {
+            throw buildDiagnosticFenceError(error.diagnostics)
         }
     }
 
     func validateRootHeistArgument(_ argument: HeistArgument, for plan: HeistPlan) throws {
-        switch HeistArgumentAdmission.validateRootArgument(argument, for: plan) {
-        case .success:
-            return
-        case .failure(let diagnostics):
-            throw buildDiagnosticFenceError(diagnostics)
+        do {
+            try HeistArgumentAdmission.validateRootArgument(argument, for: plan)
+        } catch let error {
+            throw buildDiagnosticFenceError(error.diagnostics)
         }
     }
 

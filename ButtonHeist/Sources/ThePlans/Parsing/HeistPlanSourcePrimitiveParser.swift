@@ -88,7 +88,7 @@ extension HeistPlanSourceParser {
         return value
     }
 
-    mutating func parseDotCallName(allowedPrefixes _: Set<String>) throws -> String {
+    mutating func parseDotCallName() throws -> String {
         let token = currentToken
         guard consumeSymbol(".") else {
             throw error(token, "expected a ButtonHeist expression beginning with '.'")
@@ -154,12 +154,6 @@ extension HeistPlanSourceParser {
         advance()
     }
 
-    mutating func parseTryPrefixIfPresent() throws -> HeistPlanSourceToken? {
-        guard let token = consumeIdentifier("try") else { return nil }
-        _ = consumeSymbol("!")
-        return token
-    }
-
     @discardableResult
     mutating func consumeIdentifier(_ name: String) -> HeistPlanSourceToken? {
         guard case .identifier(name) = currentToken.kind else { return nil }
@@ -168,35 +162,18 @@ extension HeistPlanSourceParser {
         return token
     }
 
-    mutating func consumeSymbol(_ symbol: Character) -> Bool {
-        guard currentToken.isSymbol(symbol) else { return false }
+    mutating func consumeLabel(_ name: String) -> Bool {
+        guard currentToken.kind == .identifier(name), nextToken.isSymbol(":") else {
+            return false
+        }
+        advance()
         advance()
         return true
     }
 
-    func nextTokenIsIdentifier(_ name: String) -> Bool {
-        guard tokens.indices.contains(index + 1),
-              case .identifier(name) = tokens[index + 1].kind else {
-            return false
-        }
-        return true
-    }
-
-    func nextTokenIsSymbol(_ symbol: Character) -> Bool {
-        guard tokens.indices.contains(index + 1) else { return false }
-        return tokens[index + 1].isSymbol(symbol)
-    }
-
-    func tokenIsIdentifier(_ token: HeistPlanSourceToken, _ name: String) -> Bool {
-        guard case .identifier(name) = token.kind else { return false }
-        return true
-    }
-
-    func lookaheadIdentifier(_ offset: Int, _ name: String) -> Bool {
-        guard tokens.indices.contains(index + offset),
-              case .identifier(name) = tokens[index + offset].kind else {
-            return false
-        }
+    mutating func consumeSymbol(_ symbol: Character) -> Bool {
+        guard currentToken.isSymbol(symbol) else { return false }
+        advance()
         return true
     }
 
@@ -204,39 +181,24 @@ extension HeistPlanSourceParser {
         while consumeSymbol(";") {}
     }
 
-    func lookaheadLabel(_ label: String) -> Bool {
-        guard case .identifier(label) = currentToken.kind else { return false }
-        guard tokens.indices.contains(index + 1) else { return false }
-        return tokens[index + 1].isSymbol(":")
-    }
-
-    func lookaheadIdentifier(in values: Set<String>) -> Bool {
-        guard tokens.indices.contains(index + 1),
-              case .identifier(let name) = tokens[index + 1].kind else {
-            return false
-        }
-        return values.contains(name)
-    }
-
     var startsRootHeistPlan: Bool {
-        tokenIsIdentifier(currentToken, "HeistPlan")
+        currentToken.kind == .identifier("HeistPlan")
     }
 
     var startsDefinition: Bool {
-        tokenIsIdentifier(currentToken, "HeistDef") || tokenIsIdentifier(currentToken, "Namespace")
+        currentToken.kind == .identifier("HeistDef") || currentToken.kind == .identifier("Namespace")
     }
 
     var atEnd: Bool {
         currentToken.kind == .eof
     }
 
-    var currentTokenIsIdentifier: Bool {
-        if case .identifier = currentToken.kind { return true }
-        return false
-    }
-
     var currentToken: HeistPlanSourceToken {
         tokens[index]
+    }
+
+    var nextToken: HeistPlanSourceToken {
+        tokens[min(index + 1, tokens.index(before: tokens.endIndex))]
     }
 
     var previous: HeistPlanSourceToken {

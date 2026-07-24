@@ -458,6 +458,43 @@ container presence, `.within(container:..., target)` for descendant scope,
 There is no runtime Swift execution and no hidden fallback: a local Swift file
 either compiles to an admissible `HeistPlan` ahead of time or the command fails.
 
+### Compilation results and diagnostics
+
+`HeistSwiftCompiler` returns the compiled value on success and throws
+`HeistPlanBuildError` on failure. File compilation returns `HeistPlan`;
+directory compilation returns `HeistCatalogCompilationResult`, whose `catalog`
+is the compiled value and whose `diagnostics` retain non-error diagnostics from
+the successful compilation:
+
+```swift
+import Foundation
+import ThePlans
+
+let compiler = HeistSwiftCompiler()
+
+do {
+    let plan = try await compiler.compileFile(
+        URL(fileURLWithPath: "Flow.swift"),
+        entry: "makeHeist"
+    )
+    let result = try await compiler.compileDirectory(
+        URL(fileURLWithPath: "Heists", isDirectory: true)
+    )
+
+    print(plan)
+    print(result.catalog)
+    result.diagnostics.forEach { print($0.renderedMessage) }
+} catch let error {
+    error.diagnostics.forEach { print($0.renderedMessage) }
+}
+```
+
+All failure diagnostics are carried by the thrown error. A directory containing
+one anonymous plan still compiles successfully and returns a
+`catalogAnonymousCapability` warning. In a catalog compiled from multiple
+plans, anonymity is ambiguous, so the same diagnostic is an error and
+`compileDirectory(_:)` throws.
+
 ### Resolving built ThePlans artifacts
 
 Compiling Swift source links the user file against a **built** `ThePlans`

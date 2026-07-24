@@ -128,7 +128,7 @@ func semanticTarget(
     ordinal: Int? = nil
 ) -> AccessibilityTarget {
     .predicate(
-        ElementPredicateTemplate(
+        ElementPredicate(
             label: label.map(StringMatch.exact),
             identifier: identifier.map(StringMatch.exact),
             value: value.map(StringMatch.exact),

@@ -7,7 +7,7 @@ import TheScore
 @Suite struct HeistDoctorResultTests {
     @Test("Doctor derives suggestions from result pair")
     func doctorDerivesSuggestionsFromResultPair() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Delete"))
         let lastPass = try result(
             path: "$.body[0]",
             status: .passed,
@@ -38,12 +38,12 @@ import TheScore
 
         #expect(suggestion.stepPath == "$.body[0]")
         #expect(suggestion.failureKind == .missingTarget)
-        #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Remove")))
+        #expect(suggestion.newTarget == .predicate(ElementPredicate(label: "Remove")))
         #expect(suggestion.newResolvedElement.siblingText == ["Milk"])
     }
 
     @Test func `doctor repair evidence uses action evidence result meanings`() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Pay"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Pay"))
         let before = makeTestInterface(elements: [
             element(label: "Pay", traits: [.button], actions: [.activate]),
         ])
@@ -54,7 +54,7 @@ import TheScore
             element(label: "Still Processing", traits: [.staticText]),
         ])
         let dispatchTrace = AccessibilityTrace(first: before).appending(dispatchAfter)
-        let expectationTrace = AccessibilityTrace(first: dispatchAfter).appending(expectationAfter)
+        let actionTrace = dispatchTrace.appending(expectationAfter)
         let predicate = AccessibilityPredicate.changed(.screen())
         let failure = HeistFailureDetail(
             category: .expectation,
@@ -65,15 +65,11 @@ import TheScore
         let step = HeistResultFixture.action(
             path: "$.body[0]",
             command: .activate(target),
-            result: ActionResult.success(
+            result: ActionResult.failure(
                 payload: .activate,
-                observation: .trace(makeTestTraceEvidence(dispatchTrace, completeness: .incomplete))
-            ),
-            expectationActionResult: ActionResult.failure(
-                payload: .wait,
                 failureKind: .timeout,
                 message: "wait timed out",
-                observation: .trace(makeTestTraceEvidence(expectationTrace, completeness: .incomplete))
+                observation: .trace(makeTestTraceEvidence(actionTrace, completeness: .incomplete))
             ),
             expectation: ExpectationResult(
                 met: false,
@@ -87,7 +83,7 @@ import TheScore
         let repairEvidence = try HeistDoctor.repairEvidence(from: step)
 
         #expect(repairEvidence.beforeSnapshot == before)
-        #expect(repairEvidence.changeFacts == dispatchTrace.changeFacts)
+        #expect(repairEvidence.changeFacts == actionTrace.changeFacts)
         #expect(repairEvidence.command == .activate(target))
         #expect(repairEvidence.method == .activate)
         #expect(repairEvidence.expectation?.met == false)
@@ -100,7 +96,7 @@ import TheScore
     }
 
     @Test func `doctor diagnosis returns typed refusal for valid result pair`() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Delete"))
         let lastPass = try result(
             path: "$.body[0]",
             status: .passed,

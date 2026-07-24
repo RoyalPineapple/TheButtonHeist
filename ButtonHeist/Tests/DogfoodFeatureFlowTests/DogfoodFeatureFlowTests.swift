@@ -27,9 +27,9 @@ final class DogfoodFeatureFlowTests: XCTestCase {
             matching: TransientFlowScreen.lifecycle,
             in: heist.result
         )
-        let trace = try XCTUnwrap(evidence.expectationResult?.accessibilityTrace)
+        let trace = try XCTUnwrap(evidence.result?.accessibilityTrace)
 
-        XCTAssertEqual(evidence.checkedExpectation?.met, true)
+        XCTAssertEqual(evidence.expectation?.met, true)
         XCTAssertTrue(trace.appearedLabels.contains("Processing"))
         XCTAssertTrue(trace.disappearedLabels.contains("Submit"))
 
@@ -51,7 +51,7 @@ final class DogfoodFeatureFlowTests: XCTestCase {
             in: heist.result
         )
 
-        XCTAssertEqual(evidence.checkedExpectation?.met, true)
+        XCTAssertEqual(evidence.expectation?.met, true)
         XCTAssertEqual(evidence.announcement, "Ticket saved.")
 
         let exactFailure = try await expectHeistFailure("DogfoodCombinedToastExactTextFails") {
@@ -86,7 +86,7 @@ final class DogfoodFeatureFlowTests: XCTestCase {
     ) throws -> HeistActionEvidence {
         try XCTUnwrap(
             result.outputNodes.lazy.compactMap(\.actionEvidence)
-                .first { $0.checkedExpectation?.predicate == predicate },
+                .first { $0.expectation?.predicate == predicate },
             "Missing action evidence for \(predicate)",
             file: file,
             line: line

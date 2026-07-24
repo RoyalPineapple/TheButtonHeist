@@ -11,9 +11,8 @@ enum HeistPlanJSONCodec {
         _ data: Data,
         sourceURL: URL = URL(fileURLWithPath: "inline-heist-plan.json")
     ) throws -> HeistPlan {
-        let candidate: HeistPlanAdmissionCandidate
         do {
-            candidate = try JSONDecoder().decode(HeistPlanAdmissionCandidate.self, from: data)
+            return try JSONDecoder().decode(HeistPlan.self, from: data)
         } catch DecodingError.typeMismatch(_, let context) where context.codingPath.isEmpty {
             throw HeistPlanJSONCodecError.invalidPlan(source: sourceURL.path, reason: "expected JSON object")
         } catch DecodingError.keyNotFound(let key, _) where key.stringValue == "version" {
@@ -23,19 +22,15 @@ enum HeistPlanJSONCodec {
                 source: sourceURL.path,
                 observed: context.debugDescription
             )
-        } catch {
-            throw HeistPlanJSONCodecError.invalidPlan(
-                source: sourceURL.path,
-                reason: String(describing: error)
-            )
-        }
-
-        do {
-            return try candidate.validatedForRuntimeSafety()
         } catch let error as HeistPlanVersionAdmissionError {
             throw HeistPlanJSONCodecError.unsupportedVersion(
                 source: sourceURL.path,
                 observed: error.observed
+            )
+        } catch {
+            throw HeistPlanJSONCodecError.invalidPlan(
+                source: sourceURL.path,
+                reason: String(describing: error)
             )
         }
     }

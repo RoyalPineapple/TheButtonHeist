@@ -1,10 +1,5 @@
 import Foundation
 
-private struct PointCoordinates {
-    let x: FiniteCoordinate
-    let y: FiniteCoordinate
-}
-
 extension HeistPlanSourceParser {
     mutating func parseElementTargetAction(
         _ actionName: String,
@@ -28,18 +23,11 @@ extension HeistPlanSourceParser {
             _ = try parseInteger()
             throw error(
                 token,
-                "Ordinal belongs to the target. Use \(actionName)(\(try renderTargetCorrection(target, ordinal: 0)))."
+                "Ordinal belongs to the target. Use \(actionName)("
+                    + "\(try HeistCanonicalSwiftDSLRenderer().renderCorrection(target: target, addingOrdinal: 0)))."
             )
         }
         throw error(token, "\(actionName)(...) accepts a single AccessibilityTarget")
-    }
-
-    func renderTargetCorrection(_ target: AccessibilityTarget) throws -> String {
-        try HeistCanonicalSwiftDSLRenderer().renderCorrection(target: target)
-    }
-
-    func renderTargetCorrection(_ target: AccessibilityTarget, ordinal: Int) throws -> String {
-        try HeistCanonicalSwiftDSLRenderer().renderCorrection(target: target, addingOrdinal: ordinal)
     }
 
     mutating func parseTypeTextAction() throws -> HeistActionCommand {
@@ -66,15 +54,16 @@ extension HeistPlanSourceParser {
         var target: AccessibilityTarget?
         if consumeSymbol(",") {
             let token = currentToken
-            if lookaheadLabel("into") {
-                try expectIdentifier("into")
-                try expectSymbol(":")
+            if consumeLabel("into") {
                 target = try parseTargetExpr()
                 if consumeSymbol(",") {
-                    source = try parseTextInputMode(for: source)
+                    let modeToken = currentToken
+                    try expectIdentifier("mode")
+                    try expectSymbol(":")
+                    source = try parseTextInputMode(for: source, token: modeToken)
                 }
-            } else if lookaheadLabel("mode") {
-                source = try parseTextInputMode(for: source)
+            } else if consumeLabel("mode") {
+                source = try parseTextInputMode(for: source, token: token)
             } else {
                 throw error(token, "TypeText(...) accepts only the labeled arguments into: and mode:")
             }
@@ -83,10 +72,10 @@ extension HeistPlanSourceParser {
         return .typeText(TypeTextTarget(source: source, target: target))
     }
 
-    mutating func parseTextInputMode(for source: TextInputSource) throws -> TextInputSource {
-        let token = currentToken
-        try expectIdentifier("mode")
-        try expectSymbol(":")
+    mutating func parseTextInputMode(
+        for source: TextInputSource,
+        token: HeistPlanSourceToken
+    ) throws -> TextInputSource {
         let mode = try parseEnumCase(TextInputText.Mode.self, role: "text input mode")
         guard case .reference(let reference, _) = source else {
             throw error(token, "mode: is only valid for referenced text; use .replacing(...) for authored text")
@@ -189,7 +178,7 @@ extension HeistPlanSourceParser {
     mutating func parseOneFingerTap() throws -> HeistActionCommand {
         try expectSymbol("(")
         let selection: GesturePointSelection
-        if tokenIsIdentifier(currentToken, "ScreenPoint") {
+        if currentToken.kind == .identifier("ScreenPoint") {
             selection = .coordinate(try parseScreenPoint())
         } else {
             let target = try parseTargetExpr()
@@ -209,11 +198,11 @@ extension HeistPlanSourceParser {
         try expectSymbol("(")
         let selection: GesturePointSelection
         var duration = GestureDuration.longPressDefault
-        if tokenIsIdentifier(currentToken, "ScreenPoint") {
+        if currentToken.kind == .identifier("ScreenPoint") {
             selection = .coordinate(try parseScreenPoint())
         } else {
             let target = try parseTargetExpr()
-            if currentToken.isSymbol(","), lookaheadIdentifier(1, "at") {
+            if currentToken.isSymbol(","), nextToken.kind == .identifier("at") {
                 try expectSymbol(",")
                 try expectIdentifier("at")
                 try expectSymbol(":")
@@ -234,14 +223,10 @@ extension HeistPlanSourceParser {
     mutating func parseSwipe() throws -> HeistActionCommand {
         try expectSymbol("(")
         let selection: SwipeGestureSelection
-        if lookaheadLabel("from") {
-            try expectIdentifier("from")
-            try expectSymbol(":")
+        if consumeLabel("from") {
             let start = try parseScreenPoint()
             try expectSymbol(",")
-            if lookaheadLabel("to") {
-                try expectIdentifier("to")
-                try expectSymbol(":")
+            if consumeLabel("to") {
                 selection = .pointToPoint(start: start, end: try parseScreenPoint())
             } else {
                 let direction = try parseEnumCase(SwipeDirection.self, role: "swipe direction")
@@ -250,9 +235,7 @@ extension HeistPlanSourceParser {
         } else {
             let target = try parseTargetExpr()
             try expectSymbol(",")
-            if lookaheadLabel("from") {
-                try expectIdentifier("from")
-                try expectSymbol(":")
+            if consumeLabel("from") {
                 let start = try parseUnitPoint()
                 try expectSymbol(",")
                 try expectIdentifier("to")
@@ -269,9 +252,7 @@ extension HeistPlanSourceParser {
     mutating func parseDrag() throws -> HeistActionCommand {
         try expectSymbol("(")
         let selection: DragGestureSelection
-        if lookaheadLabel("from") {
-            try expectIdentifier("from")
-            try expectSymbol(":")
+        if consumeLabel("from") {
             let start = try parseScreenPoint()
             try expectSymbol(",")
             try expectIdentifier("to")
@@ -281,9 +262,7 @@ extension HeistPlanSourceParser {
             let target = try parseTargetExpr()
             try expectSymbol(",")
             let start: UnitPoint?
-            if lookaheadLabel("from") {
-                try expectIdentifier("from")
-                try expectSymbol(":")
+            if consumeLabel("from") {
                 start = try parseUnitPoint()
                 try expectSymbol(",")
             } else {
@@ -295,16 +274,6 @@ extension HeistPlanSourceParser {
         }
         try expectSymbol(")")
         return .drag(DragTarget(selection: selection))
-    }
-
-    fileprivate mutating func parsePointCoordinates() throws -> PointCoordinates {
-        try expectIdentifier("x")
-        try expectSymbol(":")
-        let x = try parseFiniteCoordinate()
-        try expectSymbol(",")
-        try expectIdentifier("y")
-        try expectSymbol(":")
-        return PointCoordinates(x: x, y: try parseFiniteCoordinate())
     }
 
     mutating func parseFiniteCoordinate() throws -> FiniteCoordinate {
@@ -320,17 +289,29 @@ extension HeistPlanSourceParser {
     mutating func parseScreenPoint() throws -> ScreenPoint {
         try expectIdentifier("ScreenPoint")
         try expectSymbol("(")
-        let coordinates = try parsePointCoordinates()
+        try expectIdentifier("x")
+        try expectSymbol(":")
+        let x = try parseFiniteCoordinate()
+        try expectSymbol(",")
+        try expectIdentifier("y")
+        try expectSymbol(":")
+        let y = try parseFiniteCoordinate()
         try expectSymbol(")")
-        return ScreenPoint(x: coordinates.x, y: coordinates.y)
+        return ScreenPoint(x: x, y: y)
     }
 
     mutating func parseUnitPoint() throws -> UnitPoint {
         try expectIdentifier("UnitPoint")
         try expectSymbol("(")
-        let coordinates = try parsePointCoordinates()
+        try expectIdentifier("x")
+        try expectSymbol(":")
+        let x = try parseFiniteCoordinate()
+        try expectSymbol(",")
+        try expectIdentifier("y")
+        try expectSymbol(":")
+        let y = try parseFiniteCoordinate()
         try expectSymbol(")")
-        return UnitPoint(x: coordinates.x, y: coordinates.y)
+        return UnitPoint(x: x, y: y)
     }
 
     mutating func parseGestureDuration() throws -> GestureDuration {

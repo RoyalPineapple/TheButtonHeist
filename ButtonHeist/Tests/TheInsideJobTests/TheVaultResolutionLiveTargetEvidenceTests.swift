@@ -213,7 +213,7 @@ extension TheVaultResolutionTests {
             objects: ["rotor_host": liveObject]
         ))
 
-        let target = literalTarget(ElementPredicate.identifier("rotor_host"))
+        let target = literalTarget(ResolvedElementPredicate.identifier("rotor_host"))
         let settled = try XCTUnwrap(bagman.resolveTarget(target).resolvedElement)
         XCTAssertEqual(settled.element.shape.frame, staleFrame)
         XCTAssertEqual(settled.element.bhResolvedActivationPoint, stalePoint)

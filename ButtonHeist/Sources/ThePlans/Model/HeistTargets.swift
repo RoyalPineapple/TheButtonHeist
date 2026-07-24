@@ -1,4 +1,4 @@
-public extension ElementPredicateTemplate {
+public extension ElementPredicate {
     @_disfavoredOverload
     static func label(_ match: StringMatch) -> Self { Self(label: match) }
     static func label(_ label: String) -> Self { Self(label: .exact(label)) }
@@ -74,10 +74,10 @@ public extension AccessibilityTarget {
         traits: [HeistTrait] = [],
         actions: [ElementAction] = []
     ) -> Self {
-        .predicate(ElementPredicateTemplate(checks, traits: traits, actions: actions))
+        .predicate(ElementPredicate(checks, traits: traits, actions: actions))
     }
 
-    static func target(_ predicate: ElementPredicateTemplate, ordinal: Int) -> Self {
+    static func target(_ predicate: ElementPredicate, ordinal: Int) -> Self {
         .predicate(predicate, ordinal: ordinal)
     }
 

@@ -14,54 +14,12 @@ private struct EncodedInvocationStepContract: Decodable {
     #expect(try graph.requireTopologicalOrder() == [])
 }
 
-@Test func `single node call graph is acyclic`() throws {
-    let graph = HeistCallGraph(nodes: ["A"], edges: [])
-
-    #expect(graph.isAcyclic)
-    #expect(try graph.requireTopologicalOrder() == ["A"])
-}
-
-@Test func `call graph stores canonical nodes and edges`() throws {
-    let graph = callGraph(edges: [("A", "C"), ("B", "C")])
-
-    #expect(graph.nodes == ["A", "B", "C"])
-    #expect(graph.edges == Set([
-        HeistCallGraph.Edge(caller: "A", callee: "C"),
-        HeistCallGraph.Edge(caller: "B", callee: "C"),
-    ]))
-    let publicOrder = try graph.requireTopologicalOrder()
-    #expect(publicOrder == ["A", "B", "C"])
-}
-
-@Test func `linear call graph returns forward order`() throws {
-    let graph = callGraph(edges: [("A", "B"), ("B", "C")])
-    let order = try graph.requireTopologicalOrder()
-
-    #expect(graph.isAcyclic)
-    #expect(order.respects(graph.edges))
-}
-
 @Test func `diamond call graph returns forward order`() throws {
     let graph = callGraph(edges: [("A", "B"), ("A", "C"), ("B", "D"), ("C", "D")])
     let order = try graph.requireTopologicalOrder()
 
     #expect(graph.isAcyclic)
     #expect(order.respects(graph.edges))
-}
-
-@Test func `self loop reports witnessed cycle`() throws {
-    let graph = callGraph(edges: [("A", "A")])
-
-    #expect(!graph.isAcyclic)
-    #expect(graph.requireCycle().path == ["A", "A"])
-}
-
-@Test func `two node cycle reports witnessed cycle`() throws {
-    let graph = callGraph(edges: [("A", "B"), ("B", "A")])
-
-    #expect(!graph.isAcyclic)
-    #expect(graph.requireCycle().path == ["A", "B", "A"])
-    #expect(graph.requireCycle().displayPath == "A -> B -> A")
 }
 
 @Test func `longer cycle reports witnessed cycle`() throws {
@@ -78,23 +36,77 @@ private struct EncodedInvocationStepContract: Decodable {
     #expect(graph.requireCycle().path == ["C", "D", "C"])
 }
 
-@Test func `cycle api accepts invocation path stacks`() throws {
-    let node: HeistInvocationPath = "A"
-    let graph = callGraph(edges: [("A", "A")])
-    let graphCycle = try #require(graph.nodeCycle(closing: node, in: [node]))
-    let stackCycle = try #require(HeistCallGraph.nodeCycle(closing: node, in: [node]))
+@Test func testTraversalCycleWitnessMatchesCallGraphCycleWitness() throws {
+    let acyclicCases: [(
+        name: String,
+        candidate: HeistPlan,
+        nodes: Set<HeistInvocationPath>,
+        edges: Set<HeistCallGraph.Edge>,
+        order: [HeistInvocationPath]
+    )] = [
+        (
+            "isolated definitions",
+            try isolatedDefinitions(["B", "A"]),
+            ["A", "B"],
+            [],
+            ["A", "B"]
+        ),
+        (
+            "nested edges",
+            try inlineChainCase(["A", "B", "C"]),
+            ["A", "B", "C"],
+            callGraph(edges: [("A", "B"), ("B", "C")]).edges,
+            ["A", "B", "C"]
+        ),
+        (
+            "lexical order",
+            try isolatedDefinitions(["Z", "A", "M"]),
+            ["A", "M", "Z"],
+            [],
+            ["A", "M", "Z"]
+        ),
+    ]
 
-    #expect(graphCycle.path == [node, node])
-    #expect(stackCycle.path == [node, node])
-    #expect(graphCycle.path == ["A", "A"])
-    #expect(stackCycle.displayPath == "A -> A")
+    for testCase in acyclicCases {
+        let graph = HeistCallGraph(plan: testCase.candidate)
+
+        #expect(graph.nodes == testCase.nodes, Comment(rawValue: testCase.name))
+        #expect(graph.edges == testCase.edges, Comment(rawValue: testCase.name))
+        #expect(try graph.requireTopologicalOrder() == testCase.order, Comment(rawValue: testCase.name))
+    }
+
+    let cycleCases: [(
+        name: String,
+        source: String,
+        edges: [(String, String)],
+        witness: [HeistInvocationPath]
+    )] = [
+        ("self cycle", recursivePlanSource(["A"]), [("lib.A", "lib.A")], ["lib.A", "lib.A"]),
+        (
+            "mutual cycle",
+            recursivePlanSource(["A", "B"]),
+            [("lib.A", "lib.B"), ("lib.B", "lib.A")],
+            ["lib.A", "lib.B", "lib.A"]
+        ),
+    ]
+
+    for testCase in cycleCases {
+        let graphCycle = callGraph(edges: testCase.edges).requireCycle()
+        let observedCycles = try runtimeSafetyDiagnostics {
+            try HeistSourceCompilation.compile(testCase.source)
+        }.filter { $0.message.contains(recursiveHeistRunContract) }
+            .compactMap { $0.message.components(separatedBy: "observed ").last }
+
+        #expect(graphCycle.path == testCase.witness, Comment(rawValue: testCase.name))
+        #expect(observedCycles.contains(graphCycle.displayPath), Comment(rawValue: testCase.name))
+    }
 }
 
 @Test func `plan call graph resolves invocations in their definition scope`() throws {
-    let raw = HeistPlanAdmissionCandidate(definitions: [
-        HeistPlanAdmissionCandidate(name: "Cart", definitions: [
-            HeistPlanAdmissionCandidate(name: "addToCart", definitions: [
-                HeistPlanAdmissionCandidate(name: "tapAddButton", body: [
+    let plan = try HeistPlan(definitions: [
+        HeistPlan(name: "Cart", definitions: [
+            HeistPlan(name: "addToCart", definitions: [
+                HeistPlan(name: "tapAddButton", body: [
                     .warn(WarnStep(message: "tap")),
                 ]),
             ], body: [
@@ -103,7 +115,7 @@ private struct EncodedInvocationStepContract: Decodable {
         ], body: []),
     ], body: [.warn(WarnStep(message: "root"))])
 
-    let graph = HeistCallGraph(plan: try raw.validatedForRuntimeSafety())
+    let graph = HeistCallGraph(plan: plan)
 
     #expect(graph.nodes == ["Cart", "Cart.addToCart", "Cart.addToCart.tapAddButton"])
     #expect(graph.edges == [
@@ -112,27 +124,24 @@ private struct EncodedInvocationStepContract: Decodable {
 }
 
 @Test func `plan call graph resolves qualified exported namespace invocations from definition bodies`() throws {
-    let typedPath: HeistInvocationPath = "lib.b"
-    let raw = HeistPlanAdmissionCandidate(definitions: [
-        HeistPlanAdmissionCandidate(name: "lib", definitions: [
-            HeistPlanAdmissionCandidate(name: "a", body: [
-                .invoke(HeistInvocationStep(path: typedPath)),
-            ]),
-            HeistPlanAdmissionCandidate(name: "b", body: [
-                .warn(WarnStep(message: "b")),
-            ]),
-        ], body: []),
-    ], body: [.invoke(HeistInvocationStep(path: "lib.a"))])
-
-    let graph = HeistCallGraph(plan: try raw.validatedForRuntimeSafety())
+    let plan = try HeistSourceCompilation.compile("""
+    HeistPlan {
+        Namespace("lib") {
+            HeistDef<Void>("a") { RunHeist("lib.b") }
+            HeistDef<Void>("b") { Warn("b") }
+        }
+        RunHeist("lib.a")
+    }
+    """)
+    let graph = HeistCallGraph(plan: plan)
 
     #expect(graph.edges.contains(HeistCallGraph.Edge(caller: "lib.a", callee: "lib.b")))
 }
 
 @Test func `plan call graph includes invocations in wait else bodies`() throws {
-    let raw = HeistPlanAdmissionCandidate(definitions: [
-        HeistPlanAdmissionCandidate(name: "checkout", definitions: [
-            HeistPlanAdmissionCandidate(name: "fallback", body: [
+    let plan = try HeistPlan(definitions: [
+        HeistPlan(name: "checkout", definitions: [
+            HeistPlan(name: "fallback", body: [
                 .warn(WarnStep(message: "fallback")),
             ]),
         ], body: [
@@ -144,21 +153,22 @@ private struct EncodedInvocationStepContract: Decodable {
         ]),
     ], body: [.warn(WarnStep(message: "root"))])
 
-    let graph = HeistCallGraph(plan: try raw.validatedForRuntimeSafety())
+    let graph = HeistCallGraph(plan: plan)
 
     #expect(graph.edges.contains(HeistCallGraph.Edge(caller: "checkout", callee: "checkout.fallback")))
 }
 
-@Test func `duplicate definition candidates cannot yield an executable plan`() {
-    let candidate = HeistPlanAdmissionCandidate(definitions: [
-        HeistPlanAdmissionCandidate(name: "duplicate", body: [.warn(WarnStep(message: "one"))]),
-        HeistPlanAdmissionCandidate(name: "duplicate", body: [.warn(WarnStep(message: "two"))]),
-    ], body: [.warn(WarnStep(message: "root"))])
-
-    let result = candidate.semanticValidationResult()
-
-    #expect(result.value == nil)
-    #expect(result.diagnostics.contains {
+@Test func `duplicate definition candidates cannot yield an executable plan`() throws {
+    let diagnostics = try runtimeSafetyDiagnostics {
+        try HeistSourceCompilation.compile("""
+        HeistPlan {
+            HeistDef<Void>("duplicate") { Warn("one") }
+            HeistDef<Void>("duplicate") { Warn("two") }
+            Warn("root")
+        }
+        """)
+    }
+    #expect(diagnostics.contains {
         $0.path == "$.definitions[1].name"
             && $0.code == .planRuntimeSafety
     })
@@ -276,39 +286,43 @@ private struct EncodedInvocationStepContract: Decodable {
     }
 }
 
-@Test func `runtime admission recursive failures are deterministic cycle witnesses`() {
-    let cases: [RuntimeAdmissionCallGraphCase] = [
-        RuntimeAdmissionCallGraphCase(candidate: inlineChainCase(["A", "B", "C"]), expectedCycle: nil),
-        RuntimeAdmissionCallGraphCase(candidate: inlineCycleCase(["A"]), expectedCycle: "A -> A"),
-        RuntimeAdmissionCallGraphCase(candidate: inlineCycleCase(["A", "B"]), expectedCycle: "A -> B -> A"),
-        RuntimeAdmissionCallGraphCase(candidate: inlineCycleCase(["A", "B", "C"]), expectedCycle: "A -> B -> C -> A"),
+@Test func `runtime admission recursive failures are deterministic cycle witnesses`() throws {
+    let acyclic = try inlineChainCase(["A", "B", "C"])
+    #expect(HeistCallGraph(plan: acyclic).isAcyclic)
+
+    let cases = [
+        (recursivePlanSource(["A"]), "lib.A -> lib.A"),
+        (recursivePlanSource(["A", "B"]), "lib.A -> lib.B -> lib.A"),
+        (recursivePlanSource(["A", "B", "C"]), "lib.A -> lib.B -> lib.C -> lib.A"),
     ]
 
-    for testCase in cases {
-        let result = testCase.candidate.semanticValidationResult()
-        let recursiveFailures = runtimeSafetyFailures(for: testCase.candidate).filter {
-            $0.contract == recursiveHeistRunContract
+    for (source, expectedCycle) in cases {
+        let diagnostics = try runtimeSafetyDiagnostics {
+            try HeistSourceCompilation.compile(source)
         }
-
-        if let expectedCycle = testCase.expectedCycle {
-            #expect(result.value == nil)
-            #expect(!recursiveFailures.isEmpty)
-            #expect(Set(recursiveFailures.map(\.contract)) == [recursiveHeistRunContract])
-            #expect(Set(recursiveFailures.map(\.observed)) == [expectedCycle])
-            #expect(Set(recursiveFailures.map(\.correction)) == [recursiveHeistRunCorrection])
-        } else {
-            #expect(result.value != nil)
-            #expect(recursiveFailures.isEmpty)
-        }
+        #expect(!diagnostics.isEmpty)
+        #expect(diagnostics.allSatisfy { $0.message.contains(recursiveHeistRunContract) })
+        #expect(diagnostics.contains { $0.message.contains(expectedCycle) })
+        #expect(diagnostics.allSatisfy { $0.hint == recursiveHeistRunCorrection })
     }
 }
 
 private let recursiveHeistRunContract = "heist runs must not be recursive"
 private let recursiveHeistRunCorrection = "Remove the recursive heist run cycle."
 
-private struct RuntimeAdmissionCallGraphCase {
-    let candidate: HeistPlanAdmissionCandidate
-    let expectedCycle: String?
+private func runtimeSafetyDiagnostics(
+    _ operation: () throws -> HeistPlan
+) throws -> [HeistBuildDiagnostic] {
+    do {
+        _ = try operation()
+        throw CallGraphTestFailure.expectedRuntimeSafetyFailure
+    } catch let error as HeistPlanBuildError {
+        return error.diagnostics
+    }
+}
+
+private enum CallGraphTestFailure: Error {
+    case expectedRuntimeSafetyFailure
 }
 
 private func callGraph(edges: [(String, String)]) -> HeistCallGraph {
@@ -321,76 +335,67 @@ private func callGraph(edges: [(String, String)]) -> HeistCallGraph {
     )
 }
 
-private func inlineChainCase(_ names: [HeistPlanName]) -> HeistPlanAdmissionCandidate {
-    let definition = inlineChainDefinition(names)
-    return HeistPlanAdmissionCandidate(
+private func isolatedDefinitions(_ names: [HeistPlanName]) throws -> HeistPlan {
+    try HeistPlan(
+        definitions: names.map {
+            try HeistPlan(
+                name: $0,
+                body: [.warn(WarnStep(message: warningMessage("\($0) done")))]
+            )
+        },
+        body: [.warn(WarnStep(message: "root"))]
+    )
+}
+
+private func inlineChainCase(_ names: [HeistPlanName]) throws -> HeistPlan {
+    let definition = try inlineChainDefinition(names)
+    return try HeistPlan(
         definitions: [definition],
         body: [.invoke(HeistInvocationStep(path: invocationPath(definition.name)))]
     )
 }
 
-private func inlineCycleCase(_ names: [HeistPlanName]) -> HeistPlanAdmissionCandidate {
-    guard let first = names.first else {
-        return HeistPlanAdmissionCandidate(body: [.warn(WarnStep(message: "empty"))])
-    }
-    let definition = inlineCycleDefinition(name: first, remaining: Array(names.dropFirst()), first: first)
-    return HeistPlanAdmissionCandidate(
-        definitions: [definition],
-        body: [.invoke(HeistInvocationStep(path: invocationPath(first)))]
-    )
-}
-
-private func inlineChainDefinition(_ names: [HeistPlanName]) -> HeistPlanAdmissionCandidate {
+private func inlineChainDefinition(_ names: [HeistPlanName]) throws -> HeistPlan {
     guard let name = names.first else {
-        return HeistPlanAdmissionCandidate(name: "empty", body: [.warn(WarnStep(message: "empty"))])
+        return try HeistPlan(name: "empty", body: [.warn(WarnStep(message: "empty"))])
     }
     guard names.count > 1 else {
-        return HeistPlanAdmissionCandidate(name: name, body: [
+        return try HeistPlan(name: name, body: [
             .warn(WarnStep(message: warningMessage("\(name) done"))),
         ])
     }
-    let next = inlineChainDefinition(Array(names.dropFirst()))
-    return HeistPlanAdmissionCandidate(name: name, body: [
-        inlineHeist(definitions: [next], body: [
+    let next = try inlineChainDefinition(Array(names.dropFirst()))
+    return try HeistPlan(name: name, body: [
+        try inlineHeist(definitions: [next], body: [
             .invoke(HeistInvocationStep(path: invocationPath(next.name))),
         ]),
     ])
 }
 
-private func inlineCycleDefinition(
-    name: HeistPlanName,
-    remaining: [HeistPlanName],
-    first: HeistPlanName
-) -> HeistPlanAdmissionCandidate {
-    let next = remaining.first.map { nextName in
-        inlineCycleDefinition(name: nextName, remaining: Array(remaining.dropFirst()), first: first)
-    } ?? HeistPlanAdmissionCandidate(name: first, body: [
-        .warn(WarnStep(message: warningMessage("\(first) done"))),
-    ])
-    return HeistPlanAdmissionCandidate(name: name, body: [
-        inlineHeist(definitions: [next], body: [
-            .invoke(HeistInvocationStep(path: invocationPath(next.name ?? first))),
-        ]),
-    ])
-}
-
 private func inlineHeist(
-    definitions: [HeistPlanAdmissionCandidate],
-    body: [HeistStepAdmissionCandidate]
-) -> HeistStepAdmissionCandidate {
-    .heist(HeistPlanAdmissionCandidate(definitions: definitions, body: body))
+    definitions: [HeistPlan],
+    body: [HeistStep]
+) throws -> HeistStep {
+    .heist(try HeistPlan(definitions: definitions, body: body))
 }
 
-private func runtimeSafetyFailures(for raw: HeistPlanAdmissionCandidate) -> [HeistPlanRuntimeSafetyFailure] {
-    do {
-        _ = try raw.validatedForRuntimeSafety()
-        return []
-    } catch let error as HeistPlanRuntimeSafetyError {
-        return error.failures
-    } catch {
-        Issue.record("Expected runtime safety error, got \(error)")
-        return []
+private func recursivePlanSource(_ names: [String]) -> String {
+    let definitions = names.enumerated().map { index, name in
+        let next = names[(index + 1) % names.count]
+        return """
+            HeistDef<Void>("\(name)") {
+                RunHeist("lib.\(next)")
+            }
+        """
+    }.joined(separator: "\n")
+    return """
+    HeistPlan {
+        Namespace("lib") {
+    \(definitions)
+        }
+        RunHeist("lib.\(names[0])")
     }
+    """
 }
 
 private func invocationPath(_ name: HeistPlanName?) -> HeistInvocationPath {

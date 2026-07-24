@@ -3,7 +3,7 @@ import Foundation
 /// An authored accessibility target. References and predicate expressions are
 /// resolved exactly once into `ResolvedAccessibilityTarget` before execution.
 public indirect enum AccessibilityTarget: Codable, Sendable, Equatable, Hashable {
-    case predicate(ElementPredicateTemplate, ordinal: Int? = nil)
+    case predicate(ElementPredicate, ordinal: Int? = nil)
     case container(ContainerPredicate, ordinal: Int? = nil)
     case ref(HeistReferenceName)
     case within(container: ContainerPredicate, target: AccessibilityTarget)
@@ -13,7 +13,7 @@ public indirect enum AccessibilityTarget: Codable, Sendable, Equatable, Hashable
     }
 
     public static var inlineFieldNames: [String] {
-        ElementPredicateTemplate.CodingKeys.allCases.map(\.stringValue)
+        ElementPredicate.CodingKeys.allCases.map(\.stringValue)
             + CodingKeys.allCases.map(\.stringValue)
     }
 
@@ -59,10 +59,10 @@ public indirect enum AccessibilityTarget: Codable, Sendable, Equatable, Hashable
         }
 
         try decoder.rejectUnknownKeys(
-            allowed: Set(ElementPredicateTemplate.CodingKeys.allCases.map(\.stringValue) + [CodingKeys.ordinal.stringValue]),
+            allowed: Set(ElementPredicate.CodingKeys.allCases.map(\.stringValue) + [CodingKeys.ordinal.stringValue]),
             typeName: "accessibility target"
         )
-        let predicate = try ElementPredicateTemplate.decodeAllowingAdditionalKeys(from: decoder)
+        let predicate = try ElementPredicate.decodeAllowingAdditionalKeys(from: decoder)
         guard predicate.hasPredicates else {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: container.codingPath,
@@ -148,7 +148,7 @@ public indirect enum AccessibilityTarget: Codable, Sendable, Equatable, Hashable
     private func appending(_ checks: [ElementPredicateCheck]) -> AccessibilityTarget {
         guard case .predicate(let predicate, let ordinal) = self else { return self }
         return .predicate(
-            ElementPredicateTemplate(core: ElementPredicateCore(predicate.core.checks + checks.map(\.core))),
+            ElementPredicate(predicate.checks + checks),
             ordinal: ordinal
         )
     }
@@ -199,8 +199,8 @@ extension AccessibilityTarget: CustomStringConvertible {
 
 /// The execution-phase target currency. There is deliberately no reference
 /// case and no expression-bearing predicate payload.
-public indirect enum ResolvedAccessibilityTarget: Codable, Sendable, Equatable, Hashable {
-    case predicate(ElementPredicate, ordinal: Int? = nil)
+package indirect enum ResolvedAccessibilityTarget: Codable, Sendable, Equatable, Hashable {
+    case predicate(ResolvedElementPredicate, ordinal: Int? = nil)
     case container(ResolvedContainerPredicate, ordinal: Int? = nil)
     case within(container: ResolvedContainerPredicate, target: ResolvedAccessibilityTarget)
 
@@ -208,7 +208,7 @@ public indirect enum ResolvedAccessibilityTarget: Codable, Sendable, Equatable, 
         case ordinal, container, target
     }
 
-    public init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         if container.contains(.container) || container.contains(.target) {
             guard container.contains(.container) else {
@@ -245,12 +245,12 @@ public indirect enum ResolvedAccessibilityTarget: Codable, Sendable, Equatable, 
             typeName: "resolved accessibility target"
         )
         let predicateContainer = try decoder.container(keyedBy: ElementPredicateCodingKeys.self)
-        let predicate = ElementPredicate(core: ElementPredicateCore(
+        let predicate = ResolvedElementPredicate(
             try predicateContainer.decodeIfPresent(
-                [ElementPredicateCheckCore<String>].self,
+                [ResolvedElementPredicateCheck].self,
                 forKey: .checks
             ) ?? []
-        ))
+        )
         guard predicate.hasPredicates else {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: container.codingPath,
@@ -260,7 +260,7 @@ public indirect enum ResolvedAccessibilityTarget: Codable, Sendable, Equatable, 
         self = .predicate(predicate, ordinal: try Self.decodeOrdinal(from: container))
     }
 
-    public func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         switch self {
         case .predicate(let predicate, let ordinal):
             try predicate.encode(to: encoder)
@@ -295,7 +295,7 @@ public indirect enum ResolvedAccessibilityTarget: Codable, Sendable, Equatable, 
 }
 
 extension ResolvedAccessibilityTarget: CustomStringConvertible {
-    public var description: String {
+    package var description: String {
         switch self {
         case .predicate(let predicate, let ordinal):
             return CanonicalValueDescription.call("target", [

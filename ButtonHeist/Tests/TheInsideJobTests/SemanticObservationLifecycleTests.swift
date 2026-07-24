@@ -157,7 +157,8 @@ final class SemanticObservationLifecycleTests: SemanticObservationStreamTestCase
         let lifecycle = LiveSettlementLifecycle()
         lifecycle.begin(
             demand: vault.semanticObservationStream.beginActiveObservationDemand(),
-            notificationWindow: vault.accessibilityNotifications.beginActionWindow()
+            notificationWindow: vault.accessibilityNotifications.beginActionWindow(),
+            boundary: firstEvent.moment
         )
         vault.accessibilityNotifications.recordForTesting(
             code: 1000,

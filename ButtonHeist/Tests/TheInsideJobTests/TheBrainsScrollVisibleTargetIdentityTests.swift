@@ -117,7 +117,7 @@ extension TheBrainsScrollTests {
         )
         await brains.vault.installObservationForTesting(liveScreen)
         let prematureResolution = brains.vault.resolveTarget(
-            literalTarget(ElementPredicate.label("Jump Target"), ordinal: 0)
+            literalTarget(ResolvedElementPredicate.label("Jump Target"), ordinal: 0)
         )
         guard case .notFound = prematureResolution else {
             XCTFail("Parser exposed offscreen scroll content before semantic reveal: \(prematureResolution)")
@@ -146,9 +146,31 @@ extension TheBrainsScrollTests {
             liveCapture: liveScreen.liveCapture
         )
         await brains.vault.installObservationForTesting(knownScreen)
-        brains.navigation.elementInflation.exploration.discoverTarget = { _ in nil }
+        let revealedScreen = duplicateRevealObservation(
+            knownEntry: knownEntry,
+            firstTarget: firstTarget,
+            secondTarget: secondTarget,
+            scrollView: scrollView,
+            containerPath: scrollContainerPath
+        )
+        let inflation = brains.navigation.elementInflation
+        let originalMoveViewport = inflation.exploration.moveViewport
+        inflation.exploration.moveViewport = { _ in
+            self.visibleObservationSource.observation = revealedScreen
+            let event = await self.brains.vault.semanticObservationStream
+                .commitDiscoveryObservationAfterViewportMovementForTesting(revealedScreen)
+            return Navigation.ViewportTransition(
+                outcome: .moved,
+                previousVisibleIds: [],
+                event: event
+            )
+        }
+        inflation.exploration.discoverTarget = { _ in nil }
+        defer {
+            inflation.exploration.moveViewport = originalMoveViewport
+        }
 
-        let result = await brains.navigation.elementInflation.inflate(
+        let result = await inflation.inflate(
             for: try resolvedTarget(.label("Jump Target")),
             method: .scrollToVisible
         )
@@ -159,6 +181,51 @@ extension TheBrainsScrollTests {
         XCTAssertEqual(failure.failedStep, .ambiguous)
         XCTAssertEqual(failure.failureKind, .targetUnavailable)
         XCTAssertTrue(failure.message.contains("[ambiguous]"))
+    }
+
+    private func duplicateRevealObservation(
+        knownEntry: InterfaceTree.Element,
+        firstTarget: UIView,
+        secondTarget: UIView,
+        scrollView: UIScrollView,
+        containerPath: TreePath
+    ) -> InterfaceObservation {
+        let duplicateElement = makeElement(
+            label: "Jump Target",
+            traits: .button,
+            shape: .frame(AccessibilityRect(secondTarget.frame))
+        )
+        let duplicateEntry = InterfaceTree.Element(
+            heistId: "duplicate_reveal_target",
+            scrollMembership: .init(containerPath: containerPath, index: nil),
+            element: duplicateElement
+        )
+        return InterfaceObservation.makeForTests(
+            elements: [
+                knownEntry.heistId: knownEntry,
+                duplicateEntry.heistId: duplicateEntry,
+            ],
+            hierarchy: [
+                .container(
+                    makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame),
+                    children: [
+                        .element(knownEntry.element, traversalIndex: 0),
+                        .element(duplicateElement, traversalIndex: 1),
+                    ]
+                ),
+            ],
+            heistIdsByPath: [
+                containerPath.appending(0): knownEntry.heistId,
+                containerPath.appending(1): duplicateEntry.heistId,
+            ],
+            elementRefs: [
+                knownEntry.heistId: .init(object: firstTarget, scrollView: scrollView),
+                duplicateEntry.heistId: .init(object: secondTarget, scrollView: scrollView),
+            ],
+            containerRefsByPath: [containerPath: .init(object: scrollView)],
+            firstResponderHeistId: nil,
+            scrollableContainerViewsByPath: [containerPath: .init(view: scrollView)]
+        )
     }
 
 }

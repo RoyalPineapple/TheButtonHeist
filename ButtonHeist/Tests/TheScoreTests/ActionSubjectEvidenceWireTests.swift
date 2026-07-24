@@ -6,7 +6,7 @@ import TheScore
 final class ActionSubjectEvidenceWireTests: XCTestCase {
     func testActionResultSubjectEvidenceWireShape() throws {
         let target = try AccessibilityTarget
-            .predicate(ElementPredicateTemplate(label: "Delete", traits: [.button]))
+            .predicate(ElementPredicate(label: "Delete", traits: [.button]))
             .resolve(in: .empty)
         let element = HeistElement(
             description: "Delete",

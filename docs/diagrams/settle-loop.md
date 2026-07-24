@@ -26,30 +26,37 @@ handoff; current-state inspection returns its one admitted capture directly.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> AwaitingBaseline : capture baseline
-    [*] --> Armed : supplied baseline
-    [*] --> Failed : required baseline unavailable
-    AwaitingBaseline --> Completed : currentState capture admitted
-    AwaitingBaseline --> Armed : baseline Moment committed
-    AwaitingBaseline --> Failed : baseline unavailable
-    Armed --> Dispatching : action trigger
-    Armed --> Observing : observation trigger
-    Dispatching --> Observing : dispatch completes
-    Observing --> Observing : observation, announcement,<br/>predicate, or readiness event
-    Observing --> NeedHandoff : readiness without eligible observation
-    NeedHandoff --> Observing : handoff capture admitted
-    Observing --> Completed : trigger + predicate +<br/>readiness + handoff
-    NeedHandoff --> Completed : remaining evidence complete
-    Dispatching --> TimedOut : absolute deadline
-    Observing --> TimedOut : absolute deadline
-    NeedHandoff --> TimedOut : absolute deadline
-    AwaitingBaseline --> Cancelled : cancellation
-    Armed --> Cancelled : cancellation
-    Observing --> Cancelled : cancellation
-    Completed --> [*]
-    Failed --> [*]
-    TimedOut --> [*]
-    Cancelled --> [*]
+    state "Settlement.State.awaitingBaseline(Command)" as AwaitingBaseline
+    state "Settlement.State.armed(Session)" as Armed
+    state "Settlement.State.active(Session)" as Active {
+        state PhaseChoice <<choice>>
+        state "Session.Phase.observation(PhaseDeadline)" as Observation
+        state "Session.Phase.awaitingActionDispatch" as AwaitingActionDispatch
+        state "Session.Phase.actionReadiness(PhaseDeadline)" as ActionReadiness
+        state "Session.Phase.actionExpectation(PhaseDeadline)" as ActionExpectation
+
+        [*] --> PhaseChoice
+        PhaseChoice --> Observation : observation command
+        PhaseChoice --> AwaitingActionDispatch : action command
+        Observation --> Observation : ordered nonterminal Event
+        AwaitingActionDispatch --> ActionReadiness : dispatchCompleted / replace deadline
+        ActionReadiness --> ActionReadiness : ordered nonterminal Event
+        ActionReadiness --> ActionExpectation : first ready handoff + unmet predicate / replace deadline
+        ActionReadiness --> ActionReadiness : readiness invalidated / advance generation
+        ActionExpectation --> ActionExpectation : ordered nonterminal Event or generation advance
+        ActionExpectation --> ActionExpectation : stale readiness deadline ignored
+    }
+    state "Settlement.State.terminal(Result)" as Terminal
+
+    [*] --> AwaitingBaseline : Command captures baseline
+    [*] --> Armed : Command supplies baseline
+    AwaitingBaseline --> Armed : baselineAdmitted
+    AwaitingBaseline --> Terminal : currentState Result, failure, or cancellation
+    Armed --> Active : channelsArmed
+    Armed --> Terminal : cancellation
+    Active --> Terminal : requirements complete, current deadline, failure, or cancellation
+    Terminal --> Terminal : later Event ignored
+    Terminal --> [*] : project owned Result once
 ```
 
 ## Arm before dispatch
@@ -59,47 +66,56 @@ sequenceDiagram
     participant Caller
     participant Executor as Settlement.Executor
     participant Store as Observation.Store
-    participant Channels as Observation + announcement<br/>+ readiness + deadline
+    participant Channels as Observation + announcement + readiness
     participant UIKit as Action boundary
     participant Reducer as Settlement.Reducer
+    participant Clock as Replaceable deadline task
 
-    Caller->>Executor: execute typed Command
+    Caller->>Executor: execute Settlement.Command
     alt currentState command
         Executor->>Store: capture and admit once
         Store-->>Executor: exact current Moment
         Executor-->>Caller: Settlement.Result
-    else timed command captures its baseline
-        Executor->>Store: capture and commit baseline
-        Store-->>Executor: Moment
-    else command supplies an exact Moment
-        Executor->>Store: subscribe with replay after Moment
-        Store-->>Executor: retained Events, then live delivery
+    else timed command
+        alt command captures its baseline
+            Executor->>Store: capture and commit baseline
+            Store-->>Executor: Moment
+        else command supplies an exact Moment
+            Executor->>Store: subscribe with replay after Moment
+            Store-->>Executor: retained Events, then live delivery
+        end
+        Executor->>Channels: arm after baseline
+        Channels-->>Reducer: Settlement.Event with Fact.channelsArmed
+        alt action trigger
+            Executor->>UIKit: dispatch exactly once
+            UIKit-->>Reducer: Settlement.Event with Fact.dispatchCompleted
+            Reducer-->>Clock: Effect.armDeadline readiness at dispatch + 5,000 ms
+        else observation trigger
+            Reducer-->>Clock: Effect.armDeadline at authored instant
+            Note over Executor,UIKit: no action and no fake no-op
+        end
+        loop while Settlement.State is nonterminal
+            alt observation, announcement, or readiness Event
+                Channels-->>Executor: next ordered Event
+            else phase deadline Event
+                Clock-->>Executor: next ordered deadline Event
+            end
+            Executor->>Reducer: reduce Event
+            Reducer-->>Executor: Decision with State and typed effects
+            alt Decision requests a handoff capture
+                Executor->>Store: capture, admit, commit
+                Store-->>Executor: enqueue Fact.observationAdmitted
+            else Decision admits actionExpectation
+                Reducer-->>Clock: replace task with handoff + authored timeout
+            else Decision rejects a stale deadline
+                Note over Reducer,Executor: unchanged active State and no effects
+            else Decision is terminal
+                Note over Reducer,Executor: State.terminal owns one absorbing Result
+            end
+        end
+        Executor-->>Caller: project owned Result once
     end
-    Executor->>Channels: arm after baseline
-    Channels-->>Reducer: channelsArmed
-    alt action trigger
-        Executor->>UIKit: dispatch exactly once
-        UIKit-->>Reducer: dispatchCompleted
-    else observation trigger
-        Note over Executor,UIKit: no action and no fake no-op
-    end
-    loop until terminal
-        Channels-->>Reducer: committed Event / announcement / readiness
-        Reducer-->>Executor: typed effects
-    end
-    alt readiness has no eligible observation
-        Reducer-->>Executor: capture one handoff
-        Executor->>Store: admit and commit capture
-        Store-->>Reducer: post-readiness Event
-    end
-    Reducer-->>Executor: Settlement.Result
-    Executor-->>Caller: project action or wait result
 ```
-
-Arming first closes the synchronous-change race: an announcement or hierarchy
-change caused during dispatch cannot occur before its consumer exists. The
-absolute deadline covers baseline, dispatch, observation effects, readiness,
-predicate evaluation, and handoff; no phase receives a fresh timeout.
 
 ## Completion evidence
 
@@ -143,4 +159,4 @@ Terminal projection happens after structured cleanup:
 
 This ordering prevents a child scope from outliving its owner, restores the
 viewport before an observation-only wait returns, and guarantees no capture or
-predicate work occurs after the terminal result.
+predicate work occurs after the absorbing terminal result.

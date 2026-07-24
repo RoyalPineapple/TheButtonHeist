@@ -172,7 +172,7 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
             ]),
         ]))
 
-        XCTAssertEqual(predicate, .exists(.predicate(ElementPredicateTemplate(label: .contains("Pay")))))
+        XCTAssertEqual(predicate, .exists(.predicate(ElementPredicate(label: .contains("Pay")))))
     }
 
     func testPredicateAcceptsRepeatedStringChecksInTarget() throws {

@@ -24,15 +24,11 @@ extension TheBrains {
         defer { finishChangedWait() }
 
         let predicate = expectation ?? .changed(.elements())
-        let step: ResolvedWaitRuntimeInput
+        let resolvedTimeout: WaitTimeout
+        let resolved: ResolvedAccessibilityPredicate
         do {
-            step = try ResolvedWaitRuntimeInput(
-                resolving: WaitStep(
-                    predicate: predicate,
-                    timeout: WaitTimeout(validatingSeconds: timeout)
-                ),
-                in: .empty
-            )
+            resolvedTimeout = try WaitTimeout(validatingSeconds: timeout)
+            resolved = try predicate.resolve(in: .empty)
         } catch {
             return .failure(
                 payload: .wait,
@@ -40,7 +36,11 @@ extension TheBrains {
                 message: "could not resolve changed wait predicate: \(error)"
             )
         }
-        let result = await executeSettlementCommand(Settlement.Command(observing: step))
+        let result = await executeSettlementCommand(Settlement.Command(
+            observing: predicate,
+            resolved: resolved,
+            timeout: resolvedTimeout
+        ))
         return Settlement.ResultProjector.projectWait(result).actionResult
     }
 }

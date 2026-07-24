@@ -119,12 +119,12 @@ package struct HeistForEachStringDeclaration: Sendable, Equatable {
 
 package struct HeistForEachElementDeclaration: Sendable, Equatable {
     package let parameter: HeistReferenceName
-    package let matching: ElementPredicateTemplate
+    package let matching: ElementPredicate
     package let limit: Int
 
     package init?(
         parameter: HeistReferenceName,
-        matching: ElementPredicateTemplate,
+        matching: ElementPredicate,
         limit: Int
     ) {
         guard limit > 0 else { return nil }

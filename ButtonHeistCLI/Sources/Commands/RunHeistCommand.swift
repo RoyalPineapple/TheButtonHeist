@@ -8,7 +8,7 @@ struct RunHeistCommand: ConnectedOneShotCLICommand {
     typealias SwiftHeistCompilation = @Sendable (
         _ source: URL,
         _ entry: HeistEntrySymbol
-    ) async -> ValidationResult<HeistPlan, HeistBuildDiagnostic>
+    ) async throws(HeistPlanBuildError) -> HeistPlan
 
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
@@ -135,7 +135,7 @@ struct RunHeistCommand: ConnectedOneShotCLICommand {
         path: String?,
         entry: String?,
         compileSwiftSource: SwiftHeistCompilation = { source, entry in
-            await HeistSwiftCompiler().compileFile(source, entry: entry)
+            try await HeistSwiftCompiler().compileFile(source, entry: entry)
         }
     ) async throws -> PreparedInput {
         guard let path, path.lowercased().hasSuffix(".swift") else {
@@ -154,11 +154,12 @@ struct RunHeistCommand: ConnectedOneShotCLICommand {
         let source = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
         let name = source.deletingPathExtension().lastPathComponent
         let plan: HeistPlan
-        switch await compileSwiftSource(source, entrySymbol) {
-        case .success(let compiledPlan, _):
-            plan = compiledPlan
-        case .failure(let diagnostics):
-            throw ValidationError("failed to compile Swift heist source: \(formatCompilationDiagnostics(diagnostics))")
+        do {
+            plan = try await compileSwiftSource(source, entrySymbol)
+        } catch let error {
+            throw ValidationError(
+                "failed to compile Swift heist source: \(formatCompilationDiagnostics(error.diagnostics))"
+            )
         }
 
         let directory = FileManager.default.temporaryDirectory

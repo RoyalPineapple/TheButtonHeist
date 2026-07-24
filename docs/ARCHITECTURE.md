@@ -140,14 +140,19 @@ ordering, keyboard state, and first responder state. It never classifies the
 accessibility tree.
 
 `Settlement.Executor` is the one operation loop for actions and waits. Its
-typed command is the product of an action-or-observation trigger and an
-optional resolved predicate. Readiness is mandatory for all four combinations;
-an observation-only command is a real trigger, not a fabricated no-op action.
-The executor captures the invocation baseline, arms observation,
-announcement, readiness, and deadline delivery, and only then dispatches an
-action. Every capture follows capture → admit → commit → publish → evaluate.
+typed command is `currentState`, `observation`, or `action`; an observation
+command is a real trigger, not a fabricated no-op action. Timed commands capture
+the invocation baseline and arm observation, announcement, and readiness
+delivery before action dispatch. Every capture follows capture → admit → commit
+→ publish → evaluate.
 `Settlement.Reducer` owns the explicit state machine and produces typed effects;
-boundary code alone performs UIKit work.
+boundary code alone performs UIKit work. `Settlement.State` has exactly four
+structural phases: `awaitingBaseline`, `armed`, `active`, and `terminal`.
+`Settlement.Session` is the sole active evidence aggregate, and
+`Settlement.Result.outcome` is the sole terminal classifier.
+The [settlement loop](diagrams/settle-loop.md) owns the nested phase, event,
+deadline, and cleanup mechanics; the
+[action pipeline](diagrams/action-pipeline.md) shows their end-to-end boundary.
 
 One pure `ScreenClassifier` combines typed snapshots with scoped
 `screenChanged`, `elementChanged`, and `announcement` notifications.
@@ -170,12 +175,12 @@ heist can observe an animation that began before its own execution scope.
 Outermost active-observation demand only opens permission to wait on that
 counter; nested heists and actions share the permission and its one-shot idle
 waiters. A public `CFRunLoopObserver` publishes one-shot main-loop
-`beforeWaiting` edges. Active settlement starts parsing immediately and races
-two proofs within the same authored operation deadline. The UIKit proof waits
-for the aggregate animation count to reach zero, rechecks it at a main-loop
-idle edge, then admits the first parse from an explicitly registered future
-heartbeat only if the count is still zero on that heartbeat. The semantic
-proof admits a fingerprint that remains unchanged for
+`beforeWaiting` edges. Active settlement starts parsing immediately and admits
+either readiness proof under the current `Settlement.Session.Phase`. The UIKit
+proof waits for the aggregate animation count to reach zero, rechecks it at a
+main-loop idle edge, then admits the first parse from an explicitly registered
+future heartbeat only if the count is still zero on that heartbeat. The
+semantic proof admits a fingerprint that remains unchanged for
 60 ms, so a cosmetic infinite animation cannot pin the operation forever.
 Both proofs sample through Button Heist's one CADisplayLink heartbeat. The
 UIKit waiter is armed after the first heartbeat so UIKit has a chance to publish
@@ -205,11 +210,12 @@ there is no fixed delay or redundant final parse. Readiness invalidation starts
 a new generation and makes an older handoff ineligible without erasing latched
 transition or announcement evidence.
 
-That shared deadline is an operation bound, not a main-thread responsiveness
-probe. A true liveness probe must originate off the main actor, schedule a
-round trip onto the main run loop, and win or lose its timeout race without
-requiring the main thread to deliver the timeout. Transport-level unresponsive
-process diagnosis remains a separate boundary from in-process idle detection.
+A Settlement phase deadline bounds in-process operation work; it is not a
+main-thread responsiveness probe. A true liveness probe must originate off the
+main actor, schedule a round trip onto the main run loop, and win or lose its
+timeout race without requiring the main thread to deliver the timeout.
+Transport-level unresponsive process diagnosis remains a separate boundary
+from in-process idle detection.
 
 A scoped screen notification or snapshot-inferred replacement with typed
 `fallbackReason` evidence starts a new observation generation. The screen
@@ -285,15 +291,16 @@ capture arrays, or claim notification events. Retention loss is explicit
 incomplete evidence, never an inferred `noChange`.
 
 `waitFor` is the predicate-bearing observation case of `Settlement.Command`.
-It shares the same reducer, deadline, readiness, handoff, and projection rules
-as an action, but cannot produce a dispatch effect. The separate `currentState`
-case performs one exact capture without arming timed channels; conditionals,
-element iteration, repeat-until, and invocation expectations use that result
-instead of reading the observation store through a second runtime API. A wait
-establishes its own baseline Moment and announcement position, so it cannot
-consume earlier action or heist evidence. Observation effects may reveal a
-resolvable target or run canonical discovery; their graceful stop restores the
-authored viewport exit position before settlement finalizes.
+It uses the same reducer, readiness, and handoff rules as an action, but owns
+one authored observation deadline and cannot dispatch. The separate
+`currentState` case performs one exact capture without arming timed channels;
+conditionals, element iteration,
+repeat-until, and invocation expectations use that result instead of reading
+the observation store through a second runtime API. A wait establishes its own
+baseline Moment and announcement position, so it cannot consume earlier action
+or heist evidence. Observation effects may reveal a resolvable target or run
+canonical discovery; their graceful stop restores the authored viewport exit
+position before settlement finalizes.
 
 Heist-internal waits use the same command with an exact supplied Moment when
 the predicate spans an invocation or repeat body. Arming replays retained
@@ -308,9 +315,9 @@ before dispatch. Current-state predicates must hold in the exact returned
 handoff snapshot. Positive transitions evaluate direct Log events strictly
 after the Moment and latch their first qualifying fact, so a transient
 appearance or disappearance remains valid even when absent at the endpoint.
-Announcements likewise latch only after the invocation boundary. Every phase
-inherits one absolute authored deadline; no follow-on wait or final-validation
-budget is added after the action.
+Announcements likewise latch only after the invocation boundary. The same
+Moment and retained evidence remain authoritative through readiness and any
+expectation phase.
 
 Detail level is separate: `detail: "summary"` keeps responses compact, while
 `detail: "full"` adds geometry and heavier accessibility fields.
@@ -430,11 +437,11 @@ pipelines are explicit:
 | Result interpretation | `HeistReport.project(result:)` in `HeistResult+Report.swift` | JSON, compact, human, JUnit, doctor, and metric renderers |
 | Result recording decision | `HeistResult.Outcome` and `HeistResultRecordingMode` | `HeistResultRecording` filesystem boundary |
 | Offline validation algebra | `HeistValidation.Result<Value>` composed by `HeistValidation.Report` | Public JSON and text projections |
-| Settlement lifecycle | `Settlement.State`, `Settlement.Reducer`, and `Settlement.Executor` | Actions and observation-only waits provide typed commands; boundaries perform effects |
+| Settlement lifecycle | `Settlement.State` (`awaitingBaseline`, `armed`, `active`, `terminal`); `Settlement.Session` owns active evidence and `Settlement.Result.outcome` owns terminal classification | `Settlement.Reducer` produces transitions and effects; `Settlement.Executor` performs effects for actions and observation-only waits |
 | Semantic observation scheduling | `Observation.Stream` in `SemanticObservationStream.swift` | Capture scheduling, publication, and observation demand |
 | Semantic observation state | `Observation.StoreOwner` and `Observation.Store` | Actor-owned atomic commit of graph, Log, lineage, positions, and admitted-read state |
 | Semantic observation history | `Observation.Log` in `SemanticObservationHistory.swift` | Private collection indices, Moments, direct `events(since:)`, retention, and typed gaps |
-| Result projection | `Settlement.ResultProjector` | Existing action and wait contracts, settlement evidence, and diagnostics |
+| Result projection | `Settlement.ResultProjector` | Action and standalone wait contracts, settlement evidence, and diagnostics |
 | Testing request construction | `ButtonHeistTesting.swift` | Synchronous helpers and joined sessions live in their named extension files |
 | Fence action JSON | `FenceJSON+Action.swift` and `FenceJSON+HeistExecution.swift`, one result family each | Fence response formatting |
 | Exported tuple contract enforcement | The single `buttonheist.exported_tuple_return` Bumper rule | One effective-access projection covers functions, properties, subscripts, protocol requirements, and inherited public or package visibility; private and local tuple scratch values never enter the exported-contract projection |
@@ -482,6 +489,9 @@ rejecting mismatched method/payload pairs. There is no wire-payload model or
 semantic payload wrapper. `ActionResult.success` and `ActionResult.failure`
 accept that payload plus observation, subject, and timing values. Activation
 trace evidence enters only through the fixed-method activation factories.
+`HeistActionEvidence.completed` carries exactly that one `ActionResult` plus
+optional `ExpectationResult` predicate truth. Only a standalone observation
+command projects `HeistSettlementEvidence`.
 `ActionResultSuccessEvidence` and
 `ActionResultFailureEvidence` are output projections backed by one common body,
 not public assembly inputs. Each result supplies exactly one observation case:
@@ -583,10 +593,11 @@ in-app server.
 The Button Heist has one current-tree projection and one retained ordered history.
 Actions, `get_interface` subtree queries, waits, expectations, and repeat-loop
 stop conditions use one `AccessibilityTarget` language. Authored conditions use
-the concrete `AccessibilityPredicate` root and `ChangeDeclaration` assertion
-types; expression, core, and resolved representations remain package
-implementation details. For a single action's end-to-end sequence, see the
-[action pipeline diagram](diagrams/action-pipeline.md).
+the concrete `AccessibilityPredicate` root, `ElementPredicate`, `StringMatch`,
+and `ChangeDeclaration` assertion types. Resolution produces package-only
+concrete values for execution; no generic predicate phase or alternate
+evaluator sits between authoring and execution. For a single action's
+end-to-end sequence, see the [action pipeline diagram](diagrams/action-pipeline.md).
 
 `InteractionRequestExecutor`, owned by `TheBrains`, provides the single FIFO for
 UI-facing requests. Transport submits admitted UI work with its client identity,
@@ -607,41 +618,47 @@ Compiler entry symbols reuse that parser as `HeistEntrySymbol`. Structural
 plan locations are component-backed `HeistPlanPath` values; only source,
 diagnostic, and response rendering turns them into strings.
 
+Swift DSL construction, JSON decoding, source compilation, and live command
+composition each return one root-admitted `HeistPlan`. Recursive source
+assembly is private to `HeistPlanSourceProgramParser.swift`; it never becomes a
+stored, returned, package-visible, or cross-file architectural currency.
+`HeistPlan` owns root structural admission, and one
+`HeistPlanRuntimeSafetyValidator` owns cross-tree bounds, references, expansion,
+and cycle safety before the root crosses its boundary. There is no candidate
+tree or node, graph projection, runtime-input wrapper, validation alias, or
+second admission route.
+
+After admission, `HeistPlanTraversal` owns the semantic walk.
+`HeistCallGraph` alone owns graph nodes and edges by reducing traversal events;
+traversal observes invocation cycles from its own invocation stack, never from
+graph state. Catalogs, descriptions, and semantic surfaces are local reductions
+over the same traversal observations and do not create another plan
+representation. This converges on the existing execution boundary; result,
+observation, and settlement ownership below is unchanged.
+
 ```mermaid
 flowchart TD
     SwiftAuthor["Swift DSL authoring"] --> Fragment["Opaque HeistContent<br/>builder fragment"]
-    SourceAuthor["Canonical runtime heist source"] --> Parse["Lex and parse source"]
-    Fragment --> Candidate["Package admission shape<br/>HeistPlanAdmissionCandidate"]
-    Parse --> Candidate
-    Candidate --> Validate["Admit once<br/>semantic validation + runtime bounds"]
-    Validate --> Plan["Executable HeistPlan"]
-    Validate --> OfflineReport["validate_heist<br/>plan + invocation + lint report"]
+    SourceAuthor["Canonical runtime heist source"] --> Parse["Lex and parse source<br/>file-private recursive assembly"]
+    JSONAuthor["HeistPlan JSON"] --> RootAdmission
+    Fragment --> RootAdmission["HeistPlan root<br/>structural admission"]
+    Parse --> RootAdmission
+    RootAdmission --> Validate["HeistPlanRuntimeSafetyValidator<br/>one cross-tree safety pass"]
+    Validate --> Plan["Canonical admitted HeistPlan"]
+    Plan --> Walk["HeistPlanTraversal<br/>semantic walk + stack-owned cycle observation"]
+    Walk --> Graph["HeistCallGraph<br/>owns node + edge reduction"]
+    Walk --> Discovery["Catalog + descriptions + semantic surfaces<br/>local observation reduction"]
+    Plan --> OfflineReport["validate_heist<br/>plan + invocation + lint report"]
     Plan --> FenceCommand["Fence command<br/>run_heist / perform / wait"]
     FenceCommand --> HandoffSocket["Handoff socket<br/>client version == app version"]
     HandoffSocket --> Executor["TheBrains-owned InteractionRequestExecutor<br/>one UI FIFO"]
 
     Executor --> Resolve["Resolve typed action and predicate"]
     Resolve --> Command["Settlement.Command<br/>currentState | observation | action"]
-    Command --> Baseline["Capture and commit baseline<br/>Observation.Moment + announcement position"]
-    Command -->|currentState| Current["Return exact admitted capture"]
-    Baseline --> Arm["Arm observation, announcement,<br/>readiness, and deadline channels"]
-    Arm --> Trigger{"Command"}
-    Trigger -->|action| Dispatch["Dispatch exactly once"]
-    Trigger -->|observation| Observe["No dispatch"]
-    Dispatch --> Observe
-    Observe --> Commit["capture → admit → commit → publish"]
-    Commit --> Reduce["Settlement.Reducer<br/>evaluate typed evidence"]
-    Reduce --> Ready{"trigger + predicate + readiness<br/>+ eligible handoff?"}
-    Ready -->|no, time remains| Observe
-    Ready -->|ready, handoff absent| Handoff["Request one post-readiness capture"]
-    Handoff --> Commit
-    Ready -->|yes| Result["Settlement.Result"]
-    Ready -->|deadline| TimedOut["Independent predicate,<br/>readiness, and handoff evidence"]
-    Current --> Result
+    Command --> Settlement["Settlement.Executor + Reducer<br/>one operation"]
+    Settlement --> Result["Absorbing Settlement.Result"]
     Result --> Project["Canonical result projector"]
-    TimedOut --> Project
-    Project --> ActionResult["ActionResult"]
-    Project --> WaitResult["HeistSettlementEvidence"]
+    Project --> Response["Current-state, action, or wait contract"]
 
     Resolve -->|Action.until / RepeatUntil| LoopBaseline["Read baseline observation<br/>without evaluating stop predicate"]
     LoopBaseline --> RunBody["Run body action<br/>at least once"]
@@ -748,18 +765,12 @@ result shape, or wire field.
    then lowers it into a one-step or composed `HeistPlan` and sends
    `ClientMessage.heistPlan`.
 3. TheGetaway routes the plan to TheBrains' heist runtime.
-4. TheBrains resolves the semantic target and predicate, then creates one
-   `Settlement.Command` with an action trigger and absolute deadline.
-5. Settlement captures and commits its baseline Moment, opens the action
-   notification window, and arms observation, announcement, readiness, and
-   deadline delivery before dispatching exactly once.
-6. Each admitted observation atomically updates the Store and Log, publishes
-   one event, and is evaluated by the reducer. Successful completion requires
-   dispatch, predicate truth when requested, readiness, and an eligible
-   post-readiness handoff observation.
-7. The response includes the heist execution result. `HeistReport` classifies
-   its accumulated accessibility evidence once, and public renderers project
-   any resulting delta from that classification.
+4. TheBrains resolves the semantic target and predicate, then executes one
+   action-triggered Settlement command. See the
+   [action pipeline](diagrams/action-pipeline.md) for the boundary sequence and
+   the [settlement loop](diagrams/settle-loop.md) for reducer mechanics.
+5. The canonical result and report projectors return the response and classify
+   its accumulated accessibility evidence once.
 
 ### Wait
 
@@ -779,12 +790,12 @@ viewport discovery. Discovery searches both directional rays and exits
 The executor otherwise waits on committed Log/Stream events instead of polling.
 A standalone wait cannot consume evidence from a prior action or heist.
 
-Every observation effect, readiness wait, predicate evaluation, and handoff
-capture inherits one authored operation deadline. When predicate, readiness,
-and handoff evidence are complete, the reducer exits immediately—there is no
-extra stability sleep or final predicate revalidation. After a terminal result,
-the lifecycle first suppresses new callbacks, then quiesces and joins child
-work, and only then releases its outer notification and observation leases.
+A standalone observation command owns its authored deadline from command
+admission. When predicate, readiness, and handoff evidence are complete, the
+reducer exits immediately—there is no extra stability sleep or final predicate
+revalidation. After a terminal result, the lifecycle first
+suppresses new callbacks, then quiesces and joins child work, and only then
+releases its outer notification and observation leases.
 
 `.exists(target)` and `.missing(target)` resolve any element, container, or
 descendant-scoped `AccessibilityTarget` against current state.

@@ -604,8 +604,7 @@ private func repeatUntilRuntime(
     TheBrains.HeistExecutionRuntime(
         execute: { command, _ in
             RuntimeActionExecution(
-                result: await execute(command),
-                actionExpectationContext: nil
+                result: await execute(command)
             )
         },
         settle: { command in

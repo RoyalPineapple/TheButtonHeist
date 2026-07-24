@@ -5,7 +5,7 @@ import Foundation
 /// Totality rests on three bounds: (a) acyclic call graph
 /// [HeistCallGraph] - structural; (b) bounded ForEach; (c) timeout-floored
 /// RepeatUntil/WaitFor - runtime floors.
-struct HeistPlanRuntimeSafetyValidator {
+package struct HeistPlanRuntimeSafetyValidator {
     private static let nestedCollectionLoopContract = "collection loops must not be nested"
     private static let nestedCollectionLoopCorrection =
         "Flatten this heist so ForEach bodies contain only non-collection steps."
@@ -20,8 +20,15 @@ struct HeistPlanRuntimeSafetyValidator {
     var reportedDefinitionLimit = false
     var reportedTotalStringLimit = false
 
-    init(limits: HeistPlanRuntimeSafetyLimits) {
+    package init(limits: HeistPlanRuntimeSafetyLimits) {
         self.limits = limits
+    }
+
+    package mutating func validate(_ plan: HeistPlan) throws {
+        inspect(plan)
+        guard failures.isEmpty else {
+            throw HeistPlanRuntimeSafetyError(failures: failures)
+        }
     }
 
     mutating func inspect(_ plan: HeistPlan) {
@@ -265,14 +272,6 @@ struct HeistPlanRuntimeSafetyValidator {
         validateCommand(action.command, path: path.child(.command), scope: scope, environment: environment)
         if let waiver = action.expectationPolicy.waiver?.reason {
             addString(waiver, path: path.child(.withoutExpectation), role: "expectation waiver")
-        }
-        for diagnostic in action.expectationValidationDiagnostics {
-            fail(
-                path: path.child(.expectation),
-                contract: "action expectation composition must be supported and unambiguous",
-                observed: diagnostic.message,
-                correction: diagnostic.hint ?? "Use one change predicate plus optional state predicates, or split unrelated waits into explicit WaitFor steps."
-            )
         }
     }
 

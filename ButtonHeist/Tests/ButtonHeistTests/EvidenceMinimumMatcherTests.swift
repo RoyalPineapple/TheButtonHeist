@@ -11,7 +11,7 @@ final class EvidenceMinimumMatcherTests: XCTestCase {
         let actionResult = try semanticActionResult(
             payload: .activate,
             source: .resolvedSemanticTarget,
-            target: .predicate(ElementPredicateTemplate(label: "Delete"), ordinal: 1),
+            target: .predicate(ElementPredicate(label: "Delete"), ordinal: 1),
             subject: button,
             before: [label, button],
             after: [label, button]
@@ -19,7 +19,7 @@ final class EvidenceMinimumMatcherTests: XCTestCase {
 
         XCTAssertEqual(
             EvidenceMinimumMatcher.minimumTarget(actionResult: actionResult),
-            .predicate(ElementPredicateTemplate(label: "Delete", traits: [.button]))
+            .predicate(ElementPredicate(label: "Delete", traits: [.button]))
         )
     }
 
@@ -28,7 +28,7 @@ final class EvidenceMinimumMatcherTests: XCTestCase {
         let actionResult = try semanticActionResult(
             payload: .activate,
             source: .resolvedSemanticTarget,
-            target: .predicate(ElementPredicateTemplate(label: "Delete")),
+            target: .predicate(ElementPredicate(label: "Delete")),
             subject: button,
             before: [button],
             after: [button],

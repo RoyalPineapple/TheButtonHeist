@@ -30,7 +30,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     mutating func validateString(
-        _ string: Expr<String>,
+        _ string: AuthoredString,
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
@@ -59,11 +59,11 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     mutating func validateString(
-        _ match: StringMatchCore<Expr<String>>,
+        _ match: StringMatch,
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
-        if let value = match.payload {
+        if let value = match.value {
             validateString(value, path: path, scope: scope)
         }
         if match.hasInvalidEmptyBroadLiteral {
@@ -81,7 +81,7 @@ extension HeistPlanRuntimeSafetyValidator {
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
-        for (index, check) in predicate.core.checks.enumerated() {
+        for (index, check) in predicate.checks.enumerated() {
             validateContainerPredicateCheck(
                 check,
                 path: path.child(.checks).index(index),
@@ -91,7 +91,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func validateContainerPredicateCheck(
-        _ check: ContainerPredicateCheckCore<Expr<String>>,
+        _ check: ContainerPredicateCheck,
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
@@ -108,7 +108,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func validateSemanticContainerPredicate(
-        _ predicate: SemanticContainerPredicateCore<Expr<String>>,
+        _ predicate: SemanticContainerPredicate,
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
@@ -143,7 +143,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     mutating func validateElementPredicate(
-        _ predicate: ElementPredicateTemplate,
+        _ predicate: ElementPredicate,
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
@@ -155,7 +155,7 @@ extension HeistPlanRuntimeSafetyValidator {
                 correction: "Use a non-empty label, identifier, value, hint, traits, actions, customContent, rotors, or exclude check."
             )
         }
-        for (index, check) in predicate.core.checks.enumerated() {
+        for (index, check) in predicate.checks.enumerated() {
             validateElementPredicateCheck(
                 check,
                 path: path.child(.checks).index(index),
@@ -165,7 +165,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func validateElementPredicateCheck(
-        _ check: ElementPredicateCheckCore<Expr<String>>,
+        _ check: ElementPredicateCheck,
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
@@ -244,7 +244,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func validateStrings(
-        _ matches: [StringMatchCore<Expr<String>>],
+        _ matches: [StringMatch],
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {

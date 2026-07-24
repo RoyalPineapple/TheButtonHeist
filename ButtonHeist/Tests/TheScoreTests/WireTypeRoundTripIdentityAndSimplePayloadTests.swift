@@ -19,6 +19,17 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(try decoder.decode(ButtonHeistVersion.self, from: data), version)
     }
 
+    func testCurrentProductVersionRoundTripsExactly() throws {
+        let expected: ButtonHeistVersion = "0.6.32"
+        let envelope = RequestEnvelope(message: .ping)
+        let data = try encoder.encode(envelope)
+        let decoded = try decoder.decode(RequestEnvelope.self, from: data)
+
+        XCTAssertEqual(buttonHeistVersion, expected)
+        XCTAssertEqual(decoded.buttonHeistVersion, expected)
+        XCTAssertEqual(decoded.message, .ping)
+    }
+
     func testRequestEnvelopeRejectsInvalidButtonHeistVersion() throws {
         let data = Data("""
         {"buttonHeistVersion":"1.0","type":"ping"}
@@ -111,7 +122,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testTypeTextStringRefLoweringRejectsEmptyResolvedText() throws {
         let command = HeistActionCommand.typeText(
             reference: "item",
-            target: .predicate(ElementPredicateTemplate(label: "Add item"))
+            target: .predicate(ElementPredicate(label: "Add item"))
         )
 
         XCTAssertThrowsError(try command.resolve(in: HeistExecutionEnvironment(strings: ["item": ""]))) { error in
@@ -122,7 +133,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testTypeTextStringRefLoweringAllowsEmptyResolvedTextWhenReplacingExisting() throws {
         let command = HeistActionCommand.typeText(
             reference: "item",
-            target: .predicate(ElementPredicateTemplate(label: "Add item")),
+            target: .predicate(ElementPredicate(label: "Add item")),
             mode: .replace
         )
 

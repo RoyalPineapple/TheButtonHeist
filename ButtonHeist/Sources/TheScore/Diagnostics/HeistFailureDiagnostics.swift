@@ -120,7 +120,7 @@ public extension HeistExecutionStepResult {
     }
 
     package var screenshotPayload: ScreenPayload? {
-        guard case .screenshot(let screenshot) = actionEvidence?.dispatchResult?.payload else {
+        guard case .screenshot(let screenshot) = actionEvidence?.result?.payload else {
             return nil
         }
         return screenshot

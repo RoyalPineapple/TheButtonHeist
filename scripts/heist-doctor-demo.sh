@@ -185,7 +185,7 @@ struct DoctorDemoFixture {
             )
         }
         let command = HeistActionCommand.activate(target)
-        let evidence = HeistActionEvidence.dispatch(dispatchResult: actionResult)
+        let evidence = HeistActionEvidence.completed(result: actionResult, expectation: nil)
         let node = ActionNodeFixture(
             command: command,
             outcome: outcome,

@@ -19,9 +19,9 @@ extension TheBrains {
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
-        let resolvedWait: ResolvedWaitRuntimeInput
+        let resolvedWait: ResolvedWaitStep
         do {
-            resolvedWait = try ResolvedWaitRuntimeInput(resolving: step, in: environment)
+            resolvedWait = try step.resolve(in: environment)
         } catch {
             return standaloneWaitResolutionFailureResult(
                 HeistStandaloneWaitResolutionFailure(
@@ -34,7 +34,9 @@ extension TheBrains {
         }
 
         let settlement = await runtime.settle(Settlement.Command(
-            observing: resolvedWait,
+            observing: step.predicate,
+            resolved: resolvedWait.predicate,
+            timeout: resolvedWait.timeout,
             baseline: .capture,
             startedAt: start
         ))

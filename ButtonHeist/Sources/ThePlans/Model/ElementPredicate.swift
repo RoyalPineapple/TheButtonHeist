@@ -1,65 +1,63 @@
 import Foundation
 
-// MARK: - Element Predicate Core
+private enum ElementPredicateCheckCodingKeys: String, CodingKey, CaseIterable {
+    case kind, match, values, check
+}
 
-package indirect enum ElementPredicateCheckCore<Text> {
-    case label(StringMatchCore<Text>)
-    case identifier(StringMatchCore<Text>)
-    case value(StringMatchCore<Text>)
-    case traits(Set<HeistTrait>)
-    case hint(StringMatchCore<Text>)
-    case actions(Set<ElementAction>)
-    case customContent(CustomContentMatchCore<Text>)
-    case rotors([StringMatchCore<Text>])
-    case exclude(ElementPredicateCheckCore<Text>)
-
-    package func map<NewText>(
-        _ transform: (Text) throws -> NewText
-    ) rethrows -> ElementPredicateCheckCore<NewText> {
-        switch self {
-        case .label(let match):
-            return try .label(match.map(transform))
-        case .identifier(let match):
-            return try .identifier(match.map(transform))
-        case .value(let match):
-            return try .value(match.map(transform))
-        case .traits(let traits):
-            return .traits(traits)
-        case .hint(let match):
-            return try .hint(match.map(transform))
-        case .actions(let actions):
-            return .actions(actions)
-        case .customContent(let match):
-            return try .customContent(match.map(transform))
-        case .rotors(let matches):
-            return try .rotors(matches.map { try $0.map(transform) })
-        case .exclude(let check):
-            return try .exclude(check.map(transform))
-        }
+private func rejectIrrelevantElementPredicateFields(
+    for kind: ElementPredicateCheck.Kind,
+    in container: KeyedDecodingContainer<ElementPredicateCheckCodingKeys>
+) throws {
+    let allowed: Set<ElementPredicateCheckCodingKeys>
+    switch kind {
+    case .label, .identifier, .value, .hint, .customContent:
+        allowed = [.kind, .match]
+    case .traits, .actions, .rotors:
+        allowed = [.kind, .values]
+    case .exclude:
+        allowed = [.kind, .check]
+    }
+    for key in container.allKeys where !allowed.contains(key) {
+        throw DecodingError.dataCorruptedError(
+            forKey: key,
+            in: container,
+            debugDescription: "\(key.stringValue) is not valid for \(kind.rawValue) element predicate checks"
+        )
     }
 }
 
-extension ElementPredicateCheckCore: Sendable where Text: Sendable {}
-extension ElementPredicateCheckCore: Equatable where Text: Equatable {}
-extension ElementPredicateCheckCore: Hashable where Text: Hashable {}
+/// One authored element check whose references resolve before evaluation.
+public indirect enum ElementPredicateCheck: Codable, Sendable, Equatable, Hashable {
+    case label(StringMatch)
+    case identifier(StringMatch)
+    case value(StringMatch)
+    case traits(Set<HeistTrait>)
+    case hint(StringMatch)
+    case actions(Set<ElementAction>)
+    case customContent(CustomContentMatch)
+    case rotors([StringMatch])
+    case exclude(ElementPredicateCheck)
 
-package extension ElementPredicateCheckCore where Text: StringMatchLeaf {
-    var invalidEmptyBroadMode: StringMatch.Mode? {
-        switch self {
-        case .label(let match), .identifier(let match), .value(let match), .hint(let match):
-            return match.invalidEmptyBroadMode
-        case .customContent(let match):
-            return match.label?.invalidEmptyBroadMode ?? match.value?.invalidEmptyBroadMode
-        case .rotors(let matches):
-            return matches.lazy.compactMap(\.invalidEmptyBroadMode).first
-        case .exclude(let check):
-            return check.invalidEmptyBroadMode
-        case .traits, .actions:
-            return nil
-        }
+    package enum Kind: String, Codable, CaseIterable {
+        case label, identifier, value, hint
+        case traits, actions, customContent, rotors
+        case exclude
     }
 
-    var hasPredicateLiteral: Bool {
+    public static func label(_ value: String) -> Self { .label(.exact(value)) }
+    @_disfavoredOverload
+    public static func label(_ reference: HeistReferenceName) -> Self { .label(.exact(reference)) }
+    public static func identifier(_ value: String) -> Self { .identifier(.exact(value)) }
+    @_disfavoredOverload
+    public static func identifier(_ reference: HeistReferenceName) -> Self { .identifier(.exact(reference)) }
+    public static func value(_ value: String) -> Self { .value(.exact(value)) }
+    @_disfavoredOverload
+    public static func value(_ reference: HeistReferenceName) -> Self { .value(.exact(reference)) }
+    public static func hint(_ value: String) -> Self { .hint(.exact(value)) }
+    @_disfavoredOverload
+    public static func hint(_ reference: HeistReferenceName) -> Self { .hint(.exact(reference)) }
+
+    public var hasPredicateLiteral: Bool {
         switch self {
         case .label(let match), .identifier(let match), .value(let match), .hint(let match):
             return match.hasPredicateLiteral
@@ -76,7 +74,7 @@ package extension ElementPredicateCheckCore where Text: StringMatchLeaf {
         }
     }
 
-    var invalidEmptyPayloadDescription: String? {
+    public var invalidEmptyPayloadDescription: String? {
         switch self {
         case .label(let match):
             return Self.emptyStringPayloadDescription(match, field: "label")
@@ -91,10 +89,14 @@ package extension ElementPredicateCheckCore where Text: StringMatchLeaf {
         case .actions(let actions):
             return actions.isEmpty ? "actions check must not be empty" : nil
         case .customContent(let match):
-            if let description = match.label.flatMap({ Self.emptyStringPayloadDescription($0, field: "customContent label") }) {
+            if let description = match.label.flatMap({
+                Self.emptyStringPayloadDescription($0, field: "customContent label")
+            }) {
                 return description
             }
-            if let description = match.value.flatMap({ Self.emptyStringPayloadDescription($0, field: "customContent value") }) {
+            if let description = match.value.flatMap({
+                Self.emptyStringPayloadDescription($0, field: "customContent value")
+            }) {
                 return description
             }
             return match.hasPredicateLiteral ? nil : "customContent match must include label, value, or isImportant"
@@ -111,171 +113,461 @@ package extension ElementPredicateCheckCore where Text: StringMatchLeaf {
         }
     }
 
-    private static func emptyStringPayloadDescription(
-        _ match: StringMatchCore<Text>,
-        field: String
-    ) -> String? {
-        match.payload?.stringMatchLiteralIsEmpty == true ? "\(field) match value must not be empty" : nil
+    package var invalidEmptyBroadMode: StringMatch.Mode? {
+        switch self {
+        case .label(let match), .identifier(let match), .value(let match), .hint(let match):
+            return match.hasInvalidEmptyBroadLiteral ? match.mode : nil
+        case .customContent(let match):
+            return [match.label, match.value].compactMap { $0 }
+                .first(where: \.hasInvalidEmptyBroadLiteral)?.mode
+        case .rotors(let matches):
+            return matches.first(where: \.hasInvalidEmptyBroadLiteral)?.mode
+        case .exclude(let check):
+            return check.invalidEmptyBroadMode
+        case .traits, .actions:
+            return nil
+        }
+    }
+
+    package func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedElementPredicateCheck {
+        switch self {
+        case .label(let match): return .label(try match.resolve(in: environment))
+        case .identifier(let match): return .identifier(try match.resolve(in: environment))
+        case .value(let match): return .value(try match.resolve(in: environment))
+        case .traits(let traits): return .traits(traits)
+        case .hint(let match): return .hint(try match.resolve(in: environment))
+        case .actions(let actions): return .actions(actions)
+        case .customContent(let match): return .customContent(try match.resolve(in: environment))
+        case .rotors(let matches): return .rotors(try matches.map { try $0.resolve(in: environment) })
+        case .exclude(let check): return .exclude(try check.resolve(in: environment))
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: ElementPredicateCheckCodingKeys.self, typeName: "element predicate check")
+        let container = try decoder.container(keyedBy: ElementPredicateCheckCodingKeys.self)
+        let kind = try container.decode(Kind.self, forKey: .kind)
+        try rejectIrrelevantElementPredicateFields(for: kind, in: container)
+        switch kind {
+        case .label: self = .label(try container.decode(StringMatch.self, forKey: .match))
+        case .identifier: self = .identifier(try container.decode(StringMatch.self, forKey: .match))
+        case .value: self = .value(try container.decode(StringMatch.self, forKey: .match))
+        case .hint: self = .hint(try container.decode(StringMatch.self, forKey: .match))
+        case .traits: self = .traits(try container.decode([HeistTrait].self, forKey: .values).heistTraitSet)
+        case .actions: self = .actions(Set(try container.decode([ElementAction].self, forKey: .values)))
+        case .customContent: self = .customContent(try container.decode(CustomContentMatch.self, forKey: .match))
+        case .rotors: self = .rotors(try container.decode([StringMatch].self, forKey: .values))
+        case .exclude: self = .exclude(try container.decode(ElementPredicateCheck.self, forKey: .check))
+        }
+        if let description = invalidEmptyPayloadDescription {
+            throw DecodingError.dataCorrupted(.init(codingPath: container.codingPath, debugDescription: description))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: ElementPredicateCheckCodingKeys.self)
+        switch self {
+        case .label(let match):
+            try container.encode(Kind.label, forKey: .kind)
+            try container.encode(match, forKey: .match)
+        case .identifier(let match):
+            try container.encode(Kind.identifier, forKey: .kind)
+            try container.encode(match, forKey: .match)
+        case .value(let match):
+            try container.encode(Kind.value, forKey: .kind)
+            try container.encode(match, forKey: .match)
+        case .hint(let match):
+            try container.encode(Kind.hint, forKey: .kind)
+            try container.encode(match, forKey: .match)
+        case .traits(let traits):
+            try container.encode(Kind.traits, forKey: .kind)
+            try container.encode(traits.canonicalHeistTraitArray, forKey: .values)
+        case .actions(let actions):
+            try container.encode(Kind.actions, forKey: .kind)
+            try container.encode(actions.canonicalElementActionArray, forKey: .values)
+        case .customContent(let match):
+            try container.encode(Kind.customContent, forKey: .kind)
+            try container.encode(match, forKey: .match)
+        case .rotors(let matches):
+            try container.encode(Kind.rotors, forKey: .kind)
+            try container.encode(matches, forKey: .values)
+        case .exclude(let check):
+            try container.encode(Kind.exclude, forKey: .kind)
+            try container.encode(check, forKey: .check)
+        }
+    }
+
+    private static func emptyStringPayloadDescription(_ match: StringMatch, field: String) -> String? {
+        match.value?.literalIsEmpty == true ? "\(field) match value must not be empty" : nil
+    }
+
+}
+
+extension ElementPredicateCheck: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .label(let match): return "label=\(match)"
+        case .identifier(let match): return "identifier=\(match)"
+        case .value(let match): return "value=\(match)"
+        case .traits(let traits):
+            return "traits=[\(traits.canonicalHeistTraitArray.map(\.rawValue).joined(separator: ", "))]"
+        case .hint(let match): return "hint=\(match)"
+        case .actions(let actions):
+            return "actions=[\(actions.canonicalElementActionArray.map(\.description).joined(separator: ", "))]"
+        case .customContent(let match): return "customContent=\(match)"
+        case .rotors(let matches):
+            return "rotors=[\(matches.map(\.description).joined(separator: ", "))]"
+        case .exclude(let check): return "exclude(\(check))"
+        }
     }
 }
 
-package struct ElementPredicateCore<Text> {
-    package let checks: [ElementPredicateCheckCore<Text>]
+/// The canonical authored element predicate.
+public struct ElementPredicate: Codable, Sendable, Equatable, Hashable {
+    public let checks: [ElementPredicateCheck]
 
-    package init(_ checks: [ElementPredicateCheckCore<Text>] = []) {
+    enum CodingKeys: String, CodingKey, CaseIterable {
+        case checks
+    }
+
+    public init(_ checks: [ElementPredicateCheck] = []) {
         self.checks = checks
     }
 
-    package func map<NewText>(
-        _ transform: (Text) throws -> NewText
-    ) rethrows -> ElementPredicateCore<NewText> {
-        try ElementPredicateCore<NewText>(checks.map { try $0.map(transform) })
+    public init(
+        label: StringMatch? = nil,
+        identifier: StringMatch? = nil,
+        value: StringMatch? = nil,
+        traits: [HeistTrait] = [],
+        hint: StringMatch? = nil,
+        actions: [ElementAction] = [],
+        customContent: CustomContentMatch? = nil,
+        rotors: [StringMatch] = []
+    ) {
+        checks = [
+            label.map(ElementPredicateCheck.label),
+            identifier.map(ElementPredicateCheck.identifier),
+            value.map(ElementPredicateCheck.value),
+            hint.map(ElementPredicateCheck.hint),
+            customContent.map(ElementPredicateCheck.customContent),
+            rotors.isEmpty ? nil : .rotors(rotors),
+            traits.isEmpty ? nil : .traits(traits.heistTraitSet),
+            actions.isEmpty ? nil : .actions(Set(actions)),
+        ].compactMap { $0 }
     }
-}
 
-package extension ElementPredicateCore where Text: StringMatchLeaf {
-    var invalidEmptyBroadMode: StringMatch.Mode? {
-        checks.lazy.compactMap(\.invalidEmptyBroadMode).first
-    }
-}
-
-extension ElementPredicateCore: Sendable where Text: Sendable {}
-extension ElementPredicateCore: Equatable where Text: Equatable {}
-extension ElementPredicateCore: Hashable where Text: Hashable {}
-
-package extension ElementPredicateCore where Text: StringMatchLeaf {
-    var hasPredicates: Bool {
-        checks.contains { $0.hasPredicateLiteral }
+    public init(
+        _ checks: [ElementPredicateCheck],
+        traits: [HeistTrait] = [],
+        actions: [ElementAction] = []
+    ) {
+        self.checks = checks + [
+            traits.isEmpty ? nil : .traits(traits.heistTraitSet),
+            actions.isEmpty ? nil : .actions(Set(actions)),
+        ].compactMap { $0 }
     }
 
-    var invalidEmptyPayloadDescription: String? {
+    public var hasPredicates: Bool { checks.contains { $0.hasPredicateLiteral } }
+
+    public var invalidEmptyPayloadDescription: String? {
         if let description = checks.lazy.compactMap(\.invalidEmptyPayloadDescription).first {
             return description
         }
         return hasPredicates ? nil : AccessibilityTargetGrammarError.emptyPredicate.diagnosticDescription
     }
-}
 
-// MARK: - Authored Checks
-
-/// One authored element check whose references resolve before evaluation.
-public struct ElementPredicateCheck: Codable, Sendable, Equatable, Hashable {
-    package let core: ElementPredicateCheckCore<Expr<String>>
-
-    package init(core: ElementPredicateCheckCore<Expr<String>>) {
-        self.core = core
-    }
-
-    public static func label(_ match: StringMatch) -> Self { Self(core: .label(match.core)) }
-    public static func label(_ value: String) -> Self { .label(.exact(value)) }
-    @_disfavoredOverload
-    public static func label(_ reference: HeistReferenceName) -> Self { .label(.exact(reference)) }
-
-    public static func identifier(_ match: StringMatch) -> Self { Self(core: .identifier(match.core)) }
-    public static func identifier(_ value: String) -> Self { .identifier(.exact(value)) }
-    @_disfavoredOverload
-    public static func identifier(_ reference: HeistReferenceName) -> Self { .identifier(.exact(reference)) }
-
-    public static func value(_ match: StringMatch) -> Self { Self(core: .value(match.core)) }
-    public static func value(_ value: String) -> Self { .value(.exact(value)) }
-    @_disfavoredOverload
-    public static func value(_ reference: HeistReferenceName) -> Self { .value(.exact(reference)) }
-
-    public static func hint(_ match: StringMatch) -> Self { Self(core: .hint(match.core)) }
-    public static func hint(_ value: String) -> Self { .hint(.exact(value)) }
-    @_disfavoredOverload
-    public static func hint(_ reference: HeistReferenceName) -> Self { .hint(.exact(reference)) }
-
-    public static func traits(_ traits: Set<HeistTrait>) -> Self { Self(core: .traits(traits)) }
-    public static func actions(_ actions: Set<ElementAction>) -> Self { Self(core: .actions(actions)) }
-    public static func customContent(_ match: CustomContentMatch) -> Self { Self(core: .customContent(match.core)) }
-    public static func rotors(_ matches: [StringMatch]) -> Self { Self(core: .rotors(matches.map(\.core))) }
-    public static func exclude(_ check: ElementPredicateCheck) -> Self { Self(core: .exclude(check.core)) }
-
-    public var hasPredicateLiteral: Bool { core.hasPredicateLiteral }
-    public var invalidEmptyPayloadDescription: String? { core.invalidEmptyPayloadDescription }
-
-    public init(from decoder: Decoder) throws {
-        core = try ElementPredicateCheckCore(from: decoder)
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        try core.encode(to: encoder)
-    }
-}
-
-extension ElementPredicateCheck: CustomStringConvertible {
-    public var description: String {
-        core.map(\.description).description
-    }
-}
-
-// MARK: - Resolved Element Predicate
-
-/// A resolved element predicate. This type cannot contain references.
-public struct ElementPredicate: Codable, Sendable, Equatable, Hashable {
-    package let core: ElementPredicateCore<String>
-
-    package init(core: ElementPredicateCore<String>) {
-        self.core = core
-    }
-
-    package init(_ checks: [ElementPredicateCheckCore<String>]) {
-        core = ElementPredicateCore(checks)
-    }
-
-    public var hasPredicates: Bool { core.hasPredicates }
-    public var invalidEmptyPayloadDescription: String? { core.invalidEmptyPayloadDescription }
-
-    public static func label(_ label: String) -> Self {
-        Self([.label(.exact(label))])
-    }
-
-    public static func identifier(_ identifier: String) -> Self {
-        Self([.identifier(.exact(identifier))])
-    }
-
-    public static func value(_ value: String) -> Self {
-        Self([.value(.exact(value))])
-    }
-
-    public static func hint(_ hint: String) -> Self {
-        Self([.hint(.exact(hint))])
-    }
-
-    public static func traits(_ traits: [HeistTrait]) -> Self {
-        Self([.traits(traits.heistTraitSet)])
-    }
-
-    public static func actions(_ actions: [ElementAction]) -> Self {
-        Self([.actions(Set(actions))])
+    package func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedElementPredicate {
+        let resolved = ResolvedElementPredicate(try checks.map { try $0.resolve(in: environment) })
+        if let mode = resolved.invalidEmptyBroadMode {
+            throw HeistExpressionError.invalidStringMatch(mode: mode.rawValue)
+        }
+        if let description = resolved.invalidEmptyPayloadDescription {
+            throw InvalidResolvedPredicateError(reason: description)
+        }
+        return resolved
     }
 
     public init(from decoder: Decoder) throws {
-        core = try ElementPredicateCore(from: decoder)
-        if let description = invalidEmptyPayloadDescription {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element predicate")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(container: container, requiresNonEmpty: true)
+    }
+
+    static func decodeAllowingAdditionalKeys(from decoder: Decoder) throws -> ElementPredicate {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        return try ElementPredicate(container: container, requiresNonEmpty: container.contains(.checks))
+    }
+
+    init(container: KeyedDecodingContainer<CodingKeys>, requiresNonEmpty: Bool) throws {
+        checks = try container.decodeIfPresent([ElementPredicateCheck].self, forKey: .checks) ?? []
+        if requiresNonEmpty, let description = invalidEmptyPayloadDescription {
             throw DecodingError.dataCorrupted(.init(
-                codingPath: decoder.codingPath,
+                codingPath: container.codingPath + [CodingKeys.checks],
                 debugDescription: description
             ))
         }
     }
 
     public func encode(to encoder: Encoder) throws {
-        try core.encode(to: encoder)
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        if !checks.isEmpty {
+            try container.encode(checks, forKey: .checks)
+        }
     }
 }
 
 extension ElementPredicate: CustomStringConvertible {
     public var description: String {
-        CanonicalValueDescription.call(
-            "predicate",
-            core.checks.map { $0.map(CanonicalValueDescription.quoted).description }
-        )
+        CanonicalValueDescription.call("predicate", checks.map(\.description))
     }
 }
 
-// MARK: - Evaluation
+package indirect enum ResolvedElementPredicateCheck: Codable, Sendable, Equatable, Hashable {
+    case label(ResolvedStringMatch)
+    case identifier(ResolvedStringMatch)
+    case value(ResolvedStringMatch)
+    case traits(Set<HeistTrait>)
+    case hint(ResolvedStringMatch)
+    case actions(Set<ElementAction>)
+    case customContent(ResolvedCustomContentMatch)
+    case rotors([ResolvedStringMatch])
+    case exclude(ResolvedElementPredicateCheck)
+
+    package var hasPredicateLiteral: Bool {
+        switch self {
+        case .label(let match), .identifier(let match), .value(let match), .hint(let match):
+            return match.hasPredicateLiteral
+        case .traits(let traits): return !traits.isEmpty
+        case .actions(let actions): return !actions.isEmpty
+        case .customContent(let match): return match.hasPredicateLiteral
+        case .rotors(let matches): return matches.contains { $0.hasPredicateLiteral }
+        case .exclude(let check): return check.hasPredicateLiteral
+        }
+    }
+
+    package var invalidEmptyBroadMode: StringMatch.Mode? {
+        switch self {
+        case .label(let match), .identifier(let match), .value(let match), .hint(let match):
+            return match.invalidEmptyBroadMode
+        case .customContent(let match):
+            return [match.label, match.value].compactMap { $0 }
+                .compactMap(\.invalidEmptyBroadMode).first
+        case .rotors(let matches):
+            return matches.lazy.compactMap(\.invalidEmptyBroadMode).first
+        case .exclude(let check):
+            return check.invalidEmptyBroadMode
+        case .traits, .actions:
+            return nil
+        }
+    }
+
+    package var invalidEmptyPayloadDescription: String? {
+        switch self {
+        case .label(let match):
+            return Self.emptyStringPayloadDescription(match, field: "label")
+        case .identifier(let match):
+            return Self.emptyStringPayloadDescription(match, field: "identifier")
+        case .value(let match):
+            return Self.emptyStringPayloadDescription(match, field: "value")
+        case .hint(let match):
+            return Self.emptyStringPayloadDescription(match, field: "hint")
+        case .traits(let traits):
+            return traits.isEmpty ? "traits check must not be empty" : nil
+        case .actions(let actions):
+            return actions.isEmpty ? "actions check must not be empty" : nil
+        case .customContent(let match):
+            if let description = match.label.flatMap({
+                Self.emptyStringPayloadDescription($0, field: "customContent label")
+            }) {
+                return description
+            }
+            if let description = match.value.flatMap({
+                Self.emptyStringPayloadDescription($0, field: "customContent value")
+            }) {
+                return description
+            }
+            return match.hasPredicateLiteral ? nil : "customContent match must include label, value, or isImportant"
+        case .rotors(let matches):
+            if matches.isEmpty {
+                return "rotors check must not be empty"
+            }
+            return matches.lazy.compactMap { Self.emptyStringPayloadDescription($0, field: "rotor") }.first
+        case .exclude(let check):
+            if let description = check.invalidEmptyPayloadDescription {
+                return "excluded \(description)"
+            }
+            return check.hasPredicateLiteral ? nil : "exclude check must not be empty"
+        }
+    }
+
+    package func matches(_ subject: some ElementPredicateSubject) -> Bool {
+        switch self {
+        case .exclude(let check):
+            return !check.matches(subject)
+        case .label, .identifier, .value, .hint, .traits, .actions, .customContent, .rotors:
+            return matchesSubject(subject)
+        }
+    }
+
+    fileprivate func matchesSubject(_ subject: some ElementPredicateSubject) -> Bool {
+        switch self {
+        case .label(let match): return match.matches(optional: subject.predicateLabel)
+        case .identifier(let match): return match.matches(optional: subject.predicateIdentifier)
+        case .value(let match): return match.matches(optional: subject.predicateValue)
+        case .hint(let match): return match.matches(optional: subject.predicateHint)
+        case .traits(let traits): return traits.isEmpty || subject.satisfiesRequiredTraits(traits)
+        case .actions(let actions): return actions.isEmpty || subject.satisfiesRequiredActions(actions)
+        case .customContent(let match):
+            return !match.hasPredicateLiteral || subject.containsCustomContent(matching: match)
+        case .rotors(let matches): return matches.isEmpty || subject.satisfiesRequiredRotors(matches)
+        case .exclude: return false
+        }
+    }
+
+    package init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: ElementPredicateCheckCodingKeys.self, typeName: "element predicate check")
+        let container = try decoder.container(keyedBy: ElementPredicateCheckCodingKeys.self)
+        let kind = try container.decode(ElementPredicateCheck.Kind.self, forKey: .kind)
+        try rejectIrrelevantElementPredicateFields(for: kind, in: container)
+        switch kind {
+        case .label: self = .label(try container.decode(ResolvedStringMatch.self, forKey: .match))
+        case .identifier: self = .identifier(try container.decode(ResolvedStringMatch.self, forKey: .match))
+        case .value: self = .value(try container.decode(ResolvedStringMatch.self, forKey: .match))
+        case .hint: self = .hint(try container.decode(ResolvedStringMatch.self, forKey: .match))
+        case .traits: self = .traits(try container.decode([HeistTrait].self, forKey: .values).heistTraitSet)
+        case .actions: self = .actions(Set(try container.decode([ElementAction].self, forKey: .values)))
+        case .customContent:
+            self = .customContent(try container.decode(ResolvedCustomContentMatch.self, forKey: .match))
+        case .rotors: self = .rotors(try container.decode([ResolvedStringMatch].self, forKey: .values))
+        case .exclude: self = .exclude(try container.decode(ResolvedElementPredicateCheck.self, forKey: .check))
+        }
+        if let description = invalidEmptyPayloadDescription {
+            throw DecodingError.dataCorrupted(.init(codingPath: container.codingPath, debugDescription: description))
+        }
+    }
+
+    package func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: ElementPredicateCheckCodingKeys.self)
+        switch self {
+        case .label(let match):
+            try container.encode(ElementPredicateCheck.Kind.label, forKey: .kind)
+            try container.encode(match, forKey: .match)
+        case .identifier(let match):
+            try container.encode(ElementPredicateCheck.Kind.identifier, forKey: .kind)
+            try container.encode(match, forKey: .match)
+        case .value(let match):
+            try container.encode(ElementPredicateCheck.Kind.value, forKey: .kind)
+            try container.encode(match, forKey: .match)
+        case .hint(let match):
+            try container.encode(ElementPredicateCheck.Kind.hint, forKey: .kind)
+            try container.encode(match, forKey: .match)
+        case .traits(let traits):
+            try container.encode(ElementPredicateCheck.Kind.traits, forKey: .kind)
+            try container.encode(traits.canonicalHeistTraitArray, forKey: .values)
+        case .actions(let actions):
+            try container.encode(ElementPredicateCheck.Kind.actions, forKey: .kind)
+            try container.encode(actions.canonicalElementActionArray, forKey: .values)
+        case .customContent(let match):
+            try container.encode(ElementPredicateCheck.Kind.customContent, forKey: .kind)
+            try container.encode(match, forKey: .match)
+        case .rotors(let matches):
+            try container.encode(ElementPredicateCheck.Kind.rotors, forKey: .kind)
+            try container.encode(matches, forKey: .values)
+        case .exclude(let check):
+            try container.encode(ElementPredicateCheck.Kind.exclude, forKey: .kind)
+            try container.encode(check, forKey: .check)
+        }
+    }
+
+    private static func emptyStringPayloadDescription(_ match: ResolvedStringMatch, field: String) -> String? {
+        match.value?.isEmpty == true ? "\(field) match value must not be empty" : nil
+    }
+}
+
+extension ResolvedElementPredicateCheck: CustomStringConvertible {
+    package var description: String {
+        switch self {
+        case .label(let match): return "label=\(match)"
+        case .identifier(let match): return "identifier=\(match)"
+        case .value(let match): return "value=\(match)"
+        case .traits(let traits):
+            return "traits=[\(traits.canonicalHeistTraitArray.map(\.rawValue).joined(separator: ", "))]"
+        case .hint(let match): return "hint=\(match)"
+        case .actions(let actions):
+            return "actions=[\(actions.canonicalElementActionArray.map(\.description).joined(separator: ", "))]"
+        case .customContent(let match): return "customContent=\(match)"
+        case .rotors(let matches):
+            return "rotors=[\(matches.map(\.description).joined(separator: ", "))]"
+        case .exclude(let check): return "exclude(\(check))"
+        }
+    }
+}
+
+/// A resolved element predicate. This type cannot contain references.
+package struct ResolvedElementPredicate: Codable, Sendable, Equatable, Hashable {
+    package let checks: [ResolvedElementPredicateCheck]
+
+    package init(_ checks: [ResolvedElementPredicateCheck] = []) {
+        self.checks = checks
+    }
+
+    package var hasPredicates: Bool { checks.contains { $0.hasPredicateLiteral } }
+    package var invalidEmptyBroadMode: StringMatch.Mode? {
+        checks.lazy.compactMap(\.invalidEmptyBroadMode).first
+    }
+    package var invalidEmptyPayloadDescription: String? {
+        if let description = checks.lazy.compactMap(\.invalidEmptyPayloadDescription).first {
+            return description
+        }
+        return hasPredicates ? nil : AccessibilityTargetGrammarError.emptyPredicate.diagnosticDescription
+    }
+
+    package static func label(_ label: String) -> Self {
+        Self([.label(.exact(label))])
+    }
+
+    package static func identifier(_ identifier: String) -> Self {
+        Self([.identifier(.exact(identifier))])
+    }
+
+    package static func value(_ value: String) -> Self {
+        Self([.value(.exact(value))])
+    }
+
+    package static func hint(_ hint: String) -> Self {
+        Self([.hint(.exact(hint))])
+    }
+
+    package static func traits(_ traits: [HeistTrait]) -> Self {
+        Self([.traits(traits.heistTraitSet)])
+    }
+
+    package static func actions(_ actions: [ElementAction]) -> Self {
+        Self([.actions(Set(actions))])
+    }
+
+    package init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: ElementPredicate.CodingKeys.self, typeName: "element predicate")
+        let container = try decoder.container(keyedBy: ElementPredicate.CodingKeys.self)
+        checks = try container.decodeIfPresent([ResolvedElementPredicateCheck].self, forKey: .checks) ?? []
+        if let description = invalidEmptyPayloadDescription {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: description))
+        }
+    }
+
+    package func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: ElementPredicate.CodingKeys.self)
+        if !checks.isEmpty {
+            try container.encode(checks, forKey: .checks)
+        }
+    }
+}
+
+extension ResolvedElementPredicate: CustomStringConvertible {
+    package var description: String {
+        CanonicalValueDescription.call("predicate", checks.map(\.description))
+    }
+}
 
 package protocol ElementPredicateSubject {
     var predicateLabel: String? { get }
@@ -284,8 +576,8 @@ package protocol ElementPredicateSubject {
     var predicateHint: String? { get }
     func satisfiesRequiredTraits(_ required: Set<HeistTrait>) -> Bool
     func satisfiesRequiredActions(_ required: Set<ElementAction>) -> Bool
-    func containsCustomContent(matching match: CustomContentMatchCore<String>) -> Bool
-    func satisfiesRequiredRotors(_ required: [StringMatchCore<String>]) -> Bool
+    func containsCustomContent(matching match: ResolvedCustomContentMatch) -> Bool
+    func satisfiesRequiredRotors(_ required: [ResolvedStringMatch]) -> Bool
 }
 
 package protocol ElementPredicateSubjectBacked: ElementPredicateSubject {
@@ -307,18 +599,18 @@ package extension ElementPredicateSubjectBacked {
         predicateSubject.satisfiesRequiredActions(required)
     }
 
-    func containsCustomContent(matching match: CustomContentMatchCore<String>) -> Bool {
+    func containsCustomContent(matching match: ResolvedCustomContentMatch) -> Bool {
         predicateSubject.containsCustomContent(matching: match)
     }
 
-    func satisfiesRequiredRotors(_ required: [StringMatchCore<String>]) -> Bool {
+    func satisfiesRequiredRotors(_ required: [ResolvedStringMatch]) -> Bool {
         predicateSubject.satisfiesRequiredRotors(required)
     }
 }
 
-package extension ElementPredicate {
+package extension ResolvedElementPredicate {
     func matches(_ subject: some ElementPredicateSubject) -> Bool {
-        hasPredicates && core.checks.allSatisfy { $0.matches(subject) }
+        hasPredicates && checks.allSatisfy { $0.matches(subject) }
     }
 }
 
@@ -396,12 +688,10 @@ package struct ElementPredicateGraph<Identity: Hashable, Subject: ElementPredica
         })
     }
 
-    package func resolve(_ predicate: ElementPredicate) -> ElementPredicateMatchSet<Identity, Subject> {
+    package func resolve(_ predicate: ResolvedElementPredicate) -> ElementPredicateMatchSet<Identity, Subject> {
         guard predicate.hasPredicates else { return .empty }
         return ElementPredicateMatchSet(
-            all.matches.filter { match in
-                predicate.core.checks.allSatisfy { $0.matches(match.subject) }
-            }
+            all.matches.filter { match in predicate.checks.allSatisfy { $0.matches(match.subject) } }
         )
     }
 
@@ -414,7 +704,7 @@ package struct ElementPredicateGraph<Identity: Hashable, Subject: ElementPredica
     }
 
     package func resolve(
-        _ check: ElementPredicateCheckCore<String>
+        _ check: ResolvedElementPredicateCheck
     ) -> ElementPredicateMatchSet<Identity, Subject> {
         switch check {
         case .exclude(let excluded):
@@ -424,192 +714,6 @@ package struct ElementPredicateGraph<Identity: Hashable, Subject: ElementPredica
         }
     }
 }
-
-package extension ElementPredicateCheckCore where Text == String {
-    func matches(_ subject: some ElementPredicateSubject) -> Bool {
-        switch self {
-        case .exclude(let check):
-            return !check.matches(subject)
-        case .label, .identifier, .value, .hint, .traits, .actions, .customContent, .rotors:
-            return matchesSubject(subject)
-        }
-    }
-
-    fileprivate func matchesSubject(_ subject: some ElementPredicateSubject) -> Bool {
-        switch self {
-        case .label(let match):
-            return ResolvedStringMatch(core: match).matches(optional: subject.predicateLabel)
-        case .identifier(let match):
-            return ResolvedStringMatch(core: match).matches(optional: subject.predicateIdentifier)
-        case .value(let match):
-            return ResolvedStringMatch(core: match).matches(optional: subject.predicateValue)
-        case .hint(let match):
-            return ResolvedStringMatch(core: match).matches(optional: subject.predicateHint)
-        case .traits(let traits):
-            return traits.isEmpty || subject.satisfiesRequiredTraits(traits)
-        case .actions(let actions):
-            return actions.isEmpty || subject.satisfiesRequiredActions(actions)
-        case .customContent(let match):
-            return !match.hasPredicateLiteral || subject.containsCustomContent(matching: match)
-        case .rotors(let matches):
-            return matches.isEmpty || subject.satisfiesRequiredRotors(matches)
-        case .exclude:
-            return false
-        }
-    }
-}
-
-// MARK: - Codable
-
-extension ElementPredicateCore: Codable where Text: Codable & StringMatchLeaf {
-    private enum CodingKeys: String, CodingKey, CaseIterable {
-        case checks
-    }
-
-    package init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element predicate")
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        checks = try container.decodeIfPresent([ElementPredicateCheckCore<Text>].self, forKey: .checks) ?? []
-    }
-
-    package func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        if !checks.isEmpty {
-            try container.encode(checks, forKey: .checks)
-        }
-    }
-}
-
-extension ElementPredicateCheckCore: Codable where Text: Codable & StringMatchLeaf {
-    private enum CodingKeys: String, CodingKey, CaseIterable {
-        case kind, match, values, check
-    }
-
-    package enum Kind: String, Codable, CaseIterable {
-        case label, identifier, value, hint
-        case traits, actions, customContent, rotors
-        case exclude
-    }
-
-    package init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element predicate check")
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        switch try container.decode(Kind.self, forKey: .kind) {
-        case .label:
-            try Self.rejectIrrelevantField(.values, in: container, forKind: .label)
-            try Self.rejectIrrelevantField(.check, in: container, forKind: .label)
-            self = .label(try container.decode(StringMatchCore<Text>.self, forKey: .match))
-        case .identifier:
-            try Self.rejectIrrelevantField(.values, in: container, forKind: .identifier)
-            try Self.rejectIrrelevantField(.check, in: container, forKind: .identifier)
-            self = .identifier(try container.decode(StringMatchCore<Text>.self, forKey: .match))
-        case .value:
-            try Self.rejectIrrelevantField(.values, in: container, forKind: .value)
-            try Self.rejectIrrelevantField(.check, in: container, forKind: .value)
-            self = .value(try container.decode(StringMatchCore<Text>.self, forKey: .match))
-        case .hint:
-            try Self.rejectIrrelevantField(.values, in: container, forKind: .hint)
-            try Self.rejectIrrelevantField(.check, in: container, forKind: .hint)
-            self = .hint(try container.decode(StringMatchCore<Text>.self, forKey: .match))
-        case .traits:
-            try Self.rejectIrrelevantField(.match, in: container, forKind: .traits)
-            try Self.rejectIrrelevantField(.check, in: container, forKind: .traits)
-            self = .traits(try container.decode([HeistTrait].self, forKey: .values).heistTraitSet)
-        case .actions:
-            try Self.rejectIrrelevantField(.match, in: container, forKind: .actions)
-            try Self.rejectIrrelevantField(.check, in: container, forKind: .actions)
-            self = .actions(Set(try container.decode([ElementAction].self, forKey: .values)))
-        case .customContent:
-            try Self.rejectIrrelevantField(.values, in: container, forKind: .customContent)
-            try Self.rejectIrrelevantField(.check, in: container, forKind: .customContent)
-            self = .customContent(try container.decode(CustomContentMatchCore<Text>.self, forKey: .match))
-        case .rotors:
-            try Self.rejectIrrelevantField(.match, in: container, forKind: .rotors)
-            try Self.rejectIrrelevantField(.check, in: container, forKind: .rotors)
-            self = .rotors(try container.decode([StringMatchCore<Text>].self, forKey: .values))
-        case .exclude:
-            try Self.rejectIrrelevantField(.match, in: container, forKind: .exclude)
-            try Self.rejectIrrelevantField(.values, in: container, forKind: .exclude)
-            self = .exclude(try container.decode(ElementPredicateCheckCore<Text>.self, forKey: .check))
-        }
-        if let description = invalidEmptyPayloadDescription {
-            throw DecodingError.dataCorrupted(.init(codingPath: container.codingPath, debugDescription: description))
-        }
-    }
-
-    package func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        switch self {
-        case .label(let match):
-            try container.encode(Kind.label, forKey: .kind)
-            try container.encode(match, forKey: .match)
-        case .identifier(let match):
-            try container.encode(Kind.identifier, forKey: .kind)
-            try container.encode(match, forKey: .match)
-        case .value(let match):
-            try container.encode(Kind.value, forKey: .kind)
-            try container.encode(match, forKey: .match)
-        case .hint(let match):
-            try container.encode(Kind.hint, forKey: .kind)
-            try container.encode(match, forKey: .match)
-        case .traits(let traits):
-            try container.encode(Kind.traits, forKey: .kind)
-            try container.encode(traits.canonicalHeistTraitArray, forKey: .values)
-        case .actions(let actions):
-            try container.encode(Kind.actions, forKey: .kind)
-            try container.encode(actions.canonicalElementActionArray, forKey: .values)
-        case .customContent(let match):
-            try container.encode(Kind.customContent, forKey: .kind)
-            try container.encode(match, forKey: .match)
-        case .rotors(let matches):
-            try container.encode(Kind.rotors, forKey: .kind)
-            try container.encode(matches, forKey: .values)
-        case .exclude(let check):
-            try container.encode(Kind.exclude, forKey: .kind)
-            try container.encode(check, forKey: .check)
-        }
-    }
-
-    private static func rejectIrrelevantField(
-        _ key: CodingKeys,
-        in container: KeyedDecodingContainer<CodingKeys>,
-        forKind kind: Kind
-    ) throws {
-        guard container.contains(key) else { return }
-        throw DecodingError.dataCorruptedError(
-            forKey: key,
-            in: container,
-            debugDescription: "\(key.stringValue) is not valid for \(kind.rawValue) element predicate checks"
-        )
-    }
-}
-
-extension ElementPredicateCheckCore: CustomStringConvertible {
-    package var description: String {
-        switch self {
-        case .label(let match):
-            return "label=\(match)"
-        case .identifier(let match):
-            return "identifier=\(match)"
-        case .value(let match):
-            return "value=\(match)"
-        case .traits(let traits):
-            return "traits=[\(traits.canonicalHeistTraitArray.map(\.rawValue).joined(separator: ", "))]"
-        case .hint(let match):
-            return "hint=\(match)"
-        case .actions(let actions):
-            return "actions=[\(actions.canonicalElementActionArray.map(\.description).joined(separator: ", "))]"
-        case .customContent(let match):
-            return "customContent=\(match)"
-        case .rotors(let matches):
-            return "rotors=[\(matches.map(\.description).joined(separator: ", "))]"
-        case .exclude(let check):
-            return "exclude(\(check))"
-        }
-    }
-}
-
-// MARK: - String Comparison
 
 public extension ElementPredicate {
     static func stringEquals(_ candidate: String, _ pattern: String) -> Bool {

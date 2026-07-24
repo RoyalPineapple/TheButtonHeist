@@ -195,8 +195,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
 
     func waitForAnnouncement(
         after cursor: AccessibilityNotificationCursor,
-        matching predicate: ResolvedAnnouncementPredicate,
-        timeout: TimeInterval
+        matching predicate: ResolvedAnnouncementPredicate
     ) async -> AccessibilityAnnouncementWaitOutcome {
         let waiterId = reserveAnnouncementWaiterIdentifier()
         let continuationBox = TimedOneShot<AccessibilityAnnouncementWaitOutcome>()
@@ -204,48 +203,40 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
         let outcome: AccessibilityAnnouncementWaitOutcome = await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 if Task.isCancelled {
-                    continuation.resume(returning: .timedOut)
+                    continuation.resume(returning: .cancelled)
                     return
                 }
                 guard continuationBox.register(continuation) else {
-                    continuation.resume(returning: .timedOut)
+                    continuation.resume(returning: .cancelled)
                     return
                 }
 
                 lock.lock()
                 switch announcementOutcomeLocked(after: cursor, matching: predicate) {
-                case .matched(let announcement):
+                case .matched(let announcement)?:
                     lock.unlock()
                     continuationBox.resolve(returning: .matched(announcement))
                     return
-                case .historyUnavailable(let gap):
+                case .historyUnavailable(let gap)?:
                     lock.unlock()
                     continuationBox.resolve(returning: .historyUnavailable(gap))
                     return
-                case .timedOut:
+                case .cancelled?:
+                    preconditionFailure("Announcement history cannot produce cancellation")
+                case nil:
                     break
                 }
-                guard timeout > 0 else {
-                    lock.unlock()
-                    continuationBox.resolve(returning: .timedOut)
-                    return
-                }
-
-                let timeoutMilliseconds = Int64(max(1, timeout * 1_000))
                 announcementWaiters.insert(AnnouncementWaiter(
                     afterSequence: cursor.sequence,
                     predicate: predicate,
                     continuation: continuationBox
                 ), id: waiterId)
-                continuationBox.armTimeout(after: .milliseconds(timeoutMilliseconds)) { [weak self] in
-                    self?.completeAnnouncementWaiter(waiterId, returning: .timedOut)
-                }
                 lock.unlock()
             }
         } onCancel: {
-            continuationBox.resolve(returning: .timedOut)
+            continuationBox.resolve(returning: .cancelled)
         }
-        completeAnnouncementWaiter(waiterId, returning: .timedOut)
+        completeAnnouncementWaiter(waiterId, returning: .cancelled)
         return outcome
     }
 
@@ -361,7 +352,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
     private func announcementOutcomeLocked(
         after cursor: AccessibilityNotificationCursor,
         matching predicate: ResolvedAnnouncementPredicate
-    ) -> AccessibilityAnnouncementWaitOutcome {
+    ) -> AccessibilityAnnouncementWaitOutcome? {
         let batch = ingressLog.checkpoint(after: cursor, selection: .all)
         for event in batch.events {
             guard let announcement = event.capturedAnnouncement,
@@ -372,7 +363,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
         if let gap = batch.gap {
             return .historyUnavailable(gap)
         }
-        return .timedOut
+        return nil
     }
 
     fileprivate static func stringPayload(_ value: AnyObject?) -> String? {
@@ -523,7 +514,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
 
 enum AccessibilityAnnouncementWaitOutcome: Sendable, Equatable {
     case matched(CapturedAnnouncement)
-    case timedOut
+    case cancelled
     case historyUnavailable(AccessibilityNotificationGap)
 }
 
