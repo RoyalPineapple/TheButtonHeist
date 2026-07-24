@@ -19,7 +19,7 @@ func runtimeSafetyEnforcesBounds() throws {
         .exists(.label("Nested")),
         .exists(.label("Sibling")),
     ]))
-    let raw = structurallyAdmittedPlan(body: [
+    let raw = try HeistPlan(body: [
         .wait(WaitStep(predicate: deepPredicate, timeout: 0.5)),
         .forEachElement(try ForEachElementStep(
             matching: .label("Delete"),
@@ -57,7 +57,7 @@ func runtimeSafetyRequiresForEachElementPositiveLimitUnderConfiguredMax() throws
         )
     }
 
-    let raw = structurallyAdmittedPlan(body: [
+    let raw = try HeistPlan(body: [
         .forEachElement(try ForEachElementStep(
             matching: .label("Delete"),
             limit: 2,
@@ -88,7 +88,7 @@ func runtimeSafetyRequiresForEachStringExplicitValuesUnderConfiguredMax() throws
         )
     }
 
-    let raw = structurallyAdmittedPlan(body: [
+    let raw = try HeistPlan(body: [
         .forEachString(try ForEachStringStep(
             values: ["Milk", "Eggs"],
             parameter: "item",
@@ -117,7 +117,7 @@ func runtimeSafetyUsesTheAdmittedWaitTimeoutWithoutASecondRepeatUntilCap() throw
         validatingSeconds: configuredMaximum,
         maximumSeconds: configuredMaximum
     )
-    let raw = structurallyAdmittedPlan(body: [
+    let raw = try HeistPlan(body: [
         .repeatUntil(try RepeatUntilStep(
             predicate: .exists(.label("Done")),
             timeout: timeout,
@@ -130,7 +130,7 @@ func runtimeSafetyUsesTheAdmittedWaitTimeoutWithoutASecondRepeatUntilCap() throw
 
 @Test
 func runtimeSafetyRejectsNestedStepDepthWithPreciseDiagnostic() throws {
-    let raw = structurallyAdmittedPlan(body: [
+    let raw = try HeistPlan(body: [
         .conditional(try ConditionalStep(cases: [
             PredicateCase(predicate: .exists(.label("Home")), body: [.warn(WarnStep(message: "nested"))]),
         ])),
@@ -150,9 +150,9 @@ func runtimeSafetyRejectsNestedStepDepthWithPreciseDiagnostic() throws {
 
 @Test
 func runtimeSafetyRejectsMaxDefinitionsWithPreciseDiagnostic() throws {
-    let raw = structurallyAdmittedPlan(definitions: [
-        structurallyAdmittedPlan(name: "one", body: [.warn(WarnStep(message: "one"))]),
-        structurallyAdmittedPlan(name: "two", body: [.warn(WarnStep(message: "two"))]),
+    let raw = try HeistPlan(definitions: [
+        HeistPlan(name: "one", body: [.warn(WarnStep(message: "one"))]),
+        HeistPlan(name: "two", body: [.warn(WarnStep(message: "two"))]),
     ], body: [
         .warn(WarnStep(message: "body")),
     ])
@@ -172,22 +172,23 @@ func runtimeSafetyRejectsMaxDefinitionsWithPreciseDiagnostic() throws {
 @Test
 func runtimeSafetyRejectsStandardDefinitionCapByDefault() throws {
     let definitions = try (0...HeistPlanRuntimeSafetyLimits.standardMaxDefinitions).map { index in
-        structurallyAdmittedPlan(name: try HeistPlanName(validating: "definition\(index)"), body: [
+        try HeistPlan(name: HeistPlanName(validating: "definition\(index)"), body: [
             .warn(WarnStep(message: try HeistWarningMessage(validating: "definition \(index)"))),
         ])
     }
-    let raw = structurallyAdmittedPlan(definitions: definitions, body: [
-        .warn(WarnStep(message: "body")),
-    ])
-
-    let failures = runtimeSafetyFailures(for: raw)
-
-    let expectedObserved = "\(HeistPlanRuntimeSafetyLimits.standardMaxDefinitions + 1) definitions"
-    #expect(failures.contains {
-        $0.path.description == "$.definitions"
-            && $0.contract == "max total heist definitions"
-            && $0.observed == expectedObserved
-    }, "\(failures)")
+    do {
+        _ = try HeistPlan(definitions: definitions, body: [
+            .warn(WarnStep(message: "body")),
+        ])
+        Issue.record("Expected standard definition cap to reject the plan")
+    } catch let error as HeistPlanBuildError {
+        let expectedObserved = "\(HeistPlanRuntimeSafetyLimits.standardMaxDefinitions + 1) definitions"
+        #expect(error.diagnostics.contains {
+            $0.path == "$.definitions"
+                && $0.message.contains("max total heist definitions")
+                && $0.message.contains(expectedObserved)
+        }, "\(error.diagnostics)")
+    }
 }
 
 @Test
@@ -204,12 +205,12 @@ func runtimeSafetyAllowsCollectionLoopsInsideControlFlowButRejectsNestedCollecti
         body: [.action(ActionStep(command: .activate(.ref("target"))))]
     )
     let allowedCases: [HeistPlan] = [
-        structurallyAdmittedPlan(body: [
+        try HeistPlan(body: [
             .conditional(try ConditionalStep(cases: [
                 PredicateCase(predicate: .exists(.label("Home")), body: [.forEachString(nestedString)]),
             ])),
         ]),
-        structurallyAdmittedPlan(body: [
+        try HeistPlan(body: [
             .wait(WaitStep(
                 predicate: .exists(.label("Home")),
                 timeout: 1,
@@ -217,27 +218,27 @@ func runtimeSafetyAllowsCollectionLoopsInsideControlFlowButRejectsNestedCollecti
             )),
         ]),
     ]
-    let rejectedCases: [(HeistPlan, String, String)] = [
+    let rejectedCases: [([HeistStep], String, String)] = [
         (
-            structurallyAdmittedPlan(body: [
+            [
                 .forEachElement(try ForEachElementStep(
                     matching: .label("Row"),
                     limit: 1,
                     parameter: "row",
                     body: [.forEachString(nestedString)]
                 )),
-            ]),
+            ],
             "$.body[0].for_each_element.body[0].for_each_string",
             "for_each_string inside collection loop"
         ),
         (
-            structurallyAdmittedPlan(body: [
+            [
                 .forEachString(try ForEachStringStep(
                     values: ["Row"],
                     parameter: "rowName",
                     body: [.forEachElement(nestedElement)]
                 )),
-            ]),
+            ],
             "$.body[0].for_each_string.body[0].for_each_element",
             "for_each_element inside collection loop"
         ),
@@ -248,20 +249,23 @@ func runtimeSafetyAllowsCollectionLoopsInsideControlFlowButRejectsNestedCollecti
         #expect(failures.isEmpty, "\(failures)")
     }
 
-    for (raw, path, observed) in rejectedCases {
-        let failures = runtimeSafetyFailures(for: raw)
-
-        #expect(failures.contains {
-            $0.path.description == path
-                && $0.contract == "collection loops must not be nested"
-                && $0.observed == observed
-        }, "\(failures)")
+    for (body, path, observed) in rejectedCases {
+        do {
+            _ = try HeistPlan(body: body)
+            Issue.record("Expected nested collection loop to fail")
+        } catch let error as HeistPlanBuildError {
+            #expect(error.diagnostics.contains {
+                $0.path == path
+                    && $0.message.contains("collection loops must not be nested")
+                    && $0.message.contains(observed)
+            }, "\(error.diagnostics)")
+        }
     }
 }
 
 @Test
 func runtimeSafetyEnforcesBoundsOnCollectionLoopsInsideControlFlow() throws {
-    let raw = structurallyAdmittedPlan(body: [
+    let raw = try HeistPlan(body: [
         .conditional(try ConditionalStep(cases: [
             PredicateCase(predicate: .exists(.label("Home")), body: [
                 .forEachString(try ForEachStringStep(

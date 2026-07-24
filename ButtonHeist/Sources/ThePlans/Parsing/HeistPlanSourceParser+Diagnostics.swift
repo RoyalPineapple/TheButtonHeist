@@ -122,11 +122,6 @@ extension HeistPlanSourceParser {
     }
 }
 
-struct ParsedHeistBody {
-    let definitions: [HeistPlan]
-    let steps: [HeistStep]
-}
-
 struct HeistPlanSourceScope: Equatable {
     var stringRefs: [String: HeistReferenceName] = [:]
     var targetRefs: [String: HeistReferenceName] = [:]

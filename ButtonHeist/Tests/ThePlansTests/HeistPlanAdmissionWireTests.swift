@@ -3,6 +3,37 @@ import Testing
 @_spi(ButtonHeistInternals) import ThePlans
 
 @Test
+func `thePlans exposes no unchecked HeistPlan construction seam`() throws {
+    let thePlans = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appendingPathComponent("Sources/ThePlans")
+    let swiftFiles = try #require(
+        FileManager.default.enumerator(
+            at: thePlans,
+            includingPropertiesForKeys: nil
+        )?.allObjects as? [URL]
+    ).filter { $0.pathExtension == "swift" }
+    let forbiddenSpelling = "structural" + "Version"
+    let uncheckedInitializer = try NSRegularExpression(
+        pattern: #"(?:package|public)\s+init\s*\(\s*(?:stackVersion|sourceStackVersion)"#
+    )
+
+    for file in swiftFiles {
+        let source = try String(contentsOf: file, encoding: .utf8)
+        #expect(!source.contains(forbiddenSpelling), "\(file.path) exposes unchecked plan construction")
+        #expect(
+            uncheckedInitializer.firstMatch(
+                in: source,
+                range: NSRange(source.startIndex..., in: source)
+            ) == nil,
+            "\(file.path) exposes package-visible unchecked plan construction"
+        )
+    }
+}
+
+@Test
 func `JSONDecoder decode of heist plan still runs runtime safety validation`() {
     let unresolvedInvocation = Data("""
     {

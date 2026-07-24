@@ -214,8 +214,7 @@ extension HeistPlanSourceParser {
 
     mutating func parseHeistBlock() throws -> [HeistStep] {
         try expectSymbol("{")
-        let body = try parseHeistBody(untilRightBrace: true, allowDefinitions: false)
-        return body.steps
+        return try parseStepBody(untilRightBrace: true)
     }
 
     mutating func parseLowercaseElseChainIfPresent(
@@ -241,8 +240,7 @@ extension HeistPlanSourceParser {
         let previousScope = currentScope()
         defer { restoreScope(previousScope) }
         bindScopedReference(binding, localName: localName, referenceName: referenceName)
-        let body = try parseHeistBody(untilRightBrace: true, allowDefinitions: false)
-        return try project(referenceName, body.steps)
+        return try project(referenceName, parseStepBody(untilRightBrace: true))
     }
 
 }

@@ -3,10 +3,6 @@ import ButtonHeistTestSupport
 import Testing
 @_spi(ButtonHeistInternals) import ThePlans
 
-private func validatedPlan(_ raw: HeistPlan) throws -> HeistPlan {
-    try admitRuntimeSafety(raw)
-}
-
 private func invocation(_ dottedName: String) -> HeistInvocationPath {
     do {
         return try HeistInvocationPath(validating: dottedName)
@@ -66,10 +62,10 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
 }
 
 @Test func `list heists includes string definition`() throws {
-    let catalog = try validatedPlan(structurallyAdmittedPlan(
+    let catalog = try HeistPlan(
         name: "root",
         definitions: [
-            structurallyAdmittedPlan(
+            HeistPlan(
                 name: "addToCart",
                 parameter: .string(name: "item"),
                 body: [
@@ -80,7 +76,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
             ),
         ],
         body: [.warn(WarnStep(message: "ready"))]
-    )).heistCatalog()
+    ).heistCatalog()
 
     #expect(catalog[1].identity.displayName == "addToCart")
     #expect(catalog[1].role == .capability)
@@ -92,10 +88,10 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
 }
 
 @Test func `list heists includes element target definition`() throws {
-    let catalog = try validatedPlan(structurallyAdmittedPlan(
+    let catalog = try HeistPlan(
         name: "root",
         definitions: [
-            structurallyAdmittedPlan(
+            HeistPlan(
                 name: "tapRow",
                 parameter: .accessibilityTarget(name: "row"),
                 body: [
@@ -104,7 +100,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
             ),
         ],
         body: [.warn(WarnStep(message: "ready"))]
-    )).heistCatalog()
+    ).heistCatalog()
 
     #expect(catalog[1].identity.displayName == "tapRow")
     #expect(catalog[1].role == .capability)
@@ -172,10 +168,10 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
 }
 
 @Test func `list heists detailed mode includes parameter name for parameterized capability`() throws {
-    let catalog = try validatedPlan(structurallyAdmittedPlan(
+    let catalog = try HeistPlan(
         name: "root",
         definitions: [
-            structurallyAdmittedPlan(
+            HeistPlan(
                 name: "tapRow",
                 parameter: .accessibilityTarget(name: "row"),
                 body: [
@@ -184,7 +180,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
             ),
         ],
         body: [.warn(WarnStep(message: "ready"))]
-    )).heistCatalog(detail: .detailed)
+    ).heistCatalog(detail: .detailed)
 
     let tapRow = try #require(catalog.first { $0.identity.displayName == "tapRow" })
     #expect(tapRow.parameterName == "row")
@@ -243,17 +239,14 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
 }
 
 @Test func `list heists cannot be reached for invalid raw plan`() throws {
-    let raw = structurallyAdmittedPlan(
-        name: "root",
-        definitions: [
-            structurallyAdmittedPlan(name: "duplicate", body: [.warn(WarnStep(message: "one"))]),
-            structurallyAdmittedPlan(name: "duplicate", body: [.warn(WarnStep(message: "two"))]),
-        ],
-        body: [.warn(WarnStep(message: "ready"))]
-    )
-
-    #expect(throws: HeistPlanRuntimeSafetyError.self) {
-        _ = try admitRuntimeSafety(raw)
+    #expect(throws: HeistPlanBuildError.self) {
+        _ = try HeistSourceCompilation.compile("""
+        HeistPlan("root") {
+            HeistDef<Void>("duplicate") { Warn("one") }
+            HeistDef<Void>("duplicate") { Warn("two") }
+            Warn("ready")
+        }
+        """)
     }
 }
 
@@ -272,7 +265,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
 }
 
 @Test func `list heists includes parameterized root entry`() throws {
-    let catalog = try validatedPlan(structurallyAdmittedPlan(
+    let catalog = try HeistPlan(
         name: "root",
         parameter: .string(name: "item"),
         body: [
@@ -281,7 +274,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
                 target: .label("Search")
             ))),
         ]
-    )).heistCatalog()
+    ).heistCatalog()
 
     let root = try #require(catalog.first)
     #expect(root.identity.displayName == "root")
@@ -307,10 +300,10 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
 }
 
 @Test func `describe parameterized capability`() throws {
-    let description = try validatedPlan(structurallyAdmittedPlan(
+    let description = try HeistPlan(
         name: "root",
         definitions: [
-            structurallyAdmittedPlan(
+            HeistPlan(
                 name: "addToCart",
                 parameter: .string(name: "item"),
                 body: [
@@ -321,7 +314,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
             ),
         ],
         body: [.warn(WarnStep(message: "ready"))]
-    )).describeHeist(at: "addToCart")
+    ).describeHeist(at: "addToCart")
 
     #expect(description.role == .capability)
     #expect(description.parameterKind == .string)

@@ -203,7 +203,7 @@ func `heist artifact validates required entry against root plan name`() throws {
 @Test
 func `heist artifact accepts parameterized root entry through validation contract`() throws {
     let temp = try PlansTemporaryDirectory()
-    let raw = structurallyAdmittedPlan(
+    let plan = try HeistPlan(
         name: "search",
         parameter: .string(name: "query"),
         body: [.action(ActionStep(command: .typeText(
@@ -216,7 +216,7 @@ func `heist artifact accepts parameterized root entry through validation contrac
         named: "ParameterizedRoot.heist",
         in: temp.url,
         manifest: validArtifactManifest(entry: "search"),
-        planJSON: try JSONEncoder().encode(raw)
+        planJSON: try JSONEncoder().encode(plan)
     ) { url in
         let plan = try HeistArtifactCodec.readPlan(from: url)
         #expect(plan.name == "search")
@@ -228,21 +228,27 @@ func `heist artifact accepts parameterized root entry through validation contrac
 func `heist artifact loading rejects standard definition cap`() throws {
     let temp = try PlansTemporaryDirectory()
     let definitions = try (0...250).map { index in
-        structurallyAdmittedPlan(name: try HeistPlanName(validating: "definition\(index)"), body: [
+        try HeistPlan(name: HeistPlanName(validating: "definition\(index)"), body: [
             .warn(WarnStep(message: try HeistWarningMessage(validating: "definition \(index)"))),
         ])
     }
-    let raw = structurallyAdmittedPlan(
-        name: "tooManyDefinitions",
-        definitions: definitions,
-        body: [.warn(WarnStep(message: "body"))]
-    )
+    let encodedDefinitions = try definitions.map {
+        try #require(String(bytes: JSONEncoder().encode($0), encoding: .utf8))
+    }.joined(separator: ",")
+    let planJSON = Data("""
+    {
+      "version": 2,
+      "name": "tooManyDefinitions",
+      "definitions": [\(encodedDefinitions)],
+      "body": [{ "type": "warn", "warn": { "message": "body" } }]
+    }
+    """.utf8)
 
     try writePackage(
         named: "TooManyDefinitions.heist",
         in: temp.url,
         manifest: validArtifactManifest(entry: "tooManyDefinitions"),
-        planJSON: try JSONEncoder().encode(raw)
+        planJSON: planJSON
     ) { url in
         do {
             _ = try HeistArtifactCodec.readPlan(from: url)

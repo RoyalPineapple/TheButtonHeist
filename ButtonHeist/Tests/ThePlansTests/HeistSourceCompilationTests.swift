@@ -62,15 +62,14 @@ func expect(_ string: String, contains substring: String) {
 }
 
 @Test func `non-durable action admission exposes source diagnostic code and path`() throws {
-    let raw = structurallyAdmittedPlan(body: [
-        .action(ActionStep(command: .scroll(ScrollTarget(direction: .down)))),
-    ])
     let diagnostics: [HeistBuildDiagnostic]
     do {
-        _ = try admitRuntimeSafety(raw)
+        _ = try HeistPlan(body: [
+            .action(ActionStep(command: .scroll(ScrollTarget(direction: .down)))),
+        ])
         Issue.record("Expected non-durable action to fail runtime safety admission")
         return
-    } catch let error as HeistPlanRuntimeSafetyError {
+    } catch let error as HeistPlanBuildError {
         diagnostics = error.diagnostics
     }
     let diagnostic = try #require(diagnostics.first)

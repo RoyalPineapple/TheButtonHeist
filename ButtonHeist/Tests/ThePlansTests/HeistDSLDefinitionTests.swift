@@ -2,10 +2,10 @@ import Testing
 @_spi(ButtonHeistInternals) import ThePlans
 
 private func validatedDefinitions(_ definitions: [HeistPlan]) throws -> [HeistPlan] {
-    try admitRuntimeSafety(structurallyAdmittedPlan(
+    try HeistPlan(
         definitions: definitions,
         body: [.warn(WarnStep(message: "root"))]
-    )).definitions
+    ).definitions
 }
 
 private func admittedSteps<Input>(
@@ -45,8 +45,8 @@ func heistDefinitionsCompileToInvocationsWithLocalDefinitions() throws {
         )),
     ])
     #expect(try heist.definitions == validatedDefinitions([
-        structurallyAdmittedPlan(name: "LibraryScreen", definitions: [
-            structurallyAdmittedPlan(
+        HeistPlan(name: "LibraryScreen", definitions: [
+            HeistPlan(
                 name: "addToCart",
                 parameter: .string(name: "item"),
                 body: [
@@ -76,8 +76,8 @@ func `string heist definitions default parameter to input`() throws {
     }
 
     #expect(try heist.definitions == validatedDefinitions([
-        structurallyAdmittedPlan(name: "SearchScreen", definitions: [
-            structurallyAdmittedPlan(
+        HeistPlan(name: "SearchScreen", definitions: [
+            HeistPlan(
                 name: "search",
                 parameter: .string(name: "input"),
                 body: [
@@ -105,8 +105,8 @@ func `accessibility target heist definitions default parameter to input`() throw
     }
 
     #expect(try heist.definitions == validatedDefinitions([
-        structurallyAdmittedPlan(name: "Rows", definitions: [
-            structurallyAdmittedPlan(
+        HeistPlan(name: "Rows", definitions: [
+            HeistPlan(
                 name: "delete",
                 parameter: .accessibilityTarget(name: "input"),
                 body: [
@@ -161,13 +161,13 @@ func heistDefinitionsCarryLocalDependenciesInDefinitionScope() throws {
         try LibraryScreen.addToCart("Milk")
     }
     #expect(try heist.definitions == validatedDefinitions([
-        structurallyAdmittedPlan(name: "LibraryScreen", definitions: [
-            structurallyAdmittedPlan(
+        HeistPlan(name: "LibraryScreen", definitions: [
+            HeistPlan(
                 name: "addToCart",
                 parameter: .string(name: "item"),
                 definitions: [
-                    structurallyAdmittedPlan(name: "AddButton", definitions: [
-                        structurallyAdmittedPlan(
+                    HeistPlan(name: "AddButton", definitions: [
+                        HeistPlan(
                             name: "tap",
                             body: [
                                 .action(ActionStep(command: .activate(.label("Add to Cart")))),

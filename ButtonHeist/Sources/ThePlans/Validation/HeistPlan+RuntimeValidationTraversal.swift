@@ -24,12 +24,11 @@ package struct HeistPlanRuntimeSafetyValidator {
         self.limits = limits
     }
 
-    package mutating func admit(_ plan: HeistPlan) throws -> HeistPlan {
+    package mutating func validate(_ plan: HeistPlan) throws {
         inspect(plan)
         guard failures.isEmpty else {
             throw HeistPlanRuntimeSafetyError(failures: failures)
         }
-        return plan
     }
 
     mutating func inspect(_ plan: HeistPlan) {

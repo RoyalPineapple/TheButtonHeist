@@ -43,7 +43,7 @@ public struct HeistPlan: Codable, Sendable, Equatable {
         body: [HeistStep]
     ) throws {
         let plan = try HeistPlan(
-            structuralVersion: version,
+            stackVersion: version,
             name: name,
             parameter: parameter,
             definitions: definitions,
@@ -51,7 +51,8 @@ public struct HeistPlan: Codable, Sendable, Equatable {
         )
         do {
             var validator = HeistPlanRuntimeSafetyValidator(limits: .standard)
-            self = try validator.admit(plan)
+            try validator.validate(plan)
+            self = plan
         } catch let error as HeistPlanRuntimeSafetyError {
             throw HeistPlanBuildError(diagnostics: error.diagnostics)
         }
@@ -62,7 +63,8 @@ public struct HeistPlan: Codable, Sendable, Equatable {
         let plan = try decoded.admitStructure()
         do {
             var validator = HeistPlanRuntimeSafetyValidator(limits: .standard)
-            self = try validator.admit(plan)
+            try validator.validate(plan)
+            self = plan
         } catch let error as HeistPlanRuntimeSafetyError {
             throw HeistPlanBuildError(diagnostics: error.diagnostics)
         }
@@ -81,8 +83,8 @@ public struct HeistPlan: Codable, Sendable, Equatable {
         try container.encode(body, forKey: .body)
     }
 
-    package init(
-        structuralVersion version: Int,
+    fileprivate init(
+        stackVersion version: Int,
         name: HeistPlanName? = nil,
         parameter: HeistParameter = .none,
         definitions: [HeistPlan] = [],
@@ -98,22 +100,6 @@ public struct HeistPlan: Codable, Sendable, Equatable {
                 hint: "Add body steps, or use this plan only as a namespace with nested definitions."
             )
         }
-        self.init(
-            admittedVersion: version,
-            name: name,
-            parameter: parameter,
-            definitions: definitions,
-            body: body
-        )
-    }
-
-    private init(
-        admittedVersion version: Int,
-        name: HeistPlanName?,
-        parameter: HeistParameter,
-        definitions: [HeistPlan],
-        body: [HeistStep]
-    ) {
         self.version = version
         self.name = name
         self.parameter = parameter
@@ -131,8 +117,8 @@ extension HeistPlan {
     static func mergeDefinitions(
         _ definitions: [HeistPlan],
         duplicatePolicy: DefinitionDuplicatePolicy
-    ) -> [HeistPlan] {
-        definitions.reduce(into: []) { merged, definition in
+    ) throws -> [HeistPlan] {
+        try definitions.reduce(into: []) { merged, definition in
             guard let definitionName = definition.name,
                   let existingIndex = merged.firstIndex(where: { $0.name == definitionName })
             else {
@@ -148,16 +134,26 @@ extension HeistPlan {
                 merged.append(definition)
                 return
             }
-            merged[existingIndex] = HeistPlan(
-                admittedVersion: existing.version,
-                name: existing.name,
-                parameter: existing.parameter,
-                definitions: mergeDefinitions(
-                    existing.definitions + definition.definitions,
-                    duplicatePolicy: duplicatePolicy
-                ),
-                body: existing.body
-            )
+            do {
+                merged[existingIndex] = try HeistPlan(
+                    version: existing.version,
+                    name: existing.name,
+                    parameter: existing.parameter,
+                    definitions: try mergeDefinitions(
+                        existing.definitions + definition.definitions,
+                        duplicatePolicy: duplicatePolicy
+                    ),
+                    body: existing.body
+                )
+            } catch let error as HeistPlanBuildError {
+                let prefix = "$.definitions[\(existingIndex)]"
+                throw HeistPlanBuildError(diagnostics: error.diagnostics.map { diagnostic in
+                    guard let path = diagnostic.path, path.hasPrefix("$") else {
+                        return diagnostic
+                    }
+                    return diagnostic.withPath(prefix + String(path.dropFirst()))
+                })
+            }
         }
     }
 
@@ -186,7 +182,7 @@ extension HeistPlan {
         }
         guard components.count > 1 else {
             return try HeistPlan(
-                structuralVersion: currentVersion,
+                version: currentVersion,
                 name: first,
                 parameter: parameter,
                 definitions: definitions,
@@ -194,7 +190,7 @@ extension HeistPlan {
             )
         }
         return try HeistPlan(
-            structuralVersion: currentVersion,
+            version: currentVersion,
             name: first,
             definitions: [
                 nestedDefinition(
@@ -251,7 +247,7 @@ private struct DecodedHeistPlan: Decodable {
 
     func admitStructure() throws -> HeistPlan {
         try HeistPlan(
-            structuralVersion: version,
+            stackVersion: version,
             name: name,
             parameter: parameter,
             definitions: definitions.map { try $0.admitStructure() },

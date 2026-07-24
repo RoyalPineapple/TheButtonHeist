@@ -176,15 +176,15 @@ func `canonical Swift renderer preserves composed expectation with string ref`()
 
 @Test
 func canonicalSwiftRendererRejectsRefsOutsideLoopScope() throws {
-    let raw = structurallyAdmittedPlan(body: [
-        .action(ActionStep(command: .activate(.ref("target")))),
-    ])
-
     do {
-        _ = try admitRuntimeSafety(raw)
+        _ = try HeistPlan(body: [
+            .action(ActionStep(command: .activate(.ref("target")))),
+        ])
         Issue.record("Expected unresolved ref validation failure")
-    } catch let error as HeistPlanRuntimeSafetyError {
-        #expect(error.failures.contains { $0.contract == "target ref must resolve in the current heist scope" })
+    } catch let error as HeistPlanBuildError {
+        #expect(error.diagnostics.contains {
+            $0.message.contains("target ref must resolve in the current heist scope")
+        })
     }
 }
 

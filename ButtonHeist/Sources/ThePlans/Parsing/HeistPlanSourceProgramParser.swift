@@ -1,18 +1,31 @@
 import Foundation
 
 extension HeistPlanSourceParser {
-    mutating func parseRootHeistPlan() throws -> HeistPlan {
+    mutating func parseProgram() throws -> HeistPlan {
+        guard startsRootHeistPlan else {
+            try rejectForbiddenStatementSyntax()
+            throw error(currentToken, "ButtonHeist source must be a canonical root plan: `HeistPlan { ... }`")
+        }
+
+        let root = try parseRootHeistPlan()
+        try expect(.eof)
+        var validator = HeistPlanRuntimeSafetyValidator(limits: .standard)
+        try validator.validate(root)
+        return root
+    }
+
+    private mutating func parseRootHeistPlan() throws -> HeistPlan {
         let name = try parseCalleeName()
         guard name == ["HeistPlan"] else {
             throw error(previous, "expected `HeistPlan { ... }`")
         }
-        return try parseHeistPlanAfterCallee(allowDefinitions: true)
+        return try parseHeistPlanAfterCallee(allowDefinitions: true, stackLocal: true)
     }
 
-    mutating func parseHeistBody(
+    private mutating func parseHeistBody(
         untilRightBrace: Bool,
         allowDefinitions: Bool
-    ) throws -> ParsedHeistBody {
+    ) throws -> SourcePlanBody {
         var definitions: [HeistPlan] = []
         var steps: [HeistStep] = []
         var seenStep = false
@@ -21,7 +34,7 @@ extension HeistPlanSourceParser {
             if atEnd { break }
             if consumeSymbol("}") {
                 if untilRightBrace {
-                    return ParsedHeistBody(definitions: definitions, steps: steps)
+                    return SourcePlanBody(definitions: definitions, steps: steps)
                 }
                 throw error(previous, "unexpected '}'")
             }
@@ -39,10 +52,14 @@ extension HeistPlanSourceParser {
         if untilRightBrace {
             throw error(currentToken, "expected '}' to close ButtonHeist source block")
         }
-        return ParsedHeistBody(definitions: definitions, steps: steps)
+        return SourcePlanBody(definitions: definitions, steps: steps)
     }
 
-    mutating func parseDefinition() throws -> HeistPlan {
+    mutating func parseStepBody(untilRightBrace: Bool) throws -> [HeistStep] {
+        try parseHeistBody(untilRightBrace: untilRightBrace, allowDefinitions: false).steps
+    }
+
+    private mutating func parseDefinition() throws -> HeistPlan {
         let callee = try parseCalleeName()
         switch callee {
         case ["HeistDef"]:
@@ -54,7 +71,7 @@ extension HeistPlanSourceParser {
         }
     }
 
-    mutating func parseNamespaceDefinition() throws -> HeistPlan {
+    private mutating func parseNamespaceDefinition() throws -> HeistPlan {
         try expectSymbol("(")
         let nameToken = currentToken
         let name = try parseStringLiteral()
@@ -64,10 +81,10 @@ extension HeistPlanSourceParser {
             throw error(previous, "Namespace blocks may contain HeistDef or Namespace declarations only")
         }
         return try HeistPlan(
-            structuralVersion: HeistPlan.currentVersion,
+            sourceStackVersion: HeistPlan.currentVersion,
             name: try parsePlanName(name, token: nameToken),
             parameter: .none,
-            definitions: mergeDefinitions(body.definitions),
+            definitions: try HeistPlan.mergeSourceDefinitions(body.definitions),
             body: []
         )
     }
@@ -88,7 +105,7 @@ extension HeistPlanSourceParser {
         }
     }
 
-    fileprivate mutating func parseHeistDef(
+    private mutating func parseHeistDef(
         parameterKind: HeistParameterKind
     ) throws -> HeistPlan {
         try expectSymbol("(")
@@ -132,16 +149,59 @@ extension HeistPlanSourceParser {
             ))
         }
         let body = try parseHeistClosureBody(parameter: parameter, allowDefinitions: true)
-        return try HeistPlan.nestedDefinition(
+        return try sourceDefinition(
             path: definitionPath,
             parameter: parameter,
-            definitions: mergeDefinitions(body.definitions),
+            definitions: try HeistPlan.mergeSourceDefinitions(body.definitions),
             body: body.steps
         )
     }
 
-    func mergeDefinitions(_ definitions: [HeistPlan]) -> [HeistPlan] {
-        HeistPlan.mergeDefinitions(definitions, duplicatePolicy: .preserve)
+    private func sourceDefinition(
+        path: HeistDefinitionPath,
+        parameter: HeistParameter,
+        definitions: [HeistPlan],
+        body: [HeistStep]
+    ) throws -> HeistPlan {
+        try sourceDefinition(
+            components: path.components[...],
+            parameter: parameter,
+            definitions: definitions,
+            body: body
+        )
+    }
+
+    private func sourceDefinition(
+        components: ArraySlice<HeistPlanName>,
+        parameter: HeistParameter,
+        definitions: [HeistPlan],
+        body: [HeistStep]
+    ) throws -> HeistPlan {
+        guard let name = components.first else {
+            preconditionFailure("validated heist definition path must not be empty")
+        }
+        guard components.count > 1 else {
+            return try HeistPlan(
+                sourceStackVersion: HeistPlan.currentVersion,
+                name: name,
+                parameter: parameter,
+                definitions: definitions,
+                body: body
+            )
+        }
+        return try HeistPlan(
+            sourceStackVersion: HeistPlan.currentVersion,
+            name: name,
+            definitions: [
+                sourceDefinition(
+                    components: components.dropFirst(),
+                    parameter: parameter,
+                    definitions: definitions,
+                    body: body
+                ),
+            ],
+            body: []
+        )
     }
 
     mutating func parseStatement() throws -> [HeistStep] {
@@ -202,7 +262,7 @@ extension HeistPlanSourceParser {
         case ["RepeatUntil"]:
             return [try parseRepeatUntil()]
         case ["HeistPlan"]:
-            let plan = try parseHeistPlanAfterCallee(allowDefinitions: false)
+            let plan = try parseHeistPlanAfterCallee(allowDefinitions: false, stackLocal: false)
             return [.heist(plan)]
         case ["RunHeist"]:
             return [try parseRunHeist()]
@@ -215,7 +275,10 @@ extension HeistPlanSourceParser {
         }
     }
 
-    mutating func parseHeistPlanAfterCallee(allowDefinitions: Bool) throws -> HeistPlan {
+    private mutating func parseHeistPlanAfterCallee(
+        allowDefinitions: Bool,
+        stackLocal: Bool
+    ) throws -> HeistPlan {
         var name: HeistPlanName?
         var parameter = HeistParameter.none
         if consumeSymbol("(") {
@@ -236,11 +299,21 @@ extension HeistPlanSourceParser {
         }
 
         let body = try parseHeistClosureBody(parameter: parameter, allowDefinitions: allowDefinitions)
+        let definitions = try HeistPlan.mergeSourceDefinitions(body.definitions)
+        if stackLocal {
+            return try HeistPlan(
+                sourceStackVersion: HeistPlan.currentVersion,
+                name: name,
+                parameter: parameter,
+                definitions: definitions,
+                body: body.steps
+            )
+        }
         return try HeistPlan(
-            structuralVersion: HeistPlan.currentVersion,
+            version: HeistPlan.currentVersion,
             name: name,
             parameter: parameter,
-            definitions: mergeDefinitions(body.definitions),
+            definitions: definitions,
             body: body.steps
         )
     }
@@ -265,10 +338,10 @@ extension HeistPlanSourceParser {
         throw error(currentToken, "expected parameter: or targetParameter:")
     }
 
-    mutating func parseHeistClosureBody(
+    private mutating func parseHeistClosureBody(
         parameter: HeistParameter,
         allowDefinitions: Bool
-    ) throws -> ParsedHeistBody {
+    ) throws -> SourcePlanBody {
         try expectSymbol("{")
         let previousScope = currentScope()
         defer { restoreScope(previousScope) }
@@ -280,4 +353,64 @@ extension HeistPlanSourceParser {
         return try parseHeistBody(untilRightBrace: true, allowDefinitions: allowDefinitions)
     }
 
+}
+
+private struct SourcePlanBody {
+    let definitions: [HeistPlan]
+    let steps: [HeistStep]
+}
+
+private extension HeistPlan {
+    static func mergeSourceDefinitions(_ definitions: [HeistPlan]) throws -> [HeistPlan] {
+        try definitions.reduce(into: []) { merged, definition in
+            guard let name = definition.name,
+                  let existingIndex = merged.firstIndex(where: { $0.name == name })
+            else {
+                merged.append(definition)
+                return
+            }
+            let existing = merged[existingIndex]
+            guard existing.parameter == .none,
+                  existing.body.isEmpty,
+                  !existing.definitions.isEmpty,
+                  definition.parameter == .none,
+                  definition.body.isEmpty,
+                  !definition.definitions.isEmpty
+            else {
+                merged.append(definition)
+                return
+            }
+            merged[existingIndex] = try HeistPlan(
+                sourceStackVersion: existing.version,
+                name: existing.name,
+                parameter: existing.parameter,
+                definitions: try mergeSourceDefinitions(existing.definitions + definition.definitions),
+                body: existing.body
+            )
+        }
+    }
+
+    init(
+        sourceStackVersion version: Int,
+        name: HeistPlanName? = nil,
+        parameter: HeistParameter = .none,
+        definitions: [HeistPlan] = [],
+        body: [HeistStep]
+    ) throws {
+        guard version == Self.currentVersion else {
+            throw HeistPlanVersionAdmissionError(observed: version)
+        }
+        guard !body.isEmpty || !definitions.isEmpty else {
+            throw HeistPlanBuildError.planStructure(
+                path: "$.body",
+                message: "heist plan must contain a body or nested definitions",
+                hint: "Add body steps, or use this plan only as a namespace with nested definitions."
+            )
+        }
+        self.version = version
+        self.name = name
+        self.parameter = parameter
+        self.definitions = definitions
+        self.body = body
+    }
 }

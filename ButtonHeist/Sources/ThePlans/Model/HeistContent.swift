@@ -166,17 +166,24 @@ public enum HeistBuilder {
     }
 
     public static func buildBlock(_ components: HeistContent...) -> HeistContent {
-        HeistContent(
-            components.flatMap(\.steps),
-            definitions: mergeDefinitions(components.flatMap(\.definitions)),
-            diagnostics: components.flatMap(\.diagnostics)
-        )
-    }
-
-    private static func mergeDefinitions(
-        _ definitions: [HeistPlan]
-    ) -> [HeistPlan] {
-        HeistPlan.mergeDefinitions(definitions, duplicatePolicy: .discardIdentical)
+        let diagnostics = components.flatMap(\.diagnostics)
+        do {
+            return try HeistContent(
+                components.flatMap(\.steps),
+                definitions: HeistPlan.mergeDefinitions(
+                    components.flatMap(\.definitions),
+                    duplicatePolicy: .discardIdentical
+                ),
+                diagnostics: diagnostics
+            )
+        } catch let error as HeistPlanBuildError {
+            return HeistContent(diagnostics: diagnostics + error.diagnostics)
+        } catch {
+            return HeistContent(diagnostics: diagnostics + [.dslBuild(
+                code: .dslInvalidDefinition,
+                message: String(describing: error)
+            )])
+        }
     }
 }
 
