@@ -28,3 +28,7 @@ Architecture diagrams for Button Heist, one file per concern. Every diagram is M
 - [connection-lifecycle.md](connection-lifecycle.md) — `HandoffConnectionPhase` and the handshake: TLS-PSK, version gate, auth
 - [multi-agent-isolation.md](multi-agent-isolation.md) — one simulator, port, and human-readable token per agent
 - [test-entry-points.md](test-entry-points.md) — `runHeist` / `runHeistSync` / `joinHeist` / `withJoinedHeistSession` and the run loop
+
+## Verification
+
+- [test-runner.md](test-runner.md) — one suite catalog, bounded simulator-runtime admission, build-once execution, result evidence, and cleanup
