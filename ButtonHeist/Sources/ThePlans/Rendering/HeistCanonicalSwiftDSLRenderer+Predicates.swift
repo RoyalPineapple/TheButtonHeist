@@ -167,8 +167,8 @@ extension HeistCanonicalSwiftDSLRenderer {
 
     private func renderStringPropertyChange(
         _ name: String,
-        before: StringMatchCore<Expr<String>>?,
-        after: StringMatchCore<Expr<String>>?,
+        before: StringMatchCore<AuthoredString>?,
+        after: StringMatchCore<AuthoredString>?,
         environment: RenderEnvironment
     ) throws -> String {
         if name == "value", before == nil, let after {
@@ -224,7 +224,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     func render(
-        customContent match: CustomContentMatchCore<Expr<String>>,
+        customContent match: CustomContentMatchCore<AuthoredString>,
         environment: RenderEnvironment
     ) throws -> String {
         let fields = try renderCustomContentFields(
@@ -236,7 +236,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     private func render(
-        rotorSet match: RotorSetMatchCore<Expr<String>>,
+        rotorSet match: RotorSetMatchCore<AuthoredString>,
         environment: RenderEnvironment
     ) throws -> String {
         let include = match.include.isEmpty
@@ -296,7 +296,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     func renderStringMatchArray(
-        _ matches: [StringMatchCore<Expr<String>>],
+        _ matches: [StringMatchCore<AuthoredString>],
         environment: RenderEnvironment
     ) throws -> String {
         let rendered = try matches.map {

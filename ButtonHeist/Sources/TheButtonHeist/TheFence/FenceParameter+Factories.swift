@@ -227,7 +227,7 @@ internal func predicateChecksParam(_ key: FenceParameterKey) -> FenceParameterSp
             properties: [
                 param(
                     .kind, .string, required: true,
-                    enumValues: ElementPredicateCheckCore<Expr<String>>.Kind.allCases.map(\.rawValue)
+                    enumValues: ElementPredicateCheckCore<AuthoredString>.Kind.allCases.map(\.rawValue)
                 ),
                 stringMatchParam(.match),
                 arrayParam(.values, items: .unconstrained),

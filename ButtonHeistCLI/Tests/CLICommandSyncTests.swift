@@ -511,7 +511,7 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testCommandArgumentFieldsProjectCanonicalTargetEnvelope() throws {
-        let expectedTarget = AccessibilityTarget.predicate(ElementPredicateTemplate(
+        let expectedTarget = AccessibilityTarget.predicate(ElementPredicate(
                 [
                     .label("Rotor Host"),
                     .identifier("rotor.host"),

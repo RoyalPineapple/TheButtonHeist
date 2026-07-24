@@ -475,7 +475,7 @@ public struct ForEach {
     }
 
     public init(
-        _ predicate: ElementPredicateTemplate,
+        _ predicate: ElementPredicate,
         limit: Int = 20,
         parameter: HeistReferenceName = "target",
         @HeistBuilder _ content: (AccessibilityTarget) throws -> HeistContent

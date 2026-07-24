@@ -323,7 +323,7 @@ package extension ElementPropertyChange {
 
     private static func decodeCoreIfPresent(
         from container: KeyedDecodingContainer<ElementUpdateCodingKeys>
-    ) throws -> ElementPropertyChangeCore<Expr<String>>? {
+    ) throws -> ElementPropertyChangeCore<AuthoredString>? {
         let hasBefore = container.contains(.before)
         let hasAfter = container.contains(.after)
         guard let property = try container.decodeIfPresent(ElementProperty.self, forKey: .property) else {

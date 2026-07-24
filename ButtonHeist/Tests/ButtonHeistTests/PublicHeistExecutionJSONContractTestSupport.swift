@@ -170,7 +170,7 @@ enum PublicHeistExecutionJSONContractFixture {
     static func forEachElement() throws -> HeistExecutionStepResult {
         let declaration = try XCTUnwrap(HeistForEachElementDeclaration(
             parameter: "row",
-            matching: ElementPredicateTemplate(label: "Row"),
+            matching: ElementPredicate(label: "Row"),
             limit: 3
         ))
         let evidence = try XCTUnwrap(HeistForEachElementEvidence(
@@ -276,7 +276,7 @@ enum PublicHeistExecutionJSONContractFixture {
         let subjectEvidence = ActionSubjectEvidence(
             source: .resolvedSemanticTarget,
             target: try AccessibilityTarget
-                .predicate(ElementPredicateTemplate(label: "Pay"))
+                .predicate(ElementPredicate(label: "Pay"))
                 .resolve(in: .empty),
             element: subject,
             resolution: ActionSubjectResolution(origin: .visible)

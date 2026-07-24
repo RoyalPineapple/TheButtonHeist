@@ -172,7 +172,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
 }
 
 @Test func `semantic discovery structurally dedupes before catalog projection`() throws {
-    let duplicateTemplate = ElementPredicateTemplate([
+    let duplicateTemplate = ElementPredicate([
         .label("Pay"),
         .label("Pay"),
         .traits([.link, .button]),
@@ -415,7 +415,7 @@ private func detailedSurfacePlan() throws -> HeistPlan {
                     try HeistPlan(
                         name: "confirm",
                         body: [
-                            .action(ActionStep(command: .activate(.predicate(ElementPredicateTemplate(
+                            .action(ActionStep(command: .activate(.predicate(ElementPredicate(
                                 identifier: .exact("confirmation_button"),
                                 traits: [.button]
                             ))))),

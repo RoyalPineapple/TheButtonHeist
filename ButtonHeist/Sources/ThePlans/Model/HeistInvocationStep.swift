@@ -176,7 +176,7 @@ public struct HeistInvocationStep: Codable, Sendable, Equatable {
         }
     }
 
-    private static func stringArgumentSummary(_ expr: Expr<String>) -> String {
+    private static func stringArgumentSummary(_ expr: AuthoredString) -> String {
         switch expr {
         case .literal(let value):
             return "\"\(value)\""

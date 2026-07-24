@@ -14,7 +14,7 @@ func runtimeSafetyRejectsInvalidHeistDefinitionsAndInvocations() throws {
         name: "addToCart",
         parameter: .string(name: "item"),
         body: [.action(ActionStep(command: .activate(.predicate(
-            ElementPredicateTemplate(label: .exact(itemReference))
+            ElementPredicate(label: .exact(itemReference))
         ))))]
     )
     let cases: [(HeistPlanAdmissionCandidate, String)] = [
@@ -213,12 +213,12 @@ func runtimeSafetyUsesInvokedDefinitionScopeForHelperDependencies() throws {
             parameter: .string(name: "item"),
             definitions: [
                 HeistPlanAdmissionCandidate(name: "tapAddButton", body: [
-                    .action(ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: "Add to Cart"))))),
+                    .action(ActionStep(command: .activate(.predicate(ElementPredicate(label: "Add to Cart"))))),
                 ]),
             ],
             body: [
                 .action(ActionStep(command: .activate(.predicate(
-                    ElementPredicateTemplate(label: .exact(itemReference))
+                    ElementPredicate(label: .exact(itemReference))
                 )))),
                 .invoke(HeistInvocationStep(path: "tapAddButton")),
             ]
@@ -314,7 +314,7 @@ func runtimeSafetyAcceptsRepresentativeCanonicalPlan() throws {
                 .action(ActionStep(
                     command: .typeText(reference: itemReference, target: .predicate(.label("Add item"))),
                     expectationPolicy: .expect(ActionExpectation(
-                        predicate: .exists(.predicate(ElementPredicateTemplate(label: .exact(itemReference)))),
+                        predicate: .exists(.predicate(ElementPredicate(label: .exact(itemReference)))),
                         timeout: 2
                     )))),
             ]

@@ -18,7 +18,7 @@ import AccessibilitySnapshotParser
 /// diagnostic can show what the original predicate diverged from.
 private struct Relaxation {
     let field: String
-    let relaxed: ElementPredicate
+    let relaxed: ResolvedElementPredicate
     let actual: (AccessibilityElement) -> String
 }
 
@@ -83,7 +83,7 @@ extension TheVault {
     enum Diagnostics {
 
     static func matcherNotFound(
-        _ predicate: ElementPredicate,
+        _ predicate: ResolvedElementPredicate,
         treeElements: [InterfaceTree.Element],
         visibleHeistIds: Set<HeistId>,
         resolutionScope: ResolutionScope
@@ -106,7 +106,7 @@ extension TheVault {
     }
 
     /// Format a predicate's fields as a human-readable query string.
-    static func formatMatcher(_ predicate: ElementPredicate) -> String {
+    static func formatMatcher(_ predicate: ResolvedElementPredicate) -> String {
         predicate.core.checks.compactMap(formatCheck).joined(separator: " ")
     }
 
@@ -183,7 +183,7 @@ extension TheVault {
     /// predicate exactly for remaining fields; derived substring searches live
     /// in the separate failure-capture diagnostic pipeline.
     static func findNearMiss(
-        for predicate: ElementPredicate,
+        for predicate: ResolvedElementPredicate,
         in treeElements: [InterfaceTree.Element],
         visibleHeistIds: Set<HeistId>
     ) -> String? {
@@ -191,7 +191,7 @@ extension TheVault {
             guard check.hasPredicateLiteral else { return nil }
             return Relaxation(
                 field: "check \(index + 1) (\(checkName(check)))",
-                relaxed: ElementPredicate(predicate.core.checks.enumerated().compactMap { offset, candidate in
+                relaxed: ResolvedElementPredicate(predicate.core.checks.enumerated().compactMap { offset, candidate in
                     offset == index ? nil : candidate
                 }),
                 actual: actualValueReader(for: check)
@@ -220,7 +220,7 @@ extension TheVault {
     }
 
     static func failureInterfaceSuggestion(
-        for predicate: ElementPredicate,
+        for predicate: ResolvedElementPredicate,
         elements: [HeistElement],
         limit: Int = 3
     ) -> String? {
@@ -242,8 +242,8 @@ extension TheVault {
         return "captured interface contains-match suggestion: \(suggestions)\(suffix)"
     }
 
-    private static func diagnosticContainsPredicate(from predicate: ElementPredicate) -> ElementPredicate? {
-        let diagnostic = ElementPredicate(predicate.core.checks.map { check in
+    private static func diagnosticContainsPredicate(from predicate: ResolvedElementPredicate) -> ResolvedElementPredicate? {
+        let diagnostic = ResolvedElementPredicate(predicate.core.checks.map { check in
             switch check {
             case .label(let match):
                 return .label(diagnosticContainsMatch(from: match))
@@ -280,8 +280,8 @@ extension TheVault {
     }
 
     private static func failureInterfaceSuggestionValue(
-        failedPredicate: ElementPredicate,
-        diagnosticPredicate: ElementPredicate,
+        failedPredicate: ResolvedElementPredicate,
+        diagnosticPredicate: ResolvedElementPredicate,
         element: HeistElement
     ) -> String {
         let fields: [ElementDiagnosticSummary.Field?] = [
@@ -295,8 +295,8 @@ extension TheVault {
         return "\(observed) — try \(exactPredicateDescription(failedPredicate, element: element)) or \(diagnosticPredicate)"
     }
 
-    private static func exactPredicateDescription(_ failedPredicate: ElementPredicate, element: HeistElement) -> String {
-        ElementPredicate(failedPredicate.core.checks.compactMap { check in
+    private static func exactPredicateDescription(_ failedPredicate: ResolvedElementPredicate, element: HeistElement) -> String {
+        ResolvedElementPredicate(failedPredicate.core.checks.compactMap { check in
             switch check {
             case .label:
                 return element.label.map { .label(.exact($0)) }
@@ -358,7 +358,7 @@ extension TheVault {
     }
 
     private static func matchCandidates(
-        _ predicate: ElementPredicate,
+        _ predicate: ResolvedElementPredicate,
         in treeElements: [InterfaceTree.Element],
         limit: Int
     ) -> [InterfaceTree.Element] {
@@ -406,7 +406,7 @@ private enum DiagnosticPredicateCheckKind {
     case hint
 }
 
-private extension ElementPredicate {
+private extension ResolvedElementPredicate {
     func includesCheck(_ kind: DiagnosticPredicateCheckKind) -> Bool {
         core.checks.contains { check in
             switch (kind, check) {

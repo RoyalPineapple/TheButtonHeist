@@ -117,7 +117,7 @@ extension TheBrainsScrollTests {
         )
         await brains.vault.installObservationForTesting(liveScreen)
         let prematureResolution = brains.vault.resolveTarget(
-            literalTarget(ElementPredicate.label("Jump Target"), ordinal: 0)
+            literalTarget(ResolvedElementPredicate.label("Jump Target"), ordinal: 0)
         )
         guard case .notFound = prematureResolution else {
             XCTFail("Parser exposed offscreen scroll content before semantic reveal: \(prematureResolution)")

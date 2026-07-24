@@ -11,7 +11,7 @@ import XCTest
 extension TheBrainsActionTests {
 
     func testHeistForEachWithZeroMatchesSucceedsWithoutIterations() async throws {
-        let matching = ElementPredicateTemplate.label("Delete")
+        let matching = ElementPredicate.label("Delete")
         var observedScopes: [SemanticObservationScope] = []
         let runtime = heistRuntime(
             observations: [
@@ -85,7 +85,7 @@ extension TheBrainsActionTests {
     }
 
     func testHeistForEachFailsBeforeMutationWhenMatchCountExceedsLimit() async throws {
-        let matching = ElementPredicateTemplate.label("Delete")
+        let matching = ElementPredicate.label("Delete")
         var executedCommands: [ResolvedHeistActionCommand] = []
         let runtime = heistRuntime(
             observations: [
@@ -128,7 +128,7 @@ extension TheBrainsActionTests {
     }
 
     func testHeistForEachCallsBodyWithOrdinalTargetForEachInitialMatchWithoutMutatingPlan() async throws {
-        let matching = ElementPredicateTemplate.label("Delete")
+        let matching = ElementPredicate.label("Delete")
         var executedCommands: [ResolvedHeistActionCommand] = []
         var settlementCommands: [Settlement.Command] = []
         let initialState = await observedState(elements: [
@@ -176,7 +176,7 @@ extension TheBrainsActionTests {
     }
 
     func testHeistForEachPreservesCallerPredicateInsteadOfMinimumMatchers() async throws {
-        let matching = ElementPredicateTemplate(label: "Delete", traits: [.button])
+        let matching = ElementPredicate(label: "Delete", traits: [.button])
         var executedCommands: [ResolvedHeistActionCommand] = []
         let initialState = await observedState(elements: [
             (
@@ -216,7 +216,7 @@ extension TheBrainsActionTests {
     }
 
     func testHeistForEachResetsOrdinalWhenMatchedCollectionIdentityChanges() async throws {
-        let matching = ElementPredicateTemplate.label("Delete")
+        let matching = ElementPredicate.label("Delete")
         var executedCommands: [ResolvedHeistActionCommand] = []
         let initialState = await observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
@@ -255,7 +255,7 @@ extension TheBrainsActionTests {
     }
 
     func testHeistForEachAdditionResetsOrdinalWithoutExtendingInitialIterationBudget() async throws {
-        let matching = ElementPredicateTemplate.label("Delete")
+        let matching = ElementPredicate.label("Delete")
         var executedCommands: [ResolvedHeistActionCommand] = []
         let initialState = await observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
@@ -293,7 +293,7 @@ extension TheBrainsActionTests {
     }
 
     func testHeistForEachDoesNotResetOrdinalForStateOnlyMatchMutation() async throws {
-        let matching = ElementPredicateTemplate.label("Delete")
+        let matching = ElementPredicate.label("Delete")
         var executedCommands: [ResolvedHeistActionCommand] = []
         let initialState = await observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_first", traits: [.button]), "delete_first"),
@@ -332,7 +332,7 @@ extension TheBrainsActionTests {
     }
 
     func testHeistForEachBodyFailureStopsBeforeFollowingTopLevelSteps() async throws {
-        let matching = ElementPredicateTemplate.label("Delete")
+        let matching = ElementPredicate.label("Delete")
         let initialState = await observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
             (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
@@ -382,7 +382,7 @@ extension TheBrainsActionTests {
     }
 
     func testHeistForEachExpectationUsesCurrentSemanticTarget() async throws {
-        let matching = ElementPredicateTemplate.label("Delete")
+        let matching = ElementPredicate.label("Delete")
         var executedCommands: [ResolvedHeistActionCommand] = []
         var waitedPredicates: [Settlement.Predicate] = []
         let initialState = await observedState(elements: [

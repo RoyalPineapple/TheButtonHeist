@@ -30,7 +30,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     mutating func validateString(
-        _ string: Expr<String>,
+        _ string: AuthoredString,
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
@@ -59,7 +59,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     mutating func validateString(
-        _ match: StringMatchCore<Expr<String>>,
+        _ match: StringMatchCore<AuthoredString>,
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
@@ -91,7 +91,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func validateContainerPredicateCheck(
-        _ check: ContainerPredicateCheckCore<Expr<String>>,
+        _ check: ContainerPredicateCheckCore<AuthoredString>,
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
@@ -108,7 +108,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func validateSemanticContainerPredicate(
-        _ predicate: SemanticContainerPredicateCore<Expr<String>>,
+        _ predicate: SemanticContainerPredicateCore<AuthoredString>,
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
@@ -143,7 +143,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     mutating func validateElementPredicate(
-        _ predicate: ElementPredicateTemplate,
+        _ predicate: ElementPredicate,
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
@@ -165,7 +165,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func validateElementPredicateCheck(
-        _ check: ElementPredicateCheckCore<Expr<String>>,
+        _ check: ElementPredicateCheckCore<AuthoredString>,
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
@@ -244,7 +244,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func validateStrings(
-        _ matches: [StringMatchCore<Expr<String>>],
+        _ matches: [StringMatchCore<AuthoredString>],
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {

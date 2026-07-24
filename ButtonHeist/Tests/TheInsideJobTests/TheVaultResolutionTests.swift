@@ -130,9 +130,9 @@ final class TheVaultResolutionTests: XCTestCase {
         try authored.resolve(in: .empty)
     }
 
-    func resolvedPredicate(_ authored: AccessibilityTarget) throws -> ElementPredicate {
+    func resolvedPredicate(_ authored: AccessibilityTarget) throws -> ResolvedElementPredicate {
         guard case .predicate(let predicate, ordinal: nil) = try resolvedTarget(authored) else {
-            return try XCTUnwrap(nil as ElementPredicate?, "Expected an unqualified element predicate")
+            return try XCTUnwrap(nil as ResolvedElementPredicate?, "Expected an unqualified element predicate")
         }
         return predicate
     }
@@ -506,9 +506,9 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(bagman.interfaceTree.orderedElements.first?.element.label, "Settled")
         XCTAssertEqual(bagman.latestFailedSettleDiagnosticEvidence?.tree.orderedElements.first?.element.label, "Timeout")
         XCTAssertTrue(invalidated)
-        XCTAssertNil(bagman.resolveVisibleTarget(literalTarget(ElementPredicate.label("Timeout"))).resolvedElement)
+        XCTAssertNil(bagman.resolveVisibleTarget(literalTarget(ResolvedElementPredicate.label("Timeout"))).resolvedElement)
         XCTAssertEqual(
-            bagman.resolveVisibleTarget(literalTarget(ElementPredicate.label("Settled"))).resolvedElement?.element.label,
+            bagman.resolveVisibleTarget(literalTarget(ResolvedElementPredicate.label("Settled"))).resolvedElement?.element.label,
             "Settled"
         )
     }
@@ -522,8 +522,8 @@ extension TheVaultResolutionTests {
 
         XCTAssertEqual(bagman.interfaceTree.orderedElements.first?.element.label, "Settled")
         XCTAssertEqual(bagman.latestObservation.tree.orderedElements.first?.element.label, "Observed")
-        XCTAssertNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Observed"))).resolvedElement)
-        XCTAssertNil(bagman.resolveVisibleTarget(literalTarget(ElementPredicate.label("Observed"))).resolvedElement)
+        XCTAssertNil(bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Observed"))).resolvedElement)
+        XCTAssertNil(bagman.resolveVisibleTarget(literalTarget(ResolvedElementPredicate.label("Observed"))).resolvedElement)
         XCTAssertEqual(bagman.viewportElementIDs, ["observed"])
     }
 

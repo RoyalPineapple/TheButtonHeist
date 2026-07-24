@@ -220,7 +220,7 @@ func runtimeSafetyRejectsNegativeOrdinalsBeforeRuntimeUse() throws {
 @Test
 func runtimeSafetyRejectsEmptyElementPredicatesBeforeRuntimeUse() throws {
     let raw = HeistPlanAdmissionCandidate(body: [
-        .wait(WaitStep(predicate: .exists(.predicate(ElementPredicateTemplate())))),
+        .wait(WaitStep(predicate: .exists(.predicate(ElementPredicate())))),
     ])
 
     let failures = runtimeSafetyFailures(for: raw)

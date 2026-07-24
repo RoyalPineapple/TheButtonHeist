@@ -81,7 +81,7 @@ package enum HeistResultFixture {
 
     package static func action(
         path: String = "$.body[0]",
-        command: HeistActionCommand = .activate(.predicate(ElementPredicateTemplate(label: "Button"))),
+        command: HeistActionCommand = .activate(.predicate(ElementPredicate(label: "Button"))),
         result: ActionResult = actionResult(),
         expectation: ExpectationResult? = nil,
         durationMs: ElapsedMilliseconds = 1,

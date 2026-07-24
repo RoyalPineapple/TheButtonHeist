@@ -1,8 +1,8 @@
 /// An authored property change that resolves references before evaluation.
 public struct ElementPropertyChange: Codable, Sendable, Equatable {
-    package let core: ElementPropertyChangeCore<Expr<String>>
+    package let core: ElementPropertyChangeCore<AuthoredString>
 
-    package init(core: ElementPropertyChangeCore<Expr<String>>) {
+    package init(core: ElementPropertyChangeCore<AuthoredString>) {
         self.core = core
     }
 

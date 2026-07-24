@@ -58,9 +58,9 @@ package extension SemanticContainerPredicateCore where Text: StringMatchLeaf {
 }
 
 public struct SemanticContainerPredicate: Codable, Sendable, Equatable, Hashable {
-    package let core: SemanticContainerPredicateCore<Expr<String>>
+    package let core: SemanticContainerPredicateCore<AuthoredString>
 
-    package init(core: SemanticContainerPredicateCore<Expr<String>>) {
+    package init(core: SemanticContainerPredicateCore<AuthoredString>) {
         self.core = core
     }
 
@@ -195,9 +195,9 @@ package extension ContainerPredicateCheckCore where Text: StringMatchLeaf {
 }
 
 public struct ContainerPredicateCheck: Codable, Sendable, Equatable, Hashable {
-    package let core: ContainerPredicateCheckCore<Expr<String>>
+    package let core: ContainerPredicateCheckCore<AuthoredString>
 
-    package init(core: ContainerPredicateCheckCore<Expr<String>>) {
+    package init(core: ContainerPredicateCheckCore<AuthoredString>) {
         self.core = core
     }
 
@@ -213,7 +213,7 @@ public struct ContainerPredicateCheck: Codable, Sendable, Equatable, Hashable {
     public static func scrollable(_ required: Bool) -> Self { Self(core: .scrollable(required)) }
     public static func actions(_ actions: ContainerPredicateActions) -> Self { Self(core: .actions(actions)) }
 
-    public static var wireKindValues: [String] { ContainerPredicateCheckCore<Expr<String>>.wireKindValues }
+    public static var wireKindValues: [String] { ContainerPredicateCheckCore<AuthoredString>.wireKindValues }
     public var invalidEmptyPayloadDescription: String? { core.invalidEmptyPayloadDescription }
 
     public init(from decoder: Decoder) throws {
@@ -256,9 +256,9 @@ package extension ContainerPredicateCore where Text: StringMatchLeaf {
 /// An authored container predicate with unresolved leaves hidden behind a
 /// nongeneric public surface.
 public struct ContainerPredicate: Codable, Sendable, Equatable, Hashable {
-    package let core: ContainerPredicateCore<Expr<String>>
+    package let core: ContainerPredicateCore<AuthoredString>
 
-    package init(core: ContainerPredicateCore<Expr<String>>) {
+    package init(core: ContainerPredicateCore<AuthoredString>) {
         self.core = core
     }
 

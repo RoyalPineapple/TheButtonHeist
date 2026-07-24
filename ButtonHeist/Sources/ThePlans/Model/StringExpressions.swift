@@ -1,41 +1,16 @@
 import Foundation
 
-// MARK: - Expression Phases
-
-/// The only unresolved leaf representation in ThePlans.
-package enum Expr<Value> {
-    case literal(Value)
+/// A string literal or typed reference awaiting plan resolution.
+package enum AuthoredString: Codable, Sendable, Equatable, Hashable {
+    case literal(String)
     case ref(HeistReferenceName)
 
-    package func map<NewValue>(_ transform: (Value) throws -> NewValue) rethrows -> Expr<NewValue> {
-        switch self {
-        case .literal(let value):
-            return try .literal(transform(value))
-        case .ref(let reference):
-            return .ref(reference)
-        }
-    }
-}
-
-extension Expr: Sendable where Value: Sendable {}
-extension Expr: Equatable where Value: Equatable {}
-extension Expr: Hashable where Value: Hashable {}
-
-package struct InvalidResolvedPredicateError: Error, Sendable, Equatable, CustomStringConvertible {
-    package let reason: String
-
-    package var description: String {
-        "resolved predicate is invalid: \(reason)"
-    }
-}
-
-extension Expr: Codable where Value: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case ref
     }
 
     package init(from decoder: Decoder) throws {
-        if let literal = try? decoder.singleValueContainer().decode(Value.self) {
+        if let literal = try? decoder.singleValueContainer().decode(String.self) {
             self = .literal(literal)
             return
         }
@@ -54,10 +29,7 @@ extension Expr: Codable where Value: Codable {
             try container.encode(reference, forKey: .ref)
         }
     }
-}
-
-package extension Expr where Value == String {
-    func resolve(in environment: HeistExecutionEnvironment) throws -> String {
+    package func resolve(in environment: HeistExecutionEnvironment) throws -> String {
         switch self {
         case .literal(let literal):
             return literal
@@ -70,7 +42,7 @@ package extension Expr where Value == String {
     }
 }
 
-extension Expr: CustomStringConvertible where Value == String {
+extension AuthoredString: CustomStringConvertible {
     package var description: String {
         switch self {
         case .literal(let literal):
@@ -78,6 +50,14 @@ extension Expr: CustomStringConvertible where Value == String {
         case .ref(let reference):
             return CanonicalValueDescription.call("stringRef", [CanonicalValueDescription.quoted(reference.rawValue)])
         }
+    }
+}
+
+package struct InvalidResolvedPredicateError: Error, Sendable, Equatable, CustomStringConvertible {
+    package let reason: String
+
+    package var description: String {
+        "resolved predicate is invalid: \(reason)"
     }
 }
 
@@ -91,7 +71,7 @@ extension String: StringMatchLeaf {
     package var stringMatchLiteralIsEmpty: Bool? { isEmpty }
 }
 
-extension Expr: StringMatchLeaf where Value == String {
+extension AuthoredString: StringMatchLeaf {
     package var stringMatchLiteralIsEmpty: Bool? {
         switch self {
         case .literal(let value):
@@ -258,9 +238,9 @@ public struct StringMatch: Codable, Sendable, Equatable, Hashable {
         case isEmpty
     }
 
-    package let core: StringMatchCore<Expr<String>>
+    package let core: StringMatchCore<AuthoredString>
 
-    package init(core: StringMatchCore<Expr<String>>) {
+    package init(core: StringMatchCore<AuthoredString>) {
         self.core = core
     }
 

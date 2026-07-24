@@ -8,7 +8,7 @@ final class ScrollToVisibleTests: XCTestCase {
 
     func testScrollToVisibleTargetEncodeDecode() throws {
         let target = ScrollToVisibleTarget(
-            target: .predicate(ElementPredicateTemplate(label: "Color Picker", traits: [.button]))
+            target: .predicate(ElementPredicate(label: "Color Picker", traits: [.button]))
         )
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(ScrollToVisibleTarget.self, from: data)
@@ -22,7 +22,7 @@ final class ScrollToVisibleTests: XCTestCase {
     }
 
     func testScrollToVisibleTargetMinimal() throws {
-        let target = ScrollToVisibleTarget(target: .predicate(ElementPredicateTemplate(label: "Save")))
+        let target = ScrollToVisibleTarget(target: .predicate(ElementPredicate(label: "Save")))
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(ScrollToVisibleTarget.self, from: data)
         guard case .predicate(let matcher, _) = decoded.target else {
@@ -33,7 +33,7 @@ final class ScrollToVisibleTests: XCTestCase {
 
     func testScrollToVisibleRuntimeActionRoundTrip() throws {
         let target = ScrollToVisibleTarget(
-            target: .predicate(ElementPredicateTemplate(label: "Settings", traits: [.header]))
+            target: .predicate(ElementPredicate(label: "Settings", traits: [.header]))
         )
         let message = ClientMessage.runtimeAction(.scrollToVisible(target.target))
         let data = try JSONEncoder().encode(message)

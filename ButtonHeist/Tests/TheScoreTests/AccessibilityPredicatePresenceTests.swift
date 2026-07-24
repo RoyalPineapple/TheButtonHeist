@@ -113,6 +113,69 @@ final class AccessibilityPredicateTests: XCTestCase {
 
     // MARK: - Presence Evaluation
 
+    func testCanonicalPredicateAgreesAcrossTargetAndExpectation() throws {
+        let element = element(
+            label: "Checkout",
+            value: "Ready",
+            identifier: "checkout.button",
+            hint: "Opens checkout",
+            traits: [.button],
+            customContent: [HeistCustomContent(label: "State", value: "Ready", isImportant: true)],
+            rotors: [HeistRotor(name: "Actions")],
+            actions: [.activate]
+        )
+        let interface = makeTestInterface(nodes: [testElement(element)])
+        let evidence = evidence(AccessibilityTrace(interface: interface))
+        let checks: [ElementPredicateCheck] = [
+            .label(.contains("Check")),
+            .identifier(.suffix("button")),
+            .value(.exact("Ready")),
+            .traits([.button]),
+            .hint(.prefix("Opens")),
+            .actions([.activate]),
+            .customContent(CustomContentMatch(label: "State", value: "Ready")),
+            .rotors(["Actions"]),
+            .exclude(.label("Cancel")),
+        ]
+
+        for check in checks {
+            let predicate = ElementPredicate([check])
+            let target = AccessibilityTarget.predicate(predicate)
+            let resolvedTarget = try target.resolve(in: .empty)
+            let targetMatched = !AccessibilityTargetMatchGraph(interface: interface)
+                .resolve(resolvedTarget)
+                .isEmpty
+            let expectationMatched = try AccessibilityPredicate.exists(target)
+                .resolve(in: .empty)
+                .evaluate(in: evidence)
+                .met
+
+            XCTAssertEqual(targetMatched, expectationMatched, "\(check)")
+            XCTAssertTrue(targetMatched, "\(check)")
+        }
+
+        let shorthand: [AccessibilityTarget] = [
+            .label("Checkout"),
+            .identifier("checkout.button"),
+            .value("Ready"),
+            .traits([.button]),
+            .hint("Opens checkout"),
+            .actions([.activate]),
+            .customContent(CustomContentMatch(label: "State", value: "Ready")),
+            .rotors(["Actions"]),
+            .exclude(.label("Cancel")),
+        ]
+        for target in shorthand {
+            XCTAssertTrue(
+                try AccessibilityPredicate.exists(target)
+                    .resolve(in: .empty)
+                    .evaluate(in: evidence)
+                    .met,
+                "\(target)"
+            )
+        }
+    }
+
     func testPresentMatchesAnyValueFour() throws {
         let elements = [element(label: "Counter", value: "4")]
         let predicate = AccessibilityPredicate.exists(.value("4"))
@@ -216,7 +279,7 @@ final class AccessibilityPredicateTests: XCTestCase {
         ])
 
         let matches = AccessibilityTargetMatchGraph(interface: interface)
-            .resolve(ElementPredicate.label("Save"))
+            .resolve(ResolvedElementPredicate.label("Save"))
 
         XCTAssertEqual(matches.count, 2)
         XCTAssertEqual(matches.orderedPaths, [TreePath([0, 0]), TreePath([0, 1])])
@@ -231,15 +294,15 @@ final class AccessibilityPredicateTests: XCTestCase {
         ]
 
         let graph = AccessibilityTargetMatchGraph(elements: elements)
-        let predicate = try ElementPredicateTemplate(
+        let predicate = try ElementPredicate(
             label: "Save",
             identifier: "primary",
             traits: [.button]
         ).resolve(in: .empty)
         let matches = graph.resolve(predicate)
-        let expected = graph.resolve(ElementPredicate.label("Save"))
-            .intersection(graph.resolve(ElementPredicate.identifier("primary")))
-            .intersection(graph.resolve(ElementPredicate.traits([.button])))
+        let expected = graph.resolve(ResolvedElementPredicate.label("Save"))
+            .intersection(graph.resolve(ResolvedElementPredicate.identifier("primary")))
+            .intersection(graph.resolve(ResolvedElementPredicate.traits([.button])))
 
         XCTAssertEqual(matches.elements, [elements[0]])
         XCTAssertEqual(matches, expected)
@@ -253,7 +316,7 @@ final class AccessibilityPredicateTests: XCTestCase {
             element(label: "Coke", traits: [.staticText], actions: []),
             element(label: "Sprite", traits: [.staticText], actions: [.custom("Sub")]),
         ]
-        let predicate = try ElementPredicateTemplate([
+        let predicate = try ElementPredicate([
             .label("Coke"),
             .exclude(.actions([.custom("Sub")])),
         ]).resolve(in: .empty)
@@ -271,8 +334,8 @@ final class AccessibilityPredicateTests: XCTestCase {
             element(label: "Cancel"),
         ]
         let graph = AccessibilityTargetMatchGraph(elements: elements)
-        let cancelMatches = graph.resolve(ElementPredicate.label("Cancel"))
-        let saveMatches = graph.resolve(ElementPredicate.label("Save"))
+        let cancelMatches = graph.resolve(ResolvedElementPredicate.label("Cancel"))
+        let saveMatches = graph.resolve(ResolvedElementPredicate.label("Save"))
 
         XCTAssertEqual(cancelMatches.union(saveMatches).orderedPaths, [TreePath([0]), TreePath([2])])
     }
@@ -294,7 +357,7 @@ final class AccessibilityPredicateTests: XCTestCase {
             AccessibilityTargetMatchInput(elements: [later, earlier], containers: [])
         )
 
-        let matches = graph.resolve(ElementPredicate.label("Row"))
+        let matches = graph.resolve(ResolvedElementPredicate.label("Row"))
 
         XCTAssertEqual(matches.orderedPaths, [TreePath([1]), TreePath([9])])
     }
@@ -308,7 +371,7 @@ final class AccessibilityPredicateTests: XCTestCase {
         let graph = AccessibilityTargetMatchGraph(elements: elements)
 
         let authored = AccessibilityTarget.predicate(
-            ElementPredicateTemplate(label: "Save", traits: [.button]),
+            ElementPredicate(label: "Save", traits: [.button]),
             ordinal: 1
         )
         let selected = graph.resolve(try authored.resolve(in: .empty))
@@ -316,7 +379,7 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertEqual(selected.elements.elements, [elements[2]])
         XCTAssertEqual(selected.elements.orderedPaths, [TreePath([2])])
         let predicate = AccessibilityPredicate.exists(
-            .predicate(ElementPredicateTemplate(label: "Save", traits: [.button]), ordinal: 1)
+            .predicate(ElementPredicate(label: "Save", traits: [.button]), ordinal: 1)
         )
         XCTAssertTrue(
             try predicate.resolve(in: .empty).validate(

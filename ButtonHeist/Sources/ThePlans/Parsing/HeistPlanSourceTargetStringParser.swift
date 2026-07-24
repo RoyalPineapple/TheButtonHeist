@@ -17,7 +17,7 @@ extension HeistPlanSourceParser {
         switch name {
         case "label", "identifier", "value", "hint", "traits",
              "actions", "customContent", "rotors", "exclude", "element":
-            return .predicate(try parseElementPredicateTemplate(named: name))
+            return .predicate(try parseElementPredicate(named: name))
         case "container":
             try expectSymbol("(")
             let predicate = try parseContainerPredicate()
@@ -37,7 +37,7 @@ extension HeistPlanSourceParser {
             return .container(predicate, ordinal: ordinal)
         case "target":
             try expectSymbol("(")
-            let predicate = try parseElementPredicateTemplate()
+            let predicate = try parseElementPredicate()
             try expectSymbol(",")
             try expectIdentifier("ordinal")
             try expectSymbol(":")
@@ -64,24 +64,24 @@ extension HeistPlanSourceParser {
         }
     }
 
-    mutating func parseElementPredicateTemplate() throws -> ElementPredicateTemplate {
+    mutating func parseElementPredicate() throws -> ElementPredicate {
         let name = try parseDotCallName(allowedPrefixes: [])
-        return try parseElementPredicateTemplate(named: name)
+        return try parseElementPredicate(named: name)
     }
 
-    mutating func parseElementPredicateTemplate(named name: String) throws -> ElementPredicateTemplate {
+    mutating func parseElementPredicate(named name: String) throws -> ElementPredicate {
         if name == "element" {
             try expectSymbol("(")
-            let predicate = try parseElementPredicateTemplateFields()
+            let predicate = try parseElementPredicateFields()
             try expectSymbol(")")
             return predicate
         }
-        return ElementPredicateTemplate([
+        return ElementPredicate([
             try parseElementPredicateCheck(named: name, token: previous),
         ])
     }
 
-    mutating func parseElementPredicateTemplateFields() throws -> ElementPredicateTemplate {
+    mutating func parseElementPredicateFields() throws -> ElementPredicate {
         var checks: [ElementPredicateCheck] = []
         if currentToken.isSymbol(")") {
             throw error(currentToken, ".element(...) requires at least one non-empty predicate check")
@@ -108,7 +108,7 @@ extension HeistPlanSourceParser {
             }
             guard consumeSymbol(",") else { break }
         }
-        return ElementPredicateTemplate(checks)
+        return ElementPredicate(checks)
     }
 
     mutating func parseElementPredicateCheck() throws -> ElementPredicateCheck {
@@ -489,12 +489,12 @@ extension HeistPlanSourceParser {
 
     private func validatedStringMatch(
         _ mode: StringMatch.Mode,
-        value: Expr<String>,
+        value: AuthoredString,
         field: String,
         token: HeistPlanSourceToken,
         emptyLiteralPolicy: StringMatchEmptyLiteralPolicy = .reject
     ) throws -> StringMatch {
-        let core: StringMatchCore<Expr<String>>
+        let core: StringMatchCore<AuthoredString>
         switch mode {
         case .exact: core = .exact(value)
         case .contains: core = .contains(value)
@@ -510,7 +510,7 @@ extension HeistPlanSourceParser {
         return match
     }
 
-    mutating func parseStringExpr() throws -> Expr<String> {
+    mutating func parseStringExpr() throws -> AuthoredString {
         if let string = try parseStringExprIfPresent() {
             return string
         }
@@ -523,7 +523,7 @@ extension HeistPlanSourceParser {
         throw error(currentToken, "expected a string literal or scoped string reference")
     }
 
-    mutating func parseStringExprIfPresent() throws -> Expr<String>? {
+    mutating func parseStringExprIfPresent() throws -> AuthoredString? {
         if case .string(let value) = currentToken.kind {
             advance()
             return .literal(value)

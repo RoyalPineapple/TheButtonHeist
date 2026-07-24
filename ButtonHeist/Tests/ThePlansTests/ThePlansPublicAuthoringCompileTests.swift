@@ -4,7 +4,7 @@ import Testing
 @Test
 func `canonical authoring module exposes predicates with concrete types`() throws {
     let literalMatch: StringMatch = "Checkout"
-    let element = ElementPredicateTemplate(
+    let element = ElementPredicate(
         label: literalMatch,
         identifier: "checkout.button",
         value: "Ready",
@@ -39,6 +39,72 @@ func `canonical authoring module exposes predicates with concrete types`() throw
     }
 
     #expect(plan.body.count == 6)
+}
+
+@Test
+func `canonical matcher and target forms compile through the public module`() throws {
+    let reference = try HeistReferenceName(validating: "checkout")
+    let matches: [StringMatch] = [
+        "Checkout",
+        .exact("Checkout"),
+        .contains("Check"),
+        .prefix("Check"),
+        .suffix("out"),
+        .isEmpty,
+        .exact(reference),
+        .contains(reference),
+        .prefix(reference),
+        .suffix(reference),
+    ]
+    let checks: [ElementPredicateCheck] = [
+        .label(matches[0]),
+        .identifier("checkout.button"),
+        .value(reference),
+        .hint(.contains("checkout")),
+        .traits([.button]),
+        .actions([.activate]),
+        .customContent(CustomContentMatch(label: "State", value: "Ready")),
+        .rotors(["Actions"]),
+        .exclude(.traits([.notEnabled])),
+    ]
+    let predicates: [ElementPredicate] = [
+        .label(matches[0]),
+        .identifier("checkout.button"),
+        .value(reference),
+        .hint(.contains("checkout")),
+        .traits([.button]),
+        .actions([.activate]),
+        .customContent(CustomContentMatch(label: "State", value: "Ready")),
+        .rotors(["Actions"]),
+        .exclude(.traits([.notEnabled])),
+        .element(checks[0], checks[1], traits: [.button], actions: [.activate]),
+        ElementPredicate(checks),
+    ]
+    let targets: [AccessibilityTarget] = [
+        .label(matches[0]),
+        .identifier("checkout.button"),
+        .value(reference),
+        .hint(.contains("checkout")),
+        .traits([.button]),
+        .actions([.activate]),
+        .customContent(CustomContentMatch(label: "State", value: "Ready")),
+        .rotors(["Actions"]),
+        .exclude(.traits([.notEnabled])),
+        .element(checks[0], checks[1], traits: [.button], actions: [.activate]),
+        .target(predicates[0], ordinal: 0),
+        .within(container: .label("Checkout"), .label("Pay")),
+        .ref(reference),
+    ]
+    let expectations: [AccessibilityPredicate] = [
+        .exists(targets[0]),
+        .missing(targets[1]),
+    ]
+
+    #expect(matches.count == 10)
+    #expect(checks.count == 9)
+    #expect(predicates.count == 11)
+    #expect(targets.count == 13)
+    #expect(expectations.count == 2)
 }
 
 @Test

@@ -15,23 +15,23 @@ final class MinimumPredicateSelectorTests: XCTestCase {
         let candidates = MinimumPredicateSelector.predicateCandidates(for: element)
 
         XCTAssertEqual(candidates.map(\.predicate), [
-            ElementPredicate.identifier("saveButton"),
-            ElementPredicate([.identifier(.exact("saveButton")), .label(.exact("Save"))]),
-            ElementPredicate([.identifier(.exact("saveButton")), .label(.exact("Save")), .traits([.button])]),
-            ElementPredicate([
+            ResolvedElementPredicate.identifier("saveButton"),
+            ResolvedElementPredicate([.identifier(.exact("saveButton")), .label(.exact("Save"))]),
+            ResolvedElementPredicate([.identifier(.exact("saveButton")), .label(.exact("Save")), .traits([.button])]),
+            ResolvedElementPredicate([
                 .identifier(.exact("saveButton")),
                 .label(.exact("Save")),
                 .traits([.button]),
                 .value(.exact("Ready")),
             ]),
-            ElementPredicate([
+            ResolvedElementPredicate([
                 .identifier(.exact("saveButton")),
                 .label(.exact("Save")),
                 .traits([.button]),
                 .value(.exact("Ready")),
                 .traits([.selected]),
             ]),
-            ElementPredicate([
+            ResolvedElementPredicate([
                 .identifier(.exact("saveButton")),
                 .label(.exact("Save")),
                 .traits([.button]),
@@ -39,7 +39,7 @@ final class MinimumPredicateSelectorTests: XCTestCase {
                 .traits([.selected]),
                 .exclude(.traits([.inactive])),
             ]),
-            ElementPredicate([
+            ResolvedElementPredicate([
                 .identifier(.exact("saveButton")),
                 .label(.exact("Save")),
                 .traits([.button]),
@@ -48,7 +48,7 @@ final class MinimumPredicateSelectorTests: XCTestCase {
                 .exclude(.traits([.inactive])),
                 .exclude(.traits([.isEditing])),
             ]),
-            ElementPredicate([
+            ResolvedElementPredicate([
                 .identifier(.exact("saveButton")),
                 .label(.exact("Save")),
                 .traits([.button]),
@@ -58,7 +58,7 @@ final class MinimumPredicateSelectorTests: XCTestCase {
                 .exclude(.traits([.isEditing])),
                 .exclude(.traits([.notEnabled])),
             ]),
-            ElementPredicate([
+            ResolvedElementPredicate([
                 .identifier(.exact("saveButton")),
                 .label(.exact("Save")),
                 .traits([.button]),
@@ -69,7 +69,7 @@ final class MinimumPredicateSelectorTests: XCTestCase {
                 .exclude(.traits([.notEnabled])),
                 .exclude(.traits([.updatesFrequently])),
             ]),
-            ElementPredicate([
+            ResolvedElementPredicate([
                 .identifier(.exact("saveButton")),
                 .label(.exact("Save")),
                 .traits([.button]),
@@ -97,7 +97,7 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             in: context
         ))
 
-        XCTAssertEqual(selection.target, .predicate(ElementPredicateTemplate(identifier: "saveButton")))
+        XCTAssertEqual(selection.target, .predicate(ElementPredicate(identifier: "saveButton")))
         XCTAssertEqual(selection.candidate.tier, .identityOnly)
     }
 
@@ -114,7 +114,7 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             in: context
         ))
 
-        XCTAssertEqual(selection.target, .predicate(ElementPredicateTemplate(label: "Save")))
+        XCTAssertEqual(selection.target, .predicate(ElementPredicate(label: "Save")))
     }
 
     func testUniquenessChangesWhenDuplicateElementIsAddedToContext() throws {
@@ -137,8 +137,8 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             in: duplicateContext
         ))
 
-        XCTAssertEqual(initial.target, .predicate(ElementPredicateTemplate(label: "Save")))
-        XCTAssertEqual(duplicate.target, .predicate(ElementPredicateTemplate(label: "Save", traits: [.button]), ordinal: 0))
+        XCTAssertEqual(initial.target, .predicate(ElementPredicate(label: "Save")))
+        XCTAssertEqual(duplicate.target, .predicate(ElementPredicate(label: "Save", traits: [.button]), ordinal: 0))
     }
 
     func testDuplicateLabelDisambiguatedByIdentityTrait() throws {
@@ -154,7 +154,7 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             in: context
         ))
 
-        XCTAssertEqual(selection.target, .predicate(ElementPredicateTemplate(label: "Delete", traits: [.button])))
+        XCTAssertEqual(selection.target, .predicate(ElementPredicate(label: "Delete", traits: [.button])))
         XCTAssertEqual(selection.candidate.tier, .identityOnly)
     }
 
@@ -171,7 +171,7 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             in: context
         ))
 
-        XCTAssertEqual(selection.target, .predicate(ElementPredicateTemplate(label: "Payment Method", value: "Visa")))
+        XCTAssertEqual(selection.target, .predicate(ElementPredicate(label: "Payment Method", value: "Visa")))
         XCTAssertEqual(selection.candidate.tier, .identityWithState)
     }
 
@@ -188,7 +188,7 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             in: context
         ))
 
-        XCTAssertEqual(selection.target, .predicate(ElementPredicateTemplate(traits: [.selected])))
+        XCTAssertEqual(selection.target, .predicate(ElementPredicate(traits: [.selected])))
         XCTAssertEqual(selection.candidate.tier, .stateOnly)
     }
 
@@ -209,9 +209,9 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             in: context
         ))
 
-        XCTAssertEqual(firstSelection.target, .predicate(ElementPredicateTemplate(label: "Delete", traits: [.button]), ordinal: 0))
+        XCTAssertEqual(firstSelection.target, .predicate(ElementPredicate(label: "Delete", traits: [.button]), ordinal: 0))
         XCTAssertEqual(firstSelection.candidate.tier, .ordinalDisambiguation)
-        XCTAssertEqual(secondSelection.target, .predicate(ElementPredicateTemplate(label: "Delete", traits: [.button]), ordinal: 1))
+        XCTAssertEqual(secondSelection.target, .predicate(ElementPredicate(label: "Delete", traits: [.button]), ordinal: 1))
         XCTAssertEqual(secondSelection.candidate.tier, .ordinalDisambiguation)
     }
 

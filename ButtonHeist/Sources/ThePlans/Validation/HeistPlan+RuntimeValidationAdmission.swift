@@ -228,7 +228,7 @@ package struct HeistPredicateCaseAdmissionCandidate: Codable, Sendable, Equatabl
 }
 
 package struct HeistForEachElementAdmissionCandidate: Codable, Sendable, Equatable {
-    let matching: ElementPredicateTemplate
+    let matching: ElementPredicate
     let limit: Int
     let parameter: HeistReferenceName
     let body: [HeistStepAdmissionCandidate]
@@ -236,7 +236,7 @@ package struct HeistForEachElementAdmissionCandidate: Codable, Sendable, Equatab
     private enum CodingKeys: String, CodingKey, CaseIterable { case matching, limit, parameter, body }
 
     init(
-        matching: ElementPredicateTemplate,
+        matching: ElementPredicate,
         limit: Int,
         parameter: HeistReferenceName,
         body: [HeistStepAdmissionCandidate]
@@ -261,7 +261,7 @@ package struct HeistForEachElementAdmissionCandidate: Codable, Sendable, Equatab
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "for_each_element step")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try self.init(
-            matching: container.decode(ElementPredicateTemplate.self, forKey: .matching),
+            matching: container.decode(ElementPredicate.self, forKey: .matching),
             limit: container.decode(Int.self, forKey: .limit),
             parameter: HeistReferenceName.decode(from: container, forKey: .parameter, type: "for_each_element parameter"),
             body: container.decode([HeistStepAdmissionCandidate].self, forKey: .body)

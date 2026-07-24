@@ -127,7 +127,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
     }
 
     func testPredicateSemanticsAreDerivedFromResolvedCore() async throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save"))
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Save"))
         let authored = [
             AccessibilityPredicate.exists(target),
             .changed(.elements([.appeared(target)])),
@@ -1005,7 +1005,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
 
     private func currentStatePredicate() throws -> Settlement.Predicate {
         let authored = AccessibilityPredicate.exists(
-            .predicate(ElementPredicateTemplate(label: "Save"))
+            .predicate(ElementPredicate(label: "Save"))
         )
         return Settlement.Predicate(
             authored: authored,

@@ -141,14 +141,14 @@ func `predicate case wire boundary decodes only snapshot predicates`() throws {
 @Test
 func `durable element predicate JSON requires canonical checks`() throws {
     #expect(throws: DecodingError.self) {
-        _ = try JSONDecoder().decode(ElementPredicateTemplate.self, from: Data("""
+        _ = try JSONDecoder().decode(ElementPredicate.self, from: Data("""
         {
           "label": "Receipt"
         }
         """.utf8))
     }
 
-    let predicate = try JSONDecoder().decode(ElementPredicateTemplate.self, from: Data("""
+    let predicate = try JSONDecoder().decode(ElementPredicate.self, from: Data("""
     {
       "checks": [
         { "kind": "label", "match": { "mode": "exact", "value": "Receipt" } }

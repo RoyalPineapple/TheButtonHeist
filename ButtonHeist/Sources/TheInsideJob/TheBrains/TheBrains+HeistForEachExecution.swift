@@ -106,7 +106,7 @@ extension TheBrains {
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
-        let resolvedMatching: ElementPredicate
+        let resolvedMatching: ResolvedElementPredicate
         do {
             resolvedMatching = try step.matching.resolve(in: environment)
         } catch {
@@ -595,7 +595,7 @@ private struct ForEachMatchSignature: Equatable {
 
     var count: Int { identities.count }
 
-    init(matching: ElementPredicate, elements: [HeistElement]) {
+    init(matching: ResolvedElementPredicate, elements: [HeistElement]) {
         identities = AccessibilityTargetMatchGraph(elements: elements)
             .resolve(matching)
             .elements

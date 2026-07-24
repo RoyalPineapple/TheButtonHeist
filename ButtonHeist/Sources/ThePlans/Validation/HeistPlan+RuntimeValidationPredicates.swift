@@ -135,7 +135,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func validateStringPropertyChange(
-        _ change: PropertyChangeCore<StringMatchCore<Expr<String>>>,
+        _ change: PropertyChangeCore<StringMatchCore<AuthoredString>>,
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
@@ -148,7 +148,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func validateCustomContentPropertyChange(
-        _ change: PropertyChangeCore<CustomContentMatchCore<Expr<String>>>,
+        _ change: PropertyChangeCore<CustomContentMatchCore<AuthoredString>>,
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
@@ -161,7 +161,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func validateCustomContent(
-        _ match: CustomContentMatchCore<Expr<String>>,
+        _ match: CustomContentMatchCore<AuthoredString>,
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
@@ -174,7 +174,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func validateRotorPropertyChange(
-        _ change: PropertyChangeCore<RotorSetMatchCore<Expr<String>>>,
+        _ change: PropertyChangeCore<RotorSetMatchCore<AuthoredString>>,
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
@@ -187,7 +187,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func validateRotorSet(
-        _ match: RotorSetMatchCore<Expr<String>>,
+        _ match: RotorSetMatchCore<AuthoredString>,
         path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {

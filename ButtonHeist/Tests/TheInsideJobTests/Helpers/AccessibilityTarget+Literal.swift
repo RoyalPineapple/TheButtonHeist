@@ -2,7 +2,7 @@ import ThePlans
 @testable import TheInsideJob
 
 func literalTarget(
-    _ predicate: ElementPredicate,
+    _ predicate: ResolvedElementPredicate,
     ordinal: Int? = nil
 ) -> ResolvedAccessibilityTarget {
     .predicate(predicate, ordinal: ordinal)

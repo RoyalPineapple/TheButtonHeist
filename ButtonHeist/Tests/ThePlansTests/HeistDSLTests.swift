@@ -688,7 +688,7 @@ func namedHeistPlanCanDeclareSingularStringRootParameter() throws {
 
 @Test
 func semanticForEachCallsBodyWithRuntimeIterationTarget() throws {
-    let matching = ElementPredicateTemplate.label("Delete")
+    let matching = ElementPredicate.label("Delete")
     let heist = try HeistPlan {
         ForEach(matching, limit: 20) { element in
             Activate(element)

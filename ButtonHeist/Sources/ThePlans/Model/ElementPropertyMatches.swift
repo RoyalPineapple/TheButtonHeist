@@ -83,9 +83,9 @@ package extension CustomContentMatchCore where Text: StringMatchLeaf {
 }
 
 public struct CustomContentMatch: Codable, Sendable, Equatable, Hashable {
-    package let core: CustomContentMatchCore<Expr<String>>
+    package let core: CustomContentMatchCore<AuthoredString>
 
-    package init(core: CustomContentMatchCore<Expr<String>>) {
+    package init(core: CustomContentMatchCore<AuthoredString>) {
         self.core = core
     }
 
@@ -138,9 +138,9 @@ extension RotorSetMatchCore: Equatable where Text: Equatable {}
 extension RotorSetMatchCore: Hashable where Text: Hashable {}
 
 public struct RotorSetMatch: Codable, Sendable, Equatable, Hashable {
-    package let core: RotorSetMatchCore<Expr<String>>
+    package let core: RotorSetMatchCore<AuthoredString>
 
-    package init(core: RotorSetMatchCore<Expr<String>>) {
+    package init(core: RotorSetMatchCore<AuthoredString>) {
         self.core = core
     }
 

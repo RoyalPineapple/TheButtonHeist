@@ -21,7 +21,7 @@ extension TheFenceCompactFormattingContractTests {
             before: makeTestInterface(elements: unchanged),
             after: makeTestInterface(elements: unchanged + [lazyRow])
         )
-        let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Load More")))
+        let command = HeistActionCommand.activate(.predicate(ElementPredicate(label: "Load More")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let result = try HeistResult(
             steps: [
@@ -101,7 +101,7 @@ extension TheFenceCompactFormattingContractTests {
             before: makeTestInterface(elements: []),
             after: makeTestInterface(elements: addedRows)
         )
-        let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Load More")))
+        let command = HeistActionCommand.activate(.predicate(ElementPredicate(label: "Load More")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let response = FenceResponse.heistExecution(
             plan: plan,
@@ -180,7 +180,7 @@ extension TheFenceCompactFormattingContractTests {
             afterScreenId: "checkout",
             afterTransition: makeTestScreenChangedTransition()
         )
-        let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Checkout")))
+        let command = HeistActionCommand.activate(.predicate(ElementPredicate(label: "Checkout")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let response = FenceResponse.heistExecution(
             plan: plan,
@@ -253,7 +253,7 @@ extension TheFenceCompactFormattingContractTests {
             before: makeTestInterface(elements: unchanged),
             after: makeTestInterface(elements: unchanged + [lazyRow])
         )
-        let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Load More")))
+        let command = HeistActionCommand.activate(.predicate(ElementPredicate(label: "Load More")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let result = try HeistResult(
             steps: [
@@ -288,7 +288,7 @@ extension TheFenceCompactFormattingContractTests {
             tapActivationPoint: ScreenPoint(x: 195, y: 139),
             tapActivationSucceeded: true
         ))
-        let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Search all items")))
+        let command = HeistActionCommand.activate(.predicate(ElementPredicate(label: "Search all items")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let response = FenceResponse.heistExecution(
             plan: plan,

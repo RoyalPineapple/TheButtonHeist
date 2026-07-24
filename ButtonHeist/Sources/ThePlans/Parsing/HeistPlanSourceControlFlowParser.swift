@@ -77,13 +77,13 @@ extension HeistPlanSourceParser {
         ))
     }
 
-    mutating func parseElementLoopPredicate() throws -> ElementPredicateTemplate {
+    mutating func parseElementLoopPredicate() throws -> ElementPredicate {
         try expectSymbol(".")
         let name = try parseIdentifier()
         if name == "matching" {
             throw error(previous, #"ForEach element loops use direct predicates like `ForEach(.label("x"))`, not `.matching(...)`"#)
         }
-        return try parseElementPredicateTemplate(named: name)
+        return try parseElementPredicate(named: name)
     }
 
     mutating func parseRunHeist() throws -> HeistStep {

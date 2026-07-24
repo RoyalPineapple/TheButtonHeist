@@ -22,7 +22,7 @@ struct AccessibilityTargetOptions: ParsableArguments {
     @Option(name: .long, help: "0-based index to select among multiple matches (in tree traversal order)")
     var ordinal: Int?
 
-    func parsedPredicate() throws -> ElementPredicateTemplate? {
+    func parsedPredicate() throws -> ElementPredicate? {
         let hasFields = identifier != nil || label != nil || value != nil
             || !traits.isEmpty || !excludedTraits.isEmpty
         guard hasFields else { return nil }
@@ -34,7 +34,7 @@ struct AccessibilityTargetOptions: ParsableArguments {
         if !requiredTraits.isEmpty { checks.append(.traits(requiredTraits)) }
         let excludedTraits = Set(try parseTraits(excludedTraits, label: "excluded trait"))
         if !excludedTraits.isEmpty { checks.append(.exclude(.traits(excludedTraits))) }
-        return ElementPredicateTemplate(checks)
+        return ElementPredicate(checks)
     }
 
     func requireTarget() throws -> AccessibilityTarget {

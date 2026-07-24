@@ -25,7 +25,7 @@ package enum ElementPropertyChangeCore<Text> {
 extension ElementPropertyChangeCore: Sendable where Text: Sendable {}
 extension ElementPropertyChangeCore: Equatable where Text: Equatable {}
 
-package extension ElementPropertyChangeCore where Text == Expr<String> {
+package extension ElementPropertyChangeCore where Text == AuthoredString {
     func resolve(in environment: HeistExecutionEnvironment) throws -> ElementPropertyChangeCore<String> {
         switch self {
         case .value(let change):
@@ -48,7 +48,7 @@ package extension ElementPropertyChangeCore where Text == Expr<String> {
     }
 
     private func resolve(
-        _ match: StringMatchCore<Expr<String>>,
+        _ match: StringMatchCore<AuthoredString>,
         in environment: HeistExecutionEnvironment
     ) throws -> StringMatchCore<String> {
         let resolved = try match.map { try $0.resolve(in: environment) }

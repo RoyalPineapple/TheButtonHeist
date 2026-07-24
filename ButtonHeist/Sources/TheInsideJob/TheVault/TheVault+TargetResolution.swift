@@ -29,7 +29,7 @@ extension TheVault {
     }
 
     struct TargetElementMatches: Equatable {
-        let predicate: ElementPredicate
+        let predicate: ResolvedElementPredicate
         let ordinal: Int?
         let candidates: [InterfaceTree.Element]
         let exactMatches: [InterfaceTree.Element]

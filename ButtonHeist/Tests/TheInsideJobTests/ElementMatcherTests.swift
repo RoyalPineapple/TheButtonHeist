@@ -42,10 +42,10 @@ final class ElementMatcherTests: XCTestCase {
         )
     }
 
-    private func resolvedPredicate(_ authored: AccessibilityTarget) throws -> ElementPredicate {
+    private func resolvedPredicate(_ authored: AccessibilityTarget) throws -> ResolvedElementPredicate {
         let resolved = try authored.resolve(in: .empty)
         guard case .predicate(let predicate, ordinal: nil) = resolved else {
-            return try XCTUnwrap(nil as ElementPredicate?, "Expected an unqualified element predicate")
+            return try XCTUnwrap(nil as ResolvedElementPredicate?, "Expected an unqualified element predicate")
         }
         return predicate
     }
@@ -54,9 +54,9 @@ final class ElementMatcherTests: XCTestCase {
 
     func testLabelExactMatch() {
         let element = element(label: "Save")
-        XCTAssertTrue(ElementPredicate.label("Save").matches(element))
-        XCTAssertFalse(ElementPredicate.label("Sav").matches(element))
-        XCTAssertFalse(ElementPredicate.label("Save Draft").matches(element))
+        XCTAssertTrue(ResolvedElementPredicate.label("Save").matches(element))
+        XCTAssertFalse(ResolvedElementPredicate.label("Sav").matches(element))
+        XCTAssertFalse(ResolvedElementPredicate.label("Save Draft").matches(element))
     }
 
     func testLabelTypographyFolding() {
@@ -64,19 +64,19 @@ final class ElementMatcherTests: XCTestCase {
         // Shared helper coverage lives in TheScoreTests; this asserts the
         // server-side AccessibilityElement.matches plumbs through correctly.
         let element = element(label: "Don\u{2019}t skip")
-        XCTAssertTrue(ElementPredicate.label("Don't skip").matches(element))
+        XCTAssertTrue(ResolvedElementPredicate.label("Don't skip").matches(element))
     }
 
     func testIdentifierExactMatch() {
         let element = element(identifier: "saveBtn")
-        XCTAssertTrue(ElementPredicate.identifier("saveBtn").matches(element))
-        XCTAssertFalse(ElementPredicate.identifier("save").matches(element))
+        XCTAssertTrue(ResolvedElementPredicate.identifier("saveBtn").matches(element))
+        XCTAssertFalse(ResolvedElementPredicate.identifier("save").matches(element))
     }
 
     func testValueExactMatch() {
         let element = element(value: "50%")
-        XCTAssertTrue(ElementPredicate.value("50%").matches(element))
-        XCTAssertFalse(ElementPredicate.value("75%").matches(element))
+        XCTAssertTrue(ResolvedElementPredicate.value("50%").matches(element))
+        XCTAssertFalse(ResolvedElementPredicate.value("75%").matches(element))
     }
 
     func testExplicitBroadStringMatches() throws {
@@ -89,7 +89,7 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertTrue(try resolvedPredicate(.value(.suffix("changes"))).matches(element))
         XCTAssertTrue(try resolvedPredicate(.identifier(.contains("changes"))).matches(element))
         XCTAssertTrue(try resolvedPredicate(.identifier(.prefix("save"))).matches(element))
-        XCTAssertFalse(ElementPredicate.label("Changes").matches(element))
+        XCTAssertFalse(ResolvedElementPredicate.label("Changes").matches(element))
     }
 
     func testSemanticSurfacePredicatesMatchHintActionsCustomContentAndRotors() throws {
@@ -104,7 +104,7 @@ final class ElementMatcherTests: XCTestCase {
         )
 
         XCTAssertTrue(try resolvedPredicate(.label("Coke").and(.hint(.contains("edit")))).matches(element))
-        XCTAssertTrue(ElementPredicate.actions([.custom("Modify")]).matches(element))
+        XCTAssertTrue(ResolvedElementPredicate.actions([.custom("Modify")]).matches(element))
         XCTAssertTrue(try resolvedPredicate(.label("Coke").excluding(.actions([.custom("Sub")]))).matches(element))
         XCTAssertTrue(try resolvedPredicate(
             .label("Coke").and(.customContent(.init(label: "Slot", value: "Main")))
@@ -135,12 +135,12 @@ final class ElementMatcherTests: XCTestCase {
             ),
         ]
         let predicates = [
-            ElementPredicate.actions([.activate]),
-            ElementPredicate.actions([.typeText]),
-            ElementPredicate.actions([.increment]),
-            ElementPredicate.actions([.decrement]),
-            ElementPredicate.actions([.custom("Modify")]),
-            ElementPredicate.actions([.activate, .typeText]),
+            ResolvedElementPredicate.actions([.activate]),
+            ResolvedElementPredicate.actions([.typeText]),
+            ResolvedElementPredicate.actions([.increment]),
+            ResolvedElementPredicate.actions([.decrement]),
+            ResolvedElementPredicate.actions([.custom("Modify")]),
+            ResolvedElementPredicate.actions([.activate, .typeText]),
         ]
 
         for source in sources {
@@ -184,15 +184,15 @@ final class ElementMatcherTests: XCTestCase {
     func testTextInputTraitsExposeTypeTextActionToMatcher() throws {
         let element = element(label: "Search", traits: .searchField)
 
-        XCTAssertTrue(ElementPredicate.actions([.typeText]).matches(element))
+        XCTAssertTrue(ResolvedElementPredicate.actions([.typeText]).matches(element))
         XCTAssertFalse(try resolvedPredicate(.label("Search").excluding(.actions([.typeText]))).matches(element))
     }
 
     func testTraitsIncludeExactBitmask() {
         let element = element(traits: [.button, .selected])
-        XCTAssertTrue(ElementPredicate.traits([.button]).matches(element))
-        XCTAssertTrue(ElementPredicate.traits([.button, .selected]).matches(element))
-        XCTAssertFalse(ElementPredicate.traits([.button, .header]).matches(element))
+        XCTAssertTrue(ResolvedElementPredicate.traits([.button]).matches(element))
+        XCTAssertTrue(ResolvedElementPredicate.traits([.button, .selected]).matches(element))
+        XCTAssertFalse(ResolvedElementPredicate.traits([.button, .header]).matches(element))
     }
 
     func testTraitsExclude() throws {
@@ -228,7 +228,7 @@ final class ElementMatcherTests: XCTestCase {
     }
 
     func testEmptyMatcherMatchesNothing() {
-        let empty = ElementPredicate([])
+        let empty = ResolvedElementPredicate([])
         XCTAssertFalse(empty.matches(element(label: "Save", traits: .button)))
         XCTAssertFalse(empty.matches(element()))
     }

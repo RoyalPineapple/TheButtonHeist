@@ -15,12 +15,12 @@ public enum CandidateTier: Int, Sendable, Equatable, Comparable {
 }
 
 public struct MatcherAtom: Sendable, Equatable {
-    public let predicate: ElementPredicate
+    public let predicate: ResolvedElementPredicate
     public let stability: AccessibilityFactStability
     public let priority: Int
 
     public init(
-        predicate: ElementPredicate,
+        predicate: ResolvedElementPredicate,
         stability: AccessibilityFactStability,
         priority: Int
     ) {
@@ -68,12 +68,12 @@ package struct PredicateSelectionSubjectElement<Subject: PredicateSelectionSubje
 }
 
 public struct PredicateCandidate: Sendable, Equatable {
-    public let predicate: ElementPredicate
+    public let predicate: ResolvedElementPredicate
     public let atoms: [MatcherAtom]
     public let tier: CandidateTier
 
     public init(
-        predicate: ElementPredicate,
+        predicate: ResolvedElementPredicate,
         atoms: [MatcherAtom],
         tier: CandidateTier
     ) {
@@ -222,7 +222,7 @@ public enum MinimumPredicateSelector {
         candidates.reserveCapacity(atoms.count)
 
         var accumulated: [MatcherAtom] = []
-        var seen = Set<ElementPredicate>()
+        var seen = Set<ResolvedElementPredicate>()
         for atom in atoms {
             accumulated.append(atom)
             let predicate = combinedPredicate(from: accumulated)
@@ -312,7 +312,7 @@ public enum MinimumPredicateSelector {
         return atoms.sorted { $0.sortKey < $1.sortKey }
     }
 
-    private static func predicate(for fact: AccessibilityMatcherFact) -> ElementPredicate? {
+    private static func predicate(for fact: AccessibilityMatcherFact) -> ResolvedElementPredicate? {
         switch fact {
         case .identifier(let identifier):
             return .identifier(identifier)
@@ -323,16 +323,16 @@ public enum MinimumPredicateSelector {
         case .trait(let trait):
             return .traits([trait])
         case .excludedTrait(let trait):
-            return ElementPredicate([.exclude(.traits([trait]))])
+            return ResolvedElementPredicate([.exclude(.traits([trait]))])
         }
     }
 
-    private static func combinedPredicate(from atoms: [MatcherAtom]) -> ElementPredicate {
-        ElementPredicate(atoms.flatMap { $0.predicate.core.checks })
+    private static func combinedPredicate(from atoms: [MatcherAtom]) -> ResolvedElementPredicate {
+        ResolvedElementPredicate(atoms.flatMap { $0.predicate.core.checks })
     }
 
-    private static func authoredTemplate(_ predicate: ElementPredicate) -> ElementPredicateTemplate {
-        ElementPredicateTemplate(core: predicate.core.map { .literal($0) })
+    private static func authoredTemplate(_ predicate: ResolvedElementPredicate) -> ElementPredicate {
+        ElementPredicate(core: predicate.core.map { .literal($0) })
     }
 
     private static func tier(for atoms: [MatcherAtom]) -> CandidateTier {

@@ -24,7 +24,7 @@ extension WireTypeRoundTripTests {
         let plan = try HeistPlan(body: [
                 .action(ActionStep(
                     command: .activate(.predicate(
-                        ElementPredicateTemplate(label: "Settings", traits: [.button]),
+                        ElementPredicate(label: "Settings", traits: [.button]),
                         ordinal: 1
                     )),
                     expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 2.5)))),
@@ -70,7 +70,7 @@ extension WireTypeRoundTripTests {
     }
 
     func testHeistExecutionResultRoundTripKeepsActivationTraceOnlyInActionEvidence() throws {
-        let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Save")))
+        let command = HeistActionCommand.activate(.predicate(ElementPredicate(label: "Save")))
         let activationTrace = ActivationTrace(.activationPointFallback(
             axActivateReturned: false,
             tapActivationPoint: ScreenPoint(x: 195, y: 139),

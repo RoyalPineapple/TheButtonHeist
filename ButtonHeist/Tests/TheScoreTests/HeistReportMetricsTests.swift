@@ -166,7 +166,7 @@ import TheScore
     }
 
     private func actionStep(predicate: AccessibilityPredicate) -> HeistExecutionStepResult {
-        let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Pay")))
+        let command = HeistActionCommand.activate(.predicate(ElementPredicate(label: "Pay")))
         return HeistResultFixture.action(
             path: "$.body[0]",
             command: command,

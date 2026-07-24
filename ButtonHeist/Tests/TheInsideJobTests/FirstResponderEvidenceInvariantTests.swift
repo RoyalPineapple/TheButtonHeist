@@ -220,7 +220,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             firstResponderHeistId: "email_field"
         )
         let expectedAuthoredTarget = AccessibilityTarget.label("Email")
-        let expectedResolvedTarget = literalTarget(ElementPredicate.label("Email"))
+        let expectedResolvedTarget = literalTarget(ResolvedElementPredicate.label("Email"))
 
         let semantic = await brains.vault.semanticObservationStream
             .commitVisibleObservationForTesting(screen)

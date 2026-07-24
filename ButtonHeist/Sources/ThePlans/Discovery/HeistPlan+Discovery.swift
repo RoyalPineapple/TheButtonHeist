@@ -27,7 +27,7 @@ public enum HeistCatalogTag: String, Codable, Sendable, Equatable {
 }
 
 public enum HeistTargetPredicateFact: Sendable, Equatable, Hashable {
-    case predicate(ElementPredicateTemplate)
+    case predicate(ElementPredicate)
     case container(ContainerPredicate)
     case targetReference(HeistReferenceName)
 }
@@ -55,7 +55,7 @@ public struct HeistSemanticCustomContentMatch: Sendable, Equatable, Hashable {
         self.isImportant = isImportant
     }
 
-    init(_ match: CustomContentMatchCore<Expr<String>>) {
+    init(_ match: CustomContentMatchCore<AuthoredString>) {
         self.label = match.label.map(HeistSemanticStringMatch.init)
         self.value = match.value.map(HeistSemanticStringMatch.init)
         self.isImportant = match.isImportant
@@ -71,7 +71,7 @@ public struct HeistSemanticStringMatch: Sendable, Equatable, Hashable {
         self.value = value
     }
 
-    init(_ match: StringMatchCore<Expr<String>>) {
+    init(_ match: StringMatchCore<AuthoredString>) {
         switch match.mode {
         case .exact:
             self.mode = .exact
@@ -92,7 +92,7 @@ public enum HeistSemanticStringValue: Sendable, Equatable, Hashable {
     case literal(String)
     case reference(HeistReferenceName)
 
-    init(_ expression: Expr<String>) {
+    init(_ expression: AuthoredString) {
         switch expression {
         case .literal(let literal):
             self = .literal(literal)
@@ -466,7 +466,7 @@ private struct HeistSemanticSurfaceCollector {
     private var expectations: [AccessibilityPredicate] = []
     private var nestedRunHeists: [HeistInvocationPath] = []
     private var expectedEffects: [AccessibilityPredicate] = []
-    private var semanticFacets: [ElementPredicateCheckCore<Expr<String>>] = []
+    private var semanticFacets: [ElementPredicateCheckCore<AuthoredString>] = []
 
     static func surface(for resolved: ResolvedCatalogHeist) -> HeistSemanticSurface {
         var collector = Self()
@@ -554,7 +554,7 @@ private struct HeistSemanticSurfaceCollector {
         appendTargetPredicate(occurrence.target)
     }
 
-    mutating func appendSemanticSurfaces(_ predicate: ElementPredicateTemplate) {
+    mutating func appendSemanticSurfaces(_ predicate: ElementPredicate) {
         for check in predicate.core.checks where check.hasPredicateLiteral {
             semanticFacets.appendIfMissing(check)
         }
@@ -627,7 +627,7 @@ private struct HeistSemanticSurfaceCollector {
 }
 
 private extension HeistSemanticSurfaceFact {
-    init(_ check: ElementPredicateCheckCore<Expr<String>>) {
+    init(_ check: ElementPredicateCheckCore<AuthoredString>) {
         switch check {
         case .label(let match):
             self = .label(HeistSemanticStringMatch(match))

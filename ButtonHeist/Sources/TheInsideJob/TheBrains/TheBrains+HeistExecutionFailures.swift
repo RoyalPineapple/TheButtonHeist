@@ -180,7 +180,7 @@ extension TheBrains {
         return TheVault.Diagnostics.failureInterfaceSuggestion(for: predicate, elements: elements)
     }
 
-    private func failureSuggestionPredicate(for target: AccessibilityTarget) -> ElementPredicate? {
+    private func failureSuggestionPredicate(for target: AccessibilityTarget) -> ResolvedElementPredicate? {
         switch target {
         case .predicate(let template, _):
             return try? template.resolve(in: .empty)

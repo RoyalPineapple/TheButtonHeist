@@ -409,7 +409,7 @@ extension TheVaultResolutionTests {
 
         let interface = try bagman.selectInterface(InterfaceQuery())
         XCTAssertEqual(interface.projectedElements.compactMap(\.label), ["Settled"])
-        XCTAssertNil(bagman.resolveVisibleTarget(literalTarget(ElementPredicate.label("Timeout"))).resolvedElement)
+        XCTAssertNil(bagman.resolveVisibleTarget(literalTarget(ResolvedElementPredicate.label("Timeout"))).resolvedElement)
     }
 
 }

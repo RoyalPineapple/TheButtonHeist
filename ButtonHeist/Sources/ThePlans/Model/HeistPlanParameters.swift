@@ -64,7 +64,7 @@ public enum HeistParameterKind: String, Codable, Sendable, Equatable {
 
 package enum HeistArgumentCore: Sendable, Equatable {
     case none
-    case string(Expr<String>)
+    case string(AuthoredString)
     case accessibilityTarget(AccessibilityTarget)
 }
 

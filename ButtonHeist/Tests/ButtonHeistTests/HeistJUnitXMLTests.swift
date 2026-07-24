@@ -94,7 +94,7 @@ final class HeistJUnitXMLTests: XCTestCase {
     @ButtonHeistActor
     func testJunitXMLSkippedNodeIsNotFailure() async throws {
         let command = HeistActionCommand.activate(
-            .predicate(ElementPredicateTemplate(label: "Skipped"))
+            .predicate(ElementPredicate(label: "Skipped"))
         )
         let skipped = HeistExecutionStepResult.action(
             path: try HeistExecutionPath(validating: "$.body[1]"),
@@ -146,7 +146,7 @@ final class HeistJUnitXMLTests: XCTestCase {
     private func passingAction(path: String, label: String) -> HeistExecutionStepResult {
         HeistResultFixture.action(
             path: path,
-            command: .activate(.predicate(ElementPredicateTemplate(label: .exact(label)))),
+            command: .activate(.predicate(ElementPredicate(label: .exact(label)))),
             durationMs: 100
         )
     }
@@ -158,7 +158,7 @@ final class HeistJUnitXMLTests: XCTestCase {
     ) -> HeistExecutionStepResult {
         HeistResultFixture.action(
             path: path,
-            command: .activate(.predicate(ElementPredicateTemplate(label: .exact(label)))),
+            command: .activate(.predicate(ElementPredicate(label: .exact(label)))),
             result: HeistResultFixture.actionResult(
                 succeeded: false,
                 message: message,

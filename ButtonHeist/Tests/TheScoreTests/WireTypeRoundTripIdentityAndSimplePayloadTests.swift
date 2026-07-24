@@ -122,7 +122,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testTypeTextStringRefLoweringRejectsEmptyResolvedText() throws {
         let command = HeistActionCommand.typeText(
             reference: "item",
-            target: .predicate(ElementPredicateTemplate(label: "Add item"))
+            target: .predicate(ElementPredicate(label: "Add item"))
         )
 
         XCTAssertThrowsError(try command.resolve(in: HeistExecutionEnvironment(strings: ["item": ""]))) { error in
@@ -133,7 +133,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testTypeTextStringRefLoweringAllowsEmptyResolvedTextWhenReplacingExisting() throws {
         let command = HeistActionCommand.typeText(
             reference: "item",
-            target: .predicate(ElementPredicateTemplate(label: "Add item")),
+            target: .predicate(ElementPredicate(label: "Add item")),
             mode: .replace
         )
 

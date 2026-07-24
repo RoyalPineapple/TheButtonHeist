@@ -120,7 +120,7 @@ import TheScore
         let stringSummary = try #require(HeistForEachStringEvidence(iterationCount: 2))
         let elementDeclaration = try #require(HeistForEachElementDeclaration(
             parameter: "item",
-            matching: ElementPredicateTemplate(label: "Row"),
+            matching: ElementPredicate(label: "Row"),
             limit: 2
         ))
         let elementSummary = try #require(HeistForEachElementEvidence(matchedCount: 1, iterationCount: 1))

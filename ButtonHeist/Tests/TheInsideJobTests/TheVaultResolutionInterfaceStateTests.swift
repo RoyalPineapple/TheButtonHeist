@@ -57,7 +57,7 @@ extension TheVaultResolutionTests {
         await register(save1, heistId: "button_save_1", index: 0)
         await register(save2, heistId: "button_save_2", index: 1)
 
-        let result = bagman.resolveVisibleTarget(literalTarget(ElementPredicate.label("Save")))
+        let result = bagman.resolveVisibleTarget(literalTarget(ResolvedElementPredicate.label("Save")))
 
         guard case .ambiguous(let facts) = result else {
             XCTFail("Expected visible ambiguity, got \(result)")
@@ -73,7 +73,7 @@ extension TheVaultResolutionTests {
         let save = element(label: "Save", traits: .button)
         await register(save, heistId: "button_save", index: 0)
 
-        let result = bagman.resolveVisibleTarget(literalTarget(ElementPredicate.label("Save"), ordinal: 4))
+        let result = bagman.resolveVisibleTarget(literalTarget(ResolvedElementPredicate.label("Save"), ordinal: 4))
 
         guard case .notFound(let facts) = result else {
             XCTFail("Expected ordinal miss, got \(result)")
@@ -92,10 +92,10 @@ extension TheVaultResolutionTests {
         await register(visible, heistId: "button_visible", index: 0)
         await registerOffScreen(offScreen, heistId: "below_fold_button")
 
-        let knownResult = bagman.resolveTarget(literalTarget(ElementPredicate.label("Below Fold")))
+        let knownResult = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Below Fold")))
         XCTAssertEqual(knownResult.resolvedElement?.heistId, "below_fold_button")
 
-        let visibleResult = bagman.resolveVisibleTarget(literalTarget(ElementPredicate.label("Below Fold")))
+        let visibleResult = bagman.resolveVisibleTarget(literalTarget(ResolvedElementPredicate.label("Below Fold")))
         guard case .notFound(let facts) = visibleResult else {
             XCTFail("Expected visible miss, got \(visibleResult)")
             return
@@ -132,7 +132,7 @@ extension TheVaultResolutionTests {
             firstResponderHeistId: nil,
         ))
 
-        guard let resolved = bagman.resolveTarget(literalTarget(ElementPredicate.label("Below Fold"))).resolvedElement else {
+        guard let resolved = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Below Fold"))).resolvedElement else {
             XCTFail("Off-viewport entry should still resolve")
             return
         }
@@ -153,7 +153,7 @@ extension TheVaultResolutionTests {
             firstResponderHeistId: nil,
         ))
 
-        let refreshed = bagman.resolveTarget(literalTarget(ElementPredicate.label("Below Fold"))).resolvedElement
+        let refreshed = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Below Fold"))).resolvedElement
         XCTAssertNotNil(bagman.treeElement(heistId: "below_fold_button", in: .viewport))
         guard let refreshed,
               case .resolved(let liveTarget) = bagman.resolveLiveActionTarget(for: refreshed) else {
@@ -189,7 +189,7 @@ extension TheVaultResolutionTests {
             firstResponderHeistId: nil,
         ))
 
-        guard let resolved = bagman.resolveTarget(literalTarget(ElementPredicate.label("Visible"))).resolvedElement else {
+        guard let resolved = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Visible"))).resolvedElement else {
             XCTFail("Expected visible target to resolve")
             return
         }
@@ -203,14 +203,14 @@ extension TheVaultResolutionTests {
         let offScreen = element(label: "Below Fold", traits: .button)
         await registerOffScreen(offScreen, heistId: "below_fold_button")
 
-        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Below Fold"))).resolvedElement)
+        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Below Fold"))).resolvedElement)
     }
 
     func testResolveTargetFindsLivePredicateInViewport() async {
         let element = element(label: "Visible", traits: .button)
         await register(element, heistId: "visible_button", index: 0)
 
-        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Visible"))).resolvedElement)
+        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Visible"))).resolvedElement)
     }
 
     func testResolveTargetHonorsExplicitOrdinal() async {
@@ -219,8 +219,8 @@ extension TheVaultResolutionTests {
         await register(save1, heistId: "button_save_1", index: 0)
         await register(save2, heistId: "button_save_2", index: 1)
 
-        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Save"), ordinal: 1)).resolvedElement)
-        guard case .notFound = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save"), ordinal: 2)) else {
+        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save"), ordinal: 1)).resolvedElement)
+        guard case .notFound = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save"), ordinal: 2)) else {
             XCTFail("Expected out-of-range ordinal to fail closed")
             return
         }
@@ -231,7 +231,7 @@ extension TheVaultResolutionTests {
         await register(element, heistId: "button_combobox", index: 0)
 
         // Element resolves immediately — no markPresented gate
-        let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Combobox")))
+        let result = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Combobox")))
         XCTAssertNotNil(result.resolvedElement)
     }
 
@@ -261,27 +261,27 @@ extension TheVaultResolutionTests {
         let cases = [
             ResolutionCase(
                 name: "unique",
-                target: literalTarget(ElementPredicate.label("Done")),
+                target: literalTarget(ResolvedElementPredicate.label("Done")),
                 expected: .resolved("done_button")
             ),
             ResolutionCase(
                 name: "ambiguous",
-                target: literalTarget(ElementPredicate.label("Delete")),
+                target: literalTarget(ResolvedElementPredicate.label("Delete")),
                 expected: .ambiguous(["delete_first", "delete_second"])
             ),
             ResolutionCase(
                 name: "not found",
-                target: literalTarget(ElementPredicate.label("Missing")),
+                target: literalTarget(ResolvedElementPredicate.label("Missing")),
                 expected: .notFound
             ),
             ResolutionCase(
                 name: "ordinal select",
-                target: literalTarget(ElementPredicate.label("Delete"), ordinal: 1),
+                target: literalTarget(ResolvedElementPredicate.label("Delete"), ordinal: 1),
                 expected: .resolved("delete_second")
             ),
             ResolutionCase(
                 name: "ordinal out of range",
-                target: literalTarget(ElementPredicate.label("Delete"), ordinal: 2),
+                target: literalTarget(ResolvedElementPredicate.label("Delete"), ordinal: 2),
                 expected: .ordinalOutOfRange(
                     requested: 2,
                     matches: ["delete_first", "delete_second"]
@@ -329,7 +329,7 @@ extension TheVaultResolutionTests {
         let save = element(label: "Save Draft", traits: .button)
         await register(save, heistId: "button_save_draft", index: 0)
 
-        let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save")))
+        let result = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save")))
         guard case .notFound(let facts) = result else {
             XCTFail("Substring partial must not auto-resolve to exact-or-miss; got \(result)")
             return
@@ -360,9 +360,9 @@ extension TheVaultResolutionTests {
         let save = element(label: "Save", traits: .button)
         await register(save, heistId: "button_save", index: 0)
 
-        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Save"))).resolvedElement)
-        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("save"))).resolvedElement)
-        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("SAVE"))).resolvedElement)
+        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save"))).resolvedElement)
+        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("save"))).resolvedElement)
+        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("SAVE"))).resolvedElement)
     }
 
     /// Typography folding still works under exact-or-miss: a label with a smart
@@ -371,7 +371,7 @@ extension TheVaultResolutionTests {
         let dontSkip = element(label: "Don\u{2019}t skip", traits: .button)
         await register(dontSkip, heistId: "button_dont_skip", index: 0)
 
-        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Don't skip"))).resolvedElement)
+        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Don't skip"))).resolvedElement)
     }
 
     /// When two labels share a partial substring, exact must win outright
@@ -382,7 +382,7 @@ extension TheVaultResolutionTests {
         await register(save, heistId: "button_save", index: 0)
         await register(saveDraft, heistId: "button_save_draft", index: 1)
 
-        let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save")))
+        let result = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save")))
         guard let resolved = result.resolvedElement else {
             XCTFail("Exact match should resolve uniquely, got \(result)")
             return
@@ -398,12 +398,12 @@ extension TheVaultResolutionTests {
 
         // "Save" is a substring of "Save Draft" but not equal, so semantic
         // resolution must not report it as present.
-        guard case .notFound = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save"))) else {
+        guard case .notFound = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save"))) else {
             XCTFail("Expected substring-only matcher to miss")
             return
         }
         // Exact label still resolves to present.
-        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Save Draft"))).resolvedElement)
+        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save Draft"))).resolvedElement)
     }
 
     /// Server-side and client-side matchers must agree on the same input.
@@ -432,7 +432,7 @@ extension TheVaultResolutionTests {
         XCTAssertTrue(serverHit, "Both sides must hit on exact label+trait match")
 
         // Substring partial should miss on BOTH sides now.
-        let partial = ElementPredicate.label("Save")
+        let partial = ResolvedElementPredicate.label("Save")
         XCTAssertFalse(partial.matches(element))
         XCTAssertFalse(heistElement.matches(partial))
     }
@@ -450,7 +450,7 @@ extension TheVaultResolutionTests {
             frameX: 0, frameY: 0, frameWidth: 0, frameHeight: 0,
             actions: []
         )
-        let asciiMatcher = ElementPredicate.label("Don't skip")
+        let asciiMatcher = ResolvedElementPredicate.label("Don't skip")
 
         XCTAssertTrue(asciiMatcher.matches(smart))
         XCTAssertTrue(heist.matches(asciiMatcher),

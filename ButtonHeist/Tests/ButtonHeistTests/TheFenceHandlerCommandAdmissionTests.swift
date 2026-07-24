@@ -287,7 +287,7 @@ extension TheFenceHandlerTests {
     @ButtonHeistActor
     func testAccessibilityTargetPayloadShapesDecodeCanonically() async throws {
         let publicExpected = AccessibilityTarget.predicate(
-            ElementPredicateTemplate(label: "Save", identifier: "saveButton", traits: [.button]),
+            ElementPredicate(label: "Save", identifier: "saveButton", traits: [.button]),
             ordinal: 1
         )
         let jsonMCPShape = accessibilityTargetValue([
@@ -310,12 +310,12 @@ extension TheFenceHandlerTests {
             (
                 "identifier",
                 targetValue(identifier: "myButton"),
-                .predicate(ElementPredicateTemplate(identifier: "myButton"))
+                .predicate(ElementPredicate(identifier: "myButton"))
             ),
             (
                 "matcher fields",
                 targetValue(label: "Save", traits: ["button"]),
-                .predicate(ElementPredicateTemplate(label: "Save", traits: [.button]))
+                .predicate(ElementPredicate(label: "Save", traits: [.button]))
             ),
             (
                 "CLI public shape",
@@ -326,12 +326,12 @@ extension TheFenceHandlerTests {
             (
                 "ordinal",
                 targetValue(label: "Save", ordinal: 2),
-                .predicate(ElementPredicateTemplate(label: "Save"), ordinal: 2)
+                .predicate(ElementPredicate(label: "Save"), ordinal: 2)
             ),
             (
                 "no ordinal",
                 targetValue(label: "Save"),
-                .predicate(ElementPredicateTemplate(label: "Save"))
+                .predicate(ElementPredicate(label: "Save"))
             ),
             ("missing", nil, nil),
             ("container", containerShape, .container(.matching(.scrollable(true)))),

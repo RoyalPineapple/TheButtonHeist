@@ -160,9 +160,9 @@ package extension ElementPredicateCore where Text: StringMatchLeaf {
 
 /// One authored element check whose references resolve before evaluation.
 public struct ElementPredicateCheck: Codable, Sendable, Equatable, Hashable {
-    package let core: ElementPredicateCheckCore<Expr<String>>
+    package let core: ElementPredicateCheckCore<AuthoredString>
 
-    package init(core: ElementPredicateCheckCore<Expr<String>>) {
+    package init(core: ElementPredicateCheckCore<AuthoredString>) {
         self.core = core
     }
 
@@ -213,7 +213,7 @@ extension ElementPredicateCheck: CustomStringConvertible {
 // MARK: - Resolved Element Predicate
 
 /// A resolved element predicate. This type cannot contain references.
-public struct ElementPredicate: Codable, Sendable, Equatable, Hashable {
+public struct ResolvedElementPredicate: Codable, Sendable, Equatable, Hashable {
     package let core: ElementPredicateCore<String>
 
     package init(core: ElementPredicateCore<String>) {
@@ -224,30 +224,30 @@ public struct ElementPredicate: Codable, Sendable, Equatable, Hashable {
         core = ElementPredicateCore(checks)
     }
 
-    public var hasPredicates: Bool { core.hasPredicates }
-    public var invalidEmptyPayloadDescription: String? { core.invalidEmptyPayloadDescription }
+    package var hasPredicates: Bool { core.hasPredicates }
+    package var invalidEmptyPayloadDescription: String? { core.invalidEmptyPayloadDescription }
 
-    public static func label(_ label: String) -> Self {
+    package static func label(_ label: String) -> Self {
         Self([.label(.exact(label))])
     }
 
-    public static func identifier(_ identifier: String) -> Self {
+    package static func identifier(_ identifier: String) -> Self {
         Self([.identifier(.exact(identifier))])
     }
 
-    public static func value(_ value: String) -> Self {
+    package static func value(_ value: String) -> Self {
         Self([.value(.exact(value))])
     }
 
-    public static func hint(_ hint: String) -> Self {
+    package static func hint(_ hint: String) -> Self {
         Self([.hint(.exact(hint))])
     }
 
-    public static func traits(_ traits: [HeistTrait]) -> Self {
+    package static func traits(_ traits: [HeistTrait]) -> Self {
         Self([.traits(traits.heistTraitSet)])
     }
 
-    public static func actions(_ actions: [ElementAction]) -> Self {
+    package static func actions(_ actions: [ElementAction]) -> Self {
         Self([.actions(Set(actions))])
     }
 
@@ -266,7 +266,7 @@ public struct ElementPredicate: Codable, Sendable, Equatable, Hashable {
     }
 }
 
-extension ElementPredicate: CustomStringConvertible {
+extension ResolvedElementPredicate: CustomStringConvertible {
     public var description: String {
         CanonicalValueDescription.call(
             "predicate",
@@ -316,7 +316,7 @@ package extension ElementPredicateSubjectBacked {
     }
 }
 
-package extension ElementPredicate {
+package extension ResolvedElementPredicate {
     func matches(_ subject: some ElementPredicateSubject) -> Bool {
         hasPredicates && core.checks.allSatisfy { $0.matches(subject) }
     }
@@ -396,7 +396,7 @@ package struct ElementPredicateGraph<Identity: Hashable, Subject: ElementPredica
         })
     }
 
-    package func resolve(_ predicate: ElementPredicate) -> ElementPredicateMatchSet<Identity, Subject> {
+    package func resolve(_ predicate: ResolvedElementPredicate) -> ElementPredicateMatchSet<Identity, Subject> {
         guard predicate.hasPredicates else { return .empty }
         return ElementPredicateMatchSet(
             all.matches.filter { match in

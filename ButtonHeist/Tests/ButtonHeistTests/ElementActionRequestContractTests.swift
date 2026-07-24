@@ -273,7 +273,7 @@ private func assertPredicateChecksSchema(
     }
     XCTAssertEqual(properties["kind"], .object([
         "type": .string("string"),
-        "enum": .array(ElementPredicateCheckCore<Expr<String>>.Kind.allCases.map { .string($0.rawValue) }),
+        "enum": .array(ElementPredicateCheckCore<AuthoredString>.Kind.allCases.map { .string($0.rawValue) }),
     ]), file: file, line: line)
 
     guard case .object? = properties["match"] else {

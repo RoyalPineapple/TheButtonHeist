@@ -1,10 +1,10 @@
 import Foundation
 
-/// An authored predicate that resolves references into an `ElementPredicate`.
-public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
-    package let core: ElementPredicateCore<Expr<String>>
+/// The canonical authored element predicate.
+public struct ElementPredicate: Codable, Sendable, Equatable, Hashable {
+    package let core: ElementPredicateCore<AuthoredString>
 
-    package init(core: ElementPredicateCore<Expr<String>>) {
+    package init(core: ElementPredicateCore<AuthoredString>) {
         self.core = core
     }
 
@@ -51,8 +51,8 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
     public var hasPredicates: Bool { core.hasPredicates }
     public var invalidEmptyPayloadDescription: String? { core.invalidEmptyPayloadDescription }
 
-    package func resolve(in environment: HeistExecutionEnvironment) throws -> ElementPredicate {
-        let resolved = ElementPredicate(core: try core.map { try $0.resolve(in: environment) })
+    package func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedElementPredicate {
+        let resolved = ResolvedElementPredicate(core: try core.map { try $0.resolve(in: environment) })
         if let mode = resolved.core.invalidEmptyBroadMode {
             throw HeistExpressionError.invalidStringMatch(mode: mode.rawValue)
         }
@@ -71,7 +71,7 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
         actions: [ElementAction],
         customContent: CustomContentMatch?,
         rotors: [StringMatch]
-    ) -> [ElementPredicateCheckCore<Expr<String>>] {
+    ) -> [ElementPredicateCheckCore<AuthoredString>] {
         [
             label.map { .label($0.core) },
             identifier.map { .identifier($0.core) },
@@ -85,7 +85,7 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
     private static func setChecks(
         traits: [HeistTrait],
         actions: [ElementAction]
-    ) -> [ElementPredicateCheckCore<Expr<String>>] {
+    ) -> [ElementPredicateCheckCore<AuthoredString>] {
         [
             traits.isEmpty ? nil : .traits(traits.heistTraitSet),
             actions.isEmpty ? nil : .actions(Set(actions)),
@@ -102,14 +102,14 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
         try self.init(container: container, requiresNonEmpty: true)
     }
 
-    static func decodeAllowingAdditionalKeys(from decoder: Decoder) throws -> ElementPredicateTemplate {
+    static func decodeAllowingAdditionalKeys(from decoder: Decoder) throws -> ElementPredicate {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        return try ElementPredicateTemplate(container: container, requiresNonEmpty: container.contains(.checks))
+        return try ElementPredicate(container: container, requiresNonEmpty: container.contains(.checks))
     }
 
     init(container: KeyedDecodingContainer<CodingKeys>, requiresNonEmpty: Bool) throws {
         core = ElementPredicateCore(
-            try container.decodeIfPresent([ElementPredicateCheckCore<Expr<String>>].self, forKey: .checks) ?? []
+            try container.decodeIfPresent([ElementPredicateCheckCore<AuthoredString>].self, forKey: .checks) ?? []
         )
         if requiresNonEmpty, let description = invalidEmptyPayloadDescription {
             throw DecodingError.dataCorrupted(.init(
@@ -127,7 +127,7 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
     }
 }
 
-extension ElementPredicateTemplate: CustomStringConvertible {
+extension ElementPredicate: CustomStringConvertible {
     public var description: String {
         CanonicalValueDescription.call(
             "predicate",

@@ -48,7 +48,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     private func renderSingleContainerCheck(
-        _ checks: NonEmptyArray<ContainerPredicateCheckCore<Expr<String>>>,
+        _ checks: NonEmptyArray<ContainerPredicateCheckCore<AuthoredString>>,
         environment: RenderEnvironment
     ) throws -> String? {
         guard checks.count == 1 else { return nil }
@@ -81,7 +81,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     private func renderDataTable(
-        _ checks: NonEmptyArray<ContainerPredicateCheckCore<Expr<String>>>
+        _ checks: NonEmptyArray<ContainerPredicateCheckCore<AuthoredString>>
     ) -> String? {
         let hasDataTableType = checks.contains {
             if case .type(.dataTable) = $0 { return true }
@@ -114,7 +114,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     private func renderContainerCheck(
-        _ check: ContainerPredicateCheckCore<Expr<String>>,
+        _ check: ContainerPredicateCheckCore<AuthoredString>,
         environment: RenderEnvironment
     ) throws -> String {
         switch check {
@@ -138,7 +138,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     private func renderSemanticContainerPredicate(
-        _ predicate: SemanticContainerPredicateCore<Expr<String>>,
+        _ predicate: SemanticContainerPredicateCore<AuthoredString>,
         environment: RenderEnvironment
     ) throws -> String {
         switch predicate {
@@ -155,7 +155,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     func render(
-        predicate: ElementPredicateTemplate,
+        predicate: ElementPredicate,
         environment: RenderEnvironment
     ) throws -> String {
         let checks = predicate.core.checks
@@ -169,7 +169,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     private func renderSingleCheckTarget(
-        _ checks: [ElementPredicateCheckCore<Expr<String>>],
+        _ checks: [ElementPredicateCheckCore<AuthoredString>],
         environment: RenderEnvironment
     ) throws -> String? {
         guard checks.count == 1 else { return nil }
@@ -196,7 +196,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     private func renderPredicateCheck(
-        _ check: ElementPredicateCheckCore<Expr<String>>,
+        _ check: ElementPredicateCheckCore<AuthoredString>,
         environment: RenderEnvironment
     ) throws -> String {
         switch check {
@@ -226,14 +226,14 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     func renderStringArgument(
-        _ match: StringMatchCore<Expr<String>>,
+        _ match: StringMatchCore<AuthoredString>,
         environment: RenderEnvironment
     ) throws -> String {
         try renderStringMatch(match, environment: environment)
     }
 
     private func renderStringMatch(
-        _ match: StringMatchCore<Expr<String>>,
+        _ match: StringMatchCore<AuthoredString>,
         environment: RenderEnvironment
     ) throws -> String {
         switch match {
@@ -250,7 +250,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         }
     }
 
-    func render(string: Expr<String>, environment: RenderEnvironment) throws -> String {
+    func render(string: AuthoredString, environment: RenderEnvironment) throws -> String {
         switch string {
         case .literal(let literal):
             return quote(literal)

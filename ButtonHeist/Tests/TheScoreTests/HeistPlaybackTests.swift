@@ -319,7 +319,7 @@ final class HeistPlanTests: XCTestCase {
 
     func testActionStepDescriptionComposesCommandAndExpectation() throws {
         let step = ActionStep(
-            command: .activate(.predicate(ElementPredicateTemplate(label: "Save", traits: [.button]))),
+            command: .activate(.predicate(ElementPredicate(label: "Save", traits: [.button]))),
             expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 2)))
 
         XCTAssertEqual(
@@ -331,7 +331,7 @@ final class HeistPlanTests: XCTestCase {
     func testAccessibilityTargetSugarHashMatchesCanonicalValue() {
         let target = AccessibilityTarget.target(.label("Save"), ordinal: 1)
         let template = AccessibilityTarget.predicate(
-            ElementPredicateTemplate(label: "Save"),
+            ElementPredicate(label: "Save"),
             ordinal: 1
         )
 
@@ -342,7 +342,7 @@ final class HeistPlanTests: XCTestCase {
     // MARK: - ForEach
 
     func testForEachElementStepStoresRefBackedBodyAST() throws {
-        let matching = ElementPredicateTemplate(label: "Cell", traits: [.button])
+        let matching = ElementPredicate(label: "Cell", traits: [.button])
         let target = AccessibilityTarget(ref: "target")
         let step = try ForEachElementStep(
             matching: matching,
@@ -374,7 +374,7 @@ final class HeistPlanTests: XCTestCase {
     }
 
     func testForEachElementEncodesDurableBodyAST() throws {
-        let matching = ElementPredicateTemplate(label: "Cell", traits: [.button])
+        let matching = ElementPredicate(label: "Cell", traits: [.button])
         let plan = try HeistPlan(body: [
             .forEachElement(try ForEachElementStep(
                 matching: matching,
@@ -548,6 +548,6 @@ private func activateStep(
     traits: [HeistTrait] = []
 ) throws -> HeistStep {
     .action(ActionStep(
-        command: .activate(.predicate(ElementPredicateTemplate(label: .exact(label), traits: traits)))
+        command: .activate(.predicate(ElementPredicate(label: .exact(label), traits: traits)))
     ))
 }
