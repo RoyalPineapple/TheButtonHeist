@@ -130,10 +130,17 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
     #expect(checkout.validationStatus == nil)
 }
 
-@Test func `list heists detailed mode includes derived non raw fields`() throws {
-    let catalog = try detailedSurfacePlan().heistCatalog(detail: .detailed)
+@Test func testDiscoveryPreservesFirstOccurrenceOrder() throws {
+    let plan = try detailedSurfacePlan()
+    let catalog = try plan.heistCatalog(detail: .detailed)
     let checkout = try #require(catalog.first { $0.identity.displayName == "checkout" })
 
+    #expect(catalog.map(\.identity.displayName) == ["root", "checkout", "checkout.confirm"])
+    #expect(catalog.map(\.tags) == [
+        [.entry],
+        [.capability, .composed, .assertion, .semanticAction],
+        [.capability, .semanticAction],
+    ])
     #expect(checkout.parameterName == nil)
     #expect(checkout.nestedRunHeists == [invocation("checkout.confirm")])
     #expect(checkout.actionCommands == [.activate])
@@ -147,6 +154,21 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
         .traits([.button]),
     ])
     #expect(checkout.validationStatus == .validated)
+
+    let description = try plan.describeHeist(at: "checkout")
+    #expect(description.identity == .capability("checkout"))
+    #expect(description.semanticSurface.actionCommands == [.activate])
+    #expect(description.semanticSurface.targetPredicates == [
+        .predicate(.label("Checkout")),
+        .predicate(.label("Done")),
+        .predicate(.label("Confirm")),
+        .predicate(ElementPredicate(identifier: .exact("confirmation_button"), traits: [.button])),
+    ])
+    #expect(description.semanticSurface.waits == [existsLabel("Confirm")])
+    #expect(description.semanticSurface.expectations == [existsLabel("Done")])
+    #expect(description.semanticSurface.nestedRunHeists == [invocation("checkout.confirm")])
+    #expect(description.semanticSurface.expectedEffects == [existsLabel("Done"), existsLabel("Confirm")])
+    #expect(description.semanticSurface.semanticSurfaces == checkout.semanticSurfaces)
 }
 
 @Test func `list heists detailed mode includes parameter name for parameterized capability`() throws {
@@ -305,33 +327,6 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
     #expect(description.parameterKind == .string)
     #expect(description.parameterName == "item")
     #expect(description.requiresArgument)
-}
-
-@Test func `describe nested RunHeist includes call and expanded surface`() throws {
-    let description = try HeistPlan(
-        name: "root",
-        definitions: [
-            try HeistPlan(
-                name: "checkout",
-                definitions: [
-                    try HeistPlan(
-                        name: "confirm",
-                        body: [
-                            .action(ActionStep(command: .activate(.predicate(.label("Confirm"))))),
-                        ]
-                    ),
-                ],
-                body: [
-                    .invoke(HeistInvocationStep(path: "confirm")),
-                ]
-            ),
-        ],
-        body: [.warn(WarnStep(message: "ready"))]
-    ).describeHeist(at: "checkout")
-
-    #expect(description.semanticSurface.nestedRunHeists == [invocation("checkout.confirm")])
-    #expect(description.semanticSurface.actionCommands == [.activate])
-    #expect(description.semanticSurface.targetPredicates.contains(.predicate(.label("Confirm"))))
 }
 
 @Test func `describe action targets and predicates`() throws {
