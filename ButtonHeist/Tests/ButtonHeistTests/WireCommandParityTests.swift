@@ -263,11 +263,16 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     private func sampleClientMessages() throws -> [ClientMessage] {
+        let mainThreadProbe = try XCTUnwrap(MainThreadProbeRequest.admit(
+            responsivenessTimeoutMilliseconds: 1_000,
+            workTimeoutMilliseconds: 1_000
+        ))
         return [
             .clientHello,
             .authenticate(AuthenticatePayload(token: "token")),
             .requestInterface(InterfaceQuery()),
             .ping,
+            .mainThreadProbe(mainThreadProbe),
             .status,
             .getPasteboard,
             .getAnnouncements,

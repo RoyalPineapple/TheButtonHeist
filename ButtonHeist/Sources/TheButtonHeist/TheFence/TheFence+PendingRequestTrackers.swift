@@ -191,6 +191,15 @@ extension TheFence.PendingResponseExpectation where Response == PongPayload {
     }
 }
 
+extension TheFence.PendingResponseExpectation where Response == MainThreadProbeResponse {
+    static var mainThreadProbe: Self {
+        Self(responseName: "main-thread probe") { message in
+            guard case .mainThreadProbe(let result) = message else { return nil }
+            return result
+        }
+    }
+}
+
 extension TheFence.PendingResponseExpectation where Response == Interface {
     static var interface: Self {
         Self(responseName: "interface") { message in
@@ -234,6 +243,8 @@ private extension ServerMessage {
         switch self {
         case .pong:
             return "pong"
+        case .mainThreadProbe:
+            return "main-thread probe"
         case .interface:
             return "interface"
         case .actionResult(let result) where result.heistResult != nil:

@@ -1,10 +1,105 @@
 import Foundation
 
+import ButtonHeistSupport
 import TheScore
 
 /// Centralized command dispatch layer. Both the CLI and MCP server are thin wrappers over TheFence.
 @ButtonHeistActor
 public final class TheFence {
+    public enum MainThreadWatchdog: Sendable, Equatable {
+        case disabled
+        case enabled(MainThreadWatchdogSettings)
+    }
+
+    public struct MainThreadWatchdogSettings: Sendable, Equatable {
+        public let initialDelay: TimeInterval
+        public let cadence: TimeInterval
+        public let probeResponseTimeout: TimeInterval
+        public let responsivenessTimeout: TimeInterval
+        public let workTimeout: TimeInterval
+        let initialDelayDuration: Duration
+        let cadenceDuration: Duration
+        let responsivenessTimeoutMilliseconds: Int64
+        let workTimeoutMilliseconds: Int64
+
+        public init(
+            initialDelay: TimeInterval,
+            cadence: TimeInterval,
+            probeResponseTimeout: TimeInterval,
+            responsivenessTimeout: TimeInterval,
+            workTimeout: TimeInterval
+        ) throws {
+            let durations = [
+                ("initialDelay", initialDelay),
+                ("cadence", cadence),
+                ("probeResponseTimeout", probeResponseTimeout),
+                ("responsivenessTimeout", responsivenessTimeout),
+                ("workTimeout", workTimeout),
+            ]
+            if let invalid = durations.first(where: { !$0.1.isFinite || $0.1 <= 0 }) {
+                throw FenceError.invalidRequest(
+                    "Main-thread watchdog \(invalid.0) must be a positive finite number of seconds."
+                )
+            }
+            guard durations.allSatisfy({ $0.1 < Double(Int64.max) }),
+                  let responsivenessMilliseconds = Self.milliseconds(from: responsivenessTimeout),
+                  let workMilliseconds = Self.milliseconds(from: workTimeout)
+            else {
+                throw FenceError.invalidRequest(
+                    "Main-thread watchdog durations must fit Swift Duration and positive Int64 milliseconds."
+                )
+            }
+            self.init(
+                admittedInitialDelay: initialDelay,
+                cadence: cadence,
+                probeResponseTimeout: probeResponseTimeout,
+                responsivenessTimeout: responsivenessTimeout,
+                workTimeout: workTimeout,
+                responsivenessTimeoutMilliseconds: responsivenessMilliseconds,
+                workTimeoutMilliseconds: workMilliseconds
+            )
+        }
+
+        public static let standard = MainThreadWatchdogSettings(
+            admittedInitialDelay: 2,
+            cadence: 2,
+            probeResponseTimeout: 2,
+            responsivenessTimeout: 1,
+            workTimeout: 1,
+            responsivenessTimeoutMilliseconds: 1_000,
+            workTimeoutMilliseconds: 1_000
+        )
+
+        private init(
+            admittedInitialDelay: TimeInterval,
+            cadence: TimeInterval,
+            probeResponseTimeout: TimeInterval,
+            responsivenessTimeout: TimeInterval,
+            workTimeout: TimeInterval,
+            responsivenessTimeoutMilliseconds: Int64,
+            workTimeoutMilliseconds: Int64
+        ) {
+            self.initialDelay = admittedInitialDelay
+            self.cadence = cadence
+            self.probeResponseTimeout = probeResponseTimeout
+            self.responsivenessTimeout = responsivenessTimeout
+            self.workTimeout = workTimeout
+            self.initialDelayDuration = .seconds(admittedInitialDelay)
+            self.cadenceDuration = .seconds(cadence)
+            self.responsivenessTimeoutMilliseconds = responsivenessTimeoutMilliseconds
+            self.workTimeoutMilliseconds = workTimeoutMilliseconds
+        }
+
+        private static func milliseconds(from seconds: TimeInterval) -> Int64? {
+            let milliseconds = (seconds * 1_000).rounded(.up)
+            guard milliseconds.isFinite,
+                  milliseconds > 0,
+                  milliseconds < Double(Int64.max)
+            else { return nil }
+            return Int64(milliseconds)
+        }
+    }
+
     /// Connection and session configuration for TheFence.
     public struct Configuration {
         /// Substring filter for Bonjour device names. `nil` matches any device.
@@ -26,6 +121,8 @@ public final class TheFence {
         var artifactBaseDirectory: URL?
         /// Extra client-side headroom beyond a server-owned wait timeout.
         var postActionExpectationTimeoutBuffer: TimeInterval
+        /// Diagnoses a wedged app main thread while a UI request remains pending.
+        public var mainThreadWatchdog: MainThreadWatchdog
 
         init(
             deviceFilter: String? = nil,
@@ -36,7 +133,8 @@ public final class TheFence {
             fileConfig: ButtonHeistFileConfig? = nil,
             directDevice: DiscoveredDevice? = nil,
             artifactBaseDirectory: URL? = nil,
-            postActionExpectationTimeoutBuffer: TimeInterval = 5
+            postActionExpectationTimeoutBuffer: TimeInterval = 5,
+            mainThreadWatchdog: MainThreadWatchdog = .enabled(.standard)
         ) {
             self.deviceFilter = deviceFilter
             self.connectionTimeout = connectionTimeout
@@ -47,6 +145,7 @@ public final class TheFence {
             self.directDevice = directDevice
             self.artifactBaseDirectory = artifactBaseDirectory
             self.postActionExpectationTimeoutBuffer = postActionExpectationTimeoutBuffer
+            self.mainThreadWatchdog = mainThreadWatchdog
         }
     }
 
@@ -61,6 +160,9 @@ public final class TheFence {
     let handoff = TheHandoff()
     let screenshotArtifacts: ScreenshotArtifactWriter
     let pendingRequests = PendingRequestRegistry()
+    var sleepForMainThreadWatchdog: @Sendable (Duration) async -> Bool = {
+        await Task.cancellableSleep(for: $0)
+    }
 
     public init(configuration: Configuration) {
         self.config = configuration
