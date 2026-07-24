@@ -267,16 +267,6 @@ public struct HeistCatalogError: Error, Sendable, Equatable, CustomStringConvert
 
 public extension HeistPlan {
     func heistCatalog(detail: HeistCatalogDetail = .summary) throws -> [HeistCatalogEntry] {
-        return try uncheckedHeistCatalog(detail: detail)
-    }
-
-    func describeHeist(at requestedPath: HeistDefinitionPath) throws -> HeistDescription {
-        return try uncheckedDescribeHeist(at: requestedPath)
-    }
-}
-
-private extension HeistPlan {
-    func uncheckedHeistCatalog(detail: HeistCatalogDetail = .summary) throws -> [HeistCatalogEntry] {
         var identities: [HeistCatalogIdentity] = []
         var entries: [HeistCatalogEntry] = []
         HeistPlanTraversal().walkCatalogHeists(self) { projection in
@@ -353,7 +343,7 @@ private extension HeistPlan {
         return entries
     }
 
-    func uncheckedDescribeHeist(at requestedPath: HeistDefinitionPath) throws -> HeistDescription {
+    func describeHeist(at requestedPath: HeistDefinitionPath) throws -> HeistDescription {
         var identities: [HeistCatalogIdentity] = []
         var description: HeistDescription?
         HeistPlanTraversal().walkCatalogHeists(self) { projection in
@@ -386,7 +376,9 @@ private extension HeistPlan {
         }
         return description
     }
+}
 
+private extension HeistPlan {
     func validateUniqueCatalogPaths(_ identities: [HeistCatalogIdentity]) throws {
         var seen = Set<HeistDefinitionPath>()
         var duplicateSet = Set<HeistCatalogIdentity>()

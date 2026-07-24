@@ -72,7 +72,7 @@ produces `HeistContent`; command and expectation bookkeeping are not exposed.
 `HeistContent` is an opaque authoring fragment with no public step, definition,
 diagnostic, or admission-candidate collections. Swift authoring feeds that
 fragment into `HeistBuilder`; canonical source is parsed into the same
-package-scoped admission shape. One semantic and runtime-safety admission then
+private recursive `HeistPlan` shape. One root runtime-safety admission then
 produces the executable public `HeistPlan`.
 
 CI checks public Swift API compatibility against the latest `v*` release tag

@@ -16,7 +16,7 @@ import Foundation
 // - HeistSwiftFileCompilation.swift owns authored Swift-file compilation.
 // - HeistPlan+CanonicalSwiftDSL.swift owns canonical Swift DSL rendering.
 // - HeistArtifact.swift owns .heist package read/write.
-// - HeistPlan+Discovery.swift and HeistPlan+Description.swift own discovery and description.
+// - HeistPlan+Discovery.swift owns discovery and description.
 
 /// Canonical ordered automation contract.
 ///
