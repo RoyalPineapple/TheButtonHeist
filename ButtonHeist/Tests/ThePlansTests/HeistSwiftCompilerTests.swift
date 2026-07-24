@@ -496,6 +496,32 @@ struct HeistSwiftCompilerTests {
     }
 
     @Test
+    func `compileDirectory returns catalog with non-error diagnostics`() async throws {
+        let temp = try CompilerTemporaryDirectory()
+        _ = try temp.writeSwiftSource(
+            named: "Anonymous.swift",
+            """
+            import ThePlans
+
+            func heist() throws -> HeistPlan {
+                try HeistPlan {
+                    Warn("anonymous")
+                }
+            }
+            """
+        )
+
+        let result = try await HeistSwiftCompiler().compileDirectory(temp.url)
+
+        #expect(result.catalog.capabilities.count == 1)
+        #expect(result.diagnostics.map(\.code.knownCode) == [.catalogAnonymousCapability])
+        #expect(result.diagnostics.map(\.kind) == [.warning])
+        #expect(result.diagnostics.map { $0.sourceSpan?.sourceName } == [
+            temp.url.appendingPathComponent("Anonymous.swift").path,
+        ])
+    }
+
+    @Test
     func `compileDirectory fails duplicate capability names`() async throws {
         let temp = try CompilerTemporaryDirectory()
         _ = try temp.writeSwiftSource(named: "First.swift", namedPlan: "Duplicate")
@@ -575,6 +601,44 @@ struct HeistSwiftCompilerTests {
             #expect(error.diagnostics.allSatisfy { $0.kind == .error })
         }
     }
+
+#if os(macOS) || os(Linux)
+    @Test
+    func `compiler command preserves exact argument contract`() {
+        let compileDirectory = URL(fileURLWithPath: "/tmp/heist/Sources/PlanCompiler", isDirectory: true)
+        let moduleCache = URL(fileURLWithPath: "/tmp/heist/module-cache", isDirectory: true)
+        let executable = URL(fileURLWithPath: "/tmp/heist/Build/plan-compiler")
+        let thePlansArguments = ["-I", "/tmp/heist/Modules", "/tmp/heist/ThePlans.o"]
+
+        let command = HeistSwiftFileCompilation.planCompilerCommand(
+            compileDirectory: compileDirectory,
+            moduleCache: moduleCache,
+            executableURL: executable,
+            thePlansSwiftcArguments: thePlansArguments
+        )
+
+        #expect(command == HeistCompilerProcess.Command(
+            executable: URL(fileURLWithPath: "/usr/bin/env"),
+            arguments: [
+                "swiftc",
+                "-j",
+                "1",
+                "-num-threads",
+                "1",
+                "-swift-version",
+                "6",
+                "-module-cache-path",
+                moduleCache.path,
+                "-o",
+                executable.path,
+                compileDirectory.appendingPathComponent("main.swift").path,
+                "-I",
+                "/tmp/heist/Modules",
+                "/tmp/heist/ThePlans.o",
+            ]
+        ))
+    }
+#endif
 
     @Test
     func `swiftPM metadata extraction selects active object files`() throws {

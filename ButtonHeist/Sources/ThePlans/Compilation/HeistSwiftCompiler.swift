@@ -226,10 +226,11 @@ private extension HeistSwiftCompiler {
 
         for (index, plan) in plans.enumerated() {
             let source = sources[index]
-            if plans.count > 1, plan.name == nil {
+            if plan.name == nil {
                 diagnostics.append(diagnostic(
                     code: .catalogAnonymousCapability,
                     "Directory heist source compiled an anonymous capability. Name directory capabilities in the authored HeistPlan.",
+                    severity: plans.count > 1 ? .error : .warning,
                     phase: .planValidation,
                     source: source
                 ))

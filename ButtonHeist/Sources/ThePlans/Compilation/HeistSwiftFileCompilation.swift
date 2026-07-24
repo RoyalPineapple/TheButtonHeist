@@ -98,14 +98,11 @@ struct HeistSwiftFileCompilation: Sendable {
         let executableURL = buildDirectory.appendingPathComponent("plan-compiler")
         HeistSwiftFileCompilationTrace.write("compiling Swift heist wrapper against built ThePlans artifacts")
         let compilerResult = try await HeistCompilerProcess.Runner.shared.execute(
-            HeistCompilerProcess.Command(
-                executable: URL(fileURLWithPath: "/usr/bin/env"),
-                arguments: swiftcPlanCompilerArguments(
-                    compileDirectory: compileDirectory,
-                    moduleCache: moduleCache,
-                    executableURL: executableURL,
-                    thePlansSwiftcArguments: thePlansSwiftcArguments
-                )
+            Self.planCompilerCommand(
+                compileDirectory: compileDirectory,
+                moduleCache: moduleCache,
+                executableURL: executableURL,
+                thePlansSwiftcArguments: thePlansSwiftcArguments
             ),
             purpose: .compilation,
             limits: processLimits
@@ -186,12 +183,12 @@ struct HeistSwiftFileCompilation: Sendable {
         return sourcesURL
     }
 
-    private func swiftcPlanCompilerArguments(
+    package static func planCompilerCommand(
         compileDirectory: URL,
         moduleCache: URL,
         executableURL: URL,
         thePlansSwiftcArguments: [String]
-    ) -> [String] {
+    ) -> HeistCompilerProcess.Command {
         var arguments = [
             "swiftc",
             "-j",
@@ -207,7 +204,10 @@ struct HeistSwiftFileCompilation: Sendable {
             compileDirectory.appendingPathComponent("main.swift").path,
         ]
         arguments.append(contentsOf: thePlansSwiftcArguments)
-        return arguments
+        return HeistCompilerProcess.Command(
+            executable: URL(fileURLWithPath: "/usr/bin/env"),
+            arguments: arguments
+        )
     }
 
     private func sourceLocationDirective(for source: URL) -> String {
