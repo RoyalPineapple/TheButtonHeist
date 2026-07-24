@@ -52,6 +52,9 @@ public enum ServerMessage: Codable, Sendable {
     /// Pong response with cheap static app/server health facts.
     case pong(PongPayload)
 
+    /// Result of an off-main main-thread responsiveness probe.
+    case mainThreadProbe(MainThreadProbeResponse)
+
     /// Server-side error broadcast. `ServerError.kind` tags the category
     /// (auth failure, general) so clients can route without
     /// pattern-matching on message text.

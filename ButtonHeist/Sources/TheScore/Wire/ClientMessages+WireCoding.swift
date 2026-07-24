@@ -89,6 +89,8 @@ private func clientMessageWireRepresentation(
         return ClientMessageWireRepresentation(type: .requestInterface, payload: .requestInterface(payload))
     case .ping:
         return ClientMessageWireRepresentation(type: .ping, payload: nil)
+    case .mainThreadProbe(let payload):
+        return ClientMessageWireRepresentation(type: .mainThreadProbe, payload: .mainThreadProbe(payload))
     case .status:
         return ClientMessageWireRepresentation(type: .status, payload: nil)
     case .getPasteboard:
@@ -133,6 +135,8 @@ private func decodeClientMessage(from payloadDecoder: Decoder?, type: ClientWire
     case .ping:
         try noPayload()
         return .ping
+    case .mainThreadProbe:
+        return .mainThreadProbe(try MainThreadProbeRequest(from: try payload()))
     case .status:
         try noPayload()
         return .status
@@ -158,6 +162,7 @@ private func decodeClientMessage(from payloadDecoder: Decoder?, type: ClientWire
 
 private enum ClientMessageWirePayload {
     case requestInterface(InterfaceQuery)
+    case mainThreadProbe(MainThreadProbeRequest)
     case requestScreen(ScreenRequestPayload)
     case runtimeAction(HeistActionCommand)
     case authenticate(AuthenticatePayload)
@@ -166,6 +171,8 @@ private enum ClientMessageWirePayload {
     func encode(to encoder: Encoder) throws {
         switch self {
         case .requestInterface(let payload):
+            try payload.encode(to: encoder)
+        case .mainThreadProbe(let payload):
             try payload.encode(to: encoder)
         case .requestScreen(let payload):
             try payload.encode(to: encoder)
