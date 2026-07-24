@@ -32,8 +32,6 @@ an expectation will pass.
 - Give agents and CLI users a deterministic validation step before UI
   mutation.
 - Require no active or configured Button Heist session.
-- Reuse direct root `HeistPlan` admission and the single
-  `HeistPlanRuntimeSafetyValidator`. Do not create another validator for MCP.
 - Return domain diagnostics as structured data suitable for an automated
   generate-and-repair loop.
 - Return canonical source for every admitted plan.
@@ -70,8 +68,7 @@ For this feature, offline means that the result depends only on:
 
 - the CLI, MCP, or JSON-lines argument envelope;
 - inline canonical Button Heist source, or a local `.heist` artifact;
-- Button Heist's parser, artifact decoder, root `HeistPlan` admission,
-  `HeistPlanRuntimeSafetyValidator`, linter, and canonical renderer.
+- local plan loading, linting, and canonical rendering.
 
 The command MUST NOT call `TheFence.start()`, `DeviceDiscovery`,
 `DeviceConnection`, `TheHandoff`, Bonjour, `NWConnection`, simulator tools, or
@@ -347,13 +344,12 @@ inline plan
 → admitted HeistPlan
 ```
 
-The source parser and JSON decoder may assemble recursive values only in
-private stack-local scope inside their owning boundary. That assembly is an
-implementation detail: it is never stored, returned, package-visible, or
-observable before the complete root is admitted. It is not another plan or
-validation currency. Swift DSL construction enters the same throwing root
-`HeistPlan` initializer. Source, generated artifact JSON, and Swift DSL
-construction therefore expose exactly one admitted value: `HeistPlan`.
+The source parser and JSON decoder may store and return recursive intermediate
+values among private helpers inside their owning boundary. Those values never
+escape that boundary or become a separate package or public currency. Swift
+DSL construction enters the same throwing root `HeistPlan` initializer.
+Source, generated artifact JSON, and Swift DSL construction therefore expose
+exactly one admitted value: `HeistPlan`.
 
 Root structural admission runs once, followed by the single
 `HeistPlanRuntimeSafetyValidator`. There is no validation alias, adapter,
@@ -828,9 +824,8 @@ contract from `HeistValidation.Report`.
 
 ### Ownership
 
-- `ThePlans` continues to own source compilation, artifact decoding, root
-  `HeistPlan` admission, the single `HeistPlanRuntimeSafetyValidator`,
-  root-argument validation, lint, and canonical rendering.
+- `ThePlans` owns plan loading, root-argument validation, lint, and canonical
+  rendering.
 - `TheFence` owns public command admission, phase orchestration, the typed
   report, and response projection.
 - `ButtonHeistCLI` owns option parsing, output selection, and the one-shot
@@ -923,15 +918,13 @@ validation, but have different terminal effects:
 
 ```text
 source or artifact
-→ root HeistPlan admission
+→ shared plan loading
   ├→ validate_heist → lint → canonical report
   └→ run_heist → connect → wire dispatch → result
 ```
 
-The common prefix MUST remain one implementation pipeline. If validation rules
-change, both commands pick them up through `HeistPlanSourceAdmission`,
-`HeistPlanLoading`, direct root `HeistPlan` admission, the single
-`HeistPlanRuntimeSafetyValidator`, and `HeistArgumentAdmission`.
+The common loading and root-argument prefix MUST remain one implementation
+pipeline so rule changes apply to both commands.
 
 `run_heist` MUST always repeat admission. A client may change the source or
 artifact between calls, and a validation report carries no authority.
@@ -1045,8 +1038,7 @@ is final. Treat the new input and response JSON shapes as public contracts.
 Run at minimum:
 
 ```bash
-tuist test TheScoreTests --no-selective-testing
-tuist test ButtonHeistTests --no-selective-testing
+scripts/test-runner.py run MacFrameworkTests --selection full
 ```
 
 Run the ButtonHeistMCP package tests through the repository gate:
