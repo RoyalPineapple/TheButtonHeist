@@ -9,28 +9,28 @@ func `plan loading loads generated heist artifact source`() throws {
     let plan = try representativeArtifactPlan()
     try HeistArtifactCodec.writePlan(plan, to: artifactURL)
 
-    let request = try #require(HeistPlanSourceAdmission.admit(
+    let request = try HeistPlanSourceAdmission.admit(
         commandName: "run_heist",
         path: artifactURL.path,
         inlineDSL: nil
-    ).value)
-    let loaded = try #require(HeistPlanLoading.loadValidated(from: request).value)
+    )
+    let loaded = try HeistPlanLoading.loadValidated(from: request)
 
     #expect(loaded == plan)
 }
 
 @Test
 func `plan loading compiles inline ButtonHeist DSL source`() throws {
-    let request = try #require(HeistPlanSourceAdmission.admit(
+    let request = try HeistPlanSourceAdmission.admit(
         commandName: "run_heist",
         path: nil,
         inlineDSL: """
         HeistPlan("sourceFlow") {
-            Warn("from source")
+        Warn("from source")
         }
         """
-    ).value)
-    let loaded = try #require(HeistPlanLoading.loadValidated(from: request).value)
+    )
+    let loaded = try HeistPlanLoading.loadValidated(from: request)
 
     #expect(loaded.name == "sourceFlow")
     #expect(loaded.body == [.warn(WarnStep(message: "from source"))])
@@ -50,40 +50,43 @@ func `plan source admission raw IR keys map to a closed rejected field set`() th
 
 @Test
 func `plan source admission rejects missing public source`() throws {
-    let result = HeistPlanSourceAdmission.admit(
-        commandName: "run_heist",
-        path: nil,
-        inlineDSL: nil
-    )
-
-    #expect(try #require(result.failureDiagnostics?.first).message.contains(
+    let diagnostic = try buildDiagnostic {
+        try HeistPlanSourceAdmission.admit(
+            commandName: "run_heist",
+            path: nil,
+            inlineDSL: nil
+        )
+    }
+    #expect(diagnostic.message.contains(
         "run_heist requires exactly one plan source"
     ))
 }
 
 @Test
 func `plan source admission rejects multiple public sources`() throws {
-    let result = HeistPlanSourceAdmission.admit(
-        commandName: "run_heist",
-        path: "/tmp/SearchFlow.heist",
-        inlineDSL: #"HeistPlan("searchFlow") { Warn("from source") }"#
-    )
-
-    #expect(try #require(result.failureDiagnostics?.first).message.contains(
+    let diagnostic = try buildDiagnostic {
+        try HeistPlanSourceAdmission.admit(
+            commandName: "run_heist",
+            path: "/tmp/SearchFlow.heist",
+            inlineDSL: #"HeistPlan("searchFlow") { Warn("from source") }"#
+        )
+    }
+    #expect(diagnostic.message.contains(
         "run_heist accepts exactly one plan source"
     ))
 }
 
 @Test
 func `plan source admission rejects inline source when policy is artifact only`() throws {
-    let result = HeistPlanSourceAdmission.admit(
-        commandName: "heist-plan",
-        path: nil,
-        inlineDSL: #"HeistPlan("searchFlow") { Warn("from source") }"#,
-        sourcePolicy: .artifactOnly
-    )
-
-    #expect(try #require(result.failureDiagnostics?.first).message.contains(
+    let diagnostic = try buildDiagnostic {
+        try HeistPlanSourceAdmission.admit(
+            commandName: "heist-plan",
+            path: nil,
+            inlineDSL: #"HeistPlan("searchFlow") { Warn("from source") }"#,
+            sourcePolicy: .artifactOnly
+        )
+    }
+    #expect(diagnostic.message.contains(
         "heist-plan does not accept inline ButtonHeist DSL source"
     ))
 }
@@ -94,11 +97,12 @@ func `plan loading rejects standalone raw json path as public source`() throws {
     let jsonURL = temp.url.appendingPathComponent("SearchFlow.json")
     try representativeArtifactPlan().canonicalHeistJSONData().write(to: jsonURL)
 
-    let result = HeistPlanLoading.loadValidated(from: HeistPlanLoadRequest(
-        commandName: "run_heist",
-        source: .artifactPath(jsonURL.path)
-    ))
-    let message = try #require(result.failureDiagnostics?.first).message
+    let message = try buildDiagnostic {
+        try HeistPlanLoading.loadValidated(from: HeistPlanLoadRequest(
+            commandName: "run_heist",
+            source: .artifactPath(jsonURL.path)
+        ))
+    }.message
 
     #expect(message.contains("raw `.json` HeistPlan IR"))
     #expect(message.contains("not public run input"))
@@ -106,15 +110,33 @@ func `plan loading rejects standalone raw json path as public source`() throws {
 
 @Test
 func `plan source admission rejects raw structured JSON IR fields`() throws {
-    let result = HeistPlanSourceAdmission.rejectRawStructuredJSONIRSourceFields(
-        commandName: "run_heist",
-        fields: [.version, .body]
-    )
-    let message = try #require(result.failureDiagnostics?.first).message
+    let message = try buildDiagnostic {
+        try HeistPlanSourceAdmission.rejectRawStructuredJSONIRSourceFields(
+            commandName: "run_heist",
+            fields: [.version, .body]
+        )
+    }.message
 
     #expect(message.contains("raw JSON HeistPlan IR field"))
     #expect(message.contains("ButtonHeist DSL"))
     #expect(message.contains(".heist"))
+}
+
+private func buildDiagnostic<Value>(_ operation: () throws -> Value) throws -> HeistBuildDiagnostic {
+    do {
+        _ = try operation()
+        throw PlansTestFailure("Expected plan build to fail")
+    } catch let error as HeistPlanBuildError {
+        return try #require(error.diagnostics.first)
+    }
+}
+
+private struct PlansTestFailure: Error {
+    let message: String
+
+    init(_ message: String) {
+        self.message = message
+    }
 }
 
 @Test

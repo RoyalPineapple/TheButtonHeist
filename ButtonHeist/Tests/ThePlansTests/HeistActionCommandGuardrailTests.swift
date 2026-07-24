@@ -141,7 +141,6 @@ import Testing
             let expectedFailure = try #require(testCase.durabilityFailure)
             let failures = runtimeSafetyFailures(for: raw)
             expectNonDurableHeistActionFailure(failures, observed: expectedFailure)
-            #expect(raw.semanticValidationResult().value == nil)
         }
     }
 }

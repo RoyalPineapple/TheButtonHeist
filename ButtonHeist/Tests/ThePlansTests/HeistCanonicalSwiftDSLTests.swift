@@ -417,14 +417,8 @@ private func compileCanonicalHeist(_ source: String) async throws -> HeistPlan {
     defer { try? FileManager.default.removeItem(at: tempDirectory) }
     let sourceURL = tempDirectory.appendingPathComponent("Canonical.swift")
     try source.write(to: sourceURL, atomically: true, encoding: .utf8)
-    let result = await HeistSwiftCompiler(configuration: .init(packageRoot: buttonHeistPackageRoot()))
+    return try await HeistSwiftCompiler(configuration: .init(packageRoot: buttonHeistPackageRoot()))
         .compileFile(sourceURL, entry: "heist")
-    switch result {
-    case .success(let plan, _):
-        return plan
-    case .failure(let diagnostics):
-        throw CompileBackFailure(diagnostics: diagnostics.map(\.description))
-    }
 }
 
 private func buttonHeistPackageRoot() -> URL {
@@ -435,11 +429,4 @@ private func buttonHeistPackageRoot() -> URL {
         .deletingLastPathComponent()
 }
 
-private struct CompileBackFailure: Error, CustomStringConvertible {
-    let diagnostics: [String]
-
-    var description: String {
-        diagnostics.joined(separator: "\n")
-    }
-}
 #endif

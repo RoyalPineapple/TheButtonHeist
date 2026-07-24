@@ -221,7 +221,7 @@ final class CLICommandSyncTests: XCTestCase {
         let prepared = try await RunHeistCommand.prepareInput(
             path: "Flow.swift",
             entry: "makeHeist",
-            compileSwiftSource: { _, _ in .success(plan, diagnostics: []) }
+            compileSwiftSource: { _, _ in plan }
         )
         defer { prepared.cleanup() }
 

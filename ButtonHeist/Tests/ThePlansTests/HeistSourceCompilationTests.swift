@@ -26,14 +26,11 @@ func compileDiagnostic(_ source: String) -> HeistBuildDiagnostic {
             phase: .sourceCompilation,
             message: "Expected source to fail"
         )
-    } catch let error as HeistSourceCompilationError {
-        return error.diagnostic
-    } catch {
-        Issue.record("Expected HeistSourceCompilationError, got \(error)")
-        return HeistBuildDiagnostic(
-            externalBoundaryRawCode: "test.unexpected_error",
+    } catch let error {
+        return error.diagnostics.first ?? HeistBuildDiagnostic(
+            externalBoundaryRawCode: "test.missing_diagnostic",
             phase: .sourceCompilation,
-            message: String(describing: error)
+            message: "Source compilation failed without diagnostics"
         )
     }
 }
@@ -68,11 +65,15 @@ func expect(_ string: String, contains substring: String) {
     let raw = HeistPlanAdmissionCandidate(body: [
         .action(ActionStep(command: .scroll(ScrollTarget(direction: .down)))),
     ])
-    guard case .failure(let diagnostics) = raw.runtimeSafetyValidationResult(),
-          let diagnostic = diagnostics.first else {
+    let diagnostics: [HeistBuildDiagnostic]
+    do {
+        _ = try raw.validatedSemantics()
         Issue.record("Expected non-durable action to fail runtime safety admission")
         return
+    } catch let error as HeistPlanRuntimeSafetyError {
+        diagnostics = error.diagnostics
     }
+    let diagnostic = try #require(diagnostics.first)
 
     #expect(diagnostics.count == 1)
     #expect(diagnostic.code == .nonDurableAction)
@@ -95,7 +96,7 @@ func expect(_ string: String, contains substring: String) {
         "Process()",
         #"await Warn("x")"#,
     ] {
-        #expect(throws: HeistSourceCompilationError.self) {
+        #expect(throws: HeistPlanBuildError.self) {
             _ = try HeistSourceCompilation.compile(source)
         }
     }
@@ -118,13 +119,19 @@ func expect(_ string: String, contains substring: String) {
 }
 
 @Test func `planning admission exposes typed diagnostics before rendering`() {
-    let result = HeistPlanSourceAdmission.rejectRawStructuredJSONIRSourceFields(
-        commandName: "run_heist",
-        fields: [.body, .version]
-    )
-
-    guard let diagnostic = result.failureDiagnostics?.first else {
+    let diagnostics: [HeistBuildDiagnostic]
+    do {
+        try HeistPlanSourceAdmission.rejectRawStructuredJSONIRSourceFields(
+            commandName: "run_heist",
+            fields: [.body, .version]
+        )
         Issue.record("Expected raw JSON IR fields to fail planning admission")
+        return
+    } catch let error {
+        diagnostics = error.diagnostics
+    }
+    guard let diagnostic = diagnostics.first else {
+        Issue.record("Expected raw JSON IR fields to report a diagnostic")
         return
     }
 
@@ -154,7 +161,7 @@ func expect(_ string: String, contains substring: String) {
 }
 
 @Test func `inline plan source import Foundation is rejected`() throws {
-    #expect(throws: HeistSourceCompilationError.self) {
+    #expect(throws: HeistPlanBuildError.self) {
         _ = try HeistSourceCompilation.compile("""
         import Foundation
         Activate(.label("Pay"))
@@ -163,7 +170,7 @@ func expect(_ string: String, contains substring: String) {
 }
 
 @Test func `inline plan source while true is rejected`() throws {
-    #expect(throws: HeistSourceCompilationError.self) {
+    #expect(throws: HeistPlanBuildError.self) {
         _ = try HeistSourceCompilation.compile("""
         while true {
             Activate(.label("Pay"))
@@ -173,7 +180,7 @@ func expect(_ string: String, contains substring: String) {
 }
 
 @Test func `inline plan source arbitrary function declaration is rejected`() throws {
-    #expect(throws: HeistSourceCompilationError.self) {
+    #expect(throws: HeistPlanBuildError.self) {
         _ = try HeistSourceCompilation.compile("""
         func pay() {
             Activate(.label("Pay"))

@@ -253,6 +253,14 @@ public struct HeistBuildDiagnostic: Sendable, Equatable, CustomStringConvertible
     }
 }
 
+public struct HeistPlanBuildError: Error, Sendable, Equatable, CustomStringConvertible {
+    public let diagnostics: [HeistBuildDiagnostic]
+
+    public var description: String {
+        "ButtonHeist plan build failed: \(diagnostics.map(\.renderedMessage).joined(separator: "; "))"
+    }
+}
+
 public extension HeistBuildDiagnosticCode {
     var title: String {
         switch knownCode {
@@ -393,14 +401,6 @@ extension HeistBuildDiagnostic {
 
     private static func pathForDiagnostic(_ path: String) -> String? {
         path.isEmpty ? nil : path
-    }
-}
-
-extension HeistPlanAdmissionCandidate {
-    func runtimeSafetyValidationResult(
-        limits: HeistPlanRuntimeSafetyLimits = .standard
-    ) -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
-        semanticValidationResult(limits: limits)
     }
 }
 

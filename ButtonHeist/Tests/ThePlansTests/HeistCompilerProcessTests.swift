@@ -290,8 +290,9 @@ struct HeistCompilerProcessTests {
             temporaryDirectory: temp.url
         )
 
-        let result = await HeistSwiftCompiler(configuration: configuration).compileFile(source)
-        let diagnostic = try #require(result.failureDiagnostics?.first)
+        let diagnostic = try await compilerDiagnostic {
+            try await HeistSwiftCompiler(configuration: configuration).compileFile(source)
+        }
 
         #expect(diagnostic.code.knownCode == .swiftCompilationCompileTimedOut)
         #expect(diagnostic.code.knownCode != .swiftCompilationExecutionTimedOut)
@@ -319,8 +320,9 @@ struct HeistCompilerProcessTests {
             temporaryDirectory: temp.url
         )
 
-        let result = await HeistSwiftCompiler(configuration: configuration).compileFile(source)
-        let diagnostic = try #require(result.failureDiagnostics?.first)
+        let diagnostic = try await compilerDiagnostic {
+            try await HeistSwiftCompiler(configuration: configuration).compileFile(source)
+        }
 
         #expect(diagnostic.code.knownCode == .swiftCompilationExecutionTimedOut)
         #expect(try temp.generatedCompilerWorkspaces().isEmpty)
@@ -348,8 +350,9 @@ struct HeistCompilerProcessTests {
             temporaryDirectory: temp.url
         )
 
-        let result = await HeistSwiftCompiler(configuration: configuration).compileFile(source)
-        let diagnostic = try #require(result.failureDiagnostics?.first)
+        let diagnostic = try await compilerDiagnostic {
+            try await HeistSwiftCompiler(configuration: configuration).compileFile(source)
+        }
 
         #expect(diagnostic.code.knownCode == .swiftCompilationExecutionTerminated)
         #expect(try temp.generatedCompilerWorkspaces().isEmpty)
@@ -396,6 +399,21 @@ struct HeistCompilerProcessTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
     }
+}
+
+private func compilerDiagnostic<Value>(
+    _ operation: () async throws -> Value
+) async throws -> HeistBuildDiagnostic {
+    do {
+        _ = try await operation()
+        throw CompilerProcessTestFailure.expectedCompilationFailure
+    } catch let error as HeistPlanBuildError {
+        return try #require(error.diagnostics.first)
+    }
+}
+
+private enum CompilerProcessTestFailure: Error {
+    case expectedCompilationFailure
 }
 
 private final class ProcessTestTemporaryDirectory {

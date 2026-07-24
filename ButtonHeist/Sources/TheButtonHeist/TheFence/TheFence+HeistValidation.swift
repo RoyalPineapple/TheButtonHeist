@@ -2,15 +2,15 @@ import ThePlans
 
 extension TheFence {
     func handleValidateHeist(_ request: ValidateHeistRequest) throws -> FenceResponse {
-        switch HeistPlanLoading.loadValidated(from: request.source) {
-        case .failure(let diagnostics):
+        do {
+            let plan = try HeistPlanLoading.loadValidated(from: request.source)
+            return .heistValidation(try validationReport(for: plan, request: request))
+        } catch let error as HeistPlanBuildError {
             return .heistValidation(HeistValidation.Report.rejectedPlan(
-                diagnostics: diagnostics,
+                diagnostics: error.diagnostics,
                 argumentProvided: request.argumentProvided,
                 lintMode: request.lintMode
             ))
-        case .success(let plan, _):
-            return .heistValidation(try validationReport(for: plan, request: request))
         }
     }
 
@@ -38,11 +38,11 @@ extension TheFence {
         argumentProvided: Bool,
         plan: HeistPlan
     ) -> HeistValidation.Result<HeistValidation.InvocationSummary> {
-        switch HeistArgumentAdmission.validateRootArgument(argument, for: plan) {
-        case .success:
+        do {
+            try HeistArgumentAdmission.validateRootArgument(argument, for: plan)
             return .valid(HeistValidation.InvocationSummary(argumentProvided: argumentProvided))
-        case .failure(let diagnostics):
-            return .invalid(diagnostics)
+        } catch let error {
+            return .invalid(error.diagnostics)
         }
     }
 

@@ -149,16 +149,14 @@ private struct EncodedInvocationStepContract: Decodable {
     #expect(graph.edges.contains(HeistCallGraph.Edge(caller: "checkout", callee: "checkout.fallback")))
 }
 
-@Test func `duplicate definition candidates cannot yield an executable plan`() {
+@Test func `duplicate definition candidates cannot yield an executable plan`() throws {
     let candidate = HeistPlanAdmissionCandidate(definitions: [
         HeistPlanAdmissionCandidate(name: "duplicate", body: [.warn(WarnStep(message: "one"))]),
         HeistPlanAdmissionCandidate(name: "duplicate", body: [.warn(WarnStep(message: "two"))]),
     ], body: [.warn(WarnStep(message: "root"))])
 
-    let result = candidate.semanticValidationResult()
-
-    #expect(result.value == nil)
-    #expect(result.diagnostics.contains {
+    let diagnostics = try runtimeSafetyDiagnostics(candidate)
+    #expect(diagnostics.contains {
         $0.path == "$.definitions[1].name"
             && $0.code == .planRuntimeSafety
     })
@@ -276,7 +274,7 @@ private struct EncodedInvocationStepContract: Decodable {
     }
 }
 
-@Test func `runtime admission recursive failures are deterministic cycle witnesses`() {
+@Test func `runtime admission recursive failures are deterministic cycle witnesses`() throws {
     let cases: [RuntimeAdmissionCallGraphCase] = [
         RuntimeAdmissionCallGraphCase(candidate: inlineChainCase(["A", "B", "C"]), expectedCycle: nil),
         RuntimeAdmissionCallGraphCase(candidate: inlineCycleCase(["A"]), expectedCycle: "A -> A"),
@@ -285,19 +283,20 @@ private struct EncodedInvocationStepContract: Decodable {
     ]
 
     for testCase in cases {
-        let result = testCase.candidate.semanticValidationResult()
         let recursiveFailures = runtimeSafetyFailures(for: testCase.candidate).filter {
             $0.contract == recursiveHeistRunContract
         }
 
         if let expectedCycle = testCase.expectedCycle {
-            #expect(result.value == nil)
+            #expect(throws: HeistPlanRuntimeSafetyError.self) {
+                _ = try testCase.candidate.validatedSemantics()
+            }
             #expect(!recursiveFailures.isEmpty)
             #expect(Set(recursiveFailures.map(\.contract)) == [recursiveHeistRunContract])
             #expect(Set(recursiveFailures.map(\.observed)) == [expectedCycle])
             #expect(Set(recursiveFailures.map(\.correction)) == [recursiveHeistRunCorrection])
         } else {
-            #expect(result.value != nil)
+            _ = try testCase.candidate.validatedSemantics()
             #expect(recursiveFailures.isEmpty)
         }
     }
@@ -305,6 +304,21 @@ private struct EncodedInvocationStepContract: Decodable {
 
 private let recursiveHeistRunContract = "heist runs must not be recursive"
 private let recursiveHeistRunCorrection = "Remove the recursive heist run cycle."
+
+private func runtimeSafetyDiagnostics(
+    _ candidate: HeistPlanAdmissionCandidate
+) throws -> [HeistBuildDiagnostic] {
+    do {
+        _ = try candidate.validatedSemantics()
+        throw CallGraphTestFailure.expectedRuntimeSafetyFailure
+    } catch let error as HeistPlanRuntimeSafetyError {
+        return error.diagnostics
+    }
+}
+
+private enum CallGraphTestFailure: Error {
+    case expectedRuntimeSafetyFailure
+}
 
 private struct RuntimeAdmissionCallGraphCase {
     let candidate: HeistPlanAdmissionCandidate

@@ -98,16 +98,14 @@ struct Compile: AsyncParsableCommand {
         } catch {
             throw ValidationError(String(describing: error))
         }
-        let result = await HeistSwiftCompiler().compileFile(
-            URL(fileURLWithPath: source),
-            entry: entrySymbol
-        )
         let plan: HeistPlan
-        switch result {
-        case .success(let compiledPlan, _):
-            plan = compiledPlan
-        case .failure(let diagnostics):
-            throw ValidationError(formatBuildDiagnostics(diagnostics))
+        do {
+            plan = try await HeistSwiftCompiler().compileFile(
+                URL(fileURLWithPath: source),
+                entry: entrySymbol
+            )
+        } catch let error {
+            throw ValidationError(formatBuildDiagnostics(error.diagnostics))
         }
         try HeistPlanIO.writeCanonicalHeistPackage(for: plan, to: output)
     }

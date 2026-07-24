@@ -1,35 +1,29 @@
 import Foundation
 
 public enum HeistSourceCompilation {
-    package static func compileResult(
+    public static func compile(
         _ source: String,
         sourceName: String = "inline-heist-plan"
-    ) -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
+    ) throws(HeistPlanBuildError) -> HeistPlan {
         do {
             var lexer = HeistPlanSourceLexer(source: source, sourceName: sourceName)
             let tokens = try lexer.lex()
             var parser = HeistPlanSourceParser(tokens: tokens)
             let plan = try parser.parseProgram()
-            return plan.semanticValidationResult()
+            return try plan.validatedSemantics()
+        } catch let error as HeistPlanBuildError {
+            throw error
         } catch let error as HeistSourceCompilationError {
-            return .failure(error.diagnostics)
+            throw HeistPlanBuildError(diagnostics: error.diagnostics)
         } catch let error as HeistPlanRuntimeSafetyError {
-            return .failure(error.diagnostics)
+            throw HeistPlanBuildError(diagnostics: error.diagnostics)
         } catch {
-            return .failure([HeistBuildDiagnostic(
+            throw HeistPlanBuildError(diagnostics: [HeistBuildDiagnostic(
                 code: .planRuntimeSafety,
                 phase: .planValidation,
                 message: "ButtonHeist source failed runtime safety: \(String(describing: error))"
             )])
         }
-    }
-
-    public static func compile(
-        _ source: String,
-        sourceName: String = "inline-heist-plan"
-    ) throws -> HeistPlan {
-        try compileResult(source, sourceName: sourceName)
-            .value(orThrow: HeistSourceCompilationError.init(diagnostics:))
     }
 }
 

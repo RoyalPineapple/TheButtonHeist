@@ -93,7 +93,7 @@ import Testing
 }
 
 @Test func `runtime parser rejects exact StringMatch source spelling`() {
-    #expect(throws: HeistSourceCompilationError.self) {
+    #expect(throws: HeistPlanBuildError.self) {
         _ = try HeistSourceCompilation.compile(root("""
         Activate(.label(.exact("Search")))
         """))
@@ -101,7 +101,7 @@ import Testing
 }
 
 @Test func `runtime parser rejects labeled element predicate fields`() {
-    #expect(throws: HeistSourceCompilationError.self) {
+    #expect(throws: HeistPlanBuildError.self) {
         _ = try HeistSourceCompilation.compile(root("""
         Activate(.element(label: "Pay", traits: [.button]))
         """))

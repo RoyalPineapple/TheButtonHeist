@@ -130,14 +130,6 @@ private extension HeistPlan {
     }
 }
 
-public struct HeistPlanBuildError: Error, Sendable, Equatable, CustomStringConvertible {
-    public let diagnostics: [HeistBuildDiagnostic]
-
-    public var description: String {
-        "ButtonHeist plan build failed: \(diagnostics.renderedMessages)"
-    }
-}
-
 private struct HeistPlanCodingKey: CodingKey {
     let stringValue: String
     let intValue: Int?
@@ -231,7 +223,7 @@ public enum HeistBuilder {
 public struct HeistDef<Input>: Sendable {
     let path: HeistDefinitionPath
     let parameter: HeistParameter
-    private let definitionResult: ValidationResult<HeistPlanAdmissionCandidate, HeistBuildDiagnostic>
+    private let content: HeistContent
 
     public init(
         _ path: HeistDefinitionPath,
@@ -239,7 +231,7 @@ public struct HeistDef<Input>: Sendable {
     ) where Input == Void {
         self.parameter = .none
         self.path = path
-        self.definitionResult = Self.buildDefinition(path: path, parameter: self.parameter) {
+        self.content = Self.definitionContent(path: path, parameter: self.parameter) {
             try content()
         }
     }
@@ -252,7 +244,7 @@ public struct HeistDef<Input>: Sendable {
         let reference = parameter
         self.parameter = .string(name: reference)
         self.path = path
-        self.definitionResult = Self.buildDefinition(path: path, parameter: self.parameter) {
+        self.content = Self.definitionContent(path: path, parameter: self.parameter) {
             try content(reference)
         }
     }
@@ -265,30 +257,32 @@ public struct HeistDef<Input>: Sendable {
         let reference = parameter
         self.parameter = .accessibilityTarget(name: reference)
         self.path = path
-        self.definitionResult = Self.buildDefinition(path: path, parameter: self.parameter) {
+        self.content = Self.definitionContent(path: path, parameter: self.parameter) {
             try content(AccessibilityTarget(ref: reference))
         }
     }
 
-    private static func buildDefinition(
+    private static func definitionContent(
         path: HeistDefinitionPath,
         parameter: HeistParameter,
         _ content: () throws -> HeistContent
-    ) -> ValidationResult<HeistPlanAdmissionCandidate, HeistBuildDiagnostic> {
+    ) -> HeistContent {
         let renderedPath = path.description
         do {
             let content = try content()
             guard content.diagnostics.isEmpty else {
-                return .failure(content.diagnostics.map { $0.withPath(renderedPath) })
+                return HeistContent(diagnostics: content.diagnostics.map { $0.withPath(renderedPath) })
             }
-            return .success(nestedHeistDefinition(
-                path: path,
-                parameter: parameter,
-                definitions: content.definitions,
-                body: content.steps.map(HeistStepAdmissionCandidate.init)
-            ), diagnostics: [])
+            return HeistContent(definitions: [
+                nestedHeistDefinition(
+                    path: path,
+                    parameter: parameter,
+                    definitions: content.definitions,
+                    body: content.steps.map(HeistStepAdmissionCandidate.init)
+                ),
+            ])
         } catch {
-            return .failure([.dslBuild(
+            return HeistContent(diagnostics: [.dslBuild(
                 code: .dslInvalidDefinition,
                 path: renderedPath,
                 message: String(describing: error)
@@ -297,11 +291,11 @@ public struct HeistDef<Input>: Sendable {
     }
 
     fileprivate func invocation(argument: HeistArgument) throws -> HeistInvocationContent {
-        let definition = try definitionResult.value(orThrow: HeistPlanBuildError.init(diagnostics:))
+        try HeistPlan.throwIfBuildDiagnostics(content.diagnostics)
         return HeistInvocationContent(
             path: HeistInvocationPath(definitionPath: path),
             argument: argument,
-            definitions: [definition]
+            definitions: content.definitions
         )
     }
 }
@@ -366,10 +360,7 @@ public extension HeistDef where Input == Void {
 
 extension HeistDef {
     var heistContent: HeistContent {
-        HeistContent(
-            definitions: definitionResult.value.map { [$0] } ?? [],
-            diagnostics: definitionResult.failureDiagnostics ?? []
-        )
+        content
     }
 }
 
@@ -485,11 +476,5 @@ public struct ForEach {
                 message: "ForEach element loop is invalid: \(String(describing: error))"
             )])
         }
-    }
-}
-
-private extension Array where Element == HeistBuildDiagnostic {
-    var renderedMessages: String {
-        map(\.renderedMessage).joined(separator: "; ")
     }
 }

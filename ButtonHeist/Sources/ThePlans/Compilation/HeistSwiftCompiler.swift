@@ -28,6 +28,11 @@ public struct HeistBuildSourceLocation: Sendable, Equatable, CustomStringConvert
     }
 }
 
+public struct HeistCatalogCompilationResult: Sendable, Equatable {
+    public let catalog: HeistCatalog
+    public let diagnostics: [HeistBuildDiagnostic]
+}
+
 public actor HeistSwiftCompiler {
     public struct Configuration: Sendable, Equatable {
         public static let `default` = Configuration()
@@ -69,7 +74,7 @@ public actor HeistSwiftCompiler {
     public func compileFile(
         _ url: URL,
         entry: HeistEntrySymbol = "heist"
-    ) async -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
+    ) async throws(HeistPlanBuildError) -> HeistPlan {
         let source = url.standardizedFileURL
         do {
             try Task.checkCancellation()
@@ -80,9 +85,9 @@ public actor HeistSwiftCompiler {
                 temporaryDirectory: configuration.temporaryDirectory
             ).compile(source, entry: entry)
             try Task.checkCancellation()
-            return .success(plan, diagnostics: [])
+            return plan
 #else
-            return .failure([
+            throw HeistPlanBuildError(diagnostics: [
                 Self.diagnostic(
                     code: .swiftCompilationUnsupportedPlatform,
                     "Swift heist source compilation is only supported on macOS and Linux.",
@@ -91,25 +96,27 @@ public actor HeistSwiftCompiler {
             ])
 #endif
         } catch is CancellationError {
-            return .failure([Self.diagnostic(
+            throw HeistPlanBuildError(diagnostics: [Self.diagnostic(
                 code: .swiftCompilationCancelled,
                 "Swift heist compilation was cancelled.",
                 source: source
             )])
+        } catch let error as HeistPlanBuildError {
+            throw error
         } catch {
-            return .failure(Self.diagnostics(for: error, source: source, entry: entry))
+            throw HeistPlanBuildError(diagnostics: Self.diagnostics(for: error, source: source, entry: entry))
         }
     }
 
     public func compileDirectory(
         _ url: URL
-    ) async -> ValidationResult<HeistCatalog, HeistBuildDiagnostic> {
+    ) async throws(HeistPlanBuildError) -> HeistCatalogCompilationResult {
         let directory = url.standardizedFileURL
         do {
             try Task.checkCancellation()
             let sources = try Self.sourceFiles(in: directory)
             guard !sources.isEmpty else {
-                return .failure([
+                throw HeistPlanBuildError(diagnostics: [
                     Self.diagnostic(
                         code: .directoryNoSources,
                         "Directory contains no Swift heist source files.",
@@ -119,38 +126,45 @@ public actor HeistSwiftCompiler {
                 ])
             }
 
-            var compileResults: [ValidationResult<HeistPlan, HeistBuildDiagnostic>] = []
+            var plans: [HeistPlan] = []
+            var diagnostics: [HeistBuildDiagnostic] = []
             for source in sources {
                 try Task.checkCancellation()
-                compileResults.append(await compileFile(source, entry: configuration.directoryEntry))
-            }
-
-            let compiledPlans = compileResults.collectValidationResults()
-            let compileDiagnostics = compiledPlans.diagnostics
-            guard compileDiagnostics.allSatisfy({ $0.severity != .error }) else {
-                return .failure(compileDiagnostics)
-            }
-            return compiledPlans.flatMap { plans in
-                let catalogDiagnostics = Self.catalogDiagnostics(for: plans, sources: sources)
-                guard catalogDiagnostics.allSatisfy({ $0.severity != .error }) else {
-                    return .failure(catalogDiagnostics)
+                do {
+                    plans.append(try await compileFile(source, entry: configuration.directoryEntry))
+                } catch let error {
+                    diagnostics.append(contentsOf: error.diagnostics)
                 }
+            }
 
-                let catalog = HeistCatalog(
+            guard diagnostics.allSatisfy({ $0.severity != .error }) else {
+                throw HeistPlanBuildError(diagnostics: diagnostics)
+            }
+            diagnostics.append(contentsOf: Self.catalogDiagnostics(for: plans, sources: sources))
+            guard diagnostics.allSatisfy({ $0.severity != .error }) else {
+                throw HeistPlanBuildError(diagnostics: diagnostics)
+            }
+
+            return HeistCatalogCompilationResult(
+                catalog: HeistCatalog(
                     source: HeistCatalogSource(url: directory),
                     capabilities: plans
-                )
-                return .success(catalog, diagnostics: catalogDiagnostics)
-            }
+                ),
+                diagnostics: diagnostics
+            )
         } catch is CancellationError {
-            return .failure([Self.diagnostic(
+            throw HeistPlanBuildError(diagnostics: [Self.diagnostic(
                 code: .directoryCancelled,
                 "Swift heist directory compilation was cancelled.",
                 phase: .planning,
                 source: directory
             )])
+        } catch let error as HeistPlanBuildError {
+            throw error
         } catch {
-            return .failure(Self.diagnostics(for: error, source: directory, entry: configuration.directoryEntry))
+            throw HeistPlanBuildError(
+                diagnostics: Self.diagnostics(for: error, source: directory, entry: configuration.directoryEntry)
+            )
         }
     }
 }

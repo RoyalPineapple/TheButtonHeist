@@ -244,7 +244,7 @@ import Testing
 }
 
 @Test func `inline plan source RepeatUntil else is rejected`() throws {
-    #expect(throws: HeistSourceCompilationError.self) {
+    #expect(throws: HeistPlanBuildError.self) {
         _ = try HeistSourceCompilation.compile(root("""
         RepeatUntil(.exists(.value("3")), timeout: 2) {
             Increment(.identifier("Quantity"))

@@ -78,7 +78,7 @@ import Testing
 
 @Test func `semantic validation rejects nested collection loops`() throws {
     for testCase in try nestedCollectionLoopCases() {
-        let diagnostic = try #require(testCase.candidate.semanticValidationResult().failureDiagnostics?.first)
+        let diagnostic = try semanticDiagnostic(testCase.candidate)
         #expect(diagnostic.code == .planRuntimeSafety)
         #expect(diagnostic.title == "Plan semantic validation failed")
         #expect(diagnostic.phase == .planValidation)
@@ -156,7 +156,7 @@ private func expectSemanticDiagnostic(
     path expectedPath: String,
     message expectedMessage: String
 ) throws {
-    let diagnostic = try #require(candidate.semanticValidationResult().failureDiagnostics?.first)
+    let diagnostic = try semanticDiagnostic(candidate)
 
     #expect(diagnostic.code == .planRuntimeSafety)
     #expect(diagnostic.title == "Plan semantic validation failed")
@@ -164,4 +164,17 @@ private func expectSemanticDiagnostic(
     #expect(diagnostic.path == expectedPath)
     #expect(diagnostic.message.contains(expectedMessage))
     #expect(diagnostic.hint != nil)
+}
+
+private func semanticDiagnostic(_ candidate: HeistPlanAdmissionCandidate) throws -> HeistBuildDiagnostic {
+    do {
+        _ = try candidate.validatedSemantics()
+        throw LanguageContractFailure.expectedSemanticFailure
+    } catch let error as HeistPlanRuntimeSafetyError {
+        return try #require(error.diagnostics.first)
+    }
+}
+
+private enum LanguageContractFailure: Error {
+    case expectedSemanticFailure
 }
