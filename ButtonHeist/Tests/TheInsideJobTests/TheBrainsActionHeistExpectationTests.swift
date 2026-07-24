@@ -154,19 +154,19 @@ extension TheBrainsActionTests {
         await committedObservations.wait()
         let appeared = await brains.performWait(step: WaitStep(
             predicate: .changed(.elements([.appeared(.label("Saved"))])),
-            timeout: .milliseconds(1)
+            timeout: try .milliseconds(1)
         ))
         let disappeared = await brains.performWait(step: WaitStep(
             predicate: .changed(.elements([.disappeared(.label("Saved"))])),
-            timeout: .milliseconds(1)
+            timeout: try .milliseconds(1)
         ))
         let exists = await brains.performWait(step: WaitStep(
             predicate: .exists(.label("Saved")),
-            timeout: .milliseconds(1)
+            timeout: try .milliseconds(1)
         ))
         let announcement = await brains.performWait(step: WaitStep(
             predicate: .announcement("Saved"),
-            timeout: .milliseconds(1)
+            timeout: try .milliseconds(1)
         ))
 
         XCTAssertTrue(action.outcome.isSuccess, action.message ?? "action heist failed")
@@ -194,7 +194,7 @@ extension TheBrainsActionTests {
 
         let result = await brains.performWait(step: WaitStep(
             predicate: .exists(.label("Ready")),
-            timeout: .seconds(1)
+            timeout: try .seconds(1)
         ))
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "standalone wait failed")
@@ -216,7 +216,7 @@ extension TheBrainsActionTests {
 
         let result = await brains.performWait(step: WaitStep(
             predicate: .changed(.elements([.appeared(.label("Ready"))])),
-            timeout: .milliseconds(1)
+            timeout: try .milliseconds(1)
         ))
 
         XCTAssertFalse(result.outcome.isSuccess)

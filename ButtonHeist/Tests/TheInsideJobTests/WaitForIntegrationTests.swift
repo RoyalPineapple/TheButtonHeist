@@ -267,7 +267,7 @@ final class WaitForIntegrationTests: XCTestCase {
         ).resolve(in: .empty)
         let authoredExpectation = WaitStep(
             predicate: .exists(.label("Action-RepeatingAnimation")),
-            timeout: .seconds(1)
+            timeout: try .seconds(1)
         )
         let resolvedExpectation = try authoredExpectation.resolve(in: .empty)
         let expectation = Settlement.ActionExpectation(
