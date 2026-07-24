@@ -113,7 +113,7 @@ final class SemanticObservationStoreTests: XCTestCase {
             of: Observation.StoreOwner.CommittedDelivery.self
         ) { group in
             group.addTask {
-                try await owner.commit(admission)
+                try await owner.commitAdmission(admission)
             }
             return try await group.next()!
         }

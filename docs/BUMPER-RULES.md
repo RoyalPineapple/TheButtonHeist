@@ -52,12 +52,15 @@ resolve Swift types or infer runtime ownership.
 
 ## Canonical Runtime Owners
 
-This shaper guards a semantic effect boundary that Swift access control cannot
+These shapers guard semantic effect boundaries that Swift access control cannot
 express across files in the runtime target.
 
 | Rule ID | Invariant | Repair | Verification and deletion condition |
 | --- | --- | --- | --- |
-| `buttonheist.semantic_observation_commit_ownership` | `Observation.Stream` is the only runtime caller that commits admissions through actor-owned `Observation.StoreOwner`, so graph, Log, lineage, and delivery order cannot be advanced by competing paths. | Commit admitted observations through the observation stream. | Verification: standard `boundaryOnly` with an invalid competing committer fixture and repository evaluation of the observation owner. Delete when Store commit becomes inaccessible outside the stream owner. |
+| `buttonheist.semantic_observation_commit_ownership` | `Observation.Stream` is the only runtime caller that commits admissions through actor-owned `Observation.StoreOwner`, so graph, Log, lineage, and delivery order cannot be advanced by competing paths. | Commit admitted observations through the observation stream. | Verification: standard `memberReferenceOwnership` with valid Stream and invalid competing caller fixtures plus repository evaluation. Delete when StoreOwner admission commit becomes inaccessible outside the stream owner. |
+| `buttonheist.semantic_observation_store_mutation_ownership` | `Observation.StoreOwner` is the only runtime caller that mutates `Observation.Store` with an admitted observation. | Commit through the actor-owned StoreOwner rather than mutating the Store directly. | Verification: standard `memberReferenceOwnership` with valid StoreOwner and invalid competing mutator fixtures plus repository evaluation. Delete when Store mutation becomes file-private to StoreOwner. |
+| `buttonheist.settlement_executor_ownership` | `Settlement+Execution.swift` is the only runtime owner that constructs the unified settlement executor. Action waits, standalone waits, repeat checks, and current-state reads enter through `Settlement.Command` instead of creating competing orchestration. | Route the operation through the existing settlement command boundary. | Verification: standard `constructionOwnership` with valid canonical-owner and invalid competing-owner fixtures plus repository evaluation. Delete when the executor initializer becomes inaccessible outside its owning file. |
+| `buttonheist.scroll_content_offset_ownership` | `TheSafecracker+Scroll.swift` is the only production owner of direct `UIScrollView.setContentOffset` dispatch; demo fixtures remain outside the runtime effect boundary. | Express viewport movement as a `Navigation.ViewportMovementIntent` and dispatch it through TheSafecracker. | Verification: standard `memberReferenceOwnership` with one valid owner fixture, one invalid competing runtime fixture, and repository evaluation. Delete when direct content-offset mutation becomes inaccessible outside TheSafecracker. |
 
 ## Plan Language Boundaries
 

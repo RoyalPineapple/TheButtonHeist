@@ -110,7 +110,64 @@ final class TheSafecrackerScrollTests: XCTestCase {
         XCTAssertEqual(sv.contentOffset.x, 200, accuracy: 0.01)
     }
 
-    // MARK: - scrollByPage: unclamped (lazy container mode)
+    func testHorizontalPagerMovesRightToNextPageBoundary() {
+        let scrollView = makeScrollView(
+            frame: CGRect(x: 0, y: 0, width: 390, height: 800),
+            contentSize: CGSize(width: 1_170, height: 800),
+            contentOffset: CGPoint(x: 390, y: 0)
+        )
+        scrollView.isPagingEnabled = true
+
+        let result = safecracker.scrollByPage(scrollView, direction: .right, animated: false)
+
+        XCTAssertEqual(result, .moved)
+        XCTAssertEqual(scrollView.contentOffset.x, 780, accuracy: 0.01)
+    }
+
+    func testHorizontalPagerMovesLeftToPreviousPageBoundary() {
+        let scrollView = makeScrollView(
+            frame: CGRect(x: 0, y: 0, width: 390, height: 800),
+            contentSize: CGSize(width: 1_170, height: 800),
+            contentOffset: CGPoint(x: 780, y: 0)
+        )
+        scrollView.isPagingEnabled = true
+
+        let result = safecracker.scrollByPage(scrollView, direction: .left, animated: false)
+
+        XCTAssertEqual(result, .moved)
+        XCTAssertEqual(scrollView.contentOffset.x, 390, accuracy: 0.01)
+    }
+
+    func testVerticalPagerMovesBetweenPageBoundaries() {
+        let scrollView = makeScrollView(
+            frame: CGRect(x: 0, y: 0, width: 390, height: 390),
+            contentSize: CGSize(width: 390, height: 1_170),
+            contentOffset: CGPoint(x: 0, y: 390)
+        )
+        scrollView.isPagingEnabled = true
+
+        let downResult = safecracker.scrollByPage(scrollView, direction: .down, animated: false)
+        XCTAssertEqual(downResult, .moved)
+        XCTAssertEqual(scrollView.contentOffset.y, 780, accuracy: 0.01)
+
+        let upResult = safecracker.scrollByPage(scrollView, direction: .up, animated: false)
+        XCTAssertEqual(upResult, .moved)
+        XCTAssertEqual(scrollView.contentOffset.y, 390, accuracy: 0.01)
+    }
+
+    func testPagerAdmitsPartialFinalPageAsTerminalEdge() {
+        let scrollView = makeScrollView(
+            frame: CGRect(x: 0, y: 0, width: 390, height: 800),
+            contentSize: CGSize(width: 1_000, height: 800),
+            contentOffset: CGPoint(x: 390, y: 0)
+        )
+        scrollView.isPagingEnabled = true
+
+        let result = safecracker.scrollByPage(scrollView, direction: .right, animated: false)
+
+        XCTAssertEqual(result, .moved)
+        XCTAssertEqual(scrollView.contentOffset.x, 610, accuracy: 0.01)
+    }
 
     // MARK: - scrollToEdge
 
@@ -207,6 +264,25 @@ final class TheSafecrackerScrollTests: XCTestCase {
         XCTAssertEqual(sv.contentOffset.y, 0, accuracy: 0.01)
     }
 
+    func testPagedScreenPointRevealLandsOnLegalPageBoundary() {
+        let scrollView = makeScrollView(
+            frame: CGRect(x: 0, y: 0, width: 390, height: 800),
+            contentSize: CGSize(width: 1_170, height: 800)
+        )
+        scrollView.isPagingEnabled = true
+
+        let result = safecracker.scrollToMakeScreenPointVisible(
+            CGPoint(x: 700, y: 300),
+            in: scrollView,
+            animated: false,
+            preferredScreenRect: CGRect(x: 0, y: 0, width: 390, height: 800),
+            minimumScreenRect: CGRect(x: 0, y: 0, width: 390, height: 800)
+        )
+
+        XCTAssertEqual(result, .moved)
+        XCTAssertEqual(scrollView.contentOffset.x, 390, accuracy: 0.01)
+    }
+
     func testRevealContentPointCentersKnownContentCoordinates() {
         let scrollView = makeScrollView(
             frame: CGRect(x: 0, y: 0, width: 400, height: 800),
@@ -236,6 +312,45 @@ final class TheSafecrackerScrollTests: XCTestCase {
 
         XCTAssertEqual(result, .moved)
         XCTAssertEqual(scrollView.contentOffset.y, 200, accuracy: 0.01)
+    }
+
+    func testPagedContentPointRevealLandsOnLegalPageBoundary() {
+        let scrollView = makeScrollView(
+            frame: CGRect(x: 0, y: 0, width: 390, height: 800),
+            contentSize: CGSize(width: 1_170, height: 800)
+        )
+        scrollView.isPagingEnabled = true
+
+        let result = safecracker.revealContentPoint(
+            ScrollContentPoint(x: 900, y: 400),
+            in: scrollView
+        )
+
+        XCTAssertEqual(result, .moved)
+        XCTAssertEqual(scrollView.contentOffset.x, 780, accuracy: 0.01)
+    }
+
+    func testRestorationPreservesNonPageAlignedCapturedOffset() {
+        let scrollView = makeScrollView(
+            frame: CGRect(x: 0, y: 0, width: 390, height: 800),
+            contentSize: CGSize(width: 1_170, height: 800),
+            contentOffset: CGPoint(x: 123.5, y: 0)
+        )
+        scrollView.isPagingEnabled = true
+        let capturedOrigin = Navigation.visualOrigin(in: scrollView)
+        scrollView.setContentOffset(CGPoint(x: 780, y: 0), animated: false)
+
+        let result = safecracker.restoreVisualOrigin(
+            capturedOrigin,
+            in: scrollView
+        )
+
+        XCTAssertEqual(result, .moved)
+        XCTAssertEqual(
+            Navigation.visualOrigin(in: scrollView).x,
+            capturedOrigin.x,
+            accuracy: 0.01
+        )
     }
 }
 #endif

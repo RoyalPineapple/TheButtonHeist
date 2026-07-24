@@ -892,7 +892,8 @@ extension TheBrainsScrollTests {
                 Navigation.InterfaceExplorationResult(
                     event: event,
                     progress: .init(),
-                    didMoveViewport: true
+                    didMoveViewport: true,
+                    viewportExit: .retained
                 )
             )
         }

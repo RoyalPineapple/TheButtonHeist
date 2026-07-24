@@ -338,7 +338,8 @@ extension TheVaultResolutionTests {
                 .commitDiscoveryObservationForTesting(second)
             return Navigation.InterfaceExplorationResult(
                 event: event,
-                progress: .init()
+                progress: .init(),
+                viewportExit: .restored
             )
         }
 
@@ -363,7 +364,8 @@ extension TheVaultResolutionTests {
                 .commitDiscoveryObservationForTesting(discovery)
             return Navigation.InterfaceExplorationResult(
                 event: event,
-                progress: .init()
+                progress: .init(),
+                viewportExit: .restored
             )
         }
 
@@ -439,7 +441,8 @@ extension TheVaultResolutionTests {
                 .commitDiscoveryObservationForTesting(observation)
             return Navigation.InterfaceExplorationResult(
                 event: event,
-                progress: .init()
+                progress: .init(),
+                viewportExit: .restored
             )
         }
         defer { resumeDiscovery(returning: nil) }

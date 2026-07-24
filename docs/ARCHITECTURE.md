@@ -165,13 +165,33 @@ the invocation baseline and arm observation, announcement, and readiness
 delivery before action dispatch. Every capture follows capture → admit → commit
 → publish → evaluate.
 `Settlement.Reducer` owns the explicit state machine and produces typed effects;
-boundary code alone performs UIKit work. `Settlement.State` has exactly four
-structural phases: `awaitingBaseline`, `armed`, `active`, and `terminal`.
-`Settlement.Session` is the sole active evidence aggregate, and
-`Settlement.Result.outcome` is the sole terminal classifier.
+boundary code alone performs UIKit work. `Settlement.State` has exactly five
+structural phases: `awaitingBaseline`, `armed`, `active`, `quiescing`, and
+`terminal`.
+`Settlement.Session` is the sole active evidence aggregate. `Settlement.Result`
+then admits only command-specific terminal cases: current-state, observation,
+or action success and failure carry exactly their valid evidence.
 The [settlement loop](diagrams/settle-loop.md) owns the nested phase, event,
 deadline, and cleanup mechanics; the
 [action pipeline](diagrams/action-pipeline.md) shows their end-to-end boundary.
+
+```mermaid
+stateDiagram-v2
+    [*] --> awaitingBaseline
+    awaitingBaseline --> armed: baseline admitted
+    armed --> active: channels armed
+    active --> quiescing: intended outcome known
+    quiescing --> terminal: producers stopped, work drained, viewport exited, resources released
+    terminal --> [*]: project Result
+```
+
+Timed settlement enters `quiescing` after its intended outcome is known.
+Quiescing stops producers, cancels and joins executor work, restores or retains
+the viewport unless a genuine screen replacement supersedes restoration, and
+releases observation resources. Only the resulting `ViewportExit` evidence
+admits terminal `Settlement.Result`: `.restored`, `.retained`, and
+`.superseded` preserve the intended outcome, while `.failed` replaces it with a
+viewport-exit failure.
 
 One pure `ScreenClassifier` combines typed snapshots with scoped
 `screenChanged`, `elementChanged`, and `announcement` notifications.
@@ -282,6 +302,12 @@ route. The explorer is also the fallback for unknown targets or missing reveal
 evidence. It dispatches exactly one viewport movement,
 waits for settle, parse, Store commit, and callback, and only
 then may request another movement.
+
+`TheSafecracker+Scroll.swift` is the sole production owner of direct
+`UIScrollView.setContentOffset` dispatch. For paged scroll views, movement is
+admitted to the page lattice or the terminal content edge. Restoration instead
+preserves the exact clamped authored origin, including an origin between page
+boundaries.
 
 Each scrollable container is searched as two independent directional rays from
 its saved visual origin. The caller chooses `ViewportSearchOrder.forwardFirst`
@@ -456,7 +482,7 @@ pipelines are explicit:
 | Result interpretation | `HeistReport.project(result:)` in `HeistResult+Report.swift` | JSON, compact, human, JUnit, doctor, and metric renderers |
 | Result recording decision | `HeistResult.Outcome` and `HeistResultRecordingMode` | `HeistResultRecording` filesystem boundary |
 | Offline validation algebra | `HeistValidation.Result<Value>` composed by `HeistValidation.Report` | Public JSON and text projections |
-| Settlement lifecycle | `Settlement.State` (`awaitingBaseline`, `armed`, `active`, `terminal`); `Settlement.Session` owns active evidence and `Settlement.Result.outcome` owns terminal classification | `Settlement.Reducer` produces transitions and effects; `Settlement.Executor` performs effects for actions and observation-only waits |
+| Settlement lifecycle | `Settlement.State` (`awaitingBaseline`, `armed`, `active`, `quiescing`, `terminal`); `Settlement.Session` owns active evidence and command-specific `Settlement.Result` cases own terminal truth | `Settlement.Reducer` produces transitions and effects; `Settlement.Executor` stops producers, drains work, admits `ViewportExit`, and releases resources before terminal result projection |
 | Semantic observation scheduling | `Observation.Stream` in `SemanticObservationStream.swift` | Capture scheduling, publication, and observation demand |
 | Semantic observation state | `Observation.StoreOwner` and `Observation.Store` | Actor-owned atomic commit of graph, Log, lineage, positions, and admitted-read state |
 | Semantic observation history | `Observation.Log` in `SemanticObservationHistory.swift` | Private collection indices, Moments, direct `events(since:)`, retention, and typed gaps |
@@ -811,10 +837,10 @@ A standalone wait cannot consume evidence from a prior action or heist.
 
 A standalone observation command owns its authored deadline from command
 admission. When predicate, readiness, and handoff evidence are complete, the
-reducer exits immediately—there is no extra stability sleep or final predicate
-revalidation. After a terminal result, the lifecycle first
-suppresses new callbacks, then quiesces and joins child work, and only then
-releases its outer notification and observation leases.
+reducer enters `quiescing` immediately—there is no extra stability sleep or
+final predicate revalidation. The lifecycle suppresses new callbacks, joins
+child work, admits the viewport exit, and releases its outer notification and
+observation leases before the reducer constructs the terminal result.
 
 `.exists(target)` and `.missing(target)` resolve any element, container, or
 descendant-scoped `AccessibilityTarget` against current state.

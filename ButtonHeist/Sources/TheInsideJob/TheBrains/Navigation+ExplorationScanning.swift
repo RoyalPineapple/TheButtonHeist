@@ -29,15 +29,30 @@ extension Navigation {
         case interrupted
     }
 
+    @MainActor
+    private final class ViewportOrigin {
+        let scrollViewID: ObjectIdentifier
+        let origin: CGPoint
+        weak var originalScrollView: UIScrollView?
+
+        init(scrollView: UIScrollView, origin: CGPoint) {
+            scrollViewID = ObjectIdentifier(scrollView)
+            self.origin = origin
+            originalScrollView = scrollView
+        }
+    }
+
+    @MainActor
     private struct ActiveContainerExploration {
         let semantic: ContainerExploration
-        let scrollViewID: ObjectIdentifier
+        let scrollView: UIScrollView
 
         var semanticContainer: InterfaceTree.Container { semantic.semanticContainer }
         var savedVisualOrigin: CGPoint { semantic.savedVisualOrigin }
         var hasHOverflow: Bool { semantic.hasHOverflow }
         var hasVOverflow: Bool { semantic.hasVOverflow }
         var path: TreePath { semantic.path }
+        var scrollViewID: ObjectIdentifier { ObjectIdentifier(scrollView) }
     }
 
     private struct PendingContainer {
@@ -45,26 +60,25 @@ extension Navigation {
         let overflow: CGFloat
     }
 
+    @MainActor
     private struct ViewportExplorationState {
         var latestEvent: Observation.SnapshotEvent?
         var didMoveViewport = false
+        var screenWasReplaced = false
         var exploredScrollViewIDs = Set<ObjectIdentifier>()
-        var originByScrollViewID: [ObjectIdentifier: CGPoint] = [:]
-        var originOrder: [ObjectIdentifier] = []
+        var origins: [ViewportOrigin] = []
 
-        mutating func resetLiveViewportMemory() {
+        mutating func resetSemanticViewportMemory() {
             exploredScrollViewIDs.removeAll()
-            originByScrollViewID.removeAll()
-            originOrder.removeAll()
         }
 
         mutating func recordOrigin(
-            _ origin: CGPoint,
-            scrollViewID: ObjectIdentifier
+            scrollView: UIScrollView,
+            origin: CGPoint
         ) {
-            guard originByScrollViewID[scrollViewID] == nil else { return }
-            originByScrollViewID[scrollViewID] = origin
-            originOrder.append(scrollViewID)
+            let scrollViewID = ObjectIdentifier(scrollView)
+            guard !origins.contains(where: { $0.scrollViewID == scrollViewID }) else { return }
+            origins.append(ViewportOrigin(scrollView: scrollView, origin: origin))
         }
     }
 
@@ -96,7 +110,9 @@ extension Navigation {
             let outcome: TraversalOutcome
 
             if let initial = await observe(onObservation: onObservation) {
-                if initial.decision == .goalSatisfied {
+                if initial.continuity.isReplacement {
+                    outcome = .exhausted
+                } else if initial.decision == .goalSatisfied {
                     exploration.progress.clearPendingContainers()
                     outcome = .goalSatisfied
                 } else {
@@ -108,16 +124,17 @@ extension Navigation {
                 outcome = .interrupted
             }
 
-            let didFinalize = await finalize(
+            let viewportExit = await finalize(
                 exitPosition: exitPosition,
                 notifyObservation: outcome != .goalSatisfied,
                 onObservation: onObservation
             )
-            guard didFinalize, outcome != .interrupted, let latestEvent = state.latestEvent else { return nil }
+            guard let latestEvent = state.latestEvent else { return nil }
             return exploration.finish(
                 startTime: startTime,
                 event: latestEvent,
-                didMoveViewport: state.didMoveViewport
+                didMoveViewport: state.didMoveViewport,
+                viewportExit: viewportExit
             )
         }
 
@@ -137,7 +154,7 @@ extension Navigation {
                     return .exhausted
                 }
 
-                containerBatch: for container in batch {
+                for container in batch {
                     guard !Task.isCancelled, exploration.hasTimeRemaining else { return .interrupted }
                     guard exploration.progress.scrollCount < exploration.progress.maxScrollsPerDiscovery else {
                         exploration.progress.markLimitHit(.discoveryScrollLimit)
@@ -160,7 +177,7 @@ extension Navigation {
                     case .exhausted:
                         markExplored(containerExploration)
                     case .screenReplaced:
-                        break containerBatch
+                        return .exhausted
                     case .limitHit(let reason):
                         exploration.progress.markOmitted(containerExploration.path, reason: reason)
                     case .interrupted:
@@ -220,7 +237,7 @@ extension Navigation {
                     hasHOverflow: hasHOverflow,
                     hasVOverflow: hasVOverflow
                 ),
-                scrollViewID: ObjectIdentifier(scrollView)
+                scrollView: scrollView
             )
         }
 
@@ -366,7 +383,8 @@ extension Navigation {
         ) async -> ObservedViewport {
             state.latestEvent = event
             if event.continuity.isReplacement {
-                state.resetLiveViewportMemory()
+                state.screenWasReplaced = true
+                state.resetSemanticViewportMemory()
             }
             exploration.recordCommittedObservation(
                 continuity: event.continuity,
@@ -382,30 +400,33 @@ extension Navigation {
             exitPosition: ViewportExitPosition,
             notifyObservation: Bool,
             onObservation: (Observation.SnapshotEvent) async -> ViewportExplorationDecision
-        ) async -> Bool {
-            guard exitPosition == .origin else { return true }
-            let restorationDeadline = exploration.hasTimeRemaining
-                ? exploration.deadline
-                : SemanticObservationDeadline(
-                    start: RuntimeElapsed.now,
-                    timeoutMs: SettleSession.viewportTransitionTimeoutMs
-                )
-            for scrollViewID in state.originOrder.reversed() {
-                guard let origin = state.originByScrollViewID[scrollViewID] else { continue }
+        ) async -> ViewportExit.Outcome {
+            if state.screenWasReplaced { return .superseded }
+            guard exitPosition == .origin else { return .retained }
+            guard !state.origins.isEmpty else { return .restored }
+
+            let restorationDeadline = SemanticObservationDeadline(
+                start: RuntimeElapsed.now,
+                timeoutMs: SettleSession.viewportTransitionTimeoutMs
+            )
+            for viewportOrigin in state.origins.reversed() {
                 switch await restoreOrigin(
-                    origin,
-                    scrollViewID: scrollViewID,
+                    viewportOrigin.origin,
+                    scrollViewID: viewportOrigin.scrollViewID,
+                    originalScrollView: viewportOrigin.originalScrollView,
                     deadline: restorationDeadline,
                     notifyObservation: notifyObservation,
                     onObservation: onObservation
                 ) {
-                case .observed, .unchanged:
+                case .observed(let observation):
+                    if observation.continuity.isReplacement { return .superseded }
+                case .unchanged:
                     continue
                 case .unavailable, .interrupted:
-                    return false
+                    return .failed(.originUnavailable)
                 }
             }
-            return true
+            return .restored
         }
 
         private func restoreOrigin(
@@ -415,6 +436,7 @@ extension Navigation {
             await restoreOrigin(
                 container.savedVisualOrigin,
                 scrollViewID: container.scrollViewID,
+                originalScrollView: container.scrollView,
                 onObservation: onObservation
             )
         }
@@ -422,16 +444,26 @@ extension Navigation {
         private func restoreOrigin(
             _ origin: CGPoint,
             scrollViewID: ObjectIdentifier,
+            originalScrollView: UIScrollView?,
             deadline: SemanticObservationDeadline? = nil,
             notifyObservation: Bool = true,
             onObservation: (Observation.SnapshotEvent) async -> ViewportExplorationDecision
         ) async -> OriginRestoreOutcome {
-            guard let target = currentProgrammaticScrollTarget(for: scrollViewID),
-                  case .uiScrollView = target else {
+            let intent: ViewportMovementIntent
+            if let target = currentProgrammaticScrollTarget(for: scrollViewID),
+               case .uiScrollView = target {
+                intent = .restoreVisualOrigin(origin, in: .semantic(target))
+            } else if let originalScrollView,
+                      ObjectIdentifier(originalScrollView) == scrollViewID,
+                      originalScrollView.window != nil,
+                      !originalScrollView.bhIsUnsafeForProgrammaticScrolling,
+                      !Navigation.isObscuredByPresentation(view: originalScrollView) {
+                intent = .restoreVisualOrigin(origin, in: .original(originalScrollView))
+            } else {
                 return .unavailable
             }
             let transition = await navigation.performViewportTransition(
-                .restoreVisualOrigin(origin, in: target),
+                intent,
                 deadline: deadline ?? exploration.deadline,
                 discoveryCommitPolicy: exploration.discoveryCommitPolicy
             )
@@ -503,8 +535,8 @@ extension Navigation {
 
         private func recordOrigin(of container: ActiveContainerExploration) {
             state.recordOrigin(
-                container.savedVisualOrigin,
-                scrollViewID: container.scrollViewID
+                scrollView: container.scrollView,
+                origin: container.savedVisualOrigin
             )
         }
 
@@ -585,7 +617,8 @@ extension Navigation {
         let exploration = InterfaceExplorationResult(
             event: event,
             progress: .init(),
-            didMoveViewport: true
+            didMoveViewport: true,
+            viewportExit: .retained
         )
         switch semanticTargetScanMatch(request.target) {
         case .visible(let current):

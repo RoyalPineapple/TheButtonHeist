@@ -17,6 +17,11 @@ extension TheSafecracker {
         let end: CGPoint
     }
 
+    private enum ContentOffsetPolicy {
+        case movement
+        case restoration
+    }
+
     func scrollByPage(
         _ scrollView: UIScrollView,
         direction: UIAccessibilityScrollDirection,
@@ -26,34 +31,38 @@ extension TheSafecracker {
 
         let overlap = CGFloat(ScrollContainerMetrics.pageOverlap)
         let size = scrollView.bounds.size
-        let offset = clampedContentOffset(in: scrollView)
-        let contentSize = scrollView.contentSize
-        let insets = scrollView.adjustedContentInset
+        guard let offset = admittedContentOffset(
+            scrollView.contentOffset,
+            in: scrollView,
+            policy: .restoration
+        ) else { return .unavailable }
 
         var newOffset = offset
 
         switch direction {
         case .up:
-            newOffset.y = max(offset.y - (size.height - overlap), -insets.top)
+            newOffset.y = offset.y - (size.height - overlap)
         case .down:
-            newOffset.y = min(offset.y + size.height - overlap,
-                             contentSize.height + insets.bottom - size.height)
+            newOffset.y = offset.y + size.height - overlap
         case .left:
-            newOffset.x = max(offset.x - (size.width - overlap), -insets.left)
+            newOffset.x = offset.x - (size.width - overlap)
         case .right:
-            newOffset.x = min(offset.x + size.width - overlap,
-                             contentSize.width + insets.right - size.width)
+            newOffset.x = offset.x + size.width - overlap
         case .next:
-            newOffset.y = min(offset.y + size.height - overlap,
-                             contentSize.height + insets.bottom - size.height)
+            newOffset.y = offset.y + size.height - overlap
         case .previous:
-            newOffset.y = max(offset.y - (size.height - overlap), -insets.top)
+            newOffset.y = offset.y - (size.height - overlap)
         @unknown default:
             return .unavailable
         }
 
-        if contentOffsetsEqual(newOffset, offset) { return .alreadyInPosition }
-        scrollView.setContentOffset(newOffset, animated: animated)
+        guard let admittedOffset = admittedContentOffset(
+            newOffset,
+            in: scrollView,
+            policy: .movement
+        ) else { return .unavailable }
+        if contentOffsetsEqual(admittedOffset, offset) { return .alreadyInPosition }
+        dispatchContentOffset(admittedOffset, in: scrollView, animated: animated)
         return .moved
     }
 
@@ -93,15 +102,15 @@ extension TheSafecracker {
             newOffset.y += pointInContent.y - targetRect.midY
         }
 
-        let insets = scrollView.adjustedContentInset
-        let maxX = scrollView.contentSize.width + insets.right - scrollView.frame.width
-        let maxY = scrollView.contentSize.height + insets.bottom - scrollView.frame.height
-        newOffset.x = max(-insets.left, min(newOffset.x, maxX))
-        newOffset.y = max(-insets.top, min(newOffset.y, maxY))
+        guard let admittedOffset = admittedContentOffset(
+            newOffset,
+            in: scrollView,
+            policy: .movement
+        ) else { return .unavailable }
 
         let offsetDelta = CGPoint(
-            x: newOffset.x - currentOffset.x,
-            y: newOffset.y - currentOffset.y
+            x: admittedOffset.x - currentOffset.x,
+            y: admittedOffset.y - currentOffset.y
         )
         let futurePreferredRect = preferredVisibleRect.offsetBy(dx: offsetDelta.x, dy: offsetDelta.y)
         let futureMinimumRect = minimumVisibleRect.offsetBy(dx: offsetDelta.x, dy: offsetDelta.y)
@@ -109,9 +118,11 @@ extension TheSafecracker {
             || futureMinimumRect.contains(pointInContent)
         else { return .unavailable }
 
-        if newOffset.x == currentOffset.x && newOffset.y == currentOffset.y { return .alreadyInPosition }
+        if admittedOffset.x == currentOffset.x && admittedOffset.y == currentOffset.y {
+            return .alreadyInPosition
+        }
 
-        scrollView.setContentOffset(newOffset, animated: animated)
+        dispatchContentOffset(admittedOffset, in: scrollView, animated: animated)
         return .moved
     }
 
@@ -125,19 +136,24 @@ extension TheSafecracker {
         let insets = scrollView.adjustedContentInset
         let visibleWidth = max(1, scrollView.bounds.width - insets.left - insets.right)
         let visibleHeight = max(1, scrollView.bounds.height - insets.top - insets.bottom)
-        let minX = -insets.left
-        let minY = -insets.top
-        let maxX = max(minX, scrollView.contentSize.width - scrollView.bounds.width + insets.right)
-        let maxY = max(minY, scrollView.contentSize.height - scrollView.bounds.height + insets.bottom)
-        let targetOffset = CGPoint(
-            x: min(max(point.x - visibleWidth / 2 - insets.left, minX), maxX),
-            y: min(max(point.y - visibleHeight / 2 - insets.top, minY), maxY)
+        let proposedOffset = CGPoint(
+            x: point.x - visibleWidth / 2 - insets.left,
+            y: point.y - visibleHeight / 2 - insets.top
         )
-        guard !contentOffsetsEqual(targetOffset, clampedContentOffset(in: scrollView)) else {
+        guard let targetOffset = admittedContentOffset(
+            proposedOffset,
+            in: scrollView,
+            policy: .movement
+        ), let currentOffset = admittedContentOffset(
+            scrollView.contentOffset,
+            in: scrollView,
+            policy: .restoration
+        ) else { return .unavailable }
+        guard !contentOffsetsEqual(targetOffset, currentOffset) else {
             return .alreadyInPosition
         }
 
-        scrollView.setContentOffset(targetOffset, animated: false)
+        dispatchContentOffset(targetOffset, in: scrollView, animated: false)
         return .moved
     }
 
@@ -168,7 +184,11 @@ extension TheSafecracker {
         guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return .unavailable }
 
         let insets = scrollView.adjustedContentInset
-        let currentOffset = clampedContentOffset(in: scrollView)
+        guard let currentOffset = admittedContentOffset(
+            scrollView.contentOffset,
+            in: scrollView,
+            policy: .restoration
+        ) else { return .unavailable }
         var newOffset = currentOffset
 
         switch edge {
@@ -182,10 +202,15 @@ extension TheSafecracker {
             newOffset.x = scrollView.contentSize.width + insets.right - scrollView.frame.width
         }
 
-        if contentOffsetsEqual(newOffset, currentOffset) {
+        guard let admittedOffset = admittedContentOffset(
+            newOffset,
+            in: scrollView,
+            policy: .movement
+        ) else { return .unavailable }
+        if contentOffsetsEqual(admittedOffset, currentOffset) {
             return .alreadyInPosition
         }
-        scrollView.setContentOffset(newOffset, animated: animated)
+        dispatchContentOffset(admittedOffset, in: scrollView, animated: animated)
         return .moved
     }
 
@@ -204,27 +229,83 @@ extension TheSafecracker {
             x: visualOrigin.x - insets.left,
             y: visualOrigin.y - insets.top
         )
-        let maxX = scrollView.contentSize.width + insets.right - scrollView.frame.width
-        let maxY = scrollView.contentSize.height + insets.bottom - scrollView.frame.height
-        let clampedOffset = CGPoint(
-            x: max(-insets.left, min(restoredOffset.x, maxX)),
-            y: max(-insets.top, min(restoredOffset.y, maxY))
-        )
-        scrollView.setContentOffset(clampedOffset, animated: false)
+        guard let admittedOffset = admittedContentOffset(
+            restoredOffset,
+            in: scrollView,
+            policy: .restoration
+        ) else { return .unavailable }
+        dispatchContentOffset(admittedOffset, in: scrollView, animated: false)
         return .moved
     }
 
-    private func clampedContentOffset(in scrollView: UIScrollView) -> CGPoint {
+    private func admittedContentOffset(
+        _ proposedOffset: CGPoint,
+        in scrollView: UIScrollView,
+        policy: ContentOffsetPolicy
+    ) -> CGPoint? {
         let insets = scrollView.adjustedContentInset
         let minimum = CGPoint(x: -insets.left, y: -insets.top)
         let maximum = CGPoint(
             x: max(minimum.x, scrollView.contentSize.width + insets.right - scrollView.bounds.width),
             y: max(minimum.y, scrollView.contentSize.height + insets.bottom - scrollView.bounds.height)
         )
-        return CGPoint(
-            x: min(max(scrollView.contentOffset.x, minimum.x), maximum.x),
-            y: min(max(scrollView.contentOffset.y, minimum.y), maximum.y)
+        guard proposedOffset.x.isFinite,
+              proposedOffset.y.isFinite,
+              minimum.x.isFinite,
+              minimum.y.isFinite,
+              maximum.x.isFinite,
+              maximum.y.isFinite
+        else { return nil }
+
+        let clampedOffset = CGPoint(
+            x: min(max(proposedOffset.x, minimum.x), maximum.x),
+            y: min(max(proposedOffset.y, minimum.y), maximum.y)
         )
+        guard case .movement = policy, scrollView.isPagingEnabled else {
+            return clampedOffset
+        }
+
+        guard let x = admittedPagingOffset(
+            clampedOffset.x,
+            minimum: minimum.x,
+            maximum: maximum.x,
+            pageExtent: scrollView.bounds.width
+        ), let y = admittedPagingOffset(
+            clampedOffset.y,
+            minimum: minimum.y,
+            maximum: maximum.y,
+            pageExtent: scrollView.bounds.height
+        ) else { return nil }
+        return CGPoint(x: x, y: y)
+    }
+
+    private func admittedPagingOffset(
+        _ proposedOffset: CGFloat,
+        minimum: CGFloat,
+        maximum: CGFloat,
+        pageExtent: CGFloat
+    ) -> CGFloat? {
+        guard maximum > minimum else { return minimum }
+        guard pageExtent.isFinite, pageExtent > 0 else { return nil }
+
+        let maximumPageIndex = floor((maximum - minimum) / pageExtent)
+        let proposedPageIndex = ((proposedOffset - minimum) / pageExtent).rounded()
+        guard maximumPageIndex.isFinite, proposedPageIndex.isFinite else { return nil }
+
+        let pageIndex = min(max(proposedPageIndex, 0), maximumPageIndex)
+        let pageOffset = minimum + pageIndex * pageExtent
+        guard pageOffset.isFinite else { return nil }
+        return abs(maximum - proposedOffset) < abs(pageOffset - proposedOffset)
+            ? maximum
+            : pageOffset
+    }
+
+    private func dispatchContentOffset(
+        _ contentOffset: CGPoint,
+        in scrollView: UIScrollView,
+        animated: Bool
+    ) {
+        scrollView.setContentOffset(contentOffset, animated: animated)
     }
 
     private func contentOffsetsEqual(_ lhs: CGPoint, _ rhs: CGPoint) -> Bool {

@@ -118,7 +118,7 @@ extension TheBrains {
             )
         }
         let currentState = await runtime.settle(.currentState(scope: .discovery))
-        guard let event = currentState.evidence.handoff.event else {
+        guard let event = currentState.currentObservation else {
             return forEachUnavailableResult(
                 index: index,
                 path: path,
@@ -157,7 +157,7 @@ extension TheBrains {
             nextItem: { iterationIndex in
                 if iterationIndex > 0 {
                     let nextState = await runtime.settle(.currentState(scope: .discovery))
-                    guard let nextEvent = nextState.evidence.handoff.event else {
+                    guard let nextEvent = nextState.currentObservation else {
                         return .postObservationUnavailable(iterationIndex: iterationIndex - 1)
                     }
                     let nextSignature = ForEachMatchSignature(

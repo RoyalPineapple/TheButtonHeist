@@ -161,7 +161,7 @@ extension Observation.Stream {
         )
         var delivery: Observation.StoreOwner.CommittedDelivery
         do {
-            delivery = try await storeOwner.commit(admission)
+            delivery = try await storeOwner.commitAdmission(admission)
         } catch {
             preconditionFailure("Committed interface observation failed validation: \(error)")
         }

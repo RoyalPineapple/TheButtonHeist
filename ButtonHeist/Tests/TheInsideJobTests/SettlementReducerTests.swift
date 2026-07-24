@@ -92,13 +92,21 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
 
             dispatchCount += decision.effects.filter(\.isDispatch).count
             XCTAssertEqual(dispatchCount, row.dispatchCount)
+            decision = completeQuiescence(decision)
             guard case .terminal(let result) = decision.state else {
                 XCTFail("Expected readiness and an admitted handoff to complete \(row)")
                 continue
             }
-            XCTAssertEqual(result.outcome, .settled)
-            XCTAssertEqual(result.evidence.boundary, .established(.init(moment: baseline.moment)))
-            XCTAssertEqual(result.evidence.handoff.event?.moment, handoff.moment)
+            switch result {
+            case .observation(.settled(let settled)):
+                XCTAssertEqual(settled.boundary.moment, baseline.moment)
+                XCTAssertEqual(settled.handoff.event.moment, handoff.moment)
+            case .action(.settled(let settled)):
+                XCTAssertEqual(settled.boundary.moment, baseline.moment)
+                XCTAssertEqual(settled.handoff.event.moment, handoff.moment)
+            case .currentState, .observation(.failed), .action(.failed):
+                XCTFail("Expected settled command result for \(row)")
+            }
         }
     }
 
@@ -112,17 +120,10 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected one current-state capture to complete")
         }
-        XCTAssertEqual(result.outcome, .settled)
-        XCTAssertEqual(result.evidence.boundary, .established(.init(moment: current.moment)))
-        XCTAssertEqual(result.evidence.handoff.event, current)
-        XCTAssertEqual(
-            result.evidence.readiness,
-            .established(.init(
-                generation: .initial,
-                path: .currentStateCapture,
-                observationBoundary: .including(current.moment)
-            ))
-        )
+        guard case .currentState(.captured(let capture)) = result else {
+            return XCTFail("Expected captured current state")
+        }
+        XCTAssertEqual(capture.event, current)
         XCTAssertFalse(decision.effects.contains(where: \.armsChannels))
     }
 
@@ -182,10 +183,88 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected unavailable supplied evidence to fail before arming")
         }
-        XCTAssertEqual(result.outcome, .baselineUnavailable)
-        XCTAssertEqual(result.evidence.boundary, .unavailable(.unavailable))
+        guard case .observation(.failed(let failed)) = result else {
+            return XCTFail("Expected unavailable observation baseline")
+        }
+        XCTAssertEqual(failed.reason, .baselineUnavailable)
+        XCTAssertEqual(failed.attempt.boundary, .unavailable(.unavailable))
         XCTAssertFalse(decision.effects.contains(where: \.capturesBaseline))
         XCTAssertFalse(decision.effects.contains(where: \.armsChannels))
+    }
+
+    func testArmedAndActiveTerminalCausesEnterQuiescenceWithoutResult() async {
+        let baseline = await commit(label: "Baseline")
+        var armed = Settlement.Reducer.begin(.observation(
+            predicate: transitionPredicate(),
+            deadline: deadline,
+            baseline: .capture
+        ))
+        armed = reduce(armed, .baselineAdmitted(baseline))
+        let active = reduce(armed, .channelsArmed)
+
+        for (name, decision) in [
+            ("armed", reduce(armed, .cancelled)),
+            ("active", reduce(active, .cancelled)),
+        ] {
+            assertQuiescing(decision, name)
+        }
+    }
+
+    func testViewportExitFinalizesOrReplacesTheIntendedOutcome() async {
+        let baseline = await commit(label: "Baseline")
+        let handoff = await commit(label: "Handoff")
+        var settled = armedPredicateFreeActionDecision(baseline: baseline)
+        settled = reduce(
+            settled,
+            .observationAdmitted(await admission(handoff, after: baseline))
+        )
+        settled = reduce(
+            settled,
+            .readinessEstablished(.init(
+                generation: .initial,
+                path: .semanticStability,
+                observationBoundary: .including(handoff.moment)
+            ))
+        )
+
+        for viewportExit in [
+            Navigation.ViewportExit.Outcome.restored,
+            .retained,
+            .superseded,
+        ] {
+            let decision = reduce(settled, .quiesced(viewportExit))
+            guard case .terminal(.action(.settled)) = decision.state else {
+                return XCTFail("Expected \(viewportExit) to preserve settled action")
+            }
+            XCTAssertTrue(decision.effects.isEmpty)
+        }
+
+        var timedOut = armedObservationDecision(
+            baseline: baseline,
+            predicate: transitionPredicate()
+        )
+        timedOut = reduce(timedOut, .deadlineReached(deadline))
+        for (name, intended) in [
+            ("settled", settled),
+            ("timed out", timedOut),
+        ] {
+            let decision = reduce(
+                intended,
+                .quiesced(.failed(.originUnavailable))
+            )
+            guard case .terminal(let result) = decision.state else {
+                return XCTFail("Expected failed viewport exit to terminalize \(name)")
+            }
+            switch result {
+            case .action(.failed(let failed)):
+                XCTAssertEqual(failed.reason, .viewportExitFailed(.originUnavailable), name)
+            case .observation(.failed(let failed)):
+                XCTAssertEqual(failed.reason, .viewportExitFailed(.originUnavailable), name)
+            case .currentState, .action(.settled), .observation(.settled):
+                XCTFail("Expected failed viewport exit to replace \(name)")
+            }
+            XCTAssertTrue(decision.effects.isEmpty, name)
+        }
     }
 
     func testPositiveTransitionEvaluationEventBelongsToRetainedHistory() async throws {
@@ -416,14 +495,17 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
 
         let final = await commit(label: "Final")
         decision = reduce(decision, .observationAdmitted(await admission(final, after: baseline)))
+        decision = completeQuiescence(decision)
         guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected the latched transition to survive readiness invalidation")
         }
-        XCTAssertEqual(result.outcome, .settled)
-        XCTAssertEqual(result.evidence.boundary, .established(.init(moment: baseline.moment)))
-        XCTAssertEqual(result.evidence.predicate.satisfiedTarget, evaluation.target)
-        XCTAssertEqual(result.evidence.handoff.event?.moment, final.moment)
-        XCTAssertEqual(result.evidence.observationHistory?.events, [
+        guard case .observation(.settled(let settled)) = result else {
+            return XCTFail("Expected settled observation")
+        }
+        XCTAssertEqual(settled.boundary.moment, baseline.moment)
+        XCTAssertEqual(settled.evaluation.target, evaluation.target)
+        XCTAssertEqual(settled.handoff.event.moment, final.moment)
+        XCTAssertEqual(settled.history?.events, [
             .snapshot(transient),
             .snapshot(final),
         ])
@@ -477,13 +559,17 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             ))
         )
 
+        decision = completeQuiescence(decision)
         guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected the current-state mismatch at handoff to time out")
         }
-        XCTAssertEqual(result.outcome, .timedOut(.observation))
-        XCTAssertTrue(result.evidence.readiness.isEstablished)
-        XCTAssertEqual(result.evidence.handoff.event?.moment, handoff.moment)
-        XCTAssertFalse(result.evidence.predicate.isSatisfied)
+        guard case .observation(.failed(let failed)) = result else {
+            return XCTFail("Expected failed observation")
+        }
+        XCTAssertEqual(failed.reason, .timedOut(.observation))
+        XCTAssertTrue(failed.attempt.readiness.isEstablished)
+        XCTAssertEqual(failed.attempt.handoff.event?.moment, handoff.moment)
+        XCTAssertFalse(failed.attempt.evaluation.isSatisfied)
     }
 
     func testActionCurrentStateMatchPromotesReturnedHandoff() async throws {
@@ -514,13 +600,16 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             ))
         )
 
+        decision = completeQuiescence(decision)
         guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected the matching current-state observation to settle the action")
         }
-        XCTAssertEqual(result.outcome, .settled)
-        XCTAssertEqual(result.evidence.handoff.event?.moment, matching.moment)
+        guard case .action(.settled(let settled)) = result else {
+            return XCTFail("Expected settled action")
+        }
+        XCTAssertEqual(settled.handoff.event.moment, matching.moment)
         XCTAssertEqual(
-            result.evidence.predicate.satisfiedTarget,
+            settled.evaluation?.target,
             .observation(matching.moment)
         )
     }
@@ -538,9 +627,11 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
                 observationBoundary: .including(ready.moment)
             ))
         )
-        let result = decision.state.result
-        XCTAssertEqual(result?.outcome, .settled)
-        let handoffMoment = result?.evidence.handoff.event?.moment
+        decision = completeQuiescence(decision)
+        guard case .terminal(.action(.settled(let result))) = decision.state else {
+            return XCTFail("Expected settled action")
+        }
+        let handoffMoment = result.handoff.event.moment
 
         decision = reduce(
             decision,
@@ -550,8 +641,10 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             ))
         )
 
-        XCTAssertEqual(decision.state.result?.outcome, .settled)
-        XCTAssertEqual(decision.state.result?.evidence.handoff.event?.moment, handoffMoment)
+        guard case .terminal(.action(.settled(let unchanged))) = decision.state else {
+            return XCTFail("Expected terminal result to remain settled")
+        }
+        XCTAssertEqual(unchanged.handoff.event.moment, handoffMoment)
         XCTAssertTrue(decision.effects.isEmpty)
     }
 
@@ -715,12 +808,15 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             ))
         )
 
+        decision = completeQuiescence(decision)
         guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected only the active readiness generation to admit a handoff")
         }
-        XCTAssertEqual(result.outcome, .settled)
-        XCTAssertEqual(result.evidence.handoff.event?.moment, current.moment)
-        XCTAssertEqual(result.evidence.handoff.generation, .initial.advanced())
+        guard case .action(.settled(let settled)) = result else {
+            return XCTFail("Expected settled action")
+        }
+        XCTAssertEqual(settled.handoff.event.moment, current.moment)
+        XCTAssertEqual(settled.handoff.generation, .initial.advanced())
     }
 
     func testDispatchFailureCannotEvaluatePredicateAndPreservesReadyHandoff() async throws {
@@ -748,12 +844,16 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             ))
         )
 
+        decision = completeQuiescence(decision)
         guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected failed dispatch to finish with diagnostic handoff")
         }
-        XCTAssertEqual(result.outcome, .dispatchFailed)
-        XCTAssertTrue(result.evidence.predicate.isNotEvaluated)
-        XCTAssertEqual(result.evidence.handoff.event?.moment, handoff.moment)
+        guard case .action(.failed(let failed)) = result else {
+            return XCTFail("Expected failed action")
+        }
+        XCTAssertEqual(failed.reason, .dispatchFailed)
+        XCTAssertTrue(failed.attempt.evaluation.isNotEvaluated)
+        XCTAssertEqual(failed.attempt.handoff.event?.moment, handoff.moment)
     }
 
     func testCancellationPreservesIndependentEvidenceAndStopsEffects() async throws {
@@ -774,12 +874,16 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         )
         decision = reduce(decision, .cancelled)
 
+        decision = completeQuiescence(decision)
         guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected cancellation to terminate settlement")
         }
-        XCTAssertEqual(result.outcome, .cancelled)
-        XCTAssertTrue(result.evidence.predicate.isSatisfied)
-        XCTAssertFalse(result.evidence.readiness.isEstablished)
+        guard case .observation(.failed(let failed)) = result else {
+            return XCTFail("Expected cancelled observation")
+        }
+        XCTAssertEqual(failed.reason, .cancelled)
+        XCTAssertTrue(failed.attempt.evaluation.isSatisfied)
+        XCTAssertFalse(failed.attempt.readiness.isEstablished)
 
         decision = reduce(
             decision,
@@ -864,12 +968,16 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             ))
         )
 
+        decision = completeQuiescence(decision)
         guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected incomplete history to prevent settlement")
         }
-        XCTAssertEqual(result.outcome, .timedOut(.observation))
-        XCTAssertEqual(result.evidence.predicate.unavailability, .historyExpired(gap))
-        XCTAssertEqual(result.evidence.handoff.event?.moment, handoff.moment)
+        guard case .observation(.failed(let failed)) = result else {
+            return XCTFail("Expected failed observation")
+        }
+        XCTAssertEqual(failed.reason, .timedOut(.observation))
+        XCTAssertEqual(failed.attempt.evaluation.unavailability, .historyExpired(gap))
+        XCTAssertEqual(failed.attempt.handoff.event?.moment, handoff.moment)
     }
 
     func testHandoffCaptureFailureRemainsDistinctFromReadiness() async {
@@ -899,13 +1007,17 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             ))
         )
 
+        decision = completeQuiescence(decision)
         guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected failed handoff capture to time out")
         }
-        XCTAssertEqual(result.outcome, .timedOut(.actionReadiness))
-        XCTAssertTrue(result.evidence.readiness.isEstablished)
+        guard case .action(.failed(let failed)) = result else {
+            return XCTFail("Expected failed action")
+        }
+        XCTAssertEqual(failed.reason, .timedOut(.actionReadiness))
+        XCTAssertTrue(failed.attempt.readiness.isEstablished)
         XCTAssertEqual(
-            result.evidence.handoff,
+            failed.attempt.handoff,
             .captureFailed(.initial, .admissionRejected)
         )
     }
@@ -1260,9 +1372,9 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             vault: vault,
             tripwire: TheTripwire(),
             dispatch: { _ in .success(payload: .dismiss) },
-            observationEffects: { _ in }
+            observationEffects: { _ in .restored }
         )
-        return await boundary.evaluate(.init(
+        return boundary.evaluate(.init(
             predicate: predicate,
             target: .observation(event.moment),
             evidence: evidence
@@ -1283,6 +1395,28 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
                 instant: instant
             )
         )
+    }
+
+    private func completeQuiescence(
+        _ decision: Settlement.Decision,
+        viewportExit: Navigation.ViewportExit.Outcome = .restored
+    ) -> Settlement.Decision {
+        assertQuiescing(decision)
+        return reduce(decision, .quiesced(viewportExit))
+    }
+
+    private func assertQuiescing(
+        _ decision: Settlement.Decision,
+        _ message: String = ""
+    ) {
+        XCTAssertNil(decision.state.result, message)
+        guard case .quiescing = decision.state else {
+            return XCTFail("Expected Settlement to quiesce before terminal state \(message)")
+        }
+        XCTAssertEqual(decision.effects.count, 1, message)
+        guard case .quiesce = decision.effects.first else {
+            return XCTFail("Expected exactly one quiescence effect \(message)")
+        }
     }
 }
 
@@ -1346,7 +1480,8 @@ private extension Array where Element == Settlement.Effect {
                  .arm,
                  .armReadiness,
                  .dispatchAction,
-                 .evaluatePredicate:
+                 .evaluatePredicate,
+                 .quiesce:
                 nil
             }
         }.first

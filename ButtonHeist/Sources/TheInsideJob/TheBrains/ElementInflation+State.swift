@@ -90,7 +90,7 @@ extension ElementInflation {
                 guard currentOrigin != movement.visualOrigin else { continue }
                 _ = await moveViewport(.restoreVisualOrigin(
                     movement.visualOrigin,
-                    in: movement.target
+                    in: .semantic(movement.target)
                 ))
             }
         }

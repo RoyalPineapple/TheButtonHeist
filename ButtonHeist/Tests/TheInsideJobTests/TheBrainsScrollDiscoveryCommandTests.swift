@@ -250,6 +250,7 @@ extension TheBrainsScrollTests {
         }
 
         XCTAssertGreaterThanOrEqual(exploration.progress.scrollCount, 2)
+        XCTAssertEqual(exploration.viewportExit, .restored)
         XCTAssertNotNil(brains.vault.interfaceTree.orderedElements.first {
             $0.element.label == "Beyond Blank Page"
         })
@@ -311,6 +312,7 @@ extension TheBrainsScrollTests {
         XCTAssertNotNil(exploration.event.snapshot.observation.tree.orderedElements.first {
             $0.element.label == "Wait Discovery Target"
         })
+        XCTAssertEqual(exploration.viewportExit, .restored)
         XCTAssertEqual(
             Navigation.visualOrigin(in: scrollView).y,
             initialVisualOrigin.y,
@@ -319,6 +321,146 @@ extension TheBrainsScrollTests {
         XCTAssertFalse(exploration.event.snapshot.observation.liveCapture.hierarchy.sortedElements.contains {
             $0.label == "Wait Discovery Target"
         })
+    }
+
+    func testPagedHorizontalDiscoveryRestoresStartingPage() async throws {
+        let fixture = try await explorationViewport(
+            frame: CGRect(x: 0, y: 0, width: 390, height: 300),
+            contentSize: CGSize(width: 1_170, height: 300),
+            contentOffset: CGPoint(x: 390, y: 0),
+            isPagingEnabled: true,
+            label: "Page 1"
+        )
+        defer { fixture.close() }
+        let initialOrigin = Navigation.visualOrigin(in: fixture.scrollView)
+        fixture.scrollView.onSetContentOffset = { [unowned self] scrollView in
+            let requestedX = scrollView.requestedContentOffsets.last?.x ?? scrollView.contentOffset.x
+            self.visibleObservationSource.observation = self.explorationObservation(
+                label: "Page \(Int((requestedX / 390).rounded()))",
+                scrollView: scrollView
+            )
+        }
+
+        guard let exploration = await exploreViewport(maxScrolls: 8) else {
+            return XCTFail("Expected paged discovery to complete")
+        }
+
+        XCTAssertEqual(exploration.viewportExit, .restored)
+        XCTAssertTrue(exploration.didMoveViewport)
+        XCTAssertEqual(Navigation.visualOrigin(in: fixture.scrollView).x, initialOrigin.x, accuracy: 0.01)
+    }
+
+    func testStopRequestObservedDuringScanningRestoresOrigin() async throws {
+        let fixture = try await explorationViewport()
+        defer { fixture.close() }
+        publishVerticalOffsetObservations(from: fixture.scrollView)
+        var stopRequested = false
+
+        guard let exploration = await exploreViewport(onObservation: { _ in
+            stopRequested = stopRequested || fixture.scrollView.contentOffset.y > 0
+            return stopRequested ? .goalSatisfied : .continue
+        }) else {
+            return XCTFail("Expected stopped discovery to report its viewport exit")
+        }
+
+        XCTAssertTrue(stopRequested)
+        XCTAssertEqual(exploration.viewportExit, .restored)
+        XCTAssertEqual(Navigation.visualOrigin(in: fixture.scrollView).y, 0, accuracy: 0.01)
+    }
+
+    func testExpiredBusinessDeadlineStillPermitsBoundedRestoration() async throws {
+        let fixture = try await explorationViewport()
+        defer { fixture.close() }
+        publishVerticalOffsetObservations(from: fixture.scrollView)
+        fixture.scrollView.setContentOffset(CGPoint(x: 0, y: 300), animated: false)
+        await installSyntheticObservation(explorationObservation(
+            label: "Scrolled",
+            scrollView: fixture.scrollView
+        ))
+        let businessDeadline = SemanticObservationDeadline(
+            start: RuntimeElapsed.now,
+            timeoutMs: 0
+        )
+
+        XCTAssertFalse(businessDeadline.hasTimeRemaining(at: RuntimeElapsed.now))
+        let cleanup = await brains.navigation.performViewportTransition(
+            .restoreVisualOrigin(.zero, in: .original(fixture.scrollView)),
+            deadline: SemanticObservationDeadline(
+                start: RuntimeElapsed.now,
+                timeoutMs: SettleSession.viewportTransitionTimeoutMs
+            ),
+            discoveryCommitPolicy: .replaceInterface
+        )
+
+        XCTAssertEqual(cleanup.outcome, .moved)
+        XCTAssertEqual(Navigation.visualOrigin(in: fixture.scrollView).y, 0, accuracy: 0.01)
+    }
+
+    func testCurrentExitRetainsReachedViewport() async throws {
+        let fixture = try await explorationViewport()
+        defer { fixture.close() }
+        publishVerticalOffsetObservations(from: fixture.scrollView, movedLabel: "Reached")
+
+        guard let exploration = await exploreViewport(exitPosition: .current, onObservation: { _ in
+            fixture.scrollView.contentOffset.y > 0 ? .goalSatisfied : .continue
+        }) else {
+            return XCTFail("Expected retained discovery to complete")
+        }
+
+        XCTAssertEqual(exploration.viewportExit, .retained)
+        XCTAssertGreaterThan(Navigation.visualOrigin(in: fixture.scrollView).y, 0)
+    }
+
+    func testScreenReplacementSupersedesOriginWithoutMovingReplacementViewport() async throws {
+        let fixture = try await explorationViewport(label: "Original")
+        defer { fixture.close() }
+        let replacement = RecordingScrollView(frame: fixture.scrollView.frame)
+        replacement.contentSize = fixture.scrollView.contentSize
+        var replaced = false
+        fixture.scrollView.onSetContentOffset = { [unowned self] _ in
+            guard !replaced else { return }
+            replaced = true
+            fixture.scrollView.removeFromSuperview()
+            fixture.rootView.addSubview(replacement)
+            self.visibleObservationSource.observation = self.explorationObservation(
+                label: "Replacement Back",
+                traits: [.button, .backButton],
+                scrollView: replacement,
+                heistId: "replacement_back"
+            )
+        }
+
+        guard let exploration = await exploreViewport() else {
+            return XCTFail("Expected replacement discovery to report supersession")
+        }
+
+        XCTAssertTrue(replaced)
+        XCTAssertEqual(exploration.viewportExit, .superseded)
+        XCTAssertTrue(replacement.requestedContentOffsets.isEmpty)
+    }
+
+    func testSemanticOmissionRestoresThroughOriginalViewportEvidence() async throws {
+        let fixture = try await explorationViewport()
+        defer { fixture.close() }
+        fixture.scrollView.onSetContentOffset = { [unowned self] scrollView in
+            let requestedY = scrollView.requestedContentOffsets.last?.y ?? scrollView.contentOffset.y
+            self.visibleObservationSource.observation = .makeForTests(elements: [
+                (
+                    self.makeElement(label: requestedY > 0 ? "Viewport Omitted" : "Origin Restored"),
+                    HeistId(rawValue: "stable_marker")
+                ),
+            ])
+        }
+
+        guard let exploration = await exploreViewport(onObservation: { _ in
+            fixture.scrollView.contentOffset.y > 0 ? .goalSatisfied : .continue
+        }) else {
+            return XCTFail("Expected weak viewport evidence to restore the omitted semantic target")
+        }
+
+        XCTAssertEqual(exploration.viewportExit, .restored)
+        XCTAssertGreaterThanOrEqual(fixture.scrollView.requestedContentOffsets.count, 2)
+        XCTAssertEqual(Navigation.visualOrigin(in: fixture.scrollView).y, 0, accuracy: 0.01)
     }
 
     func testScrollToVisibleDiscoversTargetAboveCurrentViewport() async throws {
@@ -606,6 +748,79 @@ extension TheBrainsScrollTests {
             "Expected offscreen guidance, got \(String(describing: result.message))"
         )
         XCTAssertTrue(result.message?.contains("scroll_to_visible") == true)
+    }
+
+    private struct ExplorationViewportFixture {
+        let rootView: UIView
+        let scrollView: RecordingScrollView
+        let window: UIWindow
+
+        @MainActor
+        func close() {
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
+        }
+    }
+
+    private func explorationViewport(
+        frame: CGRect = CGRect(x: 0, y: 0, width: 320, height: 300),
+        contentSize: CGSize = CGSize(width: 320, height: 900),
+        contentOffset: CGPoint = .zero,
+        isPagingEnabled: Bool = false,
+        label: String = "Origin"
+    ) async throws -> ExplorationViewportFixture {
+        let rootView = UIView()
+        rootView.backgroundColor = .white
+        let scrollView = RecordingScrollView(frame: frame)
+        scrollView.contentSize = contentSize
+        scrollView.contentOffset = contentOffset
+        scrollView.isPagingEnabled = isPagingEnabled
+        rootView.addSubview(scrollView)
+        let window = try installModalWindow(rootView: rootView)
+        await brains.tripwire.yieldFrames(3)
+        await installSyntheticObservation(explorationObservation(label: label, scrollView: scrollView))
+        return ExplorationViewportFixture(rootView: rootView, scrollView: scrollView, window: window)
+    }
+
+    private func publishVerticalOffsetObservations(
+        from scrollView: RecordingScrollView,
+        movedLabel: String = "Scrolled"
+    ) {
+        scrollView.onSetContentOffset = { [unowned self] scrollView in
+            let requestedY = scrollView.requestedContentOffsets.last?.y ?? scrollView.contentOffset.y
+            self.visibleObservationSource.observation = self.explorationObservation(
+                label: requestedY > 0 ? movedLabel : "Origin",
+                scrollView: scrollView
+            )
+        }
+    }
+
+    private func exploreViewport(
+        exitPosition: Navigation.ViewportExitPosition = .origin,
+        maxScrolls: Int = 3,
+        onObservation: ((Observation.SnapshotEvent) async -> Navigation.ViewportExplorationDecision)? = nil
+    ) async -> Navigation.InterfaceExplorationResult? {
+        await brains.navigation.exploreScreen(
+            baseline: .currentViewport(brains.vault.latestObservation),
+            exitPosition: exitPosition,
+            maxScrollsPerContainer: maxScrolls,
+            maxScrollsPerDiscovery: maxScrolls,
+            onObservation: onObservation
+        )
+    }
+
+    private func explorationObservation(
+        label: String,
+        traits: UIAccessibilityTraits = .staticText,
+        scrollView: UIScrollView,
+        heistId: HeistId = "exploration_marker"
+    ) -> InterfaceObservation {
+        makePlacementScreen(
+            targetId: heistId,
+            element: makeElement(label: label, traits: traits),
+            object: retainedLiveObject(),
+            scrollView: scrollView
+        )
     }
 
 }

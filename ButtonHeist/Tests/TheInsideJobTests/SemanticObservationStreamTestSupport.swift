@@ -167,47 +167,143 @@ func scriptedSettlement(
     _ command: Settlement.Command,
     observation event: Observation.SnapshotEvent?
 ) -> Settlement.Result {
-    if case .currentState = command {
-        return scriptedCurrentStateSettlement(command, event: event)
-    }
-
-    let predicate: Settlement.Predicate
-    let baseline: Settlement.Baseline
-    let trigger: Settlement.TriggerEvidence
-    let timeoutPhase: Settlement.DeadlinePhase
     switch command {
     case .action(let action):
         guard let actionPredicate = action.predicate else {
             preconditionFailure("Scripted action settlement requires a predicate")
         }
-        predicate = actionPredicate
-        baseline = action.baseline
-        trigger = .actionDispatched(.success(payload: action.command.actionResultPayload))
-        timeoutPhase = event == nil ? .actionReadiness : .actionExpectation
-    case .observation(let observationPredicate, _, let observationBaseline):
-        predicate = observationPredicate
-        baseline = observationBaseline
-        trigger = .observation
-        timeoutPhase = .observation
+        return scriptedActionSettlement(action, predicate: actionPredicate, event: event)
+    case .observation(let predicate, _, let baseline):
+        return scriptedObservationSettlement(predicate, baseline: baseline, event: event)
     case .currentState:
-        preconditionFailure("Current-state settlement must use its capture path")
+        return scriptedCurrentStateSettlement(command, event: event)
     }
-    var predicateEvidence = Settlement.Predicate.Evidence(predicate: predicate)
+}
+
+@MainActor
+private func scriptedActionSettlement(
+    _ action: Settlement.Command.Action,
+    predicate: Settlement.Predicate,
+    event: Observation.SnapshotEvent?
+) -> Settlement.Result {
+    let timeoutPhase: Settlement.DeadlinePhase = event == nil
+        ? .actionReadiness
+        : .actionExpectation
+    let boundary = scriptedBoundary(action.baseline, fallback: event?.moment)
     guard let event else {
-        return Settlement.Result(
-            outcome: .timedOut(timeoutPhase),
-            evidence: Settlement.Evidence(
-                command: command,
-                boundary: scriptedBoundary(baseline, fallback: nil),
-                trigger: trigger,
-                predicate: predicateEvidence,
+        return .action(.failed(.init(
+            reason: .timedOut(timeoutPhase),
+            attempt: .init(
+                command: action,
+                boundary: boundary,
+                dispatch: .completed(.success(payload: action.command.actionResultPayload)),
+                evaluation: .init(predicate: predicate),
                 readiness: .pending(.initial),
                 handoff: .pending(.initial),
-                observationHistory: nil,
-                elapsed: 1
+                history: nil,
+                timing: scriptedTiming
             )
-        )
+        )))
     }
+    let observation = scriptedPredicateObservation(predicate, event: event)
+    let dispatch = TheSafecracker.ActionDispatchResult.success(
+        payload: action.command.actionResultPayload
+    )
+    guard observation.expectation.met else {
+        return .action(.failed(.init(
+            reason: .timedOut(timeoutPhase),
+            attempt: .init(
+                command: action,
+                boundary: boundary,
+                dispatch: .completed(dispatch),
+                evaluation: observation.evidence,
+                readiness: .established(observation.readiness),
+                handoff: .admitted(observation.handoff),
+                history: observation.history,
+                timing: scriptedTiming
+            )
+        )))
+    }
+    guard case .established(let establishedBoundary) = boundary else {
+        preconditionFailure("Settled scripted action requires an established boundary")
+    }
+    return .action(.settled(.init(
+        command: action,
+        boundary: establishedBoundary,
+        dispatch: dispatch,
+        evaluation: observation.evaluation,
+        readiness: observation.readiness,
+        handoff: observation.handoff,
+        history: observation.history,
+        timing: scriptedTiming
+    )))
+}
+
+@MainActor
+private func scriptedObservationSettlement(
+    _ predicate: Settlement.Predicate,
+    baseline: Settlement.Baseline,
+    event: Observation.SnapshotEvent?
+) -> Settlement.Result {
+    let boundary = scriptedBoundary(baseline, fallback: event?.moment)
+    guard let event else {
+        return .observation(.failed(.init(
+            reason: .timedOut(.observation),
+            attempt: .init(
+                predicate: predicate,
+                boundary: boundary,
+                evaluation: .init(predicate: predicate),
+                readiness: .pending(.initial),
+                handoff: .pending(.initial),
+                history: nil,
+                timing: scriptedTiming
+            )
+        )))
+    }
+    let observation = scriptedPredicateObservation(predicate, event: event)
+    guard observation.expectation.met else {
+        return .observation(.failed(.init(
+            reason: .timedOut(.observation),
+            attempt: .init(
+                predicate: predicate,
+                boundary: boundary,
+                evaluation: observation.evidence,
+                readiness: .established(observation.readiness),
+                handoff: .admitted(observation.handoff),
+                history: observation.history,
+                timing: scriptedTiming
+            )
+        )))
+    }
+    guard case .established(let establishedBoundary) = boundary else {
+        preconditionFailure("Settled scripted observation requires an established boundary")
+    }
+    return .observation(.settled(.init(
+        predicate: predicate,
+        boundary: establishedBoundary,
+        evaluation: observation.evaluation,
+        readiness: observation.readiness,
+        handoff: observation.handoff,
+        history: observation.history,
+        timing: scriptedTiming
+    )))
+}
+
+private struct ScriptedPredicateObservation {
+    let expectation: ExpectationResult
+    let evidence: Settlement.Predicate.Evidence
+    let evaluation: Settlement.Predicate.EvaluationResponse
+    let readiness: Settlement.Readiness.Establishment
+    let handoff: Settlement.Handoff.Admission
+    let history: Observation.EventsSince
+}
+
+@MainActor
+private func scriptedPredicateObservation(
+    _ predicate: Settlement.Predicate,
+    event: Observation.SnapshotEvent
+) -> ScriptedPredicateObservation {
+    var predicateEvidence = Settlement.Predicate.Evidence(predicate: predicate)
     let expectation = Settlement.PredicateEvaluation.evaluate(
         predicate.resolved,
         expression: predicate.authored,
@@ -249,20 +345,23 @@ func scriptedSettlement(
     guard let handoff = Settlement.Handoff.Admission.admit(admission, for: readiness) else {
         preconditionFailure("Scripted settlement handoff was not admitted")
     }
-    return Settlement.Result(
-        outcome: expectation.met
-            ? .settled
-            : .timedOut(timeoutPhase),
-        evidence: Settlement.Evidence(
-            command: command,
-            boundary: scriptedBoundary(baseline, fallback: event.moment),
-            trigger: trigger,
-            predicate: predicateEvidence,
-            readiness: .established(readiness),
-            handoff: .admitted(handoff),
-            observationHistory: history,
-            elapsed: 1
-        )
+    guard let evaluation = predicateEvidence.responses.first else {
+        preconditionFailure("Scripted settlement requires one predicate evaluation")
+    }
+    return ScriptedPredicateObservation(
+        expectation: expectation,
+        evidence: predicateEvidence,
+        evaluation: evaluation,
+        readiness: readiness,
+        handoff: handoff,
+        history: history
+    )
+}
+
+private var scriptedTiming: Settlement.Result.Timing {
+    .init(
+        execution: .init(),
+        elapsed: RuntimeElapsed.admit(milliseconds: 1)
     )
 }
 
@@ -270,39 +369,25 @@ private func scriptedCurrentStateSettlement(
     _ command: Settlement.Command,
     event: Observation.SnapshotEvent?
 ) -> Settlement.Result {
-    guard let event else {
-        return Settlement.Result(
-            outcome: .baselineUnavailable,
-            evidence: Settlement.Evidence(
-                command: command,
-                boundary: .unavailable(.unavailable),
-                trigger: .observation,
-                predicate: Settlement.Predicate.Evidence(predicate: nil),
-                readiness: .pending(.initial),
-                handoff: .pending(.initial),
-                observationHistory: nil,
-                elapsed: 0
-            )
-        )
+    guard case .currentState = command else {
+        preconditionFailure("Current-state settlement requires a current-state command")
     }
-    let readiness = Settlement.Readiness.Establishment(
-        generation: .initial,
-        path: .currentStateCapture,
-        observationBoundary: .including(event.moment)
-    )
-    return Settlement.Result(
-        outcome: .settled,
-        evidence: Settlement.Evidence(
-            command: command,
-            boundary: .established(.init(moment: event.moment)),
-            trigger: .observation,
-            predicate: Settlement.Predicate.Evidence(predicate: nil),
-            readiness: .established(readiness),
-            handoff: .admitted(.currentState(event)),
-            observationHistory: .events([]),
-            elapsed: 0
+    guard let event else {
+        return .currentState(.failed(.init(
+            reason: .unavailable(.unavailable),
+            timing: .init(
+                execution: .init(),
+                elapsed: RuntimeElapsed.admit(milliseconds: 0)
+            )
+        )))
+    }
+    return .currentState(.captured(.init(
+        event: event,
+        timing: .init(
+            execution: .init(),
+            elapsed: RuntimeElapsed.admit(milliseconds: 0)
         )
-    )
+    )))
 }
 
 private func scriptedBoundary(

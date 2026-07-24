@@ -7,6 +7,11 @@ import TheScore
 
 extension Navigation {
 
+    @MainActor enum ViewportRestorationTarget {
+        case semantic(ScrollableTarget)
+        case original(UIScrollView)
+    }
+
     @MainActor enum ViewportMovementIntent {
         case page(ScrollableTarget, direction: UIAccessibilityScrollDirection, animated: Bool)
         case edge(ScrollableTarget, edge: ScrollEdge)
@@ -18,7 +23,7 @@ extension Navigation {
             minimumScreenRect: CGRect
         )
         case revealContentPoint(ScrollContentPoint, in: ScrollableTarget)
-        case restoreVisualOrigin(CGPoint, in: ScrollableTarget)
+        case restoreVisualOrigin(CGPoint, in: ViewportRestorationTarget)
 
     }
 
@@ -51,8 +56,10 @@ extension Navigation {
         deadline: SemanticObservationDeadline? = nil,
         discoveryCommitPolicy: DiscoveryCommitPolicy = .mergeIntoInterface
     ) async -> ViewportTransition {
-        guard !Task.isCancelled,
-              deadline.map({
+        if Task.isCancelled {
+            guard case .restoreVisualOrigin = intent else { return .unavailable() }
+        }
+        guard deadline.map({
                   $0.remainingSeconds() >= Double(SettleSession.viewportTransitionMinimumBudgetMs) / 1_000
               }) ?? true
         else { return .unavailable() }
@@ -138,9 +145,18 @@ extension Navigation {
                 safecracker.revealContentPoint(point, in: scrollView)
             } ?? .unavailable
         case .restoreVisualOrigin(let origin, let target):
-            return target.dispatchOnFreshScrollView(in: vault) { scrollView in
-                safecracker.restoreVisualOrigin(origin, in: scrollView)
-            } ?? .unavailable
+            switch target {
+            case .semantic(let semantic):
+                return semantic.dispatchOnFreshScrollView(in: vault) { scrollView in
+                    safecracker.restoreVisualOrigin(origin, in: scrollView)
+                } ?? .unavailable
+            case .original(let scrollView):
+                guard scrollView.window != nil,
+                      !scrollView.bhIsUnsafeForProgrammaticScrolling,
+                      !Navigation.isObscuredByPresentation(view: scrollView)
+                else { return .unavailable }
+                return safecracker.restoreVisualOrigin(origin, in: scrollView)
+            }
         }
     }
 

@@ -41,10 +41,25 @@ let buttonHeistRules = RuleSet {
     heistContentOpacityRule
     planElseOwnershipRule
     exportedTupleContractRule
-    Rules.boundaryOnly(
-        function: "commitObservation",
+    Rules.memberReferenceOwnership(
+        "commitAdmission",
         allowed: .files([semanticObservationSettlementPath]),
         id: "buttonheist.semantic_observation_commit_ownership"
+    )
+    Rules.memberReferenceOwnership(
+        "commitObservation",
+        allowed: .files([semanticObservationStoreOwnerPath]),
+        id: "buttonheist.semantic_observation_store_mutation_ownership"
+    )
+    Rules.constructionOwnership(
+        "Settlement.Executor",
+        allowed: .files([settlementExecutionPath]),
+        id: "buttonheist.settlement_executor_ownership"
+    )
+    Rules.memberReferenceOwnership(
+        "setContentOffset",
+        allowed: .files([scrollContentOffsetOwnerPath]).union(demoScope),
+        id: "buttonheist.scroll_content_offset_ownership"
     )
 }
 
@@ -61,6 +76,12 @@ private let demoAccessibilityIdentifierResearchFixtures: Set<RelativeFilePath> =
 
 private let semanticObservationSettlementPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream+Settlement.swift"
+private let semanticObservationStoreOwnerPath: RelativeFilePath =
+    "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStoreOwner.swift"
+private let settlementExecutionPath: RelativeFilePath =
+    "ButtonHeist/Sources/TheInsideJob/TheBrains/Settlement+Execution.swift"
+private let scrollContentOffsetOwnerPath: RelativeFilePath =
+    "ButtonHeist/Sources/TheInsideJob/TheSafecracker/TheSafecracker+Scroll.swift"
 private let startupConfigurationPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/Lifecycle/StartupConfiguration.swift"
 
