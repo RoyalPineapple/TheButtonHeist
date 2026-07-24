@@ -14,54 +14,12 @@ private struct EncodedInvocationStepContract: Decodable {
     #expect(try graph.requireTopologicalOrder() == [])
 }
 
-@Test func `single node call graph is acyclic`() throws {
-    let graph = HeistCallGraph(nodes: ["A"], edges: [])
-
-    #expect(graph.isAcyclic)
-    #expect(try graph.requireTopologicalOrder() == ["A"])
-}
-
-@Test func `call graph stores canonical nodes and edges`() throws {
-    let graph = callGraph(edges: [("A", "C"), ("B", "C")])
-
-    #expect(graph.nodes == ["A", "B", "C"])
-    #expect(graph.edges == Set([
-        HeistCallGraph.Edge(caller: "A", callee: "C"),
-        HeistCallGraph.Edge(caller: "B", callee: "C"),
-    ]))
-    let publicOrder = try graph.requireTopologicalOrder()
-    #expect(publicOrder == ["A", "B", "C"])
-}
-
-@Test func `linear call graph returns forward order`() throws {
-    let graph = callGraph(edges: [("A", "B"), ("B", "C")])
-    let order = try graph.requireTopologicalOrder()
-
-    #expect(graph.isAcyclic)
-    #expect(order.respects(graph.edges))
-}
-
 @Test func `diamond call graph returns forward order`() throws {
     let graph = callGraph(edges: [("A", "B"), ("A", "C"), ("B", "D"), ("C", "D")])
     let order = try graph.requireTopologicalOrder()
 
     #expect(graph.isAcyclic)
     #expect(order.respects(graph.edges))
-}
-
-@Test func `self loop reports witnessed cycle`() throws {
-    let graph = callGraph(edges: [("A", "A")])
-
-    #expect(!graph.isAcyclic)
-    #expect(graph.requireCycle().path == ["A", "A"])
-}
-
-@Test func `two node cycle reports witnessed cycle`() throws {
-    let graph = callGraph(edges: [("A", "B"), ("B", "A")])
-
-    #expect(!graph.isAcyclic)
-    #expect(graph.requireCycle().path == ["A", "B", "A"])
-    #expect(graph.requireCycle().displayPath == "A -> B -> A")
 }
 
 @Test func `longer cycle reports witnessed cycle`() throws {
@@ -78,16 +36,69 @@ private struct EncodedInvocationStepContract: Decodable {
     #expect(graph.requireCycle().path == ["C", "D", "C"])
 }
 
-@Test func `cycle api accepts invocation path stacks`() throws {
-    let node: HeistInvocationPath = "A"
-    let graph = callGraph(edges: [("A", "A")])
-    let graphCycle = try #require(graph.nodeCycle(closing: node, in: [node]))
-    let stackCycle = try #require(HeistCallGraph.nodeCycle(closing: node, in: [node]))
+@Test func testTraversalCycleWitnessMatchesCallGraphCycleWitness() throws {
+    let acyclicCases: [(
+        name: String,
+        candidate: HeistPlanAdmissionCandidate,
+        nodes: Set<HeistInvocationPath>,
+        edges: Set<HeistCallGraph.Edge>,
+        order: [HeistInvocationPath]
+    )] = [
+        (
+            "isolated definitions",
+            isolatedDefinitions(["B", "A"]),
+            ["A", "B"],
+            [],
+            ["A", "B"]
+        ),
+        (
+            "nested edges",
+            inlineChainCase(["A", "B", "C"]),
+            ["A", "B", "C"],
+            callGraph(edges: [("A", "B"), ("B", "C")]).edges,
+            ["A", "B", "C"]
+        ),
+        (
+            "lexical order",
+            isolatedDefinitions(["Z", "A", "M"]),
+            ["A", "M", "Z"],
+            [],
+            ["A", "M", "Z"]
+        ),
+    ]
 
-    #expect(graphCycle.path == [node, node])
-    #expect(stackCycle.path == [node, node])
-    #expect(graphCycle.path == ["A", "A"])
-    #expect(stackCycle.displayPath == "A -> A")
+    for testCase in acyclicCases {
+        let graph = HeistCallGraph(plan: try testCase.candidate.validatedForRuntimeSafety())
+
+        #expect(graph.nodes == testCase.nodes, Comment(rawValue: testCase.name))
+        #expect(graph.edges == testCase.edges, Comment(rawValue: testCase.name))
+        #expect(try graph.requireTopologicalOrder() == testCase.order, Comment(rawValue: testCase.name))
+    }
+
+    let cycleCases: [(
+        name: String,
+        candidate: HeistPlanAdmissionCandidate,
+        edges: [(String, String)],
+        witness: [HeistInvocationPath]
+    )] = [
+        ("self cycle", inlineCycleCase(["A"]), [("A", "A")], ["A", "A"]),
+        (
+            "mutual cycle",
+            inlineCycleCase(["A", "B"]),
+            [("A", "B"), ("B", "A")],
+            ["A", "B", "A"]
+        ),
+    ]
+
+    for testCase in cycleCases {
+        let graphCycle = callGraph(edges: testCase.edges).requireCycle()
+        let observedCycles = runtimeSafetyFailures(for: testCase.candidate)
+            .filter { $0.contract == recursiveHeistRunContract }
+            .map(\.observed)
+
+        #expect(graphCycle.path == testCase.witness, Comment(rawValue: testCase.name))
+        #expect(Set(observedCycles) == [graphCycle.displayPath], Comment(rawValue: testCase.name))
+    }
 }
 
 @Test func `plan call graph resolves invocations in their definition scope`() throws {
@@ -332,6 +343,15 @@ private func callGraph(edges: [(String, String)]) -> HeistCallGraph {
     return HeistCallGraph(
         nodes: Set(graphEdges.flatMap { [$0.caller, $0.callee] }),
         edges: Set(graphEdges)
+    )
+}
+
+private func isolatedDefinitions(_ names: [HeistPlanName]) -> HeistPlanAdmissionCandidate {
+    HeistPlanAdmissionCandidate(
+        definitions: names.map {
+            HeistPlanAdmissionCandidate(name: $0, body: [.warn(WarnStep(message: warningMessage("\($0) done")))])
+        },
+        body: [.warn(WarnStep(message: "root"))]
     )
 }
 
