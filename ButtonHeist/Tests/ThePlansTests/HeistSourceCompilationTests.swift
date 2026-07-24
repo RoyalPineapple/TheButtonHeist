@@ -117,7 +117,7 @@ func expect(_ string: String, contains substring: String) {
     #expect(diagnostic.sourceSpan?.column == 5)
 }
 
-@Test func testCanonicalSourceRoundTripPreservesDiagnosticSpan() throws {
+private func assertCanonicalSourceRoundTripPreservesBranchSemantics() throws {
     let source = """
     HeistPlan {
         If {
@@ -147,7 +147,10 @@ func expect(_ string: String, contains substring: String) {
         [.fail(FailStep(message: "missing"))],
     ])
     #expect(branches.elseBody == [.warn(WarnStep(message: "fallback"))])
+}
 
+@Test func testCanonicalSourceRoundTripPreservesDiagnosticSpan() throws {
+    try assertCanonicalSourceRoundTripPreservesBranchSemantics()
     let removedSpellings: [(String, String, Int)] = [
         (
             #"WaitFor(.present(.label("Receipt")))"#,
@@ -186,6 +189,38 @@ func expect(_ string: String, contains substring: String) {
             #"WaitFor(.changed(.elements([.updated(.label("Total"), .activationPoint(after: .match(x: 1)))])))"#,
             "activation point match must use .init(...)",
             91
+        ),
+        (
+            #"WaitFor(.changed(.elements([.updated(.identifier("item"), .actions(after: .exclude([.activate])))])))"#,
+            "action set match must use .init(...)",
+            87
+        ),
+        (
+            #"WaitFor(.changed(.elements([.updated(.identifier("item"), .frame(after: .exact(x: 0, y: 0, width: 10, height: 10)))])))"#,
+            "frame match must use .init(...)",
+            85
+        ),
+        (
+            #"WaitFor(.changed(.elements([.updated(.identifier("item"), .customContent(after: .match(label: "Status")))])))"#,
+            "custom content match must use .init(...)",
+            93
+        ),
+        (
+            #"WaitFor(.changed(.elements([.updated(.identifier("item"), .rotors(after: .include(["Headings"])))])))"#,
+            "rotor set match must use .init(...)",
+            86
+        ),
+        (#"WaitFor(.change(.appeared(.label("Toast"))))"#, "unsupported accessibility predicate '.change'", 21),
+        (
+            #"Activate(.label(.exact("Search")))"#,
+            #"exact label matches use the literal form: .label("...")"#,
+            28
+        ),
+        (
+            #"Activate(.element(label: "Pay", traits: [.button]))"#,
+            #".element(...) accepts ordered checks like .label("Pay"), .identifier("id"), "# +
+                #".traits([.button]), .actions([.activate]), .exclude(.traits([.notEnabled]))"#,
+            30
         ),
         (#"Tap(.label("Pay"))"#, "unsupported ButtonHeist source statement 'Tap'", 12),
         (
