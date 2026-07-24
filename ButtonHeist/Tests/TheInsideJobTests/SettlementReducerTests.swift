@@ -486,6 +486,45 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         XCTAssertFalse(result.evidence.predicate.isSatisfied)
     }
 
+    func testActionCurrentStateMatchPromotesReturnedHandoff() async throws {
+        let baseline = await commit(label: "Baseline")
+        let ready = await commit(label: "Ready")
+        let dispatchAt = ContinuousClock.now
+        var decision = try await actionAwaitingEvidence(
+            baseline: baseline,
+            ready: ready,
+            dispatchAt: dispatchAt,
+            readyAt: dispatchAt.advanced(by: .milliseconds(100)),
+            predicate: try currentStatePredicate()
+        )
+
+        let matching = await commit(label: "Save")
+        decision = reduce(
+            decision,
+            .observationAdmitted(await admission(matching, after: baseline))
+        )
+        let matchingEvaluation = try XCTUnwrap(
+            decision.effects.compactMap(\.predicateEvaluation).first
+        )
+        decision = reduce(
+            decision,
+            .predicateEvaluated(.init(
+                target: matchingEvaluation.target,
+                result: PredicateEvaluationResult(met: true)
+            ))
+        )
+
+        guard case .terminal(let result) = decision.state else {
+            return XCTFail("Expected the matching current-state observation to settle the action")
+        }
+        XCTAssertEqual(result.outcome, .settled)
+        XCTAssertEqual(result.evidence.handoff.event?.moment, matching.moment)
+        XCTAssertEqual(
+            result.evidence.predicate.satisfiedTarget,
+            .observation(matching.moment)
+        )
+    }
+
     func testTerminalStateEmitsNoFurtherEffects() async {
         let baseline = await commit(label: "Baseline")
         var decision = armedPredicateFreeActionDecision(baseline: baseline)

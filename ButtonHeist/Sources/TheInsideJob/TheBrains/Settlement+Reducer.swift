@@ -246,7 +246,9 @@ private extension Settlement.Reducer {
         session.observationHistory = admission.history
         session.latestObservation = admission
         if case .established(let readiness) = session.readiness,
-           session.command.waitsForObservation || session.handoff.admission == nil,
+           session.command.waitsForObservation
+               || session.requirement.predicate?.semantics == .currentState
+               || session.handoff.admission == nil,
            let handoff = Settlement.Handoff.Admission.admit(admission, for: readiness) {
             session.handoff = .admitted(handoff)
         }
