@@ -46,22 +46,16 @@ def default_sim_name(preferred_device: str) -> str:
 
 
 def ios_runtimes(
-    runtimes: list[dict[str, Any]],
-    maximum_runtime: str,
-    requested_runtime: str | None = None,
+    runtimes: list[dict[str, Any]], maximum: tuple[int, ...],
+    requested: tuple[int, ...] | None = None,
 ) -> list[dict[str, Any]]:
-    maximum = version_key(maximum_runtime)
-    requested = version_key(requested_runtime) if requested_runtime else None
     return sorted(
         [
             runtime
             for runtime in runtimes
             if runtime.get("platform") == "iOS" and runtime.get("isAvailable") is True
             and version_key(str(runtime.get("version", ""))) <= maximum
-            and (
-                requested is None
-                or version_key(str(runtime.get("version", ""))) == requested
-            )
+            and (requested is None or version_key(str(runtime.get("version", ""))) == requested)
         ],
         key=lambda runtime: version_key(str(runtime.get("version", ""))),
         reverse=True,
@@ -135,33 +129,26 @@ def create_candidates(runtimes: list[dict[str, Any]], preferred: str) -> tuple[l
 
 
 def select_or_create_simulator(
-    preferred: str,
-    sim_name: str,
-    maximum_runtime: str,
+    preferred: str, sim_name: str, maximum_runtime: str,
     requested_runtime: str | None = None,
 ) -> dict[str, str]:
-    if (
-        requested_runtime
-        and version_key(requested_runtime) > version_key(maximum_runtime)
-    ):
+    maximum = version_key(maximum_runtime)
+    requested = version_key(requested_runtime) if requested_runtime else None
+    if requested is not None and requested > maximum:
         raise RuntimeError(
-            f"requested iOS simulator runtime {requested_runtime} "
-            f"exceeds active SDK {maximum_runtime}"
+            f"requested iOS simulator runtime {requested_runtime} exceeds active SDK {maximum_runtime}"
         )
     runtimes = ios_runtimes(
         load_json(["xcrun", "simctl", "list", "runtimes", "-j"])["runtimes"],
-        maximum_runtime,
-        requested_runtime,
+        maximum, requested,
     )
     if not runtimes:
         if requested_runtime:
             raise RuntimeError(
-                f"Requested iOS simulator runtime {requested_runtime} "
-                "is not installed and available"
+                f"Requested iOS simulator runtime {requested_runtime} is not installed and available"
             )
         raise RuntimeError(
-            "No available iOS simulator runtime at or below "
-            f"active SDK {maximum_runtime}"
+            f"No available iOS simulator runtime at or below active SDK {maximum_runtime}"
         )
 
     devices = load_json(["xcrun", "simctl", "list", "devices", "available", "-j"])["devices"]
@@ -217,14 +204,9 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     sim_name = args.sim_name or default_sim_name(args.preferred_device)
-    sdk_version = run(
-        ["xcrun", "--sdk", "iphonesimulator", "--show-sdk-version"]
-    ).stdout.strip()
+    sdk_version = run(["xcrun", "--sdk", "iphonesimulator", "--show-sdk-version"]).stdout.strip()
     selected = select_or_create_simulator(
-        args.preferred_device,
-        sim_name,
-        sdk_version,
-        args.runtime,
+        args.preferred_device, sim_name, sdk_version, args.runtime,
     )
     try:
         boot = run(["xcrun", "simctl", "boot", selected["udid"]], check=False)

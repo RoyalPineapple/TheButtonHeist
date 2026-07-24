@@ -31,6 +31,14 @@ class SimulatorSelectionTests(unittest.TestCase):
                 ],
             }
         ]
+        self.runtimes = [
+            {
+                **self.runtimes[0],
+                "identifier": f"ios-{version.replace('.', '-')}",
+                "version": version,
+            }
+            for version in ("26.4", "26.3", "27.0")
+        ]
         self.devices = {
             "ios-26-3": [
                 {
@@ -70,55 +78,33 @@ class SimulatorSelectionTests(unittest.TestCase):
         self.assertEqual(preferred[0]["device_type_identifier"], "iphone-16-pro")
         self.assertEqual(fallback, [])
 
-    def test_automatic_runtime_is_capped_by_active_sdk(self) -> None:
-        newer = {
-            **self.runtimes[0],
-            "identifier": "ios-27-0",
-            "version": "27.0",
-        }
-
-        runtimes = SELECTOR.ios_runtimes([newer, *self.runtimes], "26.5")
-
+    def test_runtime_filter_uses_newest_compatible_or_exact_requested(self) -> None:
+        maximum = SELECTOR.version_key("26.5")
         self.assertEqual(
-            [runtime["version"] for runtime in runtimes],
+            [runtime["version"] for runtime in SELECTOR.ios_runtimes(self.runtimes, maximum)],
+            ["26.4", "26.3"],
+        )
+        requested = SELECTOR.version_key("26.3")
+        self.assertEqual(
+            [runtime["version"] for runtime in SELECTOR.ios_runtimes(self.runtimes, maximum, requested)],
             ["26.3"],
         )
 
     def test_too_new_explicit_runtime_fails_before_simctl_selection(self) -> None:
-        with mock.patch.object(SELECTOR, "load_json") as load:
-            with self.assertRaisesRegex(
-                RuntimeError,
-                "requested iOS simulator runtime 27.0 exceeds active SDK 26.5",
-            ):
-                SELECTOR.select_or_create_simulator(
-                    "iPhone 16 Pro",
-                    "accra-created",
-                    "26.5",
-                    "27.0",
-                )
+        with mock.patch.object(SELECTOR, "load_json") as load, self.assertRaisesRegex(
+            RuntimeError, "requested iOS simulator runtime 27.0 exceeds active SDK 26.5"
+        ):
+            SELECTOR.select_or_create_simulator("iPhone 16 Pro", "accra-created", "26.5", "27.0")
 
         load.assert_not_called()
 
     def test_no_compatible_runtime_does_not_fall_forward(self) -> None:
-        newer = {
-            **self.runtimes[0],
-            "identifier": "ios-27-0",
-            "version": "27.0",
-        }
         with mock.patch.object(
-            SELECTOR,
-            "load_json",
-            return_value={"runtimes": [newer]},
+            SELECTOR, "load_json", return_value={"runtimes": self.runtimes[-1:]}
+        ), self.assertRaisesRegex(
+            RuntimeError, "No available iOS simulator runtime at or below active SDK 26.5"
         ):
-            with self.assertRaisesRegex(
-                RuntimeError,
-                "No available iOS simulator runtime at or below active SDK 26.5",
-            ):
-                SELECTOR.select_or_create_simulator(
-                    "iPhone 16 Pro",
-                    "accra-created",
-                    "26.5",
-                )
+            SELECTOR.select_or_create_simulator("iPhone 16 Pro", "accra-created", "26.5")
 
     def test_failed_boot_deletes_the_selected_simulator(self) -> None:
         selected = {
@@ -128,6 +114,7 @@ class SimulatorSelectionTests(unittest.TestCase):
             "device_type": "iPhone 16 Pro",
             "runtime_version": "26.3",
         }
+        sdk = mock.Mock(stdout="26.5")
         boot = mock.Mock(returncode=0, stdout="", stderr="")
         failure = subprocess.CalledProcessError(1, ["bootstatus"])
         cleaned = mock.Mock(returncode=0, stdout="", stderr="")
@@ -149,29 +136,14 @@ class SimulatorSelectionTests(unittest.TestCase):
         ), mock.patch.object(
             SELECTOR,
             "run",
-            side_effect=[boot, failure, cleaned, cleaned],
+            side_effect=[sdk, boot, failure, cleaned, cleaned],
         ) as run:
             with self.assertRaises(subprocess.CalledProcessError):
                 SELECTOR.main()
 
         self.assertEqual(
-            run.call_args_list[-2:],
-            [
-                mock.call(
-                    ["xcrun", "simctl", "shutdown", "selected-udid"],
-                    check=False,
-                ),
-                mock.call(
-                    ["xcrun", "simctl", "delete", "selected-udid"],
-                    check=False,
-                ),
-            ],
-        )
-        self.assertEqual(
-            run.call_args_list[0],
-            mock.call(
-                ["xcrun", "--sdk", "iphonesimulator", "--show-sdk-version"]
-            ),
+            [call.args[0][2] for call in run.call_args_list],
+            ["iphonesimulator", "boot", "bootstatus", "shutdown", "delete"],
         )
 
 

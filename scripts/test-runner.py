@@ -234,10 +234,7 @@ def select_simulator(
         ]
         if name:
             command.extend(("--sim-name", name))
-        runtime = (
-            requested_runtime
-            or os.environ.get("BUTTONHEIST_TEST_SIMULATOR_RUNTIME")
-        )
+        runtime = requested_runtime or os.environ.get("BUTTONHEIST_TEST_SIMULATOR_RUNTIME")
         if runtime:
             command.extend(("--runtime", runtime))
         if mode in ("run", "test-without-building"):
@@ -255,10 +252,10 @@ def select_simulator(
     }
     sdk_version = values["sim_sdk"]
     if VERSION_KEY(simulator["os"]) > VERSION_KEY(sdk_version):
-        delete_simulator(simulator)
+        cleanup_failed = not delete_simulator(simulator)
         raise RuntimeError(
-            f"selected iOS simulator runtime {simulator['os']} "
-            f"exceeds active SDK {sdk_version}"
+            f"selected iOS simulator runtime {simulator['os']} exceeds active SDK {sdk_version}"
+            + ("; cleanup failed to delete selected simulator" if cleanup_failed else "")
         )
     return simulator
 
@@ -500,12 +497,7 @@ def execute(
         publish(paths, None)
         collect(suite, paths, include_diagnostics=True)
         return 0
-    simulator = select_simulator(
-        args.mode,
-        suite,
-        args.simulator_name,
-        args.simulator_runtime,
-    )
+    simulator = select_simulator(args.mode, suite, args.simulator_name, args.simulator_runtime)
     if simulator is not None and selected_simulators is not None:
         selected_simulators.append(simulator)
     publish(paths, simulator)
