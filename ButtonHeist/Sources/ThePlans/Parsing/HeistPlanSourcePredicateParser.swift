@@ -2,11 +2,11 @@ import Foundation
 
 extension HeistPlanSourceParser {
     mutating func parseAccessibilityPredicateExpr() throws -> AccessibilityPredicate {
-        let name = try parseDotCallName(allowedPrefixes: [])
+        let name = try parseDotCallName()
         switch name {
         case "changed":
             try expectSymbol("(")
-            let scopeName = try parseDotCallName(allowedPrefixes: [])
+            let scopeName = try parseDotCallName()
             let predicate: AccessibilityPredicate
             switch scopeName {
             case "screen": predicate = .changed(try parseScreenDelta())
@@ -43,7 +43,7 @@ extension HeistPlanSourceParser {
         if !consumeSymbol(")") {
             try expectSymbol("[")
             repeat {
-                let name = try parseDotCallName(allowedPrefixes: [])
+                let name = try parseDotCallName()
                 guard name == "exists" || name == "missing" else {
                     throw error(previous, "screen assertions accept only .exists and .missing")
                 }
@@ -78,7 +78,7 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseScreenAssertion() throws -> ChangeDeclaration.ScreenAssertion {
-        let name = try parseDotCallName(allowedPrefixes: [])
+        let name = try parseDotCallName()
         guard name == "exists" || name == "missing" else {
             throw error(previous, "screen assertion accepts only .exists and .missing")
         }
@@ -87,15 +87,15 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseElementsAssertion() throws -> ChangeDeclaration.ElementAssertion {
-        let name = try parseDotCallName(allowedPrefixes: [])
+        let name = try parseDotCallName()
         switch name {
         case "exists", "missing":
             let target = try parseCurrentTreeTarget()
             return name == "exists" ? .exists(target) : .missing(target)
         case "appeared":
-            return try parseTemporalTarget(constructor: ChangeDeclaration.ElementAssertion.appeared)
+            return .appeared(try parseCurrentTreeTarget())
         case "disappeared":
-            return try parseTemporalTarget(constructor: ChangeDeclaration.ElementAssertion.disappeared)
+            return .disappeared(try parseCurrentTreeTarget())
         case "updated":
             return try parseUpdatedAssertion()
         default:
@@ -104,15 +104,6 @@ extension HeistPlanSourceParser {
                 "unsupported elements assertion '.\(name)'. Valid: exists, missing, appeared, disappeared, updated"
             )
         }
-    }
-
-    mutating func parseTemporalTarget(
-        constructor: (AccessibilityTarget) -> ChangeDeclaration.ElementAssertion
-    ) throws -> ChangeDeclaration.ElementAssertion {
-        try expectSymbol("(")
-        let target = try parseTargetExpr()
-        try expectSymbol(")")
-        return constructor(target)
     }
 
     mutating func parseUpdatedAssertion() throws -> ChangeDeclaration.ElementAssertion {
@@ -124,54 +115,79 @@ extension HeistPlanSourceParser {
         return .updated(target, change)
     }
     mutating func parsePropertyChangeExpr() throws -> ElementPropertyChange {
-        let name = try parseDotCallName(allowedPrefixes: [])
+        let name = try parseDotCallName()
         try expectSymbol("(")
         let change: ElementPropertyChange
         switch name {
         case "value":
-            change = try parseStringPropertyChange(property: "value", allowsUnlabeledAfter: true) {
-                .value(before: $0, after: $1)
+            var before: StringMatch?
+            var after: StringMatch?
+            try parsePropertyChangeFields(
+                property: name,
+                allowsUnlabeledAfter: true
+            ) { parser, isBefore, isLabeled, role in
+                let value = try isLabeled
+                    ? parser.parseStringPropertyUpdateFieldValue(field: role)
+                    : parser.parseStringMatchCallArgument(field: role)
+                if isBefore { before = value } else { after = value }
             }
+            change = .value(before: before, after: after)
         case "hint":
-            change = try parseStringPropertyChange(property: "hint") {
-                .hint(before: $0, after: $1)
+            var before: StringMatch?
+            var after: StringMatch?
+            try parsePropertyChangeFields(property: name) { parser, isBefore, _, role in
+                let value = try parser.parseStringPropertyUpdateFieldValue(field: role)
+                if isBefore { before = value } else { after = value }
             }
+            change = .hint(before: before, after: after)
         case "actions":
-            change = try parseTypedPropertyChange(
-                property: "actions",
-                parseValue: { try $0.parseActionSetMatch(role: $1) },
-                project: { .actions(before: $0, after: $1) }
-            )
+            var before: ActionSetMatch?
+            var after: ActionSetMatch?
+            try parsePropertyChangeFields(property: name) { parser, isBefore, _, role in
+                let value = try parser.parseActionSetMatch(role: role)
+                if isBefore { before = value } else { after = value }
+            }
+            change = .actions(before: before, after: after)
         case "frame":
-            change = try parseTypedPropertyChange(
-                property: "frame",
-                parseValue: { try $0.parseElementFrameMatch(role: $1) },
-                project: { .frame(before: $0, after: $1) }
-            )
+            var before: ElementFrameMatch?
+            var after: ElementFrameMatch?
+            try parsePropertyChangeFields(property: name) { parser, isBefore, _, role in
+                let value = try parser.parseElementFrameMatch(role: role)
+                if isBefore { before = value } else { after = value }
+            }
+            change = .frame(before: before, after: after)
         case "activationPoint":
-            change = try parseTypedPropertyChange(
-                property: "activationPoint",
-                parseValue: { try $0.parseElementPointMatch(role: $1) },
-                project: { .activationPoint(before: $0, after: $1) }
-            )
+            var before: ElementPointMatch?
+            var after: ElementPointMatch?
+            try parsePropertyChangeFields(property: name) { parser, isBefore, _, role in
+                let value = try parser.parseElementPointMatch(role: role)
+                if isBefore { before = value } else { after = value }
+            }
+            change = .activationPoint(before: before, after: after)
         case "customContent":
-            change = try parseTypedPropertyChange(
-                property: "customContent",
-                parseValue: { try $0.parseCustomContentMatch(role: $1) },
-                project: { .customContent(before: $0, after: $1) }
-            )
+            var before: CustomContentMatch?
+            var after: CustomContentMatch?
+            try parsePropertyChangeFields(property: name) { parser, isBefore, _, role in
+                let value = try parser.parseCustomContentMatch(role: role)
+                if isBefore { before = value } else { after = value }
+            }
+            change = .customContent(before: before, after: after)
         case "rotors":
-            change = try parseTypedPropertyChange(
-                property: "rotors",
-                parseValue: { try $0.parseRotorSetMatch(role: $1) },
-                project: { .rotors(before: $0, after: $1) }
-            )
+            var before: RotorSetMatch?
+            var after: RotorSetMatch?
+            try parsePropertyChangeFields(property: name) { parser, isBefore, _, role in
+                let value = try parser.parseRotorSetMatch(role: role)
+                if isBefore { before = value } else { after = value }
+            }
+            change = .rotors(before: before, after: after)
         case "traits":
-            change = try parseTypedPropertyChange(
-                property: "traits",
-                parseValue: { try $0.parseTraitSetMatch(role: $1) },
-                project: { .traits(before: $0, after: $1) }
-            )
+            var before: TraitSetMatch?
+            var after: TraitSetMatch?
+            try parsePropertyChangeFields(property: name) { parser, isBefore, _, role in
+                let value = try parser.parseTraitSetMatch(role: role)
+                if isBefore { before = value } else { after = value }
+            }
+            change = .traits(before: before, after: after)
         default:
             throw error(previous, "unsupported element update property '.\(name)'. Valid: \(Self.validElementProperties)")
         }
@@ -179,108 +195,71 @@ extension HeistPlanSourceParser {
         return change
     }
 
-    fileprivate mutating func parseStringPropertyChange(
+    private mutating func parsePropertyChangeFields(
         property: String,
         allowsUnlabeledAfter: Bool = false,
-        project: (StringMatch?, StringMatch?) -> ElementPropertyChange
-    ) throws -> ElementPropertyChange {
-        var before: StringMatch?
-        var after: StringMatch?
-        if currentToken.isSymbol(")") {
-            return project(nil, nil)
+        parse: (inout HeistPlanSourceParser, Bool, Bool, String) throws -> Void
+    ) throws {
+        guard !currentToken.isSymbol(")") else { return }
+        let startsFieldLabel: Bool
+        if case .identifier = currentToken.kind {
+            startsFieldLabel = nextToken.isSymbol(":")
+        } else {
+            startsFieldLabel = false
         }
-        if allowsUnlabeledAfter && !currentTokenStartsFieldLabel {
-            return project(nil, try parseStringMatchCallArgument(field: "\(property) after"))
+        if allowsUnlabeledAfter, !startsFieldLabel {
+            try parse(&self, false, false, "\(property) after")
+            return
         }
+        var parsedBefore = false
+        var parsedAfter = false
         while true {
-            if lookaheadLabel("before") {
-                try expectIdentifier("before")
-                try expectSymbol(":")
-                guard before == nil else {
+            let isBefore: Bool
+            if consumeLabel("before") {
+                guard !parsedBefore else {
                     throw error(previous, "\(property) update predicate accepts before only once")
                 }
-                before = try parseStringPropertyUpdateFieldValue(field: "\(property) before")
-            } else if lookaheadLabel("after") {
-                try expectIdentifier("after")
-                try expectSymbol(":")
-                guard after == nil else {
+                parsedBefore = true
+                isBefore = true
+            } else if consumeLabel("after") {
+                guard !parsedAfter else {
                     throw error(previous, "\(property) update predicate accepts after only once")
                 }
-                after = try parseStringPropertyUpdateFieldValue(field: "\(property) after")
+                parsedAfter = true
+                isBefore = false
             } else {
                 throw error(currentToken, "\(property) update predicate accepts before and after")
             }
+            try parse(&self, isBefore, true, "\(property) \(isBefore ? "before" : "after")")
             guard consumeSymbol(",") else { break }
         }
-        if before != nil, after == nil {
+        if parsedBefore, !parsedAfter {
             throw error(currentToken, "\(property) update predicate requires after when before is set")
         }
-        return project(before, after)
-    }
-
-    var currentTokenStartsFieldLabel: Bool {
-        guard case .identifier = currentToken.kind else { return false }
-        return nextTokenIsSymbol(":")
     }
 
     mutating func parseTraitSetMatch(role: String) throws -> TraitSetMatch {
         try expectContextualInitializer(role: "trait set match")
-        let match = try parseIncludeExclude(
-            role: role,
-            parseInclude: { parser, role in try parser.parseTraitArray(role: role) },
-            parseExclude: { parser, role in try parser.parseTraitArray(role: role) },
-            project: { TraitSetMatch(include: $0 ?? [], exclude: $1 ?? []) }
-        )
+        var include: [HeistTrait] = []
+        var exclude: [HeistTrait] = []
+        try parseIncludeExclude(role: role) { parser, isInclude, fieldRole in
+            let traits = try parser.parseTraitArray(role: fieldRole)
+            if isInclude { include = traits } else { exclude = traits }
+        }
         try expectSymbol(")")
-        return match
-    }
-
-    fileprivate mutating func parseTypedPropertyChange<T>(
-        property: String,
-        parseValue: (inout HeistPlanSourceParser, String) throws -> T,
-        project: (T?, T?) -> ElementPropertyChange
-    ) throws -> ElementPropertyChange {
-        var before: T?
-        var after: T?
-        if currentToken.isSymbol(")") {
-            return project(nil, nil)
-        }
-        while true {
-            if lookaheadLabel("before") {
-                try expectIdentifier("before")
-                try expectSymbol(":")
-                guard before == nil else {
-                    throw error(previous, "\(property) update predicate accepts before only once")
-                }
-                before = try parseValue(&self, "\(property) before")
-            } else if lookaheadLabel("after") {
-                try expectIdentifier("after")
-                try expectSymbol(":")
-                guard after == nil else {
-                    throw error(previous, "\(property) update predicate accepts after only once")
-                }
-                after = try parseValue(&self, "\(property) after")
-            } else {
-                throw error(currentToken, "\(property) update predicate accepts before and after")
-            }
-            guard consumeSymbol(",") else { break }
-        }
-        if before != nil, after == nil {
-            throw error(currentToken, "\(property) update predicate requires after when before is set")
-        }
-        return project(before, after)
+        return TraitSetMatch(include: include, exclude: exclude)
     }
 
     mutating func parseActionSetMatch(role: String) throws -> ActionSetMatch {
         try expectContextualInitializer(role: "action set match")
-        let match = try parseIncludeExclude(
-            role: role,
-            parseInclude: { parser, role in Set(try parser.parseActionArray(role: role)) },
-            parseExclude: { parser, role in Set(try parser.parseActionArray(role: role)) },
-            project: { ActionSetMatch(include: $0 ?? [], exclude: $1 ?? []) }
-        )
+        var include: Set<ElementAction> = []
+        var exclude: Set<ElementAction> = []
+        try parseIncludeExclude(role: role) { parser, isInclude, fieldRole in
+            let actions = Set(try parser.parseActionArray(role: fieldRole))
+            if isInclude { include = actions } else { exclude = actions }
+        }
         try expectSymbol(")")
-        return match
+        return ActionSetMatch(include: include, exclude: exclude)
     }
 
     mutating func parseActionArray(role: String) throws -> [ElementAction] {
@@ -329,46 +308,55 @@ extension HeistPlanSourceParser {
 
     mutating func parseElementFrameMatch(role: String) throws -> ElementFrameMatch {
         try expectContextualInitializer(role: "frame match")
-        let fields = try parseIntegerMatchFields(
-            role: role,
-            allowed: ["x", "y", "width", "height"]
-        )
+        let fields = try parseIntegerMatchFields(role: role, allowsSize: true)
         try expectSymbol(")")
         return ElementFrameMatch(
-            x: fields["x"],
-            y: fields["y"],
-            width: fields["width"],
-            height: fields["height"]
+            x: fields.x,
+            y: fields.y,
+            width: fields.width,
+            height: fields.height
         )
     }
 
     mutating func parseElementPointMatch(role: String) throws -> ElementPointMatch {
         try expectContextualInitializer(role: "activation point match")
-        let fields = try parseIntegerMatchFields(
-            role: role,
-            allowed: ["x", "y"]
-        )
+        let fields = try parseIntegerMatchFields(role: role, allowsSize: false)
         try expectSymbol(")")
-        return ElementPointMatch(x: fields["x"], y: fields["y"])
+        return ElementPointMatch(x: fields.x, y: fields.y)
     }
 
     mutating func parseIntegerMatchFields(
         role: String,
-        allowed: Set<String>
-    ) throws -> [String: Int] {
-        var fields: [String: Int] = [:]
+        allowsSize: Bool
+    ) throws -> (x: Int?, y: Int?, width: Int?, height: Int?) {
+        var fields: (x: Int?, y: Int?, width: Int?, height: Int?) = (nil, nil, nil, nil)
         if !currentToken.isSymbol(")") {
             while true {
                 let token = currentToken
                 let name = try parseIdentifier()
-                guard allowed.contains(name) else {
+                guard name == "x" || name == "y" || (allowsSize && (name == "width" || name == "height")) else {
                     throw error(token, "\(role) does not accept '\(name)'")
                 }
                 try expectSymbol(":")
-                guard fields[name] == nil else {
+                let isDuplicate = switch name {
+                case "x": fields.x != nil
+                case "y": fields.y != nil
+                case "width": fields.width != nil
+                case "height": fields.height != nil
+                default: false
+                }
+                guard !isDuplicate else {
                     throw error(token, "\(role) accepts \(name) only once")
                 }
-                fields[name] = try parseSignedInteger()
+                let value = try parseSignedInteger()
+                switch name {
+                case "x": fields.x = value
+                case "y": fields.y = value
+                case "width": fields.width = value
+                case "height": fields.height = value
+                default:
+                    preconditionFailure("admitted integer match field must be assignable")
+                }
                 guard consumeSymbol(",") else { break }
             }
         }
@@ -386,58 +374,16 @@ extension HeistPlanSourceParser {
         return Int(value)
     }
 
-    mutating func parseCustomContentMatch(role: String) throws -> CustomContentMatch {
-        try expectContextualInitializer(role: "custom content match")
-        var label: StringMatch?
-        var value: StringMatch?
-        var isImportant: Bool?
-        if !currentToken.isSymbol(")") {
-            while true {
-                if lookaheadLabel("label") {
-                    try expectIdentifier("label")
-                    try expectSymbol(":")
-                    guard label == nil else {
-                        throw error(previous, "\(role) accepts label only once")
-                    }
-                    label = try parseStringMatchFieldValue(field: "\(role) label")
-                } else if lookaheadLabel("value") {
-                    try expectIdentifier("value")
-                    try expectSymbol(":")
-                    guard value == nil else {
-                        throw error(previous, "\(role) accepts value only once")
-                    }
-                    value = try parseStringMatchFieldValue(field: "\(role) value")
-                } else if lookaheadLabel("isImportant") {
-                    try expectIdentifier("isImportant")
-                    try expectSymbol(":")
-                    guard isImportant == nil else {
-                        throw error(previous, "\(role) accepts isImportant only once")
-                    }
-                    isImportant = try parseBoolLiteral()
-                } else {
-                    throw error(currentToken, "custom content match accepts label, value, and isImportant")
-                }
-                guard consumeSymbol(",") else { break }
-            }
-        }
-        try expectSymbol(")")
-        let match = CustomContentMatch(label: label, value: value, isImportant: isImportant)
-        guard match.hasPredicateLiteral else {
-            throw error(previous, "\(role) match must include label, value, or isImportant")
-        }
-        return match
-    }
-
     mutating func parseRotorSetMatch(role: String) throws -> RotorSetMatch {
         try expectContextualInitializer(role: "rotor set match")
-        let match = try parseIncludeExclude(
-            role: role,
-            parseInclude: { parser, role in try parser.parseStringMatchArray(role: role) },
-            parseExclude: { parser, role in try parser.parseStringMatchArray(role: role) },
-            project: { RotorSetMatch(include: $0 ?? [], exclude: $1 ?? []) }
-        )
+        var include: [StringMatch] = []
+        var exclude: [StringMatch] = []
+        try parseIncludeExclude(role: role) { parser, isInclude, fieldRole in
+            let matches = try parser.parseStringMatchArray(role: fieldRole)
+            if isInclude { include = matches } else { exclude = matches }
+        }
         try expectSymbol(")")
-        return match
+        return RotorSetMatch(include: include, exclude: exclude)
     }
 
     mutating func expectContextualInitializer(role: String) throws {
@@ -450,37 +396,34 @@ extension HeistPlanSourceParser {
         try expectSymbol("(")
     }
 
-    fileprivate mutating func parseIncludeExclude<Value, Result>(
+    private mutating func parseIncludeExclude(
         role: String,
-        parseInclude: (inout HeistPlanSourceParser, String) throws -> Value,
-        parseExclude: (inout HeistPlanSourceParser, String) throws -> Value,
-        project: (Value?, Value?) -> Result
-    ) throws -> Result {
-        var include: Value?
-        var exclude: Value?
+        parse: (inout HeistPlanSourceParser, Bool, String) throws -> Void
+    ) throws {
+        var parsedInclude = false
+        var parsedExclude = false
         if !currentToken.isSymbol(")") {
             while true {
-                if lookaheadLabel("include") {
-                    try expectIdentifier("include")
-                    try expectSymbol(":")
-                    guard include == nil else {
+                let isInclude: Bool
+                if consumeLabel("include") {
+                    guard !parsedInclude else {
                         throw error(previous, "\(role) accepts include only once")
                     }
-                    include = try parseInclude(&self, "\(role) include")
-                } else if lookaheadLabel("exclude") {
-                    try expectIdentifier("exclude")
-                    try expectSymbol(":")
-                    guard exclude == nil else {
+                    parsedInclude = true
+                    isInclude = true
+                } else if consumeLabel("exclude") {
+                    guard !parsedExclude else {
                         throw error(previous, "\(role) accepts exclude only once")
                     }
-                    exclude = try parseExclude(&self, "\(role) exclude")
+                    parsedExclude = true
+                    isInclude = false
                 } else {
                     throw error(currentToken, "\(role) accepts include and exclude")
                 }
+                try parse(&self, isInclude, "\(role) \(isInclude ? "include" : "exclude")")
                 guard consumeSymbol(",") else { break }
             }
         }
-        return project(include, exclude)
     }
 
     mutating func parseStringMatchArray(role: String) throws -> [StringMatch] {

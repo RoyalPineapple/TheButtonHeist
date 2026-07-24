@@ -117,6 +117,104 @@ func expect(_ string: String, contains substring: String) {
     #expect(diagnostic.sourceSpan?.column == 5)
 }
 
+@Test func testCanonicalSourceRoundTripPreservesDiagnosticSpan() throws {
+    let source = """
+    HeistPlan {
+        If {
+            Case(.exists(.label("Pay"))) {
+                Warn("primary")
+            }
+            Case(.missing(.label("Pay"))) {
+                Fail("missing")
+            }
+            Else {
+                Warn("fallback")
+            }
+        }
+    }
+    """
+    let plan = try HeistSourceCompilation.compile(source)
+    let reparsed = try HeistSourceCompilation.compile(plan.canonicalSwiftDSL())
+
+    #expect(reparsed == plan)
+    guard case .conditional(let branches) = plan.body.first else {
+        Issue.record("Expected the canonical source to preserve its conditional")
+        return
+    }
+    #expect(branches.cases.map(\.predicate) == [.exists(.label("Pay")), .missing(.label("Pay"))])
+    #expect(branches.cases.map(\.body) == [
+        [.warn(WarnStep(message: "primary"))],
+        [.fail(FailStep(message: "missing"))],
+    ])
+    #expect(branches.elseBody == [.warn(WarnStep(message: "fallback"))])
+
+    let removedSpellings: [(String, String, Int)] = [
+        (
+            #"WaitFor(.present(.label("Receipt")))"#,
+            "unsupported accessibility predicate '.present'",
+            21
+        ),
+        ("WaitFor(.screenChanged())", "unsupported accessibility predicate '.screenChanged'", 21),
+        ("WaitFor(.change(.screen()))", "unsupported accessibility predicate '.change'", 21),
+        ("WaitFor(.announcement())", "empty announcement predicate must use .announcement", 34),
+        (
+            #"WaitFor(.announcement(containing: "done"))"#,
+            "expected a string literal or scoped string reference",
+            34
+        ),
+        (
+            #"WaitFor(.changed(.elements([.updated(.label("Total"), .label(before: "Old", after: "New"))])))"#,
+            "unsupported element update property '.label'. Valid: value, traits, hint, actions, frame, activationPoint, customContent, rotors",
+            72
+        ),
+        (
+            #"WaitFor(.changed(.elements([.updated(.label("Total"), .identifier(before: "old", after: "new"))])))"#,
+            "unsupported element update property '.identifier'. Valid: value, traits, hint, actions, frame, activationPoint, customContent, rotors",
+            77
+        ),
+        (
+            #"WaitFor(.changed(.elements([.updated(.label("Total"), .value(from: "$2", to: "$3"))])))"#,
+            "value update predicate accepts before and after",
+            73
+        ),
+        (
+            #"WaitFor(.changed(.elements([.updated(.label("Total"), .traits(after: .include([.selected])))])))"#,
+            "trait set match must use .init(...)",
+            82
+        ),
+        (
+            #"WaitFor(.changed(.elements([.updated(.label("Total"), .activationPoint(after: .match(x: 1)))])))"#,
+            "activation point match must use .init(...)",
+            91
+        ),
+        (#"Tap(.label("Pay"))"#, "unsupported ButtonHeist source statement 'Tap'", 12),
+        (
+            #"Activate("Pay")"#,
+            "target expression requires an explicit accessibility property such as .label(...)",
+            21
+        ),
+        (
+            #"WaitFor("Receipt")"#,
+            "expected a ButtonHeist expression beginning with '.'",
+            20
+        ),
+    ]
+
+    for (statement, message, offset) in removedSpellings {
+        let invalidSource = "HeistPlan { \(statement) }"
+        let diagnostic = compileDiagnostic(invalidSource)
+        #expect(diagnostic.code == .sourceInvalidSyntax)
+        #expect(diagnostic.message == message)
+        #expect(diagnostic.sourceSpan == HeistBuildSourceSpan(
+            sourceName: "inline-heist-plan",
+            offset: offset,
+            line: 1,
+            column: offset + 1,
+            length: 1
+        ))
+    }
+}
+
 @Test func `planning admission exposes typed diagnostics before rendering`() {
     let diagnostics: [HeistBuildDiagnostic]
     do {

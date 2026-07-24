@@ -7,25 +7,21 @@ extension HeistPlanSourceParser {
             throw error(currentToken, "ButtonHeist source must be a canonical root plan: `HeistPlan { ... }`")
         }
 
-        let root = try parseRootHeistPlan()
+        let name = try parseCalleeName()
+        guard name == ["HeistPlan"] else {
+            throw error(previous, "expected `HeistPlan { ... }`")
+        }
+        let root = try parseHeistPlanAfterCallee(allowDefinitions: true)
         try expect(.eof)
         var validator = HeistPlanRuntimeSafetyValidator(limits: .standard)
         try validator.validate(root)
         return root
     }
 
-    private mutating func parseRootHeistPlan() throws -> HeistPlan {
-        let name = try parseCalleeName()
-        guard name == ["HeistPlan"] else {
-            throw error(previous, "expected `HeistPlan { ... }`")
-        }
-        return try parseHeistPlanAfterCallee(allowDefinitions: true)
-    }
-
     private mutating func parseHeistBody(
         untilRightBrace: Bool,
         allowDefinitions: Bool
-    ) throws -> SourcePlanBody {
+    ) throws -> (definitions: [HeistPlan], steps: [HeistStep]) {
         var definitions: [HeistPlan] = []
         var steps: [HeistStep] = []
         var seenStep = false
@@ -34,7 +30,7 @@ extension HeistPlanSourceParser {
             if atEnd { break }
             if consumeSymbol("}") {
                 if untilRightBrace {
-                    return SourcePlanBody(definitions: definitions, steps: steps)
+                    return (definitions, steps)
                 }
                 throw error(previous, "unexpected '}'")
             }
@@ -52,11 +48,7 @@ extension HeistPlanSourceParser {
         if untilRightBrace {
             throw error(currentToken, "expected '}' to close ButtonHeist source block")
         }
-        return SourcePlanBody(definitions: definitions, steps: steps)
-    }
-
-    private mutating func parseStepBody(untilRightBrace: Bool) throws -> [HeistStep] {
-        try parseHeistBody(untilRightBrace: untilRightBrace, allowDefinitions: false).steps
+        return (definitions, steps)
     }
 
     private mutating func parseDefinition() throws -> HeistPlan {
@@ -145,29 +137,15 @@ extension HeistPlanSourceParser {
                 path,
                 error: error,
                 phase: .sourceCompilation,
-                sourceSpan: sourceSpan(for: pathToken)
+                sourceSpan: pathToken.sourceSpan
             ))
         }
         let body = try parseHeistClosureBody(parameter: parameter, allowDefinitions: true)
         return try sourceDefinition(
-            path: definitionPath,
+            components: definitionPath.components[...],
             parameter: parameter,
             definitions: try HeistPlan.mergeSourceDefinitions(body.definitions),
             body: body.steps
-        )
-    }
-
-    private func sourceDefinition(
-        path: HeistDefinitionPath,
-        parameter: HeistParameter,
-        definitions: [HeistPlan],
-        body: [HeistStep]
-    ) throws -> HeistPlan {
-        try sourceDefinition(
-            components: path.components[...],
-            parameter: parameter,
-            definitions: definitions,
-            body: body
         )
     }
 
@@ -205,17 +183,6 @@ extension HeistPlanSourceParser {
     }
 
     private mutating func parseStatement() throws -> [HeistStep] {
-        let tryPrefix = try parseTryPrefixIfPresent()
-        if let tryPrefix {
-            if let correction = runHeistCorrectionAfterTryPrefix(startingAt: index) {
-                throw error(
-                    tryPrefix,
-                    "`try` is only allowed in Swift wrapper code, not inside ButtonHeist DSL bodies. Use \(correction)."
-                )
-            }
-            throw error(tryPrefix, "`try` is only allowed in Swift wrapper code, not inside ButtonHeist DSL bodies")
-        }
-
         let name = try parseCalleeName()
 
         switch name {
@@ -283,7 +250,7 @@ extension HeistPlanSourceParser {
                 throw error(currentToken, "empty HeistPlan parentheses are not canonical; use `HeistPlan { ... }`")
             }
 
-            if lookaheadLabel("parameter") || lookaheadLabel("targetParameter") {
+            if currentToken.kind == .identifier("parameter") || currentToken.kind == .identifier("targetParameter") {
                 parameter = try parseRootHeistParameter()
             } else {
                 let nameToken = currentToken
@@ -329,10 +296,10 @@ extension HeistPlanSourceParser {
     private mutating func parseHeistClosureBody(
         parameter: HeistParameter,
         allowDefinitions: Bool
-    ) throws -> SourcePlanBody {
+    ) throws -> (definitions: [HeistPlan], steps: [HeistStep]) {
         try expectSymbol("{")
-        let previousScope = currentScope()
-        defer { restoreScope(previousScope) }
+        let previousScope = scope
+        defer { scope = previousScope }
         if parameter.name != nil {
             let localName = try parseIdentifier()
             try expectIdentifier("in")
@@ -441,7 +408,7 @@ private extension HeistPlanSourceParser {
                 name,
                 error: validationError,
                 phase: .sourceCompilation,
-                sourceSpan: sourceSpan(for: nameToken)
+                sourceSpan: nameToken.sourceSpan
             ))
         }
         var argument = HeistArgument.none
@@ -557,7 +524,7 @@ private extension HeistPlanSourceParser {
 
     mutating func parseHeistBlock() throws -> [HeistStep] {
         try expectSymbol("{")
-        return try parseStepBody(untilRightBrace: true)
+        return try parseHeistBody(untilRightBrace: true, allowDefinitions: false).steps
     }
 
     mutating func parseLowercaseElseChainIfPresent(
@@ -572,24 +539,22 @@ private extension HeistPlanSourceParser {
         return try parseHeistBlock()
     }
 
-    mutating func parseScopedClosure<Value>(
+    mutating func parseScopedClosure(
         binding: HeistPlanSourceBinding,
-        project: (HeistReferenceName, [HeistStep]) throws -> Value
-    ) throws -> Value {
+        project: (HeistReferenceName, [HeistStep]) throws -> HeistStep
+    ) throws -> HeistStep {
         try expectSymbol("{")
         let localName = try parseIdentifier()
         try expectIdentifier("in")
         let referenceName = try HeistReferenceName(validating: localName)
-        let previousScope = currentScope()
-        defer { restoreScope(previousScope) }
+        let previousScope = scope
+        defer { scope = previousScope }
         bindScopedReference(binding, localName: localName, referenceName: referenceName)
-        return try project(referenceName, parseStepBody(untilRightBrace: true))
+        return try project(
+            referenceName,
+            parseHeistBody(untilRightBrace: true, allowDefinitions: false).steps
+        )
     }
-}
-
-private struct SourcePlanBody {
-    let definitions: [HeistPlan]
-    let steps: [HeistStep]
 }
 
 private extension HeistPlan {
