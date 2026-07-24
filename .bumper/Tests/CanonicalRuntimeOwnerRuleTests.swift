@@ -11,7 +11,8 @@ struct CanonicalRuntimeOwnerRuleTests {
         let report = try evaluateButtonHeistRules(
             path: path,
             component: .runtime,
-            source: "func commit(_ owner: Observation.StoreOwner, _ admission: Observation.Admission) async throws { try await owner.commitAdmission(admission) }"
+            source: "func commit(_ owner: Observation.StoreOwner, _ admission: Observation.Admission) " +
+                "async throws { try await owner.commitAdmission(admission) }"
         )
 
         #expect(report.contains(ViolationMatcher(
@@ -27,7 +28,8 @@ struct CanonicalRuntimeOwnerRuleTests {
         let report = try evaluateButtonHeistRules(
             path: path,
             component: .runtime,
-            source: "func commit(_ owner: Observation.StoreOwner, _ admission: Observation.Admission) async throws { try await owner.commitAdmission(admission) }"
+            source: "func commit(_ owner: Observation.StoreOwner, _ admission: Observation.Admission) " +
+                "async throws { try await owner.commitAdmission(admission) }"
         )
 
         #expect(report.violations.isEmpty)
@@ -116,6 +118,35 @@ struct CanonicalRuntimeOwnerRuleTests {
 
         #expect(report.contains(ViolationMatcher(
             id: "buttonheist.scroll_content_offset_ownership",
+            path: path
+        )))
+    }
+
+    @Test
+    func transportWiringMayConsumeTransportEvents() throws {
+        let path: RelativeFilePath =
+            "ButtonHeist/Sources/TheInsideJob/TheGetaway/TransportControlPlane.swift"
+        let report = try evaluateButtonHeistRules(
+            path: path,
+            component: .runtime,
+            source: "func consume(_ transport: ServerTransport) { _ = transport.transportEvents }"
+        )
+
+        #expect(report.violations.isEmpty)
+    }
+
+    @Test
+    func competingTransportEventConsumerIsRejected() throws {
+        let path: RelativeFilePath =
+            "ButtonHeist/Sources/TheInsideJob/TheGetaway/CompetingTransportConsumer.swift"
+        let report = try evaluateButtonHeistRules(
+            path: path,
+            component: .runtime,
+            source: "func consume(_ transport: ServerTransport) { _ = transport.transportEvents }"
+        )
+
+        #expect(report.contains(ViolationMatcher(
+            id: "buttonheist.transport_event_consumption_ownership",
             path: path
         )))
     }

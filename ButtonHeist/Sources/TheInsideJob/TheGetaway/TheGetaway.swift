@@ -48,7 +48,9 @@ final class TheGetaway {
 
     struct WiredTransport {
         let attempt: TransportWiringAttempt
-        let eventConsumer: Task<Void, Never>
+        let controlPlane: TransportControlPlane
+        let mainActorEvents: AsyncStream<TransportControlPlane.MainActorEvent>.Continuation
+        let mainActorConsumer: Task<Void, Never>
     }
 
     enum TransportWiringState {
@@ -67,9 +69,9 @@ final class TheGetaway {
             }
         }
 
-        var eventConsumer: Task<Void, Never>? {
+        var wired: WiredTransport? {
             guard case .wired(let session) = self else { return nil }
-            return session.eventConsumer
+            return session
         }
 
         var deliveryGeneration: ClientDelivery.Generation? {
@@ -101,13 +103,6 @@ final class TheGetaway {
 
     var pauseBeforeTransportCallbackBeginForTesting: (@MainActor @Sendable () async -> Void)?
     var pauseBeforeTransportCallbackInstallationForTesting: (@MainActor @Sendable () async -> Void)?
-    var pauseAfterClientRequestAdmissionForTesting: (
-        @MainActor @Sendable (ClientDelivery.Generation) async -> Void
-    )?
-    var observeClientRequestCompletionForTesting: (
-        @MainActor @Sendable (ClientDelivery.Generation) -> Void
-    )?
-
     var transport: ServerTransport? {
         transportWiring.transport
     }
@@ -120,10 +115,6 @@ final class TheGetaway {
         latestIssuedDeliveryGenerationRawValue += 1
         return ClientDelivery.Generation(rawValue: latestIssuedDeliveryGenerationRawValue)
     }
-
-    /// Frames are admitted and executed in per-client order. Transport
-    /// lifecycle events never wait for these consumers.
-    var clientRequestPipelines: [Int: ClientRequestPipeline] = [:]
 
     // MARK: - Init
 
@@ -141,18 +132,17 @@ final class TheGetaway {
         respond: @escaping SocketResponseHandler,
         generation: ClientDelivery.Generation
     ) async {
-        let clientId = admitted.clientId
         let envelope = admitted.envelope
         let requestId = envelope.requestId
         let message = envelope.message
 
         switch message {
-        case .clientHello, .authenticate:
+        case .clientHello, .authenticate, .ping, .mainThreadProbe:
             insideJobLogger.fault("Protocol message reached app dispatch after admission")
             await sendMessage(
                 .error(ServerError(
                     kind: .validationError,
-                    message: "Protocol messages are handled by admission before app dispatch."
+                    message: "Transport-control messages are handled before app dispatch."
                 )),
                 requestId: requestId,
                 respond: respond,
@@ -161,14 +151,6 @@ final class TheGetaway {
         case .requestInterface(let query):
             await sendInterface(
                 query: query,
-                requestId: requestId,
-                respond: respond,
-                generation: generation
-            )
-        case .ping:
-            await muscle.noteClientActivity(clientId)
-            await sendMessage(
-                .pong(pongPayload.withServerTimestamp()),
                 requestId: requestId,
                 respond: respond,
                 generation: generation

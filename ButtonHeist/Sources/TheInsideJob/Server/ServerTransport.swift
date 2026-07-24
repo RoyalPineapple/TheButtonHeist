@@ -74,7 +74,7 @@ final class ServerTransport {
     // MARK: - Event Stream
 
     /// Ordered event stream. Only one consumer should iterate it.
-    nonisolated let events: Events
+    nonisolated let transportEvents: Events
     private nonisolated let eventStream: EventStream
 
     /// The port the server is listening on (0 if not started).
@@ -92,7 +92,7 @@ final class ServerTransport {
         self.token = token
         let eventStream = EventStream(bufferLimit: Self.eventStreamBufferLimit)
         self.eventStream = eventStream
-        self.events = eventStream.events
+        self.transportEvents = eventStream.events
         self.server = SimpleSocketServer(
             allowedScopes: allowedScopes,
             callbacks: eventStream.makeCallbacks(),

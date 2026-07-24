@@ -12,17 +12,17 @@ final class MainThreadProbeTests: XCTestCase {
             workTimeoutMilliseconds: .max
         ))
 
-        let response = await MainThreadProbe.execute(request)
+        let response = try await MainThreadProbe.execute(request)
 
         XCTAssertEqual(response.outcome, .responsive)
     }
 
     @MainActor
-    func testCompletedWorkReturnsCompleted() async {
+    func testCompletedWorkReturnsCompleted() async throws {
         let scheduler = ManualMainScheduler()
         let workCount = OSAllocatedUnfairLock(initialState: 0)
 
-        let outcome = await MainThreadProbe.execute(
+        let outcome = try await MainThreadProbe.execute(
             timeouts: .immediate,
             dependencies: dependencies(scheduler: scheduler),
             work: {
@@ -35,11 +35,11 @@ final class MainThreadProbeTests: XCTestCase {
     }
 
     @MainActor
-    func testMissingMainRunLoopTurnReturnsUnresponsive() async {
+    func testMissingMainRunLoopTurnReturnsUnresponsive() async throws {
         let scheduler = ManualMainScheduler()
         let workCount = OSAllocatedUnfairLock(initialState: 0)
 
-        let outcome = await MainThreadProbe.execute(
+        let outcome = try await MainThreadProbe.execute(
             timeouts: .immediate,
             dependencies: dependencies(scheduler: scheduler, runScheduledWork: false),
             work: {
@@ -53,11 +53,11 @@ final class MainThreadProbeTests: XCTestCase {
     }
 
     @MainActor
-    func testStartedWorkWithoutCompletionReturnsWorkTimedOut() async {
+    func testStartedWorkWithoutCompletionReturnsWorkTimedOut() async throws {
         let scheduler = ManualMainScheduler()
         let deferredWork = DeferredMainWork()
 
-        let outcome = await MainThreadProbe.execute(
+        let outcome = try await MainThreadProbe.execute(
             timeouts: .immediate,
             dependencies: dependencies(
                 scheduler: scheduler,
@@ -71,11 +71,11 @@ final class MainThreadProbeTests: XCTestCase {
     }
 
     @MainActor
-    func testLateMainRunLoopTurnSuppressesWork() async {
+    func testLateMainRunLoopTurnSuppressesWork() async throws {
         let scheduler = ManualMainScheduler()
         let executionCount = OSAllocatedUnfairLock(initialState: 0)
 
-        let outcome = await MainThreadProbe.execute(
+        let outcome = try await MainThreadProbe.execute(
             timeouts: .immediate,
             dependencies: dependencies(scheduler: scheduler, runScheduledWork: false),
             work: {
@@ -91,12 +91,12 @@ final class MainThreadProbeTests: XCTestCase {
     }
 
     @MainActor
-    func testCompletionWinsAConcurrentWorkTimeout() async {
+    func testCompletionWinsAConcurrentWorkTimeout() async throws {
         let scheduler = ManualMainScheduler()
         let deferredWork = DeferredMainWork()
         let waitCount = OSAllocatedUnfairLock(initialState: 0)
 
-        let outcome = await MainThreadProbe.execute(
+        let outcome = try await MainThreadProbe.execute(
             timeouts: .immediate,
             dependencies: MainThreadProbe.Dependencies(
                 schedule: scheduler.schedule,
@@ -119,6 +119,41 @@ final class MainThreadProbeTests: XCTestCase {
         )
 
         XCTAssertEqual(outcome, .completed)
+    }
+
+    func testCancellationWakesAnUnboundedWait() async {
+        let waitStarted = DispatchSemaphore(value: 0)
+        let task = Task {
+            try await MainThreadProbe.execute(
+                timeouts: MainThreadProbe.Timeouts(
+                    responsiveness: MainThreadProbe.Timeout(nanoseconds: .max),
+                    work: MainThreadProbe.Timeout(nanoseconds: .max)
+                ),
+                dependencies: MainThreadProbe.Dependencies(
+                    schedule: { _ in },
+                    executeWork: { _, _ in },
+                    wait: { semaphore, _ in
+                        waitStarted.signal()
+                        return semaphore.wait(timeout: .distantFuture)
+                    },
+                    waitQueue: probeWaitQueue
+                ),
+                work: {}
+            )
+        }
+
+        await Task {
+            waitStarted.wait()
+        }.value
+        task.cancel()
+
+        do {
+            _ = try await task.value
+            XCTFail("Expected probe cancellation")
+        } catch is CancellationError {
+        } catch {
+            XCTFail("Expected CancellationError, got \(error)")
+        }
     }
 }
 

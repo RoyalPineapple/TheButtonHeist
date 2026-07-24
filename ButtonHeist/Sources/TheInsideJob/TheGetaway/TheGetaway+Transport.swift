@@ -8,18 +8,6 @@ extension TheGetaway {
 
     // MARK: - Transport Wiring
 
-    /// Wire a transport to the crew.
-    ///
-    /// Async because `muscle.installCallbacks(...)` must complete *before* any
-    /// transport event consumer starts. The previous shape kicked off an
-    /// unstructured `Task { await muscle.installCallbacks(...) }` and returned
-    /// synchronously; the caller then immediately ran `transport.start(...)`
-    /// and the event consumer began accepting `.clientConnected` events. Task
-    /// submission onto an actor's mailbox is not FIFO across separately-rooted
-    /// Tasks, so the first `.clientConnected` could race ahead of the install
-    /// — `sendToClient` was still nil — and the serverHello was silently
-    /// dropped. Awaiting `installCallbacks` inline closes that race for both
-    /// `start()` and `resume()`. See finding PR #352 (High) and #359 M1.
     func wireTransport(
         _ transport: ServerTransport,
         onBacklogOverflow: @escaping @MainActor @Sendable (Int) async -> Void
@@ -28,9 +16,12 @@ extension TheGetaway {
             transport: transport,
             deliveryGeneration: issueDeliveryGeneration()
         )
-        let previousEventConsumer = transportWiring.eventConsumer
-        previousEventConsumer?.cancel()
+        let previousWiring = transportWiring.wired
         transportWiring = .wiring(attempt)
+        previousWiring?.mainActorEvents.finish()
+        previousWiring?.mainActorConsumer.cancel()
+        await previousWiring?.controlPlane.stop()
+
         if let pauseBeforeTransportCallbackBeginForTesting {
             await pauseBeforeTransportCallbackBeginForTesting()
         }
@@ -38,18 +29,22 @@ extension TheGetaway {
         guard beginOutcome == .admitted,
               transportWiring.admits(attempt)
         else {
-            if transportWiring.admits(attempt) {
-                transportWiring = .unwired
-            }
-            await muscle.invalidateCallbacks(for: attempt.deliveryGeneration)
-            return .rejected
+            return await rejectTransportWiring(attempt)
         }
 
-        // Install actor-isolated callbacks on TheMuscle. Each callback is
-        // `@Sendable`. We capture the inner `SimpleSocketServer` actor (which
-        // is Sendable) rather than the `ServerTransport` wrapper (NSObject,
-        // non-Sendable) so the closures don't drag a non-Sendable type into
-        // actor-isolated storage.
+        let installOutcome = await installTransportCallbacks(for: attempt)
+        guard installOutcome == .installed,
+              transportWiring.admits(attempt)
+        else {
+            return await rejectTransportWiring(attempt)
+        }
+        return await wireControlPlane(for: attempt, onBacklogOverflow: onBacklogOverflow)
+    }
+
+    private func installTransportCallbacks(
+        for attempt: TransportWiringAttempt
+    ) async -> ClientDelivery.InstallOutcome {
+        let transport = attempt.transport
         let server = transport.server
         let generation = attempt.deliveryGeneration
         let sendToClient: @Sendable (Data, Int) async -> ServerSendOutcome = { data, clientId in
@@ -58,97 +53,110 @@ extension TheGetaway {
         let disconnect: @Sendable (Int) async -> Void = { clientId in
             await server.removeClient(clientId)
         }
-        let onAuthenticated: @MainActor @Sendable (Int, @escaping SocketResponseHandler) async -> Void = { [weak self] _, respond in
+        let onAuthenticated: @MainActor @Sendable (
+            Int,
+            @escaping SocketResponseHandler
+        ) async -> Void = { [weak self] _, respond in
             await self?.sendServerInfo(respond: respond, generation: generation)
         }
         if let pauseBeforeTransportCallbackInstallationForTesting {
             await pauseBeforeTransportCallbackInstallationForTesting()
         }
-        let installOutcome = await muscle.installCallbacks(
+        return await muscle.installCallbacks(
             sendToClient: sendToClient,
             disconnectClient: disconnect,
             onClientAuthenticated: onAuthenticated,
-            generation: attempt.deliveryGeneration
+            generation: generation
         )
+    }
 
-        guard installOutcome == .installed,
-              transportWiring.admits(attempt)
-        else {
-            if transportWiring.admits(attempt) {
-                transportWiring = .unwired
+    private func wireControlPlane(
+        for attempt: TransportWiringAttempt,
+        onBacklogOverflow: @escaping @MainActor @Sendable (Int) async -> Void
+    ) async -> TransportWiringOutcome {
+        let transport = attempt.transport
+        let generation = attempt.deliveryGeneration
+        let mainActorStream = AsyncStream<TransportControlPlane.MainActorEvent>.makeStream(
+            bufferingPolicy: .bufferingOldest(ClientRequestPipeline.maximumQueuedRequests)
+        )
+        let controlPlane = TransportControlPlane.wired(
+            to: transport,
+            muscle: muscle,
+            generation: generation,
+            pongPayload: pongPayload,
+            probe: { request in
+                try await MainThreadProbe.execute(request)
+            },
+            publish: { event in
+                switch mainActorStream.continuation.yield(event) {
+                case .enqueued:
+                    return .enqueued
+                case .terminated:
+                    return .stopped
+                case .dropped:
+                    return .overflowed
+                @unknown default:
+                    return .overflowed
+                }
             }
-            await muscle.invalidateCallbacks(for: attempt.deliveryGeneration)
-            return .rejected
-        }
-        let events = transport.events
-        let eventConsumer = Task { @MainActor [weak self, events, generation, onBacklogOverflow] in
+        )
+        let events = mainActorStream.stream
+        let mainActorConsumer = Task { @MainActor [weak self, events, onBacklogOverflow] in
             for await event in events {
-                guard let self else { return }
-                await self.observeTransportEvent(
-                    event,
-                    generation: generation,
-                    onBacklogOverflow: onBacklogOverflow
-                )
+                guard !Task.isCancelled, let self else { return }
+                await self.executeMainActorEvent(event, onBacklogOverflow: onBacklogOverflow)
             }
         }
-        transportWiring = .wired(WiredTransport(attempt: attempt, eventConsumer: eventConsumer))
+        let wiring = WiredTransport(
+            attempt: attempt,
+            controlPlane: controlPlane,
+            mainActorEvents: mainActorStream.continuation,
+            mainActorConsumer: mainActorConsumer
+        )
+        transportWiring = .wired(wiring)
+        await controlPlane.start()
+        guard transportWiring.admitsEvent(generation: generation) else {
+            mainActorStream.continuation.finish()
+            mainActorConsumer.cancel()
+            await controlPlane.stop()
+            return await rejectTransportWiring(attempt)
+        }
         return .admitted(WiredTransportAdmission(attempt: attempt))
     }
 
-    /// Observes one transport event on the main actor. Client frames are handed
-    /// to per-client admission streams so unrelated lifecycle and client
-    /// traffic can continue while a request is suspended.
+    private func rejectTransportWiring(
+        _ attempt: TransportWiringAttempt
+    ) async -> TransportWiringOutcome {
+        if transportWiring.admits(attempt) {
+            transportWiring = .unwired
+        }
+        await muscle.invalidateCallbacks(for: attempt.deliveryGeneration)
+        return .rejected
+    }
+
     func observeTransportEvent(
         _ event: TransportEvent,
         generation: ClientDelivery.Generation,
-        onBacklogOverflow: @MainActor @Sendable (Int) async -> Void
+        onBacklogOverflow _: @MainActor @Sendable (Int) async -> Void
     ) async {
-        guard transportWiring.admitsEvent(generation: generation) else { return }
-        switch event {
-        case .clientConnected(let clientId, let remoteAddress):
-            replaceClientRequestPipeline(clientId: clientId)
-            if let remoteAddress {
-                await muscle.registerClientAddress(
-                    clientId,
-                    address: ClientNetworkAddress(remoteAddress),
-                    generation: generation
-                )
-            }
-            await muscle.sendServerHello(clientId: clientId, generation: generation)
-
-        case .clientDisconnected(let clientId):
-            stopClientRequestPipeline(clientId: clientId)
-            await observeClientDisconnection(clientId: clientId, generation: generation)
-
-        case .dataReceived(let clientId, let data, let respond):
-            await enqueueClientRequest(
-                clientId: clientId,
-                data: data,
-                respond: respond,
-                generation: generation
-            )
-
-        case .backlogOverflow(let maxEvents):
-            await onBacklogOverflow(maxEvents)
-
-        }
+        guard case .wired(let wiring) = transportWiring,
+              wiring.attempt.deliveryGeneration == generation
+        else { return }
+        await wiring.controlPlane.observe(event)
     }
 
     func tearDown() async {
-        let eventConsumer = transportWiring.eventConsumer
-        let deliveryGeneration = transportWiring.deliveryGeneration
+        let wiring = transportWiring.wired
+        let generation = transportWiring.deliveryGeneration
         transportWiring = .unwired
-        eventConsumer?.cancel()
-        if let deliveryGeneration {
-            await muscle.invalidateCallbacks(for: deliveryGeneration)
+        wiring?.mainActorEvents.finish()
+        wiring?.mainActorConsumer.cancel()
+        if let generation {
+            await muscle.invalidateCallbacks(for: generation)
         }
-        let pipelineConsumers = clientRequestPipelines.values.compactMap { $0.stop() }
-        clientRequestPipelines.removeAll()
+        await wiring?.controlPlane.stop()
         await brains.stopInteractionRequests()
-        await eventConsumer?.value
-        for consumer in pipelineConsumers {
-            await consumer.value
-        }
+        await wiring?.mainActorConsumer.value
     }
 
     func tearDownIfWired(to expectedTransport: ServerTransport) async {
@@ -156,127 +164,48 @@ extension TheGetaway {
         await tearDown()
     }
 
-    private func observeClientDisconnection(
-        clientId: Int,
-        generation: ClientDelivery.Generation
+    private func executeMainActorEvent(
+        _ event: TransportControlPlane.MainActorEvent,
+        onBacklogOverflow: @escaping @MainActor @Sendable (Int) async -> Void
     ) async {
-        await muscle.handleClientDisconnected(clientId, generation: generation)
-    }
+        switch event {
+        case .clientConnected(let clientId, let generation):
+            guard transportWiring.admitsEvent(generation: generation) else { return }
+            brains.cancelTransportRequests(clientId: clientId)
 
-    private func replaceClientRequestPipeline(clientId: Int) {
-        brains.cancelTransportRequests(clientId: clientId)
-        clientRequestPipelines.removeValue(forKey: clientId)?.stop()
-        clientRequestPipelines[clientId] = ClientRequestPipeline { [weak self] request in
-            await self?.executeClientRequest(request)
-        }
-    }
-
-    private func stopClientRequestPipeline(clientId: Int) {
-        brains.cancelTransportRequests(clientId: clientId)
-        clientRequestPipelines.removeValue(forKey: clientId)?.stop()
-    }
-
-    private func enqueueClientRequest(
-        clientId: Int,
-        data: Data,
-        respond: @escaping SocketResponseHandler,
-        generation: ClientDelivery.Generation
-    ) async {
-        guard transportWiring.admitsEvent(generation: generation) else { return }
-        guard let pipeline = clientRequestPipelines[clientId] else { return }
-
-        let request = ClientTransportRequest(
-            clientId: clientId,
-            data: data,
-            respond: respond,
-            generation: generation
-        )
-        switch pipeline.enqueue(request) {
-        case .enqueued:
-            break
-        case .stopped:
-            break
-        case .overflowed:
-            insideJobLogger.error(
-                "Client \(clientId) request backlog exceeded \(ClientRequestPipeline.maximumQueuedRequests), disconnecting"
-            )
-            stopClientRequestPipeline(clientId: clientId)
-            await muscle.disconnectClient(clientId, generation: generation)
-        }
-    }
-
-    private func executeClientRequest(_ request: ClientTransportRequest) async {
-        defer { observeClientRequestCompletionForTesting?(request.generation) }
-        guard transportWiring.admitsEvent(generation: request.generation) else { return }
-        let admission = await muscle.admitClientMessage(
-            request.clientId,
-            data: request.data,
-            respond: request.respond,
-            generation: request.generation
-        )
-        if let pauseAfterClientRequestAdmissionForTesting {
-            await pauseAfterClientRequestAdmissionForTesting(request.generation)
-        }
-        guard !Task.isCancelled else { return }
-        guard transportWiring.admitsEvent(generation: request.generation) else { return }
-
-        switch admission {
-        case .admitted(let message):
-            switch message.envelope.message.executionLane {
-            case .control:
-                await executeClientMessage(
+        case .dispatch(let message, let respond, let generation):
+            guard transportWiring.admitsEvent(generation: generation) else { return }
+            let clientId = message.clientId
+            let submission = brains.submitTransportRequest(clientId: clientId) { [weak self] in
+                guard !Task.isCancelled,
+                      let self,
+                      self.transportWiring.admitsEvent(generation: generation)
+                else { return }
+                await self.executeClientMessage(
                     message,
-                    respond: request.respond,
-                    generation: request.generation
+                    respond: respond,
+                    generation: generation
                 )
-            case .userInterface:
-                guard transportWiring.admitsEvent(generation: request.generation) else { return }
-                let submission = brains.submitTransportRequest(clientId: request.clientId) { [weak self] in
-                    guard !Task.isCancelled,
-                          let self,
-                          self.transportWiring.admitsEvent(generation: request.generation)
-                    else { return }
-                    await self.executeClientMessage(
-                        message,
-                        respond: request.respond,
-                        generation: request.generation
-                    )
-                }
-                if case .rejected(let rejection) = submission {
-                    guard transportWiring.admitsEvent(generation: request.generation) else { return }
-                    insideJobLogger.error(
-                        "Client \(request.clientId) interaction submission rejected: \(String(describing: rejection))"
-                    )
-                    stopClientRequestPipeline(clientId: request.clientId)
-                    await muscle.disconnectClient(
-                        request.clientId,
-                        generation: request.generation
-                    )
-                }
             }
-        case .handled:
-            break
-        }
-    }
-}
+            if case .rejected(let rejection) = submission {
+                guard case .wired(let wiring) = transportWiring,
+                      wiring.attempt.deliveryGeneration == generation
+                else { return }
+                insideJobLogger.error(
+                    "Client \(clientId) interaction submission rejected: \(String(describing: rejection))"
+                )
+                brains.cancelTransportRequests(clientId: clientId)
+                await wiring.controlPlane.stopClient(clientId)
+                await muscle.disconnectClient(clientId, generation: generation)
+            }
 
-private enum ClientRequestExecutionLane: Equatable {
-    case control
-    case userInterface
-}
+        case .clientDisconnected(let clientId, let generation):
+            guard transportWiring.admitsEvent(generation: generation) else { return }
+            brains.cancelTransportRequests(clientId: clientId)
 
-private extension ClientMessage {
-    var executionLane: ClientRequestExecutionLane {
-        switch self {
-        case .clientHello, .authenticate, .ping, .status:
-            return .control
-        case .requestInterface,
-             .getPasteboard,
-             .getAnnouncements,
-             .requestScreen,
-             .runtimeAction,
-             .heistPlan:
-            return .userInterface
+        case .backlogOverflow(let maxEvents, let generation):
+            guard transportWiring.admitsEvent(generation: generation) else { return }
+            await onBacklogOverflow(maxEvents)
         }
     }
 }

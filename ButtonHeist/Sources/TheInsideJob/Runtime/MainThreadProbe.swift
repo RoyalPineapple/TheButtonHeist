@@ -54,10 +54,15 @@ internal enum MainThreadProbe {
 
     internal typealias MainOperation = @MainActor @Sendable () -> Void
 
+    fileprivate enum Termination: Sendable {
+        case outcome(Outcome)
+        case cancelled
+    }
+
     private enum Phase: Sendable {
         case waitingForMain
         case runningWork
-        case terminal(Outcome)
+        case terminal(Termination)
     }
 
     internal struct Dependencies: Sendable {
@@ -99,8 +104,8 @@ internal enum MainThreadProbe {
 
     internal static func execute(
         _ request: MainThreadProbeRequest
-    ) async -> MainThreadProbeResponse {
-        let outcome = await execute(timeouts: Timeouts(request), work: {})
+    ) async throws -> MainThreadProbeResponse {
+        let outcome = try await execute(timeouts: Timeouts(request), work: {})
         let responseOutcome: MainThreadProbeOutcome = switch outcome {
         case .completed:
             .responsive
@@ -116,7 +121,7 @@ internal enum MainThreadProbe {
         timeouts: Timeouts,
         dependencies: Dependencies = .live,
         work: @escaping MainOperation
-    ) async -> Outcome {
+    ) async throws -> Outcome {
         let gate = Gate()
         let responsivenessSemaphore = DispatchSemaphore(value: 0)
         let workSemaphore = DispatchSemaphore(value: 0)
@@ -130,23 +135,45 @@ internal enum MainThreadProbe {
             }
         }
 
-        return await withCheckedContinuation { continuation in
-            dependencies.waitQueue.async {
-                if dependencies.wait(
-                    responsivenessSemaphore,
-                    timeouts.responsiveness
-                ) == .timedOut, let outcome = gate.timeoutWaitingForMain() {
-                    continuation.resume(returning: outcome)
-                    return
-                }
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                dependencies.waitQueue.async {
+                    if dependencies.wait(
+                        responsivenessSemaphore,
+                        timeouts.responsiveness
+                    ) == .timedOut, let termination = gate.timeoutWaitingForMain() {
+                        continuation.resume(with: termination.result)
+                        return
+                    }
 
-                if dependencies.wait(workSemaphore, timeouts.work) == .timedOut {
-                    continuation.resume(returning: gate.timeoutWork())
-                    return
-                }
+                    if let termination = gate.termination {
+                        continuation.resume(with: termination.result)
+                        return
+                    }
 
-                continuation.resume(returning: gate.terminalOutcome ?? gate.timeoutWork())
+                    if dependencies.wait(workSemaphore, timeouts.work) == .timedOut {
+                        continuation.resume(with: gate.timeoutWork().result)
+                        return
+                    }
+
+                    continuation.resume(with: gate.requiredTermination.result)
+                }
             }
+        } onCancel: {
+            guard gate.cancel() else { return }
+            responsivenessSemaphore.signal()
+            workSemaphore.signal()
+        }
+    }
+}
+
+private extension MainThreadProbe.Termination {
+    var result: Result<MainThreadProbe.Outcome, Error> {
+        switch self {
+        case .outcome(let outcome):
+            .success(outcome)
+        case .cancelled:
+            .failure(CancellationError())
         }
     }
 }
@@ -166,44 +193,67 @@ private extension MainThreadProbe {
         func complete() -> Bool {
             phase.withLock { phase in
                 guard case .runningWork = phase else { return false }
-                phase = .terminal(.completed)
+                phase = .terminal(.outcome(.completed))
                 return true
             }
         }
 
-        func timeoutWaitingForMain() -> Outcome? {
+        func cancel() -> Bool {
+            phase.withLock { phase in
+                if case .terminal = phase {
+                    return false
+                } else {
+                    phase = .terminal(.cancelled)
+                    return true
+                }
+            }
+        }
+
+        func timeoutWaitingForMain() -> Termination? {
             phase.withLock { phase in
                 switch phase {
                 case .waitingForMain:
-                    phase = .terminal(.mainThreadUnresponsive)
-                    return .mainThreadUnresponsive
+                    let termination = Termination.outcome(.mainThreadUnresponsive)
+                    phase = .terminal(termination)
+                    return termination
                 case .runningWork:
                     return nil
-                case .terminal(let outcome):
-                    return outcome
+                case .terminal(let termination):
+                    return termination
                 }
             }
         }
 
-        func timeoutWork() -> Outcome {
+        func timeoutWork() -> Termination {
             phase.withLock { phase in
                 switch phase {
                 case .waitingForMain:
-                    phase = .terminal(.mainThreadUnresponsive)
-                    return .mainThreadUnresponsive
+                    let termination = Termination.outcome(.mainThreadUnresponsive)
+                    phase = .terminal(termination)
+                    return termination
                 case .runningWork:
-                    phase = .terminal(.workTimedOut)
-                    return .workTimedOut
-                case .terminal(let outcome):
-                    return outcome
+                    let termination = Termination.outcome(.workTimedOut)
+                    phase = .terminal(termination)
+                    return termination
+                case .terminal(let termination):
+                    return termination
                 }
             }
         }
 
-        var terminalOutcome: Outcome? {
+        var termination: Termination? {
             phase.withLock { phase in
-                guard case .terminal(let outcome) = phase else { return nil }
-                return outcome
+                guard case .terminal(let termination) = phase else { return nil }
+                return termination
+            }
+        }
+
+        var requiredTermination: Termination {
+            phase.withLock { phase in
+                guard case .terminal(let termination) = phase else {
+                    preconditionFailure("A signaled main-thread probe must be terminal")
+                }
+                return termination
             }
         }
     }
