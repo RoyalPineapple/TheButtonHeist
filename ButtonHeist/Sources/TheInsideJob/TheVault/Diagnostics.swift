@@ -404,7 +404,7 @@ private enum DiagnosticPredicateCheckKind {
 
 private extension ResolvedElementPredicate {
     func includesCheck(_ kind: DiagnosticPredicateCheckKind) -> Bool {
-        core.checks.contains { check in
+        checks.contains { check in
             switch (kind, check) {
             case (.label, .label), (.identifier, .identifier), (.value, .value), (.hint, .hint):
                 return true

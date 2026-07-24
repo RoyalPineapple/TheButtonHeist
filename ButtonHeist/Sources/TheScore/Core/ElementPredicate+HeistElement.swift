@@ -40,8 +40,8 @@ extension HeistElement: PredicateSelectionSubject {
         AccessibilityPolicy.matcherFacts(for: self)
     }
 
-    /// Match this wire element against an `ResolvedElementPredicate`.
-    public func matches(_ predicate: ResolvedElementPredicate) -> Bool {
+    /// Match this wire element against a resolved element predicate.
+    package func matches(_ predicate: ResolvedElementPredicate) -> Bool {
         predicate.matches(self)
     }
 }
@@ -52,7 +52,7 @@ private extension Optional where Wrapped == ResolvedStringMatch {
     }
 }
 
-public extension ResolvedElementPredicate {
+package extension ResolvedElementPredicate {
     /// Whether any observed element in the collection satisfies this predicate.
     func anyMatch(in elements: [HeistElement]) -> Bool {
         !AccessibilityTargetMatchGraph(elements: elements).resolve(self).isEmpty

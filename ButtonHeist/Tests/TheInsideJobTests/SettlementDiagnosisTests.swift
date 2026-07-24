@@ -82,7 +82,7 @@ final class SettlementDiagnosisTests: SemanticObservationStreamTestCase {
         let command = Settlement.Command.observation(
             predicate: Settlement.Predicate(
                 authored: .changed(.elements()),
-                resolved: ResolvedAccessibilityPredicate(core: .changed(.elements([])))
+                resolved: .changed(.elements([]))
             ),
             deadline: .init(phase: .observation, instant: .now),
             baseline: .capture

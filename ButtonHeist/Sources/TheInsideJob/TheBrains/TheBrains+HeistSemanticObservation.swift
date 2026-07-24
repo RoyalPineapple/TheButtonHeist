@@ -25,7 +25,6 @@ extension ResolvedAccessibilityPredicate {
             return .visible
         }
     }
-    }
 }
 
 private extension ResolvedElementAssertion {

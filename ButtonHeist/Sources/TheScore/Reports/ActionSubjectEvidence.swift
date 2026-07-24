@@ -74,12 +74,12 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
 
     public let source: Source
     public let phase: Phase
-    public let target: ResolvedAccessibilityTarget
+    package let target: ResolvedAccessibilityTarget
     public let element: HeistElement
     public let resolution: ActionSubjectResolution
     public let settledObservationSequence: SettledObservationSequence?
 
-    public init(
+    package init(
         source: Source,
         phase: Phase = .resolvedBeforeDispatch,
         target: ResolvedAccessibilityTarget,

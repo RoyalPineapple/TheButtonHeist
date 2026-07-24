@@ -194,10 +194,11 @@ extension TheBrains {
         let baseline: Settlement.Baseline
         if let moment = context.currentState.evidence.handoff.event?.moment {
             baseline = .supplied(.init(moment: moment))
-        } else if case .presence = context.input.predicate.core {
-            baseline = .capture
         } else {
-            baseline = .unavailable(.unavailable)
+            baseline = switch context.input.predicate {
+            case .exists, .missing: .capture
+            case .announcement, .changed, .noChange: .unavailable(.unavailable)
+            }
         }
         let settlement = await runtime.settle(Settlement.Command(
             observing: context.input,

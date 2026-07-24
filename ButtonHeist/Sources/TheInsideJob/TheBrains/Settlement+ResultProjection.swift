@@ -367,7 +367,7 @@ private extension Settlement.ResultProjector {
             if let actual = expectation(from: result)?.actual {
                 parts.append("last observed: \(actual)")
             }
-        case (.presence, _, _):
+        case (.exists, _, _), (.missing, _, _):
             break
         }
         if case .unmet = result.evidence.predicate.status {

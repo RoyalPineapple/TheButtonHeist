@@ -562,7 +562,7 @@ extension ContainerPredicate: CustomStringConvertible {
 }
 
 /// A resolved container predicate. It cannot contain references.
-public struct ResolvedContainerPredicate: Codable, Sendable, Equatable, Hashable {
+package struct ResolvedContainerPredicate: Codable, Sendable, Equatable, Hashable {
     package let checks: NonEmptyArray<ResolvedContainerPredicateCheck>
 
     package init(validating checks: NonEmptyArray<ResolvedContainerPredicateCheck>) throws {
@@ -572,11 +572,11 @@ public struct ResolvedContainerPredicate: Codable, Sendable, Equatable, Hashable
         self.checks = checks
     }
 
-    public func matches(_ facts: ContainerPredicateFacts) -> Bool {
+    package func matches(_ facts: ContainerPredicateFacts) -> Bool {
         checks.allSatisfy { $0.matches(facts) }
     }
 
-    public init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "container predicate")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let checks = try container.decode(NonEmptyArray<ResolvedContainerPredicateCheck>.self, forKey: .checks)
@@ -590,7 +590,7 @@ public struct ResolvedContainerPredicate: Codable, Sendable, Equatable, Hashable
         }
     }
 
-    public func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(checks, forKey: .checks)
     }
@@ -599,7 +599,7 @@ public struct ResolvedContainerPredicate: Codable, Sendable, Equatable, Hashable
 }
 
 extension ResolvedContainerPredicate: CustomStringConvertible {
-    public var description: String {
+    package var description: String {
         CanonicalValueDescription.call("container", checks.map(\.description))
     }
 }

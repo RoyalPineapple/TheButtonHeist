@@ -29,7 +29,7 @@ struct ResolvedWaitRuntimeInput: Sendable, Equatable {
     static func changedElements(timeout: WaitTimeout) -> ResolvedWaitRuntimeInput {
         ResolvedWaitRuntimeInput(
             predicateExpression: .changed(.elements()),
-            predicate: ResolvedAccessibilityPredicate(core: .changed(.elements([]))),
+            predicate: .changed(.elements([])),
             timeout: timeout
         )
     }

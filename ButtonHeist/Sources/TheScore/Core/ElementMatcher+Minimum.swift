@@ -14,10 +14,10 @@ public enum CandidateTier: Int, Sendable, Equatable, Comparable {
     }
 }
 
-public struct MatcherAtom: Sendable, Equatable {
-    public let predicate: ResolvedElementPredicate
-    public let stability: AccessibilityFactStability
-    public let priority: Int
+package struct MatcherAtom: Sendable, Equatable {
+    package let predicate: ResolvedElementPredicate
+    package let stability: AccessibilityFactStability
+    package let priority: Int
     package let authoredCheck: ElementPredicateCheck
 
     package init(
@@ -70,12 +70,12 @@ package struct PredicateSelectionSubjectElement<Subject: PredicateSelectionSubje
     package var predicateSubject: Subject { element }
 }
 
-public struct PredicateCandidate: Sendable, Equatable {
-    public let predicate: ResolvedElementPredicate
-    public let atoms: [MatcherAtom]
-    public let tier: CandidateTier
+package struct PredicateCandidate: Sendable, Equatable {
+    package let predicate: ResolvedElementPredicate
+    package let atoms: [MatcherAtom]
+    package let tier: CandidateTier
 
-    public init(
+    package init(
         predicate: ResolvedElementPredicate,
         atoms: [MatcherAtom],
         tier: CandidateTier
@@ -199,9 +199,9 @@ public struct PredicateSelectionContext: Sendable, Equatable {
 public struct MinimumPredicateSelection: Sendable, Equatable {
     public let contextElementId: PredicateSelectionElementId
     public let target: AccessibilityTarget
-    public let candidate: PredicateCandidate
+    package let candidate: PredicateCandidate
 
-    public init(
+    package init(
         contextElementId: PredicateSelectionElementId,
         target: AccessibilityTarget,
         candidate: PredicateCandidate
@@ -213,7 +213,7 @@ public struct MinimumPredicateSelection: Sendable, Equatable {
 }
 
 public enum MinimumPredicateSelector {
-    public static func predicateCandidates(for element: HeistElement) -> [PredicateCandidate] {
+    package static func predicateCandidates(for element: HeistElement) -> [PredicateCandidate] {
         predicateCandidates(forSubject: element)
     }
 

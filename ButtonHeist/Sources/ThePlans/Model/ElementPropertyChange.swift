@@ -14,12 +14,12 @@ public struct ElementPropertyChange: Codable, Sendable, Equatable {
 }
 
 /// The execution-phase property change.
-public struct ResolvedElementPropertyChange: Codable, Sendable, Equatable {
+package struct ResolvedElementPropertyChange: Codable, Sendable, Equatable {
     package let value: ResolvedElementPropertyChangeValue
 
     package init(value: ResolvedElementPropertyChangeValue) {
         self.value = value
     }
 
-    public var property: ElementProperty { value.property }
+    package var property: ElementProperty { value.property }
 }

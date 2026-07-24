@@ -199,7 +199,7 @@ extension AccessibilityTarget: CustomStringConvertible {
 
 /// The execution-phase target currency. There is deliberately no reference
 /// case and no expression-bearing predicate payload.
-public indirect enum ResolvedAccessibilityTarget: Codable, Sendable, Equatable, Hashable {
+package indirect enum ResolvedAccessibilityTarget: Codable, Sendable, Equatable, Hashable {
     case predicate(ResolvedElementPredicate, ordinal: Int? = nil)
     case container(ResolvedContainerPredicate, ordinal: Int? = nil)
     case within(container: ResolvedContainerPredicate, target: ResolvedAccessibilityTarget)
@@ -208,7 +208,7 @@ public indirect enum ResolvedAccessibilityTarget: Codable, Sendable, Equatable, 
         case ordinal, container, target
     }
 
-    public init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         if container.contains(.container) || container.contains(.target) {
             guard container.contains(.container) else {
@@ -260,7 +260,7 @@ public indirect enum ResolvedAccessibilityTarget: Codable, Sendable, Equatable, 
         self = .predicate(predicate, ordinal: try Self.decodeOrdinal(from: container))
     }
 
-    public func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         switch self {
         case .predicate(let predicate, let ordinal):
             try predicate.encode(to: encoder)
@@ -295,7 +295,7 @@ public indirect enum ResolvedAccessibilityTarget: Codable, Sendable, Equatable, 
 }
 
 extension ResolvedAccessibilityTarget: CustomStringConvertible {
-    public var description: String {
+    package var description: String {
         switch self {
         case .predicate(let predicate, let ordinal):
             return CanonicalValueDescription.call("target", [

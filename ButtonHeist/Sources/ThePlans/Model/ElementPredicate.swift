@@ -504,7 +504,7 @@ extension ResolvedElementPredicateCheck: CustomStringConvertible {
 }
 
 /// A resolved element predicate. This type cannot contain references.
-public struct ResolvedElementPredicate: Codable, Sendable, Equatable, Hashable {
+package struct ResolvedElementPredicate: Codable, Sendable, Equatable, Hashable {
     package let checks: [ResolvedElementPredicateCheck]
 
     package init(_ checks: [ResolvedElementPredicateCheck] = []) {
@@ -546,7 +546,7 @@ public struct ResolvedElementPredicate: Codable, Sendable, Equatable, Hashable {
         Self([.actions(Set(actions))])
     }
 
-    public init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: ElementPredicate.CodingKeys.self, typeName: "element predicate")
         let container = try decoder.container(keyedBy: ElementPredicate.CodingKeys.self)
         checks = try container.decodeIfPresent([ResolvedElementPredicateCheck].self, forKey: .checks) ?? []
@@ -555,7 +555,7 @@ public struct ResolvedElementPredicate: Codable, Sendable, Equatable, Hashable {
         }
     }
 
-    public func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: ElementPredicate.CodingKeys.self)
         if !checks.isEmpty {
             try container.encode(checks, forKey: .checks)
@@ -564,7 +564,7 @@ public struct ResolvedElementPredicate: Codable, Sendable, Equatable, Hashable {
 }
 
 extension ResolvedElementPredicate: CustomStringConvertible {
-    public var description: String {
+    package var description: String {
         CanonicalValueDescription.call("predicate", checks.map(\.description))
     }
 }

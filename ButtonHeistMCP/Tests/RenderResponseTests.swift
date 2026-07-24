@@ -46,7 +46,7 @@ struct RenderResponseTests {
         )
         let trace = AccessibilityTrace(first: try Self.interface([row]))
             .appending(try Self.interface([row, lazyRow]))
-        let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Load More")))
+        let command = HeistActionCommand.activate(.predicate(ElementPredicate(label: "Load More")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let response = FenceResponse.heistExecution(
             plan: plan,

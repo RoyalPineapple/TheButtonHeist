@@ -999,7 +999,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
     private func transitionPredicate() -> Settlement.Predicate {
         Settlement.Predicate(
             authored: .changed(.elements()),
-            resolved: ResolvedAccessibilityPredicate(core: .changed(.elements([])))
+            resolved: .changed(.elements([]))
         )
     }
 
@@ -1024,7 +1024,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
     private func completeHistoryPredicate() -> Settlement.Predicate {
         Settlement.Predicate(
             authored: .noChange,
-            resolved: ResolvedAccessibilityPredicate(core: .noChange)
+            resolved: .noChange
         )
     }
 

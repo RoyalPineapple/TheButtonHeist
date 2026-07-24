@@ -36,20 +36,20 @@ extension AnnouncementPredicate: CustomStringConvertible {
     }
 }
 
-public struct ResolvedAnnouncementPredicate: Sendable, Equatable, Hashable {
+package struct ResolvedAnnouncementPredicate: Sendable, Equatable, Hashable {
     package let match: ResolvedStringMatch?
 
     package init(match: ResolvedStringMatch?) {
         self.match = match
     }
 
-    public func matches(_ text: String) -> Bool {
+    package func matches(_ text: String) -> Bool {
         match?.matches(text) ?? true
     }
 }
 
 extension ResolvedAnnouncementPredicate: CustomStringConvertible {
-    public var description: String {
+    package var description: String {
         guard let match else { return "announcement" }
         return CanonicalValueDescription.call("announcement", [match.description])
     }

@@ -561,7 +561,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
     private func transitionPredicate() -> Settlement.Predicate {
         Settlement.Predicate(
             authored: .changed(.elements()),
-            resolved: ResolvedAccessibilityPredicate(core: .changed(.elements([])))
+            resolved: .changed(.elements([]))
         )
     }
 

@@ -507,7 +507,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
         .observation(
             predicate: Settlement.Predicate(
                 authored: .changed(.elements()),
-                resolved: ResolvedAccessibilityPredicate(core: .changed(.elements([])))
+                resolved: .changed(.elements([]))
             ),
             deadline: .init(
                 phase: .observation,
@@ -526,7 +526,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
             predicate: predicate ?? expectation.map { _ in
                 Settlement.Predicate(
                     authored: .changed(.elements()),
-                    resolved: ResolvedAccessibilityPredicate(core: .changed(.elements([])))
+                    resolved: .changed(.elements([]))
                 )
             },
             allowances: .init(readiness: .seconds(5), expectation: expectation),
@@ -562,7 +562,7 @@ final class SettlementExecutionPerformanceTests: SemanticObservationStreamTestCa
         let command = Settlement.Command.observation(
             predicate: Settlement.Predicate(
                 authored: .changed(.elements()),
-                resolved: ResolvedAccessibilityPredicate(core: .changed(.elements([])))
+                resolved: .changed(.elements([]))
             ),
             deadline: .init(
                 phase: .observation,
