@@ -221,6 +221,34 @@ HeistPlan {
     }
 }
 
+@Test func `source and JSON admit nested plans once at the root diagnostic path`() throws {
+    let expectedPath = "$.body[0].conditional.cases[0].body[0].heist.body[0].invoke.path"
+    let sourceDiagnostic = try semanticDiagnostic {
+        try HeistSourceCompilation.compile("""
+        HeistPlan {
+            If(.exists(.label("Home"))) {
+                HeistPlan { RunHeist("Missing") }
+            }
+        }
+        """)
+    }
+    let json = Data("""
+    {"version":2,"body":[{"type":"conditional","conditional":{"cases":[{
+      "predicate":{"type":"exists","target":{"checks":[
+        {"kind":"label","match":{"mode":"exact","value":"Home"}}]}},
+      "body":[{"type":"heist","heist":{"version":2,"body":[
+        {"type":"invoke","invoke":{"path":"Missing"}}]}}]}]}}]}
+    """.utf8)
+    let jsonDiagnostic = try semanticDiagnostic {
+        try JSONDecoder().decode(HeistPlan.self, from: json)
+    }
+
+    #expect(sourceDiagnostic.path == expectedPath)
+    #expect(jsonDiagnostic.path == expectedPath)
+    #expect(sourceDiagnostic.code == .planRuntimeSafety)
+    #expect(sourceDiagnostic.message == jsonDiagnostic.message)
+}
+
 private func expectSemanticDiagnostic(
     _ operation: () throws -> HeistPlan,
     path expectedPath: String,

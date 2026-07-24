@@ -19,7 +19,7 @@ extension HeistPlanSourceParser {
         guard name == ["HeistPlan"] else {
             throw error(previous, "expected `HeistPlan { ... }`")
         }
-        return try parseHeistPlanAfterCallee(allowDefinitions: true, stackLocal: true)
+        return try parseHeistPlanAfterCallee(allowDefinitions: true)
     }
 
     private mutating func parseHeistBody(
@@ -262,7 +262,7 @@ extension HeistPlanSourceParser {
         case ["RepeatUntil"]:
             return [try parseRepeatUntil()]
         case ["HeistPlan"]:
-            let plan = try parseHeistPlanAfterCallee(allowDefinitions: false, stackLocal: false)
+            let plan = try parseHeistPlanAfterCallee(allowDefinitions: false)
             return [.heist(plan)]
         case ["RunHeist"]:
             return [try parseRunHeist()]
@@ -275,10 +275,7 @@ extension HeistPlanSourceParser {
         }
     }
 
-    private mutating func parseHeistPlanAfterCallee(
-        allowDefinitions: Bool,
-        stackLocal: Bool
-    ) throws -> HeistPlan {
+    private mutating func parseHeistPlanAfterCallee(allowDefinitions: Bool) throws -> HeistPlan {
         var name: HeistPlanName?
         var parameter = HeistParameter.none
         if consumeSymbol("(") {
@@ -300,17 +297,8 @@ extension HeistPlanSourceParser {
 
         let body = try parseHeistClosureBody(parameter: parameter, allowDefinitions: allowDefinitions)
         let definitions = try HeistPlan.mergeSourceDefinitions(body.definitions)
-        if stackLocal {
-            return try HeistPlan(
-                sourceStackVersion: HeistPlan.currentVersion,
-                name: name,
-                parameter: parameter,
-                definitions: definitions,
-                body: body.steps
-            )
-        }
         return try HeistPlan(
-            version: HeistPlan.currentVersion,
+            sourceStackVersion: HeistPlan.currentVersion,
             name: name,
             parameter: parameter,
             definitions: definitions,
