@@ -39,6 +39,23 @@ extension Navigation {
         case current
     }
 
+    enum ViewportExit {}
+}
+
+extension Navigation.ViewportExit {
+    enum Outcome: Equatable, Sendable {
+        case restored
+        case retained
+        case superseded
+        case failed(Failure)
+    }
+
+    enum Failure: Equatable, Sendable {
+        case originUnavailable
+    }
+}
+
+extension Navigation {
     enum ViewportSearchOrder: Equatable, Sendable {
         case forwardFirst
         case backwardFirst
@@ -81,15 +98,18 @@ extension Navigation {
         let event: Observation.SnapshotEvent
         let progress: InterfaceExplorationProgress
         let didMoveViewport: Bool
+        let viewportExit: ViewportExit.Outcome
 
         internal init(
             event: Observation.SnapshotEvent,
             progress: InterfaceExplorationProgress,
-            didMoveViewport: Bool = false
+            didMoveViewport: Bool = false,
+            viewportExit: ViewportExit.Outcome
         ) {
             self.event = event
             self.progress = progress
             self.didMoveViewport = didMoveViewport
+            self.viewportExit = viewportExit
         }
     }
 
@@ -147,13 +167,15 @@ extension Navigation {
         mutating func finish(
             startTime: CFTimeInterval,
             event: Observation.SnapshotEvent,
-            didMoveViewport: Bool
+            didMoveViewport: Bool,
+            viewportExit: ViewportExit.Outcome
         ) -> InterfaceExplorationResult {
             progress.explorationTime = CACurrentMediaTime() - startTime
             return InterfaceExplorationResult(
                 event: event,
                 progress: progress,
-                didMoveViewport: didMoveViewport
+                didMoveViewport: didMoveViewport,
+                viewportExit: viewportExit
             )
         }
     }
@@ -162,20 +184,25 @@ extension Navigation {
         target: ResolvedAccessibilityTarget?,
         deadline: SemanticObservationDeadline,
         stopWhen: @escaping @MainActor () -> Bool
-    ) async {
-        guard deadline.hasTimeRemaining(at: RuntimeElapsed.now) else { return }
+    ) async -> ViewportExit.Outcome {
+        guard deadline.hasTimeRemaining(at: RuntimeElapsed.now) else { return .restored }
         if let target,
            target.isElementTarget,
            case .resolved(.element) = vault.resolveTarget(target) {
-            _ = await elementInflation.inflate(
+            let inflation = await elementInflation.inflate(
                 for: target,
                 method: .scrollToVisible,
                 operationDeadline: deadline
             )
-            return
+            switch inflation {
+            case .inflated:
+                return .retained
+            case .failed:
+                return .restored
+            }
         }
 
-        _ = await exploreScreen(
+        guard let exploration = await exploreScreen(
             target: target,
             baseline: .currentViewport(
                 vault.visibleExplorationBaseline(from: vault.latestObservation)
@@ -185,7 +212,10 @@ extension Navigation {
             onObservation: { _ in
                 stopWhen() ? .goalSatisfied : .continue
             }
-        )
+        ) else {
+            return .failed(.originUnavailable)
+        }
+        return exploration.viewportExit
     }
 }
 

@@ -1260,7 +1260,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             vault: vault,
             tripwire: TheTripwire(),
             dispatch: { _ in .success(payload: .dismiss) },
-            observationEffects: { _ in }
+            observationEffects: { _ in .restored }
         )
         return await boundary.evaluate(.init(
             predicate: predicate,
@@ -1346,7 +1346,8 @@ private extension Array where Element == Settlement.Effect {
                  .arm,
                  .armReadiness,
                  .dispatchAction,
-                 .evaluatePredicate:
+                 .evaluatePredicate,
+                 .quiesce:
                 nil
             }
         }.first

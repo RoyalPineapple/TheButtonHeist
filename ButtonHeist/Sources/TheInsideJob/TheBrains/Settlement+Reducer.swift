@@ -42,6 +42,8 @@ extension Settlement {
                 reduceArmed(session, event: event)
             case .active(let session):
                 reduceActive(session, event: event)
+            case .quiescing(let quiescence):
+                reduceQuiescing(quiescence, event: event)
             case .terminal:
                 Decision(state: state, effects: [])
             }
@@ -114,7 +116,8 @@ private extension Settlement.Reducer {
              .predicateEvaluated,
              .readinessEstablished,
              .readinessInvalidated,
-             .handoffCaptureFailed:
+             .handoffCaptureFailed,
+             .quiesced:
             preconditionFailure("Settlement received armed evidence before baseline admission")
         }
     }
@@ -148,7 +151,7 @@ private extension Settlement.Reducer {
         case .deadlineReached:
             return Settlement.Decision(state: .armed(session), effects: [])
         case .cancelled:
-            return terminal(session, outcome: .cancelled, elapsed: event.elapsed)
+            return quiescing(session, outcome: .cancelled, elapsed: event.elapsed)
         case .baselineAdmitted,
              .baselineUnavailable,
              .dispatchCompleted,
@@ -159,7 +162,8 @@ private extension Settlement.Reducer {
              .predicateEvaluated,
              .readinessEstablished,
              .readinessInvalidated,
-             .handoffCaptureFailed:
+             .handoffCaptureFailed,
+             .quiesced:
             preconditionFailure("Settlement received active evidence before channel arming completed")
         }
     }
@@ -213,25 +217,25 @@ private extension Settlement.Reducer {
                 return Settlement.Decision(state: .active(session), effects: [])
             }
             if session.triggerEvidence.dispatchFailed {
-                return terminal(
+                return quiescing(
                     session,
                     outcome: .dispatchFailed,
                     elapsed: event.elapsed
                 )
             }
-            return terminal(
+            return quiescing(
                 session,
                 outcome: .timedOut(reached.phase),
                 elapsed: event.elapsed
             )
         case .cancelled:
-            return terminal(session, outcome: .cancelled, elapsed: event.elapsed)
-        case .baselineAdmitted, .baselineUnavailable, .channelsArmed:
+            return quiescing(session, outcome: .cancelled, elapsed: event.elapsed)
+        case .baselineAdmitted, .baselineUnavailable, .channelsArmed, .quiesced:
             preconditionFailure("Settlement received a bootstrap event after channel arming")
         }
 
         if let outcome = completedOutcome(session) {
-            return terminal(session, outcome: outcome, elapsed: event.elapsed)
+            return quiescing(session, outcome: outcome, elapsed: event.elapsed)
         }
         effects += admitExpectationPhaseIfNeeded(in: &session)
         return Settlement.Decision(state: .active(session), effects: effects)
@@ -455,6 +459,44 @@ private extension Settlement.Reducer {
 }
 
 private extension Settlement.Reducer {
+    static func quiescing(
+        _ session: Settlement.Session,
+        outcome: Settlement.Outcome,
+        elapsed: ElapsedMilliseconds
+    ) -> Settlement.Decision {
+        Settlement.Decision(
+            state: .quiescing(.init(
+                session: session,
+                intendedOutcome: outcome,
+                elapsed: elapsed
+            )),
+            effects: [.quiesce(.init(
+                boundary: session.boundary,
+                observationScope: session.command.observationScope
+            ))]
+        )
+    }
+
+    static func reduceQuiescing(
+        _ quiescence: Settlement.Quiescence,
+        event: Settlement.Event
+    ) -> Settlement.Decision {
+        guard case .quiesced(let viewportExit) = event.fact else {
+            return Settlement.Decision(state: .quiescing(quiescence), effects: [])
+        }
+        let outcome: Settlement.Outcome = switch viewportExit {
+        case .restored, .retained, .superseded:
+            quiescence.intendedOutcome
+        case .failed(let failure):
+            .viewportExitFailed(failure)
+        }
+        return terminal(
+            quiescence.session,
+            outcome: outcome,
+            elapsed: quiescence.elapsed
+        )
+    }
+
     static func terminal(
         _ session: Settlement.Session,
         outcome: Settlement.Outcome,

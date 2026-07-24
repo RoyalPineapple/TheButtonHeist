@@ -513,6 +513,7 @@ private extension Settlement.Outcome {
         case .baselineUnavailable: "baselineUnavailable"
         case .timedOut: "timedOut"
         case .cancelled: "cancelled"
+        case .viewportExitFailed: "viewportExitFailed"
         }
     }
 }

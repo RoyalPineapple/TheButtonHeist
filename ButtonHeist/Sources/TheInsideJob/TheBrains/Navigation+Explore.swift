@@ -49,8 +49,9 @@ extension Navigation {
     ) async -> Observation.SnapshotEvent? {
         let afterViewportMovement = previousViewportHash != nil
         defer { notificationWindow?.cancel() }
-        guard !Task.isCancelled,
-              afterViewportMovement || hasTimeRemaining(before: deadline) else { return nil }
+        guard afterViewportMovement
+                || (!Task.isCancelled && hasTimeRemaining(before: deadline))
+        else { return nil }
         let timeoutMs = min(
             SettleSession.viewportTransitionTimeoutMs,
             deadline.map { max(1, Int(($0.remainingSeconds() * 1_000).rounded(.up))) } ?? .max
@@ -66,7 +67,7 @@ extension Navigation {
                 start: RuntimeElapsed.now,
                 baselineTripwireSignal: tripwire.tripwireSignal()
             )
-            guard !Task.isCancelled else { return nil }
+            guard afterViewportMovement || !Task.isCancelled else { return nil }
             let transitionCanSettleAgain = transitionDeadline.remainingSeconds() * 1_000
                 >= Double(SettleSession.viewportTransitionMinimumBudgetMs)
             if let previousViewportHash,

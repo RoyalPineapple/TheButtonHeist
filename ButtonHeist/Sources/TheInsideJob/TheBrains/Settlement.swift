@@ -760,6 +760,7 @@ extension Settlement {
         case baselineUnavailable
         case timedOut(DeadlinePhase)
         case cancelled
+        case viewportExitFailed(Navigation.ViewportExit.Failure)
     }
 
     internal struct Result: Sendable {
@@ -803,16 +804,23 @@ extension Settlement {
         case awaitingBaseline(Command)
         case armed(Session)
         case active(Session)
+        case quiescing(Quiescence)
         case terminal(Result)
 
         internal var result: Result? {
             switch self {
             case .terminal(let result):
                 result
-            case .awaitingBaseline, .armed, .active:
+            case .awaitingBaseline, .armed, .active, .quiescing:
                 nil
             }
         }
+    }
+
+    internal struct Quiescence: Sendable {
+        internal let session: Session
+        internal let intendedOutcome: Outcome
+        internal let elapsed: ElapsedMilliseconds
     }
 
     internal struct Session: Sendable {
@@ -884,6 +892,7 @@ extension Settlement {
         case armDeadline(PhaseDeadline)
         case dispatchAction(ResolvedHeistActionCommand)
         case evaluatePredicate(Predicate.EvaluationRequest)
+        case quiesce(Arming)
     }
 }
 
@@ -937,6 +946,7 @@ extension Settlement.Event {
         case handoffCaptureFailed(Settlement.Readiness.Generation, Settlement.Capture.Failure)
         case deadlineReached(Settlement.PhaseDeadline)
         case cancelled
+        case quiesced(Navigation.ViewportExit.Outcome)
     }
 }
 

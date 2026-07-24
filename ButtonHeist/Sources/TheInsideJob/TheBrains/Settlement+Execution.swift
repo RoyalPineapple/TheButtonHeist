@@ -128,9 +128,7 @@ internal protocol SettlementExecutionBoundary: Sendable {
     @MainActor
     func armObservationEffects(_ arming: Settlement.Arming) async
     @MainActor
-    func quiesceSettlement(_ arming: Settlement.Arming) async
-    @MainActor
-    func finalizeSettlement(_ arming: Settlement.Arming) async
+    func quiesceSettlement(_ arming: Settlement.Arming) async -> Navigation.ViewportExit.Outcome
 
     @MainActor
     func dispatch(
@@ -393,7 +391,6 @@ extension Settlement {
             let initial = Reducer.begin(command)
             var state = initial.state
             var effects = initial.effects
-            var arming: Arming?
             var admittedMoments: [Observation.Moment] = []
             var activeCapture: Capture.Request?, pendingCapture: Capture.Request?
             var drainsArmingInputs = false
@@ -426,7 +423,7 @@ extension Settlement {
                     }
 
                     if case .terminal(let result) = state {
-                        return await finish(result, arming: arming, sink: sink, tasks: &tasks)
+                        return finish(result, sink: sink)
                     }
 
                     if !effects.isEmpty {
@@ -449,7 +446,6 @@ extension Settlement {
                             }
 
                         case .arm(let requestedArming):
-                            arming = requestedArming
                             let decision = await arm(requestedArming, state: state, sink: sink)
                             state = decision.state
                             effects += decision.effects
@@ -474,6 +470,11 @@ extension Settlement {
                                 let result = await boundary.evaluate(request)
                                 sink.completeEvaluation(.init(target: request.target, result: result))
                             }
+
+                        case .quiesce(let arming):
+                            let decision = await quiesce(arming, state: state, sink: sink, tasks: &tasks)
+                            state = decision.state
+                            effects += decision.effects
                         }
                         continue
                     }
@@ -498,17 +499,24 @@ extension Settlement {
             }
         }
 
-        private func finish(
-            _ result: Result,
-            arming: Arming?,
+        private func quiesce(
+            _ arming: Arming,
+            state: State,
             sink: ExecutionSink,
             tasks: inout TaskGroup<Void>
-        ) async -> Result {
+        ) async -> Decision {
             sink.finish()
-            if let arming { await boundary.quiesceSettlement(arming) }
             tasks.cancelAll()
             await tasks.waitForAll()
-            if let arming { await boundary.finalizeSettlement(arming) }
+            let viewportExit = await boundary.quiesceSettlement(arming)
+            return await reduce(state, fact: .quiesced(viewportExit))
+        }
+
+        private func finish(
+            _ result: Result,
+            sink: ExecutionSink
+        ) -> Result {
+            sink.finish()
             diagnosisSink(Diagnosis.project(result))
             return result
         }
@@ -787,6 +795,8 @@ private extension Settlement.State {
         case .armed(let session),
              .active(let session):
             session
+        case .quiescing(let quiescence):
+            quiescence.session
         case .awaitingBaseline, .terminal:
             nil
         }
@@ -797,6 +807,8 @@ private extension Settlement.State {
         case .armed(let session),
              .active(let session):
             session.handoff
+        case .quiescing(let quiescence):
+            quiescence.session.handoff
         case .terminal(let result):
             result.evidence.handoff
         case .awaitingBaseline:
@@ -819,6 +831,14 @@ private extension Settlement.State {
         case .active(var session):
             session.timing.merge(timing)
             return .active(session)
+        case .quiescing(let quiescence):
+            var session = quiescence.session
+            session.timing.merge(timing)
+            return .quiescing(.init(
+                session: session,
+                intendedOutcome: quiescence.intendedOutcome,
+                elapsed: quiescence.elapsed
+            ))
         case .terminal(let result):
             return .terminal(result.recording(timing))
         case .awaitingBaseline:
@@ -832,7 +852,8 @@ private extension Settlement.Event.Fact {
         switch self {
         case .readinessInvalidated,
              .deadlineReached,
-             .cancelled:
+             .cancelled,
+             .quiesced:
             true
         case .baselineAdmitted,
              .baselineUnavailable,
@@ -878,7 +899,7 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
     ) async -> TheSafecracker.ActionDispatchResult
     internal typealias ObservationEffects = @MainActor @Sendable (
         Settlement.ObservationEffectControl
-    ) async -> Void
+    ) async -> Navigation.ViewportExit.Outcome
 
     private let command: Settlement.Command
     private let vault: TheVault
@@ -1078,23 +1099,22 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
         guard command.waitsForObservation else { return }
         let control = Settlement.ObservationEffectControl()
         let task = Task {
-            await publishObservationEffects(control)
+            let viewportExit = await publishObservationEffects(control)
             control.complete()
+            return viewportExit
         }
         lifecycle.retainObservationEffect(control: control, task: task)
     }
 
     @MainActor
-    internal func quiesceSettlement(_: Settlement.Arming) async {
-        await lifecycle.quiesce()
-    }
-
-    @MainActor
-    internal func finalizeSettlement(_ arming: Settlement.Arming) async {
-        guard await lifecycle.finalize() else { return }
+    internal func quiesceSettlement(
+        _ arming: Settlement.Arming
+    ) async -> Navigation.ViewportExit.Outcome {
+        let viewportExit = await lifecycle.finalize()
         await vault.semanticObservationStream.storeOwner.settlementDidFinish(
             at: arming.boundary.moment
         )
+        return viewportExit
     }
 
     @MainActor
@@ -1126,7 +1146,7 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
 internal final class LiveSettlementLifecycle {
     private struct ObservationEffect {
         let control: Settlement.ObservationEffectControl
-        let task: Task<Void, Never>
+        let task: Task<Navigation.ViewportExit.Outcome, Never>
     }
 
     private struct ActiveResources {
@@ -1149,7 +1169,12 @@ internal final class LiveSettlementLifecycle {
     }
 
     private struct Quiescence {
-        let completion: Task<Void, Never>
+        let completion: Task<Navigation.ViewportExit.Outcome, Never>
+        let finalization: FinalizationResources
+    }
+
+    private struct Quiesced {
+        let viewportExit: Navigation.ViewportExit.Outcome
         let finalization: FinalizationResources
     }
 
@@ -1157,8 +1182,8 @@ internal final class LiveSettlementLifecycle {
         case idle
         case active(ActiveResources)
         case quiescing(Quiescence)
-        case quiesced(FinalizationResources)
-        case finalized
+        case quiesced(Quiesced)
+        case finalized(Navigation.ViewportExit.Outcome)
     }
 
     private var phase = Phase.idle
@@ -1199,7 +1224,7 @@ internal final class LiveSettlementLifecycle {
 
     func retainObservationEffect(
         control: Settlement.ObservationEffectControl,
-        task: Task<Void, Never>
+        task: Task<Navigation.ViewportExit.Outcome, Never>
     ) {
         guard case .active(var resources) = phase else {
             preconditionFailure("Settlement observation effects require an active lifecycle")
@@ -1261,7 +1286,7 @@ internal final class LiveSettlementLifecycle {
         phase = .active(resources)
     }
 
-    internal func quiesce() async {
+    internal func quiesce() async -> Navigation.ViewportExit.Outcome {
         let quiescence: Quiescence
         switch phase {
         case .active(let resources):
@@ -1271,12 +1296,13 @@ internal final class LiveSettlementLifecycle {
             resources.observationSubscription?.cancel()
             resources.observationEffect?.control.requestStop()
             let completion = Task {
-                await resources.observationEffect?.task.value
+                let viewportExit = await resources.observationEffect?.task.value ?? .restored
                 await resources.readinessTask?.value
                 await resources.deadlineTask?.value
                 for task in resources.tasks {
                     await task.value
                 }
+                return viewportExit
             }
             quiescence = Quiescence(
                 completion: completion,
@@ -1289,28 +1315,36 @@ internal final class LiveSettlementLifecycle {
             phase = .quiescing(quiescence)
         case .quiescing(let existing):
             quiescence = existing
-        case .idle, .quiesced, .finalized:
-            return
+        case .quiesced(let quiesced):
+            return quiesced.viewportExit
+        case .finalized(let viewportExit):
+            return viewportExit
+        case .idle:
+            return .restored
         }
 
-        await quiescence.completion.value
+        let viewportExit = await quiescence.completion.value
         if case .quiescing = phase {
-            phase = .quiesced(quiescence.finalization)
+            phase = .quiesced(.init(
+                viewportExit: viewportExit,
+                finalization: quiescence.finalization
+            ))
         }
+        return viewportExit
     }
 
-    internal func finalize() async -> Bool {
-        await quiesce()
-        guard case .quiesced(let resources) = phase else { return false }
-        switch resources.notificationOutcome {
+    internal func finalize() async -> Navigation.ViewportExit.Outcome {
+        let viewportExit = await quiesce()
+        guard case .quiesced(let quiesced) = phase else { return viewportExit }
+        switch quiesced.finalization.notificationOutcome {
         case .consumed:
-            resources.notificationWindow?.consume()
+            quiesced.finalization.notificationWindow?.consume()
         case .released:
-            resources.notificationWindow?.cancel()
+            quiesced.finalization.notificationWindow?.cancel()
         }
-        resources.demand.cancel()
-        phase = .finalized
-        return true
+        quiesced.finalization.demand.cancel()
+        phase = .finalized(viewportExit)
+        return viewportExit
     }
 }
 
@@ -1328,15 +1362,15 @@ extension TheBrains {
                 timeoutSeconds: deadline.remainingDuration(at: start) / .seconds(1)
             )
             observationEffects = { control in
-                if case .announcement = predicate.resolved { return }
-                await self.navigation.exploreForWait(
+                if case .announcement = predicate.resolved { return .restored }
+                return await self.navigation.exploreForWait(
                     target: predicate.resolved.singularTarget,
                     deadline: discoveryDeadline,
                     stopWhen: { control.stopRequested }
                 )
             }
         case .currentState, .action:
-            observationEffects = { _ in }
+            observationEffects = { _ in .restored }
         }
 
         return await Settlement.Executor(boundary: LiveSettlementExecutionBoundary(

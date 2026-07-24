@@ -108,6 +108,8 @@ private extension Settlement.ResultProjector {
                 (.accessibilityTreeUnavailable, TheBrains.treeUnavailableMessage)
             case .cancelled:
                 (.actionFailed, "cancelled after \(result.evidence.elapsed)ms")
+            case .viewportExitFailed:
+                (.actionFailed, viewportExitFailureMessage)
             case .settled, .dispatchFailed:
                 preconditionFailure("Pending action requires a pre-dispatch terminal outcome")
             }
@@ -145,6 +147,8 @@ private extension Settlement.ResultProjector {
             }
         case .baselineUnavailable:
             (.accessibilityTreeUnavailable, TheBrains.treeUnavailableMessage)
+        case .viewportExitFailed:
+            (.actionFailed, viewportExitFailureMessage)
         case .settled:
             nil
         case .dispatchFailed:
@@ -299,7 +303,7 @@ private extension Settlement.ResultProjector {
             .timeout
         case .baselineUnavailable:
             .accessibilityTreeUnavailable
-        case .dispatchFailed, .cancelled:
+        case .dispatchFailed, .cancelled, .viewportExitFailed:
             .actionFailed
         case .settled:
             preconditionFailure("Settled wait has no failure kind")
@@ -316,6 +320,8 @@ private extension Settlement.ResultProjector {
             "observation settlement cannot fail action dispatch"
         case .cancelled:
             "settlement cancelled after \(result.evidence.elapsed)ms"
+        case .viewportExitFailed:
+            viewportExitFailureMessage
         case .settled:
             preconditionFailure("Settled wait has no failure message")
         }
@@ -388,6 +394,10 @@ private extension Settlement.ResultProjector {
                 ordinal.map { "ordinal=\($0)" },
             ].compactMap { $0 }.joined(separator: " ")
         }
+    }
+
+    static var viewportExitFailureMessage: String {
+        "Could not restore the accessibility viewport after observation"
     }
 }
 

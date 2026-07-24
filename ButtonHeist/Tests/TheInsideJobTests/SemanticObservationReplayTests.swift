@@ -229,7 +229,8 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
                 .commitDiscoveryObservationForTesting(freshDiscovery)
             return Navigation.InterfaceExplorationResult(
                 event: event,
-                progress: .init()
+                progress: .init(),
+                viewportExit: .restored
             )
         }
         defer { discoveryContinuation?.resume() }

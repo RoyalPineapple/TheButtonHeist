@@ -205,7 +205,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         let result = exploration.finish(
             startTime: CACurrentMediaTime() - 0.01,
             event: event,
-            didMoveViewport: false
+            didMoveViewport: false,
+            viewportExit: .restored
         )
 
         XCTAssertGreaterThan(result.progress.explorationTime, 0)

@@ -545,12 +545,14 @@ private final class AutomaticTimeoutDiagnosisBoundary: SettlementExecutionBounda
 
     func armObservationEffects(_: Settlement.Arming) async {}
 
-    func quiesceSettlement(_: Settlement.Arming) async {
-        lock.withLock { state.snapshot.quiescence += 1 }
-    }
-
-    func finalizeSettlement(_: Settlement.Arming) async {
-        lock.withLock { state.snapshot.finalization += 1 }
+    func quiesceSettlement(
+        _: Settlement.Arming
+    ) async -> Navigation.ViewportExit.Outcome {
+        lock.withLock {
+            state.snapshot.quiescence += 1
+            state.snapshot.finalization += 1
+        }
+        return .restored
     }
 
     @MainActor

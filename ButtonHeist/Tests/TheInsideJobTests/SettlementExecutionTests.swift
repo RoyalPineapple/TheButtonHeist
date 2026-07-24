@@ -26,15 +26,16 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
         )
 
         lifecycle.requestNotificationWindowConsumption()
-        await lifecycle.quiesce()
+        let viewportExit = await lifecycle.quiesce()
 
         XCTAssertEqual(try XCTUnwrap(child.capture()).events.count, 1)
         child.cancel()
-        let didFinalize = await lifecycle.finalize()
-        let didFinalizeAgain = await lifecycle.finalize()
+        let finalizedExit = await lifecycle.finalize()
+        let repeatedExit = await lifecycle.finalize()
 
-        XCTAssertTrue(didFinalize)
-        XCTAssertFalse(didFinalizeAgain)
+        XCTAssertEqual(viewportExit, .restored)
+        XCTAssertEqual(finalizedExit, .restored)
+        XCTAssertEqual(repeatedExit, .restored)
         XCTAssertTrue(
             notifications.checkpoint(
                 after: .origin,
@@ -307,7 +308,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
                     )
                     return result
                 },
-                observationEffects: { _ in }
+                observationEffects: { _ in .restored }
             )
             return await Settlement.Executor(boundary: boundary).execute(command)
         }
@@ -370,7 +371,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
             dispatch: { _ in
                 preconditionFailure("Observation settlement cannot dispatch")
             },
-            observationEffects: { _ in }
+            observationEffects: { _ in .restored }
         )
         let boundary = ScriptedSettlementBoundary(
             baseline: baseline,
@@ -933,7 +934,9 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         }
     }
 
-    func quiesceSettlement(_ arming: Settlement.Arming) async {
+    func quiesceSettlement(
+        _ arming: Settlement.Arming
+    ) async -> Navigation.ViewportExit.Outcome {
         record(.quiesce)
         let (sink, control, observationEffectsTask) = lock.withLock {
             defer {
@@ -965,16 +968,13 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
                 observationBoundary: .including(changed.moment)
             ))
         }
-        if let liveObservationBoundary {
+        let viewportExit = if let liveObservationBoundary {
             await liveObservationBoundary.quiesceSettlement(arming)
-        }
-    }
-
-    func finalizeSettlement(_ arming: Settlement.Arming) async {
-        if let liveObservationBoundary {
-            await liveObservationBoundary.finalizeSettlement(arming)
+        } else {
+            Navigation.ViewportExit.Outcome.restored
         }
         record(.finalize)
+        return viewportExit
     }
 
     func publishReadinessAfterTerminal(count: Int) {

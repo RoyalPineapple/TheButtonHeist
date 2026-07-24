@@ -166,9 +166,9 @@ final class SemanticObservationLifecycleTests: SemanticObservationStreamTestCase
             associatedElement: .none
         )
 
-        await lifecycle.quiesce()
-        let didFinalize = await lifecycle.finalize()
-        XCTAssertTrue(didFinalize)
+        _ = await lifecycle.quiesce()
+        let viewportExit = await lifecycle.finalize()
+        XCTAssertEqual(viewportExit, .restored)
         XCTAssertEqual(
             vault.accessibilityNotifications
                 .checkpoint(after: .origin, selection: .unclaimedScoped)
