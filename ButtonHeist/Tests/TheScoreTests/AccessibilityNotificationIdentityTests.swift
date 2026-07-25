@@ -95,13 +95,18 @@ final class AccessibilityNotificationIdentityTests: XCTestCase {
         }
     }
 
-    func testScreenBoundaryClassifiesNotificationsByOuterSemanticCategory() {
-        let elementNotifications = [
+    /// A replaced baseline keeps only the notifications that speak about it.
+    ///
+    /// Element, announcement and unknown notifications arriving on the same
+    /// edge are not evidence of a screen change and do not ride along on the
+    /// screen fact. They used to land on the departure and arrival facts the
+    /// boundary projected; there are none now, so they are dropped rather than
+    /// reattributed to an event they did not describe.
+    func testScreenBoundaryKeepsOnlyScreenNotifications() {
+        let screenNotification = evidence(.screenChanged, sequence: 3)
+        let notifications = [
             evidence(.elementChanged(.layout), sequence: 1),
             evidence(.elementChanged(.value), sequence: 2),
-        ]
-        let screenNotification = evidence(.screenChanged, sequence: 3)
-        let notifications = elementNotifications + [
             screenNotification,
             evidence(.announcement, sequence: 4),
             evidence(.unknown(4002), sequence: 5),
@@ -110,12 +115,10 @@ final class AccessibilityNotificationIdentityTests: XCTestCase {
 
         let facts = AccessibilityTrace.ChangeFact.between(before, after)
 
-        guard facts.count == 3 else {
-            return XCTFail("Expected departure, screen, and arrival facts")
+        guard facts.count == 1, case .screenChanged = facts[0] else {
+            return XCTFail("Expected a single screen change fact")
         }
-        XCTAssertEqual(facts[0].metadata.accessibilityNotifications, elementNotifications)
-        XCTAssertEqual(facts[1].metadata.accessibilityNotifications, [screenNotification])
-        XCTAssertEqual(facts[2].metadata.accessibilityNotifications, elementNotifications)
+        XCTAssertEqual(facts[0].metadata.accessibilityNotifications, [screenNotification])
     }
 
     private func evidence(

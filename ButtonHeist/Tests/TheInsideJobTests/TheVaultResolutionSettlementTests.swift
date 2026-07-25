@@ -381,7 +381,7 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(
             AccessibilityTrace(captures: [baseline.capture, secondEvent.moment.capture])
                 .changeFacts.map(\.kind),
-            [.elementsChanged, .screenChanged, .elementsChanged]
+            [.screenChanged]
         )
     }
 

@@ -207,7 +207,7 @@ extension WireConverterTests {
         )
         XCTAssertEqual(
             delta.changeFacts.map(\.kind),
-            [.elementsChanged, .screenChanged, .elementsChanged]
+            [.screenChanged]
         )
         XCTAssertEqual(delta.current?.projectedElements.count, 1)
     }

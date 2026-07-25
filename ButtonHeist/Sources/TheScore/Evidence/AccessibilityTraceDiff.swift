@@ -26,11 +26,7 @@ enum AccessibilityTraceDiff {
 
         switch change {
         case .screenChanged:
-            return projectScreenBoundaryFacts(
-                before: before.interface,
-                after: after.interface,
-                metadata: metadata
-            )
+            return projectScreenBoundaryFacts(metadata: metadata)
         case .elementChanged:
             return projectSameScreenFacts(
                 before: before.interface,
@@ -40,33 +36,27 @@ enum AccessibilityTraceDiff {
         }
     }
 
+    /// A screen change is a wholesale replacement of the baseline, not a diff,
+    /// so nothing here is diffed.
+    ///
+    /// The old baseline is discarded and the arrived capture becomes the one
+    /// subsequent deltas measure from. There is no edge to compute edits
+    /// across: the answer to "what changed" is "the baseline did", and the new
+    /// baseline is the settled capture the trace already holds, which
+    /// `metadata.captureEdge` already points at.
+    ///
+    /// Projecting the two graphs into departed/arrived lists would restate a
+    /// snapshot the reader has under names that promise a delta nobody
+    /// computed — and would let `appeared`/`disappeared` match every node on
+    /// either screen, since a replacement trivially contains all of both.
     private static func projectScreenBoundaryFacts(
-        before: Interface,
-        after: Interface,
         metadata: AccessibilityTrace.ChangeFactMetadata
     ) -> [AccessibilityTrace.ChangeFact] {
-        let elementMetadata = metadata.filteringNotifications(isElementChangeNotification)
-        let screenMetadata = metadata.filteringNotifications(isScreenChangeNotification)
-        let disappearances = AccessibilityTrace.ChangeFact.elementsChanged(
-            AccessibilityTrace.ElementsChangeFact(
-                disappeared: before.graph.nodesInPathOrder.map {
-                    AccessibilityTrace.InterfaceChangeNode(record: $0)
-                },
-                metadata: elementMetadata
-            )
-        )
-        let marker = AccessibilityTrace.ChangeFact.screenChanged(AccessibilityTrace.ScreenChangeFact(
-            metadata: screenMetadata
-        ))
-        let appearances = AccessibilityTrace.ChangeFact.elementsChanged(
-            AccessibilityTrace.ElementsChangeFact(
-                appeared: after.graph.nodesInPathOrder.map {
-                    AccessibilityTrace.InterfaceChangeNode(record: $0)
-                },
-                metadata: elementMetadata
-            )
-        )
-        return [disappearances, marker, appearances]
+        [
+            .screenChanged(AccessibilityTrace.ScreenChangeFact(
+                metadata: metadata.filteringNotifications(isScreenChangeNotification)
+            )),
+        ]
     }
 
     private static func projectSameScreenFacts(

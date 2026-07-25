@@ -32,18 +32,14 @@ extension TheBrainsPipelineTests {
         )
         XCTAssertEqual(
             transitionTrace.changeFacts.map(\.kind),
-            [.elementsChanged, .screenChanged, .elementsChanged]
+            [.screenChanged]
         )
-        let boundaryElementFacts = transitionTrace.changeFacts.compactMap { fact -> AccessibilityTrace.ElementsChangeFact? in
-            guard case .elementsChanged(let elements) = fact else { return nil }
-            return elements
-        }
-        XCTAssertEqual(boundaryElementFacts.count, 2)
-        XCTAssertFalse(boundaryElementFacts[0].disappeared.isEmpty)
-        XCTAssertTrue(boundaryElementFacts[0].appeared.isEmpty)
-        XCTAssertFalse(boundaryElementFacts[1].appeared.isEmpty)
-        XCTAssertTrue(boundaryElementFacts[1].disappeared.isEmpty)
-        XCTAssertTrue(boundaryElementFacts.allSatisfy(\.updated.isEmpty))
+        XCTAssertTrue(
+            transitionTrace.changeFacts.allSatisfy { fact in
+                if case .elementsChanged = fact { false } else { true }
+            },
+            "A new screen generation replaces the baseline; it is not an element change"
+        )
 
         let newBaseline = try XCTUnwrap(newScreenEvent.moment)
         let nextEvent = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
@@ -114,7 +110,7 @@ extension TheBrainsPipelineTests {
         )
         XCTAssertEqual(
             after.trace.changeFacts.map(\.kind),
-            [.elementsChanged, .screenChanged, .elementsChanged]
+            [.screenChanged]
         )
     }
 
@@ -211,7 +207,7 @@ extension TheBrainsPipelineTests {
             after.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
             [.unknown(4_002)]
         )
-        XCTAssertEqual(after.trace.changeFacts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
+        XCTAssertEqual(after.trace.changeFacts.map(\.kind), [.screenChanged])
     }
 
     func testChangePredicatesReadScreenAndElementFactsSeparately() async throws {
@@ -238,7 +234,8 @@ extension TheBrainsPipelineTests {
             predicate: elementExpression
         )
         XCTAssertTrue(screenPredicate.met)
-        XCTAssertTrue(elementPredicateAgainstScreen.met)
+        XCTAssertFalse(elementPredicateAgainstScreen.met)
+        XCTAssertEqual(elementPredicateAgainstScreen.actual, "screenChanged")
 
         _ = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")

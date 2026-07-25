@@ -307,7 +307,7 @@ final class AccessibilityTraceTests: XCTestCase {
         let facts = AccessibilityTrace.ChangeFact.between(before, after)
 
         XCTAssertEqual(after.transition.fallbackReason, .primaryHeaderChanged)
-        XCTAssertEqual(facts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
+        XCTAssertEqual(facts.map(\.kind), [.screenChanged])
     }
 
     func testFallbackReasonOverridesStructuralChange() throws {
@@ -322,7 +322,7 @@ final class AccessibilityTraceTests: XCTestCase {
         let facts = AccessibilityTrace.ChangeFact.between(before, after)
 
         XCTAssertEqual(after.transition.fallbackReason, .primaryHeaderChanged)
-        XCTAssertEqual(facts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
+        XCTAssertEqual(facts.map(\.kind), [.screenChanged])
     }
 
     func testSameScreenContextChangeProjectsElementChangedFact() throws {
@@ -442,7 +442,7 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(trace.captures.last?.transition.fallbackReason, .primaryHeaderChanged)
         XCTAssertEqual(
             trace.changeFacts.map(\.kind),
-            [.elementsChanged, .elementsChanged, .screenChanged, .elementsChanged]
+            [.elementsChanged, .screenChanged]
         )
         guard case .elementsChanged(let elementFact) = trace.changeFacts[0] else {
             return XCTFail("Expected the first edge to be an element fact")
@@ -450,34 +450,9 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertTrue(elementFact.updated.flatMap(\.changes).contains(
             try XCTUnwrap(PropertyChange.value(old: "0", new: "50"))
         ))
-        guard case .screenChanged = trace.changeFacts[2] else {
-            return XCTFail("Expected screen marker after departure facts")
-        }
-    }
-
-    func testFallbackScreenChangeEdgeDoesNotProjectElementEdits() throws {
-        let baseline = makeInterface(label: "Menu", saveValue: "0")
-        let final = makeInterface(label: "Settings", saveValue: "50")
-        let trace = AccessibilityTrace(first: baseline).appending(
-            final,
-            transition: AccessibilityTrace.Transition(fallbackReason: .primaryHeaderChanged)
-        )
-
-        XCTAssertEqual(trace.captures.last?.transition.fallbackReason, .primaryHeaderChanged)
-        XCTAssertEqual(trace.changeFacts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
-        guard case .elementsChanged(let disappearances) = trace.changeFacts[0] else {
-            return XCTFail("Expected old interface disappearance fact")
-        }
         guard case .screenChanged = trace.changeFacts[1] else {
-            return XCTFail("Expected screen boundary marker")
+            return XCTFail("Expected the screen marker on the second edge")
         }
-        guard case .elementsChanged(let appearances) = trace.changeFacts[2] else {
-            return XCTFail("Expected replacement interface appearance fact")
-        }
-        XCTAssertEqual(disappearances.disappeared.count, baseline.projectedElements.count)
-        XCTAssertTrue(disappearances.updated.isEmpty)
-        XCTAssertEqual(appearances.appeared.count, final.projectedElements.count)
-        XCTAssertTrue(appearances.updated.isEmpty)
     }
 
     func testFallbackScreenChangeDoesNotMergeEarlierElementFacts() throws {
@@ -494,7 +469,7 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(trace.captures.last?.transition.fallbackReason, .primaryHeaderChanged)
         XCTAssertEqual(
             trace.changeFacts.map(\.kind),
-            [.elementsChanged, .elementsChanged, .screenChanged, .elementsChanged]
+            [.elementsChanged, .screenChanged]
         )
         guard case .elementsChanged(let elementFact) = trace.changeFacts[0] else {
             return XCTFail("Expected outgoing same-screen update to stay on its own edge")
@@ -502,10 +477,9 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertTrue(elementFact.updated.flatMap(\.changes).contains(
             try XCTUnwrap(PropertyChange.value(old: "0", new: "1"))
         ))
-        guard case .elementsChanged(let screenDepartures) = trace.changeFacts[1] else {
-            return XCTFail("Expected screen departure fact after the outgoing update")
+        guard case .screenChanged = trace.changeFacts[1] else {
+            return XCTFail("Expected the baseline replacement to stay on its own edge")
         }
-        XCTAssertTrue(screenDepartures.updated.isEmpty)
     }
 
     func testTraceCanonicalRoundTripPreservesIdentity() throws {

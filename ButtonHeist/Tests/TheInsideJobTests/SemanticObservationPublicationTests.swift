@@ -298,7 +298,7 @@ final class SemanticObservationPublicationTests: SemanticObservationStreamTestCa
         XCTAssertEqual(
             AccessibilityTrace(captures: [firstEvent.moment.capture, secondEvent.moment.capture])
                 .changeFacts.map(\.kind),
-            [.elementsChanged, .screenChanged, .elementsChanged]
+            [.screenChanged]
         )
         guard case .screenBoundary(let previous) = secondEvent.transition else {
             return XCTFail("Expected a retained screen boundary")

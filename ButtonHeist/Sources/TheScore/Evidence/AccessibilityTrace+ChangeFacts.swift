@@ -372,6 +372,10 @@ extension AccessibilityTrace.ChangeFact: Codable {
 
         switch kind {
         case .elementsChanged:
+            try container.rejectIncompatibleFields(
+                allowing: [.kind, .metadata, .appeared, .disappeared, .updated],
+                typeName: "\(kind.rawValue) accessibility change fact"
+            )
             self = .elementsChanged(AccessibilityTrace.ElementsChangeFact(
                 appeared: try container.decodeIfPresent(
                     [AccessibilityTrace.InterfaceChangeNode].self,

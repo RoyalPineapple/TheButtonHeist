@@ -15,7 +15,15 @@ extension AccessibilityPredicateTests {
         XCTAssertEqual(decoded, predicate)
     }
 
-    func testScreenDepartureAndArrivalSatisfyElementLifecycleAssertions() throws {
+    /// A screen change replaces the baseline wholesale, which leaves a single
+    /// capture — and a single capture admits only capture predicates.
+    ///
+    /// `disappeared`/`appeared` read two graphs, so they have nothing to read
+    /// here. This used to hold: the boundary projected the whole outgoing graph
+    /// as `disappeared` and the whole incoming graph as `appeared`, which made
+    /// these predicates true of *every* element on either side — a guarantee
+    /// worth nothing. Ask `changed(.screen([...]))` about a new baseline.
+    func testDeltaPredicatesAreUnanswerableAcrossAScreenChange() throws {
         let trace = screenTrace(
             before: makeTestInterface(elements: [element(label: "Home")]),
             after: makeTestInterface(elements: [element(label: "Settings")])
@@ -25,10 +33,20 @@ extension AccessibilityPredicateTests {
             .appeared(.label("Settings")),
         ]))
 
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result(success: true, trace: trace, completeness: .incomplete)).met)
+        let outcome = try predicate.resolve(in: .empty)
+            .validate(against: result(success: true, trace: trace, completeness: .incomplete))
+        XCTAssertFalse(outcome.met)
+        XCTAssertEqual(
+            outcome.actual?.contains("the screen changed"),
+            true,
+            "The failure must say the screen changed, not that the elements were absent"
+        )
     }
 
-    func testIdenticalTargetCanDisappearAndReappearAcrossScreenBoundary() throws {
+    /// The old projection decided lifecycle by which side of the boundary a
+    /// node sat on, so an element present on *both* sides counted as having
+    /// disappeared and appeared. Identity said it never went anywhere.
+    func testUnchangedTargetDoesNotDisappearAndReappearAcrossAScreenChange() throws {
         let shared = element(label: "Continue", traits: [.button])
         let trace = screenTrace(
             before: makeTestInterface(elements: [shared]),
@@ -39,7 +57,25 @@ extension AccessibilityPredicateTests {
             .appeared(.label("Continue")),
         ]))
 
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result(success: true, trace: trace, completeness: .incomplete)).met)
+        XCTAssertFalse(try predicate.resolve(in: .empty).validate(against: result(success: true, trace: trace, completeness: .incomplete)).met)
+    }
+
+    /// The discrimination law: the gate is specific to a baseline replacement,
+    /// not a blanket disable. The same target, the same lifecycle predicate —
+    /// answerable within a screen, unanswerable across one.
+    ///
+    /// Without this, "always false" would satisfy the two tests above.
+    func testLifecyclePredicatesAnswerWithinAScreenButNotAcrossOne() throws {
+        let empty = makeTestInterface(elements: [])
+        let arrived = makeTestInterface(elements: [element(label: "Toast")])
+        let sameScreen = AccessibilityTrace(first: empty).appending(arrived)
+        let screenBoundary = screenTrace(before: empty, after: arrived)
+        let predicate = AccessibilityPredicate.changed(.elements([
+            .appeared(.label("Toast")),
+        ]))
+
+        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result(success: true, trace: sameScreen, completeness: .incomplete)).met)
+        XCTAssertFalse(try predicate.resolve(in: .empty).validate(against: result(success: true, trace: screenBoundary, completeness: .incomplete)).met)
     }
 
     func testUpdatedOnlyMatchesSameScreenElementFacts() throws {
@@ -160,11 +196,19 @@ extension AccessibilityPredicateTests {
         XCTAssertEqual(result.actual, "noChange")
     }
 
-    func testElementsChangedMetForScreenDepartureAndArrivalFacts() throws {
+    /// Element change, screen change and announcement are sibling events. None
+    /// nests inside another, so no predicate answers about a kind it did not
+    /// ask for — just as `announcement` stays silent on an element change.
+    ///
+    /// This used to pass: a boundary projected element facts, so "did elements
+    /// change?" was true of every navigation and `changed(.elements())` was a
+    /// strict superset of `changed(.screen())`. They are disjoint now.
+    func testElementsChangedNotMetForAScreenChange() throws {
         let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
         let action = result(success: true, trace: .screenChangedForTests(replacementInterface: interface), completeness: .incomplete)
         let result = try AccessibilityPredicate.changed(.elements()).resolve(in: .empty).validate(against: action)
-        XCTAssertTrue(result.met)
+        XCTAssertFalse(result.met)
+        XCTAssertEqual(result.actual, "screenChanged")
     }
 
     // MARK: - Codable: element updated

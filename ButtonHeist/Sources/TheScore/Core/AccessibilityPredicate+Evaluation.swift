@@ -65,6 +65,31 @@ private extension ResolvedAccessibilityPredicate {
         )
     }
 
+    /// Element predicates split by arity, and the split decides what evidence
+    /// each half is entitled to.
+    ///
+    /// `exists`/`missing` are snapshot predicates: one graph in, a verdict out.
+    /// They hold — or not — whether or not anything changed, so a quiet tree is
+    /// a legitimate answer and they are never gated on there being element
+    /// facts at all.
+    ///
+    /// `appeared`/`disappeared`/`updated` are delta predicates: two graphs in,
+    /// measured from a baseline.
+    ///
+    /// A screen change is a wholesale replacement of that baseline. It is not
+    /// an edge to be diffed — it discards the old starting point and installs a
+    /// new one, and deltas resume from there. So a delta predicate has nothing
+    /// to say about the replacement itself: asking "did X appear?" of it is not
+    /// vacuously true, it is a question about an edge that does not exist.
+    /// `changed(.screen)` is the predicate that speaks about a new baseline,
+    /// and it admits snapshot predicates only — the sensible question about a
+    /// baseline being what is in it. The projection emits no `elementsChanged`
+    /// fact for a replacement, so the filter below leaves delta predicates
+    /// unanswerable there rather than trivially satisfied.
+    ///
+    /// Asserting nothing is itself the nullary delta predicate — "elements
+    /// changed, never mind which" — so it keeps the whole-predicate gate. A
+    /// quiet tree must not satisfy it, or a wait on it returns immediately.
     func evaluateElements(
         _ assertions: [ResolvedElementAssertion],
         evidence: AccessibilityTraceEvidence,
@@ -72,10 +97,16 @@ private extension ResolvedAccessibilityPredicate {
     ) -> PredicateEvaluationResult {
         let facts = evidence.changeFacts
         let elementFacts = facts.compactMap(\.elementsChanged)
-        guard !elementFacts.isEmpty else {
+        let crossedScreenBoundary = facts.contains(where: \.isScreenChanged)
+        guard !assertions.isEmpty || !elementFacts.isEmpty else {
             return PredicateEvaluationResult(met: false, actual: facts.kindDescription)
         }
         let failures = assertions.compactMap { assertion -> String? in
+            guard assertion.isSnapshotPredicate || !elementFacts.isEmpty else {
+                return crossedScreenBoundary
+                    ? "\(assertion) asks about an element change, but the screen changed; use changed(.screen([...]))"
+                    : facts.kindDescription
+            }
             let result = evaluateElementAssertion(
                 assertion,
                 facts: elementFacts,
