@@ -9,19 +9,21 @@ import TheScore
 actor TransportControlPlane {
     private static let maximumPendingMainActorDispatches =
         ClientRequestPipeline.maximumQueuedRequests
+    static let mainActorEventBufferLimit = maximumPendingMainActorDispatches + 1
 
     enum MainActorEvent: Sendable {
-        case leaseEnded(TransportClientLease, generation: ClientDelivery.Generation)
+        case controlChanged(generation: ClientDelivery.Generation)
         case dispatch(
             AdmittedClientMessage,
             respond: SocketResponseHandler,
             lease: TransportClientLease,
             generation: ClientDelivery.Generation
         )
-        case backlogOverflow(
-            maxEvents: Int,
-            generation: ClientDelivery.Generation
-        )
+    }
+
+    struct ControlChanges: Sendable, Equatable {
+        let endedLeases: Set<TransportClientLease>
+        let backlogOverflowLimit: Int?
     }
 
     typealias Publish = @Sendable (
@@ -53,40 +55,25 @@ actor TransportControlPlane {
     private var clientConnections: [Int: ClientConnection] = [:]
     private var nextClientIncarnation: UInt64 = 1
     private var pendingMainActorDispatches = 0
+    private var endedLeases: Set<TransportClientLease> = []
+    private var backlogOverflowLimit: Int?
+    private var isControlChangePublished = false
 
-    private init(
-        events: ServerTransport.Events,
+    @MainActor
+    init(
+        transport: ServerTransport,
         muscle: TheMuscle,
         generation: ClientDelivery.Generation,
         pongPayload: PongPayload,
         probe: @escaping Probe,
         publish: @escaping Publish
     ) {
-        self.events = events
+        self.events = transport.transportEvents
         self.muscle = muscle
         self.generation = generation
         self.pongPayload = pongPayload
         self.probe = probe
         self.publish = publish
-    }
-
-    @MainActor
-    static func wired(
-        to transport: ServerTransport,
-        muscle: TheMuscle,
-        generation: ClientDelivery.Generation,
-        pongPayload: PongPayload,
-        probe: @escaping Probe,
-        publish: @escaping Publish
-    ) -> TransportControlPlane {
-        TransportControlPlane(
-            events: transport.transportEvents,
-            muscle: muscle,
-            generation: generation,
-            pongPayload: pongPayload,
-            probe: probe,
-            publish: publish
-        )
     }
 
     func start() {
@@ -123,7 +110,8 @@ actor TransportControlPlane {
 
         case .backlogOverflow(let maxEvents):
             endAllClientConnections()
-            _ = publish(.backlogOverflow(maxEvents: maxEvents, generation: generation))
+            backlogOverflowLimit = max(backlogOverflowLimit ?? maxEvents, maxEvents)
+            publishControlChange()
         }
     }
 
@@ -142,6 +130,9 @@ actor TransportControlPlane {
         let pipelineConsumers = clientConnections.values.compactMap { $0.pipeline.stop() }
         clientConnections.removeAll()
         pendingMainActorDispatches = 0
+        endedLeases.removeAll()
+        backlogOverflowLimit = nil
+        isControlChangePublished = false
         await eventConsumer?.value
         for consumer in pipelineConsumers {
             await consumer.value
@@ -152,6 +143,17 @@ actor TransportControlPlane {
         guard pendingMainActorDispatches > 0 else { return false }
         pendingMainActorDispatches -= 1
         return isCurrent(lease)
+    }
+
+    func consumeControlChanges() -> ControlChanges {
+        let changes = ControlChanges(
+            endedLeases: endedLeases,
+            backlogOverflowLimit: backlogOverflowLimit
+        )
+        endedLeases.removeAll()
+        backlogOverflowLimit = nil
+        isControlChangePublished = false
+        return changes
     }
 
     func isCurrent(_ lease: TransportClientLease) -> Bool {
@@ -186,7 +188,8 @@ actor TransportControlPlane {
             return
         }
         connection.pipeline.stop()
-        _ = publish(.leaseEnded(connection.lease, generation: generation))
+        endedLeases.insert(connection.lease)
+        publishControlChange()
     }
 
     private func endAllClientConnections() {
@@ -274,21 +277,25 @@ actor TransportControlPlane {
                 return
             }
             pendingMainActorDispatches += 1
-            switch publish(.dispatch(
+            guard case .enqueued = publish(.dispatch(
                 message,
                 respond: request.respond,
                 lease: request.lease,
                 generation: generation
-            )) {
-            case .enqueued:
-                break
-            case .terminated, .dropped:
+            )) else {
                 pendingMainActorDispatches -= 1
                 await disconnect(request.lease)
-            @unknown default:
-                pendingMainActorDispatches -= 1
-                await disconnect(request.lease)
+                return
             }
+        }
+    }
+
+    private func publishControlChange() {
+        guard !isControlChangePublished else { return }
+        isControlChangePublished = true
+        guard case .enqueued = publish(.controlChanged(generation: generation)) else {
+            isControlChangePublished = false
+            return
         }
     }
 

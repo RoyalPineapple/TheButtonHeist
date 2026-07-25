@@ -8,7 +8,7 @@ final class MainThreadWatchdogTests: XCTestCase {
         let settings = try TheFence.MainThreadWatchdogSettings(
             initialDelay: 10_000,
             cadence: 20_000,
-            probeResponseTimeout: 30_000,
+            probeResponseTimeout: 100_000,
             responsivenessTimeout: 40_000,
             workTimeout: 50_000
         )
@@ -19,6 +19,13 @@ final class MainThreadWatchdogTests: XCTestCase {
             initialDelay: 0,
             cadence: 1,
             probeResponseTimeout: 1,
+            responsivenessTimeout: 1,
+            workTimeout: 1
+        ))
+        XCTAssertThrowsError(try TheFence.MainThreadWatchdogSettings(
+            initialDelay: 1,
+            cadence: 1,
+            probeResponseTimeout: 2,
             responsivenessTimeout: 1,
             workTimeout: 1
         ))
@@ -229,7 +236,7 @@ final class MainThreadWatchdogTests: XCTestCase {
         configuration.mainThreadWatchdog = .enabled(try .init(
             initialDelay: 1,
             cadence: 2,
-            probeResponseTimeout: 5,
+            probeResponseTimeout: 8,
             responsivenessTimeout: 3,
             workTimeout: 4
         ))

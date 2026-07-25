@@ -255,10 +255,11 @@ main-thread responsiveness probe. `ServerTransport.transportEvents` has one
 off-main consumer, `TransportControlPlane`. That control plane performs
 per-client admission without entering `MainActor`. Authenticated `ping` and
 `mainThreadProbe` requests remain on this transport-control sideband. Admitted
-`status` and UI requests cross one capacity-admitted stream onto `MainActor`;
-client-lease invalidation and transport backlog events share its ordered,
-non-lossy delivery. UI work then enters the existing single `TheBrains`
-interaction executor.
+`status` and UI requests cross one bounded, capacity-admitted stream onto
+`MainActor`. The control plane retains ended leases and transport-overflow
+facts, coalesces them behind at most one control wake-up, and clears them only
+when `MainActor` consumes that wake-up. UI work then enters the existing single
+`TheBrains` interaction executor.
 
 Each client connection receives a monotonically issued `TransportClientLease`.
 The control plane invalidates that lease before publishing disconnect or
@@ -505,7 +506,7 @@ pipelines are explicit:
 
 | Concept | Canonical owner | Thin projections or lifecycle callers |
 | --- | --- | --- |
-| Transport event consumption and per-client admission | `TransportControlPlane.swift` | `TheGetaway+Transport.swift` wires one capacity-admitted MainActor stream with non-lossy lifecycle delivery |
+| Transport event consumption and per-client admission | `TransportControlPlane.swift` | `TheGetaway+Transport.swift` wires one bounded MainActor stream; the control plane coalesces retained lifecycle facts behind one wake-up |
 | Main-thread responsiveness classification | `MainThreadProbe` | `TransportControlPlane` dispatches authenticated probes; TheFence watches pending UI requests |
 | UI request admission and cancellation | `InteractionRequestExecutor` in `TheBrains.swift` | `TheGetaway+Transport.swift`, `Heist.swift` |
 | Callback generation admission and delivery | `ClientDelivery.swift` | `TheGetaway` issues strictly increasing generations and admits matching wiring and events; `TheMuscle` routes generation-scoped callback effects through the owner |

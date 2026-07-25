@@ -77,9 +77,11 @@ extension TheGetaway {
     ) async -> TransportWiringOutcome {
         let transport = attempt.transport
         let generation = attempt.deliveryGeneration
-        let mainActorStream = AsyncStream<TransportControlPlane.MainActorEvent>.makeStream()
-        let controlPlane = TransportControlPlane.wired(
-            to: transport,
+        let mainActorStream = AsyncStream<TransportControlPlane.MainActorEvent>.makeStream(
+            bufferingPolicy: .bufferingOldest(TransportControlPlane.mainActorEventBufferLimit)
+        )
+        let controlPlane = TransportControlPlane(
+            transport: transport,
             muscle: muscle,
             generation: generation,
             pongPayload: pongPayload,
@@ -145,17 +147,6 @@ extension TheGetaway {
         await wiring.mainActorConsumer.value
     }
 
-    func observeTransportEvent(
-        _ event: TransportEvent,
-        generation: ClientDelivery.Generation,
-        onBacklogOverflow _: @MainActor @Sendable (Int) async -> Void
-    ) async {
-        guard case .wired(let wiring) = transportWiring,
-              wiring.attempt.deliveryGeneration == generation
-        else { return }
-        await wiring.controlPlane.observe(event)
-    }
-
     func tearDown() async {
         let wiring = transportWiring.wired
         let cleanup = transportWiring.cleanup
@@ -180,9 +171,17 @@ extension TheGetaway {
         onBacklogOverflow: @escaping @MainActor @Sendable (Int) async -> Void
     ) async {
         switch event {
-        case .leaseEnded(let lease, let generation):
-            guard transportWiring.admitsEvent(generation: generation) else { return }
-            brains.cancelTransportRequests(lease: lease)
+        case .controlChanged(let generation):
+            guard case .wired(let wiring) = transportWiring,
+                  wiring.attempt.deliveryGeneration == generation
+            else { return }
+            let changes = await wiring.controlPlane.consumeControlChanges()
+            for lease in changes.endedLeases {
+                brains.cancelTransportRequests(lease: lease)
+            }
+            if let maxEvents = changes.backlogOverflowLimit {
+                await onBacklogOverflow(maxEvents)
+            }
 
         case .dispatch(let message, let respond, let lease, let generation):
             guard case .wired(let wiring) = transportWiring,
@@ -214,9 +213,6 @@ extension TheGetaway {
                 await wiring.controlPlane.disconnect(lease)
             }
 
-        case .backlogOverflow(let maxEvents, let generation):
-            guard transportWiring.admitsEvent(generation: generation) else { return }
-            await onBacklogOverflow(maxEvents)
         }
     }
 }

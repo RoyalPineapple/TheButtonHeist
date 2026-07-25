@@ -27,11 +27,11 @@ final class TheGetawayTransportWiringTests: XCTestCase {
             return XCTFail("Expected transport wiring to be admitted")
         }
         let generation = admission.deliveryGeneration
-        await getaway.observeTransportEvent(
-            .clientConnected(clientId: clientId, remoteAddress: "127.0.0.1"),
-            generation: generation,
-            onBacklogOverflow: { _ in }
-        )
+        let controlPlane = try XCTUnwrap(getaway.transportWiring.wired?.controlPlane)
+        await controlPlane.observe(.clientConnected(
+            clientId: clientId,
+            remoteAddress: "127.0.0.1"
+        ))
         try await authenticate(clientId: clientId, muscle: muscle, generation: generation)
 
         let blockerEntered = CompletionSignal()
@@ -45,40 +45,27 @@ final class TheGetawayTransportWiringTests: XCTestCase {
         await blockerEntered.wait()
 
         let priorResponses = TransportResponseSink()
-        await getaway.observeTransportEvent(
-            .dataReceived(
-                clientId: clientId,
-                data: try requestData(id: "prior-incarnation", message: .getAnnouncements),
-                respond: priorResponses.respond
-            ),
-            generation: generation,
-            onBacklogOverflow: { _ in }
-        )
+        await controlPlane.observe(.dataReceived(
+            clientId: clientId,
+            data: try requestData(id: "prior-incarnation", message: .getAnnouncements),
+            respond: priorResponses.respond
+        ))
         await waitForPendingDepth(1, brains: brains)
 
-        await getaway.observeTransportEvent(
-            .clientDisconnected(clientId: clientId),
-            generation: generation,
-            onBacklogOverflow: { _ in }
-        )
+        await controlPlane.observe(.clientDisconnected(clientId: clientId))
         await waitForPendingDepth(0, brains: brains)
 
-        await getaway.observeTransportEvent(
-            .clientConnected(clientId: clientId, remoteAddress: "127.0.0.1"),
-            generation: generation,
-            onBacklogOverflow: { _ in }
-        )
+        await controlPlane.observe(.clientConnected(
+            clientId: clientId,
+            remoteAddress: "127.0.0.1"
+        ))
         try await authenticate(clientId: clientId, muscle: muscle, generation: generation)
         let currentResponses = TransportResponseSink()
-        await getaway.observeTransportEvent(
-            .dataReceived(
-                clientId: clientId,
-                data: try requestData(id: "current-incarnation", message: .getAnnouncements),
-                respond: currentResponses.respond
-            ),
-            generation: generation,
-            onBacklogOverflow: { _ in }
-        )
+        await controlPlane.observe(.dataReceived(
+            clientId: clientId,
+            data: try requestData(id: "current-incarnation", message: .getAnnouncements),
+            respond: currentResponses.respond
+        ))
         await waitForPendingDepth(1, brains: brains)
 
         releaseBlocker.finish()
@@ -167,11 +154,11 @@ final class TheGetawayTransportWiringTests: XCTestCase {
             return XCTFail("Expected transport wiring to be admitted")
         }
         let generation = admission.deliveryGeneration
-        await getaway.observeTransportEvent(
-            .clientConnected(clientId: clientId, remoteAddress: "127.0.0.1"),
-            generation: generation,
-            onBacklogOverflow: { _ in }
-        )
+        let controlPlane = try XCTUnwrap(getaway.transportWiring.wired?.controlPlane)
+        await controlPlane.observe(.clientConnected(
+            clientId: clientId,
+            remoteAddress: "127.0.0.1"
+        ))
         try await authenticate(
             clientId: clientId,
             muscle: muscle,
@@ -198,11 +185,11 @@ final class TheGetawayTransportWiringTests: XCTestCase {
                 )))
             )
         )
-        await getaway.observeTransportEvent(
-            .dataReceived(clientId: clientId, data: probe, respond: responses.respond),
-            generation: generation,
-            onBacklogOverflow: { _ in }
-        )
+        await controlPlane.observe(.dataReceived(
+            clientId: clientId,
+            data: probe,
+            respond: responses.respond
+        ))
         await responses.delivered.wait()
 
         let response = try XCTUnwrap(responses.messages.first)

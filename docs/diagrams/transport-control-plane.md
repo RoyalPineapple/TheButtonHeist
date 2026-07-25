@@ -23,7 +23,7 @@ flowchart LR
     end
 
     subgraph main["MainActor"]
-        STREAM["One capacity-admitted stream<br/>non-lossy lease events + app work"]
+        STREAM["One bounded stream<br/>app work + coalesced control wake"]
         BRAINS["TheBrains<br/>single interaction executor"]
         SETTLE["Settlement.Executor<br/>idle and semantic evidence"]
     end
@@ -42,9 +42,11 @@ flowchart LR
 ```
 
 `ping` and `mainThreadProbe` never enter the MainActor stream or TheBrains.
-Admitted app work crosses one capacity-admitted stream. Client-lease
-invalidation and transport backlog events are never dropped, and UI work still
-has one interaction executor. The same lease gates admission and execution.
+Admitted app work crosses one bounded, capacity-admitted stream. The control
+plane retains client-lease invalidations and transport backlog facts off-main
+and coalesces them behind one pending control wake-up, so connection churn
+cannot grow the stream or lose cancellation facts. UI work still has one
+interaction executor. The same lease gates admission and execution.
 Response handlers reserve delivery against their originating socket
 incarnation. Replacement wiring drains prior interaction work before its
 generation is admitted.

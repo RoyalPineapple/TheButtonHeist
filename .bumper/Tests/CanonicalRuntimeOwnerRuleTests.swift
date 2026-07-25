@@ -136,6 +136,24 @@ struct CanonicalRuntimeOwnerRuleTests {
     }
 
     @Test
+    func serverTransportMayPublishTransportEvents() throws {
+        let path: RelativeFilePath =
+            "ButtonHeist/Sources/TheInsideJob/Server/ServerTransport.swift"
+        let report = try evaluateButtonHeistRules(
+            path: path,
+            component: .runtime,
+            source: """
+            final class ServerTransport {
+                let transportEvents: Events
+                init(events: Events) { self.transportEvents = events }
+            }
+            """
+        )
+
+        #expect(report.violations.isEmpty)
+    }
+
+    @Test
     func competingTransportEventConsumerIsRejected() throws {
         let path: RelativeFilePath =
             "ButtonHeist/Sources/TheInsideJob/TheGetaway/CompetingTransportConsumer.swift"

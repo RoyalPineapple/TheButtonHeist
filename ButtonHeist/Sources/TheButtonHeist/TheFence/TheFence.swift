@@ -54,6 +54,12 @@ public final class TheFence {
                     "Main-thread watchdog durations must fit Swift Duration and positive Int64 milliseconds."
                 )
             }
+            guard probeResponseTimeout > responsivenessTimeout + workTimeout else {
+                throw FenceError.invalidRequest(
+                    "Main-thread watchdog probeResponseTimeout must exceed the combined " +
+                        "responsivenessTimeout and workTimeout."
+                )
+            }
             self.init(
                 admittedInitialDelay: initialDelay,
                 cadence: cadence,
@@ -66,7 +72,7 @@ public final class TheFence {
         public static let standard = MainThreadWatchdogSettings(
             admittedInitialDelay: 2,
             cadence: 2,
-            probeResponseTimeout: 2,
+            probeResponseTimeout: 3,
             responsivenessTimeout: 1,
             workTimeout: 1
         )

@@ -179,6 +179,9 @@ second heist or a second UI execution lane.
 The server assigns an internal lease to each client connection. Disconnect,
 reconnect, and admission overflow invalidate that lease off-main. Buffered app
 work checks the lease before MainActor admission and again before execution.
+The MainActor handoff is bounded. Ended leases and transport-overflow facts stay
+in the control plane and share one coalesced wake-up until MainActor consumes
+them, so connection churn cannot create an unbounded event backlog.
 Each response handler is separately bound to the concrete socket connection
 that supplied its request, and send reservation verifies that connection
 atomically. Reusing a transport client ID therefore cannot admit work or receive

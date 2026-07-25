@@ -63,7 +63,7 @@ let buttonHeistRules = RuleSet {
     )
     Rules.memberReferenceOwnership(
         "transportEvents",
-        allowed: .files([transportEventConsumerPath]),
+        allowed: .files(transportEventOwnerPaths),
         id: "buttonheist.transport_event_consumption_ownership"
     )
 }
@@ -87,8 +87,10 @@ private let settlementExecutionPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheBrains/Settlement+Execution.swift"
 private let scrollContentOffsetOwnerPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheSafecracker/TheSafecracker+Scroll.swift"
-private let transportEventConsumerPath: RelativeFilePath =
-    "ButtonHeist/Sources/TheInsideJob/TheGetaway/TransportControlPlane.swift"
+private let transportEventOwnerPaths: Set<RelativeFilePath> = [
+    "ButtonHeist/Sources/TheInsideJob/Server/ServerTransport.swift",
+    "ButtonHeist/Sources/TheInsideJob/TheGetaway/TransportControlPlane.swift",
+]
 private let startupConfigurationPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/Lifecycle/StartupConfiguration.swift"
 
