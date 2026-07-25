@@ -20,9 +20,9 @@ final class TripwireIntegrationTests: XCTestCase {
         tripwire = nil
     }
 
-    // MARK: - Heartbeat waiters
+    // MARK: - Tick waiters
 
-    func testNextHeartbeatIsUnavailableWithoutRuntimePulse() async {
+    func testNextTickIsUnavailableWithoutRuntimePulse() async {
         let isolatedTripwire = TheTripwire()
 
         let outcome = await isolatedTripwire.waitForNextTick(
@@ -33,7 +33,7 @@ final class TripwireIntegrationTests: XCTestCase {
         XCTAssertEqual(outcome, .unavailable)
     }
 
-    func testNextHeartbeatObservesFuturePulseAndRestoresAmbientRate() async throws {
+    func testNextTickObservesFuturePulseAndRestoresAmbientRate() async throws {
         let context = try XCTUnwrap(tripwire.runningContext)
         let ambientRate = context.link.preferredFrameRateRange
 
@@ -47,7 +47,7 @@ final class TripwireIntegrationTests: XCTestCase {
         XCTAssertEqual(context.link.preferredFrameRateRange, ambientRate)
     }
 
-    func testNextHeartbeatCancellationRemovesWaiterAndRestoresAmbientRate() async throws {
+    func testNextTickCancellationRemovesWaiterAndRestoresAmbientRate() async throws {
         let context = try XCTUnwrap(tripwire.runningContext)
         let ambientRate = context.link.preferredFrameRateRange
         context.link.isPaused = true
@@ -95,7 +95,7 @@ final class TripwireIntegrationTests: XCTestCase {
         XCTAssertTrue(context.tickWaiters.isEmpty)
     }
 
-    func testImmediateHeartbeatRateUsesScreenMaximum() {
+    func testImmediateTickRateUsesScreenMaximum() {
         let range = TheTripwire.activeDisplayFrameRateRange(maximumFramesPerSecond: 120)
 
         XCTAssertEqual(range.minimum, 120)

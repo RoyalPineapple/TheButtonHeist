@@ -49,11 +49,11 @@ final class AnimationObserverIntegrationTests: XCTestCase {
             completionRan = true
         })
 
-        let heartbeat = await tripwire.waitForNextTick(
+        let tick = await tripwire.waitForNextTick(
             timeout: .seconds(1),
             demand: .immediate
         )
-        XCTAssertEqual(heartbeat, .observed)
+        XCTAssertEqual(tick, .observed)
         XCTAssertGreaterThan(try XCTUnwrap(observer.animationSnapshot).observedStartCount, 0)
         XCTAssertTrue(
             completionRan,

@@ -202,7 +202,7 @@ final class TheBrainsActionTests: XCTestCase {
             tripwire: TheTripwire(),
             visibleObservationSource: visibleObservationSource.capture
         )
-        installObservedGeometryHeartbeat()
+        installObservedGeometryTick()
         await brains.startActionTestRuntime()
     }
 
@@ -220,11 +220,11 @@ final class TheBrainsActionTests: XCTestCase {
             keyboardInput: keyboardInput,
             visibleObservationSource: visibleObservationSource.capture
         )
-        installObservedGeometryHeartbeat()
+        installObservedGeometryTick()
         await brains.startActionTestRuntime()
     }
 
-    private func installObservedGeometryHeartbeat() {
+    private func installObservedGeometryTick() {
         brains.navigation.elementInflation.geometryEnvironment = .init(
             now: { RuntimeElapsed.now },
             awaitFrame: { _ in .observed }

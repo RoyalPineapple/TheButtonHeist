@@ -74,7 +74,7 @@ extension TheTripwire {
 
     // MARK: - Tick Waiting
 
-    /// Waits for one future tick of Button Heist's single CADisplayLink heartbeat.
+    /// Waits for one future tick of Button Heist's single CADisplayLink tick.
     /// Immediate demand temporarily raises the same link to the active screen's
     /// maximum refresh rate; ambient demand preserves the configured monitor rate.
     func waitForNextTick(
@@ -120,7 +120,7 @@ extension TheTripwire {
     /// timings. Use this when the caller needs to advance a known number
     /// of layout passes (post-scroll CATransaction flush, intra-swipe
     /// frame stepping) without subscribing to the persistent pulse. For
-    /// signal-driven waits, see `waitForNextTick` (heartbeat) or
+    /// signal-driven waits, see `waitForNextTick` (tick) or
     /// `SettleSession` (AX tree).
     func yieldFrames(_ count: Int) async {
         for _ in 0..<count {
