@@ -20,8 +20,9 @@ final class Navigation {
         exploration: ElementInflation.Exploration(
             settleForDiscovery: { [weak self] in
                 guard let self else { return }
-                _ = await self.tripwire.waitForAllClear(
-                    timeout: SemanticObservationTiming.defaultTimeout
+                _ = await self.tripwire.waitForNextTick(
+                    timeout: .milliseconds(Int(SemanticObservationTiming.defaultTimeout * 1_000)),
+                    demand: .ambient
                 )
             },
             discoverTarget: { [weak self] target in

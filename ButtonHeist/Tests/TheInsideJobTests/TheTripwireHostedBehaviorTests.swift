@@ -30,21 +30,14 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
         XCTAssertNil(tripwire.latestReading)
     }
 
-    func testWaitForSettleRequiresCallerOwnedPulse() async {
-        let settled = await tripwire.waitForSettle(timeout: 0.01)
+    func testTickWaitIsUnavailableWithoutCallerOwnedPulse() async {
+        let outcome = await tripwire.waitForNextTick(
+            timeout: .milliseconds(10),
+            demand: .ambient
+        )
 
-        XCTAssertFalse(settled)
+        XCTAssertEqual(outcome, .unavailable)
         XCTAssertFalse(tripwire.isPulseRunning)
-    }
-
-    func testLayerScanCoversEveryTraversableWindow() {
-        let windows = tripwire.captureTraversableWindows()
-        let scan = tripwire.scanLayers()
-
-        XCTAssertFalse(windows.isEmpty, "Test host should have a traversable window")
-        XCTAssertEqual(scan.windowCount, windows.count)
-        XCTAssertGreaterThan(scan.layerCount, 0)
-        XCTAssertGreaterThan(scan.fingerprint.layerCount, 0)
     }
 
     func testTraversableWindowsAreVisibleSizedAndFrontToBack() {
@@ -92,46 +85,8 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
         XCTAssertTrue(fingerprints.activeFingerprintCenters.isEmpty)
     }
 
-    func testLayerScanReportsPendingLayout() throws {
-        let window = try XCTUnwrap(tripwire.captureTraversableWindows().first?.window)
-        let view = UIView(frame: CGRect(x: 0, y: 0, width: 50, height: 50))
-        window.addSubview(view)
-        defer { view.removeFromSuperview() }
-
-        view.setNeedsLayout()
-        XCTAssertTrue(tripwire.scanLayers().hasPendingLayout)
-    }
-
-    func testLayerScanIgnoresNeedsDisplay() throws {
-        let window = try XCTUnwrap(tripwire.captureTraversableWindows().first?.window)
-        let layer = CALayer()
-        layer.frame = CGRect(x: 0, y: 0, width: 50, height: 50)
-        window.layer.addSublayer(layer)
-        defer { layer.removeFromSuperlayer() }
-
-        for _ in 0..<3 {
-            window.layoutIfNeeded()
-            CATransaction.flush()
-            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
-        }
-        XCTAssertFalse(tripwire.scanLayers().hasPendingLayout, "Test baseline must be settled")
-
-        layer.setNeedsDisplay()
-        XCTAssertFalse(tripwire.scanLayers().hasPendingLayout)
-    }
-
-    func testHostedControllerAndFingerprintRemainStableWhenIdle() {
+    func testHostedControllerIsResolvableWhenIdle() {
         XCTAssertNotNil(tripwire.topmostViewController())
-
-        let first = tripwire.scanLayers().fingerprint
-        let second = tripwire.scanLayers().fingerprint
-        XCTAssertTrue(first.matches(second))
-    }
-
-    func testAllClearRequiresFirstPulseReading() {
-        tripwire.startPulse()
-
-        XCTAssertFalse(tripwire.allClear())
     }
 
     func testTransientExpectationLatchesUntilReadyHandoff() async throws {

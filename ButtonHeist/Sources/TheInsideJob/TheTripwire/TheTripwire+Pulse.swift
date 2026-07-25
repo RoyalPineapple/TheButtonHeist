@@ -14,7 +14,6 @@ extension TheTripwire {
         let target: PulseTick
         var latestReading: PulseReading?
         var tickCount: UInt64 = 0
-        var settleWaiters = WaiterStore<UInt64, SettleWaiter>()
         var tickWaiters = WaiterStore<UInt64, TickWaiter>()
 
         init(link: CADisplayLink, target: PulseTick) {
@@ -32,13 +31,6 @@ extension TheTripwire {
     private(set) var latestReading: PulseReading? {
         get { runningContext?.latestReading }
         set { runningContext?.latestReading = newValue }
-    }
-
-    struct SettleWaiter {
-        var quietFrames: Int
-        let requiredQuietFrames: Int
-        let deadline: CFAbsoluteTime
-        let continuation: TimedOneShot<Bool>
     }
 
     enum TickDemand: Equatable, Sendable {
@@ -75,58 +67,12 @@ extension TheTripwire {
         guard let context = runningContext else { return }
         context.link.invalidate()
 
-        let waiters = context.settleWaiters.removeAll()
         let tickWaiters = context.tickWaiters.removeAll()
-
-        for waiter in waiters {
-            waiter.continuation.resolve(returning: false)
-        }
         tickWaiters.forEach { $0.continuation.resolve(returning: .unavailable) }
         pulsePhase = .idle
     }
 
-    // MARK: - Settle Waiting
-
-    /// Wait for the UI to settle — no pending layout, stable presentation
-    /// fingerprint for `requiredQuietFrames` consecutive ticks.
-    ///
-    /// Each waiter tracks its own quiet-frame count from the moment of
-    /// registration, so post-action animations are captured even if the
-    /// pulse was already settled.
-    ///
-    /// The caller owns pulse lifetime. Runtime commands get their pulse from
-    /// TheInsideJob runtime resources; standalone tests and tools must start it
-    /// explicitly.
-    ///
-    /// Returns true if settled before timeout, false if timed out.
-    func waitForSettle(timeout: TimeInterval = 1.0, requiredQuietFrames: Int = 2) async -> Bool {
-        guard let context = runningContext else { return false }
-        let waiterID = context.settleWaiters.reserveID()
-        let oneShot = TimedOneShot<Bool>()
-
-        let result = await withTaskCancellationHandler {
-            await withCheckedContinuation { continuation in
-                if oneShot.register(continuation) {
-                    context.settleWaiters.insert(SettleWaiter(
-                        quietFrames: 0,
-                        requiredQuietFrames: requiredQuietFrames,
-                        deadline: CFAbsoluteTimeGetCurrent() + timeout,
-                        continuation: oneShot
-                    ), id: waiterID)
-                } else {
-                    continuation.resume(returning: false)
-                }
-            }
-        } onCancel: {
-            oneShot.resolve(returning: false)
-        }
-        removeSettleWaiter(id: waiterID)
-        return result
-    }
-
-    private func removeSettleWaiter(id: UInt64) {
-        _ = runningContext?.settleWaiters.remove(id: id)
-    }
+    // MARK: - Tick Waiting
 
     /// Waits for one future tick of Button Heist's single CADisplayLink heartbeat.
     /// Immediate demand temporarily raises the same link to the active screen's
@@ -164,27 +110,6 @@ extension TheTripwire {
         )
     }
 
-    /// Wait for the interface to become all clear.
-    ///
-    /// Delegates to `waitForSettle`; the caller must already own a running
-    /// pulse.
-    /// Returns true if settled before timeout, false if timed out.
-    ///
-    /// **Settle signal boundary.** This is the layer-level settle path: it
-    /// watches CALayer geometry fingerprint and pending layout, and
-    /// never reads the AX tree. Use it when the caller only needs "the UI
-    /// has stopped changing frame geometry" — post-jump SPI animations,
-    /// broadcast pacing, wait-for-idle, wait-for-change polling.
-    /// For post-action correctness
-    /// (where AX-tree fingerprint stability is the load-bearing signal)
-    /// use `SettleSession` instead; for per-frame swipe motion detection
-    /// (where the viewport heistId set is the signal) use the swipe-settle
-    /// loop in `Navigation+Scroll.swift`. The boundary is intentional —
-    /// layer quiet and AX-tree quiet disagree on every spinner.
-    func waitForAllClear(timeout: TimeInterval = 1.0) async -> Bool {
-        await waitForSettle(timeout: timeout)
-    }
-
     /// Yield to the main run loop for N display frames. Each iteration
     /// flushes pending Core Animation transactions and gives layout a
     /// chance to run — enough for lazy containers to materialise content
@@ -195,8 +120,8 @@ extension TheTripwire {
     /// timings. Use this when the caller needs to advance a known number
     /// of layout passes (post-scroll CATransaction flush, intra-swipe
     /// frame stepping) without subscribing to the persistent pulse. For
-    /// signal-driven waits, see `waitForAllClear` (layer) or `SettleSession`
-    /// (AX tree).
+    /// signal-driven waits, see `waitForNextTick` (heartbeat) or
+    /// `SettleSession` (AX tree).
     func yieldFrames(_ count: Int) async {
         for _ in 0..<count {
             CATransaction.flush()
@@ -209,35 +134,20 @@ extension TheTripwire {
     func onTick() {
         guard let context = runningContext else { return }
         context.tickCount += 1
-        let now = CFAbsoluteTimeGetCurrent()
-        let prev = context.latestReading
 
-        // Flush pending implicit transactions so SwiftUI's deferred
-        // layout commits before we scan.
+        // Flush pending implicit transactions so SwiftUI's deferred layout
+        // commits before we sample.
         CATransaction.flush()
 
-        let scan = scanLayers()
-        let fingerprint = scan.fingerprint
-
-        let isQuiet = !scan.hasPendingLayout
-            && (prev?.fingerprint.matches(fingerprint) ?? true)
-
         let tripwireSignal = tripwireSignal()
-        let vcId = tripwireSignal.topmostVC
-
-        let reading = PulseReading(
+        context.latestReading = PulseReading(
             tick: context.tickCount,
-            timestamp: now,
-            layoutPending: scan.hasPendingLayout,
-            fingerprint: fingerprint,
-            topmostVC: vcId,
+            timestamp: CFAbsoluteTimeGetCurrent(),
+            topmostVC: tripwireSignal.topmostVC,
             tripwireSignal: tripwireSignal,
-            windowCount: scan.windowCount,
-            quietFrames: isQuiet ? (prev?.quietFrames ?? 0) + 1 : 0
+            windowCount: tripwireSignal.windowStack.windows.count
         )
-        context.latestReading = reading
 
-        resolveSettleWaiters(context: context, now: now, isQuiet: isQuiet)
         observeTick(context)
     }
 
@@ -279,53 +189,6 @@ extension TheTripwire {
             .lazy
             .compactMap { $0.window.windowScene?.screen.maximumFramesPerSecond }
             .first ?? 60
-    }
-
-    private func resolveSettleWaiters(context: RunningContext, now: CFAbsoluteTime, isQuiet: Bool) {
-        context.settleWaiters.updateAll { waiter in
-            if isQuiet {
-                waiter.quietFrames += 1
-            } else {
-                waiter.quietFrames = 0
-            }
-        }
-
-        let completed = context.settleWaiters.removeAll {
-            $0.quietFrames >= $0.requiredQuietFrames || now >= $0.deadline
-        }
-        for waiter in completed {
-            waiter.continuation.resolve(returning: waiter.quietFrames >= waiter.requiredQuietFrames)
-        }
-    }
-
-    /// Is the interface all clear? When the pulse is running, returns the
-    /// latest reading's settle state (requires 2 consecutive quiet frames).
-    /// Otherwise falls back to a synchronous pending-layout check. Animation
-    /// keys are diagnostic; movement is represented by fingerprint changes.
-    func allClear() -> Bool {
-        switch pulsePhase {
-        case .running(let context):
-            return context.latestReading?.isSettled ?? false
-        case .idle:
-            let scan = scanLayers()
-            return !scan.hasPendingLayout
-        }
-    }
-
-    /// Whether the pulse has ticked within the last couple of frames.
-    ///
-    /// A synchronous read of the most recent pulse reading's age. The display
-    /// link only advances when the main run loop services it, so a recent
-    /// reading is positive proof the MainActor was turning; a reading older
-    /// than `singleTickSettleTimeout` (two ticks of wall-clock) means the run
-    /// loop has stalled. Wall-clock age, not tick delta, is the honest measure:
-    /// a wedged link freezes the tick counter too.
-    ///
-    /// Returns `true` when the pulse is not running, so callers that gate on
-    /// liveness do not fail closed in tools and tests that never start it.
-    func pulseIsFresh(now: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()) -> Bool {
-        guard let reading = latestReading else { return !isPulseRunning }
-        return now - reading.timestamp <= Self.singleTickSettleTimeout
     }
 }
 

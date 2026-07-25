@@ -268,7 +268,10 @@ extension TheInsideJob {
         )
         let result = await brains.executeHeistPlan(plan, argument: argument)
         if shouldRestoreRuntime {
-            _ = await tripwire.waitForAllClear(timeout: SemanticObservationTiming.defaultTimeout)
+            _ = await tripwire.waitForNextTick(
+                timeout: .milliseconds(Int(SemanticObservationTiming.defaultTimeout * 1_000)),
+                demand: .ambient
+            )
         }
         return result
     }
