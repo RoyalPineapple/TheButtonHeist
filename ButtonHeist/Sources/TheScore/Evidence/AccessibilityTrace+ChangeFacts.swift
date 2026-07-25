@@ -184,6 +184,35 @@ public extension AccessibilityTrace {
             ChangeFact.between(before, after)
         }
     }
+
+    /// Elements the window saw and then lost — a toast, a spinner, a banner.
+    ///
+    /// Derived from the retained captures rather than from the fact stream,
+    /// because a transient is a statement about a *window*, not about an edge.
+    /// An element that appears at capture 2 and is gone by capture 4 is
+    /// evidence no single edge holds: the fact stream reports the arrival and
+    /// the departure separately, and a baseline replacement in between reports
+    /// neither.
+    ///
+    /// Captures are retained in full, so the honest derivation is direct: an
+    /// element present in some intermediate capture and absent from the last
+    /// one came and went. That answer survives a screen change, where no
+    /// element facts exist to fold.
+    var transientElements: [HeistElement] {
+        guard let first = captures.first, let last = captures.last, captures.count > 2 else {
+            return []
+        }
+        let keys = { (capture: Capture) in
+            Set(capture.interface.projectedElementRecords.map { ElementDiffRecord($0).diffPairingKey })
+        }
+        let endpoints = keys(first).union(keys(last))
+        var seen = Set<ElementDiffPairingKey>()
+        return captures.dropFirst().dropLast()
+            .flatMap(\.interface.projectedElementRecords)
+            .map(ElementDiffRecord.init)
+            .filter { !endpoints.contains($0.diffPairingKey) && seen.insert($0.diffPairingKey).inserted }
+            .map(\.element)
+    }
 }
 
 // MARK: - Element Edits

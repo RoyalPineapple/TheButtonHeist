@@ -91,6 +91,130 @@ with the state that follows it.
 Banking makes the conjunction accumulate. Simultaneity makes the most important
 case inexpressible.
 
+### One list, no cursors
+
+The timeline is **single and sequential**. Everything that happens — a tree
+diff, a spoken string — happens in one order, on one clock, and the evidence
+records it that way. "This happened, then that happened" is always answerable.
+
+The predicates are **one list**, authored in whatever order, freely interleaving
+kinds. There is no split, no partition, and no cursor to maintain.
+
+### The tick
+
+**A tick carries one thing**: the next snapshot, or the next announcement. Not a
+snapshot with announcements attached — a single event. That is what makes
+announcements peers of snapshots rather than a side channel.
+
+A `.noChange` tick carries nothing and is keep-alive only; it has nothing to
+offer anyone.
+
+### The baseline
+
+There is **one global baseline** for the delta predicates — held by the run,
+replaced when a screen change says so. Not a baseline per fact, not one per
+predicate.
+
+A delta predicate measures against *that*. It does not go hunting for which two
+captures it is about, which is what `ChangeFactMetadata.captureEdge` exists to
+answer today. With one baseline, that lookup disappears, and a predicate needs
+the baseline and the tick rather than the whole window.
+
+### The rule
+
+> A tick walks the remaining list in order, asking only the predicates that
+> answer its type. Each one it satisfies drops out. **The first one that answers
+> its type and is *not* satisfied blocks the rest** — the walk stops there.
+
+Two things follow, and both matter:
+
+- A predicate of another type is **not asked** and does **not block**. A
+  snapshot tick passes an unsatisfied announcement predicate as if it were not
+  there.
+- A tick is **not spent on one predicate**. It keeps satisfying consecutive
+  predicates of its type until one refuses. `[appeared(A), appeared(B)]` against
+  one settled snapshot showing both arrivals satisfies both.
+
+The second is deliberate. A tick is one *settled* snapshot, and a settled
+snapshot can evidence several arrivals at once. Spending the tick per predicate
+would make the verdict depend on how finely the tripwire happened to sample —
+the same UI with different frame timing would pass or fail — which contradicts
+the display-linked rule this system is built on.
+
+Blocking is what makes the list a sequence rather than a bag with
+order-flavoured tie-breaking. It is the consumption step that makes the greedy
+match exact: a later predicate cannot be satisfied by an earlier event, because
+the unsatisfied predicate in front of it held the walk.
+
+### The generic, as a fold
+
+The kind-specific part collapses to one question — *does this predicate answer
+this tick type* — and the walk is written once, **non-mutating**: list plus
+tick in, new list out.
+
+```swift
+func remaining<T: Tick>(after tick: T, from pending: [Pending]) -> [Pending] {
+    let blocked = pending.firstIndex { $0.answers(T.self) && !$0.isSatisfied(by: tick) }
+        ?? pending.endIndex
+    return pending.enumerated()
+        .filter { $0.offset >= blocked || !$0.element.answers(T.self) }
+        .map(\.element)
+}
+```
+
+Find where the walk stops; keep everything from there on, plus the other-type
+predicates interleaved before it.
+
+**"Satisfied" is not state.** There is no flag on a predicate and no lifecycle —
+satisfied means *absent from the returned list*. A predicate cannot be asked a
+question at the wrong time because there is no wrong time to be in.
+
+The whole step state is then the remaining list plus the baseline, and the
+session is a fold over ticks:
+
+```swift
+ticks.reduce(authored) { remaining(after: $1, from: $0) }
+```
+
+Success is reaching empty; failure is the timeout firing with anything left.
+Replayable by construction — same ticks, same result — which the report gets
+for free.
+
+`answers(_:)` is a type relationship, not a switch: `SnapshotPredicate` answers
+snapshot ticks, `DeltaPredicate` answers snapshot ticks against the baseline,
+`AnnouncementPredicate` answers announcement ticks. That is what the type split
+buys — the four hand-maintained switches over the same distinction
+(`isSnapshotPredicate`, `latchesPositiveEvaluation`, `Semantics.init(resolved:)`,
+and the evaluator's own) all reduce to it.
+
+This makes ordering between announcements expressible, which it is not today:
+
+```swift
+[.announcement("Saving…"), .announcement("Saved.")]
+```
+
+means those two, in that order, against the spoken stream — while any graph
+predicates in the same step drain independently against generations.
+
+Cross-lane order is **observable but not assertable**. The timeline records that
+the toast appeared before "Saved." was spoken, and a report can show it. The
+list cannot *require* it: because each cursor skips the other kind, authoring a
+graph predicate before an announcement predicate constrains neither against the
+other.
+
+That is a deliberate limit, not an oversight. Requiring cross-lane order would
+mean blocking one lane's cursor on the other's progress, which turns two exact
+greedy matches into one that can deadlock on evidence that arrives in a valid
+but unanticipated order.
+
+This is also the boundary between the two predicate families, and it is already
+enforced. Graph predicates target nodes; announcements match strings via the
+shared `StringMatch` (`StringExpressions.swift:73-76`), so `.contains`,
+`.prefix`, `.suffix` and `.exact` come from the same matcher the rest of the
+language uses. The trace evaluator's refusal of announcement predicates
+(`AccessibilityPredicate+Evaluation.swift:41-46`) is correct and stays: spoken
+text is not in the graph, so the graph evaluator should refuse it.
+
 ### Why ordered, and why greedy is exact
 
 The list is a cursor. Each predicate is banked at most once, at the first
