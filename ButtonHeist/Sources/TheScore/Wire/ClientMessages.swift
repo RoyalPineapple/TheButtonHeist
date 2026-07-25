@@ -52,6 +52,9 @@ public enum ClientMessage: Codable, Sendable, Equatable {
     /// Ping for keepalive
     case ping
 
+    /// Probe whether the app's main thread can begin and complete scheduled work.
+    case mainThreadProbe(MainThreadProbeRequest)
+
     /// Lightweight status command (identity + availability) for authenticated clients.
     case status
 

@@ -89,6 +89,18 @@ final class TheFenceHandlerTests: XCTestCase {
             hint: "Refresh the interface and verify the target's accessibility properties."
         ),
         .requestTimeout: .init(.request, .request, retryable: true, hint: FenceError.actionTimeoutRecoveryHint),
+        .requestMainThreadUnresponsive: .init(
+            .request,
+            .request,
+            retryable: true,
+            hint: "The app's main thread is not servicing its run loop. Capture a process sample before retrying."
+        ),
+        .requestMainThreadWorkTimedOut: .init(
+            .request,
+            .request,
+            retryable: true,
+            hint: "The main thread accepted the probe but did not complete its work before the configured deadline."
+        ),
         .requestValidationError: .init(
             .request,
             .request,

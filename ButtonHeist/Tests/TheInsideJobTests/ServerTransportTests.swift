@@ -20,7 +20,7 @@ final class ServerTransportTests: XCTestCase {
         }
         callbacks.onClientDisconnected?(ServerTransport.eventStreamBufferLimit)
 
-        var iterator = transport.events.makeAsyncIterator()
+        var iterator = transport.transportEvents.makeAsyncIterator()
         for _ in 0..<ServerTransport.eventStreamBufferLimit {
             _ = await iterator.next()
         }
@@ -74,7 +74,7 @@ final class ServerTransportTests: XCTestCase {
         await transport.stop()
         _ = try await transport.start(port: 0, bindToLoopback: true, addressFamily: .ipv4)
         let iteratorTask = Task { @MainActor in
-            var iterator = transport.events.makeAsyncIterator()
+            var iterator = transport.transportEvents.makeAsyncIterator()
             return await iterator.next()
         }
 

@@ -73,7 +73,8 @@ extension TheFence {
             autoReconnect: config.autoReconnect,
             fileConfig: config.fileConfig,
             directDevice: resolvedDirectDevice,
-            artifactBaseDirectory: config.artifactBaseDirectory
+            artifactBaseDirectory: config.artifactBaseDirectory,
+            mainThreadWatchdog: config.mainThreadWatchdog
         )
         config = newConfig
 

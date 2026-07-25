@@ -11,6 +11,23 @@ extension SimpleSocketServer {
     /// Send data to a specific client.
     @discardableResult
     func send(_ data: Data, to clientId: Int) async -> ServerSendOutcome {
+        await send(data, to: clientId, requiring: nil)
+    }
+
+    @discardableResult
+    func send(
+        _ data: Data,
+        to clientId: Int,
+        through connection: NWConnection
+    ) async -> ServerSendOutcome {
+        await send(data, to: clientId, requiring: connection)
+    }
+
+    private func send(
+        _ data: Data,
+        to clientId: Int,
+        requiring connection: NWConnection?
+    ) async -> ServerSendOutcome {
         var dataToSend = data
         if !dataToSend.hasSuffix(Data([WireFrameLimits.newlineDelimiterByte])) {
             dataToSend.append(WireFrameLimits.newlineDelimiterByte)
@@ -22,7 +39,16 @@ extension SimpleSocketServer {
         }
 
         let reservation: SocketClientRegistry.SendReservation
-        switch clientRegistry.reserveSend(clientId: clientId, byteCount: byteCount) {
+        let sendAdmission = if let connection {
+            clientRegistry.reserveSend(
+                clientId: clientId,
+                connection: connection,
+                byteCount: byteCount
+            )
+        } else {
+            clientRegistry.reserveSend(clientId: clientId, byteCount: byteCount)
+        }
+        switch sendAdmission {
         case .missingClient:
             return .failed(.clientNotFound(clientId))
         case .accepted(let acceptedReservation):

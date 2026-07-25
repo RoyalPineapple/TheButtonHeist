@@ -2,19 +2,25 @@
 #if DEBUG
 import Foundation
 
-struct ClientTransportRequest: Sendable {
+struct TransportClientLease: Hashable, Sendable {
     let clientId: Int
+    let incarnation: UInt64
+}
+
+struct ClientTransportRequest: Sendable {
+    let lease: TransportClientLease
     let data: Data
     let respond: SocketResponseHandler
-    let generation: ClientDelivery.Generation
+
+    var clientId: Int { lease.clientId }
 }
 
 /// One bounded, ordered frame-admission stream for one connected client.
 ///
-/// Admitted control work runs inline. UI work is submitted in source order to
-/// the shared interaction executor, so it cannot block later control frames.
+/// Admission and transport-control work run off the main actor. UI work is
+/// published in source order to the shared interaction executor, so it cannot
+/// block later transport-control frames.
 /// Transport lifecycle remains outside this stream and can stop it immediately.
-@MainActor
 final class ClientRequestPipeline {
     static let maximumQueuedRequests = 512
 
@@ -35,12 +41,12 @@ final class ClientRequestPipeline {
     private var phase: Phase = .stopped(consumer: nil)
 
     init(
-        execute: @escaping @MainActor @Sendable (ClientTransportRequest) async -> Void
+        execute: @escaping @Sendable (ClientTransportRequest) async -> Void
     ) {
         let stream = AsyncStream<ClientTransportRequest>.makeStream(
             bufferingPolicy: .bufferingOldest(Self.maximumQueuedRequests)
         )
-        let consumer = Task { @MainActor in
+        let consumer = Task {
             for await request in stream.stream {
                 guard !Task.isCancelled else { return }
                 await execute(request)

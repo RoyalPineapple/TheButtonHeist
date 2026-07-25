@@ -27,56 +27,59 @@ final class TheGetaway {
 
     var identity: ServerIdentity
     let pongPayload: PongPayload
+    let mainThreadProbe: TransportControlPlane.Probe
 
     struct TransportWiringAttempt {
         let transport: ServerTransport
         let deliveryGeneration: ClientDelivery.Generation
     }
 
-    struct WiredTransportAdmission {
-        let attempt: TransportWiringAttempt
-
-        var transport: ServerTransport {
-            attempt.transport
-        }
-    }
-
     enum TransportWiringOutcome {
-        case admitted(WiredTransportAdmission)
+        case admitted(TransportWiringAttempt)
         case rejected
     }
 
     struct WiredTransport {
         let attempt: TransportWiringAttempt
-        let eventConsumer: Task<Void, Never>
+        let controlPlane: TransportControlPlane
+        let mainActorEvents: AsyncStream<TransportControlPlane.MainActorEvent>.Continuation
+        let mainActorConsumer: Task<Void, Never>
     }
 
     enum TransportWiringState {
         case unwired
-        case wiring(TransportWiringAttempt)
+        case wiring(
+            TransportWiringAttempt,
+            cleanup: Task<Void, Never>?
+        )
         case wired(WiredTransport)
 
         var transport: ServerTransport? {
             switch self {
             case .unwired:
                 nil
-            case .wiring(let attempt):
+            case .wiring(let attempt, _):
                 attempt.transport
             case .wired(let session):
                 session.attempt.transport
             }
         }
 
-        var eventConsumer: Task<Void, Never>? {
+        var wired: WiredTransport? {
             guard case .wired(let session) = self else { return nil }
-            return session.eventConsumer
+            return session
+        }
+
+        var cleanup: Task<Void, Never>? {
+            guard case .wiring(_, let cleanup) = self else { return nil }
+            return cleanup
         }
 
         var deliveryGeneration: ClientDelivery.Generation? {
             switch self {
             case .unwired:
                 nil
-            case .wiring(let attempt):
+            case .wiring(let attempt, _):
                 attempt.deliveryGeneration
             case .wired(let session):
                 session.attempt.deliveryGeneration
@@ -84,7 +87,7 @@ final class TheGetaway {
         }
 
         func admits(_ attempt: TransportWiringAttempt) -> Bool {
-            guard case .wiring(let current) = self else { return false }
+            guard case .wiring(let current, _) = self else { return false }
             return current.deliveryGeneration == attempt.deliveryGeneration
         }
 
@@ -101,13 +104,6 @@ final class TheGetaway {
 
     var pauseBeforeTransportCallbackBeginForTesting: (@MainActor @Sendable () async -> Void)?
     var pauseBeforeTransportCallbackInstallationForTesting: (@MainActor @Sendable () async -> Void)?
-    var pauseAfterClientRequestAdmissionForTesting: (
-        @MainActor @Sendable (ClientDelivery.Generation) async -> Void
-    )?
-    var observeClientRequestCompletionForTesting: (
-        @MainActor @Sendable (ClientDelivery.Generation) -> Void
-    )?
-
     var transport: ServerTransport? {
         transportWiring.transport
     }
@@ -121,17 +117,21 @@ final class TheGetaway {
         return ClientDelivery.Generation(rawValue: latestIssuedDeliveryGenerationRawValue)
     }
 
-    /// Frames are admitted and executed in per-client order. Transport
-    /// lifecycle events never wait for these consumers.
-    var clientRequestPipelines: [Int: ClientRequestPipeline] = [:]
-
     // MARK: - Init
 
-    init(muscle: TheMuscle, brains: TheBrains, identity: ServerIdentity) {
+    init(
+        muscle: TheMuscle,
+        brains: TheBrains,
+        identity: ServerIdentity,
+        mainThreadProbe: @escaping TransportControlPlane.Probe = {
+            try await MainThreadProbe.execute($0)
+        }
+    ) {
         self.muscle = muscle
         self.brains = brains
         self.identity = identity
         self.pongPayload = Self.capturePongPayload(identity: identity)
+        self.mainThreadProbe = mainThreadProbe
     }
 
     // MARK: - Message Execution
@@ -141,18 +141,17 @@ final class TheGetaway {
         respond: @escaping SocketResponseHandler,
         generation: ClientDelivery.Generation
     ) async {
-        let clientId = admitted.clientId
         let envelope = admitted.envelope
         let requestId = envelope.requestId
         let message = envelope.message
 
         switch message {
-        case .clientHello, .authenticate:
+        case .clientHello, .authenticate, .ping, .mainThreadProbe:
             insideJobLogger.fault("Protocol message reached app dispatch after admission")
             await sendMessage(
                 .error(ServerError(
                     kind: .validationError,
-                    message: "Protocol messages are handled by admission before app dispatch."
+                    message: "Transport-control messages are handled before app dispatch."
                 )),
                 requestId: requestId,
                 respond: respond,
@@ -161,14 +160,6 @@ final class TheGetaway {
         case .requestInterface(let query):
             await sendInterface(
                 query: query,
-                requestId: requestId,
-                respond: respond,
-                generation: generation
-            )
-        case .ping:
-            await muscle.noteClientActivity(clientId)
-            await sendMessage(
-                .pong(pongPayload.withServerTimestamp()),
                 requestId: requestId,
                 respond: respond,
                 generation: generation

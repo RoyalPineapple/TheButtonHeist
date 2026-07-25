@@ -60,7 +60,7 @@ extension DirectionalWireMessageType {
 public enum ClientWireMessageType: String, DirectionalWireMessageType {
     public static let directionName = "client"
 
-    case clientHello, authenticate, requestInterface, ping, status
+    case clientHello, authenticate, requestInterface, ping, mainThreadProbe, status
     case getPasteboard
     case getAnnouncements
     case requestScreen
@@ -73,7 +73,7 @@ public enum ServerWireMessageType: String, DirectionalWireMessageType {
     public static let directionName = "server"
 
     case serverHello, protocolMismatch, authRequired, info, interface
-    case pong, status, error, actionResult, screen, sessionLocked
+    case pong, mainThreadProbe, status, error, actionResult, screen, sessionLocked
     case announcements
 }
 

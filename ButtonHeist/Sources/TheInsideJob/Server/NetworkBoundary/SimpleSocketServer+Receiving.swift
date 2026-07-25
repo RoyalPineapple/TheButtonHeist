@@ -68,7 +68,11 @@ extension SimpleSocketServer {
         }
 
         for messageData in messageFrames {
-            guard routeMessageFrame(clientId: clientId, messageData: messageData) else { return }
+            guard routeMessageFrame(
+                clientId: clientId,
+                connection: connection,
+                messageData: messageData
+            ) else { return }
         }
 
         if isComplete {
@@ -81,16 +85,27 @@ extension SimpleSocketServer {
         }
     }
 
-    private func routeMessageFrame(clientId: Int, messageData: Data) -> Bool {
-        guard clientRegistry.client(clientId) != nil else { return false }
-        callbacks.onDataReceived?(clientId, messageData, responseHandler(clientId: clientId))
+    private func routeMessageFrame(
+        clientId: Int,
+        connection: NWConnection,
+        messageData: Data
+    ) -> Bool {
+        guard clientRegistry.client(clientId)?.connection === connection else { return false }
+        callbacks.onDataReceived?(
+            clientId,
+            messageData,
+            responseHandler(clientId: clientId, connection: connection)
+        )
         return true
     }
 
-    private func responseHandler(clientId: Int) -> SocketResponseHandler {
+    private func responseHandler(
+        clientId: Int,
+        connection: NWConnection
+    ) -> SocketResponseHandler {
         { [weak self] response in
             guard let self else { return .failed(.transportUnavailable) }
-            return await self.send(response, to: clientId)
+            return await self.send(response, to: clientId, through: connection)
         }
     }
 }

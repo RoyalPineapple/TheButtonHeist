@@ -26,6 +26,7 @@ Architecture diagrams for Button Heist, one file per concern. Every diagram is M
 ## Connection and sessions
 
 - [connection-lifecycle.md](connection-lifecycle.md) — `HandoffConnectionPhase` and the handshake: TLS-PSK, version gate, auth
+- [transport-control-plane.md](transport-control-plane.md) — off-main transport admission, the capacity-admitted MainActor handoff, main-thread probes, and failure taxonomy
 - [multi-agent-isolation.md](multi-agent-isolation.md) — one simulator, port, and human-readable token per agent
 - [test-entry-points.md](test-entry-points.md) — `runHeist` / `runHeistSync` / `joinHeist` / `withJoinedHeistSession` and the run loop
 

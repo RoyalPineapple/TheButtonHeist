@@ -24,6 +24,7 @@ follow the part of the pipeline you are changing:
 | Actions, waits, and terminal evidence | [Action pipeline](diagrams/action-pipeline.md) and [settlement loop](diagrams/settle-loop.md) |
 | Current truth and ordered change | [Observation pipeline](diagrams/observation-pipeline.md) |
 | Target resolution and viewport exploration | [Element inflation](diagrams/element-inflation.md) |
+| Transport admission and main-thread liveness | [Transport control plane](diagrams/transport-control-plane.md) |
 | Test orchestration and simulator admission | [Test runner](diagrams/test-runner.md) |
 
 These are architectural contracts, not review snapshots. A responsibility,
@@ -250,11 +251,43 @@ a new generation and makes an older handoff ineligible without erasing latched
 transition or announcement evidence.
 
 A Settlement phase deadline bounds in-process operation work; it is not a
-main-thread responsiveness probe. A true liveness probe must originate off the
-main actor, schedule a round trip onto the main run loop, and win or lose its
-timeout race without requiring the main thread to deliver the timeout.
-Transport-level unresponsive process diagnosis remains a separate boundary
-from in-process idle detection.
+main-thread responsiveness probe. `ServerTransport.transportEvents` has one
+off-main consumer, `TransportControlPlane`. That control plane performs
+per-client admission without entering `MainActor`. Authenticated `ping` and
+`mainThreadProbe` requests remain on this transport-control sideband. Admitted
+`status` and UI requests cross one bounded, capacity-admitted stream onto
+`MainActor`. The control plane retains ended leases and transport-overflow
+facts, coalesces them behind at most one control wake-up, and clears them only
+when `MainActor` consumes that wake-up. UI work then enters the existing single
+`TheBrains` interaction executor.
+
+Each client connection receives a monotonically issued `TransportClientLease`.
+The control plane invalidates that lease before publishing disconnect or
+overflow effects. Buffered UI work must present the current lease both when the
+MainActor consumes it and immediately before TheBrains executes it, so a reused
+client ID cannot revive work from an earlier connection. At the socket boundary,
+each request's response handler reserves its send against the exact
+`NWConnection` that supplied the request, so a stale response cannot target a
+replacement connection. Replacing transport wiring shares one cleanup task
+across competing attempts and drains prior interaction work before admitting
+the new generation.
+
+`MainThreadProbe` schedules public `CFRunLoopPerformBlock` work
+and wakes the main run loop. Its off-main waiter observes two ordered stages:
+the main thread must first begin the scheduled block, then the block's admitted
+work must complete. One terminal gate classifies the probe as `responsive`,
+`mainThreadUnresponsive`, or `workTimedOut`; a timeout winner suppresses late
+main work or completion.
+
+While a UI request is pending, TheFence may send probes using its configurable
+watchdog timings. A transport disconnect means no live connection; a
+`mainThreadUnresponsive` result means the transport answered but the main run
+loop did not begin scheduled work; `workTimedOut` means the main thread began
+the probe but did not complete its admitted work; a settlement timeout means UI
+execution ran but did not establish the required stable semantic evidence.
+These outcomes are not aliases for one another. The full ownership and failure
+taxonomy are shown in the
+[transport control plane diagram](diagrams/transport-control-plane.md).
 
 A scoped screen notification or snapshot-inferred replacement with typed
 `fallbackReason` evidence starts a new observation generation. The screen
@@ -440,6 +473,9 @@ The approved long-lived owners are:
   `Observation.Stream` is the sole visible-observation producer and delivery
   owner.
 - `TheMuscle`: auth, admission, and session state inside the app.
+- `TransportControlPlane`: sole off-main consumer of
+  `ServerTransport.transportEvents`, per-client request admission, and
+  transport-control sideband dispatch.
 - `ClientDelivery`: the newest admitted callback generation and its current
   callbacks inside the app.
 - `TheHandoff`: external connection phase and discovery state outside the app.
@@ -470,6 +506,8 @@ pipelines are explicit:
 
 | Concept | Canonical owner | Thin projections or lifecycle callers |
 | --- | --- | --- |
+| Transport event consumption and per-client admission | `TransportControlPlane.swift` | `TheGetaway+Transport.swift` wires one bounded MainActor stream; the control plane coalesces retained lifecycle facts behind one wake-up |
+| Main-thread responsiveness classification | `MainThreadProbe` | `TransportControlPlane` dispatches authenticated probes; TheFence watches pending UI requests |
 | UI request admission and cancellation | `InteractionRequestExecutor` in `TheBrains.swift` | `TheGetaway+Transport.swift`, `Heist.swift` |
 | Callback generation admission and delivery | `ClientDelivery.swift` | `TheGetaway` issues strictly increasing generations and admits matching wiring and events; `TheMuscle` routes generation-scoped callback effects through the owner |
 | Drainable callback work | `TaskTracker.swift` | Lifecycle, listener-generation, and delayed-disconnect owners |

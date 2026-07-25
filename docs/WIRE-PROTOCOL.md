@@ -37,8 +37,8 @@ such as `get_interface`, `activate`, and `scroll_to_visible`.
 
 The wire protocol is lower-level transport. Its `type` values are TheScore
 message discriminators such as `requestInterface`, `requestScreen`, `status`,
-and `heistPlan`. Use Fence command names at public adapter boundaries and wire
-discriminators only when speaking raw TCP.
+`mainThreadProbe`, and `heistPlan`. Use Fence command names at public adapter
+boundaries and wire discriminators only when speaking raw TCP.
 
 Side-effecting app interactions are not raw command dictionaries on the wire.
 Durable mutations such as `activate`, `type_text`, `wait`, and `set_pasteboard`
@@ -127,6 +127,9 @@ sequenceDiagram
 
 `status` is the only post-hello message allowed before authentication. It
 reports identity and session availability without claiming a driver session.
+After authentication, `ping` and `mainThreadProbe` are transport-control
+sideband messages. They do not enter the MainActor UI request stream or the
+TheBrains interaction executor.
 
 The client-side view of the same exchange — the `HandoffConnectionPhase` state
 machine and every documented failure edge — is drawn in the
@@ -154,6 +157,62 @@ Server response:
 | `requestId` | Optional `RequestID` encoded as a nonblank string. Echoed by the matching response. |
 | `type` | Explicit TheScore message discriminator. |
 | `payload` | Optional payload object. |
+
+## Transport Control and Main-Thread Liveness
+
+`ServerTransport.transportEvents` is consumed only by the off-main
+`TransportControlPlane`. Per-client message admission happens there before any
+MainActor hop. Admitted message families then have one route:
+
+| Client message | Execution boundary | Matching server message |
+| --- | --- | --- |
+| `clientHello`, `authenticate` | Off-main handshake and admission | `authRequired`, `info`, `error`, or `sessionLocked` |
+| `ping` | Authenticated transport-control sideband | `pong` |
+| `mainThreadProbe` | Authenticated transport-control sideband plus a public main-run-loop round trip | `mainThreadProbe` |
+| `status` | One capacity-admitted MainActor stream | `status` |
+| `requestInterface`, `getPasteboard`, `getAnnouncements`, `requestScreen`, `runtimeAction`, `heistPlan` | One capacity-admitted MainActor stream, then the single TheBrains interaction executor | Typed response for the admitted request |
+
+The sideband exists so transport control can remain responsive while the UI
+executor is occupied or the app's main thread is wedged. It does not create a
+second heist or a second UI execution lane.
+
+The server assigns an internal lease to each client connection. Disconnect,
+reconnect, and admission overflow invalidate that lease off-main. Buffered app
+work checks the lease before MainActor admission and again before execution.
+The MainActor handoff is bounded. Ended leases and transport-overflow facts stay
+in the control plane and share one coalesced wake-up until MainActor consumes
+them, so connection churn cannot create an unbounded event backlog.
+Each response handler is separately bound to the concrete socket connection
+that supplied its request, and send reservation verifies that connection
+atomically. Reusing a transport client ID therefore cannot admit work or receive
+a response from its prior connection.
+
+Main-thread probe request:
+
+```json
+{"buttonHeistVersion":"<semver>","requestId":"probe-1","type":"mainThreadProbe","payload":{"responsivenessTimeoutMilliseconds":1000,"workTimeoutMilliseconds":1000}}
+```
+
+Main-thread probe response:
+
+```json
+{"buttonHeistVersion":"<semver>","requestId":"probe-1","type":"mainThreadProbe","payload":{"outcome":"responsive"}}
+```
+
+Both timeout fields are positive integer millisecond durations. Unknown fields,
+zero, and negative values are rejected during decoding. `outcome` has exactly
+three spellings:
+
+| Outcome | Meaning |
+| --- | --- |
+| `responsive` | The main run loop began the scheduled probe block and its admitted work completed. |
+| `mainThreadUnresponsive` | The transport remained able to answer, but the main run loop did not begin the scheduled block before the responsiveness timeout. Late scheduled work is suppressed. |
+| `workTimedOut` | The main run loop began the scheduled block, but its admitted work did not complete before the work timeout. Late completion cannot replace the terminal outcome. |
+
+The two stages share one terminal gate. Exactly one of completion,
+responsiveness timeout, or work timeout wins. The probe's timeout decision is
+made off-main and therefore does not depend on the executor whose liveness it
+measures.
 
 ## Public Wire Examples
 
@@ -582,6 +641,14 @@ The token is not invalidated when the session expires.
 ## Keepalive and Recovery
 
 Clients should send `ping` periodically and tolerate a few delayed responses
-before declaring failure. App main-thread stalls can delay pong handling.
+before declaring the transport disconnected. Because `ping` is handled by the
+off-main transport control plane, `pong` proves transport-control progress but
+does not prove main-thread responsiveness.
+
+TheFence separately watches pending UI requests with configurable
+`mainThreadProbe` cadence, response, responsiveness, and work timeouts. A probe
+can report `mainThreadUnresponsive` or `workTimedOut` while the connection
+remains alive. Settlement and idle deadlines remain in-process UI evidence
+deadlines and do not classify connection or main-thread liveness.
 
 After reconnecting, clients should request fresh interface state before acting.

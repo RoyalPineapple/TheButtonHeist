@@ -86,6 +86,9 @@ private func encodeServerMessage<Key: CodingKey>(
     case .pong(let payload):
         try container.encode(ServerWireMessageType.pong, forKey: typeKey)
         try payload.encode(to: container.superEncoder(forKey: payloadKey))
+    case .mainThreadProbe(let payload):
+        try container.encode(ServerWireMessageType.mainThreadProbe, forKey: typeKey)
+        try payload.encode(to: container.superEncoder(forKey: payloadKey))
     case .protocolMismatch(let payload):
         try container.encode(ServerWireMessageType.protocolMismatch, forKey: typeKey)
         try payload.encode(to: container.superEncoder(forKey: payloadKey))
@@ -135,6 +138,8 @@ private func decodeServerMessage(from payloadDecoder: Decoder?, type: ServerWire
         return .authRequired
     case .pong:
         return .pong(try PongPayload(from: try payload()))
+    case .mainThreadProbe:
+        return .mainThreadProbe(try MainThreadProbeResponse(from: try payload()))
     case .protocolMismatch:
         return .protocolMismatch(try ProtocolMismatchPayload(from: try payload()))
     case .error:
