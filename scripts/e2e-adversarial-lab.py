@@ -521,7 +521,7 @@ def execute_scenario(
 
         stop_after_recovery = not observation.passed and observation.requires_app_recovery
         if observation.requires_app_recovery:
-            app.launch()
+            app.restart()
         if stop_after_recovery:
             break
 

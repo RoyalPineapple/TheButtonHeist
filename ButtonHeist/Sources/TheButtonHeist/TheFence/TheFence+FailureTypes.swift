@@ -44,8 +44,6 @@ public enum KnownFailureCode: String, Codable, Sendable, CaseIterable, CustomStr
     case requestAccessibilityTreeUnavailable = "request.accessibility_tree_unavailable"
     case requestElementNotFound = "request.element_not_found"
     case requestTimeout = "request.timeout"
-    case requestMainThreadUnresponsive = "request.main_thread_unresponsive"
-    case requestMainThreadWorkTimedOut = "request.main_thread_work_timed_out"
     case requestValidationError = "request.validation_error"
     case requestActionFailed = "request.action_failed"
     case discoveryNoDeviceFound = "discovery.no_device_found"
@@ -78,8 +76,6 @@ public enum KnownFailureCode: String, Codable, Sendable, CaseIterable, CustomStr
              .requestAccessibilityTreeUnavailable,
              .requestElementNotFound,
              .requestTimeout,
-             .requestMainThreadUnresponsive,
-             .requestMainThreadWorkTimedOut,
              .requestValidationError,
              .requestActionFailed:
             return .request
@@ -123,8 +119,6 @@ public enum KnownFailureCode: String, Codable, Sendable, CaseIterable, CustomStr
              .requestAccessibilityTreeUnavailable,
              .requestElementNotFound,
              .requestTimeout,
-             .requestMainThreadUnresponsive,
-             .requestMainThreadWorkTimedOut,
              .requestValidationError,
              .requestActionFailed,
              .connectionNotConnected:
@@ -166,8 +160,6 @@ public enum KnownFailureCode: String, Codable, Sendable, CaseIterable, CustomStr
         switch self {
         case .requestAccessibilityTreeUnavailable,
              .requestTimeout,
-             .requestMainThreadUnresponsive,
-             .requestMainThreadWorkTimedOut,
              .discoveryNoDeviceFound,
              .setupTimeout,
              .connectionFailed,
@@ -212,10 +204,6 @@ public enum KnownFailureCode: String, Codable, Sendable, CaseIterable, CustomStr
             return "Refresh the interface and verify the target's accessibility properties."
         case .requestTimeout:
             return FenceError.actionTimeoutRecoveryHint
-        case .requestMainThreadUnresponsive:
-            return "The app's main thread is not servicing its run loop. Capture a process sample before retrying."
-        case .requestMainThreadWorkTimedOut:
-            return "The main thread accepted the probe but did not complete its work before the configured deadline."
         case .requestValidationError:
             return "Fix the request so it satisfies the server-side validation rules."
         case .requestActionFailed:

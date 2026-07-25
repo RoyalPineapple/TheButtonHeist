@@ -279,15 +279,14 @@ work must complete. One terminal gate classifies the probe as `responsive`,
 `mainThreadUnresponsive`, or `workTimedOut`; a timeout winner suppresses late
 main work or completion.
 
-While a UI request is pending, TheFence may send probes using its configurable
-watchdog timings. A transport disconnect means no live connection; a
-`mainThreadUnresponsive` result means the transport answered but the main run
-loop did not begin scheduled work; `workTimedOut` means the main thread began
-the probe but did not complete its admitted work; a settlement timeout means UI
-execution ran but did not establish the required stable semantic evidence.
-These outcomes are not aliases for one another. The full ownership and failure
-taxonomy are shown in the
-[transport control plane diagram](diagrams/transport-control-plane.md).
+`mainThreadProbe` is an explicit diagnostic operation. It answers whether the
+main run loop can begin and complete trivial scheduled work, but it never
+competes with another request or changes that request's outcome. Once app work
+begins, its normal response deadline is the sole client-side terminal timer and
+produces `request.timeout`. A transport disconnect still means no live
+connection, while a settlement timeout means UI execution ran but did not
+establish the required stable semantic evidence. The boundaries are shown in
+the [transport control plane diagram](diagrams/transport-control-plane.md).
 
 A scoped screen notification or snapshot-inferred replacement with typed
 `fallbackReason` evidence starts a new observation generation. The screen
@@ -507,7 +506,7 @@ pipelines are explicit:
 | Concept | Canonical owner | Thin projections or lifecycle callers |
 | --- | --- | --- |
 | Transport event consumption and per-client admission | `TransportControlPlane.swift` | `TheGetaway+Transport.swift` wires one bounded MainActor stream; the control plane coalesces retained lifecycle facts behind one wake-up |
-| Main-thread responsiveness classification | `MainThreadProbe` | `TransportControlPlane` dispatches authenticated probes; TheFence watches pending UI requests |
+| Main-thread responsiveness classification | `MainThreadProbe` | `TransportControlPlane` dispatches authenticated explicit probe requests |
 | UI request admission and cancellation | `InteractionRequestExecutor` in `TheBrains.swift` | `TheGetaway+Transport.swift`, `Heist.swift` |
 | Callback generation admission and delivery | `ClientDelivery.swift` | `TheGetaway` issues strictly increasing generations and admits matching wiring and events; `TheMuscle` routes generation-scoped callback effects through the owner |
 | Drainable callback work | `TaskTracker.swift` | Lifecycle, listener-generation, and delayed-disconnect owners |

@@ -6,13 +6,13 @@ diagram answers "which work can still progress when the app main thread is
 wedged?"
 
 **Illustrates:** [ARCHITECTURE.md](../ARCHITECTURE.md), [WIRE-PROTOCOL.md](../WIRE-PROTOCOL.md)
-**Source of truth:** `ButtonHeist/Sources/TheInsideJob/Server/ServerTransport.swift`, `ButtonHeist/Sources/TheInsideJob/Server/NetworkBoundary/SocketClientRegistry.swift`, `ButtonHeist/Sources/TheInsideJob/TheGetaway/TransportControlPlane.swift`, `ButtonHeist/Sources/TheInsideJob/TheGetaway/TheGetaway+Transport.swift`, `ButtonHeist/Sources/TheInsideJob/Runtime/MainThreadProbe.swift`, `ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+TransportWaits.swift`
+**Source of truth:** `ButtonHeist/Sources/TheInsideJob/Server/ServerTransport.swift`, `ButtonHeist/Sources/TheInsideJob/Server/NetworkBoundary/SocketClientRegistry.swift`, `ButtonHeist/Sources/TheInsideJob/TheGetaway/TransportControlPlane.swift`, `ButtonHeist/Sources/TheInsideJob/TheGetaway/TheGetaway+Transport.swift`, `ButtonHeist/Sources/TheInsideJob/Runtime/MainThreadProbe.swift`
 
 ## Ownership and execution
 
 ```mermaid
 flowchart LR
-    FENCE["TheFence<br/>pending UI request watchdog"]
+    CLIENT["Diagnostic client<br/>explicit main-thread probe"]
     SOCKET["ServerTransport<br/>transportEvents"]
 
     subgraph offmain["Off MainActor"]
@@ -28,14 +28,14 @@ flowchart LR
         SETTLE["Settlement.Executor<br/>idle and semantic evidence"]
     end
 
-    FENCE -- "mainThreadProbe while UI request is pending" --> SOCKET
+    CLIENT -- "mainThreadProbe" --> SOCKET
     SOCKET --> CONTROL
     CONTROL --> ADMISSION
     ADMISSION --> SIDEBAND
     ADMISSION --> STREAM
-    SIDEBAND -- "pong" --> FENCE
+    SIDEBAND -- "pong" --> CLIENT
     SIDEBAND --> PROBE
-    PROBE -- "responsive · mainThreadUnresponsive · workTimedOut" --> FENCE
+    PROBE -- "responsive · mainThreadUnresponsive · workTimedOut" --> CLIENT
     PROBE -. "CFRunLoopPerformBlock + wake" .-> main
     STREAM --> BRAINS
     BRAINS --> SETTLE
@@ -55,16 +55,15 @@ generation is admitted.
 
 ```mermaid
 flowchart TD
-    PENDING["UI request remains pending"] --> CONNECTION{"Can transport control respond?"}
-    CONNECTION -- "No" --> DISCONNECTED["Transport disconnected<br/>or probe response unavailable"]
-    CONNECTION -- "Yes" --> BEGAN{"Did the main run loop<br/>begin scheduled work?"}
+    PROBE["Explicit diagnostic probe"] --> BEGAN{"Did the main run loop<br/>begin scheduled work?"}
     BEGAN -- "No" --> UNRESPONSIVE["mainThreadUnresponsive"]
     BEGAN -- "Yes" --> COMPLETED{"Did admitted probe work<br/>complete in time?"}
     COMPLETED -- "No" --> WORK["workTimedOut"]
-    COMPLETED -- "Yes" --> UI["Main thread responsive"]
-    UI --> SETTLED{"Did UI execution establish<br/>required stable evidence?"}
-    SETTLED -- "No" --> SETTLEMENT["Settlement or idle timeout"]
-    SETTLED -- "Yes" --> SUCCESS["Request result"]
+    COMPLETED -- "Yes" --> RESPONSIVE["responsive"]
+
+    REQUEST["Independent app request"] --> TERMINAL{"Response before<br/>its one deadline?"}
+    TERMINAL -- "Yes" --> RESULT["Request result"]
+    TERMINAL -- "No" --> TIMEOUT["request.timeout"]
 ```
 
 These outcomes locate different boundaries:
@@ -74,5 +73,5 @@ These outcomes locate different boundaries:
   work did not begin.
 - `workTimedOut` says the main run loop began the probe but its admitted work
   did not finish.
-- Settlement timeout says UI execution ran but stable semantic evidence did
-  not satisfy the operation.
+- Request execution owns one normal deadline. Explicit probe outcomes do not
+  compete with or replace a request's terminal result.

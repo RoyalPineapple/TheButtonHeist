@@ -645,10 +645,11 @@ before declaring the transport disconnected. Because `ping` is handled by the
 off-main transport control plane, `pong` proves transport-control progress but
 does not prove main-thread responsiveness.
 
-TheFence separately watches pending UI requests with configurable
-`mainThreadProbe` cadence, response, responsiveness, and work timeouts. A probe
-can report `mainThreadUnresponsive` or `workTimedOut` while the connection
-remains alive. Settlement and idle deadlines remain in-process UI evidence
+Clients may issue `mainThreadProbe` explicitly to diagnose whether the main run
+loop can still execute scheduled work. TheFence does not emit probes
+automatically before, during, or after another request. Every app request keeps
+one normal response deadline; a probe cannot compete with or replace its
+terminal result. Settlement and idle deadlines remain in-process UI evidence
 deadlines and do not classify connection or main-thread liveness.
 
 After reconnecting, clients should request fresh interface state before acting.
