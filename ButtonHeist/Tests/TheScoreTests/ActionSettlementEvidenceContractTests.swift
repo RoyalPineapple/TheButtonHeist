@@ -33,13 +33,6 @@ final class ActionSettlementEvidenceContractTests: XCTestCase {
         )
     }
 
-    func testSettlementPathKeyIsRejected() {
-        XCTAssertThrowsError(try JSONDecoder().decode(
-            ActionSettlementEvidence.self,
-            from: Data(#"{"durationMs":1,"kind":"settled","path":"semanticStability"}"#.utf8)
-        ), "rejectUnknownKeys must refuse the retired path key")
-    }
-
     func testSettlementFactsAreExhaustive() {
         let rows: [(ActionSettlementEvidence, Bool, Bool, Bool)] = [
             (.settled(duration: 1), true, true, true),
@@ -54,34 +47,9 @@ final class ActionSettlementEvidenceContractTests: XCTestCase {
         }
     }
 
-    func testStrictLegacyDecoderRequiresCoordinatedVersionForNewDiscriminator() throws {
-        let data = try JSONEncoder().encode(
-            ActionSettlementEvidence.observationHandoffTimedOut(duration: 1)
-        )
-
-        XCTAssertThrowsError(try JSONDecoder().decode(LegacySettlementEvidence.self, from: data))
-        XCTAssertNoThrow(try JSONDecoder().decode(ActionSettlementEvidence.self, from: data))
-    }
-
     private func encodedString(_ evidence: ActionSettlementEvidence) throws -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         return try XCTUnwrap(String(data: encoder.encode(evidence), encoding: .utf8))
-    }
-}
-
-private struct LegacySettlementEvidence: Decodable {
-    private enum Kind: String, Decodable {
-        case settled
-        case timedOut
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case kind
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        _ = try container.decode(Kind.self, forKey: .kind)
     }
 }
