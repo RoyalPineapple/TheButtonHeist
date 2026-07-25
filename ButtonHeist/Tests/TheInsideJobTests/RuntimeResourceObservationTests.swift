@@ -40,7 +40,7 @@ final class RuntimeResourceObservationTests: XCTestCase {
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.brains.vault.semanticObservationStream.isActive)
         XCTAssertFalse(job.tripwire.isPulseRunning)
-        XCTAssertFalse(job.tripwire.uikitIdleTracker.isInstalled)
+        XCTAssertFalse(job.tripwire.animationObserver.isInstalled)
         XCTAssertFalse(job.lifecycleObservationIsInstalled)
 
         await activateRuntime()
@@ -48,7 +48,7 @@ final class RuntimeResourceObservationTests: XCTestCase {
         XCTAssertTrue(job.brains.semanticObservationIsActive)
         XCTAssertTrue(job.brains.vault.semanticObservationStream.isActive)
         XCTAssertTrue(job.tripwire.isPulseRunning)
-        XCTAssertTrue(job.tripwire.uikitIdleTracker.isInstalled)
+        XCTAssertTrue(job.tripwire.animationObserver.isInstalled)
         XCTAssertTrue(job.lifecycleObservationIsInstalled)
         assertIdleTimerProtection(on: job, retainedBaseline: idleTimerBaseline)
 
@@ -57,7 +57,7 @@ final class RuntimeResourceObservationTests: XCTestCase {
         XCTAssertTrue(job.brains.semanticObservationIsActive)
         XCTAssertTrue(job.brains.vault.semanticObservationStream.isActive)
         XCTAssertTrue(job.tripwire.isPulseRunning)
-        XCTAssertTrue(job.tripwire.uikitIdleTracker.isInstalled)
+        XCTAssertTrue(job.tripwire.animationObserver.isInstalled)
         XCTAssertTrue(job.lifecycleObservationIsInstalled)
         assertIdleTimerProtection(on: job, retainedBaseline: idleTimerBaseline)
     }
@@ -68,7 +68,7 @@ final class RuntimeResourceObservationTests: XCTestCase {
         XCTAssertTrue(job.brains.semanticObservationIsActive)
         XCTAssertTrue(job.brains.vault.semanticObservationStream.isActive)
         XCTAssertTrue(job.tripwire.isPulseRunning)
-        XCTAssertTrue(job.tripwire.uikitIdleTracker.isInstalled)
+        XCTAssertTrue(job.tripwire.animationObserver.isInstalled)
         XCTAssertTrue(job.lifecycleObservationIsInstalled)
 
         await job.suspend()
@@ -76,7 +76,7 @@ final class RuntimeResourceObservationTests: XCTestCase {
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.brains.vault.semanticObservationStream.isActive)
         XCTAssertFalse(job.tripwire.isPulseRunning)
-        XCTAssertFalse(job.tripwire.uikitIdleTracker.isInstalled)
+        XCTAssertFalse(job.tripwire.animationObserver.isInstalled)
         XCTAssertTrue(job.lifecycleObservationIsInstalled)
         assertIdleTimerProtection(on: job, retainedBaseline: idleTimerBaseline)
         XCTAssertEqual(UIApplication.shared.isIdleTimerDisabled, idleTimerBaseline)
@@ -84,16 +84,16 @@ final class RuntimeResourceObservationTests: XCTestCase {
 
     func testRuntimeReactivationReinstallsUIKitIdleTracking() async {
         await activateRuntime()
-        XCTAssertTrue(job.tripwire.uikitIdleTracker.isInstalled)
+        XCTAssertTrue(job.tripwire.animationObserver.isInstalled)
 
         job.releaseRuntimeOwnedResources(
             policy: .suspend,
             idleTimerBaseline: resources.idleTimerBaseline
         )
-        XCTAssertFalse(job.tripwire.uikitIdleTracker.isInstalled)
+        XCTAssertFalse(job.tripwire.animationObserver.isInstalled)
 
         await job.activateRuntime(resources)
-        XCTAssertTrue(job.tripwire.uikitIdleTracker.isInstalled)
+        XCTAssertTrue(job.tripwire.animationObserver.isInstalled)
     }
 
     func testStopClearsLifecycleObservationAndIdleTimerBaseline() async {
@@ -107,7 +107,7 @@ final class RuntimeResourceObservationTests: XCTestCase {
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.brains.vault.semanticObservationStream.isActive)
         XCTAssertFalse(job.tripwire.isPulseRunning)
-        XCTAssertFalse(job.tripwire.uikitIdleTracker.isInstalled)
+        XCTAssertFalse(job.tripwire.animationObserver.isInstalled)
         XCTAssertFalse(job.lifecycleObservationIsInstalled)
         assertIdleTimerProtectionIsCleared(on: job)
         XCTAssertEqual(UIApplication.shared.isIdleTimerDisabled, idleTimerBaseline)
@@ -128,7 +128,7 @@ final class RuntimeResourceObservationTests: XCTestCase {
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.brains.vault.semanticObservationStream.isActive)
         XCTAssertFalse(job.tripwire.isPulseRunning)
-        XCTAssertFalse(job.tripwire.uikitIdleTracker.isInstalled)
+        XCTAssertFalse(job.tripwire.animationObserver.isInstalled)
     }
 
     func testStopPreservesLatestSettleFailureDiagnostic() async {
@@ -143,7 +143,7 @@ final class RuntimeResourceObservationTests: XCTestCase {
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.brains.vault.semanticObservationStream.isActive)
         XCTAssertFalse(job.tripwire.isPulseRunning)
-        XCTAssertFalse(job.tripwire.uikitIdleTracker.isInstalled)
+        XCTAssertFalse(job.tripwire.animationObserver.isInstalled)
     }
 
     func testInactiveCommandFailsWithoutStartingObservation() async {

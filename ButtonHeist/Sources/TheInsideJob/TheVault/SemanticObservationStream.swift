@@ -200,19 +200,11 @@ internal final class Stream {
     }
 
     internal func beginActiveObservationDemand() -> SemanticObservationDemand {
-        let wasIdle = !scopePressure.hasActiveDemand
-        let id = scopePressure.addActiveDemand()
-        if wasIdle {
-            tripwire.uikitIdleTracker.beginOperationIfAvailable()
-        }
-        return SemanticObservationDemand(id: id, stream: self)
+        SemanticObservationDemand(id: scopePressure.addActiveDemand(), stream: self)
     }
 
     internal func removeActiveObservationDemand(_ id: UInt64) {
         scopePressure.removeActiveDemand(id)
-        if !scopePressure.hasActiveDemand {
-            tripwire.uikitIdleTracker.endOperationIfNeeded()
-        }
     }
 
     internal func subscribedObservationScope() -> SemanticObservationScope {

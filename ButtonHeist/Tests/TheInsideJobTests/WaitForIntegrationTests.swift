@@ -46,7 +46,7 @@ final class WaitForIntegrationTests: XCTestCase {
         )
         self.runtimeResources = runtimeResources
         await insideJob.activateRuntime(runtimeResources)
-        XCTAssertTrue(insideJob.tripwire.uikitIdleTracker.isInstalled)
+        XCTAssertTrue(insideJob.tripwire.animationObserver.isInstalled)
     }
 
     override func tearDown() async throws {
@@ -55,7 +55,7 @@ final class WaitForIntegrationTests: XCTestCase {
                 policy: .stop,
                 idleTimerBaseline: runtimeResources.idleTimerBaseline
             )
-            XCTAssertFalse(insideJob.tripwire.uikitIdleTracker.isInstalled)
+            XCTAssertFalse(insideJob.tripwire.animationObserver.isInstalled)
         }
         insideJob = nil
         runtimeResources = nil
@@ -173,7 +173,7 @@ final class WaitForIntegrationTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) throws {
-        XCTAssertTrue(insideJob.tripwire.uikitIdleTracker.isInstalled, file: file, line: line)
+        XCTAssertTrue(insideJob.tripwire.animationObserver.isInstalled, file: file, line: line)
         let settlement = try XCTUnwrap(result.evidence.settlement, file: file, line: line)
         XCTAssertTrue(settlement.settled, file: file, line: line)
         XCTAssertTrue(settlement.readinessEstablished, file: file, line: line)
@@ -284,7 +284,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "action failed")
         XCTAssertEqual(result.evidence.settlement?.path, .accessibilityQuietWindow)
         try assertSuccessfulWaitSettlement(result)
-        let animationIsIdle = await insideJob.tripwire.uikitIdleTracker.waitUntilIdle(timeout: .zero)
+        let animationIsIdle = await insideJob.tripwire.animationObserver.waitUntilIdle(timeout: .zero)
         XCTAssertFalse(animationIsIdle)
     }
 
