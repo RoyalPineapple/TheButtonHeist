@@ -6,7 +6,7 @@ import TheScore
 @MainActor
 func evaluatePredicateCases(
     _ cases: [PredicateCase],
-    resolved: [ResolvedScreenAssertion],
+    resolved: [ResolvedPresenceCondition],
     in settlement: Settlement.Result
 ) -> HeistCaseSelectionResult {
     precondition(cases.count == resolved.count, "resolved predicate case count must match authored cases")

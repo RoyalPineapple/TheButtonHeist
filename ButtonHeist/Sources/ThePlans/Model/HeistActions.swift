@@ -126,21 +126,16 @@ enum AuthoredActionExpectation: Sendable, Equatable {
             )
         }
 
-        let predicate: AccessibilityPredicate
-        switch (existingStep.predicate.core, nextPredicate.core) {
-        case (.changed(.screen(let assertions)), .presence(let presence)),
-             (.presence(let presence), .changed(.screen(let assertions))):
-            predicate = AccessibilityPredicate(
-                core: .changed(.screen(assertions + [.presence(presence)]))
-            )
-        default:
-            predicate = existingStep.predicate
-            diagnostics.append(.dslBuild(
-                code: .dslInvalidActionExpectation,
-                message: "unsupported expectation composition: \(existingStep.predicate) + \(nextPredicate)",
-                hint: "Use one canonical predicate per expectation, or add current-tree assertions inside .changed(.screen(...))."
-            ))
-        }
+        // An expectation holds one predicate, so two cannot be composed here.
+        // They are siblings in authored order — a list — and that is a change
+        // to `ActionExpectation`, not something to fake by folding one
+        // predicate inside another.
+        let predicate = existingStep.predicate
+        diagnostics.append(.dslBuild(
+            code: .dslInvalidActionExpectation,
+            message: "unsupported expectation composition: \(existingStep.predicate) + \(nextPredicate)",
+            hint: "Use one predicate per expectation, or follow the action with a WaitFor."
+        ))
 
         let timeout: WaitTimeout
         let explicitTimeout: WaitTimeout?

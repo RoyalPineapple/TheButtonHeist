@@ -67,7 +67,7 @@ final class ScreenGenerationTests: XCTestCase {
         let oldPath = TreePath([0])
         let newPath = TreePath([1])
         var exploration = Navigation.SemanticExploration(
-            baseline: .interfaceMemory(screen(header: "Home")),
+            startingFresh: false,
             maxScrollsPerContainer: 2,
             maxScrollsPerDiscovery: 2
         )
@@ -90,10 +90,8 @@ final class ScreenGenerationTests: XCTestCase {
         XCTAssertEqual(exploration.progress.recordScrollAttempt(in: newPath), .discoveryScrollLimit)
     }
 
-    func testCurrentViewportBaselineReplacesOnceThenMergesDiscoveryPages() async {
-        var exploration = Navigation.SemanticExploration(
-            baseline: .currentViewport(screen(header: "Catalog"))
-        )
+    func testStartingFreshReplacesOnceThenMergesDiscoveryPages() async {
+        var exploration = Navigation.SemanticExploration(startingFresh: true)
 
         XCTAssertEqual(exploration.discoveryCommitPolicy, .replaceInterface)
 

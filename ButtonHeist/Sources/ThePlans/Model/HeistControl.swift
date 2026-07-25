@@ -74,7 +74,7 @@ public struct IfContent {
     }
 
     fileprivate init(
-        predicate: ChangeDeclaration.ScreenAssertion,
+        predicate: PresenceCondition,
         content: HeistContent
     ) {
         let step = ConditionalStep(cases: NonEmptyArray(PredicateCase(
@@ -91,7 +91,7 @@ public struct IfContent {
 }
 
 public func If(
-    _ predicate: ChangeDeclaration.ScreenAssertion,
+    _ predicate: PresenceCondition,
     @HeistBuilder _ content: () -> HeistContent
 ) -> IfContent {
     IfContent(predicate: predicate, content: content())
@@ -114,7 +114,7 @@ public struct Case {
     fileprivate let diagnostics: [HeistBuildDiagnostic]
 
     public init(
-        _ predicate: ChangeDeclaration.ScreenAssertion,
+        _ predicate: PresenceCondition,
         @HeistBuilder _ content: () -> HeistContent
     ) {
         let content = content()

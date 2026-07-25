@@ -136,15 +136,12 @@ final class TheBrains {
         guard semanticObservationIsActive else {
             return .failure(.inactiveRuntime)
         }
-        guard let admittedVisibleObservation = await vault.semanticObservationStream.admittedVisibleObservation(timeout: 2.0),
-              let exploration = await navigation.exploreScreen(
-                baseline: .currentViewport(
-                    vault.visibleExplorationBaseline(
-                        from: admittedVisibleObservation.event.snapshot.observation
-                    )
-                ),
+        // Wait for a visible settle before exploring; the observation itself
+        // is not needed, because exploration starts fresh from the screen.
+        guard await vault.semanticObservationStream.admittedVisibleObservation(timeout: 2.0) != nil,
+              let exploration = await navigation.fullGraph(
                 maxScrollsPerContainer: query.maxScrollsPerContainer?.value,
-                maxScrollsPerDiscovery: query.maxScrollsPerDiscovery?.value,
+                maxScrollsPerDiscovery: query.maxScrollsPerDiscovery?.value
               ) else {
             return .failure(.rootViewUnavailable)
         }

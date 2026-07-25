@@ -46,16 +46,10 @@ final class SettlementTerminalLogTests: SemanticObservationStreamTestCase {
             .init(event: observed, history: history),
             for: readiness
         ))
-        let evaluation = Settlement.Predicate.EvaluationResponse(
-            target: .observation(observed.moment),
-            result: .init(met: true, actual: "Observed")
-        )
-
         assertLog(
             .observation(.settled(.init(
                 predicate: predicate,
                 boundary: .init(moment: baseline.moment),
-                evaluation: evaluation,
                 readiness: readiness,
                 handoff: handoff,
                 history: history,
@@ -63,7 +57,7 @@ final class SettlementTerminalLogTests: SemanticObservationStreamTestCase {
             ))),
             contains: [
                 "command=observation",
-                "predicate=satisfied(observation:\(observed.sequence.rawValue))",
+                "predicate=satisfied",
                 "observation=\(observed.sequence.rawValue)",
                 "handoff=admitted(observation:\(observed.sequence.rawValue))",
                 "outcome=settled",
@@ -75,7 +69,7 @@ final class SettlementTerminalLogTests: SemanticObservationStreamTestCase {
                 attempt: .init(
                     predicate: predicate,
                     boundary: .established(.init(moment: baseline.moment)),
-                    evaluation: .init(predicate: predicate),
+                    outstanding: Expectation([predicate.resolved]).outstanding,
                     readiness: .pending(.initial),
                     handoff: .pending(.initial),
                     history: history,
@@ -112,7 +106,7 @@ final class SettlementTerminalLogTests: SemanticObservationStreamTestCase {
                 command: command,
                 boundary: .init(moment: baseline.moment),
                 dispatch: .success(payload: .dismiss),
-                evaluation: nil,
+
                 readiness: readiness,
                 handoff: handoff,
                 history: history,
@@ -137,7 +131,7 @@ final class SettlementTerminalLogTests: SemanticObservationStreamTestCase {
                         message: "Dismiss failed",
                         failureKind: .actionFailed
                     )),
-                    evaluation: .init(predicate: nil),
+                    outstanding: [],
                     readiness: .pending(.initial),
                     handoff: .pending(.initial),
                     history: nil,

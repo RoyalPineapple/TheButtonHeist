@@ -177,7 +177,7 @@ extension TheBrains {
     }
 
     func executeSemanticDiscovery() async -> Navigation.InterfaceExplorationResult? {
-        await navigation.exploreScreen(exitPosition: .origin)
+        await navigation.fullGraph()
     }
 
     private func clearRotorCursorBeforeNonRotorAction(_ command: ResolvedHeistActionCommand) {

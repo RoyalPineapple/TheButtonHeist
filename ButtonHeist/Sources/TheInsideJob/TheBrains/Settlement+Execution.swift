@@ -139,10 +139,6 @@ internal protocol SettlementExecutionBoundary: Sendable {
     @MainActor
     func dispatchDidComplete() async
 
-    func evaluate(
-        _ request: Settlement.Predicate.EvaluationRequest
-    ) -> PredicateEvaluationResult
-
     func elapsed() async -> ElapsedMilliseconds
 }
 
@@ -459,14 +455,6 @@ extension Settlement {
                                 sink.completeDispatch(result, at: instant)
                             }
 
-                        case .evaluatePredicate(let request):
-                            let decision = await resolvePredicateEvaluation(.init(
-                                state: state,
-                                effects: [.evaluatePredicate(request)] + effects
-                            ))
-                            state = decision.state
-                            effects = decision.effects
-
                         case .quiesce(let arming):
                             let decision = await quiesce(arming, state: state, sink: sink, tasks: &tasks)
                             state = decision.state
@@ -554,7 +542,6 @@ extension Settlement {
                 fact: fact,
                 instant: admitted.instant
             )
-            decision = await resolvePredicateEvaluation(decision)
             if decision.state.concludesFinalSemanticEvidence
                 || fact.endsFinalSemanticEvidenceAttempt {
                 if let timing = finalSemanticEvidence.complete() {
@@ -562,36 +549,6 @@ extension Settlement {
                         state: decision.state.recording(timing),
                         effects: decision.effects
                     )
-                }
-            }
-            return decision
-        }
-
-        private func resolvePredicateEvaluation(_ initial: Decision) async -> Decision {
-            var decision = initial
-            while let index = decision.effects.firstIndex(where: {
-                if case .evaluatePredicate = $0 { return true }
-                return false
-            }) {
-                guard case .evaluatePredicate(let request) = decision.effects[index] else {
-                    preconditionFailure("Predicate evaluation effect index changed")
-                }
-                var remainingEffects = decision.effects
-                remainingEffects.remove(at: index)
-                let result = boundary.evaluate(request)
-                let evaluated = await reduce(
-                    decision.state,
-                    fact: .predicateEvaluated(.init(
-                        target: request.target,
-                        result: result
-                    ))
-                )
-                switch evaluated.state {
-                case .quiescing, .terminal:
-                    return evaluated
-                case .awaitingBaseline, .armed, .active:
-                    remainingEffects.insert(contentsOf: evaluated.effects, at: index)
-                    decision = Decision(state: evaluated.state, effects: remainingEffects)
                 }
             }
             return decision
@@ -869,7 +826,6 @@ private extension Settlement.Event.Fact {
              .announcementObserved,
              .observationHistoryUnavailable,
              .announcementHistoryUnavailable,
-             .predicateEvaluated,
              .readinessEstablished,
              .handoffCaptureFailed:
             false
@@ -1097,12 +1053,6 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
         lifecycle.dispatchDidComplete(
             visibleRefreshBoundary: vault.semanticObservationStream.visibleRefreshBoundary()
         )
-    }
-
-    internal func evaluate(
-        _ request: Settlement.Predicate.EvaluationRequest
-    ) -> PredicateEvaluationResult {
-        Settlement.PredicateEvaluation.evaluate(request)
     }
 
     internal func elapsed() async -> ElapsedMilliseconds {

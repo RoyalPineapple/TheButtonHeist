@@ -23,7 +23,6 @@ extension SettleSessionTests {
                 clock.advance(milliseconds: 10)
                 return completed ? .observed : .cancelled
             },
-            cyclesRequired: 3,
             clock: { clock.currentTime() },
             timeoutMs: 100
         )
@@ -52,7 +51,6 @@ extension SettleSessionTests {
                 sleepStarted.fulfill()
                 _ = await Task.cancellableSleep(for: .seconds(10))
             },
-            cyclesRequired: 3,
             cycleIntervalMs: 1,
             timeoutMs: 200
         )
@@ -90,8 +88,7 @@ extension SettleSessionTests {
                 makeParseResult([staticElement, spinnerB]),
                 makeParseResult([staticElement, spinnerC]),
                 makeParseResult([staticElement, spinnerA])
-            ],
-            cyclesRequired: 3
+            ]
         )
 
         let outcome = await session.run(
@@ -120,8 +117,7 @@ extension SettleSessionTests {
             )
         }
         let session = makeSession(
-            script: hands.map { hand in makeParseResult([staticElement, hand]) },
-            cyclesRequired: 3
+            script: hands.map { hand in makeParseResult([staticElement, hand]) }
         )
 
         let outcome = await session.run(
@@ -153,8 +149,7 @@ extension SettleSessionTests {
             )
         }
         let session = makeSession(
-            script: sliding.map { banner in makeParseResult([staticElement, banner]) },
-            cyclesRequired: 3
+            script: sliding.map { banner in makeParseResult([staticElement, banner]) }
         )
 
         let outcome = await session.run(

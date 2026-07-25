@@ -441,7 +441,7 @@ private indirect enum DecodedHeistStep: Decodable {
 }
 
 private struct DecodedPredicateCase: Decodable {
-    let predicate: ChangeDeclaration.ScreenAssertion
+    let predicate: PresenceCondition
     let body: [DecodedHeistStep]
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -451,7 +451,7 @@ private struct DecodedPredicateCase: Decodable {
     init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "predicate case")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        predicate = try container.decode(ChangeDeclaration.ScreenAssertion.self, forKey: .predicate)
+        predicate = try container.decode(PresenceCondition.self, forKey: .predicate)
         body = try container.decode([DecodedHeistStep].self, forKey: .body)
     }
 

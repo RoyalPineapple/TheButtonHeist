@@ -53,6 +53,16 @@ extension Observation {
         private let tree: InterfaceTree
         private let captureID: InterfaceCaptureID
 
+        /// What the classifier calls this screen.
+        ///
+        /// A derived view like `observation`, computed here because the tree
+        /// stays private: the classifier reads a primary header to decide
+        /// whether two captures are the same screen, and that same reading is
+        /// the screen's name.
+        internal var screenName: String? {
+            ScreenClassifier.screenName(of: tree)
+        }
+
         internal var observation: InterfaceObservation {
             do {
                 return try InterfaceObservation.build(

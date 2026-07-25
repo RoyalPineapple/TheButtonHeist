@@ -25,8 +25,8 @@ private extension ResolvedAccessibilityPredicate {
             return currentResult(target, shouldExist: true, graph: current)
         case .missing(let target):
             return currentResult(target, shouldExist: false, graph: current)
-        case .changed(.screen(let assertions)):
-            return evaluateScreen(assertions, evidence: evidence, current: current)
+        case .changed(.screen(let predicate)):
+            return evaluateScreen(predicate, evidence: evidence)
         case .changed(.elements(let assertions)):
             return evaluateElements(assertions, evidence: evidence, current: current)
         case .announcement:
@@ -37,23 +37,24 @@ private extension ResolvedAccessibilityPredicate {
         }
     }
 
+    /// A screen predicate asks about the screen and nothing else: did a
+    /// boundary happen, and — if the caller named one — was the screen arrived
+    /// at that screen. Which elements left and which arrived are element
+    /// questions, and they are asked by element predicates.
     func evaluateScreen(
-        _ assertions: [ResolvedScreenAssertion],
-        evidence: AccessibilityTraceEvidence,
-        current: AccessibilityTargetMatchGraph<HeistElement>
+        _ predicate: ResolvedScreenPredicate,
+        evidence: AccessibilityTraceEvidence
     ) -> PredicateEvaluationResult {
         let facts = evidence.changeFacts
         guard facts.contains(where: \.isScreenChanged) else {
             return PredicateEvaluationResult(met: false, actual: facts.kindDescription)
         }
-        let failures = assertions.compactMap { assertion -> String? in
-            let result = evaluateCurrentAssertion(assertion, graph: current)
-            return result.met ? nil : result.actual
+        let arrived = InterfaceSummary.screenId(for: evidence.currentInterface)
+        let screenFacts = ScreenFacts(idBefore: nil, idAfter: arrived)
+        guard predicate.matches(screenFacts) else {
+            return PredicateEvaluationResult(met: false, actual: arrived ?? "unnamed screen")
         }
-        return PredicateEvaluationResult(
-            met: failures.isEmpty,
-            actual: failures.isEmpty ? nil : failures.compactMap { $0 }.joined(separator: "; ")
-        )
+        return PredicateEvaluationResult(met: true, actual: nil)
     }
 
     /// Element predicates split by arity, and the split decides what evidence
@@ -113,7 +114,7 @@ private extension ResolvedAccessibilityPredicate {
     }
 
     func evaluateCurrentAssertion(
-        _ assertion: ResolvedScreenAssertion,
+        _ assertion: ResolvedPresenceCondition,
         graph: AccessibilityTargetMatchGraph<HeistElement>
     ) -> PredicateEvaluationResult {
         switch assertion {

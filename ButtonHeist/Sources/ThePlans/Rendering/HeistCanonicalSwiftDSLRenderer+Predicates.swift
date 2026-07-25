@@ -9,10 +9,10 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     func render(
-        predicate: ChangeDeclaration.ScreenAssertion,
+        predicate: PresenceCondition,
         environment: RenderEnvironment
     ) throws -> String {
-        try render(screenAssertion: predicate, environment: environment)
+        try render(presenceCondition: predicate, environment: environment)
     }
 
     private func render(
@@ -47,12 +47,9 @@ extension HeistCanonicalSwiftDSLRenderer {
         environment: RenderEnvironment
     ) throws -> String {
         switch change {
-        case .screen(let assertions):
-            guard !assertions.isEmpty else { return ".screen()" }
-            let rendered = try assertions.map {
-                try render(screenAssertion: $0, environment: environment)
-            }
-            return ".screen([\(rendered.joined(separator: ", "))])"
+        case .screen(let predicate):
+            guard let match = predicate.match else { return ".screen()" }
+            return try ".screen(\(renderStringArgument(match, environment: environment)))"
         case .elements(let assertions):
             guard !assertions.isEmpty else { return ".elements()" }
             let rendered = try assertions.map {
@@ -63,7 +60,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     private func render(
-        screenAssertion assertion: ChangeDeclaration.ScreenAssertion,
+        presenceCondition assertion: PresenceCondition,
         environment: RenderEnvironment
     ) throws -> String {
         switch assertion {

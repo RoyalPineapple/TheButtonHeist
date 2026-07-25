@@ -12,10 +12,12 @@ private enum MenuScreen {
 
     static let checkout = HeistDef<Void>("MenuScreen.checkout") {
         Activate(.label("Checkout"))
-            .expect(.changed(.screen([.exists(.label("Checkout"))])), timeout: 8)
+            .expect(.changed(.screen()), timeout: 8)
+        WaitFor(.exists(.label("Checkout")), timeout: 8)
 
         Activate(.label(DemoOrder.confirmPaymentLabel))
-            .expect(.changed(.screen([.exists(.label("Processing payment"))])), timeout: 8)
+            .expect(.changed(.screen()), timeout: 8)
+        WaitFor(.exists(.label("Processing payment")), timeout: 8)
 
         WaitFor(.exists(.label("Payment Successful")), timeout: 12)
     }

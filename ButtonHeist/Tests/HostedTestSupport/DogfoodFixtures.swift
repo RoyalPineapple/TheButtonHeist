@@ -34,7 +34,8 @@ package enum DogfoodHome {
                 backToRoot
 
                 Activate(.predicate(ElementPredicate(label: .exact(screen), traits: [.button])))
-                    .expect(.changed(.screen([.exists(.predicate(destinationTitle))])), timeout: 8)
+                    .expect(.changed(.screen()), timeout: 8)
+                WaitFor(.exists(.predicate(destinationTitle)), timeout: 8)
             }
         }
     }
@@ -43,7 +44,8 @@ package enum DogfoodHome {
 package enum ControlsDemoScreen {
     package static let openScreen = HeistDef<String>("ControlsDemo.openScreen", parameter: "screen") { screen in
         Activate(.predicate(ElementPredicate(label: .exact(screen), traits: [.button])))
-            .expect(.changed(.screen([.exists(.label(screen))])), timeout: 8)
+            .expect(.changed(.screen()), timeout: 8)
+        WaitFor(.exists(.label(screen)), timeout: 8)
     }
 }
 

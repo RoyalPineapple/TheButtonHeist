@@ -9,7 +9,7 @@ import ButtonHeistSupport
 /// Result of running the multi-cycle AX-tree settle loop.
 enum SettleOutcome: Equatable, Sendable {
 
-    /// The AX tree reached `cyclesRequired` consecutive stable cycles.
+    /// The AX tree stopped changing: two consecutive readings came back equal.
     case settled(timeMs: Int)
 
     /// The hard timeout elapsed while the tree was still changing.
@@ -62,45 +62,27 @@ struct SettleObservationSample: Equatable, Sendable {
     let fingerprint: Int
 }
 
-/// The one settle rule: N consecutive unchanged observation diffs.
-///
-/// There is no policy enum. "How many cycles" is a number, not a variant, and
-/// the diff is the only evidence — a cycle either changed the interface or it
-/// did not.
-private struct SettleLoopStability: Equatable, Sendable {
-    let cyclesRequired: Int
-    private(set) var consecutiveUnchangedCycles: Int = 0
-
-    init(cyclesRequired: Int) {
-        self.cyclesRequired = cyclesRequired
-    }
-
-    mutating func observe(unchanged: Bool) -> Bool {
-        consecutiveUnchangedCycles = unchanged ? consecutiveUnchangedCycles + 1 : 0
-        return consecutiveUnchangedCycles >= cyclesRequired
-    }
-
-    mutating func reset() {
-        consecutiveUnchangedCycles = 0
-    }
-}
-
 struct SettleLoopMachine: Equatable {
     struct State: Equatable, Sendable {
         fileprivate var tripwireBaseline: TheTripwire.TripwireSignal
-        private var stability: SettleLoopStability
         private var previousFingerprint: Int?
 
-        init(cyclesRequired: Int, tripwireBaseline: TheTripwire.TripwireSignal) {
+        init(tripwireBaseline: TheTripwire.TripwireSignal) {
             self.tripwireBaseline = tripwireBaseline
-            self.stability = SettleLoopStability(cyclesRequired: cyclesRequired)
             self.previousFingerprint = nil
         }
 
+        /// One no-change is the whole settle rule.
+        ///
+        /// Two consecutive equal fingerprints mean the tree stopped moving, and
+        /// there is nothing a third look can add that the second did not
+        /// already say. Counting cycles was a way of buying confidence that the
+        /// predicates now provide directly: what the caller asked for either
+        /// happened or the timeout says it never will.
         fileprivate mutating func observe(_ observation: SettleObservationSample) -> Bool {
             let unchanged = previousFingerprint == observation.fingerprint
             previousFingerprint = observation.fingerprint
-            return stability.observe(unchanged: unchanged)
+            return unchanged
         }
 
         fileprivate mutating func observe(_ signal: TheTripwire.TripwireSignal) -> Bool {
@@ -111,7 +93,6 @@ struct SettleLoopMachine: Equatable {
             guard signal.requiresSettleBaselineReset(from: previous) else { return false }
 
             previousFingerprint = nil
-            stability.reset()
             return true
         }
     }
@@ -156,22 +137,22 @@ struct SettleSessionFinalObservation {
 
 // MARK: - SettleSession
 
-/// Multi-cycle accessibility-tree settle loop.
+/// Accessibility-tree settle loop.
 ///
-/// Samples the parsed AX tree on the shared UI tick and settles after
-/// `cyclesRequired` consecutive unchanged observation diffs. Values on elements
+/// Samples the parsed AX tree on the shared UI tick and settles on one
+/// no-change: two consecutive readings that come back equal. Values on elements
 /// carrying `UIAccessibilityTraits.updatesFrequently` are masked so spinners
 /// don't block semantic settle; their geometry never is.
 ///
 /// **One clock, one comparison, one event.** The tripwire tick is the only time
-/// source and the AX-tree diff is the only evidence. Callers tune the cycle
-/// count, not the criterion: there is no second stability rule and no second
-/// event source racing the tick.
+/// source and the AX-tree diff is the only evidence. There is no cycle count to
+/// tune: counting repetitions was buying confidence that the caller's
+/// predicates now supply directly, and a third identical reading never said
+/// anything the second had not.
 ///
-/// The loop seeds `previousFingerprint` from a synchronous parse *before*
-/// the first tick, so a static screen settles after exactly
-/// `cyclesRequired` cycles (300 ms with the default 3 × 100 ms), not
-/// `cyclesRequired + 1`.
+/// The loop seeds `previousFingerprint` from a synchronous parse *before* the
+/// first tick, so a static screen settles on the first tick rather than
+/// spending one to discover what it already knew.
 ///
 /// Dependencies are injected as closures so unit tests can drive the loop
 /// against a scripted sequence of parse results without standing up a
@@ -181,25 +162,14 @@ struct SettleSessionFinalObservation {
 /// `@MainActor`-typed provider closures.
 @MainActor struct SettleSession {
 
-    /// Number of consecutive identical-fingerprint cycles required before the
-    /// AX tree is considered stable. Three is the smallest value that filters
-    /// out the typical "one frame of churn between two stable states" pattern
-    /// produced by UIKit animations finishing on a frame boundary, while
-    /// keeping the best-case settle to `3 × cycleInterval` (~300 ms).
-    static let defaultCyclesRequired: Int = 3
-
     /// Poll interval between AX-tree fingerprint checks. 100 ms is roughly
     /// six display frames at 60 Hz — long enough that a parse + fingerprint
     /// + sleep cycle stays well under one frame of main-actor budget on real
-    /// devices, short enough that settle latency is dominated by the
-    /// `cyclesRequired × interval` floor rather than per-cycle wait. This is
-    /// the poll cadence VoiceOver itself uses for similar idle-checks, which
-    /// is why agents driving the same AX surface feel "in sync" at this rate.
+    /// devices, short enough that settle latency is dominated by waiting for
+    /// the app rather than by the poll itself. This is the poll cadence
+    /// VoiceOver itself uses for similar idle-checks, which is why agents
+    /// driving the same AX surface feel "in sync" at this rate.
     static let defaultCycleIntervalMs: Int = 100
-
-    static let minimumStableDurationSeconds = Double(
-        defaultCyclesRequired * defaultCycleIntervalMs
-    ) / 1_000
 
     /// Hard ceiling on how long the settle loop will wait for the AX tree
     /// to quiesce before giving up with `.timedOut`. 5 s is the longest
@@ -225,7 +195,6 @@ struct SettleSessionFinalObservation {
     let parseProvider: ParseProvider
     let tripwireSignalProvider: TripwireSignalProvider
     let observationYield: ObservationYield
-    let cyclesRequired: Int
     let clock: Clock
     let timeoutMs: Int
 
@@ -233,14 +202,12 @@ struct SettleSessionFinalObservation {
         parseProvider: @escaping ParseProvider,
         tripwireSignalProvider: @escaping TripwireSignalProvider,
         observationYield: @escaping ObservationYield,
-        cyclesRequired: Int = SettleSession.defaultCyclesRequired,
         clock: @escaping Clock = { RuntimeElapsed.now },
         timeoutMs: Int = SettleSession.defaultTimeoutMs
     ) {
         self.parseProvider = parseProvider
         self.tripwireSignalProvider = tripwireSignalProvider
         self.observationYield = observationYield
-        self.cyclesRequired = cyclesRequired
         self.clock = clock
         self.timeoutMs = timeoutMs
     }
@@ -251,7 +218,6 @@ struct SettleSessionFinalObservation {
         parseProvider: @escaping ParseProvider,
         tripwireSignalProvider: @escaping TripwireSignalProvider,
         sleeper: @escaping Sleeper = { _ = await Task.cancellableSleep(nanoseconds: $0) },
-        cyclesRequired: Int = SettleSession.defaultCyclesRequired,
         cycleIntervalMs: Int = SettleSession.defaultCycleIntervalMs,
         timeoutMs: Int = SettleSession.defaultTimeoutMs
     ) {
@@ -262,7 +228,6 @@ struct SettleSessionFinalObservation {
                 await sleeper(UInt64(cycleIntervalMs) * 1_000_000)
                 return Task.isCancelled ? .cancelled : .observed
             },
-            cyclesRequired: cyclesRequired,
             timeoutMs: timeoutMs
         )
     }
@@ -274,8 +239,7 @@ struct SettleSessionFinalObservation {
         vault: TheVault,
         tripwire: TheTripwire,
         timeoutMs: Int = SettleSession.defaultTimeoutMs,
-        demand: TheTripwire.TickDemand = .ambient,
-        cyclesRequired: Int = SettleSession.defaultCyclesRequired
+        demand: TheTripwire.TickDemand = .ambient
     ) -> SettleSession {
         SettleSession(
             parseProvider: { vault.refreshLiveCapture() },
@@ -283,26 +247,18 @@ struct SettleSessionFinalObservation {
             observationYield: { timeout in
                 await tripwire.waitForNextTick(timeout: timeout, demand: demand)
             },
-            cyclesRequired: cyclesRequired,
             timeoutMs: timeoutMs
         )
     }
 
-    /// Minimal stability criterion for a programmatic viewport transition. UIKit
-    /// receives two run-loop turns to lay out the new viewport, and the diff
-    /// must read unchanged across both.
+    /// A programmatic viewport transition settles by the same rule as anything
+    /// else; it only asks the tick harder, because nothing else is driving it.
     static func viewportTransition(
         vault: TheVault,
         tripwire: TheTripwire,
         timeoutMs: Int
     ) -> SettleSession {
-        live(
-            vault: vault,
-            tripwire: tripwire,
-            timeoutMs: timeoutMs,
-            demand: .immediate,
-            cyclesRequired: 2
-        )
+        live(vault: vault, tripwire: tripwire, timeoutMs: timeoutMs, demand: .immediate)
     }
 
     /// Result of the loop.
@@ -347,10 +303,7 @@ struct SettleSessionFinalObservation {
             observationYield: observationYield,
             clock: clock,
             timeoutMs: timeoutMs,
-            initial: SettleLoopMachine.State(
-                cyclesRequired: cyclesRequired,
-                tripwireBaseline: baselineTripwireSignal
-            )
+            initial: SettleLoopMachine.State(tripwireBaseline: baselineTripwireSignal)
         ).run(start: start)
     }
 

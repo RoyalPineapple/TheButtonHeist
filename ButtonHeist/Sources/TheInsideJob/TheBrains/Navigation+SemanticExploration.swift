@@ -10,20 +10,6 @@ import ThePlans
 
 extension Navigation {
 
-    enum ExplorationBaseline {
-        case interfaceMemory(InterfaceObservation)
-        case currentViewport(InterfaceObservation)
-
-        var discoveryCommitPolicy: DiscoveryCommitPolicy {
-            switch self {
-            case .interfaceMemory:
-                .mergeIntoInterface
-            case .currentViewport:
-                .replaceInterface
-            }
-        }
-    }
-
     enum DiscoveryCommitPolicy: Equatable, Sendable {
         case mergeIntoInterface
         case replaceInterface
@@ -119,12 +105,14 @@ extension Navigation {
         let deadline: SemanticObservationDeadline?
 
         init(
-            baseline: ExplorationBaseline,
+            startingFresh: Bool,
             deadline: SemanticObservationDeadline? = nil,
             maxScrollsPerContainer: Int = InterfaceExplorationProgress.maxScrollsPerContainer,
             maxScrollsPerDiscovery: Int = InterfaceExplorationProgress.maxScrollsPerDiscovery
         ) {
-            discoveryCommitPolicy = baseline.discoveryCommitPolicy
+            // Only the first page can replace: everything after it merges,
+            // which is what `recordCommittedObservation` latches.
+            discoveryCommitPolicy = startingFresh ? .replaceInterface : .mergeIntoInterface
             self.deadline = deadline
             progress = InterfaceExplorationProgress(
                 maxScrollsPerContainer: maxScrollsPerContainer,
@@ -204,9 +192,7 @@ extension Navigation {
 
         guard let exploration = await exploreScreen(
             target: target,
-            baseline: .currentViewport(
-                vault.visibleExplorationBaseline(from: vault.latestObservation)
-            ),
+            startingFresh: true,
             exitPosition: .origin,
             deadline: deadline,
             onObservation: { _ in

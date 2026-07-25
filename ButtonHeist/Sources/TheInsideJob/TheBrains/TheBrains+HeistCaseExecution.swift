@@ -15,7 +15,7 @@ extension TheBrains {
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
-        let resolvedCases: [ResolvedScreenAssertion]
+        let resolvedCases: [ResolvedPresenceCondition]
         do {
             resolvedCases = try step.cases.map {
                 try $0.predicate.resolve(in: environment)
@@ -137,7 +137,7 @@ extension TheBrains {
 
 }
 
-extension Array where Element == ResolvedScreenAssertion {
+extension Array where Element == ResolvedPresenceCondition {
     var observationScope: SemanticObservationScope {
         map(\.observationScope).max() ?? .visible
     }

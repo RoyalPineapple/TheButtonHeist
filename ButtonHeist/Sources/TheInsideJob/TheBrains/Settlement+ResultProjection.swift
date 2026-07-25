@@ -14,8 +14,8 @@ extension Settlement {
             case .settled(let settled):
                 return .completed(
                     result: actionResult(settled),
-                    expectation: settled.evaluation.map {
-                        $0.result.expectation(for: settled.command.predicate?.authored)
+                    expectation: settled.command.predicate.map {
+                        ExpectationResult(met: true, predicate: $0.authored, actual: nil)
                     }
                 )
             case .failed(let failed):
@@ -32,8 +32,10 @@ extension Settlement {
             }
             switch observation {
             case .settled(let settled):
-                let expectation = settled.evaluation.result.expectation(
-                    for: settled.predicate.authored
+                let expectation = ExpectationResult(
+                    met: true,
+                    predicate: settled.predicate.authored,
+                    actual: nil
                 )
                 guard let met = ExpectationResult.Met(expectation),
                       let check = HeistSettlementEvidence.MatchedCheck(
@@ -50,7 +52,7 @@ extension Settlement {
             case .failed(let failed):
                 let expectation = expectation(
                     predicate: failed.attempt.predicate,
-                    evidence: failed.attempt.evaluation
+                    outstanding: failed.attempt.outstanding
                 )
                 guard let check = HeistSettlementEvidence.UnmatchedCheck(
                     actionResult: waitActionResult(failed),
@@ -92,7 +94,7 @@ private extension Settlement.ResultProjector {
         let failure: (kind: ActionFailure.Kind, message: String) = switch failed.reason {
         case .dispatchFailed:
             if case .completed(let dispatch) = attempt.dispatch {
-                (.actionFailed, dispatch.message ?? "action dispatch failed")
+                (.actionFailed, dispatch.message ?? Strings.Failure.actionDispatchFailed)
             } else {
                 preconditionFailure("Dispatch failure requires completed dispatch evidence")
             }
@@ -100,13 +102,13 @@ private extension Settlement.ResultProjector {
             (.accessibilityTreeUnavailable, TheBrains.treeUnavailableMessage)
         case .timedOut:
             if case .captureFailed = attempt.handoff {
-                (.actionFailed, "Could not capture accessibility tree after action")
+                (.actionFailed, Strings.Failure.treeCaptureFailed)
             } else if let predicate = attempt.command.predicate {
                 (
                     .timeout,
                     renderTimeoutMessage(
                         predicate: predicate,
-                        evidence: attempt.evaluation,
+                        outstanding: attempt.outstanding,
                         boundary: attempt.boundary,
                         readiness: attempt.readiness,
                         handoff: attempt.handoff,
@@ -117,12 +119,11 @@ private extension Settlement.ResultProjector {
             } else {
                 (
                     .timeout,
-                    "action dispatch did not complete before settlement deadline "
-                        + "after \(attempt.timing.elapsed)ms"
+                    Strings.Timeout.dispatchIncomplete(attempt.timing.elapsed)
                 )
             }
         case .cancelled:
-            (.actionFailed, "cancelled after \(attempt.timing.elapsed)ms")
+            (.actionFailed, Strings.Failure.cancelled(attempt.timing.elapsed))
         case .viewportExitFailed:
             (.actionFailed, viewportExitFailureMessage)
         }
@@ -214,7 +215,7 @@ private extension Settlement.ResultProjector {
               let predicate = failed.attempt.command.predicate else {
             return nil
         }
-        return expectation(predicate: predicate, evidence: failed.attempt.evaluation)
+        return expectation(predicate: predicate, outstanding: failed.attempt.outstanding)
     }
 
     static func waitActionResult(
@@ -247,7 +248,7 @@ private extension Settlement.ResultProjector {
                 .timeout,
                 renderTimeoutMessage(
                     predicate: attempt.predicate,
-                    evidence: attempt.evaluation,
+                    outstanding: attempt.outstanding,
                     boundary: attempt.boundary,
                     readiness: attempt.readiness,
                     handoff: attempt.handoff,
@@ -258,7 +259,7 @@ private extension Settlement.ResultProjector {
         case .baselineUnavailable:
             (.accessibilityTreeUnavailable, TheBrains.treeUnavailableMessage)
         case .cancelled:
-            (.actionFailed, "settlement cancelled after \(attempt.timing.elapsed)ms")
+            (.actionFailed, Strings.Failure.settlementCancelled(attempt.timing.elapsed))
         case .viewportExitFailed:
             (.actionFailed, viewportExitFailureMessage)
         }
@@ -277,34 +278,18 @@ private extension Settlement.ResultProjector {
         )
     }
 
+    /// A failed run has exactly one thing to say: it ran out of time while
+    /// waiting on the head of the list. Everything behind the head was never
+    /// asked, so naming it would be reporting on questions nobody put.
     static func expectation(
         predicate: Settlement.Predicate,
-        evidence: Settlement.Predicate.Evidence
+        outstanding: [String]
     ) -> ExpectationResult {
-        switch evidence.status {
-        case .satisfied(let response), .unmet(let response):
-            response.result.expectation(for: predicate.authored)
-        case .pending:
-            ExpectationResult(
-                met: false,
-                predicate: predicate.authored,
-                actual: "deadline reached before predicate evaluation completed"
-            )
-        case .unavailable(let unavailable):
-            ExpectationResult(
-                met: false,
-                predicate: predicate.authored,
-                actual: String(describing: unavailable)
-            )
-        case .notEvaluated:
-            ExpectationResult(
-                met: false,
-                predicate: predicate.authored,
-                actual: "predicate was not evaluated"
-            )
-        case .notRequired:
-            preconditionFailure("Predicate result cannot carry not-required evidence")
-        }
+        ExpectationResult(
+            met: false,
+            predicate: predicate.authored,
+            actual: outstanding.first.map(Strings.Timeout.waitingOn)
+        )
     }
 
     static func projectedObservation(
@@ -409,23 +394,17 @@ private extension Settlement.ResultProjector {
 
     static func renderTimeoutMessage(
         predicate: Settlement.Predicate,
-        evidence: Settlement.Predicate.Evidence,
+        outstanding: [String],
         boundary: Settlement.BoundaryEvidence,
         readiness: Settlement.Readiness.Evidence,
         handoff: Settlement.Handoff.Evidence,
         history: Observation.EventsSince?,
         elapsed: ElapsedMilliseconds
     ) -> String {
-        let headline = "settlement timed out after \(elapsed)ms"
-        if case .satisfied = evidence.status {
-            let incompleteAxis = if !readiness.isEstablished {
-                "interface readiness did not complete"
-            } else if handoff.admission == nil {
-                "settled observation handoff did not complete"
-            } else {
-                "settlement completion evidence was unavailable"
-            }
-            return "\(headline); predicate was satisfied but \(incompleteAxis)"
+        let headline = if let tip = outstanding.first {
+            Strings.Timeout.settlementElapsed(elapsed, waitingOn: tip)
+        } else {
+            Strings.Timeout.settlementElapsed(elapsed)
         }
 
         var parts = [headline]
@@ -455,25 +434,31 @@ private extension Settlement.ResultProjector {
         case (.exists, let target?, let count?), (.missing, let target?, let count?):
             let exists = if case .exists = predicate.resolved { true } else { false }
             parts[0] += exists
-                ? " waiting for element to appear"
-                : " waiting for element to disappear"
+                ? Strings.Diagnostic.waitingToAppear
+                : Strings.Diagnostic.waitingToDisappear
             parts += [
-                "expected: \(renderExpectedTarget(target))",
-                "interface: \(count) elements",
-                "last result: \(exists ? "element not found" : "element still present")",
-                "Next: get_interface() to inspect current elements, then retry wait with an exact predicate.",
+                Strings.Diagnostic.expected(renderExpectedTarget(target)),
+                Strings.Diagnostic.interfaceElementCount(count),
+                Strings.Diagnostic.lastResult(
+                    exists
+                        ? Strings.Diagnostic.elementNotFound
+                        : Strings.Diagnostic.elementStillPresent
+                ),
+                Strings.Diagnostic.nextStep,
             ]
         case (.announcement, _, _), (.changed, _, _):
-            parts.append("expected: \(predicate.authored.description)")
-            parts.append("last observed: \(expectation(predicate: predicate, evidence: evidence).actual ?? "none")")
+            parts.append(Strings.Diagnostic.expected(predicate.authored.description))
+            parts.append(Strings.Timeout.stillWaitingOn(
+                outstanding.first ?? Strings.Diagnostic.none
+            ))
         case (.exists, _, _), (.missing, _, _):
             break
         }
-        if case .unmet = evidence.status {
-            parts += candidates.map {
-                "observed accessibility candidate \($0.rendered(using: .predicateMismatchCandidate)) "
-                    + "did not match \(predicate.authored.description)"
-            }
+        parts += candidates.map {
+            Strings.Diagnostic.candidateDidNotMatch(
+                $0.rendered(using: .predicateMismatchCandidate),
+                predicate.authored.description
+            )
         }
         return parts.joined(separator: "; ")
     }

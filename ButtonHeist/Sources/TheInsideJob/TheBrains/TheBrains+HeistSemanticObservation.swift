@@ -3,7 +3,7 @@
 import TheScore
 import ThePlans
 
-extension ResolvedScreenAssertion {
+extension ResolvedPresenceCondition {
     var observationScope: SemanticObservationScope {
         switch self {
         case .exists(let target), .missing(let target):
@@ -17,8 +17,9 @@ extension ResolvedAccessibilityPredicate {
         switch self {
         case .exists(let target), .missing(let target):
             return target.observationScope
-        case .changed(.screen(let assertions)):
-            return assertions.map(\.observationScope).max() ?? .visible
+        // A screen boundary names no element, so it widens no scope.
+        case .changed(.screen):
+            return .visible
         case .changed(.elements(let assertions)):
             return assertions.map(\.observationScope).max() ?? .visible
         case .announcement:

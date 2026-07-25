@@ -113,7 +113,6 @@ private extension Settlement.Reducer {
              .announcementObserved,
              .observationHistoryUnavailable,
              .announcementHistoryUnavailable,
-             .predicateEvaluated,
              .readinessEstablished,
              .readinessInvalidated,
              .handoffCaptureFailed,
@@ -159,7 +158,6 @@ private extension Settlement.Reducer {
              .announcementObserved,
              .observationHistoryUnavailable,
              .announcementHistoryUnavailable,
-             .predicateEvaluated,
              .readinessEstablished,
              .readinessInvalidated,
              .handoffCaptureFailed,
@@ -184,9 +182,6 @@ private extension Settlement.Reducer {
                 return Settlement.Decision(state: .active(session), effects: [])
             }
             session.triggerEvidence = .actionDispatched(result)
-            if !result.success {
-                session.requirement.evidence.recordDispatchFailure()
-            }
             let deadline = Settlement.PhaseDeadline(
                 phase: .actionReadiness,
                 instant: event.instant.advanced(by: action.allowances.readiness)
@@ -201,11 +196,12 @@ private extension Settlement.Reducer {
         case .announcementObserved(let announcement):
             effects += observe(announcement, in: &session)
         case .observationHistoryUnavailable(let history):
-            recordUnavailableHistory(history, in: &session)
-        case .announcementHistoryUnavailable(let gap):
-            recordUnavailableAnnouncementHistory(gap, in: &session)
-        case .predicateEvaluated(let response):
-            record(response, in: &session)
+            // Missing history is not its own failure: a predicate that never
+            // saw the evidence it needed simply never drained, and the timeout
+            // says so. The history is kept only because reporting quotes it.
+            session.observationHistory = history
+        case .announcementHistoryUnavailable:
+            break
         case .readinessEstablished(let establishment):
             effects += establishReadiness(establishment, in: &session)
         case .readinessInvalidated(let generation):
@@ -249,6 +245,28 @@ private extension Settlement.Reducer {
     ) -> [Settlement.Effect] {
         session.observationHistory = admission.history
         session.latestObservation = admission
+        // A screen replacement is three ticks: the old screen empties, the new
+        // one is named, and its graph arrives. Ordered, not simultaneous —
+        // the empty tree drains every `missing` half before the graph that
+        // follows drains the `exists` halves, and neither enumerates anything.
+        //
+        // ponytail: all three are emitted from this one admission, so the
+        // pause between them is zero. The real timeline stops ticking at
+        // detection, classifies, ticks the screen info, explores, and only
+        // then delivers the graph — which means the graph here is the visible
+        // hierarchy, not an explored one. Wire the emission to the exploration
+        // stages when the tick stream can be paused.
+        let interface = admission.event.moment.capture.interface
+        let screenName = admission.event.snapshot.screenName
+        if admission.event.continuity.isReplacement {
+            session.requirement.expectation.vacated(at: interface.timestamp)
+            session.requirement.expectation.screenChange(ScreenFacts(
+                idBefore: session.latestScreenName,
+                idAfter: screenName
+            ))
+        }
+        session.requirement.expectation.snapshot(interface)
+        session.latestScreenName = screenName
         if case .established(let readiness) = session.readiness,
            session.command.waitsForObservation
                || session.requirement.predicate?.semantics == .currentState
@@ -256,8 +274,7 @@ private extension Settlement.Reducer {
            let handoff = Settlement.Handoff.Admission.admit(admission, for: readiness) {
             session.handoff = .admitted(handoff)
         }
-        guard !session.triggerEvidence.dispatchFailed else { return [] }
-        return evaluationEffect(for: admission, session: &session)
+        return []
     }
 
     static func observe(
@@ -265,65 +282,9 @@ private extension Settlement.Reducer {
         in session: inout Settlement.Session
     ) -> [Settlement.Effect] {
         guard event.announcement.sequence > session.boundary.announcementCursor.sequence,
-              !session.triggerEvidence.dispatchFailed,
-              let predicate = session.requirement.predicate,
-              predicate.semantics == .announcement,
-              !session.requirement.evidence.isSatisfied else { return [] }
-        let request = Settlement.Predicate.EvaluationRequest(
-            predicate: predicate,
-            target: .announcement(sequence: event.announcement.sequence),
-            evidence: .announcement(event)
-        )
-        return session.requirement.evidence.schedule(request)
-            ? [.evaluatePredicate(request)]
-            : []
-    }
-
-    static func evaluationEffect(
-        for admission: Settlement.ObservationAdmission,
-        session: inout Settlement.Session
-    ) -> [Settlement.Effect] {
-        guard let predicate = session.requirement.predicate else { return [] }
-        let target = Settlement.Predicate.EvaluationTarget.observation(admission.event.moment)
-        let evidence: Settlement.Predicate.EvaluationEvidence
-        switch predicate.semantics {
-        case .currentState:
-            evidence = .currentState(admission.event)
-        case .positiveTransition:
-            if session.requirement.evidence.isSatisfied { return [] }
-            guard history(admission.history, contains: admission.event) else {
-                recordUnavailableHistory(admission.history, in: &session)
-                return []
-            }
-            evidence = .positiveTransition(admission.event)
-        case .announcement:
-            return []
-        case .completeHistory:
-            guard session.handoff.event?.moment == admission.event.moment else { return [] }
-            guard historyIsComplete(admission.history) else {
-                recordUnavailableHistory(admission.history, in: &session)
-                return []
-            }
-            evidence = .completeHistory(.init(
-                history: admission.history,
-                handoff: admission.event
-            ))
-        }
-        let request = Settlement.Predicate.EvaluationRequest(
-            predicate: predicate,
-            target: target,
-            evidence: evidence
-        )
-        return session.requirement.evidence.schedule(request)
-            ? [.evaluatePredicate(request)]
-            : []
-    }
-
-    static func record(
-        _ response: Settlement.Predicate.EvaluationResponse,
-        in session: inout Settlement.Session
-    ) {
-        session.requirement.evidence.record(response)
+              !session.triggerEvidence.dispatchFailed else { return [] }
+        session.requirement.expectation.announcement(event.announcement.text)
+        return []
     }
 }
 
@@ -336,6 +297,7 @@ private extension Settlement.Reducer {
         if case .established = session.readiness { return [] }
 
         session.readiness = .established(establishment)
+        session.requirement.expectation.noChange()
         if let latestObservation = session.latestObservation,
            let handoff = Settlement.Handoff.Admission.admit(
                latestObservation,
@@ -350,12 +312,6 @@ private extension Settlement.Reducer {
             session.handoff = .captureRequested(request)
         }
 
-        if let handoff = session.handoff.event,
-           session.requirement.predicate?.semantics == .completeHistory,
-           let latestObservation = session.latestObservation,
-           latestObservation.event.moment == handoff.moment {
-            return evaluationEffect(for: latestObservation, session: &session)
-        }
         guard case .captureRequested(let request) = session.handoff else { return [] }
         return [.capture(.handoff(request))]
     }
@@ -382,65 +338,20 @@ private extension Settlement.Reducer {
 }
 
 private extension Settlement.Reducer {
-    static func recordUnavailableHistory(
-        _ history: Observation.EventsSince,
-        in session: inout Settlement.Session
-    ) {
-        session.observationHistory = history
-        guard let semantics = session.requirement.predicate?.semantics,
-              semantics == .positiveTransition || semantics == .completeHistory,
-              !session.requirement.evidence.isSatisfied else { return }
-        switch history {
-        case .events:
-            break
-        case .expired(let gap):
-            session.requirement.evidence.recordUnavailable(.historyExpired(gap))
-        case .unavailable(let error):
-            session.requirement.evidence.recordUnavailable(.historyUnavailable(error))
-        }
-    }
-
-    static func recordUnavailableAnnouncementHistory(
-        _ gap: AccessibilityNotificationGap,
-        in session: inout Settlement.Session
-    ) {
-        guard session.requirement.predicate?.semantics == .announcement,
-              !session.requirement.evidence.isSatisfied else { return }
-        session.requirement.evidence.recordUnavailable(.announcementHistoryUnavailable(gap))
-    }
-
-    static func history(
-        _ history: Observation.EventsSince,
-        contains event: Observation.SnapshotEvent
-    ) -> Bool {
-        guard case .events(let events) = history else { return false }
-        return events.contains(.snapshot(event))
-    }
-
-    static func historyIsComplete(_ history: Observation.EventsSince) -> Bool {
-        if case .events = history { return true }
-        return false
-    }
-}
-
-private extension Settlement.Reducer {
     /// The settle rule, in full.
     ///
     /// A session completes when readiness is established, the handoff belongs
-    /// to that readiness, and the predicate — `noChange` when the caller named
-    /// none — is satisfied at the handed-off event. Nothing else participates:
+    /// to that readiness, and the expectation is met — every authored predicate
+    /// drained, in order, and the tree still. Nothing else participates:
     /// settlement is a statement about the accessibility tree, decided by
-    /// comparing trees.
+    /// walking one list of predicates against the ticks that arrived.
     static func completedOutcome(_ session: Settlement.Session) -> Settlement.TerminalIntent? {
         guard case .established(let readiness) = session.readiness,
               let handoff = session.handoff.admission,
               handoff.belongs(to: readiness) else { return nil }
         if session.triggerEvidence.dispatchFailed { return .dispatchFailed }
         guard session.triggerEvidence.permitsCompletion,
-              session.requirement.evidence.satisfies(
-                  session.requirement.predicate,
-                  at: handoff.event
-              ) else { return nil }
+              session.requirement.expectation.isMet else { return nil }
         return .settled
     }
 
@@ -452,10 +363,7 @@ private extension Settlement.Reducer {
               let allowance = action.allowances.expectation,
               session.triggerEvidence.permitsCompletion,
               let handoff = session.handoff.admission,
-              !session.requirement.evidence.satisfies(
-                  session.requirement.predicate,
-                  at: handoff.event
-              ) else { return [] }
+              !session.requirement.expectation.isMet else { return [] }
         let deadline = Settlement.PhaseDeadline(
             phase: .actionExpectation,
             instant: handoff.instant.advanced(by: allowance)
@@ -566,7 +474,7 @@ private extension Settlement.Reducer {
                 attempt: .init(
                     predicate: predicate,
                     boundary: boundary,
-                    evaluation: .init(predicate: predicate),
+                    outstanding: Expectation([predicate.resolved]).outstanding,
                     readiness: .pending(.initial),
                     handoff: .pending(.initial),
                     history: nil,
@@ -580,7 +488,7 @@ private extension Settlement.Reducer {
                     command: command,
                     boundary: boundary,
                     dispatch: .pending,
-                    evaluation: .init(predicate: command.predicate),
+                    outstanding: Expectation(command.predicate.map { [$0.resolved] } ?? []).outstanding,
                     readiness: .pending(.initial),
                     handoff: .pending(.initial),
                     history: nil,
@@ -645,17 +553,12 @@ private extension Settlement.Reducer {
             }
             guard case .established(let readiness) = session.readiness,
                   let handoff = session.handoff.admission,
-                  handoff.belongs(to: readiness),
-                  let evaluation = session.requirement.evidence.satisfyingResponse(
-                      for: predicate,
-                      at: handoff.event
-                  ) else {
+                  handoff.belongs(to: readiness) else {
                 preconditionFailure("Settled observation requires admitted terminal evidence")
             }
             return .observation(.settled(.init(
                 predicate: predicate,
                 boundary: session.boundary,
-                evaluation: evaluation,
                 readiness: readiness,
                 handoff: handoff,
                 history: session.observationHistory,
@@ -677,20 +580,10 @@ private extension Settlement.Reducer {
                   handoff.belongs(to: readiness) else {
                 preconditionFailure("Settled action requires dispatch and admitted terminal evidence")
             }
-            let evaluation = command.predicate.map {
-                guard let response = session.requirement.evidence.satisfyingResponse(
-                    for: $0,
-                    at: handoff.event
-                ) else {
-                    preconditionFailure("Settled action expectation requires predicate evidence")
-                }
-                return response
-            }
             return .action(.settled(.init(
                 command: command,
                 boundary: session.boundary,
                 dispatch: dispatch,
-                evaluation: evaluation,
                 readiness: readiness,
                 handoff: handoff,
                 history: session.observationHistory,
@@ -710,7 +603,7 @@ private extension Settlement.Reducer {
         .init(
             predicate: predicate,
             boundary: .established(session.boundary),
-            evaluation: session.requirement.evidence,
+            outstanding: session.requirement.expectation.outstanding,
             readiness: session.readiness,
             handoff: session.handoff,
             history: session.observationHistory,
@@ -735,7 +628,7 @@ private extension Settlement.Reducer {
             command: command,
             boundary: .established(session.boundary),
             dispatch: dispatch,
-            evaluation: session.requirement.evidence,
+            outstanding: session.requirement.expectation.outstanding,
             readiness: session.readiness,
             handoff: session.handoff,
             history: session.observationHistory,

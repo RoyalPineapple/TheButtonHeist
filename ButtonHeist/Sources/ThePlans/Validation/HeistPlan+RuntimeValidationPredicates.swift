@@ -21,7 +21,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     mutating func validatePredicate(
-        _ predicate: ChangeDeclaration.ScreenAssertion,
+        _ predicate: PresenceCondition,
         path: HeistPlanPath,
         depth: Int,
         scope: HeistReferenceScope
@@ -52,22 +52,12 @@ extension HeistPlanRuntimeSafetyValidator {
     ) {
         checkPredicateDepth(depth, path: path)
         switch declaration {
-        case .screen(let assertions):
-            validateAllChildCount(assertions.count, path: path.child(.assertions))
+        case .screen:
+            // A screen predicate names no elements: there is no child list to
+            // bound and no target to resolve.
+            break
         case .elements(let assertions):
             validateAllChildCount(assertions.count, path: path.child(.assertions))
-        }
-        switch declaration {
-        case .screen(let assertions):
-            for (index, assertion) in assertions.enumerated() {
-                validateScreenAssertion(
-                    assertion,
-                    path: path.child(.assertions).index(index),
-                    depth: depth + 1,
-                    scope: scope
-                )
-            }
-        case .elements(let assertions):
             for (index, assertion) in assertions.enumerated() {
                 validateElementAssertion(
                     assertion,
@@ -79,8 +69,8 @@ extension HeistPlanRuntimeSafetyValidator {
         }
     }
 
-    private mutating func validateScreenAssertion(
-        _ assertion: ChangeDeclaration.ScreenAssertion,
+    private mutating func validatePresenceCondition(
+        _ assertion: PresenceCondition,
         path: HeistPlanPath,
         depth: Int,
         scope: HeistReferenceScope

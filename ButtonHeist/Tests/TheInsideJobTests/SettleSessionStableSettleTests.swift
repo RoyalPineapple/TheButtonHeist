@@ -8,7 +8,7 @@ import ButtonHeistSupport
 @MainActor
 extension SettleSessionTests {
 
-    func testStableSettleLandsOnTheCycleThatCompletesTheRequiredRun() async {
+    func testStableSettleLandsOnTheFirstRepeat() async {
         let element = makeElement(label: "Hello", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30))
         let stable = makeParseResult([element])
         let clock = ManualClock()
@@ -24,8 +24,8 @@ extension SettleSessionTests {
             baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
-        XCTAssertEqual(outcome.outcome, .settled(timeMs: 30))
-        XCTAssertEqual(yieldCount.next(), 3)
+        XCTAssertEqual(outcome.outcome, .settled(timeMs: 10))
+        XCTAssertEqual(yieldCount.next(), 1)
     }
 
     func testStableSettleRestartsTheRunWhenTheFingerprintChanges() async {
@@ -37,7 +37,7 @@ extension SettleSessionTests {
         ])
         let clock = ManualClock()
         let session = makeClockedSession(
-            script: [first, first, second, second, second, second],
+            script: [first, second, second, second],
             clock: clock
         )
 
@@ -46,7 +46,7 @@ extension SettleSessionTests {
             baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
-        XCTAssertEqual(outcome.outcome, .settled(timeMs: 50))
+        XCTAssertEqual(outcome.outcome, .settled(timeMs: 20))
         XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
@@ -66,7 +66,7 @@ extension SettleSessionTests {
             baselineTripwireSignal: tripwireSignal(topmostVC: nil, accessibilityNotificationSequence: 0)
         )
 
-        XCTAssertEqual(outcome.outcome, .settled(timeMs: 30))
+        XCTAssertEqual(outcome.outcome, .settled(timeMs: 10))
         XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
@@ -96,7 +96,6 @@ extension SettleSessionTests {
         ])
         let session = makeSession(
             script: [nil, nil, stable, stable, stable],
-            cyclesRequired: 2,
             timeoutMs: 100
         )
 
@@ -115,8 +114,7 @@ extension SettleSessionTests {
         let element = makeElement(label: "Hello", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30))
         let stable = makeParseResult([element])
         let session = makeSession(
-            script: [stable, stable, stable, stable],
-            cyclesRequired: 3
+            script: [stable, stable, stable, stable]
         )
 
         let outcome = await session.run(
@@ -136,8 +134,7 @@ extension SettleSessionTests {
         let element = makeElement(label: "Unchanged", traits: .staticText)
         let stable = makeParseResult([element])
         let session = makeSession(
-            script: [stable, stable, stable],
-            cyclesRequired: 2
+            script: [stable, stable, stable]
         )
 
         let outcome = await session.run(

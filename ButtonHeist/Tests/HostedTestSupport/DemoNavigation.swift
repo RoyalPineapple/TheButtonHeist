@@ -29,7 +29,8 @@ package enum DemoNavigation {
 
         WaitFor(.exists(.label("Menu")), timeout: 4)
         Activate(.label("Menu"))
-            .expect(.changed(.screen([.exists(.label("Menu"))])), timeout: 8)
+            .expect(.changed(.screen()), timeout: 8)
+        WaitFor(.exists(.label("Menu")), timeout: 8)
     }
 
     package static let backTo = HeistDef<String>("DemoNavigation.backTo", parameter: "title") { title in

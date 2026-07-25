@@ -37,21 +37,13 @@ extension HeistPlanSourceParser {
 
     mutating func parseScreenDelta() throws -> ChangeDeclaration {
         try expectSymbol("(")
-        var assertions: [ChangeDeclaration.ScreenAssertion] = []
-        if !consumeSymbol(")") {
-            try expectSymbol("[")
-            repeat {
-                let name = try parseDotCallName()
-                guard name == "exists" || name == "missing" else {
-                    throw error(previous, "screen assertions accept only .exists and .missing")
-                }
-                let target = try parseCurrentTreeTarget()
-                assertions.append(name == "exists" ? .exists(target) : .missing(target))
-            } while consumeSymbol(",")
-            try expectSymbol("]")
-            try expectSymbol(")")
-        }
-        return .screen(assertions)
+        // `.screen()` asks only that a boundary was crossed; `.screen("Name")`
+        // asks which screen it arrived at. Elements are never named here —
+        // those are element assertions, answered by the snapshots either side.
+        if consumeSymbol(")") { return .screen(ScreenPredicate()) }
+        let expression = try parseStringMatchCallArgument(field: "screen")
+        try expectSymbol(")")
+        return .screen(ScreenPredicate(match: expression))
     }
 
     mutating func parseElementsDelta() throws -> ChangeDeclaration {
@@ -75,7 +67,7 @@ extension HeistPlanSourceParser {
         return target
     }
 
-    mutating func parseScreenAssertion() throws -> ChangeDeclaration.ScreenAssertion {
+    mutating func parsePresenceCondition() throws -> PresenceCondition {
         let name = try parseDotCallName()
         guard name == "exists" || name == "missing" else {
             throw error(previous, "screen assertion accepts only .exists and .missing")

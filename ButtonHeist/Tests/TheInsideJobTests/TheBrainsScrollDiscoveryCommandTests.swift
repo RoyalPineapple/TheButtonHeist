@@ -179,7 +179,7 @@ extension TheBrainsScrollTests {
         await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(staleScreen)
 
         guard let exploration = await brains.navigation.exploreScreen(
-            baseline: .currentViewport(brains.vault.visibleExplorationBaseline(from: visibleScreen)),
+            startingFresh: true,
             maxScrollsPerContainer: 3,
             maxScrollsPerDiscovery: 3
         ) else {
@@ -234,14 +234,14 @@ extension TheBrainsScrollTests {
         }
         await brains.tripwire.yieldFrames(3)
         let initialVisualOrigin = Navigation.visualOrigin(in: scrollView)
-        let visibleScreen = try XCTUnwrap(
+        _ = try XCTUnwrap(
             brains.vault.refreshLiveCapture(),
             "Expected a live hierarchy for blank-page discovery"
         )
 
         guard let exploration = await brains.navigation.exploreScreen(
             target: try resolvedTarget(.label("Beyond Blank Page")),
-            baseline: .currentViewport(brains.vault.visibleExplorationBaseline(from: visibleScreen)),
+            startingFresh: true,
             exitPosition: .origin,
             maxScrollsPerContainer: 4,
             maxScrollsPerDiscovery: 4
@@ -295,13 +295,13 @@ extension TheBrainsScrollTests {
         await brains.tripwire.yieldFrames(3)
         let initialVisualOrigin = Navigation.visualOrigin(in: scrollView)
 
-        let visibleScreen = try XCTUnwrap(
+        _ = try XCTUnwrap(
             brains.vault.refreshLiveCapture(),
             "Expected a live hierarchy for wait discovery restoration"
         )
         guard let exploration = await brains.navigation.exploreScreen(
             target: try resolvedTarget(.label("Wait Discovery Target")),
-            baseline: .currentViewport(brains.vault.visibleExplorationBaseline(from: visibleScreen)),
+            startingFresh: true,
             exitPosition: .origin,
             maxScrollsPerContainer: 3,
             maxScrollsPerDiscovery: 3
@@ -801,7 +801,7 @@ extension TheBrainsScrollTests {
         onObservation: ((Observation.SnapshotEvent) async -> Navigation.ViewportExplorationDecision)? = nil
     ) async -> Navigation.InterfaceExplorationResult? {
         await brains.navigation.exploreScreen(
-            baseline: .currentViewport(brains.vault.latestObservation),
+            startingFresh: true,
             exitPosition: exitPosition,
             maxScrollsPerContainer: maxScrolls,
             maxScrollsPerDiscovery: maxScrolls,

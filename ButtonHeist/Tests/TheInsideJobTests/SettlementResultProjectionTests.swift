@@ -138,7 +138,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
                 command: actionCommand(.dismiss),
                 boundary: .established(.init(moment: baseline.moment)),
                 dispatch: .completed(dispatch),
-                evaluation: .init(predicate: nil),
+                outstanding: [],
                 readiness: .pending(.initial),
                 handoff: .pending(.initial),
                 history: .events([]),
@@ -160,7 +160,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
             attempt: .init(
                 predicate: predicate,
                 boundary: .unavailable(.unavailable),
-                evaluation: .init(predicate: predicate),
+                outstanding: Expectation([predicate.resolved]).outstanding,
                 readiness: .pending(.initial),
                 handoff: .pending(.initial),
                 history: nil,
@@ -218,7 +218,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
                 command: actionCommand(.dismiss),
                 boundary: .established(.init(moment: baseline.moment)),
                 dispatch: .completed(.success(payload: .dismiss)),
-                evaluation: .init(predicate: nil),
+                outstanding: [],
                 readiness: .pending(.initial),
                 handoff: .pending(.initial),
                 history: .events([]),
@@ -238,73 +238,11 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
         XCTAssertEqual(trace.completeness, .incomplete)
         XCTAssertEqual(trace.trace.captures, [baseline.moment.capture])
     }
-
-    func testViewportExitFailureOverridesSuccessfulAction() async throws {
-        let baseline = await commit(label: "Baseline")
-        let observed = await commit(label: "Observed")
-        let readiness = readiness(at: observed)
-        let handoff = await handoffAdmission(observed, baseline: baseline)
-        let action = Settlement.Result.action(.failed(.init(
-            reason: .viewportExitFailed(.originUnavailable),
-            attempt: .init(
-                command: actionCommand(.dismiss),
-                boundary: .established(.init(moment: baseline.moment)),
-                dispatch: .completed(.success(payload: .dismiss)),
-                evaluation: .init(predicate: nil),
-                readiness: .established(readiness),
-                handoff: .admitted(handoff),
-                history: await history(after: baseline),
-                timing: timing(elapsed: 30)
-            )
-        )))
-
-        let actionProjection = try XCTUnwrap(
-            Settlement.ResultProjector.projectAction(action).result
-        )
-
-        XCTAssertEqual(actionProjection.outcome, .failure(.actionFailed))
-        XCTAssertEqual(actionProjection.message, "Could not restore the accessibility viewport after observation")
-        XCTAssertEqual(actionProjection.traceEvidence?.completeness, .complete)
-        XCTAssertEqual(actionProjection.evidence.settlement, .settled(duration: 30))
-    }
-}
-
-private extension SettlementResultProjectionTests {
-    struct EvaluatedPredicate {
-        let evidence: Settlement.Predicate.Evidence
-        let response: Settlement.Predicate.EvaluationResponse
-    }
-
     func predicate(_ authored: AccessibilityPredicate) throws -> Settlement.Predicate {
         Settlement.Predicate(
             authored: authored,
             resolved: try authored.resolve(in: HeistExecutionEnvironment())
         )
-    }
-
-    func evaluated(
-        _ predicate: Settlement.Predicate,
-        at event: Observation.SnapshotEvent,
-        met: Bool
-    ) -> EvaluatedPredicate {
-        let request = Settlement.Predicate.EvaluationRequest(
-            predicate: predicate,
-            target: .observation(event.moment),
-            evidence: predicate.semantics == .currentState
-                ? .currentState(event)
-                : .positiveTransition(event)
-        )
-        let response = Settlement.Predicate.EvaluationResponse(
-            target: request.target,
-            result: PredicateEvaluationResult(
-                met: met,
-                actual: met ? "matched" : "missing"
-            )
-        )
-        var evidence = Settlement.Predicate.Evidence(predicate: predicate)
-        precondition(evidence.schedule(request))
-        evidence.record(response)
-        return EvaluatedPredicate(evidence: evidence, response: response)
     }
 
     func settledWait(
@@ -313,11 +251,9 @@ private extension SettlementResultProjectionTests {
         observed: Observation.SnapshotEvent,
         elapsed: ElapsedMilliseconds
     ) async -> Settlement.Result {
-        let evaluation = evaluated(predicate, at: observed, met: true)
         return .observation(.settled(.init(
             predicate: predicate,
             boundary: .init(moment: baseline.moment),
-            evaluation: evaluation.response,
             readiness: readiness(at: observed),
             handoff: await handoffAdmission(observed, baseline: baseline),
             history: await history(after: baseline),
@@ -337,7 +273,7 @@ private extension SettlementResultProjectionTests {
             attempt: .init(
                 predicate: predicate,
                 boundary: .established(.init(moment: baseline.moment)),
-                evaluation: evaluated(predicate, at: observed, met: predicateMet).evidence,
+                outstanding: predicateMet ? [] : Expectation([predicate.resolved]).outstanding,
                 readiness: .established(readiness(at: observed)),
                 handoff: .admitted(await handoffAdmission(observed, baseline: baseline)),
                 history: await history(after: baseline),
@@ -357,7 +293,7 @@ private extension SettlementResultProjectionTests {
             command: actionCommand(command),
             boundary: .init(moment: baseline.moment),
             dispatch: dispatch,
-            evaluation: nil,
+
             readiness: readiness(at: observed),
             handoff: await handoffAdmission(observed, baseline: baseline),
             history: await history(after: baseline),

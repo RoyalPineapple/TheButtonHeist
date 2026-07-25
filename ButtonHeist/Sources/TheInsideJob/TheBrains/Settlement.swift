@@ -184,287 +184,21 @@ extension Settlement.Predicate.Semantics {
 }
 
 extension Settlement.Predicate {
-    internal struct CompleteHistoryEvidence: Sendable, Equatable {
-        internal let history: Observation.EventsSince
-        internal let handoff: Observation.SnapshotEvent
-    }
-
-    internal enum EvaluationEvidence: Sendable, Equatable {
-        case currentState(Observation.SnapshotEvent)
-        case positiveTransition(Observation.SnapshotEvent)
-        case announcement(Observation.AnnouncementEvent)
-        case completeHistory(CompleteHistoryEvidence)
-    }
-
-    internal enum EvaluationTarget: Sendable, Equatable {
-        case observation(Observation.Moment)
-        case announcement(sequence: UInt64)
-    }
-
-    internal struct EvaluationRequest: Sendable, Equatable {
-        internal let predicate: Settlement.Predicate
-        internal let target: EvaluationTarget
-        internal let evidence: EvaluationEvidence
-    }
-
-    internal struct EvaluationResponse: Sendable, Equatable {
-        internal let target: EvaluationTarget
-        internal let result: PredicateEvaluationResult
-
-        internal init(target: EvaluationTarget, result: PredicateEvaluationResult) {
-            self.target = target
-            self.result = result
-        }
-    }
-
-    internal enum Unavailability: Sendable, Equatable {
-        case historyExpired(Observation.Gap)
-        case historyUnavailable(Observation.LogReadError)
-        case announcementHistoryUnavailable(AccessibilityNotificationGap)
-        case dispatchFailed
-    }
-
-    internal enum EvaluationResponseRejectionReason: Sendable, Equatable {
-        case targetNotPending
-        case duplicateResponse
-        case satisfactionAlreadyLatched
-        case evidenceUnavailable
-        case dispatchFailed
-    }
-
-    internal struct RejectedResponse: Sendable, Equatable {
-        internal let response: EvaluationResponse
-        internal let reason: EvaluationResponseRejectionReason
-    }
-
-    internal enum EvidenceStatus: Sendable, Equatable {
-        case notRequired
-        case pending
-        case satisfied(EvaluationResponse)
-        case unmet(EvaluationResponse)
-        case unavailable(Unavailability)
-        case notEvaluated
-    }
-
-    private struct EvaluationLedgerEntry: Sendable, Equatable {
-        let request: EvaluationRequest
-        var response: EvaluationResponse?
-    }
-
-    internal struct Evidence: Sendable, Equatable {
-        internal let semantics: Semantics?
-        internal private(set) var status: EvidenceStatus
-        internal private(set) var responses: [EvaluationResponse]
-        internal private(set) var rejectedResponses: [RejectedResponse]
-        private var evaluationLedger: [EvaluationLedgerEntry]
-
-        internal init(predicate: Settlement.Predicate?) {
-            self.semantics = predicate?.semantics
-            self.status = predicate == nil ? .notRequired : .pending
-            self.responses = []
-            self.rejectedResponses = []
-            self.evaluationLedger = []
-        }
-
-        internal var isSatisfied: Bool {
-            if case .notRequired = status { return true }
-            if case .satisfied = status { return true }
-            return false
-        }
-
-        internal var satisfiedTarget: EvaluationTarget? {
-            guard case .satisfied(let response) = status else { return nil }
-            return response.target
-        }
-
-        internal var unavailability: Unavailability? {
-            guard case .unavailable(let unavailability) = status else { return nil }
-            return unavailability
-        }
-
-        internal var isNotEvaluated: Bool {
-            if case .notEvaluated = status { return true }
-            return false
-        }
-
-        internal mutating func schedule(_ request: EvaluationRequest) -> Bool {
-            guard request.predicate.semantics == semantics,
-                  acceptsEvaluationRequests,
-                  !evaluationLedger.contains(where: { $0.request.target == request.target }),
-                  !responses.contains(where: { $0.target == request.target }) else { return false }
-            evaluationLedger.append(EvaluationLedgerEntry(request: request, response: nil))
-            return true
-        }
-
-        internal mutating func record(_ response: EvaluationResponse) {
-            if containsResponse(for: response.target) {
-                reject(response, because: .duplicateResponse)
-                return
-            }
-            guard let ledgerIndex = evaluationLedger.firstIndex(where: {
-                $0.request.target == response.target
-            }) else {
-                reject(response, because: .targetNotPending)
-                return
-            }
-            switch status {
-            case .unavailable:
-                evaluationLedger.remove(at: ledgerIndex)
-                reject(response, because: .evidenceUnavailable)
-                return
-            case .notEvaluated:
-                evaluationLedger.remove(at: ledgerIndex)
-                reject(response, because: .dispatchFailed)
-                return
-            case .satisfied where semantics?.latchesPositiveEvaluation == true:
-                evaluationLedger.remove(at: ledgerIndex)
-                reject(response, because: .satisfactionAlreadyLatched)
-                return
-            case .notRequired, .pending, .satisfied, .unmet:
-                break
-            }
-
-            guard semantics?.latchesPositiveEvaluation == true else {
-                evaluationLedger.remove(at: ledgerIndex)
-                recordLatest(response)
-                return
-            }
-            evaluationLedger[ledgerIndex].response = response
-            drainCorrelatedResponses()
-        }
-
-        internal mutating func recordUnavailable(_ unavailability: Unavailability) {
-            guard semantics != nil, !isSatisfied else { return }
-            status = .unavailable(unavailability)
-            rejectCorrelatedResponses(because: .evidenceUnavailable)
-        }
-
-        internal mutating func recordDispatchFailure() {
-            guard semantics != nil else { return }
-            status = .notEvaluated
-            rejectCorrelatedResponses(because: .dispatchFailed)
-        }
-
-        internal func satisfies(
-            _ predicate: Settlement.Predicate?,
-            at handoff: Observation.SnapshotEvent
-        ) -> Bool {
-            guard let predicate else {
-                if case .notRequired = status { return true }
-                return false
-            }
-            switch predicate.semantics {
-            case .currentState, .completeHistory:
-                return responses.first(where: {
-                    $0.target == .observation(handoff.moment)
-                })?.result.met == true
-            case .positiveTransition, .announcement:
-                return isSatisfied
-            }
-        }
-
-        internal func satisfyingResponse(
-            for predicate: Settlement.Predicate,
-            at handoff: Observation.SnapshotEvent
-        ) -> EvaluationResponse? {
-            switch predicate.semantics {
-            case .currentState, .completeHistory:
-                return responses.first {
-                    $0.target == .observation(handoff.moment) && $0.result.met
-                }
-            case .positiveTransition, .announcement:
-                guard case .satisfied(let response) = status else { return nil }
-                return response
-            }
-        }
-
-        private mutating func recordLatest(_ response: EvaluationResponse) {
-            responses.append(response)
-            guard let latest = latestObservationResponse else {
-                preconditionFailure("Observation predicate response has no observation target")
-            }
-            status = latest.result.met ? .satisfied(latest) : .unmet(latest)
-        }
-
-        private mutating func drainCorrelatedResponses() {
-            while let response = evaluationLedger.first?.response {
-                evaluationLedger.removeFirst()
-                responses.append(response)
-                status = response.result.met ? .satisfied(response) : .unmet(response)
-                if response.result.met {
-                    rejectCorrelatedResponses(because: .satisfactionAlreadyLatched)
-                    return
-                }
-            }
-        }
-
-        private mutating func rejectCorrelatedResponses(
-            because reason: EvaluationResponseRejectionReason
-        ) {
-            let responses = evaluationLedger.compactMap(\.response)
-            evaluationLedger.removeAll(where: { $0.response != nil })
-            rejectedResponses += responses.map {
-                RejectedResponse(response: $0, reason: reason)
-            }
-        }
-
-        private func containsResponse(for target: EvaluationTarget) -> Bool {
-            responses.contains(where: { $0.target == target })
-                || evaluationLedger.contains(where: { $0.response?.target == target })
-                || rejectedResponses.contains(where: { $0.response.target == target })
-        }
-
-        private var acceptsEvaluationRequests: Bool {
-            switch status {
-            case .notRequired, .unavailable, .notEvaluated:
-                false
-            case .satisfied where semantics?.latchesPositiveEvaluation == true:
-                false
-            case .pending, .satisfied, .unmet:
-                true
-            }
-        }
-
-        private var latestObservationResponse: EvaluationResponse? {
-            responses.reduce(nil) { latest, response in
-                guard case .observation(let responseMoment) = response.target else {
-                    return latest
-                }
-                guard let latest,
-                      case .observation(let latestMoment) = latest.target else {
-                    return response
-                }
-                return responseMoment.isSameOrAfter(latestMoment) ? response : latest
-            }
-        }
-
-        private mutating func reject(
-            _ response: EvaluationResponse,
-            because reason: EvaluationResponseRejectionReason
-        ) {
-            rejectedResponses.append(RejectedResponse(response: response, reason: reason))
-        }
-    }
-
     internal struct Requirement: Sendable, Equatable {
         internal let predicate: Settlement.Predicate?
-        internal var evidence: Evidence
+
+        /// What the caller is still waiting for, in authored order.
+        ///
+        /// This is the whole decision. An expectation with no authored
+        /// predicate still waits for stillness, which is what settling always
+        /// meant, so there is no second path for the unasked case.
+        internal var expectation: Expectation
 
         internal init(predicate: Settlement.Predicate?) {
             self.predicate = predicate
-            self.evidence = Evidence(predicate: predicate)
+            self.expectation = Expectation(predicate.map { [$0.resolved] } ?? [])
         }
-    }
-}
 
-private extension Settlement.Predicate.Semantics {
-    var latchesPositiveEvaluation: Bool {
-        switch self {
-        case .positiveTransition, .announcement:
-            true
-        case .currentState, .completeHistory:
-            false
-        }
     }
 }
 
@@ -791,7 +525,6 @@ extension Settlement.Result {
     internal struct SettledObservation: Sendable {
         internal let predicate: Settlement.Predicate
         internal let boundary: Settlement.EvidenceBoundary
-        internal let evaluation: Settlement.Predicate.EvaluationResponse
         internal let readiness: Settlement.Readiness.Establishment
         internal let handoff: Settlement.Handoff.Admission
         internal let history: Observation.EventsSince?
@@ -801,7 +534,8 @@ extension Settlement.Result {
     internal struct ObservationAttempt: Sendable {
         internal let predicate: Settlement.Predicate
         internal let boundary: Settlement.BoundaryEvidence
-        internal let evaluation: Settlement.Predicate.Evidence
+        /// What the run was still waiting on, head first.
+        internal let outstanding: [String]
         internal let readiness: Settlement.Readiness.Evidence
         internal let handoff: Settlement.Handoff.Evidence
         internal let history: Observation.EventsSince?
@@ -834,7 +568,6 @@ extension Settlement.Result {
         internal let command: Settlement.Command.Action
         internal let boundary: Settlement.EvidenceBoundary
         internal let dispatch: TheSafecracker.ActionDispatchResult
-        internal let evaluation: Settlement.Predicate.EvaluationResponse?
         internal let readiness: Settlement.Readiness.Establishment
         internal let handoff: Settlement.Handoff.Admission
         internal let history: Observation.EventsSince?
@@ -845,7 +578,8 @@ extension Settlement.Result {
         internal let command: Settlement.Command.Action
         internal let boundary: Settlement.BoundaryEvidence
         internal let dispatch: ActionDispatch
-        internal let evaluation: Settlement.Predicate.Evidence
+        /// What the run was still waiting on, head first.
+        internal let outstanding: [String]
         internal let readiness: Settlement.Readiness.Evidence
         internal let handoff: Settlement.Handoff.Evidence
         internal let history: Observation.EventsSince?
@@ -923,6 +657,8 @@ extension Settlement {
         internal var handoff: Handoff.Evidence
         internal var observationHistory: Observation.EventsSince?
         internal var latestObservation: ObservationAdmission?
+        /// The screen the run is on, so a boundary can say which it left.
+        internal var latestScreenName: String?
         internal var timing: ExecutionTiming
         internal var phase: Phase
 
@@ -938,10 +674,16 @@ extension Settlement {
             case .currentState, .observation: .observation
             }
             self.requirement = Predicate.Requirement(predicate: command.predicate)
+            // The pre-action tree is the first thing the run observed, so it is
+            // the first tick. A delta's opening half — `missing(X)` for an
+            // appearance, `exists(X)` for a disappearance — is a claim about
+            // this tree, and nothing later in the timeline can answer it.
+            self.requirement.expectation.snapshot(boundary.moment.capture.interface)
             self.readiness = .pending(.initial)
             self.handoff = .pending(.initial)
             self.observationHistory = nil
             self.latestObservation = nil
+            self.latestScreenName = boundary.moment.snapshot.screenName
             self.timing = timing
             self.phase = switch command {
             case .observation(_, let deadline, _): .observation(deadline)
@@ -982,7 +724,6 @@ extension Settlement {
         case armReadiness(PhaseDeadline)
         case armDeadline(PhaseDeadline)
         case dispatchAction(ResolvedHeistActionCommand)
-        case evaluatePredicate(Predicate.EvaluationRequest)
         case quiesce(Arming)
     }
 }
@@ -1031,7 +772,6 @@ extension Settlement.Event {
         case announcementObserved(Observation.AnnouncementEvent)
         case observationHistoryUnavailable(Observation.EventsSince)
         case announcementHistoryUnavailable(AccessibilityNotificationGap)
-        case predicateEvaluated(Settlement.Predicate.EvaluationResponse)
         case readinessEstablished(Settlement.Readiness.Establishment)
         case readinessInvalidated(Settlement.Readiness.Generation)
         case handoffCaptureFailed(Settlement.Readiness.Generation, Settlement.Capture.Failure)

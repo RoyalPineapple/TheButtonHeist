@@ -40,7 +40,6 @@ final class SettleSessionTests: XCTestCase {
 
     func makeSession(
         script: [InterfaceObservation?],
-        cyclesRequired: Int = 3,
         cycleIntervalMs: Int = 1,
         timeoutMs: Int = 200,
         topVCSequence: [ObjectIdentifier?]? = nil,
@@ -58,7 +57,6 @@ final class SettleSessionTests: XCTestCase {
                 )
             },
             sleeper: { _ in /* no real sleep; loop runs at wall-clock pace */ },
-            cyclesRequired: cyclesRequired,
             cycleIntervalMs: cycleIntervalMs,
             timeoutMs: timeoutMs
         )
@@ -118,7 +116,6 @@ final class SettleSessionTests: XCTestCase {
         script: [InterfaceObservation?],
         clock: ManualClock,
         frameMs: Int = 10,
-        cyclesRequired: Int = 3,
         timeoutMs: Int = 500,
         topVCSequence: [ObjectIdentifier?]? = nil,
         accessibilityNotificationSequence: [UInt64]? = nil,
@@ -141,7 +138,6 @@ final class SettleSessionTests: XCTestCase {
                 clock.advance(milliseconds: frameMs)
                 return tick()
             },
-            cyclesRequired: cyclesRequired,
             clock: { clock.currentTime() },
             timeoutMs: timeoutMs
         )

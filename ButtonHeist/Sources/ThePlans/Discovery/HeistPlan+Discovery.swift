@@ -449,12 +449,8 @@ private extension HeistPlan {
                 switch predicate.core {
                 case .presence(.exists(let target)), .presence(.missing(let target)):
                     observedTargets.append(target)
-                case .changed(.screen(let assertions)):
-                    for assertion in assertions {
-                        switch assertion {
-                        case .exists(let target), .missing(let target): observedTargets.append(target)
-                        }
-                    }
+                // A screen boundary names no elements, so it observes no targets.
+                case .changed(.screen): break
                 case .changed(.elements(let assertions)):
                     for assertion in assertions {
                         switch assertion {

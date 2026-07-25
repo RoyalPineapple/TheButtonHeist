@@ -145,6 +145,15 @@ enum ScreenClassifier {
         snapshot(of: vault.interfaceTree)
     }
 
+    /// What this screen is called.
+    ///
+    /// The classifier already reads a primary header to decide whether two
+    /// captures are the same screen, so the same reading names it. This is a
+    /// classification, not a slug: it is the header the classifier trusted.
+    static func screenName(of tree: InterfaceTree) -> String? {
+        snapshot(of: tree).signature.primaryHeader?.label
+    }
+
     static func classify(
         from previousTree: InterfaceTree?,
         to tree: InterfaceTree,

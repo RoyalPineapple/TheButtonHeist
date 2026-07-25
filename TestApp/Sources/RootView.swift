@@ -53,6 +53,9 @@ struct RootView: View {
                 NavigationLink("Menu") {
                     MenuOrderView()
                 }
+                NavigationLink("Progress Button") {
+                    ProgressButtonDemo()
+                }
                 NavigationLink("Long List") {
                     LongListView()
                 }

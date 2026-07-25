@@ -47,7 +47,6 @@ extension SettleSessionTests {
                 clock.advance(milliseconds: 10)
                 return .observed
             },
-            cyclesRequired: 3,
             clock: { clock.currentTime() },
             timeoutMs: 50
         )
@@ -80,8 +79,7 @@ extension SettleSessionTests {
                 makeParseResult([jittered]),
                 makeParseResult([first]),
                 makeParseResult([jittered]),
-            ],
-            cyclesRequired: 3
+            ]
         )
 
         let outcome = await session.run(
@@ -172,7 +170,6 @@ extension SettleSessionTests {
             // would let the loop reach a finite-script end before the
             // timeout fires.
             sleeper: { _ = await Task.cancellableSleep(nanoseconds: $0) },
-            cyclesRequired: 3,
             cycleIntervalMs: 5,
             timeoutMs: 50
         )
@@ -206,7 +203,6 @@ extension SettleSessionTests {
             },
             tripwireSignalProvider: { self.tripwireSignal(topmostVC: nil) },
             sleeper: { _ = await Task.cancellableSleep(nanoseconds: $0) },
-            cyclesRequired: 3,
             cycleIntervalMs: 5,
             timeoutMs: 50
         )
@@ -238,7 +234,6 @@ extension SettleSessionTests {
         let topVCSeq: [ObjectIdentifier?] = [placeholder]
         let session = makeSession(
             script: [stable, stable, stable],
-            cyclesRequired: 3,
             cycleIntervalMs: 1,
             timeoutMs: 100,
             topVCSequence: topVCSeq
@@ -271,7 +266,6 @@ extension SettleSessionTests {
                 makeParseResult([after]),
                 makeParseResult([after])
             ],
-            cyclesRequired: 2,
             cycleIntervalMs: 1,
             timeoutMs: 100,
             topVCSequence: [livePostTransition, livePostTransition, livePostTransition, livePostTransition]
@@ -311,7 +305,6 @@ extension SettleSessionTests {
                 makeParseResult([after]),
                 makeParseResult([after])
             ],
-            cyclesRequired: 2,
             cycleIntervalMs: 1,
             timeoutMs: 100,
             topVCSequence: [baseline, livePostTransition, livePostTransition, livePostTransition, livePostTransition]
@@ -351,7 +344,6 @@ extension SettleSessionTests {
         // first sampled value.
         let session = makeSession(
             script: [stable, stable, stable, stable],
-            cyclesRequired: 3,
             cycleIntervalMs: 1,
             timeoutMs: 100,
             topVCSequence: [baseline, baseline, baseline, baseline]
@@ -381,7 +373,6 @@ extension SettleSessionTests {
         let livePostTransition = ObjectIdentifier(liveObject)
         let session = makeSession(
             script: [stable, stable, stable],
-            cyclesRequired: 3,
             cycleIntervalMs: 1,
             timeoutMs: 100,
             topVCSequence: [livePostTransition]

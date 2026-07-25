@@ -123,7 +123,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let nestedPath = TreePath([0, 0])
         let outerEntry = semanticContainer(outer, path: outerPath)
         let nestedEntry = semanticContainer(nested, path: nestedPath)
-        var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(.empty))
+        var exploration = Navigation.SemanticExploration(startingFresh: false)
         exploration.progress.addPendingContainers([outerEntry])
 
         exploration.markExplored(outerEntry)
@@ -152,7 +152,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             ],
             firstResponderHeistId: nil,
         )
-        var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(.empty))
+        var exploration = Navigation.SemanticExploration(startingFresh: false)
 
         exploration.recordCommittedObservation(
             continuity: .sameGeneration,
@@ -184,7 +184,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let outerPath = TreePath([0])
         let nestedPath = TreePath([0, 0])
         let outerEntry = semanticContainer(outer, path: outerPath)
-        var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(.empty))
+        var exploration = Navigation.SemanticExploration(startingFresh: false)
         exploration.progress.addPendingContainers([outerEntry])
         exploration.markExplored(outerEntry)
 
@@ -199,7 +199,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testSemanticExplorationFinishOwnsExplorationTimestamp() async {
-        var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(.empty))
+        var exploration = Navigation.SemanticExploration(startingFresh: false)
         let event = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(.empty)
 
         let result = exploration.finish(
@@ -227,7 +227,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             ),
             path: path
         )
-        var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(.empty))
+        var exploration = Navigation.SemanticExploration(startingFresh: false)
 
         exploration.recordCommittedObservation(
             continuity: .sameGeneration,

@@ -8,9 +8,35 @@ import ThePlans
 import AccessibilitySnapshotParser
 
 extension Navigation {
+    /// Walk the whole screen and return the graph.
+    ///
+    /// No goal and no early exit: every scrollable container is scanned until
+    /// the knobs or the deadline stop it, and what comes back is everything
+    /// found along the way. Each page commits into the store as it is read, so
+    /// the result is the accumulation, not a tree assembled at the end.
+    ///
+    /// Always starts fresh, because that is what building a graph means: the
+    /// first page replaces whatever we knew and every page after it merges in.
+    /// Searching is the other job — `exploreScreen(target:)` stops the moment
+    /// it finds one element, keeps interface memory, and deliberately does not
+    /// produce a full graph.
+    func fullGraph(
+        deadline: SemanticObservationDeadline? = nil,
+        maxScrollsPerContainer: Int? = nil,
+        maxScrollsPerDiscovery: Int? = nil
+    ) async -> InterfaceExplorationResult? {
+        await exploreScreen(
+            startingFresh: true,
+            exitPosition: .origin,
+            deadline: deadline,
+            maxScrollsPerContainer: maxScrollsPerContainer,
+            maxScrollsPerDiscovery: maxScrollsPerDiscovery
+        )
+    }
+
     func exploreScreen(
         target: ResolvedAccessibilityTarget? = nil,
-        baseline: ExplorationBaseline? = nil,
+        startingFresh: Bool = false,
         exitPosition: ViewportExitPosition = .origin,
         searchOrder: ViewportSearchOrder = .forwardFirst,
         deadline: SemanticObservationDeadline? = nil,
@@ -21,7 +47,7 @@ extension Navigation {
         let explorer = ViewportExplorer(
             navigation: self,
             exploration: SemanticExploration(
-                baseline: baseline ?? .interfaceMemory(vault.interfaceMemoryBaseline()),
+                startingFresh: startingFresh,
                 deadline: deadline,
                 maxScrollsPerContainer: maxScrollsPerContainer ?? InterfaceExplorationProgress.maxScrollsPerContainer,
                 maxScrollsPerDiscovery: maxScrollsPerDiscovery ?? InterfaceExplorationProgress.maxScrollsPerDiscovery

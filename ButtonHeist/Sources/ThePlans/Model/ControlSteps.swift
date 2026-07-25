@@ -35,10 +35,10 @@ public struct PredicateCase: Codable, Sendable, Equatable {
         case predicate, body
     }
 
-    public let predicate: ChangeDeclaration.ScreenAssertion
+    public let predicate: PresenceCondition
     public let body: [HeistStep]
 
-    public init(predicate: ChangeDeclaration.ScreenAssertion, body: [HeistStep]) {
+    public init(predicate: PresenceCondition, body: [HeistStep]) {
         self.predicate = predicate
         self.body = body
     }
@@ -47,7 +47,7 @@ public struct PredicateCase: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "predicate case")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            predicate: try container.decode(ChangeDeclaration.ScreenAssertion.self, forKey: .predicate),
+            predicate: try container.decode(PresenceCondition.self, forKey: .predicate),
             body: try container.decode([HeistStep].self, forKey: .body)
         )
     }

@@ -197,7 +197,7 @@ private func scriptedActionSettlement(
                 command: action,
                 boundary: boundary,
                 dispatch: .completed(.success(payload: action.command.actionResultPayload)),
-                evaluation: .init(predicate: predicate),
+                outstanding: Expectation([predicate.resolved]).outstanding,
                 readiness: .pending(.initial),
                 handoff: .pending(.initial),
                 history: nil,
@@ -209,14 +209,14 @@ private func scriptedActionSettlement(
     let dispatch = TheSafecracker.ActionDispatchResult.success(
         payload: action.command.actionResultPayload
     )
-    guard observation.expectation.met else {
+    guard observation.met else {
         return .action(.failed(.init(
             reason: .timedOut(timeoutPhase),
             attempt: .init(
                 command: action,
                 boundary: boundary,
                 dispatch: .completed(dispatch),
-                evaluation: observation.evidence,
+                outstanding: observation.outstanding,
                 readiness: .established(observation.readiness),
                 handoff: .admitted(observation.handoff),
                 history: observation.history,
@@ -231,7 +231,6 @@ private func scriptedActionSettlement(
         command: action,
         boundary: establishedBoundary,
         dispatch: dispatch,
-        evaluation: observation.evaluation,
         readiness: observation.readiness,
         handoff: observation.handoff,
         history: observation.history,
@@ -252,7 +251,7 @@ private func scriptedObservationSettlement(
             attempt: .init(
                 predicate: predicate,
                 boundary: boundary,
-                evaluation: .init(predicate: predicate),
+                outstanding: Expectation([predicate.resolved]).outstanding,
                 readiness: .pending(.initial),
                 handoff: .pending(.initial),
                 history: nil,
@@ -261,13 +260,13 @@ private func scriptedObservationSettlement(
         )))
     }
     let observation = scriptedPredicateObservation(predicate, event: event)
-    guard observation.expectation.met else {
+    guard observation.met else {
         return .observation(.failed(.init(
             reason: .timedOut(.observation),
             attempt: .init(
                 predicate: predicate,
                 boundary: boundary,
-                evaluation: observation.evidence,
+                outstanding: observation.outstanding,
                 readiness: .established(observation.readiness),
                 handoff: .admitted(observation.handoff),
                 history: observation.history,
@@ -281,7 +280,6 @@ private func scriptedObservationSettlement(
     return .observation(.settled(.init(
         predicate: predicate,
         boundary: establishedBoundary,
-        evaluation: observation.evaluation,
         readiness: observation.readiness,
         handoff: observation.handoff,
         history: observation.history,
@@ -290,51 +288,28 @@ private func scriptedObservationSettlement(
 }
 
 private struct ScriptedPredicateObservation {
-    let expectation: ExpectationResult
-    let evidence: Settlement.Predicate.Evidence
-    let evaluation: Settlement.Predicate.EvaluationResponse
+    let met: Bool
+    let outstanding: [String]
     let readiness: Settlement.Readiness.Establishment
     let handoff: Settlement.Handoff.Admission
     let history: Observation.EventsSince
 }
 
+/// The scripted stand-in for a run that reached one observation.
+///
+/// It drives the same expectation the reducer drives: the event goes in as a
+/// snapshot tick, then a no-change tick says the tree stopped. What comes out
+/// is what settlement itself would decide.
 @MainActor
 private func scriptedPredicateObservation(
     _ predicate: Settlement.Predicate,
     event: Observation.SnapshotEvent
 ) -> ScriptedPredicateObservation {
-    var predicateEvidence = Settlement.Predicate.Evidence(predicate: predicate)
-    let expectation = Settlement.PredicateEvaluation.evaluate(
-        predicate.resolved,
-        expression: predicate.authored,
-        in: event
-    )
-    let evaluationEvidence: Settlement.Predicate.EvaluationEvidence = switch predicate.semantics {
-    case .currentState:
-        .currentState(event)
-    case .positiveTransition:
-        .positiveTransition(event)
-    case .completeHistory:
-        .completeHistory(.init(
-            history: .events([.snapshot(event)]),
-            handoff: event
-        ))
-    case .announcement:
-        preconditionFailure("Scripted snapshot settlement cannot evaluate an announcement")
+    var expectation = Expectation([predicate.resolved])
+    if let interface = event.trace.captures.last?.interface {
+        expectation.snapshot(interface)
     }
-    let request = Settlement.Predicate.EvaluationRequest(
-        predicate: predicate,
-        target: .observation(event.moment),
-        evidence: evaluationEvidence
-    )
-    precondition(predicateEvidence.schedule(request))
-    predicateEvidence.record(.init(
-        target: request.target,
-        result: PredicateEvaluationResult(
-            met: expectation.met,
-            actual: expectation.actual
-        )
-    ))
+    expectation.noChange()
     let readiness = Settlement.Readiness.Establishment(
         generation: .initial,
         path: .semanticStability,
@@ -345,13 +320,9 @@ private func scriptedPredicateObservation(
     guard let handoff = Settlement.Handoff.Admission.admit(admission, for: readiness) else {
         preconditionFailure("Scripted settlement handoff was not admitted")
     }
-    guard let evaluation = predicateEvidence.responses.first else {
-        preconditionFailure("Scripted settlement requires one predicate evaluation")
-    }
     return ScriptedPredicateObservation(
-        expectation: expectation,
-        evidence: predicateEvidence,
-        evaluation: evaluation,
+        met: expectation.isMet,
+        outstanding: expectation.outstanding,
         readiness: readiness,
         handoff: handoff,
         history: history

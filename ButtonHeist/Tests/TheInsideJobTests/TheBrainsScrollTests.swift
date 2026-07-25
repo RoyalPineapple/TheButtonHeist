@@ -128,14 +128,8 @@ final class TheBrainsScrollTests: XCTestCase {
     }
 
     func testExploreScreenReturnsNilWhenInitialSettlementIsCancelled() async {
-        let staleBaseline = InterfaceObservation.makeForTests([
-            InterfaceObservation.TestEntry(
-                AccessibilityElement.make(label: "Stale", traits: .staticText),
-                heistId: "stale_staticText"
-            )
-        ])
         let explorationTask = Task { @MainActor in
-            await brains.navigation.exploreScreen(baseline: .interfaceMemory(staleBaseline)) != nil
+            await brains.navigation.exploreScreen(startingFresh: false) != nil
         }
         explorationTask.cancel()
 

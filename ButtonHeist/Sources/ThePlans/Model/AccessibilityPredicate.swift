@@ -1,33 +1,20 @@
 import Foundation
 
 public enum ChangeDeclaration: Sendable, Equatable {
-    case screen([ScreenAssertion] = [])
+    /// A screen boundary, and optionally which screen it arrived at.
+    ///
+    /// This asks about the screen itself. Which elements left the old screen and
+    /// which arrived on the new one are element questions — write them as
+    /// element assertions, and the two snapshots either side of the boundary
+    /// answer them.
+    case screen(ScreenPredicate = ScreenPredicate())
     case elements([ElementAssertion] = [])
 
-    public enum ScreenAssertion: Codable, Sendable, Equatable {
-        case exists(AccessibilityTarget)
-        case missing(AccessibilityTarget)
-
-        package static func presence(_ presence: AccessibilityPredicate.Presence) -> Self {
-            switch presence {
-            case .exists(let target): return .exists(target)
-            case .missing(let target): return .missing(target)
-            }
-        }
-
-        package func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedScreenAssertion {
-            switch self {
-            case .exists(let target): return .exists(try target.resolve(in: environment))
-            case .missing(let target): return .missing(try target.resolve(in: environment))
-            }
-        }
-
-        package var rootPredicate: AccessibilityPredicate {
-            switch self {
-            case .exists(let target): return .exists(target)
-            case .missing(let target): return .missing(target)
-            }
-        }
+    /// `.screen("Settings")`, and everything `StringMatch` spells: `.contains`,
+    /// `.prefix`, `.suffix`, or a reference. A bare string literal is an exact
+    /// match, because `StringMatch` is `ExpressibleByStringLiteral`.
+    public static func screen(_ match: StringMatch) -> Self {
+        .screen(ScreenPredicate(match: match))
     }
 
     public enum ElementAssertion: Codable, Sendable, Equatable {
@@ -54,8 +41,8 @@ public enum ChangeDeclaration: Sendable, Equatable {
 
     package func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedChangeDeclaration {
         switch self {
-        case .screen(let assertions):
-            return .screen(try assertions.map { try $0.resolve(in: environment) })
+        case .screen(let predicate):
+            return .screen(try predicate.resolve(in: environment))
         case .elements(let assertions):
             return .elements(try assertions.map { try $0.resolve(in: environment) })
         }
@@ -118,20 +105,8 @@ public struct AccessibilityPredicate: Codable, Sendable, Equatable {
 }
 
 package enum ResolvedChangeDeclaration: Sendable, Equatable {
-    case screen([ResolvedScreenAssertion])
+    case screen(ResolvedScreenPredicate)
     case elements([ResolvedElementAssertion])
-}
-
-package enum ResolvedScreenAssertion: Sendable, Equatable {
-    case exists(ResolvedAccessibilityTarget)
-    case missing(ResolvedAccessibilityTarget)
-
-    package var rootPredicate: ResolvedAccessibilityPredicate {
-        switch self {
-        case .exists(let target): return .exists(target)
-        case .missing(let target): return .missing(target)
-        }
-    }
 }
 
 package enum ResolvedElementAssertion: Sendable, Equatable {
@@ -184,11 +159,9 @@ package enum ResolvedAccessibilityPredicate: Sendable, Equatable {
         switch self {
         case .exists(let target), .missing(let target):
             return target
-        case .changed(.screen(let assertions)):
-            guard assertions.count == 1 else { return nil }
-            switch assertions[0] {
-            case .exists(let target), .missing(let target): return target
-            }
+        case .changed(.screen):
+            // A screen predicate names no element, so there is no target here.
+            return nil
         case .changed(.elements(let assertions)):
             guard assertions.count == 1 else { return nil }
             return assertions[0].target
@@ -234,16 +207,6 @@ extension AccessibilityPredicate {
     }
 }
 
-extension ChangeDeclaration.ScreenAssertion {
-    public init(from decoder: Decoder) throws {
-        self = try AccessibilityPredicateWireCodec.decodeScreenAssertion(from: decoder)
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        try AccessibilityPredicateWireCodec.encodeScreenAssertion(self, to: encoder)
-    }
-}
-
 extension ChangeDeclaration.ElementAssertion {
     public init(from decoder: Decoder) throws {
         self = try AccessibilityPredicateWireCodec.decodeElementAssertion(from: decoder)
@@ -285,34 +248,19 @@ private enum AccessibilityPredicateWireCodec {
                     debugDescription: "Unknown changed predicate scope: \"\(scopeString)\". Valid: screen, elements"
                 )
             }
-            var assertions = try container.nestedUnkeyedContainer(forKey: .assertions)
             switch scope {
             case .screen:
-                return .changed(.screen(try decodeAssertions(from: &assertions) {
-                    try decodeScreenAssertion(from: $0)
-                }))
+                // A screen predicate asks about the screen, so it carries a
+                // match and no assertion list: elements are never named here.
+                return .changed(.screen(ScreenPredicate(
+                    match: try container.decodeIfPresent(StringMatch.self, forKey: .match)
+                )))
             case .elements:
+                var assertions = try container.nestedUnkeyedContainer(forKey: .assertions)
                 return .changed(.elements(try decodeAssertions(from: &assertions) {
                     try decodeElementAssertion(from: $0)
                 }))
             }
-        }
-    }
-
-    static func decodeScreenAssertion(from decoder: Decoder) throws -> ChangeDeclaration.ScreenAssertion {
-        let container = try decoder.container(keyedBy: AccessibilityPredicateCodingKeys.self)
-        let typeString = try container.decode(String.self, forKey: .type)
-        guard let type = PresencePredicateWireType(rawValue: typeString) else {
-            throw invalidType(
-                typeString,
-                in: container,
-                context: "screen assertion",
-                valid: PresencePredicateWireType.allCases.map(\.rawValue)
-            )
-        }
-        switch try decodePresence(type, from: decoder, container: container) {
-        case .exists(let target): return .exists(target)
-        case .missing(let target): return .missing(target)
         }
     }
 
@@ -364,13 +312,10 @@ private enum AccessibilityPredicateWireCodec {
         case .announcement(let announcement):
             try container.encode(RootPredicateWireType.announcement.rawValue, forKey: .type)
             try container.encodeIfPresent(announcement.match, forKey: .match)
-        case .changed(.screen(let assertions)):
+        case .changed(.screen(let predicate)):
             try container.encode(RootPredicateWireType.changed.rawValue, forKey: .type)
             try container.encode(AccessibilityChangedWireScope.screen.rawValue, forKey: .scope)
-            var nested = container.nestedUnkeyedContainer(forKey: .assertions)
-            try encodeAssertions(assertions, to: &nested) { assertion, encoder in
-                try encodeScreenAssertion(assertion, to: encoder)
-            }
+            try container.encodeIfPresent(predicate.match, forKey: .match)
         case .changed(.elements(let assertions)):
             try container.encode(RootPredicateWireType.changed.rawValue, forKey: .type)
             try container.encode(AccessibilityChangedWireScope.elements.rawValue, forKey: .scope)
@@ -378,14 +323,6 @@ private enum AccessibilityPredicateWireCodec {
             try encodeAssertions(assertions, to: &nested) { assertion, encoder in
                 try encodeElementAssertion(assertion, to: encoder)
             }
-        }
-    }
-
-    static func encodeScreenAssertion(_ assertion: ChangeDeclaration.ScreenAssertion, to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: AccessibilityPredicateCodingKeys.self)
-        switch assertion {
-        case .exists(let target): try encodePresence(.exists, target: target, to: &container)
-        case .missing(let target): try encodePresence(.missing, target: target, to: &container)
         }
     }
 
@@ -513,8 +450,8 @@ extension ResolvedAccessibilityPredicate: CustomStringConvertible {
 extension ChangeDeclaration: CustomStringConvertible {
     public var description: String {
         switch self {
-        case .screen(let assertions):
-            return CanonicalValueDescription.call("screen", assertions.map(\.description))
+        case .screen(let predicate):
+            return CanonicalValueDescription.call("screen", [predicate.description])
         case .elements(let assertions):
             return CanonicalValueDescription.call("elements", assertions.map(\.description))
         }
@@ -524,28 +461,10 @@ extension ChangeDeclaration: CustomStringConvertible {
 extension ResolvedChangeDeclaration: CustomStringConvertible {
     package var description: String {
         switch self {
-        case .screen(let assertions):
-            return CanonicalValueDescription.call("screen", assertions.map(\.description))
+        case .screen(let predicate):
+            return CanonicalValueDescription.call("screen", [predicate.description])
         case .elements(let assertions):
             return CanonicalValueDescription.call("elements", assertions.map(\.description))
-        }
-    }
-}
-
-extension ChangeDeclaration.ScreenAssertion: CustomStringConvertible {
-    public var description: String {
-        switch self {
-        case .exists(let target): return CanonicalValueDescription.call("exists", [target.description])
-        case .missing(let target): return CanonicalValueDescription.call("missing", [target.description])
-        }
-    }
-}
-
-extension ResolvedScreenAssertion: CustomStringConvertible {
-    package var description: String {
-        switch self {
-        case .exists(let target): return CanonicalValueDescription.call("exists", [target.description])
-        case .missing(let target): return CanonicalValueDescription.call("missing", [target.description])
         }
     }
 }

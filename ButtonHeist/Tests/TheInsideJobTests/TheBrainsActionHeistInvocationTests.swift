@@ -252,7 +252,7 @@ extension TheBrainsActionTests {
                 .invoke(HeistInvocationStep(
                     path: "Checkout.pay",
                     expectation: WaitStep(
-                        predicate: .changed(.screen([.exists(.label("Receipt"))])),
+                        predicate: .changed(.screen()),
                         timeout: defaultActionExpectationTimeout
                     )
                 )),
