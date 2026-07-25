@@ -101,7 +101,7 @@ internal final class Stream {
                 demand: tickDemand
             ).run(
                 start: settlementStartedAt,
-                baselineTripwireSignal: baseline
+                baselineTripwireSignal: baseline.tripwireSignal
             )
         }
     }
@@ -292,11 +292,22 @@ internal final class Stream {
 }
 
 extension Observation.Stream {
+    /// The pre-action reading a settle run compares against: the tripwire
+    /// signal, sampled before the action, deciding when the settle baseline
+    /// resets.
+    internal struct SettleBaseline: Sendable, Equatable {
+        internal let tripwireSignal: TheTripwire.TripwireSignal
+
+        internal init(tripwireSignal: TheTripwire.TripwireSignal) {
+            self.tripwireSignal = tripwireSignal
+        }
+    }
+
     internal typealias VisibleObservationSettler = @MainActor (
         TheVault,
         TheTripwire,
         SemanticObservationDemandState,
-        TheTripwire.TripwireSignal,
+        SettleBaseline,
         Int
     ) async -> SettleSession.Result
 

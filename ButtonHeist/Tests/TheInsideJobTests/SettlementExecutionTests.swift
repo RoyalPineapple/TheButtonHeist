@@ -360,7 +360,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
                 finalObservation: SettleSessionFinalObservation(
                     observation: visibleObservation
                 ),
-                tripwireSignal: baseline,
+                tripwireSignal: baseline.tripwireSignal,
                 delta: .unchanged
             )
         }

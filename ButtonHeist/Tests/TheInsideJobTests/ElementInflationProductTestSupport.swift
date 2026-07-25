@@ -40,7 +40,6 @@ final class ElementInflationProductTests: XCTestCase {
         let observationStream = brains.vault.semanticObservationStream
         XCTAssertFalse(brains.semanticObservationIsActive, file: file, line: line)
         XCTAssertFalse(brains.tripwire.isPulseRunning, file: file, line: line)
-        XCTAssertFalse(brains.tripwire.animationObserver.isInstalled, file: file, line: line)
         XCTAssertFalse(observationStream.isActive, file: file, line: line)
         XCTAssertEqual(observationStream.observationWaiterCount, 0, file: file, line: line)
         XCTAssertEqual(observationStream.activeObservationDemandCount, 0, file: file, line: line)

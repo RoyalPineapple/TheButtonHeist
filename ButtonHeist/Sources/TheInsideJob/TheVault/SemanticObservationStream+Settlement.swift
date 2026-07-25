@@ -258,7 +258,9 @@ extension Observation.Stream {
             return await finishVisibleRefresh(refresh)
         }
         return await startVisibleRefresh(
-            baselineTripwireSignal: baselineTripwireSignal ?? currentTripwireSignal(),
+            baseline: SettleBaseline(
+                tripwireSignal: baselineTripwireSignal ?? currentTripwireSignal()
+            ),
             timeoutMs: timeoutMs
         )
     }
@@ -283,13 +285,13 @@ extension Observation.Stream {
     }
 
     private func startVisibleRefresh(
-        baselineTripwireSignal: TheTripwire.TripwireSignal,
+        baseline: SettleBaseline,
         timeoutMs: Int
     ) async -> ObservationSettlement {
-        await invalidateDeliveryIfSignalChanged(to: baselineTripwireSignal)
+        await invalidateDeliveryIfSignalChanged(to: baseline.tripwireSignal)
         let task = Task { @MainActor in
             await self.produceVisibleSettlement(
-                baselineTripwireSignal: baselineTripwireSignal,
+                baseline: baseline,
                 timeoutMs: timeoutMs
             )
         }
@@ -318,7 +320,7 @@ extension Observation.Stream {
     }
 
     private func produceVisibleSettlement(
-        baselineTripwireSignal: TheTripwire.TripwireSignal,
+        baseline: SettleBaseline,
         timeoutMs: Int
     ) async -> ObservationSettlement {
         guard let vault else {
@@ -326,7 +328,7 @@ extension Observation.Stream {
                 settleResult: SettleSession.Result(
                     outcome: .cancelled(timeMs: 0),
                     finalObservation: nil,
-                    tripwireSignal: baselineTripwireSignal
+                    tripwireSignal: baseline.tripwireSignal
                 ),
                 commitOutcome: .unavailable
             )
@@ -335,7 +337,7 @@ extension Observation.Stream {
             vault,
             tripwire,
             activeObservationDemandState,
-            baselineTripwireSignal,
+            baseline,
             timeoutMs
         )
         if Task.isCancelled {

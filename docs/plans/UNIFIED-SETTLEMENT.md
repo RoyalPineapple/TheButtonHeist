@@ -1,6 +1,22 @@
 # Unified Timing and Settlement
 
-Status: proposed, not implemented. Review before code.
+Status: implemented in #1402.
+
+This is the design as approved, kept as the record of why the collapse
+happened. Code references and the "what exists today" survey below describe
+the state *before* the change — that survey is the motivation, not a
+description of the tree. For how settlement works now, read
+`docs/diagrams/settle-loop.md`.
+
+**One part of this plan did not survive implementation: the four-case
+animation-delta rule.** It shipped, failed, and was removed in the same PR.
+A process-wide animation count has no attribution — it cannot say *whose*
+animations are running, so a keyboard sliding into place over an already-quiet
+tree was indistinguishable from a spinner that never stops, and the rule turned
+successful actions into timeouts. `AnimationObserver`, the `UIViewAnimationState`
+swizzle, the bounded-`CAAnimation` layer census, and `SettleStability` are all
+gone. Settlement now compares accessibility trees and nothing else. Everything
+below about counting animations is history; the rest of the plan stands.
 
 ## The rule this restores
 

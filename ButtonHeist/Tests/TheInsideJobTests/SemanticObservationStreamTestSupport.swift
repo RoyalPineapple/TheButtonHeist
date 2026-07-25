@@ -129,7 +129,7 @@ class SemanticObservationStreamTestCase: XCTestCase {
             return self.settleResult(
                 .settled(timeMs: count),
                 observation: observation,
-                tripwireSignal: baseline
+                tripwireSignal: baseline.tripwireSignal
             )
         }
         return { count }

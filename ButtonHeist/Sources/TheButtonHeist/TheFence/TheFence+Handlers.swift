@@ -33,7 +33,7 @@ extension TheFence {
         let payload = try await sendAndAwaitAnnouncements(
             timeout: timeout
         )
-        return .announcements(payload.announcements)
+        return .announcements(payload)
     }
 
     // MARK: - Direct Action Execution

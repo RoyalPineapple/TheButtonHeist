@@ -275,13 +275,25 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         ))
     }
 
-    func testTimedOutSettlementRejectsSuccessfulSettlementPath() {
-        XCTAssertThrowsError(try JSONDecoder().decode(
+    /// A timed-out settlement cannot report success on any axis.
+    ///
+    /// This used to be a decoder rejection: the wire carried a separate
+    /// settlement `path`, so a `timedOut` evidence could be handed a successful
+    /// one and had to be refused. The kind is now the only discriminator and
+    /// every success flag is derived from it, so the contradiction is
+    /// unrepresentable rather than rejected. Assert the derivation instead.
+    func testTimedOutSettlementReportsNoSuccessOnAnyAxis() throws {
+        let decoded = try JSONDecoder().decode(
             ActionSettlementEvidence.self,
             from: Data(
                 #"{"kind":"timedOut","durationMs":125}"#.utf8
             )
-        ))
+        )
+
+        XCTAssertFalse(decoded.settled)
+        XCTAssertFalse(decoded.readinessEstablished)
+        XCTAssertFalse(decoded.observationHandoffCompleted)
+        XCTAssertEqual(decoded, .timedOut(duration: 125))
     }
 
     func testActionPerformanceTimingRejectsEveryNegativeWireField() {

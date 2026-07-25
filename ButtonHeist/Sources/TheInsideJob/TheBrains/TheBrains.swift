@@ -30,7 +30,15 @@ final class TheBrains {
     }
 
     func capturedAnnouncements() -> AnnouncementListPayload {
-        AnnouncementListPayload(announcements: vault.accessibilityNotifications.announcements())
+        let notifications = vault.accessibilityNotifications.notifications()
+        return AnnouncementListPayload(
+            announcements: notifications.compactMap(\.capturedAnnouncement),
+            notifications: vault.resolveAccessibilityNotificationEvidence(
+                notifications,
+                in: vault.latestObservation
+            ),
+            captureState: AccessibilityNotificationObserver.shared.lifecycleState.captureState
+        )
     }
 
     enum InterfaceQueryResult {

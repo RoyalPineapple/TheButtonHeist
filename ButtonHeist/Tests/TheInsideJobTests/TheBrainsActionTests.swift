@@ -674,7 +674,6 @@ final class TheBrainsActionTests: XCTestCase {
 @MainActor
 extension TheBrains {
     func startActionTestRuntime() async {
-        tripwire.animationObserver.installIfAvailable()
         tripwire.startPulse()
         await startSemanticObservation()
     }
@@ -682,7 +681,6 @@ extension TheBrains {
     func stopActionTestRuntime() {
         stopSemanticObservation()
         tripwire.stopPulse()
-        tripwire.animationObserver.uninstallIfNeeded()
     }
 }
 

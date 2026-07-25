@@ -614,11 +614,11 @@ final class SemanticObservationPublicationTests: SemanticObservationStreamTestCa
         _ = await stream.commitVisibleObservationForTesting(
             observation(label: "Before Start", heistId: "before_start")
         )
-        stream.settleVisibleObservation = { _, _, _, signal, _ in
+        stream.settleVisibleObservation = { _, _, _, baseline, _ in
             SettleSession.Result(
                 outcome: .cancelled(timeMs: 0),
                 finalObservation: nil,
-                tripwireSignal: signal
+                tripwireSignal: baseline.tripwireSignal
             )
         }
 

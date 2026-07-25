@@ -313,7 +313,7 @@ struct SettleSessionFinalObservation {
         /// Full tripwire signal paired with the final observed generation.
         let tripwireSignal: TheTripwire.TripwireSignal
         /// What the last comparison saw. On a clean settle this reads
-        /// `unchanged`; otherwise it names the fields that falsified stability.
+        /// `unchanged`; otherwise it names the fields that changed.
         let delta: SettleDelta
 
         init(
@@ -337,7 +337,10 @@ struct SettleSessionFinalObservation {
     /// action. Visible window/navigation/key changes reset the settle baseline,
     /// then the loop proves the post-transition AX tree is stable before
     /// returning.
-    func run(start: RuntimeElapsed.Instant, baselineTripwireSignal: TheTripwire.TripwireSignal) async -> Result {
+    func run(
+        start: RuntimeElapsed.Instant,
+        baselineTripwireSignal: TheTripwire.TripwireSignal
+    ) async -> Result {
         return await SettleLoopRunner(
             parseProvider: parseProvider,
             tripwireSignalProvider: tripwireSignalProvider,

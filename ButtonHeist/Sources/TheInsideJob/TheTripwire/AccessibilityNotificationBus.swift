@@ -187,6 +187,17 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
         return ingressLog.checkpoint(after: cursor, selection: .all).events.compactMap(\.capturedAnnouncement)
     }
 
+    /// The full retained notification stream, including events whose payload
+    /// carries no spoken text. `announcements(after:)` is the string-only
+    /// projection of this same window.
+    func notifications(
+        after cursor: AccessibilityNotificationCursor = .origin
+    ) -> [PendingAccessibilityNotificationEvent] {
+        lock.lock()
+        defer { lock.unlock() }
+        return ingressLog.checkpoint(after: cursor, selection: .all).events
+    }
+
     var announcementWaiterCount: Int {
         lock.lock()
         defer { lock.unlock() }

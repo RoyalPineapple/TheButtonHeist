@@ -10,7 +10,6 @@ extension TheInsideJob {
         installLifecycleObservationIfNeeded()
         engageIdleTimerProtection(baseline: resources.idleTimerBaseline)
 
-        tripwire.animationObserver.installIfAvailable()
         tripwire.startPulse()
         await brains.startSemanticObservation()
         brains.safecracker.startKeyboardObservation()
@@ -27,7 +26,6 @@ extension TheInsideJob {
 
         brains.stopSemanticObservation()
         tripwire.stopPulse()
-        tripwire.animationObserver.uninstallIfNeeded()
         brains.safecracker.stopKeyboardObservation()
     }
 

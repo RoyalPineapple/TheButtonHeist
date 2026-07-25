@@ -24,10 +24,12 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         AccessibilityNotificationObserver.shared.subscribe(bus)
         let installed = AccessibilityNotificationObserver.shared.isInstalled
-        XCTAssertEqual(
-            AccessibilityNotificationObserver.shared.lifecycleState,
-            .subscribed(callbackInstalled: installed)
-        )
+        guard case .subscribed(let callbackInstalled, _) =
+            AccessibilityNotificationObserver.shared.lifecycleState
+        else {
+            return XCTFail("Expected the shared observer to report a subscribed lifecycle")
+        }
+        XCTAssertEqual(callbackInstalled, installed)
 
         AccessibilityNotificationObserver.shared.unsubscribe(bus)
 
@@ -52,7 +54,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         XCTAssertTrue(observer.hasSubscribers)
         XCTAssertTrue(observer.isInstalled)
-        XCTAssertEqual(observer.lifecycleState, .subscribed(callbackInstalled: true))
+        XCTAssertEqual(observer.lifecycleState, .subscribed(callbackInstalled: true, unitTestModeArmed: true))
         XCTAssertTrue(harness.isInstalled)
         XCTAssertEqual(harness.installCount, 2)
         XCTAssertEqual(harness.uninstallCount, 1)

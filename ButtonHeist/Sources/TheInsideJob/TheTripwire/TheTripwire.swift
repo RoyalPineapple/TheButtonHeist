@@ -19,7 +19,6 @@ import UIKit
 final class TheTripwire {
 
     var pulsePhase: PulsePhase = .idle
-    let animationObserver = AnimationObserver()
 
     var runningContext: RunningContext? {
         if case .running(let context) = pulsePhase { return context }

@@ -424,6 +424,13 @@ private extension Settlement.Reducer {
 }
 
 private extension Settlement.Reducer {
+    /// The settle rule, in full.
+    ///
+    /// A session completes when readiness is established, the handoff belongs
+    /// to that readiness, and the predicate — `noChange` when the caller named
+    /// none — is satisfied at the handed-off event. Nothing else participates:
+    /// settlement is a statement about the accessibility tree, decided by
+    /// comparing trees.
     static func completedOutcome(_ session: Settlement.Session) -> Settlement.TerminalIntent? {
         guard case .established(let readiness) = session.readiness,
               let handoff = session.handoff.admission,

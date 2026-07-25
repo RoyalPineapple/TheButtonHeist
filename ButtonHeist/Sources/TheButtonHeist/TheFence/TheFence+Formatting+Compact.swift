@@ -37,8 +37,8 @@ extension FenceResponse {
             )
             let projection = InterfaceProjection(interface: interface, profile: projectionProfile)
             return Self.compactInterface(projection)
-        case .announcements(let announcements):
-            return Self.compactAnnouncements(announcements)
+        case .announcements(let payload):
+            return Self.compactAnnouncements(payload)
         case .action(let command, let result, let expectation):
             return compactActionResult(command: command, result, expectation: expectation, profile: profile)
         case .screenshot(let path, let payload, let options):
@@ -111,13 +111,17 @@ extension FenceResponse {
         return lines.joined(separator: "\n")
     }
 
-    private static func compactAnnouncements(_ announcements: [CapturedAnnouncement]) -> String {
-        guard !announcements.isEmpty else { return "announcements: none" }
+    private static func compactAnnouncements(_ payload: AnnouncementListPayload) -> String {
+        guard !payload.notifications.isEmpty else {
+            return "notifications: none (capture: \(payload.captureState))"
+        }
         let now = Date()
-        return announcements.enumerated().map { index, announcement in
-            let age = max(0, now.timeIntervalSince(announcement.timestamp))
-            return "[\(index)] \(String(format: "%.1f", age))s ago \(announcement.kind): \"\(announcement.text)\""
-        }.joined(separator: "\n")
+        let lines = payload.notifications.enumerated().map { index, notification in
+            let age = max(0, now.timeIntervalSince(notification.timestamp))
+            let spoken = notification.capturedAnnouncement.map { ": \"\($0.text)\"" } ?? ""
+            return "[\(index)] \(String(format: "%.1f", age))s ago \(notification.kind)\(spoken)"
+        }
+        return (lines + ["capture: \(payload.captureState)"]).joined(separator: "\n")
     }
 
 }

@@ -374,7 +374,12 @@ extension TheFence.Command {
             return fixedResponseContract(
                 family: .observation,
                 timeout: .health,
-                description: "Read recent spoken accessibility text captured from announcement, elementChanged, valueChanged, or screenChanged notifications.",
+                description: """
+                    Read the recent accessibility notification stream: spoken text plus every \
+                    captured announcement, elementChanged, valueChanged, and screenChanged event \
+                    including those posted with no string payload. Reports capture health so an \
+                    empty stream is distinguishable from a dead capture pipeline.
+                    """,
                 mcpExposure: .directTool,
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
             ) { _, _, timeout in

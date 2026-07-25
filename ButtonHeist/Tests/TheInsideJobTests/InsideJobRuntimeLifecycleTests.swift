@@ -347,13 +347,13 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
 
     private func recordSettleFailureDiagnostic(on job: TheInsideJob) async -> String {
         let stream = job.brains.vault.semanticObservationStream
-        stream.settleVisibleObservation = { vault, _, _, signal, _ in
+        stream.settleVisibleObservation = { vault, _, _, baseline, _ in
             let observation = InterfaceObservation.makeForTests()
             vault.observeInterface(observation)
             return SettleSession.Result(
                 outcome: .timedOut(timeMs: 17),
                 finalObservation: SettleSessionFinalObservation(observation: observation),
-                tripwireSignal: signal,
+                tripwireSignal: baseline.tripwireSignal,
                 delta: SettleTimeline.delta(
                     from: [.make(label: "runtime lifecycle diagnostic-before")],
                     to: [.make(label: "runtime lifecycle diagnostic-after")]

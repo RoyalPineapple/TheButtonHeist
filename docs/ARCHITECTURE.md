@@ -206,19 +206,20 @@ its `AccessibilityObservationFallbackReason` in `transition.fallbackReason`.
 Notification delivery is best effort; absence is not evidence of replacement
 or stability.
 
-The active Inside Job runtime owns one `AnimationObserver`. Its typed
-Objective-C swizzles remain installed from runtime activation until suspension
-or stop, call UIKit's original `UIViewAnimationState` start/stop methods first,
-and never need to mutate the process-global method table around each action.
-One aggregate animation counter runs continuously for that lifecycle, so a
-heist can observe an animation that began before its own execution scope.
-`animationSnapshot` reads that counter synchronously and needs no prior
-registration; nothing waits on it.
+The runtime does not observe animations. Settlement is a statement about the
+accessibility tree, so it is decided by comparing accessibility trees and
+nothing else: motion with no accessibility representation is motion the agent
+cannot act on or wait for. The runtime once counted `UIView.animate` edges via
+an Objective-C swizzle and withheld settlement while the count sat above its
+pre-action baseline, but a process-wide integer cannot say *whose* animations
+are running — a keyboard sliding into place over an already-quiet tree read
+exactly like a spinner that never stops — and the rule turned successful
+actions into timeouts.
 
 Settlement has exactly one rule and one clock. `SettleSession` samples the
 parsed AX tree on Button Heist's one CADisplayLink tick and settles after
-`cyclesRequired` consecutive unchanged observation diffs, so a cosmetic
-infinite animation cannot pin the operation forever. The diff it produces —
+`cyclesRequired` consecutive unchanged observation diffs, so an animation that
+never ends cannot pin the operation forever. The diff it produces —
 `SettleDelta` — travels on `Settlement.Readiness.Establishment`, so the
 reducer receives what changed rather than only that something settled.
 Callers tune the cycle count and the tick demand, never the criterion: there is
@@ -232,13 +233,11 @@ tick reporting `unavailable` means the pulse is not running; that projects to
 `SettleOutcome.clockUnavailable`, distinct from `timedOut`, because a stopped
 clock is not a slow app. Nested heists inherit the outermost demand; they never
 install parallel hooks. Returning to idle
-demand cancels pending waiters but preserves lifecycle animation truth. Before
+demand cancels pending waiters. Before
 a live heist—or a standalone action without an enclosing active context—opens
 its notification attribution scope, it commits one fresh composite baseline.
 That boundary prevents pre-existing navigation work from being attributed to
-the first action. Runtime release invalidates the observer, cancels waiters,
-and safely restores both methods unless a later swizzler superseded Button
-Heist's implementation.
+the first action. Runtime release invalidates the observer and cancels waiters.
 
 Settlement completion is an evidence conjunction: the trigger completed,
 readiness is established, the optional predicate is satisfied under its typed

@@ -203,11 +203,120 @@ public struct CapturedAnnouncement: Codable, Sendable, Equatable, Hashable {
     }
 }
 
+/// Health of the accessibility-notification capture pipeline at the moment a
+/// notification window was read.
+///
+/// An empty announcement list means nothing without this: no notifications
+/// posted, the private capture SPI failed to install, and nothing being
+/// subscribed all produce the same empty list. `capturing(armed:)` additionally
+/// reports whether the private unit-test-mode SPI armed the runtime — an
+/// unarmed capture is installed but the runtime may never post to it.
+public enum AccessibilityNotificationCaptureState: Codable, Sendable, Equatable, Hashable {
+    /// Callback installed. `armed` reports whether unit-test mode was enabled.
+    case capturing(armed: Bool)
+    /// The private notification-callback SPI could not be installed.
+    case installationUnavailable
+    /// Nothing is subscribed to the notification stream.
+    case unsubscribed
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case type
+        case armed
+    }
+
+    private enum Kind: String, Codable {
+        case capturing
+        case installationUnavailable
+        case unsubscribed
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(
+            allowed: CodingKeys.self,
+            typeName: "accessibility notification capture state"
+        )
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let kind = try container.decode(Kind.self, forKey: .type)
+        let typeName = "\(kind.rawValue) accessibility notification capture state"
+        switch kind {
+        case .capturing:
+            try container.rejectIncompatibleFields(allowing: [.type, .armed], typeName: typeName)
+            self = .capturing(armed: try container.decode(Bool.self, forKey: .armed))
+        case .installationUnavailable:
+            try container.rejectIncompatibleFields(allowing: [.type], typeName: typeName)
+            self = .installationUnavailable
+        case .unsubscribed:
+            try container.rejectIncompatibleFields(allowing: [.type], typeName: typeName)
+            self = .unsubscribed
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .capturing(let armed):
+            try container.encode(Kind.capturing, forKey: .type)
+            try container.encode(armed, forKey: .armed)
+        case .installationUnavailable:
+            try container.encode(Kind.installationUnavailable, forKey: .type)
+        case .unsubscribed:
+            try container.encode(Kind.unsubscribed, forKey: .type)
+        }
+    }
+}
+
+extension AccessibilityNotificationCaptureState: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .capturing(let armed):
+            return armed ? "capturing" : "capturing(unarmed)"
+        case .installationUnavailable:
+            return "installationUnavailable"
+        case .unsubscribed:
+            return "unsubscribed"
+        }
+    }
+}
+
+/// One window onto the accessibility-notification stream.
+///
+/// `announcements` is the spoken-text projection: only notifications carrying a
+/// string payload. `notifications` is the full retained event stream, including
+/// the `layoutChanged` / `screenChanged` events posted with a `nil` or element
+/// argument that carry no spoken text. `captureState` distinguishes an empty
+/// window from a dead capture pipeline.
 public struct AnnouncementListPayload: Codable, Sendable, Equatable {
     public let announcements: [CapturedAnnouncement]
+    public let notifications: [AccessibilityNotificationEvidence]
+    public let captureState: AccessibilityNotificationCaptureState
 
-    public init(announcements: [CapturedAnnouncement]) {
+    public init(
+        announcements: [CapturedAnnouncement],
+        notifications: [AccessibilityNotificationEvidence],
+        captureState: AccessibilityNotificationCaptureState
+    ) {
         self.announcements = announcements
+        self.notifications = notifications
+        self.captureState = captureState
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case announcements
+        case notifications
+        case captureState
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "announcement list payload")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            announcements: try container.decode([CapturedAnnouncement].self, forKey: .announcements),
+            notifications: try container.decode([AccessibilityNotificationEvidence].self, forKey: .notifications),
+            captureState: try container.decode(
+                AccessibilityNotificationCaptureState.self,
+                forKey: .captureState
+            )
+        )
     }
 }
 

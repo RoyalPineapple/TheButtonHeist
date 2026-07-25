@@ -142,7 +142,10 @@ extension SettleSessionTests {
         // the trait — actions dispatch at coordinates, so settling here would
         // tap where the element used to be.
         let staticElement = makeElement(label: "Static", traits: .staticText)
-        let sliding = (0..<10).map { i in
+        // `ScriptBox` repeats its last entry once exhausted, and a repeated
+        // frame is an unchanged diff. The script has to outlast the timeout or
+        // the banner "parks" and settles for a reason this test is not about.
+        let sliding = (0..<5_000).map { i in
             makeElement(
                 label: "banner",
                 traits: .updatesFrequently,

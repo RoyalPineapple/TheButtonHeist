@@ -26,8 +26,8 @@ extension FenceResponse {
             return formatDeviceList(devices)
         case .interface(let interface, let detail):
             return formatInterface(interface, detail: detail)
-        case .announcements(let announcements):
-            return formatAnnouncements(announcements)
+        case .announcements(let payload):
+            return formatAnnouncements(payload)
         case .action(let command, let result, let expectation):
             var text = formatActionResult(command: command, result: result)
             if result.outcome.isSuccess, let expectation {
@@ -72,13 +72,17 @@ extension FenceResponse {
         }
     }
 
-    private func formatAnnouncements(_ announcements: [CapturedAnnouncement]) -> String {
-        guard !announcements.isEmpty else { return "No announcements captured" }
+    private func formatAnnouncements(_ payload: AnnouncementListPayload) -> String {
+        guard !payload.notifications.isEmpty else {
+            return "No accessibility notifications captured (capture: \(payload.captureState))"
+        }
         let now = Date()
-        return announcements.enumerated().map { index, announcement in
-            let age = max(0, now.timeIntervalSince(announcement.timestamp))
-            return "[\(index)] \(String(format: "%.1f", age))s ago: \"\(announcement.text)\" (\(announcement.kind))"
-        }.joined(separator: "\n")
+        let lines = payload.notifications.enumerated().map { index, notification in
+            let age = max(0, now.timeIntervalSince(notification.timestamp))
+            let spoken = notification.capturedAnnouncement.map { "\"\($0.text)\"" } ?? "(no spoken text)"
+            return "[\(index)] \(String(format: "%.1f", age))s ago: \(spoken) (\(notification.kind))"
+        }
+        return (lines + ["capture: \(payload.captureState)"]).joined(separator: "\n")
     }
 
     private static func formatSessionStateHuman(_ payload: SessionStatePayload) -> String {
