@@ -8,7 +8,7 @@ import TheScore
 @MainActor
 final class TheGetawayTransportWiringTests: XCTestCase {
 
-    func testMainThreadProbeBypassesActiveInteractionRequest() async throws {
+    func testReconnectWithSameClientIdCancelsOnlyPriorIncarnationWork() async throws {
         let clientId = 7
         let muscle = TheMuscle(sessionToken: "transport-wiring-token", sessionReleaseTimeout: 1)
         let brains = TheBrains(tripwire: TheTripwire())
@@ -26,7 +26,147 @@ final class TheGetawayTransportWiringTests: XCTestCase {
         guard case .admitted(let admission) = wiringOutcome else {
             return XCTFail("Expected transport wiring to be admitted")
         }
-        let generation = admission.attempt.deliveryGeneration
+        let generation = admission.deliveryGeneration
+        await getaway.observeTransportEvent(
+            .clientConnected(clientId: clientId, remoteAddress: "127.0.0.1"),
+            generation: generation,
+            onBacklogOverflow: { _ in }
+        )
+        try await authenticate(clientId: clientId, muscle: muscle, generation: generation)
+
+        let blockerEntered = CompletionSignal()
+        let releaseBlocker = CompletionSignal()
+        XCTAssertEqual(brains.submitTransportRequest(
+            lease: TransportClientLease(clientId: 1_000, incarnation: 1)
+        ) {
+            blockerEntered.finish()
+            await releaseBlocker.wait()
+        }, .accepted)
+        await blockerEntered.wait()
+
+        let priorResponses = TransportResponseSink()
+        await getaway.observeTransportEvent(
+            .dataReceived(
+                clientId: clientId,
+                data: try requestData(id: "prior-incarnation", message: .getAnnouncements),
+                respond: priorResponses.respond
+            ),
+            generation: generation,
+            onBacklogOverflow: { _ in }
+        )
+        await waitForPendingDepth(1, brains: brains)
+
+        await getaway.observeTransportEvent(
+            .clientDisconnected(clientId: clientId),
+            generation: generation,
+            onBacklogOverflow: { _ in }
+        )
+        await waitForPendingDepth(0, brains: brains)
+
+        await getaway.observeTransportEvent(
+            .clientConnected(clientId: clientId, remoteAddress: "127.0.0.1"),
+            generation: generation,
+            onBacklogOverflow: { _ in }
+        )
+        try await authenticate(clientId: clientId, muscle: muscle, generation: generation)
+        let currentResponses = TransportResponseSink()
+        await getaway.observeTransportEvent(
+            .dataReceived(
+                clientId: clientId,
+                data: try requestData(id: "current-incarnation", message: .getAnnouncements),
+                respond: currentResponses.respond
+            ),
+            generation: generation,
+            onBacklogOverflow: { _ in }
+        )
+        await waitForPendingDepth(1, brains: brains)
+
+        releaseBlocker.finish()
+        await currentResponses.delivered.wait()
+
+        XCTAssertEqual(priorResponses.count, 0)
+        XCTAssertEqual(currentResponses.count, 1)
+        await getaway.tearDown()
+        await muscle.tearDown()
+    }
+
+    func testReplacementWiringWaitsForPriorInteractionCleanup() async {
+        let muscle = TheMuscle(sessionToken: "transport-wiring-token", sessionReleaseTimeout: 1)
+        let brains = TheBrains(tripwire: TheTripwire())
+        let getaway = TheGetaway(
+            muscle: muscle,
+            brains: brains,
+            identity: .init(
+                launchId: "transport-wiring-launch",
+                effectiveInstanceId: "transport-wiring-instance",
+                tlsActive: false
+            )
+        )
+        let firstTransport = ServerTransport(token: "transport-wiring-token")
+        let firstWiring = await getaway.wireTransport(firstTransport) { _ in }
+        guard case .admitted = firstWiring else {
+            return XCTFail("Expected initial transport wiring to be admitted")
+        }
+
+        let operationStarted = CompletionSignal()
+        let cancellationObserved = CompletionSignal()
+        let releaseCleanup = CompletionSignal()
+        XCTAssertEqual(brains.submitTransportRequest(
+            lease: TransportClientLease(clientId: 7, incarnation: 1)
+        ) {
+            operationStarted.finish()
+            let cleanup = Task { [releaseCleanup] in
+                await releaseCleanup.wait()
+            }
+            await withTaskCancellationHandler {
+                await cleanup.value
+            } onCancel: {
+                cancellationObserved.finish()
+            }
+        }, .accepted)
+        await operationStarted.wait()
+
+        let secondTransport = ServerTransport(token: "transport-wiring-token")
+        let replacementCompleted = CompletionSignal()
+        let replacement = Task { @MainActor in
+            let outcome = await getaway.wireTransport(secondTransport) { _ in }
+            replacementCompleted.finish()
+            guard case .admitted = outcome else { return false }
+            return true
+        }
+        await cancellationObserved.wait()
+        XCTAssertFalse(replacementCompleted.isFinished)
+
+        releaseCleanup.finish()
+        guard await replacement.value else {
+            return XCTFail("Expected replacement wiring to be admitted after cleanup")
+        }
+        await getaway.tearDown()
+        await muscle.tearDown()
+    }
+
+    func testMainThreadProbeBypassesActiveInteractionRequest() async throws {
+        let clientId = 7
+        let muscle = TheMuscle(sessionToken: "transport-wiring-token", sessionReleaseTimeout: 1)
+        let brains = TheBrains(tripwire: TheTripwire())
+        let getaway = TheGetaway(
+            muscle: muscle,
+            brains: brains,
+            identity: .init(
+                launchId: "transport-wiring-launch",
+                effectiveInstanceId: "transport-wiring-instance",
+                tlsActive: false
+            ),
+            mainThreadProbe: { _ in
+                MainThreadProbeResponse(outcome: .responsive)
+            }
+        )
+        let transport = ServerTransport(token: "transport-wiring-token")
+        let wiringOutcome = await getaway.wireTransport(transport) { _ in }
+        guard case .admitted(let admission) = wiringOutcome else {
+            return XCTFail("Expected transport wiring to be admitted")
+        }
+        let generation = admission.deliveryGeneration
         await getaway.observeTransportEvent(
             .clientConnected(clientId: clientId, remoteAddress: "127.0.0.1"),
             generation: generation,
@@ -40,7 +180,9 @@ final class TheGetawayTransportWiringTests: XCTestCase {
 
         let interactionEntered = CompletionSignal()
         let releaseInteraction = CompletionSignal()
-        XCTAssertEqual(brains.submitTransportRequest(clientId: clientId) {
+        XCTAssertEqual(brains.submitTransportRequest(
+            lease: TransportClientLease(clientId: clientId, incarnation: 0)
+        ) {
             interactionEntered.finish()
             await releaseInteraction.wait()
         }, .accepted)
@@ -103,6 +245,28 @@ final class TheGetawayTransportWiringTests: XCTestCase {
         )
     }
 
+    private func requestData(
+        id: RequestID,
+        message: ClientMessage
+    ) throws -> Data {
+        try JSONEncoder().encode(RequestEnvelope(requestId: id, message: message))
+    }
+
+    private func waitForPendingDepth(
+        _ expectedDepth: Int,
+        brains: TheBrains
+    ) async {
+        for _ in 0..<1_000 {
+            guard brains.interactionRequestSnapshot.pendingDepth != expectedDepth else {
+                return
+            }
+            await Task.yield()
+        }
+        XCTFail(
+            "Expected pending depth \(expectedDepth), got \(brains.interactionRequestSnapshot.pendingDepth)"
+        )
+    }
+
     func testOlderWiringPausedBeforeBeginCannotReplaceCurrentWiring() async {
         let muscle = TheMuscle(sessionToken: "transport-wiring-token", sessionReleaseTimeout: 1)
         let brains = TheBrains(tripwire: TheTripwire())
@@ -147,7 +311,7 @@ final class TheGetawayTransportWiringTests: XCTestCase {
         XCTAssertTrue(staleRejectedWiring, "Expected stale begin to reject its wiring attempt")
         XCTAssertFalse(staleReachedInstallation, "Rejected begin must not continue to callback installation")
         let finalGeneration = await muscle.callbackDeliveryGenerationForTesting
-        XCTAssertEqual(finalGeneration, currentAdmission.attempt.deliveryGeneration)
+        XCTAssertEqual(finalGeneration, currentAdmission.deliveryGeneration)
         guard case .wired(let wiredTransport) = getaway.transportWiring else {
             return XCTFail("Expected current transport to remain wired, got \(getaway.transportWiring)")
         }
@@ -231,14 +395,14 @@ final class TheGetawayTransportWiringTests: XCTestCase {
             return XCTFail("Expected current wiring to be admitted")
         }
         let currentGeneration = await muscle.callbackDeliveryGenerationForTesting
-        XCTAssertEqual(currentGeneration, currentAdmission.attempt.deliveryGeneration)
+        XCTAssertEqual(currentGeneration, currentAdmission.deliveryGeneration)
 
         releaseStaleInstallation.finish()
         let staleRejectedWiring = await staleWiringTask.value
         XCTAssertTrue(staleRejectedWiring, "Expected stale wiring to be rejected")
 
         let finalGeneration = await muscle.callbackDeliveryGenerationForTesting
-        XCTAssertEqual(finalGeneration, currentAdmission.attempt.deliveryGeneration)
+        XCTAssertEqual(finalGeneration, currentAdmission.deliveryGeneration)
         guard case .wired(let wiredTransport) = getaway.transportWiring else {
             return XCTFail("Expected current transport to remain wired, got \(getaway.transportWiring)")
         }
@@ -290,19 +454,6 @@ final class TheGetawayTransportWiringTests: XCTestCase {
         await job.muscle.tearDown()
     }
 
-    func testTransportWiringAttemptIdentityIsDeliveryGeneration() {
-        let generation = ClientDelivery.Generation(rawValue: 1)
-        let currentAttempt = TheGetaway.TransportWiringAttempt(
-            transport: ServerTransport(token: "transport-wiring-token"),
-            deliveryGeneration: generation
-        )
-        let matchingAttempt = TheGetaway.TransportWiringAttempt(
-            transport: ServerTransport(token: "transport-wiring-token"),
-            deliveryGeneration: generation
-        )
-
-        XCTAssertTrue(TheGetaway.TransportWiringState.wiring(currentAttempt).admits(matchingAttempt))
-    }
 }
 
 private final class TransportResponseSink: Sendable {

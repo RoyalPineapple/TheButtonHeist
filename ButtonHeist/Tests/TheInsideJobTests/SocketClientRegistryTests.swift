@@ -105,6 +105,33 @@ final class SocketClientRegistryTests: XCTestCase {
         XCTAssertEqual(registry.pendingSendBytes(for: clientId), 0)
     }
 
+    func testConnectionBoundReservationRejectsAnotherSocketIncarnation() throws {
+        var registry = SocketClientRegistry()
+        let currentConnection = makeConnection()
+        let clientId = try registeredClient(
+            in: &registry,
+            connection: currentConnection
+        )
+
+        guard case .missingClient = registry.reserveSend(
+            clientId: clientId,
+            connection: makeConnection(),
+            byteCount: 10
+        ) else {
+            return XCTFail("Expected stale socket reservation to be rejected")
+        }
+        XCTAssertEqual(registry.pendingSendBytes(for: clientId), 0)
+
+        guard case .accepted(let reservation) = registry.reserveSend(
+            clientId: clientId,
+            connection: currentConnection,
+            byteCount: 10
+        ) else {
+            return XCTFail("Expected current socket reservation to be accepted")
+        }
+        XCTAssertEqual(registry.completeSend(reservation), .completed)
+    }
+
     func testCompleteSendReportsDisconnectedClient() throws {
         var registry = SocketClientRegistry()
         let clientId = try registeredClient(in: &registry)

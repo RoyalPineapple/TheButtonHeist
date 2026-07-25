@@ -1,3 +1,4 @@
+import ButtonHeistSupport
 import os
 import XCTest
 
@@ -6,15 +7,20 @@ import TheScore
 
 final class MainThreadProbeTests: XCTestCase {
     @MainActor
-    func testWireAdapterMapsCompletedWorkToResponsiveWithoutOverflow() async throws {
+    func testMaximumWireTimeoutMapsWithoutOverflow() async throws {
         let request = try XCTUnwrap(MainThreadProbeRequest.admit(
             responsivenessTimeoutMilliseconds: .max,
             workTimeoutMilliseconds: .max
         ))
+        let scheduler = ManualMainScheduler()
 
-        let response = try await MainThreadProbe.execute(request)
+        let outcome = try await MainThreadProbe.execute(
+            timeouts: MainThreadProbe.Timeouts(request),
+            dependencies: dependencies(scheduler: scheduler),
+            work: {}
+        )
 
-        XCTAssertEqual(response.outcome, .responsive)
+        XCTAssertEqual(outcome, .responsive)
     }
 
     @MainActor
@@ -30,32 +36,15 @@ final class MainThreadProbeTests: XCTestCase {
             }
         )
 
-        XCTAssertEqual(outcome, .completed)
+        XCTAssertEqual(outcome, .responsive)
         XCTAssertEqual(workCount.withLock { $0 }, 1)
-    }
-
-    @MainActor
-    func testMissingMainRunLoopTurnReturnsUnresponsive() async throws {
-        let scheduler = ManualMainScheduler()
-        let workCount = OSAllocatedUnfairLock(initialState: 0)
-
-        let outcome = try await MainThreadProbe.execute(
-            timeouts: .immediate,
-            dependencies: dependencies(scheduler: scheduler, runScheduledWork: false),
-            work: {
-                workCount.withLock { $0 += 1 }
-            }
-        )
-
-        XCTAssertEqual(outcome, .mainThreadUnresponsive)
-        scheduler.runOnMain()
-        XCTAssertEqual(workCount.withLock { $0 }, 0)
     }
 
     @MainActor
     func testStartedWorkWithoutCompletionReturnsWorkTimedOut() async throws {
         let scheduler = ManualMainScheduler()
         let deferredWork = DeferredMainWork()
+        let executionCount = OSAllocatedUnfairLock(initialState: 0)
 
         let outcome = try await MainThreadProbe.execute(
             timeouts: .immediate,
@@ -63,11 +52,14 @@ final class MainThreadProbeTests: XCTestCase {
                 scheduler: scheduler,
                 executeWork: deferredWork.store
             ),
-            work: {}
+            work: {
+                executionCount.withLock { $0 += 1 }
+            }
         )
 
         XCTAssertEqual(outcome, .workTimedOut)
         deferredWork.completeOnMain()
+        XCTAssertEqual(executionCount.withLock { $0 }, 0)
     }
 
     @MainActor
@@ -118,11 +110,11 @@ final class MainThreadProbeTests: XCTestCase {
             work: {}
         )
 
-        XCTAssertEqual(outcome, .completed)
+        XCTAssertEqual(outcome, .responsive)
     }
 
     func testCancellationWakesAnUnboundedWait() async {
-        let waitStarted = DispatchSemaphore(value: 0)
+        let waitStarted = CompletionSignal()
         let task = Task {
             try await MainThreadProbe.execute(
                 timeouts: MainThreadProbe.Timeouts(
@@ -133,7 +125,7 @@ final class MainThreadProbeTests: XCTestCase {
                     schedule: { _ in },
                     executeWork: { _, _ in },
                     wait: { semaphore, _ in
-                        waitStarted.signal()
+                        waitStarted.finish()
                         return semaphore.wait(timeout: .distantFuture)
                     },
                     waitQueue: probeWaitQueue
@@ -142,9 +134,7 @@ final class MainThreadProbeTests: XCTestCase {
             )
         }
 
-        await Task {
-            waitStarted.wait()
-        }.value
+        await waitStarted.wait()
         task.cancel()
 
         do {

@@ -169,18 +169,18 @@ final class TheBrains {
 
     @discardableResult
     func submitTransportRequest(
-        clientId: Int,
+        lease: TransportClientLease,
         operation: @escaping @MainActor @Sendable () async -> Void
     ) -> InteractionRequestExecutor.Admission {
         requestExecutor.submit(
-            owner: .transportClient(clientId),
+            owner: .transportClient(lease),
             operation: operation,
             completion: { _ in }
         )
     }
 
-    func cancelTransportRequests(clientId: Int) {
-        requestExecutor.cancel(owner: .transportClient(clientId))
+    func cancelTransportRequests(lease: TransportClientLease) {
+        requestExecutor.cancel(owner: .transportClient(lease))
     }
 
     func stopInteractionRequests() async {
@@ -221,7 +221,7 @@ final class InteractionRequestExecutor {
 
     enum Owner: Equatable, Sendable {
         case inApp
-        case transportClient(Int)
+        case transportClient(TransportClientLease)
 
         var isTransport: Bool {
             if case .transportClient = self { return true }

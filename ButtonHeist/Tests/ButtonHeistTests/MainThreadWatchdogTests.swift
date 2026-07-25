@@ -77,7 +77,21 @@ final class MainThreadWatchdogTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testMainThreadUnresponsiveProbeFailsOriginalRequestImmediately() async throws {
+    func testTerminalProbeOutcomesFailOriginalRequestWithDistinctErrors() async throws {
+        let cases: [(MainThreadProbeOutcome, KnownFailureCode)] = [
+            (.mainThreadUnresponsive, .requestMainThreadUnresponsive),
+            (.workTimedOut, .requestMainThreadWorkTimedOut),
+        ]
+        for (outcome, failureCode) in cases {
+            try await assertTerminalProbe(outcome, failureCode: failureCode)
+        }
+    }
+
+    @ButtonHeistActor
+    private func assertTerminalProbe(
+        _ outcome: MainThreadProbeOutcome,
+        failureCode: KnownFailureCode
+    ) async throws {
         let schedule = ManualWatchdogSchedule()
         let (fence, connection) = try connectedFence(schedule: schedule)
         let originalSent = expectation(description: "original request sent")
@@ -91,7 +105,7 @@ final class MainThreadWatchdogTests: XCTestCase {
                 XCTAssertEqual(request.responsivenessTimeoutMilliseconds, 3_000)
                 XCTAssertEqual(request.workTimeoutMilliseconds, 4_000)
                 probeSent.fulfill()
-                return .mainThreadProbe(MainThreadProbeResponse(outcome: .mainThreadUnresponsive))
+                return .mainThreadProbe(MainThreadProbeResponse(outcome: outcome))
             default:
                 return nil
             }
@@ -106,53 +120,14 @@ final class MainThreadWatchdogTests: XCTestCase {
 
         do {
             _ = try await request.value
-            XCTFail("Expected mainThreadUnresponsive")
-        } catch FenceError.mainThreadUnresponsive {
+            XCTFail("Expected \(outcome.rawValue)")
+        } catch let error as FenceError {
             XCTAssertEqual(
-                FenceError.mainThreadUnresponsive.failureDescriptor.details.code,
-                .requestMainThreadUnresponsive
+                error.failureDescriptor.details.code,
+                failureCode
             )
         } catch {
-            XCTFail("Expected mainThreadUnresponsive, got \(error)")
-        }
-    }
-
-    @ButtonHeistActor
-    func testWorkTimeoutProbeFailsOriginalRequestWithDistinctError() async throws {
-        let schedule = ManualWatchdogSchedule()
-        let (fence, connection) = try connectedFence(schedule: schedule)
-        let originalSent = expectation(description: "original request sent")
-        let probeSent = expectation(description: "probe sent")
-        connection.responseScript = { message in
-            switch message {
-            case .requestInterface:
-                originalSent.fulfill()
-                return nil
-            case .mainThreadProbe:
-                probeSent.fulfill()
-                return .mainThreadProbe(MainThreadProbeResponse(outcome: .workTimedOut))
-            default:
-                return nil
-            }
-        }
-
-        let request = Task { @ButtonHeistActor in
-            try await fence.sendAndAwaitInterface(.requestInterface(.init()), timeout: 60)
-        }
-        await fulfillment(of: [originalSent], timeout: 1)
-        schedule.advance()
-        await fulfillment(of: [probeSent], timeout: 1)
-
-        do {
-            _ = try await request.value
-            XCTFail("Expected mainThreadWorkTimedOut")
-        } catch FenceError.mainThreadWorkTimedOut {
-            XCTAssertEqual(
-                FenceError.mainThreadWorkTimedOut.failureDescriptor.details.code,
-                .requestMainThreadWorkTimedOut
-            )
-        } catch {
-            XCTFail("Expected mainThreadWorkTimedOut, got \(error)")
+            XCTFail("Expected \(outcome.rawValue), got \(error)")
         }
     }
 

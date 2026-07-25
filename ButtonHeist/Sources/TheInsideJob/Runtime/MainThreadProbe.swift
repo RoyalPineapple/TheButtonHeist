@@ -6,12 +6,6 @@ import os
 import TheScore
 
 internal enum MainThreadProbe {
-    internal enum Outcome: Sendable, Equatable {
-        case completed
-        case mainThreadUnresponsive
-        case workTimedOut
-    }
-
     internal struct Timeout: Sendable {
         private let finiteNanoseconds: UInt64?
 
@@ -44,7 +38,7 @@ internal enum MainThreadProbe {
             self.work = work
         }
 
-        fileprivate init(_ request: MainThreadProbeRequest) {
+        internal init(_ request: MainThreadProbeRequest) {
             responsiveness = Timeout(
                 milliseconds: request.responsivenessTimeoutMilliseconds
             )
@@ -55,13 +49,14 @@ internal enum MainThreadProbe {
     internal typealias MainOperation = @MainActor @Sendable () -> Void
 
     fileprivate enum Termination: Sendable {
-        case outcome(Outcome)
+        case outcome(MainThreadProbeOutcome)
         case cancelled
     }
 
     private enum Phase: Sendable {
         case waitingForMain
-        case runningWork
+        case waitingForWork
+        case executingWork
         case terminal(Termination)
     }
 
@@ -88,8 +83,14 @@ internal enum MainThreadProbe {
                 CFRunLoopWakeUp(runLoop)
             },
             executeWork: { operation, completion in
-                operation()
-                completion()
+                let runLoop = CFRunLoopGetMain()
+                CFRunLoopPerformBlock(runLoop, CFRunLoopMode.commonModes as AnyObject) {
+                    MainActor.assumeIsolated {
+                        operation()
+                        completion()
+                    }
+                }
+                CFRunLoopWakeUp(runLoop)
             },
             wait: { semaphore, timeout in
                 semaphore.wait(timeout: timeout.deadline)
@@ -105,23 +106,16 @@ internal enum MainThreadProbe {
     internal static func execute(
         _ request: MainThreadProbeRequest
     ) async throws -> MainThreadProbeResponse {
-        let outcome = try await execute(timeouts: Timeouts(request), work: {})
-        let responseOutcome: MainThreadProbeOutcome = switch outcome {
-        case .completed:
-            .responsive
-        case .mainThreadUnresponsive:
-            .mainThreadUnresponsive
-        case .workTimedOut:
-            .workTimedOut
-        }
-        return MainThreadProbeResponse(outcome: responseOutcome)
+        MainThreadProbeResponse(
+            outcome: try await execute(timeouts: Timeouts(request), work: {})
+        )
     }
 
     internal static func execute(
         timeouts: Timeouts,
         dependencies: Dependencies = .live,
         work: @escaping MainOperation
-    ) async throws -> Outcome {
+    ) async throws -> MainThreadProbeOutcome {
         let gate = Gate()
         let responsivenessSemaphore = DispatchSemaphore(value: 0)
         let workSemaphore = DispatchSemaphore(value: 0)
@@ -129,10 +123,16 @@ internal enum MainThreadProbe {
         dependencies.schedule {
             guard gate.beginWork() else { return }
             responsivenessSemaphore.signal()
-            dependencies.executeWork(work) {
-                guard gate.complete() else { return }
-                workSemaphore.signal()
-            }
+            dependencies.executeWork(
+                {
+                    guard gate.beginExecution() else { return }
+                    work()
+                },
+                {
+                    guard gate.complete() else { return }
+                    workSemaphore.signal()
+                }
+            )
         }
 
         return try await withTaskCancellationHandler {
@@ -168,7 +168,7 @@ internal enum MainThreadProbe {
 }
 
 private extension MainThreadProbe.Termination {
-    var result: Result<MainThreadProbe.Outcome, Error> {
+    var result: Result<MainThreadProbeOutcome, Error> {
         switch self {
         case .outcome(let outcome):
             .success(outcome)
@@ -185,15 +185,23 @@ private extension MainThreadProbe {
         func beginWork() -> Bool {
             phase.withLock { phase in
                 guard case .waitingForMain = phase else { return false }
-                phase = .runningWork
+                phase = .waitingForWork
+                return true
+            }
+        }
+
+        func beginExecution() -> Bool {
+            phase.withLock { phase in
+                guard case .waitingForWork = phase else { return false }
+                phase = .executingWork
                 return true
             }
         }
 
         func complete() -> Bool {
             phase.withLock { phase in
-                guard case .runningWork = phase else { return false }
-                phase = .terminal(.outcome(.completed))
+                guard case .executingWork = phase else { return false }
+                phase = .terminal(.outcome(.responsive))
                 return true
             }
         }
@@ -216,7 +224,7 @@ private extension MainThreadProbe {
                     let termination = Termination.outcome(.mainThreadUnresponsive)
                     phase = .terminal(termination)
                     return termination
-                case .runningWork:
+                case .waitingForWork, .executingWork:
                     return nil
                 case .terminal(let termination):
                     return termination
@@ -231,7 +239,7 @@ private extension MainThreadProbe {
                     let termination = Termination.outcome(.mainThreadUnresponsive)
                     phase = .terminal(termination)
                     return termination
-                case .runningWork:
+                case .waitingForWork, .executingWork:
                     let termination = Termination.outcome(.workTimedOut)
                     phase = .terminal(termination)
                     return termination

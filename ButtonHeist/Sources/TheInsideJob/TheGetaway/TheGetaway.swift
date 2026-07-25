@@ -27,22 +27,15 @@ final class TheGetaway {
 
     var identity: ServerIdentity
     let pongPayload: PongPayload
+    let mainThreadProbe: TransportControlPlane.Probe
 
     struct TransportWiringAttempt {
         let transport: ServerTransport
         let deliveryGeneration: ClientDelivery.Generation
     }
 
-    struct WiredTransportAdmission {
-        let attempt: TransportWiringAttempt
-
-        var transport: ServerTransport {
-            attempt.transport
-        }
-    }
-
     enum TransportWiringOutcome {
-        case admitted(WiredTransportAdmission)
+        case admitted(TransportWiringAttempt)
         case rejected
     }
 
@@ -55,14 +48,17 @@ final class TheGetaway {
 
     enum TransportWiringState {
         case unwired
-        case wiring(TransportWiringAttempt)
+        case wiring(
+            TransportWiringAttempt,
+            cleanup: Task<Void, Never>?
+        )
         case wired(WiredTransport)
 
         var transport: ServerTransport? {
             switch self {
             case .unwired:
                 nil
-            case .wiring(let attempt):
+            case .wiring(let attempt, _):
                 attempt.transport
             case .wired(let session):
                 session.attempt.transport
@@ -74,11 +70,16 @@ final class TheGetaway {
             return session
         }
 
+        var cleanup: Task<Void, Never>? {
+            guard case .wiring(_, let cleanup) = self else { return nil }
+            return cleanup
+        }
+
         var deliveryGeneration: ClientDelivery.Generation? {
             switch self {
             case .unwired:
                 nil
-            case .wiring(let attempt):
+            case .wiring(let attempt, _):
                 attempt.deliveryGeneration
             case .wired(let session):
                 session.attempt.deliveryGeneration
@@ -86,7 +87,7 @@ final class TheGetaway {
         }
 
         func admits(_ attempt: TransportWiringAttempt) -> Bool {
-            guard case .wiring(let current) = self else { return false }
+            guard case .wiring(let current, _) = self else { return false }
             return current.deliveryGeneration == attempt.deliveryGeneration
         }
 
@@ -118,11 +119,19 @@ final class TheGetaway {
 
     // MARK: - Init
 
-    init(muscle: TheMuscle, brains: TheBrains, identity: ServerIdentity) {
+    init(
+        muscle: TheMuscle,
+        brains: TheBrains,
+        identity: ServerIdentity,
+        mainThreadProbe: @escaping TransportControlPlane.Probe = {
+            try await MainThreadProbe.execute($0)
+        }
+    ) {
         self.muscle = muscle
         self.brains = brains
         self.identity = identity
         self.pongPayload = Self.capturePongPayload(identity: identity)
+        self.mainThreadProbe = mainThreadProbe
     }
 
     // MARK: - Message Execution

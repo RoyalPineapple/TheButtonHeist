@@ -169,12 +169,20 @@ MainActor hop. Admitted message families then have one route:
 | `clientHello`, `authenticate` | Off-main handshake and admission | `authRequired`, `info`, `error`, or `sessionLocked` |
 | `ping` | Authenticated transport-control sideband | `pong` |
 | `mainThreadProbe` | Authenticated transport-control sideband plus a public main-run-loop round trip | `mainThreadProbe` |
-| `status` | One bounded MainActor stream | `status` |
-| `requestInterface`, `getPasteboard`, `getAnnouncements`, `requestScreen`, `runtimeAction`, `heistPlan` | One bounded MainActor stream, then the single TheBrains interaction executor | Typed response for the admitted request |
+| `status` | One capacity-admitted MainActor stream | `status` |
+| `requestInterface`, `getPasteboard`, `getAnnouncements`, `requestScreen`, `runtimeAction`, `heistPlan` | One capacity-admitted MainActor stream, then the single TheBrains interaction executor | Typed response for the admitted request |
 
 The sideband exists so transport control can remain responsive while the UI
 executor is occupied or the app's main thread is wedged. It does not create a
 second heist or a second UI execution lane.
+
+The server assigns an internal lease to each client connection. Disconnect,
+reconnect, and admission overflow invalidate that lease off-main. Buffered app
+work checks the lease before MainActor admission and again before execution.
+Each response handler is separately bound to the concrete socket connection
+that supplied its request, and send reservation verifies that connection
+atomically. Reusing a transport client ID therefore cannot admit work or receive
+a response from its prior connection.
 
 Main-thread probe request:
 

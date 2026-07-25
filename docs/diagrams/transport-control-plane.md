@@ -6,7 +6,7 @@ diagram answers "which work can still progress when the app main thread is
 wedged?"
 
 **Illustrates:** [ARCHITECTURE.md](../ARCHITECTURE.md), [WIRE-PROTOCOL.md](../WIRE-PROTOCOL.md)
-**Source of truth:** `ButtonHeist/Sources/TheInsideJob/Server/ServerTransport.swift`, `ButtonHeist/Sources/TheInsideJob/TheGetaway/TransportControlPlane.swift`, `ButtonHeist/Sources/TheInsideJob/TheGetaway/TheGetaway+Transport.swift`, `ButtonHeist/Sources/TheInsideJob/Runtime/MainThreadProbe.swift`, `ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+TransportWaits.swift`
+**Source of truth:** `ButtonHeist/Sources/TheInsideJob/Server/ServerTransport.swift`, `ButtonHeist/Sources/TheInsideJob/Server/NetworkBoundary/SocketClientRegistry.swift`, `ButtonHeist/Sources/TheInsideJob/TheGetaway/TransportControlPlane.swift`, `ButtonHeist/Sources/TheInsideJob/TheGetaway/TheGetaway+Transport.swift`, `ButtonHeist/Sources/TheInsideJob/Runtime/MainThreadProbe.swift`, `ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+TransportWaits.swift`
 
 ## Ownership and execution
 
@@ -23,7 +23,7 @@ flowchart LR
     end
 
     subgraph main["MainActor"]
-        STREAM["One bounded stream<br/>admitted status and UI work"]
+        STREAM["One capacity-admitted stream<br/>non-lossy lease events + app work"]
         BRAINS["TheBrains<br/>single interaction executor"]
         SETTLE["Settlement.Executor<br/>idle and semantic evidence"]
     end
@@ -42,8 +42,12 @@ flowchart LR
 ```
 
 `ping` and `mainThreadProbe` never enter the MainActor stream or TheBrains.
-Admitted app work crosses one bounded stream, and UI work still has one
-interaction executor.
+Admitted app work crosses one capacity-admitted stream. Client-lease
+invalidation and transport backlog events are never dropped, and UI work still
+has one interaction executor. The same lease gates admission and execution.
+Response handlers reserve delivery against their originating socket
+incarnation. Replacement wiring drains prior interaction work before its
+generation is admitted.
 
 ## Failure taxonomy
 

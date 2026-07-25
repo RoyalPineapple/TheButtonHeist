@@ -2,11 +2,17 @@
 #if DEBUG
 import Foundation
 
-struct ClientTransportRequest: Sendable {
+struct TransportClientLease: Hashable, Sendable {
     let clientId: Int
+    let incarnation: UInt64
+}
+
+struct ClientTransportRequest: Sendable {
+    let lease: TransportClientLease
     let data: Data
     let respond: SocketResponseHandler
-    let generation: ClientDelivery.Generation
+
+    var clientId: Int { lease.clientId }
 }
 
 /// One bounded, ordered frame-admission stream for one connected client.

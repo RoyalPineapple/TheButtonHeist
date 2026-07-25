@@ -17,10 +17,15 @@ public final class TheFence {
         public let probeResponseTimeout: TimeInterval
         public let responsivenessTimeout: TimeInterval
         public let workTimeout: TimeInterval
-        let initialDelayDuration: Duration
-        let cadenceDuration: Duration
-        let responsivenessTimeoutMilliseconds: Int64
-        let workTimeoutMilliseconds: Int64
+
+        var initialDelayDuration: Duration { .seconds(initialDelay) }
+        var cadenceDuration: Duration { .seconds(cadence) }
+        var responsivenessTimeoutMilliseconds: Int64 {
+            Self.admittedMilliseconds(from: responsivenessTimeout)
+        }
+        var workTimeoutMilliseconds: Int64 {
+            Self.admittedMilliseconds(from: workTimeout)
+        }
 
         public init(
             initialDelay: TimeInterval,
@@ -42,8 +47,8 @@ public final class TheFence {
                 )
             }
             guard durations.allSatisfy({ $0.1 < Double(Int64.max) }),
-                  let responsivenessMilliseconds = Self.milliseconds(from: responsivenessTimeout),
-                  let workMilliseconds = Self.milliseconds(from: workTimeout)
+                  Self.milliseconds(from: responsivenessTimeout) != nil,
+                  Self.milliseconds(from: workTimeout) != nil
             else {
                 throw FenceError.invalidRequest(
                     "Main-thread watchdog durations must fit Swift Duration and positive Int64 milliseconds."
@@ -54,9 +59,7 @@ public final class TheFence {
                 cadence: cadence,
                 probeResponseTimeout: probeResponseTimeout,
                 responsivenessTimeout: responsivenessTimeout,
-                workTimeout: workTimeout,
-                responsivenessTimeoutMilliseconds: responsivenessMilliseconds,
-                workTimeoutMilliseconds: workMilliseconds
+                workTimeout: workTimeout
             )
         }
 
@@ -65,9 +68,7 @@ public final class TheFence {
             cadence: 2,
             probeResponseTimeout: 2,
             responsivenessTimeout: 1,
-            workTimeout: 1,
-            responsivenessTimeoutMilliseconds: 1_000,
-            workTimeoutMilliseconds: 1_000
+            workTimeout: 1
         )
 
         private init(
@@ -75,19 +76,13 @@ public final class TheFence {
             cadence: TimeInterval,
             probeResponseTimeout: TimeInterval,
             responsivenessTimeout: TimeInterval,
-            workTimeout: TimeInterval,
-            responsivenessTimeoutMilliseconds: Int64,
-            workTimeoutMilliseconds: Int64
+            workTimeout: TimeInterval
         ) {
             self.initialDelay = admittedInitialDelay
             self.cadence = cadence
             self.probeResponseTimeout = probeResponseTimeout
             self.responsivenessTimeout = responsivenessTimeout
             self.workTimeout = workTimeout
-            self.initialDelayDuration = .seconds(admittedInitialDelay)
-            self.cadenceDuration = .seconds(cadence)
-            self.responsivenessTimeoutMilliseconds = responsivenessTimeoutMilliseconds
-            self.workTimeoutMilliseconds = workTimeoutMilliseconds
         }
 
         private static func milliseconds(from seconds: TimeInterval) -> Int64? {
@@ -97,6 +92,13 @@ public final class TheFence {
                   milliseconds < Double(Int64.max)
             else { return nil }
             return Int64(milliseconds)
+        }
+
+        private static func admittedMilliseconds(from seconds: TimeInterval) -> Int64 {
+            guard let milliseconds = milliseconds(from: seconds) else {
+                preconditionFailure("MainThreadWatchdogSettings contains an unadmitted duration")
+            }
+            return milliseconds
         }
     }
 

@@ -85,6 +85,27 @@ struct SocketClientRegistry {
 
     mutating func reserveSend(clientId: Int, byteCount: Int) -> SendAdmission {
         guard var client = clients[clientId] else { return .missingClient }
+        return reserveSend(clientId: clientId, byteCount: byteCount, client: &client)
+    }
+
+    mutating func reserveSend(
+        clientId: Int,
+        connection: NWConnection,
+        byteCount: Int
+    ) -> SendAdmission {
+        guard var client = clients[clientId],
+              client.connection === connection
+        else {
+            return .missingClient
+        }
+        return reserveSend(clientId: clientId, byteCount: byteCount, client: &client)
+    }
+
+    private mutating func reserveSend(
+        clientId: Int,
+        byteCount: Int,
+        client: inout Client
+    ) -> SendAdmission {
         switch client.sendBuffer.reserve(byteCount: byteCount) {
         case .success(let bufferReservation):
             clients[clientId] = client

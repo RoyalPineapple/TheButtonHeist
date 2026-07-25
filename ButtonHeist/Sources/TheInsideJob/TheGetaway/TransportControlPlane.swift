@@ -7,18 +7,15 @@ import TheScore
 /// Owns transport event consumption and request admission without depending on
 /// the main actor. Only admitted app work crosses the main-actor stream.
 actor TransportControlPlane {
+    private static let maximumPendingMainActorDispatches =
+        ClientRequestPipeline.maximumQueuedRequests
+
     enum MainActorEvent: Sendable {
-        case clientConnected(
-            clientId: Int,
-            generation: ClientDelivery.Generation
-        )
+        case leaseEnded(TransportClientLease, generation: ClientDelivery.Generation)
         case dispatch(
             AdmittedClientMessage,
             respond: SocketResponseHandler,
-            generation: ClientDelivery.Generation
-        )
-        case clientDisconnected(
-            clientId: Int,
+            lease: TransportClientLease,
             generation: ClientDelivery.Generation
         )
         case backlogOverflow(
@@ -27,14 +24,17 @@ actor TransportControlPlane {
         )
     }
 
-    enum Publication: Sendable {
-        case enqueued
-        case stopped
-        case overflowed
-    }
+    typealias Publish = @Sendable (
+        sending MainActorEvent
+    ) -> AsyncStream<MainActorEvent>.Continuation.YieldResult
+    typealias Probe = @Sendable (
+        MainThreadProbeRequest
+    ) async throws -> MainThreadProbeResponse
 
-    typealias Publish = @Sendable (MainActorEvent) -> Publication
-    typealias Probe = @Sendable (MainThreadProbeRequest) async throws -> MainThreadProbeResponse
+    private struct ClientConnection {
+        let lease: TransportClientLease
+        let pipeline: ClientRequestPipeline
+    }
 
     private enum State {
         case idle
@@ -50,7 +50,9 @@ actor TransportControlPlane {
     private let publish: Publish
 
     private var state = State.idle
-    private var clientRequestPipelines: [Int: ClientRequestPipeline] = [:]
+    private var clientConnections: [Int: ClientConnection] = [:]
+    private var nextClientIncarnation: UInt64 = 1
+    private var pendingMainActorDispatches = 0
 
     private init(
         events: ServerTransport.Events,
@@ -102,8 +104,7 @@ actor TransportControlPlane {
         guard isRunning else { return }
         switch event {
         case .clientConnected(let clientId, let remoteAddress):
-            replaceClientRequestPipeline(clientId: clientId)
-            _ = publish(.clientConnected(clientId: clientId, generation: generation))
+            connectClient(clientId)
             if let remoteAddress {
                 await muscle.registerClientAddress(
                     clientId,
@@ -114,14 +115,14 @@ actor TransportControlPlane {
             await muscle.sendServerHello(clientId: clientId, generation: generation)
 
         case .clientDisconnected(let clientId):
-            stopClientRequestPipeline(clientId: clientId)
+            endClientConnection(clientId)
             await muscle.handleClientDisconnected(clientId, generation: generation)
-            _ = publish(.clientDisconnected(clientId: clientId, generation: generation))
 
         case .dataReceived(let clientId, let data, let respond):
             await enqueueClientRequest(clientId: clientId, data: data, respond: respond)
 
         case .backlogOverflow(let maxEvents):
+            endAllClientConnections()
             _ = publish(.backlogOverflow(maxEvents: maxEvents, generation: generation))
         }
     }
@@ -138,16 +139,28 @@ actor TransportControlPlane {
         }
         state = .stopped
         eventConsumer?.cancel()
-        let pipelineConsumers = clientRequestPipelines.values.compactMap { $0.stop() }
-        clientRequestPipelines.removeAll()
+        let pipelineConsumers = clientConnections.values.compactMap { $0.pipeline.stop() }
+        clientConnections.removeAll()
+        pendingMainActorDispatches = 0
         await eventConsumer?.value
         for consumer in pipelineConsumers {
             await consumer.value
         }
     }
 
-    func stopClient(_ clientId: Int) {
-        stopClientRequestPipeline(clientId: clientId)
+    func consumeDispatch(for lease: TransportClientLease) -> Bool {
+        guard pendingMainActorDispatches > 0 else { return false }
+        pendingMainActorDispatches -= 1
+        return isCurrent(lease)
+    }
+
+    func isCurrent(_ lease: TransportClientLease) -> Bool {
+        isRunning && clientConnections[lease.clientId]?.lease == lease
+    }
+
+    func disconnect(_ lease: TransportClientLease) async {
+        guard endClientConnection(lease) else { return }
+        await muscle.disconnectClient(lease.clientId, generation: generation)
     }
 
     private var isRunning: Bool {
@@ -155,15 +168,38 @@ actor TransportControlPlane {
         return true
     }
 
-    private func replaceClientRequestPipeline(clientId: Int) {
-        clientRequestPipelines.removeValue(forKey: clientId)?.stop()
-        clientRequestPipelines[clientId] = ClientRequestPipeline { [weak self] request in
+    private func connectClient(_ clientId: Int) {
+        endClientConnection(clientId)
+        let lease = TransportClientLease(
+            clientId: clientId,
+            incarnation: nextClientIncarnation
+        )
+        nextClientIncarnation &+= 1
+        let pipeline = ClientRequestPipeline { [weak self] request in
             await self?.executeClientRequest(request)
+        }
+        clientConnections[clientId] = ClientConnection(lease: lease, pipeline: pipeline)
+    }
+
+    private func endClientConnection(_ clientId: Int) {
+        guard let connection = clientConnections.removeValue(forKey: clientId) else {
+            return
+        }
+        connection.pipeline.stop()
+        _ = publish(.leaseEnded(connection.lease, generation: generation))
+    }
+
+    private func endAllClientConnections() {
+        for clientId in Array(clientConnections.keys) {
+            endClientConnection(clientId)
         }
     }
 
-    private func stopClientRequestPipeline(clientId: Int) {
-        clientRequestPipelines.removeValue(forKey: clientId)?.stop()
+    @discardableResult
+    private func endClientConnection(_ lease: TransportClientLease) -> Bool {
+        guard clientConnections[lease.clientId]?.lease == lease else { return false }
+        endClientConnection(lease.clientId)
+        return true
     }
 
     private func enqueueClientRequest(
@@ -171,34 +207,33 @@ actor TransportControlPlane {
         data: Data,
         respond: @escaping SocketResponseHandler
     ) async {
-        guard let pipeline = clientRequestPipelines[clientId] else { return }
+        guard let connection = clientConnections[clientId] else { return }
+        let lease = connection.lease
         let request = ClientTransportRequest(
-            clientId: clientId,
+            lease: lease,
             data: data,
-            respond: respond,
-            generation: generation
+            respond: respond
         )
-        switch pipeline.enqueue(request) {
+        switch connection.pipeline.enqueue(request) {
         case .enqueued, .stopped:
             break
         case .overflowed:
             insideJobLogger.error(
                 "Client \(clientId) request backlog exceeded \(ClientRequestPipeline.maximumQueuedRequests), disconnecting"
             )
-            stopClientRequestPipeline(clientId: clientId)
-            await muscle.disconnectClient(clientId, generation: generation)
+            await disconnect(connection.lease)
         }
     }
 
     private func executeClientRequest(_ request: ClientTransportRequest) async {
-        guard isRunning, request.generation == generation else { return }
+        guard isCurrent(request.lease) else { return }
         let admission = await muscle.admitClientMessage(
             request.clientId,
             data: request.data,
             respond: request.respond,
             generation: generation
         )
-        guard !Task.isCancelled, isRunning else { return }
+        guard !Task.isCancelled, isCurrent(request.lease) else { return }
         guard case .admitted(let message) = admission else { return }
 
         let envelope = message.envelope
@@ -212,7 +247,9 @@ actor TransportControlPlane {
             )
 
         case .mainThreadProbe(let probeRequest):
-            guard let response = try? await probe(probeRequest) else { return }
+            guard let response = try? await probe(probeRequest) else {
+                return
+            }
             await respond(
                 .mainThreadProbe(response),
                 to: envelope,
@@ -229,12 +266,28 @@ actor TransportControlPlane {
              .requestScreen,
              .runtimeAction,
              .heistPlan:
-            switch publish(.dispatch(message, respond: request.respond, generation: generation)) {
+            guard pendingMainActorDispatches < Self.maximumPendingMainActorDispatches else {
+                insideJobLogger.error(
+                    "Main-actor request backlog exceeded \(Self.maximumPendingMainActorDispatches), disconnecting client \(request.clientId)"
+                )
+                await disconnect(request.lease)
+                return
+            }
+            pendingMainActorDispatches += 1
+            switch publish(.dispatch(
+                message,
+                respond: request.respond,
+                lease: request.lease,
+                generation: generation
+            )) {
             case .enqueued:
                 break
-            case .stopped, .overflowed:
-                stopClientRequestPipeline(clientId: request.clientId)
-                await muscle.disconnectClient(request.clientId, generation: generation)
+            case .terminated, .dropped:
+                pendingMainActorDispatches -= 1
+                await disconnect(request.lease)
+            @unknown default:
+                pendingMainActorDispatches -= 1
+                await disconnect(request.lease)
             }
         }
     }
