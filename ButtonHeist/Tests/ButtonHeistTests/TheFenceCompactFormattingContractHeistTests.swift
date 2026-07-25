@@ -55,10 +55,7 @@ extension TheFenceCompactFormattingContractTests {
             AccessibilityTrace.noChangeForTests(elementCount: 0),
             completeness: .incomplete
         )
-        let settlement = ActionSettlementEvidence.observationHandoffTimedOut(
-            duration: 25,
-            path: .uikitIdle
-        )
+        let settlement = ActionSettlementEvidence.observationHandoffTimedOut(duration: 25)
         let actionResult = ActionResult.failure(
             payload: .dismiss,
             failureKind: .timeout,
@@ -79,11 +76,10 @@ extension TheFenceCompactFormattingContractTests {
         let response = FenceResponse.heistExecution(plan: plan, report: report)
         let node = try XCTUnwrap(try publicJSONProbe(response).object("report").array("nodes").first)
         let projectedSettlement = try node.object("settlement")
-        let summary = "readiness uikitIdle; observation handoff timed out after 25ms"
+        let summary = "readiness established; observation handoff timed out after 25ms"
         let (fence, _) = makeConnectedFence()
 
         XCTAssertEqual(try projectedSettlement.string("kind"), "observationHandoffTimedOut")
-        XCTAssertEqual(try projectedSettlement.string("path"), "uikitIdle")
         XCTAssertEqual(try projectedSettlement.int("durationMs"), 25)
         XCTAssertTrue(response.compactFormatted().contains(summary), response.compactFormatted())
         XCTAssertTrue(response.humanFormatted().contains(summary), response.humanFormatted())

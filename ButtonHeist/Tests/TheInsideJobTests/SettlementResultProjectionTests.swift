@@ -78,7 +78,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
         XCTAssertEqual(trace.trace, observed.trace)
         XCTAssertEqual(trace.trace.captures.first, baseline.moment.capture)
         XCTAssertEqual(trace.trace.captures.last, observed.moment.capture)
-        XCTAssertEqual(result.evidence.settlement, .settled(duration: 25, path: .uikitIdle))
+        XCTAssertEqual(result.evidence.settlement, .settled(duration: 25))
         XCTAssertEqual(result.timing?.beforeObservationMs, 3)
         XCTAssertEqual(result.timing?.finalSemanticEvidenceMs, 5)
     }
@@ -265,7 +265,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
         XCTAssertEqual(actionProjection.outcome, .failure(.actionFailed))
         XCTAssertEqual(actionProjection.message, "Could not restore the accessibility viewport after observation")
         XCTAssertEqual(actionProjection.traceEvidence?.completeness, .complete)
-        XCTAssertEqual(actionProjection.evidence.settlement, .settled(duration: 30, path: .uikitIdle))
+        XCTAssertEqual(actionProjection.evidence.settlement, .settled(duration: 30))
     }
 }
 
@@ -395,7 +395,7 @@ private extension SettlementResultProjectionTests {
     ) -> Settlement.Readiness.Establishment {
         Settlement.Readiness.Establishment(
             generation: .initial,
-            path: .uikitIdle,
+            path: .semanticStability,
             observationBoundary: .including(event.moment)
         )
     }

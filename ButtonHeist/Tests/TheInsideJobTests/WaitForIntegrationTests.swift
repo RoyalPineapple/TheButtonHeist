@@ -286,7 +286,6 @@ final class WaitForIntegrationTests: XCTestCase {
         // stability. What this case still proves is that the AX diff — not the
         // animation — decides: the loop settles while the repeat animation is
         // demonstrably still running.
-        XCTAssertEqual(result.evidence.settlement?.path, .semanticStability)
         try assertSuccessfulWaitSettlement(result)
         let snapshot = insideJob.tripwire.animationObserver.animationSnapshot
         XCTAssertGreaterThan(

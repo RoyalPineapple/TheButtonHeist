@@ -528,8 +528,7 @@ extension FenceResponse {
     static func incompleteSettlementSummary(_ settlement: ActionSettlementEvidence) -> String {
         let duration = settlement.durationMs.milliseconds
         if settlement.readinessEstablished {
-            let path = settlement.path.map(String.init(describing:)) ?? "unknown"
-            return "readiness \(path); observation handoff timed out after \(duration)ms"
+            return "readiness established; observation handoff timed out after \(duration)ms"
         }
         return "readiness timed out after \(duration)ms"
     }

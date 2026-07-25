@@ -326,12 +326,9 @@ private extension Settlement.ResultProjector {
             .timedOut(duration: duration)
         case .established(let establishment):
             if let admission = handoff.admission, admission.belongs(to: establishment) {
-                .settled(duration: duration, path: establishment.path.actionSettlementPath)
+                .settled(duration: duration)
             } else {
-                .observationHandoffTimedOut(
-                    duration: duration,
-                    path: establishment.path.actionSettlementPath
-                )
+                .observationHandoffTimedOut(duration: duration)
             }
         }
         return .settledTrace(trace, settlement)
@@ -514,21 +511,6 @@ private extension ElementDiagnosticSummary {
                 || !actions.isEmpty
                 || !rotors.isEmpty
         else { return nil }
-    }
-}
-
-private extension Settlement.Readiness.Path {
-    var actionSettlementPath: ActionSettlementPath {
-        switch self {
-        case .currentStateCapture:
-            preconditionFailure("Current-state capture has no public action settlement path")
-        case .uikitIdle:
-            .uikitIdle
-        case .semanticStability:
-            .semanticStability
-        case .accessibilityQuietWindow:
-            .accessibilityQuietWindow
-        }
     }
 }
 

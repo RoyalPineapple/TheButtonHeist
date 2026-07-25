@@ -88,7 +88,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
             message: "done",
             observation: .settledTrace(
                 traceEvidence,
-                .settled(duration: 125, path: .uikitIdle)
+                .settled(duration: 125)
             ),
             subjectEvidence: try weakActivationSubjectEvidence(),
             activationTrace: ActivationTrace(.activationPointFallback(
@@ -120,7 +120,6 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         XCTAssertNil(observation["announcement"])
         XCTAssertEqual(settlement["kind"] as? String, "settled")
         XCTAssertEqual(settlement["durationMs"] as? Int, 125)
-        XCTAssertEqual(settlement["path"] as? String, "uikitIdle")
         XCTAssertEqual(timing["actionDispatchMs"] as? Int, 4)
         XCTAssertNil(timing["settleMs"])
 
@@ -280,7 +279,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         XCTAssertThrowsError(try JSONDecoder().decode(
             ActionSettlementEvidence.self,
             from: Data(
-                #"{"kind":"timedOut","durationMs":125,"path":"uikitIdle"}"#.utf8
+                #"{"kind":"timedOut","durationMs":125}"#.utf8
             )
         ))
     }

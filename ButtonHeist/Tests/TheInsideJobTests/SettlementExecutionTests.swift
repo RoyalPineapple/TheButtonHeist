@@ -484,7 +484,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
             history: .events([.snapshot(ready), .snapshot(changed)]),
             readinessScript: { sink, deadline in
                 sink.observeReadiness(.established(
-                    path: .uikitIdle,
+                    path: .semanticStability,
                     observationBoundary: .including(ready.moment)
                 ))
                 sink.observe(
@@ -548,7 +548,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
                 history: .events([.snapshot(ready)]),
                 readinessScript: { sink, deadline in
                     sink.observeReadiness(.established(
-                        path: .uikitIdle,
+                        path: .semanticStability,
                         observationBoundary: .including(ready.moment)
                     ))
                     sink.observe(
@@ -1019,7 +1019,7 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         if liveObservationBoundary != nil {
             await liveObservationBoundary?.armReadiness(deadline, sink: sink)
             sink.observeReadiness(.established(
-                path: .uikitIdle,
+                path: .semanticStability,
                 observationBoundary: .including(changed.moment)
             ))
             return
@@ -1035,7 +1035,7 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
             return
         }
         sink.observeReadiness(.established(
-            path: .uikitIdle,
+            path: .semanticStability,
             observationBoundary: observationOnlyEvidence
                 ? .including(changed.moment)
                 : .after(baseline.moment)
@@ -1117,7 +1117,7 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         if publishesAfterDisarm {
             sink?.observe(.snapshot(changed))
             sink?.observeReadiness(.established(
-                path: .uikitIdle,
+                path: .semanticStability,
                 observationBoundary: .including(changed.moment)
             ))
         }
@@ -1136,7 +1136,7 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         }
         for _ in 0..<count {
             sink?.observeReadiness(.established(
-                path: .uikitIdle,
+                path: .semanticStability,
                 observationBoundary: .after(baseline.moment)
             ))
         }
@@ -1204,7 +1204,7 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
             }
             for _ in 0..<duplicateCount {
                 sink.observeReadiness(.established(
-                    path: .uikitIdle,
+                    path: .semanticStability,
                     observationBoundary: .after(baseline.moment)
                 ))
             }

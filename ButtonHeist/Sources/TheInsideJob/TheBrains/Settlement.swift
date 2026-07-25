@@ -508,11 +508,11 @@ extension Settlement.Readiness {
         }
     }
 
+    /// How readiness was established. Two ways remain: a capture that runs no
+    /// diff at all, and the settle loop's comparison coming back unchanged.
     internal enum Path: Sendable, Equatable {
         case currentStateCapture
-        case uikitIdle
         case semanticStability
-        case accessibilityQuietWindow
     }
 
     internal enum ObservationBoundary: Sendable, Equatable {

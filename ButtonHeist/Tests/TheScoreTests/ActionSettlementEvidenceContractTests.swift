@@ -4,18 +4,14 @@ import XCTest
 
 final class ActionSettlementEvidenceContractTests: XCTestCase {
     func testObservationHandoffTimedOutPreservesReadyPredicateEvidence() throws {
-        let evidence = ActionSettlementEvidence.observationHandoffTimedOut(
-            duration: 125,
-            path: .uikitIdle
-        )
+        let evidence = ActionSettlementEvidence.observationHandoffTimedOut(duration: 125)
 
         XCTAssertFalse(evidence.settled)
         XCTAssertTrue(evidence.readinessEstablished)
         XCTAssertFalse(evidence.observationHandoffCompleted)
-        XCTAssertEqual(evidence.path, .uikitIdle)
         XCTAssertEqual(
             try encodedString(evidence),
-            #"{"durationMs":125,"kind":"observationHandoffTimedOut","path":"uikitIdle"}"#
+            #"{"durationMs":125,"kind":"observationHandoffTimedOut"}"#
         )
         XCTAssertEqual(try JSONDecoder().decode(
             ActionSettlementEvidence.self,
@@ -23,10 +19,13 @@ final class ActionSettlementEvidenceContractTests: XCTestCase {
         ), evidence)
     }
 
+    /// `kind` is the whole discriminator now. The `path` key is gone: once
+    /// settlement unified onto a single comparison it only ever encoded one
+    /// string, which `kind` already implied.
     func testExistingSettlementEncodingsRemainStable() throws {
         XCTAssertEqual(
-            try encodedString(ActionSettlementEvidence.settled(duration: 12, path: .semanticStability)),
-            #"{"durationMs":12,"kind":"settled","path":"semanticStability"}"#
+            try encodedString(ActionSettlementEvidence.settled(duration: 12)),
+            #"{"durationMs":12,"kind":"settled"}"#
         )
         XCTAssertEqual(
             try encodedString(ActionSettlementEvidence.timedOut(duration: 12)),
@@ -34,11 +33,18 @@ final class ActionSettlementEvidenceContractTests: XCTestCase {
         )
     }
 
+    func testSettlementPathKeyIsRejected() {
+        XCTAssertThrowsError(try JSONDecoder().decode(
+            ActionSettlementEvidence.self,
+            from: Data(#"{"durationMs":1,"kind":"settled","path":"semanticStability"}"#.utf8)
+        ), "rejectUnknownKeys must refuse the retired path key")
+    }
+
     func testSettlementFactsAreExhaustive() {
         let rows: [(ActionSettlementEvidence, Bool, Bool, Bool)] = [
-            (.settled(duration: 1, path: .uikitIdle), true, true, true),
+            (.settled(duration: 1), true, true, true),
             (.timedOut(duration: 1), false, false, false),
-            (.observationHandoffTimedOut(duration: 1, path: .uikitIdle), false, true, false),
+            (.observationHandoffTimedOut(duration: 1), false, true, false),
         ]
 
         for (evidence, settled, ready, handedOff) in rows {
@@ -49,20 +55,12 @@ final class ActionSettlementEvidenceContractTests: XCTestCase {
     }
 
     func testStrictLegacyDecoderRequiresCoordinatedVersionForNewDiscriminator() throws {
-        let data = try JSONEncoder().encode(ActionSettlementEvidence.observationHandoffTimedOut(
-            duration: 1,
-            path: .uikitIdle
-        ))
+        let data = try JSONEncoder().encode(
+            ActionSettlementEvidence.observationHandoffTimedOut(duration: 1)
+        )
 
         XCTAssertThrowsError(try JSONDecoder().decode(LegacySettlementEvidence.self, from: data))
         XCTAssertNoThrow(try JSONDecoder().decode(ActionSettlementEvidence.self, from: data))
-    }
-
-    func testObservationHandoffTimeoutRequiresReadinessPath() {
-        XCTAssertThrowsError(try JSONDecoder().decode(
-            ActionSettlementEvidence.self,
-            from: Data(#"{"durationMs":1,"kind":"observationHandoffTimedOut"}"#.utf8)
-        ))
     }
 
     private func encodedString(_ evidence: ActionSettlementEvidence) throws -> String {
