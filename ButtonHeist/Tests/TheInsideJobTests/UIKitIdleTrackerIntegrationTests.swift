@@ -50,7 +50,7 @@ final class UIKitIdleTrackerIntegrationTests: XCTestCase {
             completionRan = true
         })
 
-        let heartbeat = await tripwire.waitForNextHeartbeat(
+        let heartbeat = await tripwire.waitForNextTick(
             timeout: .seconds(1),
             demand: .immediate
         )
@@ -215,7 +215,7 @@ final class UIKitIdleTrackerIntegrationTests: XCTestCase {
             "Ready",
             "Idle counter: \(String(describing: tripwire.uikitIdleTracker.animationSnapshot))"
         )
-        XCTAssertTrue(tripwire.runningContext?.heartbeatWaiters.isEmpty == true)
+        XCTAssertTrue(tripwire.runningContext?.tickWaiters.isEmpty == true)
         let labels = try XCTUnwrap(settlement.finalObservation)
             .tree.viewportCapture.hierarchy.sortedElements.compactMap(\.label)
         XCTAssertTrue(

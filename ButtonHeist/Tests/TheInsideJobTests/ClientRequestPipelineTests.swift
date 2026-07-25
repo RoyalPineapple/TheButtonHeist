@@ -1,3 +1,5 @@
+#if canImport(UIKit)
+#if DEBUG
 import ButtonHeistSupport
 import os
 import XCTest
@@ -460,3 +462,6 @@ private extension ClientTransportRequest {
         String(bytes: data, encoding: .utf8) ?? ""
     }
 }
+
+#endif // DEBUG
+#endif // canImport(UIKit)

@@ -100,7 +100,10 @@ extension TheBrains {
             command: command,
             predicate: expectation?.predicate,
             allowances: .init(
-                readiness: .milliseconds(Int64(SettleSession.defaultTimeoutMs)),
+                // Phase 1, dispatch → stability: the action default. An
+                // expectation adds its own window after stability (phase 2), so
+                // the total action budget is action default + expectation.
+                readiness: .seconds(Int64(defaultActionExpectationTimeout.seconds)),
                 expectation: expectation?.allowance
             ),
             baseline: .capture
@@ -117,9 +120,37 @@ extension TheBrains {
         clearRotorCursorBeforeNonRotorAction(command)
         let startedAt = RuntimeElapsed.now
         var timing = ActionTiming(startedAt: startedAt)
+        guard await confirmMainThreadResponsive(for: command) else {
+            let failure = TheSafecracker.ActionDispatchResult.failure(
+                command.actionResultPayload,
+                message: "main run loop unresponsive before dispatch",
+                failureKind: .actionFailed
+            )
+            timing.record(.interaction, since: startedAt)
+            return failure.withTiming(timing.freeze())
+        }
         let result = await dispatchRawRuntimeAction(command, timing: &timing)
         timing.record(.interaction, since: startedAt)
         return result.withTiming(timing.freeze())
+    }
+
+    /// Pre-flight liveness gate. Runs inside the action's dispatch phase, so it
+    /// is covered by the single action deadline.
+    ///
+    /// The pulse ticks only when the main run loop services the display link,
+    /// so a fresh reading already proves responsiveness and we dispatch at
+    /// once. When the last tick is stale we give the run loop one chance to
+    /// prove itself by awaiting the next heartbeat; an arriving beat means it
+    /// is turning, and a beat that never comes within a tick or two is the
+    /// honest wedge that fails the dispatch before any action is performed.
+    private func confirmMainThreadResponsive(
+        for command: ResolvedHeistActionCommand
+    ) async -> Bool {
+        if tripwire.pulseIsFresh() { return true }
+        return await tripwire.waitForNextTick(
+            timeout: .milliseconds(Int(TheTripwire.singleTickSettleTimeout * 1_000)),
+            demand: .immediate
+        ) == .observed
     }
 
     private func dispatchRawRuntimeAction(

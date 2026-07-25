@@ -1,3 +1,5 @@
+#if canImport(UIKit)
+#if DEBUG
 import ThePlans
 @testable import TheInsideJob
 
@@ -23,3 +25,6 @@ func resolvedPredicate(
 ) throws -> ResolvedAccessibilityPredicate {
     try authored.resolve(in: environment)
 }
+
+#endif // DEBUG
+#endif // canImport(UIKit)

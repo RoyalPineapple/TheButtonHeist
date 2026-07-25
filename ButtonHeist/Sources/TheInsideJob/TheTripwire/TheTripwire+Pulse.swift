@@ -15,7 +15,7 @@ extension TheTripwire {
         var latestReading: PulseReading?
         var tickCount: UInt64 = 0
         var settleWaiters = WaiterStore<UInt64, SettleWaiter>()
-        var heartbeatWaiters = WaiterStore<UInt64, HeartbeatWaiter>()
+        var tickWaiters = WaiterStore<UInt64, TickWaiter>()
 
         init(link: CADisplayLink, target: PulseTick) {
             self.link = link
@@ -41,21 +41,21 @@ extension TheTripwire {
         let continuation: TimedOneShot<Bool>
     }
 
-    enum HeartbeatDemand: Equatable, Sendable {
+    enum TickDemand: Equatable, Sendable {
         case ambient
         case immediate
     }
 
-    enum HeartbeatWaitOutcome: Equatable, Sendable {
+    enum TickWaitOutcome: Equatable, Sendable {
         case observed
         case timedOut
         case cancelled
         case unavailable
     }
 
-    struct HeartbeatWaiter: Sendable {
-        let demand: HeartbeatDemand
-        let continuation: TimedOneShot<HeartbeatWaitOutcome>
+    struct TickWaiter: Sendable {
+        let demand: TickDemand
+        let continuation: TimedOneShot<TickWaitOutcome>
     }
 
     // MARK: - Pulse Lifecycle
@@ -76,12 +76,12 @@ extension TheTripwire {
         context.link.invalidate()
 
         let waiters = context.settleWaiters.removeAll()
-        let heartbeatWaiters = context.heartbeatWaiters.removeAll()
+        let tickWaiters = context.tickWaiters.removeAll()
 
         for waiter in waiters {
             waiter.continuation.resolve(returning: false)
         }
-        heartbeatWaiters.forEach { $0.continuation.resolve(returning: .unavailable) }
+        tickWaiters.forEach { $0.continuation.resolve(returning: .unavailable) }
         pulsePhase = .idle
     }
 
@@ -131,14 +131,14 @@ extension TheTripwire {
     /// Waits for one future tick of Button Heist's single CADisplayLink heartbeat.
     /// Immediate demand temporarily raises the same link to the active screen's
     /// maximum refresh rate; ambient demand preserves the configured monitor rate.
-    func waitForNextHeartbeat(
+    func waitForNextTick(
         timeout: Duration,
-        demand: HeartbeatDemand
-    ) async -> HeartbeatWaitOutcome {
+        demand: TickDemand
+    ) async -> TickWaitOutcome {
         guard timeout > .zero else { return .timedOut }
         guard let context = runningContext else { return .unavailable }
-        let waiterID = context.heartbeatWaiters.reserveID()
-        let oneShot = TimedOneShot<HeartbeatWaitOutcome>()
+        let waiterID = context.tickWaiters.reserveID()
+        let oneShot = TimedOneShot<TickWaitOutcome>()
         return await oneShot.wait(
             cancellationValue: .cancelled,
             onRegistered: { oneShot in
@@ -146,20 +146,20 @@ extension TheTripwire {
                     oneShot.resolve(returning: .unavailable)
                     return
                 }
-                context.heartbeatWaiters.insert(
-                    HeartbeatWaiter(demand: demand, continuation: oneShot),
+                context.tickWaiters.insert(
+                    TickWaiter(demand: demand, continuation: oneShot),
                     id: waiterID
                 )
                 updateDisplayLinkRate(context)
                 oneShot.armTimeout(after: timeout) { [weak self] in
-                    await self?.resolveHeartbeatWaiter(
+                    await self?.resolveTickWaiter(
                         id: waiterID,
                         returning: .timedOut
                     )
                 }
             },
             onFinished: { [weak self] in
-                self?.removeHeartbeatWaiter(id: waiterID, from: context)
+                self?.removeTickWaiter(id: waiterID, from: context)
             }
         )
     }
@@ -238,33 +238,33 @@ extension TheTripwire {
         context.latestReading = reading
 
         resolveSettleWaiters(context: context, now: now, isQuiet: isQuiet)
-        observeHeartbeat(context)
+        observeTick(context)
     }
 
-    private func observeHeartbeat(_ context: RunningContext) {
-        let waiters = context.heartbeatWaiters.removeAll()
+    private func observeTick(_ context: RunningContext) {
+        let waiters = context.tickWaiters.removeAll()
         guard !waiters.isEmpty else { return }
         updateDisplayLinkRate(context)
         waiters.forEach { $0.continuation.resolve(returning: .observed) }
     }
 
-    private func resolveHeartbeatWaiter(
+    private func resolveTickWaiter(
         id: UInt64,
-        returning outcome: HeartbeatWaitOutcome
+        returning outcome: TickWaitOutcome
     ) {
         guard let context = runningContext else { return }
-        guard let waiter = context.heartbeatWaiters.remove(id: id) else { return }
+        guard let waiter = context.tickWaiters.remove(id: id) else { return }
         updateDisplayLinkRate(context)
         waiter.continuation.resolve(returning: outcome)
     }
 
-    private func removeHeartbeatWaiter(id: UInt64, from context: RunningContext) {
-        guard context.heartbeatWaiters.remove(id: id) != nil else { return }
+    private func removeTickWaiter(id: UInt64, from context: RunningContext) {
+        guard context.tickWaiters.remove(id: id) != nil else { return }
         updateDisplayLinkRate(context)
     }
 
     private func updateDisplayLinkRate(_ context: RunningContext) {
-        let hasImmediateDemand = context.heartbeatWaiters.contains {
+        let hasImmediateDemand = context.tickWaiters.contains {
             $0.demand == .immediate
         }
         context.link.preferredFrameRateRange = hasImmediateDemand
@@ -310,6 +310,22 @@ extension TheTripwire {
             let scan = scanLayers()
             return !scan.hasPendingLayout
         }
+    }
+
+    /// Whether the pulse has ticked within the last couple of frames.
+    ///
+    /// A synchronous read of the most recent pulse reading's age. The display
+    /// link only advances when the main run loop services it, so a recent
+    /// reading is positive proof the MainActor was turning; a reading older
+    /// than `singleTickSettleTimeout` (two ticks of wall-clock) means the run
+    /// loop has stalled. Wall-clock age, not tick delta, is the honest measure:
+    /// a wedged link freezes the tick counter too.
+    ///
+    /// Returns `true` when the pulse is not running, so callers that gate on
+    /// liveness do not fail closed in tools and tests that never start it.
+    func pulseIsFresh(now: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()) -> Bool {
+        guard let reading = latestReading else { return !isPulseRunning }
+        return now - reading.timestamp <= Self.singleTickSettleTimeout
     }
 }
 

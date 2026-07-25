@@ -59,7 +59,7 @@ struct SettleLoopRunner {
         }
 
         let source = SettleLoopEventSource()
-        requestHeartbeat(from: source, deadline: deadline)
+        requestTick(from: source, deadline: deadline)
         var idleTask: Task<Void, Never>?
         defer {
             idleTask?.cancel()
@@ -68,9 +68,9 @@ struct SettleLoopRunner {
 
         for await event in source.events {
             switch event {
-            case .heartbeat(let heartbeat):
-                source.consumeHeartbeat()
-                if let outcome = evaluateHeartbeat(heartbeat, deadline: deadline) {
+            case .tick(let tick):
+                source.consumeTick()
+                if let outcome = evaluateTick(tick, deadline: deadline) {
                     return result(outcome)
                 }
                 if idleTask == nil {
@@ -78,49 +78,49 @@ struct SettleLoopRunner {
                 }
 
                 if observeTripwire(machine: machine, state: &state, observations: &observations) {
-                    requestHeartbeat(from: source, deadline: deadline)
+                    requestTick(from: source, deadline: deadline)
                     continue
                 }
 
                 guard let parse = parseProvider() else {
-                    requestHeartbeat(from: source, deadline: deadline)
+                    requestTick(from: source, deadline: deadline)
                     continue
                 }
                 if let outcome = ingest(parse) {
                     return outcome
                 }
-                requestHeartbeat(from: source, deadline: deadline)
+                requestTick(from: source, deadline: deadline)
 
             case .uikitIdle:
                 idleTask = nil
-                source.cancelHeartbeat()
+                source.cancelTick()
                 _ = observeTripwire(machine: machine, state: &state, observations: &observations)
 
-                let heartbeat = await observationYield(
+                let tick = await observationYield(
                     deadline.remainingDuration(at: clock())
                 )
-                if let outcome = evaluateHeartbeat(heartbeat, deadline: deadline) {
+                if let outcome = evaluateTick(tick, deadline: deadline) {
                     return result(outcome)
                 }
 
                 if observeTripwire(machine: machine, state: &state, observations: &observations) {
-                    requestHeartbeat(from: source, deadline: deadline)
+                    requestTick(from: source, deadline: deadline)
                     continue
                 }
                 guard await uikitIdleWait?(.zero) == true else {
                     idleTask = startIdleTask(deadline: deadline, continuation: source.continuation)
-                    requestHeartbeat(from: source, deadline: deadline)
+                    requestTick(from: source, deadline: deadline)
                     continue
                 }
                 _ = reduce(.uikitIdle)
                 guard let parse = parseProvider() else {
-                    requestHeartbeat(from: source, deadline: deadline)
+                    requestTick(from: source, deadline: deadline)
                     continue
                 }
                 if let outcome = ingest(parse) {
                     return outcome
                 }
-                requestHeartbeat(from: source, deadline: deadline)
+                requestTick(from: source, deadline: deadline)
             }
         }
 
@@ -159,34 +159,34 @@ struct SettleLoopRunner {
         deadline: SemanticObservationDeadline
     ) async -> SettleOutcome {
         if Task.isCancelled {
-            await source.cancelHeartbeatAndWait()
+            await source.cancelTickAndWait()
         }
         let elapsedMs = deadline.elapsedMilliseconds(at: clock())
         return Task.isCancelled ? .cancelled(timeMs: elapsedMs) : .timedOut(timeMs: elapsedMs)
     }
 
     @MainActor
-    private func evaluateHeartbeat(
-        _ heartbeat: TheTripwire.HeartbeatWaitOutcome,
+    private func evaluateTick(
+        _ tick: TheTripwire.TickWaitOutcome,
         deadline: SemanticObservationDeadline
     ) -> SettleOutcome? {
         let elapsedMs = deadline.elapsedMilliseconds(at: clock())
-        if heartbeat == .cancelled || Task.isCancelled {
+        if tick == .cancelled || Task.isCancelled {
             return .cancelled(timeMs: elapsedMs)
         }
-        return heartbeat == .observed ? nil : .timedOut(timeMs: elapsedMs)
+        return tick == .observed ? nil : .timedOut(timeMs: elapsedMs)
     }
 
     @MainActor
-    private func requestHeartbeat(
+    private func requestTick(
         from source: SettleLoopEventSource,
         deadline: SemanticObservationDeadline
     ) {
         guard deadline.hasTimeRemaining(at: clock()) else {
-            source.continuation.yield(.heartbeat(.timedOut))
+            source.continuation.yield(.tick(.timedOut))
             return
         }
-        source.requestHeartbeat {
+        source.requestTick {
             await observationYield(deadline.remainingDuration(at: clock()))
         }
     }

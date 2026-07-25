@@ -1,3 +1,5 @@
+#if canImport(UIKit)
+#if DEBUG
 import XCTest
 import ButtonHeistSupport
 import TheScore
@@ -271,3 +273,6 @@ final class ServerTransportTests: XCTestCase {
 }
 
 private func assertSendable<T: Sendable>(_: T.Type) {}
+
+#endif // DEBUG
+#endif // canImport(UIKit)

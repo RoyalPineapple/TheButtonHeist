@@ -387,7 +387,7 @@ final class WaitForIntegrationTests: XCTestCase {
         // the later arrival.
         let addTask = Task { @MainActor in
             for _ in 0..<2 {
-                guard await self.insideJob.tripwire.waitForNextHeartbeat(
+                guard await self.insideJob.tripwire.waitForNextTick(
                     timeout: .seconds(1),
                     demand: .immediate
                 ) == .observed else { return }

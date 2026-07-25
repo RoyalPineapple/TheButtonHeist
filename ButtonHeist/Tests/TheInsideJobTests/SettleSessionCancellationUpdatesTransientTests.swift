@@ -106,16 +106,17 @@ extension SettleSessionTests {
         }
     }
 
-    func testUpdatesFrequentlyMaskingAlsoIgnoresFrameChanges() async {
-        // Analog clock case: a hand element keeps the same label/identifier
-        // but its frame translates every cycle. With masking, the fingerprint
-        // stays stable.
+    func testUpdatesFrequentlyMaskingKeepsSettlingWhenGeometryHolds() async {
+        // Analog clock case: a hand rotates in place. Its value churns and its
+        // bounding box jitters within one coarse bucket, so the fingerprint is
+        // stable and the loop settles.
         let staticElement = makeElement(label: "Static", traits: .staticText)
         let hands = (0..<10).map { i in
             makeElement(
                 label: "hand",
+                value: "tick \(i)",
                 traits: .updatesFrequently,
-                frame: CGRect(x: i * 10, y: i * 10, width: 5, height: 50)
+                frame: CGRect(x: 100, y: 100, width: 5, height: 50)
             )
         }
         let session = makeSession(
@@ -131,8 +132,54 @@ extension SettleSessionTests {
         if case .settled = outcome.outcome {
             // Expected.
         } else {
-            XCTFail("Animated frame on .updatesFrequently element must not block settle. Got \(outcome.outcome)")
+            XCTFail("Churning value at a fixed frame must still settle. Got \(outcome.outcome)")
         }
+    }
+
+    func testUpdatesFrequentlyDoesNotMaskMovingGeometry() async {
+        // The trait declares that the *value* churns, not the position. An
+        // element that translates across the screen is unstable regardless of
+        // the trait — actions dispatch at coordinates, so settling here would
+        // tap where the element used to be.
+        let staticElement = makeElement(label: "Static", traits: .staticText)
+        let sliding = (0..<10).map { i in
+            makeElement(
+                label: "banner",
+                traits: .updatesFrequently,
+                frame: CGRect(x: i * 40, y: i * 40, width: 5, height: 50)
+            )
+        }
+        let session = makeSession(
+            script: sliding.map { banner in makeParseResult([staticElement, banner]) },
+            cyclesRequired: 3
+        )
+
+        let outcome = await session.run(
+            start: RuntimeElapsed.now,
+            baselineTripwireSignal: tripwireSignal(topmostVC: nil)
+        )
+
+        if case .settled = outcome.outcome {
+            XCTFail("Moving geometry must falsify stability even with .updatesFrequently")
+        }
+    }
+
+    func testUpdatesFrequentlyMasksValueButNotFrameInFingerprint() {
+        let fixed = CGRect(x: 10, y: 10, width: 20, height: 20)
+        let moved = CGRect(x: 200, y: 200, width: 20, height: 20)
+
+        let valueChanged = settleFingerprint(
+            [makeElement(label: "l", value: "A", traits: .updatesFrequently, frame: fixed)]
+        )
+        let valueChangedAgain = settleFingerprint(
+            [makeElement(label: "l", value: "B", traits: .updatesFrequently, frame: fixed)]
+        )
+        XCTAssertEqual(valueChanged, valueChangedAgain, "value must stay masked")
+
+        let frameMoved = settleFingerprint(
+            [makeElement(label: "l", value: "A", traits: .updatesFrequently, frame: moved)]
+        )
+        XCTAssertNotEqual(valueChanged, frameMoved, "geometry must never be masked")
     }
 
 }

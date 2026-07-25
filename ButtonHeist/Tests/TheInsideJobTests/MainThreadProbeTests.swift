@@ -1,3 +1,5 @@
+#if canImport(UIKit)
+#if DEBUG
 import ButtonHeistSupport
 import os
 import XCTest
@@ -251,3 +253,6 @@ private final class DeferredMainWork: @unchecked Sendable {
         pendingWork?.completion()
     }
 }
+
+#endif // DEBUG
+#endif // canImport(UIKit)

@@ -320,7 +320,7 @@ struct SettleSessionFinalObservation {
     typealias ParseProvider = @MainActor () -> InterfaceObservation?
     typealias TripwireSignalProvider = @MainActor () -> TheTripwire.TripwireSignal
     typealias Sleeper = @Sendable (UInt64) async -> Void
-    typealias ObservationYield = @MainActor (Duration) async -> TheTripwire.HeartbeatWaitOutcome
+    typealias ObservationYield = @MainActor (Duration) async -> TheTripwire.TickWaitOutcome
     typealias UIKitIdleWait = @MainActor (Duration) async -> Bool
     typealias PresentationSettled = @MainActor () -> Bool
     typealias Clock = @MainActor () -> RuntimeElapsed.Instant
@@ -408,15 +408,15 @@ struct SettleSessionFinalObservation {
         let observationYield: ObservationYield = switch policy {
         case .consecutiveCycles:
             { timeout in
-                await tripwire.waitForNextHeartbeat(timeout: timeout, demand: .ambient)
+                await tripwire.waitForNextTick(timeout: timeout, demand: .ambient)
             }
         case .quietWindow:
             { timeout in
-                await tripwire.waitForNextHeartbeat(timeout: timeout, demand: .immediate)
+                await tripwire.waitForNextTick(timeout: timeout, demand: .immediate)
             }
         case .uikitIdleOrQuietWindow:
             { timeout in
-                await tripwire.waitForNextHeartbeat(timeout: timeout, demand: .immediate)
+                await tripwire.waitForNextTick(timeout: timeout, demand: .immediate)
             }
         }
         let uikitIdleWait: UIKitIdleWait?
@@ -451,7 +451,7 @@ struct SettleSessionFinalObservation {
             parseProvider: { vault.refreshLiveCapture() },
             tripwireSignalProvider: { tripwire.tripwireSignal() },
             observationYield: { timeout in
-                await tripwire.waitForNextHeartbeat(timeout: timeout, demand: .immediate)
+                await tripwire.waitForNextTick(timeout: timeout, demand: .immediate)
             },
             uikitIdleWait: nil,
             policy: .consecutiveCycles(required: 2),

@@ -243,9 +243,9 @@ extension ElementInflation {
 
         while deadline.hasTimeRemaining(at: geometryEnvironment.now()) {
             let remaining = deadline.remainingDuration(at: geometryEnvironment.now())
-            let heartbeat = await geometryEnvironment.awaitFrame(remaining)
-            guard heartbeat == .observed, !Task.isCancelled else {
-                let event: LiveGeometryStabilizationEvent = heartbeat == .cancelled || Task.isCancelled
+            let tick = await geometryEnvironment.awaitFrame(remaining)
+            guard tick == .observed, !Task.isCancelled else {
+                let event: LiveGeometryStabilizationEvent = tick == .cancelled || Task.isCancelled
                     ? .cancelled
                     : .deadlineExpired
                 return stateAfterGeometryReduction(

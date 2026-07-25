@@ -217,7 +217,7 @@ final class TripwireIntegrationTests: XCTestCase {
     func testNextHeartbeatIsUnavailableWithoutRuntimePulse() async {
         let isolatedTripwire = TheTripwire()
 
-        let outcome = await isolatedTripwire.waitForNextHeartbeat(
+        let outcome = await isolatedTripwire.waitForNextTick(
             timeout: .seconds(1),
             demand: .immediate
         )
@@ -229,13 +229,13 @@ final class TripwireIntegrationTests: XCTestCase {
         let context = try XCTUnwrap(tripwire.runningContext)
         let ambientRate = context.link.preferredFrameRateRange
 
-        let outcome = await tripwire.waitForNextHeartbeat(
+        let outcome = await tripwire.waitForNextTick(
             timeout: .seconds(1),
             demand: .immediate
         )
 
         XCTAssertEqual(outcome, .observed)
-        XCTAssertTrue(context.heartbeatWaiters.isEmpty)
+        XCTAssertTrue(context.tickWaiters.isEmpty)
         XCTAssertEqual(context.link.preferredFrameRateRange, ambientRate)
     }
 
@@ -245,46 +245,46 @@ final class TripwireIntegrationTests: XCTestCase {
         context.link.isPaused = true
         defer { context.link.isPaused = false }
         let task = Task { @MainActor in
-            await self.tripwire.waitForNextHeartbeat(
+            await self.tripwire.waitForNextTick(
                 timeout: .seconds(1),
                 demand: .immediate
             )
         }
 
-        for _ in 0..<20 where context.heartbeatWaiters.isEmpty {
+        for _ in 0..<20 where context.tickWaiters.isEmpty {
             await Task.yield()
         }
-        XCTAssertEqual(context.heartbeatWaiters.count, 1)
+        XCTAssertEqual(context.tickWaiters.count, 1)
         XCTAssertNotEqual(context.link.preferredFrameRateRange, ambientRate)
 
         task.cancel()
         let outcome = await task.value
 
         XCTAssertEqual(outcome, .cancelled)
-        XCTAssertTrue(context.heartbeatWaiters.isEmpty)
+        XCTAssertTrue(context.tickWaiters.isEmpty)
         XCTAssertEqual(context.link.preferredFrameRateRange, ambientRate)
     }
 
-    func testStoppingPulseResolvesHeartbeatWaiterAsUnavailable() async throws {
+    func testStoppingPulseResolvesTickWaiterAsUnavailable() async throws {
         let context = try XCTUnwrap(tripwire.runningContext)
         context.link.isPaused = true
         let task = Task { @MainActor in
-            await self.tripwire.waitForNextHeartbeat(
+            await self.tripwire.waitForNextTick(
                 timeout: .seconds(1),
                 demand: .immediate
             )
         }
 
-        for _ in 0..<20 where context.heartbeatWaiters.isEmpty {
+        for _ in 0..<20 where context.tickWaiters.isEmpty {
             await Task.yield()
         }
-        XCTAssertEqual(context.heartbeatWaiters.count, 1)
+        XCTAssertEqual(context.tickWaiters.count, 1)
 
         tripwire.stopPulse()
         let outcome = await task.value
 
         XCTAssertEqual(outcome, .unavailable)
-        XCTAssertTrue(context.heartbeatWaiters.isEmpty)
+        XCTAssertTrue(context.tickWaiters.isEmpty)
     }
 
     func testImmediateHeartbeatRateUsesScreenMaximum() {

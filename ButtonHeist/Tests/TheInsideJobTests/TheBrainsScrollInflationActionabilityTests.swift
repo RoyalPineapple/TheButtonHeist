@@ -10,7 +10,7 @@ import UIKit
 @MainActor
 private func advanceInflationHeartbeatClock(
     _ now: inout RuntimeElapsed.Instant
-) -> TheTripwire.HeartbeatWaitOutcome {
+) -> TheTripwire.TickWaitOutcome {
     now = now.advanced(by: .milliseconds(10))
     return .observed
 }

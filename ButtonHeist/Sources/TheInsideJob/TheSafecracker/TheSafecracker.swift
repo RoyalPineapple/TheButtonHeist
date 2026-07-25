@@ -42,11 +42,18 @@ final class TheSafecracker {
         keyboardInput.hasActiveTextInput
     }
 
-    func waitForActiveTextInput() async -> Bool {
+    func waitForActiveTextInput(pulse tripwire: TheTripwire) async -> Bool {
         if hasActiveTextInput { return true }
         for _ in 0..<Self.keyboardPollMaxAttempts {
-            guard await Task.cancellableSleep(for: Self.keyboardPollInterval) else { return false }
-            if hasActiveTextInput { return true }
+            switch await tripwire.waitForNextTick(
+                timeout: .milliseconds(Int(TheTripwire.singleTickSettleTimeout * 1_000)),
+                demand: .ambient
+            ) {
+            case .observed:
+                if hasActiveTextInput { return true }
+            case .timedOut, .cancelled, .unavailable:
+                return false
+            }
         }
         return false
     }
@@ -127,8 +134,6 @@ nonisolated extension TheSafecracker {
     static let gestureYieldDelay: Duration = .milliseconds(50)
 
     static let touchGestureStepDelay: TimeInterval = 0.01
-
-    static let keyboardPollInterval: Duration = .milliseconds(100)
 
     static let keyboardPollMaxAttempts: Int = 20
 }

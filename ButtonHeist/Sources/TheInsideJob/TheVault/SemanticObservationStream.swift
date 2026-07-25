@@ -274,7 +274,15 @@ internal final class Stream {
 
     private func observeVisibleSemanticState() async -> Bool {
         if await admittedObservation(scope: .visible, after: nil) != nil {
-            _ = await Task.cancellableSleep(for: .milliseconds(100))
+            // The current observation still holds, so there is nothing to
+            // settle. Wait for the screen's next pulse tick: a tick arriving
+            // proves the MainActor serviced the display link this frame, and a
+            // timed-out beat is the honest signal that it did not. Either
+            // outcome ends the cycle and the loop re-awaits.
+            _ = await tripwire.waitForNextTick(
+                timeout: .milliseconds(Int(TheTripwire.singleTickSettleTimeout * 1_000)),
+                demand: .ambient
+            )
             await invalidateDeliveryIfSignalChanged(to: currentTripwireSignal())
             return !Task.isCancelled
         }

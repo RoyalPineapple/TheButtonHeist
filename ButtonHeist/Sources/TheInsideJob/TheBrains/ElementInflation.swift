@@ -125,7 +125,7 @@ internal final class ElementInflation {
         internal let now: @MainActor () -> RuntimeElapsed.Instant
         internal let awaitFrame: @MainActor (
             Duration
-        ) async -> TheTripwire.HeartbeatWaitOutcome
+        ) async -> TheTripwire.TickWaitOutcome
     }
 
     internal struct CommittedElementTarget {
@@ -165,7 +165,7 @@ internal final class ElementInflation {
         geometryEnvironment = GeometryEnvironment(
             now: { RuntimeElapsed.now },
             awaitFrame: { timeout in
-                await tripwire.waitForNextHeartbeat(timeout: timeout, demand: .immediate)
+                await tripwire.waitForNextTick(timeout: timeout, demand: .immediate)
             }
         )
     }

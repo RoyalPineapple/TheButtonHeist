@@ -3,7 +3,7 @@
 import Foundation
 
 enum SettleLoopEvent: Sendable {
-    case heartbeat(TheTripwire.HeartbeatWaitOutcome)
+    case tick(TheTripwire.TickWaitOutcome)
     case uikitIdle
 }
 
@@ -14,7 +14,7 @@ final class SettleLoopEventSource {
 
     let events: AsyncStream<SettleLoopEvent>
     private(set) var continuation: AsyncStream<SettleLoopEvent>.Continuation
-    private var heartbeatTask: Task<Void, Never>?
+    private var tickTask: Task<Void, Never>?
 
     // MARK: - Initialization
 
@@ -24,35 +24,35 @@ final class SettleLoopEventSource {
 
     // MARK: - Heartbeat Observation
 
-    func requestHeartbeat(
-        _ operation: @escaping @MainActor () async -> TheTripwire.HeartbeatWaitOutcome
+    func requestTick(
+        _ operation: @escaping @MainActor () async -> TheTripwire.TickWaitOutcome
     ) {
-        guard heartbeatTask == nil else { return }
-        heartbeatTask = Task { @MainActor in
-            let heartbeat = await operation()
+        guard tickTask == nil else { return }
+        tickTask = Task { @MainActor in
+            let tick = await operation()
             guard !Task.isCancelled else { return }
-            continuation.yield(.heartbeat(heartbeat))
+            continuation.yield(.tick(tick))
         }
     }
 
-    func consumeHeartbeat() {
-        heartbeatTask = nil
+    func consumeTick() {
+        tickTask = nil
     }
 
-    func cancelHeartbeat() {
-        heartbeatTask?.cancel()
-        heartbeatTask = nil
+    func cancelTick() {
+        tickTask?.cancel()
+        tickTask = nil
     }
 
-    func cancelHeartbeatAndWait() async {
-        let task = heartbeatTask
-        heartbeatTask = nil
+    func cancelTickAndWait() async {
+        let task = tickTask
+        tickTask = nil
         task?.cancel()
         await task?.value
     }
 
     func cancel() {
-        cancelHeartbeat()
+        cancelTick()
         continuation.finish()
     }
 }

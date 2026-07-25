@@ -95,8 +95,13 @@ struct SettleRecordedObservation {
         hasher.combine(element.respondsToUserInteraction)
         hasher.combine(element.visibility)
 
-        guard !element.traits.contains(.updatesFrequently) else { return }
-        hasher.combine(element.value)
+        // `updatesFrequently` declares that the *value* churns (a timer, a
+        // progress readout). It says nothing about position, so geometry stays
+        // in the fingerprint: an element carrying the trait that moves is still
+        // unstable.
+        if !element.traits.contains(.updatesFrequently) {
+            hasher.combine(element.value)
+        }
         switch element.shape {
         case .frame(let rect):
             hasher.combine(CoarseFrameComparison.key(for: rect.cgRect, bucket: bucket))
@@ -160,21 +165,21 @@ struct SettleRecordedObservation {
             fields.append("traits \(before.traits.rawValue)->\(after.traits.rawValue)")
         }
 
-        let masked = before.traits.contains(.updatesFrequently) || after.traits.contains(.updatesFrequently)
-        if !masked {
-            if before.value != after.value {
-                fields.append("value \(quoted(before.value))->\(quoted(after.value))")
-            }
-            let beforeFrame = before.shape.frame
-            let afterFrame = after.shape.frame
-            let beforeKey = CoarseFrameComparison.key(for: beforeFrame, bucket: bucket)
-            let afterKey = CoarseFrameComparison.key(for: afterFrame, bucket: bucket)
-            if beforeKey != afterKey {
-                fields.append(
-                    "frame bucket \(beforeKey.hashFragment)->\(afterKey.hashFragment) " +
-                        "frame \(format(beforeFrame))->\(format(afterFrame))"
-                )
-            }
+        // Mirrors `combine`: the value is masked for `updatesFrequently`
+        // elements, geometry never is.
+        let valueMasked = before.traits.contains(.updatesFrequently) || after.traits.contains(.updatesFrequently)
+        if !valueMasked, before.value != after.value {
+            fields.append("value \(quoted(before.value))->\(quoted(after.value))")
+        }
+        let beforeFrame = before.shape.frame
+        let afterFrame = after.shape.frame
+        let beforeKey = CoarseFrameComparison.key(for: beforeFrame, bucket: bucket)
+        let afterKey = CoarseFrameComparison.key(for: afterFrame, bucket: bucket)
+        if beforeKey != afterKey {
+            fields.append(
+                "frame bucket \(beforeKey.hashFragment)->\(afterKey.hashFragment) " +
+                    "frame \(format(beforeFrame))->\(format(afterFrame))"
+            )
         }
 
         guard !fields.isEmpty else { return nil }
