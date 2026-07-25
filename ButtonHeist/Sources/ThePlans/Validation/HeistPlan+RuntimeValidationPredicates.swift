@@ -17,8 +17,6 @@ extension HeistPlanRuntimeSafetyValidator {
             }
         case .changed(let declaration):
             validateChange(declaration, path: path.child(.changed), depth: depth + 1, scope: scope)
-        case .noChange:
-            break
         }
     }
 

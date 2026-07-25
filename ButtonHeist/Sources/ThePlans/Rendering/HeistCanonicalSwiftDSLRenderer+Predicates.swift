@@ -27,8 +27,6 @@ extension HeistCanonicalSwiftDSLRenderer {
             return try ".announcement(\(renderStringArgument(match, environment: environment)))"
         case .changed(let declaration):
             return try ".changed(\(render(change: declaration, environment: environment)))"
-        case .noChange:
-            return ".noChange"
         }
     }
 

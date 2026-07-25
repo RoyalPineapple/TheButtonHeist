@@ -112,45 +112,6 @@ extension AccessibilityPredicateTests {
         )
     }
 
-    func testNoChangeRequiresCompleteFactFreeWindow() throws {
-        let interface = makeTestInterface(elements: [element(label: "Ready")])
-        let factFreeTrace = AccessibilityTrace(first: interface).appending(interface)
-        let changed = AccessibilityTrace(first: interface).appending(
-            makeTestInterface(elements: [element(label: "Done")])
-        )
-        let predicate = AccessibilityPredicate.noChange
-
-        let incompleteResult = try predicate.resolve(in: .empty).validate(against: result(
-            success: true,
-            trace: factFreeTrace,
-            completeness: .incomplete
-        ))
-        XCTAssertFalse(incompleteResult.met)
-        XCTAssertEqual(incompleteResult.actual, "observation history incomplete")
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result(
-            success: true,
-            trace: factFreeTrace,
-            completeness: .complete
-        )).met)
-        XCTAssertFalse(try predicate.resolve(in: .empty).validate(against: result(
-            success: true,
-            trace: changed,
-            completeness: .complete
-        )).met)
-
-        let explicitlyIncomplete = ActionResult.success(
-            payload: .oneFingerTap,
-                observation: .settledTrace(
-                    traceEvidence(factFreeTrace, completeness: .incomplete),
-                    .settled(duration: 0)
-                )
-
-        )
-        let explicitlyIncompleteResult = try predicate.resolve(in: .empty).validate(against: explicitlyIncomplete)
-        XCTAssertFalse(explicitlyIncompleteResult.met)
-        XCTAssertEqual(explicitlyIncompleteResult.actual, "observation history incomplete")
-    }
-
     func testActionResultValidationUsesAccumulatedTraceEvidence() throws {
         let baseline = makeTestInterface(elements: [
             element(label: "Counter", value: "0"),
@@ -177,7 +138,6 @@ extension AccessibilityPredicateTests {
         ]))
 
         XCTAssertTrue(try changePredicate.resolve(in: .empty).validate(against: action).met)
-        XCTAssertFalse(try AccessibilityPredicate.noChange.resolve(in: .empty).validate(against: action).met)
     }
 
     // MARK: - Validation: elements changed (superset rule)

@@ -90,7 +90,7 @@ final class ElementActionRequestContractTests: XCTestCase {
         let waitDescriptor = TheFence.Command.wait.descriptor
         let predicateSpec = try XCTUnwrap(waitDescriptor.parameters.first { $0.key == FenceParameterKey.predicate.rawValue })
         let predicateType = try XCTUnwrap(predicateSpec.objectProperties.first { $0.key == FenceParameterKey.type.rawValue })
-        XCTAssertEqual(predicateType.enumValues, ["exists", "missing", "announcement", "changed", "no_change"])
+        XCTAssertEqual(predicateType.enumValues, ["exists", "missing", "announcement", "changed"])
         XCTAssertEqual(predicateSpec.objectProperties.map(\.key), ["type", "target", "match", "scope", "assertions"])
         let scope = try XCTUnwrap(predicateSpec.objectProperties.first { $0.key == FenceParameterKey.scope.rawValue })
         XCTAssertEqual(scope.enumValues, ["screen", "elements"])

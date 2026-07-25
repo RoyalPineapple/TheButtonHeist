@@ -280,8 +280,8 @@ Current-state predicates such as `exists` and `missing` must hold in the exact
 post-readiness handoff snapshot returned by settlement. Positive transitions
 such as `appeared`, `disappeared`, and `updated` consume ordered Log events
 strictly after the baseline and latch their first qualifying fact. Announcements
-likewise latch only after the invocation boundary. `noChange` requires complete
-retained history. A standalone `waitFor` creates its own boundaries and cannot
+likewise latch only after the invocation boundary. A standalone `waitFor`
+creates its own boundaries and cannot
 consume evidence from an earlier action or heist.
 
 A screen boundary emits three ordered facts: all old-tree nodes disappear, the
@@ -294,8 +294,8 @@ reason in the trace.
 Notifications are best-effort UIKit evidence, not a delivery guarantee; their
 absence does not by itself prove replacement or stability.
 
-Incomplete Log history cannot prove `noChange`. Complete history may span
-multiple events and retains fast intermediate changes until evaluation.
+Retained history may span multiple events and retains fast intermediate changes
+until evaluation.
 An action-settlement diagnostic trace is result evidence only and cannot bypass
 the settled observation window.
 
@@ -573,7 +573,7 @@ available.
 
 Expectations use the concrete `AccessibilityPredicate` root and
 `ChangeDeclaration` assertion types. At the root, the valid forms are `exists`,
-`missing`, `changed`, `no_change`, and `announcement`. `changed` has exactly one
+`missing`, `changed`, and `announcement`. `changed` has exactly one
 scope and always carries an `assertions` array:
 
 ```json

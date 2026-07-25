@@ -363,7 +363,7 @@ by waits and action expectations. Consumers read it through
 `Log.events(since: Observation.Moment)` and receive future committed events from
 `Observation.Stream`; they do not subscribe to parser samples, build private
 capture arrays, or claim notification events. Retention loss is explicit
-incomplete evidence, never an inferred `noChange`.
+incomplete evidence, never inferred stability.
 
 `waitFor` is the predicate-bearing observation case of `Settlement.Command`.
 It uses the same reducer, readiness, and handoff rules as an action, but owns
@@ -773,8 +773,8 @@ private index into its owning Log. Settlement consumes direct
 `Log.events(since:)` results and never maintains a second capture array,
 baseline, or notification claim. Current-state evidence is deliberately not
 latched; it must hold in the returned handoff. Positive transitions and
-announcements latch their first qualifying post-boundary event. `noChange`
-requires complete retained history. Uncommitted diagnostic evidence can never
+announcements latch their first qualifying post-boundary event. Uncommitted
+diagnostic evidence can never
 become a successful predicate verdict.
 
 A scoped screen notification or snapshot-inferred replacement carrying typed
@@ -803,13 +803,12 @@ only to the previous event in its own scope.
 `Observation.Log.events(since:)` returns ordered committed events or a typed
 expired/unavailable result. Ordered `ChangeFact` values derive from those events
 plus scoped notification evidence. The evaluator reads neither warning text nor
-an endpoint delta. Only complete, fact-free retained history can satisfy
-`.noChange`.
+an endpoint delta.
 
 The public predicate layer is a concrete root with concrete declaration types:
 
 - Root predicates: `.exists(target)`, `.missing(target)`,
-  `.changed(...)`, `.noChange`, and `.announcement(...)`.
+  `.changed(...)`, and `.announcement(...)`.
 - Screen declaration: `.changed(.screen([.exists(target), .missing(target)]))`.
 - Elements declaration: `.changed(.elements([.exists(target),
   .missing(target), .appeared(target), .disappeared(target),

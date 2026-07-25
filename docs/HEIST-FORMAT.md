@@ -181,7 +181,7 @@ It is Swift-shaped, but it is the source language accepted by MCP and
 
 The generated plan uses one `AccessibilityTarget` shape for action targets and
 predicate targets. Expectations use one context-typed predicate tree:
-`exists`, `missing`, `changed`, `no_change`, and `announcement` at the root;
+`exists`, `missing`, `changed`, and `announcement` at the root;
 `changed.screen` accepts current-tree `exists`/`missing`; `changed.elements`
 also accepts `appeared`, `disappeared`, and `updated`. The generated wire form
 is strict: `{"type":"changed","scope":"screen|elements","assertions":[]}`.

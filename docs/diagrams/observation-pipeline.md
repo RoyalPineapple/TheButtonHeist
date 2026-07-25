@@ -100,7 +100,6 @@ than looping.
 | Current state | Exact handoff snapshot returned by settlement |
 | Positive transition | Ordered post-baseline snapshot events; first qualifying result latches |
 | Announcement | Ordered notification event after the invocation announcement position; first qualifying result latches |
-| Complete history (`noChange`) | Complete, non-expired `events(since:)` result at the handoff |
 
 Diagnostic candidates and endpoint deltas never change predicate truth. An
 action and a later standalone wait have different Moments and announcement

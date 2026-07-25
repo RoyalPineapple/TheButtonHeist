@@ -463,7 +463,7 @@ private extension HeistPlan {
                             observedTargets.append(target)
                         }
                     }
-                case .announcement, .noChange: break
+                case .announcement: break
                 }
             }
             for var target in observedTargets {

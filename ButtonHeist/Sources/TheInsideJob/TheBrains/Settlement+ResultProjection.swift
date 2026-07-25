@@ -463,7 +463,7 @@ private extension Settlement.ResultProjector {
                 "last result: \(exists ? "element not found" : "element still present")",
                 "Next: get_interface() to inspect current elements, then retry wait with an exact predicate.",
             ]
-        case (.announcement, _, _), (.changed, _, _), (.noChange, _, _):
+        case (.announcement, _, _), (.changed, _, _):
             parts.append("expected: \(predicate.authored.description)")
             parts.append("last observed: \(expectation(predicate: predicate, evidence: evidence).actual ?? "none")")
         case (.exists, _, _), (.missing, _, _):

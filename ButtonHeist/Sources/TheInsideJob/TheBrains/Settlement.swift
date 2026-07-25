@@ -179,8 +179,6 @@ extension Settlement.Predicate.Semantics {
             self = .positiveTransition
         case .announcement:
             self = .announcement
-        case .noChange:
-            self = .completeHistory
         }
     }
 }

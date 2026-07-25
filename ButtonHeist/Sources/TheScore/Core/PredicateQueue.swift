@@ -6,7 +6,7 @@ import ThePlans
 /// announcement. Not a snapshot with announcements attached — announcements are
 /// peers of snapshots on the same clock, not a side channel riding along.
 ///
-/// A tick that carries nothing (`.noChange`) is keep-alive bookkeeping and never
+/// A tick that carries nothing is keep-alive bookkeeping and never
 /// reaches this queue.
 package enum PredicateTick: Sendable {
     /// A settled tree state, and the baseline deltas measure it against.
@@ -23,14 +23,8 @@ package enum PredicateTick: Sendable {
     ///
     /// This is the *only* kind-specific question the queue asks. Everything
     /// else — the walk, the blocking, the removal — is written once.
-    ///
-    /// `noChange` answers nothing here. It is a question about a whole window —
-    /// "nothing changed throughout" — and no single tick can settle it, so it
-    /// is not something the queue drains.
     func isAnswered(by predicate: ResolvedAccessibilityPredicate) -> Bool {
         switch (self, predicate) {
-        case (_, .noChange):
-            return false
         case (.announcement, .announcement):
             return true
         case (.snapshot, .announcement), (.announcement, _):

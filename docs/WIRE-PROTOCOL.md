@@ -545,8 +545,7 @@ commit, and publication boundary.
 Facts have two kinds: `elementsChanged` and `screenChanged`. A screen boundary
 always derives three ordered facts: old-tree departures, the screen marker,
 then new-tree arrivals. `updated` entries can only be derived from captures in
-the same screen generation. Only complete retained history with no facts proves
-`noChange`; no `noChange` fact is emitted.
+the same screen generation. A fact-free window emits no fact at all.
 
 Scoped notification evidence has one semantic shape: `screenChanged`,
 `elementChanged` with a `layout` or `value` subtype, `announcement`, or

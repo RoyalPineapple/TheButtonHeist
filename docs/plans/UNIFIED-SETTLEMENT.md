@@ -107,8 +107,13 @@ Activating a control, with `pre` = animation count sampled before dispatch:
 | 3 | spawned, outlasts the action timeout | none | **fail** — falsified stability |
 | 4 | any | predicate matched | **settled** — predicate is the authority |
 
-Case 3 is the only failure, and an explicit `noChange` predicate converts it to
-case 4. Any other predicate with no change fails.
+Case 3 is the only failure. Any predicate with no change fails.
+
+The `noChange` predicate used to convert case 3 to case 4 and was deleted: it
+was the only predicate whose evidence is absence, so it could never drain early
+and only ever resolved at the deadline. Asserting "this action correctly did
+nothing" is currently inexpressible. If it is wanted again it belongs in the
+timeout verdict — a question about the window — not in the predicate list.
 
 ### What the animation count can and cannot see
 

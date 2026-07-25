@@ -72,7 +72,6 @@ public struct AccessibilityPredicate: Codable, Sendable, Equatable {
         case presence(Presence)
         case announcement(AnnouncementPredicate)
         case changed(ChangeDeclaration)
-        case noChange
     }
 
     package let core: Value
@@ -100,11 +99,10 @@ public struct AccessibilityPredicate: Codable, Sendable, Equatable {
     public static func changed(_ declaration: ChangeDeclaration) -> Self {
         Self(core: .changed(declaration))
     }
-    public static var noChange: Self { Self(core: .noChange) }
 
     package var requiresChangeBaseline: Bool {
         switch core {
-        case .changed, .noChange: true
+        case .changed: true
         case .presence, .announcement: false
         }
     }
@@ -115,7 +113,6 @@ public struct AccessibilityPredicate: Codable, Sendable, Equatable {
         case .presence(.missing(let target)): return .missing(try target.resolve(in: environment))
         case .announcement(let predicate): return .announcement(try predicate.resolve(in: environment))
         case .changed(let declaration): return .changed(try declaration.resolve(in: environment))
-        case .noChange: return .noChange
         }
     }
 }
@@ -175,11 +172,10 @@ package enum ResolvedAccessibilityPredicate: Sendable, Equatable {
     case missing(ResolvedAccessibilityTarget)
     case announcement(ResolvedAnnouncementPredicate)
     case changed(ResolvedChangeDeclaration)
-    case noChange
 
     package var requiresChangeBaseline: Bool {
         switch self {
-        case .changed, .noChange: true
+        case .changed: true
         case .exists, .missing, .announcement: false
         }
     }
@@ -196,7 +192,7 @@ package enum ResolvedAccessibilityPredicate: Sendable, Equatable {
         case .changed(.elements(let assertions)):
             guard assertions.count == 1 else { return nil }
             return assertions[0].target
-        case .announcement, .noChange:
+        case .announcement:
             return nil
         }
     }
@@ -210,7 +206,6 @@ private enum PresencePredicateWireType: String, CaseIterable {
 private enum RootPredicateWireType: String, CaseIterable {
     case announcement
     case changed
-    case noChange = "no_change"
 }
 
 private enum ElementAssertionWireType: String, CaseIterable {
@@ -301,9 +296,6 @@ private enum AccessibilityPredicateWireCodec {
                     try decodeElementAssertion(from: $0)
                 }))
             }
-        case .noChange:
-            try decoder.rejectUnknownKeys(allowed: ["type"], typeName: "no_change predicate")
-            return .noChange
         }
     }
 
@@ -386,8 +378,6 @@ private enum AccessibilityPredicateWireCodec {
             try encodeAssertions(assertions, to: &nested) { assertion, encoder in
                 try encodeElementAssertion(assertion, to: encoder)
             }
-        case .noChange:
-            try container.encode(RootPredicateWireType.noChange.rawValue, forKey: .type)
         }
     }
 
@@ -504,7 +494,6 @@ extension AccessibilityPredicate: CustomStringConvertible {
         case .announcement(let announcement): return announcement.description
         case .changed(let declaration):
             return CanonicalValueDescription.call("changed", [declaration.description])
-        case .noChange: return "no_change"
         }
     }
 }
@@ -517,7 +506,6 @@ extension ResolvedAccessibilityPredicate: CustomStringConvertible {
         case .announcement(let announcement): return announcement.description
         case .changed(let declaration):
             return CanonicalValueDescription.call("changed", [declaration.description])
-        case .noChange: return "no_change"
         }
     }
 }

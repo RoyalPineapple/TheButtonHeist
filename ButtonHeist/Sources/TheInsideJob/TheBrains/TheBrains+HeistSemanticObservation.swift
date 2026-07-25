@@ -21,7 +21,7 @@ extension ResolvedAccessibilityPredicate {
             return assertions.map(\.observationScope).max() ?? .visible
         case .changed(.elements(let assertions)):
             return assertions.map(\.observationScope).max() ?? .visible
-        case .noChange, .announcement:
+        case .announcement:
             return .visible
         }
     }

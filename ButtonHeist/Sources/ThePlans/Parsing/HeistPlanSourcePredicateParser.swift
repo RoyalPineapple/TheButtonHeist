@@ -15,8 +15,6 @@ extension HeistPlanSourceParser {
             }
             try expectSymbol(")")
             return predicate
-        case "noChange":
-            return .noChange
         case "announcement":
             return try parseAnnouncementPredicate()
         case "exists", "missing":

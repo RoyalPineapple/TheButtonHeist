@@ -172,8 +172,7 @@ The product contract is healthy when these cases hold:
   bearing containers of every parser type.
 - `exists` and `missing` are current-tree checks in every valid predicate
   context; lifecycle and update checks require ordered facts.
-- A complete fact-free observation window is the only evidence that admits `noChange`.
-- Screen, layout, value, and announcement notifications prevent `noChange`; a
+- Screen, layout, value, and announcement notifications are edge evidence; a
   screen notification begins a new observation generation.
 - Unknown JSON keys fail at the contract boundary.
 - Timeout diagnostics say which contract was not satisfied and what command or

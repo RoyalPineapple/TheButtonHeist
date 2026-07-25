@@ -203,7 +203,7 @@ extension TheBrains {
         } else {
             baseline = switch context.predicate.resolved {
             case .exists, .missing: .capture
-            case .announcement, .changed, .noChange: .unavailable(.unavailable)
+            case .announcement, .changed: .unavailable(.unavailable)
             }
         }
         let settlement = await runtime.settle(Settlement.Command(

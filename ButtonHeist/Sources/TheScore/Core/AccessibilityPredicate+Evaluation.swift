@@ -29,15 +29,6 @@ private extension ResolvedAccessibilityPredicate {
             return evaluateScreen(assertions, evidence: evidence, current: current)
         case .changed(.elements(let assertions)):
             return evaluateElements(assertions, evidence: evidence, current: current)
-        case .noChange:
-            let facts = evidence.changeFacts
-            guard evidence.isComplete else {
-                return PredicateEvaluationResult(met: false, actual: "observation history incomplete")
-            }
-            return PredicateEvaluationResult(
-                met: facts.isEmpty,
-                actual: facts.isEmpty ? nil : facts.kindDescription
-            )
         case .announcement:
             return PredicateEvaluationResult(
                 met: false,

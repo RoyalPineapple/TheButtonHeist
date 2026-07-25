@@ -120,7 +120,7 @@ Compression changes ownership, not retained source or wire meaning. Generated
 JSON retains the `version`, `name`, `parameter`, `definitions`, and `body` plan
 fields; `StringMatch` retains `mode` and `value`; element predicates retain
 their ordered `checks`; and root accessibility predicates retain `exists`,
-`missing`, `announcement`, `changed`, and `no_change`, including `screen` and
+`missing`, `announcement`, and `changed`, including `screen` and
 `elements` change scopes. Existing omission defaults, strict unknown-key
 rejection, source spans, diagnostic messages, and canonical rendering remain
 part of the contract.
@@ -276,8 +276,8 @@ or `.suffix`.
 provides two concrete assertion contexts whose constructors expose only valid
 combinations:
 
-- Root: `.exists(target)`, `.missing(target)`, `.changed(declaration)`,
-  `.noChange`, and `.announcement(...)`.
+- Root: `.exists(target)`, `.missing(target)`, `.changed(declaration)`, and
+  `.announcement(...)`.
 - Screen declaration: `.changed(.screen([.exists(target),
   .missing(target)]))`.
 - Elements declaration: `.changed(.elements([.exists(target),
@@ -296,11 +296,10 @@ disappears, the screen marker occurs, and every new-tree node appears. Therefore
 screen boundary. `updated` can only match two captures in the same screen
 generation.
 
-`.noChange` requires a complete observation window with no facts. Notification
-ingress is retained and cursor-backed; checkpoints do not consume events.
-Screen, layout, value, and announcement notifications are edge evidence and
-prevent `noChange`. A transition assertion never passes solely because its
-implied final state is true.
+Notification ingress is retained and cursor-backed; checkpoints do not consume
+events. Screen, layout, value, and announcement notifications are edge evidence.
+A transition assertion never passes solely because its implied final state is
+true.
 
 ## Expectation composition
 

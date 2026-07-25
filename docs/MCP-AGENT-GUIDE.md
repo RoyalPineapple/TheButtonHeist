@@ -243,8 +243,8 @@ MCP tool arguments are preflighted before The Button Heist converts them into co
 Settled trace captures are truth. The ordered `ChangeFact` stream is the sole
 temporal model: same-screen edges emit lifecycle/update facts, while a screen
 boundary emits old-tree departures, a screen marker, then new-tree arrivals.
-Screen, layout, value, and announcement notifications are edge evidence and
-prevent `noChange`; a screen notification starts the new generation.
+Screen, layout, value, and announcement notifications are edge evidence; a
+screen notification starts the new generation.
 
 For the full execution pipeline, including how `WaitFor`, `.expect(...)`, and
 `.until(...)` share the same polling waiter and accumulated-fact evaluation,

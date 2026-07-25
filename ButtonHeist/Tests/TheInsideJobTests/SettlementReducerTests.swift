@@ -133,7 +133,6 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             AccessibilityPredicate.exists(target),
             .changed(.elements([.appeared(target)])),
             .announcement("Saved"),
-            .noChange,
         ]
         let environment = HeistExecutionEnvironment()
 
@@ -359,14 +358,6 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
                 observed: ready,
                 predicate: .changed(.elements([.appeared(.label("Ready"))])),
                 expected: false
-            ),
-            PredicateTruthRow(
-                name: "complete non-expired fact-free history satisfies noChange",
-                preBaseline: nil,
-                baseline: ready,
-                observed: ready,
-                predicate: .noChange,
-                expected: true
             ),
         ]
 
@@ -931,55 +922,6 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         )
     }
 
-    func testCompleteHistoryGapCannotSatisfyAtHandoff() async throws {
-        let baseline = await commit(label: "Baseline")
-        var decision = armedObservationDecision(
-            baseline: baseline,
-            predicate: completeHistoryPredicate()
-        )
-        decision = reduce(
-            decision,
-            .readinessEstablished(.init(
-                generation: .initial,
-                path: .semanticStability,
-                observationBoundary: .after(baseline.moment)
-            ))
-        )
-        let handoff = await commit(label: "Handoff")
-        let gap = Observation.Gap(
-            reason: .historyEvicted,
-            baseline: baseline.moment,
-            current: handoff.moment
-        )
-        decision = reduce(
-            decision,
-            .observationAdmitted(.init(
-                event: handoff,
-                history: .expired(gap),
-                source: .handoffCapture(.initial)
-            ))
-        )
-        XCTAssertTrue(decision.effects.compactMap(\.predicateEvaluation).isEmpty)
-        decision = reduce(
-            decision,
-            .deadlineReached(.init(
-                phase: .observation,
-                instant: deadline.instant
-            ))
-        )
-
-        decision = completeQuiescence(decision)
-        guard case .terminal(let result) = decision.state else {
-            return XCTFail("Expected incomplete history to prevent settlement")
-        }
-        guard case .observation(.failed(let failed)) = result else {
-            return XCTFail("Expected failed observation")
-        }
-        XCTAssertEqual(failed.reason, .timedOut(.observation))
-        XCTAssertEqual(failed.attempt.evaluation.unavailability, .historyExpired(gap))
-        XCTAssertEqual(failed.attempt.handoff.event?.moment, handoff.moment)
-    }
-
     func testHandoffCaptureFailureRemainsDistinctFromReadiness() async {
         let baseline = await commit(label: "Baseline")
         var decision = armedPredicateFreeActionDecision(baseline: baseline)
@@ -1169,13 +1111,6 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         return Settlement.Predicate(
             authored: authored,
             resolved: try authored.resolve(in: HeistExecutionEnvironment())
-        )
-    }
-
-    private func completeHistoryPredicate() -> Settlement.Predicate {
-        Settlement.Predicate(
-            authored: .noChange,
-            resolved: .noChange
         )
     }
 
