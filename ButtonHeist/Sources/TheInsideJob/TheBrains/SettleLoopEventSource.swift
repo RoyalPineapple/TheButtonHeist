@@ -2,27 +2,25 @@
 #if DEBUG
 import Foundation
 
-enum SettleLoopEvent: Sendable {
-    case tick(TheTripwire.TickWaitOutcome)
-    case uikitIdle
-}
-
-/// Delivers one requested display heartbeat at a time alongside UIKit-idle edges.
+/// Delivers one requested display tick at a time.
+///
+/// The tick is the settle loop's only clock, so this source has exactly one
+/// event shape. Nothing else may yield into it.
 @MainActor
 final class SettleLoopEventSource {
     // MARK: - Properties
 
-    let events: AsyncStream<SettleLoopEvent>
-    private(set) var continuation: AsyncStream<SettleLoopEvent>.Continuation
+    let events: AsyncStream<TheTripwire.TickWaitOutcome>
+    private(set) var continuation: AsyncStream<TheTripwire.TickWaitOutcome>.Continuation
     private var tickTask: Task<Void, Never>?
 
-    // MARK: - Initialization
+    // MARK: - Init
 
     init() {
-        (events, continuation) = AsyncStream<SettleLoopEvent>.makeStream()
+        (events, continuation) = AsyncStream<TheTripwire.TickWaitOutcome>.makeStream()
     }
 
-    // MARK: - Heartbeat Observation
+    // MARK: - Tick Observation
 
     func requestTick(
         _ operation: @escaping @MainActor () async -> TheTripwire.TickWaitOutcome
@@ -31,7 +29,7 @@ final class SettleLoopEventSource {
         tickTask = Task { @MainActor in
             let tick = await operation()
             guard !Task.isCancelled else { return }
-            continuation.yield(.tick(tick))
+            continuation.yield(tick)
         }
     }
 

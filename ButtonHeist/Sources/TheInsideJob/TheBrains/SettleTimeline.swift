@@ -6,9 +6,76 @@ import AccessibilitySnapshotParser
 import ThePlans
 import TheScore
 
+/// A derived change projection over two ordered accessibility observations.
+///
+/// This is the settle loop's evidence: `unchanged` is the only shape that can
+/// prove stability, and the field list explains exactly what falsified it
+/// otherwise. It never owns source truth — the ledger holds that.
+struct SettleDelta: Equatable, Sendable {
+    /// One paired element's changed fields, in traversal order.
+    struct ElementChange: Equatable, Sendable {
+        let index: Int
+        let name: String
+        let fields: [String]
+    }
+
+    /// The element counts on either side, when they differ.
+    struct CountChange: Equatable, Sendable {
+        let previous: Int
+        let current: Int
+    }
+
+    /// No prior observation exists to compare against, so the delta carries no
+    /// verdict. Distinct from `unchanged`: a first reading is not evidence.
+    static let baseline = SettleDelta(isBaseline: true)
+
+    /// A comparison ran and found nothing. This is the only settlement
+    /// evidence the loop recognises.
+    static let unchanged = SettleDelta(countChange: nil, elementChanges: [], truncated: false)
+
+    let countChange: CountChange?
+    let elementChanges: [ElementChange]
+    /// True when the paired scan stopped early at the reporting cap.
+    let truncated: Bool
+    private let isBaseline: Bool
+
+    init(
+        countChange: CountChange?,
+        elementChanges: [ElementChange],
+        truncated: Bool
+    ) {
+        self.countChange = countChange
+        self.elementChanges = elementChanges
+        self.truncated = truncated
+        self.isBaseline = false
+    }
+
+    private init(isBaseline: Bool) {
+        self.countChange = nil
+        self.elementChanges = []
+        self.truncated = false
+        self.isBaseline = isBaseline
+    }
+
+    /// True when a comparison ran and found nothing — the settle loop's only
+    /// stability evidence.
+    var isUnchanged: Bool {
+        !isBaseline && countChange == nil && elementChanges.isEmpty
+    }
+
+    /// Compact explanation of the change, or `nil` when nothing changed.
+    var changeDescription: String? {
+        guard !isUnchanged, !isBaseline else { return nil }
+        let counts = countChange.map { ["count \($0.previous)->\($0.current)"] } ?? []
+        let elements = elementChanges.map { "[\($0.index)] \($0.name): \($0.fields.joined(separator: ", "))" }
+        let suffix = truncated ? "; ..." : ""
+        return "unstable accessibility changes: \((counts + elements).joined(separator: "; "))\(suffix)"
+    }
+}
+
 @MainActor struct SettleObservationLedger {
     private(set) var currentGenerationLastObservation: SettleRecordedObservation?
-    private(set) var latestChangeDescription: String?
+    private(set) var latestDelta: SettleDelta = .baseline
     private let bucket: CGFloat
     private var previousElements: [AccessibilityElement]?
 
@@ -19,7 +86,7 @@ import TheScore
     mutating func record(_ observation: InterfaceObservation) -> SettleRecordedObservation {
         let elements = observation.liveCapture.hierarchy.sortedElements
         if let previousElements {
-            latestChangeDescription = SettleTimeline.changeDescription(
+            latestDelta = SettleTimeline.delta(
                 from: previousElements,
                 to: elements,
                 bucket: bucket
@@ -36,6 +103,8 @@ import TheScore
 
     mutating func resetCurrentGeneration() {
         currentGenerationLastObservation = nil
+        previousElements = nil
+        latestDelta = .baseline
     }
 }
 
@@ -115,45 +184,51 @@ struct SettleRecordedObservation {
         ))
     }
 
-    static func changeDescription(
+    /// The typed change projection between two ordered element scans.
+    ///
+    /// Element changes are capped at the reporting limit; `truncated` records
+    /// that the paired scan stopped early so callers do not read an empty tail
+    /// as stability.
+    static func delta(
         from previous: [AccessibilityElement],
         to current: [AccessibilityElement],
         bucket: CGFloat = CoarseFrameComparison.currentBucket
-    ) -> String? {
-        var changes: [String] = []
+    ) -> SettleDelta {
+        let countChange = previous.count == current.count
+            ? nil
+            : SettleDelta.CountChange(previous: previous.count, current: current.count)
+        let reportedChangeLimit = 4
+        var elementChanges: [SettleDelta.ElementChange] = []
         var truncated = false
-        if previous.count != current.count {
-            changes.append("count \(previous.count)->\(current.count)")
-        }
 
         let pairedCount = min(previous.count, current.count)
         for index in 0..<pairedCount {
-            let before = previous[index]
-            let after = current[index]
-            guard let summary = elementChangeDescription(
-                before: before,
-                after: after,
+            guard let change = elementChange(
+                before: previous[index],
+                after: current[index],
                 index: index,
                 bucket: bucket
             ) else { continue }
-            changes.append(summary)
-            if changes.count == 4 {
+            elementChanges.append(change)
+            if elementChanges.count + (countChange == nil ? 0 : 1) == reportedChangeLimit {
                 truncated = index < pairedCount - 1
                 break
             }
         }
 
-        guard !changes.isEmpty else { return nil }
-        let suffix = truncated ? "; ..." : ""
-        return "unstable accessibility changes: \(changes.joined(separator: "; "))\(suffix)"
+        return SettleDelta(
+            countChange: countChange,
+            elementChanges: elementChanges,
+            truncated: truncated
+        )
     }
 
-    private static func elementChangeDescription(
+    private static func elementChange(
         before: AccessibilityElement,
         after: AccessibilityElement,
         index: Int,
         bucket: CGFloat
-    ) -> String? {
+    ) -> SettleDelta.ElementChange? {
         var fields: [String] = []
         if before.label != after.label {
             fields.append("label \(quoted(before.label))->\(quoted(after.label))")
@@ -183,7 +258,11 @@ struct SettleRecordedObservation {
         }
 
         guard !fields.isEmpty else { return nil }
-        return "[\(index)] \(elementName(before, alternate: after)): \(fields.joined(separator: ", "))"
+        return SettleDelta.ElementChange(
+            index: index,
+            name: elementName(before, alternate: after),
+            fields: fields
+        )
     }
 
     private static func elementName(_ element: AccessibilityElement, alternate: AccessibilityElement) -> String {
@@ -210,18 +289,6 @@ struct SettleRecordedObservation {
             return String(format: "%.0f", Double(rounded))
         }
         return String(format: "%.1f", Double(value))
-    }
-}
-
-private extension CoarseFrameKey {
-    var sortMinX: Int {
-        guard case .available(let minX, _, _, _) = self else { return Int.max }
-        return minX
-    }
-
-    var sortMinY: Int {
-        guard case .available(_, let minY, _, _) = self else { return Int.max }
-        return minY
     }
 }
 

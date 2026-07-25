@@ -112,15 +112,18 @@ final class SettleSessionTests: XCTestCase {
         }
     }
 
-    func makeQuietSession(
+    /// A session driven by a manual clock: every yield advances `frameMs`, so
+    /// tests can assert on the exact millisecond a settle lands.
+    func makeClockedSession(
         script: [InterfaceObservation?],
         clock: ManualClock,
         frameMs: Int = 10,
-        quietWindowMs: Int = 30,
+        cyclesRequired: Int = 3,
         timeoutMs: Int = 500,
         topVCSequence: [ObjectIdentifier?]? = nil,
         accessibilityNotificationSequence: [UInt64]? = nil,
-        yieldCount: Counter? = nil
+        yieldCount: Counter? = nil,
+        tick: @escaping @MainActor () -> TheTripwire.TickWaitOutcome = { .observed }
     ) -> SettleSession {
         let scriptBox = ScriptBox(script: script)
         let topVCBox = ScriptBox(script: topVCSequence ?? [nil])
@@ -136,10 +139,10 @@ final class SettleSessionTests: XCTestCase {
             observationYield: { _ in
                 _ = yieldCount?.next()
                 clock.advance(milliseconds: frameMs)
-                return .observed
+                return tick()
             },
+            cyclesRequired: cyclesRequired,
             clock: { clock.currentTime() },
-            quietWindowMs: quietWindowMs,
             timeoutMs: timeoutMs
         )
     }

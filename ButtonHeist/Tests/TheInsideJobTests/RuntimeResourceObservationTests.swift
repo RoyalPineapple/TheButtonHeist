@@ -165,7 +165,10 @@ final class RuntimeResourceObservationTests: XCTestCase {
                 outcome: .timedOut(timeMs: 17),
                 finalObservation: SettleSessionFinalObservation(observation: observation),
                 tripwireSignal: signal,
-                instabilityDescription: "runtime resource diagnostic"
+                delta: SettleTimeline.delta(
+                    from: [.make(label: "runtime resource diagnostic-before")],
+                    to: [.make(label: "runtime resource diagnostic-after")]
+                )
             )
         }
         _ = await stream.refreshVisibleObservation(
@@ -176,7 +179,7 @@ final class RuntimeResourceObservationTests: XCTestCase {
             XCTFail("Expected settle failure diagnostic")
             return ""
         }
-        XCTAssertTrue(diagnostic.contains("runtime resource diagnostic"))
+        XCTAssertTrue(diagnostic.contains("runtime resource diagnostic-before"), diagnostic)
         return diagnostic
     }
 

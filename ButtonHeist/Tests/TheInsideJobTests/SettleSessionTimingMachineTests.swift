@@ -180,7 +180,7 @@ extension SettleSessionTests {
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
-            policy: .consecutiveCycles(required: 2),
+            cyclesRequired: 2,
             tripwireBaseline: tripwireSignal(topmostVC: nil)
         )
 
@@ -195,18 +195,21 @@ extension SettleSessionTests {
         XCTAssertEqual(step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
-    func testMachineSettlesQuietWindowAfterFingerprintRemainsStableForWindow() {
+    func testMachineSettlesAfterThreeUnchangedDiffs() {
         let stable = makeParseResult([
             makeElement(label: "Ready", traits: .staticText),
         ])
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
-            policy: .quietWindow(milliseconds: 30),
+            cyclesRequired: 3,
             tripwireBaseline: tripwireSignal(topmostVC: nil)
         )
 
+        // The first reading seeds the comparison; only the three that follow
+        // are unchanged diffs.
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
+        XCTAssertContinue(reduceObservation(stable, elapsedMs: 10, machine: machine, ledger: &ledger, state: &state))
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 20, machine: machine, ledger: &ledger, state: &state))
         let step = reduceObservation(stable, elapsedMs: 30, machine: machine, ledger: &ledger, state: &state)
 
@@ -217,7 +220,7 @@ extension SettleSessionTests {
         XCTAssertEqual(step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
-    func testMachineUIKitIdleRequiresARepeatedPostIdleObservation() {
+    func testMachineCarriesTheObservationDeltaOnTheSettledResult() {
         let loading = makeParseResult([
             makeElement(label: "Loading", traits: .staticText),
         ])
@@ -227,46 +230,59 @@ extension SettleSessionTests {
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
-            policy: .uikitIdleOrQuietWindow(milliseconds: 60),
+            cyclesRequired: 2,
             tripwireBaseline: tripwireSignal(topmostVC: nil)
         )
 
         XCTAssertContinue(reduceObservation(loading, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
-        XCTAssertContinue(reduce(.uikitIdle, machine: machine, ledger: &ledger, state: &state))
-        XCTAssertContinue(reduceObservation(ready, elapsedMs: 20, machine: machine, ledger: &ledger, state: &state))
-        let step = reduceObservation(ready, elapsedMs: 21, machine: machine, ledger: &ledger, state: &state)
+        let changed = reduceObservation(ready, elapsedMs: 20, machine: machine, ledger: &ledger, state: &state)
+        XCTAssertContinue(changed)
+        XCTAssertContinue(reduceObservation(ready, elapsedMs: 21, machine: machine, ledger: &ledger, state: &state))
+        let step = reduceObservation(ready, elapsedMs: 22, machine: machine, ledger: &ledger, state: &state)
 
         guard case .terminal(.settled(let timeMs)) = step.decision else {
-            return XCTFail("Expected UIKit idle to settle repeated post-idle semantics, got \(step.decision)")
+            return XCTFail("Expected two unchanged diffs to settle, got \(step.decision)")
         }
-        XCTAssertEqual(timeMs, 21)
-        XCTAssertEqual(step.result?.evidence, .uikitIdle)
+        XCTAssertEqual(timeMs, 22)
+        let delta = try? XCTUnwrap(step.result?.delta)
+        XCTAssertEqual(delta?.isUnchanged, true, "a clean settle must report an unchanged diff")
+        XCTAssertNil(delta?.changeDescription)
         XCTAssertEqual(
             step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label,
             "Ready"
         )
     }
 
-    func testMachineActivePolicyCanSettleThroughAccessibilityQuietWindow() {
-        let stable = makeParseResult([
+    func testMachineDeltaNamesTheFieldThatFalsifiedStability() {
+        let loading = makeParseResult([
+            makeElement(label: "Loading", traits: .staticText),
+        ])
+        let ready = makeParseResult([
             makeElement(label: "Ready", traits: .staticText),
         ])
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
-            policy: .uikitIdleOrQuietWindow(milliseconds: 60),
+            cyclesRequired: 3,
             tripwireBaseline: tripwireSignal(topmostVC: nil)
         )
 
-        XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
-        XCTAssertContinue(reduceObservation(stable, elapsedMs: 30, machine: machine, ledger: &ledger, state: &state))
-        let step = reduceObservation(stable, elapsedMs: 60, machine: machine, ledger: &ledger, state: &state)
+        XCTAssertContinue(reduceObservation(loading, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
+        XCTAssertContinue(reduceObservation(ready, elapsedMs: 10, machine: machine, ledger: &ledger, state: &state))
 
-        guard case .terminal(.settled(let timeMs)) = step.decision else {
-            return XCTFail("Expected accessibility quiet-window settlement, got \(step.decision)")
-        }
-        XCTAssertEqual(timeMs, 60)
-        XCTAssertEqual(step.result?.evidence, .accessibilityQuietWindow)
+        let result = SettleSession.result(
+            outcome: .timedOut(timeMs: 10),
+            state: state,
+            observations: ledger
+        )
+
+        XCTAssertFalse(result.delta.isUnchanged)
+        XCTAssertEqual(result.delta.elementChanges.count, 1)
+        XCTAssertEqual(result.delta.elementChanges.first?.index, 0)
+        XCTAssertTrue(
+            result.delta.changeDescription?.contains("label \"Loading\"->\"Ready\"") == true,
+            result.delta.changeDescription ?? "missing change description"
+        )
     }
 
     func testMachineFingerprintChangeResetsStability() {
@@ -279,7 +295,7 @@ extension SettleSessionTests {
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
-            policy: .consecutiveCycles(required: 2),
+            cyclesRequired: 2,
             tripwireBaseline: tripwireSignal(topmostVC: nil)
         )
 
@@ -306,7 +322,7 @@ extension SettleSessionTests {
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
-            policy: .consecutiveCycles(required: 1),
+            cyclesRequired: 1,
             tripwireBaseline: baseline
         )
 
@@ -323,7 +339,7 @@ extension SettleSessionTests {
         _ = changedObject
     }
 
-    func testMachineTripwireResetRestartsBothPolicyCriteria() {
+    func testMachineTripwireResetRestartsTheUnchangedRunAtEveryCycleCount() {
         let stable = makeParseResult([
             makeElement(label: "Stable", traits: .staticText),
         ])
@@ -331,27 +347,40 @@ extension SettleSessionTests {
         let changedObject = NSObject()
         let changed = tripwireSignal(topmostVC: ObjectIdentifier(changedObject))
 
-        for policy in [
-            SettlePolicy.consecutiveCycles(required: 1),
-            .quietWindow(milliseconds: 1),
-            .uikitIdleOrQuietWindow(milliseconds: 1),
-        ] {
+        for cyclesRequired in 1...3 {
             let machine = SettleLoopMachine()
             var ledger = SettleObservationLedger()
             var state = SettleLoopMachine.State(
-                policy: policy,
+                cyclesRequired: cyclesRequired,
                 tripwireBaseline: baseline
             )
 
             XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
             XCTAssertBaselineReset(reduce(.tripwireSignal(changed), machine: machine, ledger: &ledger, state: &state))
-            XCTAssertContinue(reduceObservation(stable, elapsedMs: 1, machine: machine, ledger: &ledger, state: &state))
-            let step = reduceObservation(stable, elapsedMs: 2, machine: machine, ledger: &ledger, state: &state)
+            // The reset discards the pre-transition reading, so the run has to
+            // re-seed before any unchanged cycle can count.
+            for cycle in 0..<cyclesRequired {
+                let step = reduceObservation(
+                    stable,
+                    elapsedMs: cycle + 1,
+                    machine: machine,
+                    ledger: &ledger,
+                    state: &state
+                )
+                XCTAssertContinue(step)
+            }
+            let step = reduceObservation(
+                stable,
+                elapsedMs: cyclesRequired + 1,
+                machine: machine,
+                ledger: &ledger,
+                state: &state
+            )
 
             guard case .terminal(.settled(let timeMs)) = step.decision else {
-                return XCTFail("Expected post-reset settle for \(policy), got \(step.decision)")
+                return XCTFail("Expected post-reset settle at \(cyclesRequired) cycles, got \(step.decision)")
             }
-            XCTAssertEqual(timeMs, 2)
+            XCTAssertEqual(timeMs, cyclesRequired + 1)
         }
         _ = changedObject
     }
@@ -365,7 +394,7 @@ extension SettleSessionTests {
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
-            policy: .consecutiveCycles(required: 1),
+            cyclesRequired: 1,
             tripwireBaseline: baseline
         )
 
@@ -387,7 +416,7 @@ extension SettleSessionTests {
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
-            policy: .consecutiveCycles(required: 2),
+            cyclesRequired: 2,
             tripwireBaseline: tripwireSignal(topmostVC: nil)
         )
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
@@ -409,7 +438,7 @@ extension SettleSessionTests {
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
-            policy: .quietWindow(milliseconds: 30),
+            cyclesRequired: 3,
             tripwireBaseline: tripwireSignal(topmostVC: nil)
         )
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
@@ -422,6 +451,56 @@ extension SettleSessionTests {
 
         XCTAssertEqual(result.outcome, .timedOut(timeMs: 99))
         XCTAssertEqual(result.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
+    }
+
+    /// A stopped pulse and a slow app are different failures. The loop must not
+    /// blame the app for a clock that never ticked.
+    func testStoppedClockReportsUnavailableRatherThanTimedOut() async {
+        let stable = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText),
+        ])
+        let clock = ManualClock()
+        let session = makeClockedSession(
+            script: [stable],
+            clock: clock,
+            timeoutMs: 500,
+            tick: { .unavailable }
+        )
+
+        let outcome = await session.run(
+            start: clock.currentTime(),
+            baselineTripwireSignal: tripwireSignal(topmostVC: nil)
+        )
+
+        XCTAssertEqual(outcome.outcome, .clockUnavailable(timeMs: 10))
+        XCTAssertFalse(outcome.outcome.didSettleCleanly)
+    }
+
+    func testSlowAppStillReportsTimedOutWhenTheClockKeepsTicking() async {
+        let counter = Counter()
+        let clock = ManualClock()
+        let session = SettleSession(
+            parseProvider: {
+                self.makeParseResult([
+                    self.makeElement(label: "Tick \(counter.next())", traits: .staticText),
+                ])
+            },
+            tripwireSignalProvider: { self.tripwireSignal(topmostVC: nil) },
+            observationYield: { _ in
+                clock.advance(milliseconds: 10)
+                return .observed
+            },
+            cyclesRequired: 3,
+            clock: { clock.currentTime() },
+            timeoutMs: 50
+        )
+
+        let outcome = await session.run(
+            start: clock.currentTime(),
+            baselineTripwireSignal: tripwireSignal(topmostVC: nil)
+        )
+
+        XCTAssertEqual(outcome.outcome, .timedOut(timeMs: 50))
     }
 }
 #endif // canImport(UIKit)

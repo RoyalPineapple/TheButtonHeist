@@ -10,11 +10,14 @@ import TheScore
 final class TheSafecrackerIntegrationTests: XCTestCase {
 
     private var safecracker: TheSafecracker!
+    private var tripwire: TheTripwire!
     private var window: UIWindow!
     private var hostView: UIView!
 
     override func setUp() async throws {
         safecracker = TheSafecracker()
+        tripwire = TheTripwire()
+        tripwire.startPulse()
         safecracker.startKeyboardObservation()
 
         _ = await retireKeyboard {
@@ -43,6 +46,8 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         }
         safecracker.stopKeyboardObservation()
         safecracker = nil
+        tripwire.stopPulse()
+        tripwire = nil
         hostView = nil
         window?.isHidden = true
         window?.rootViewController = nil
@@ -160,7 +165,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
     private func activateTextInput(_ textField: UITextField) async {
         XCTAssertTrue(textField.becomeFirstResponder())
         XCTAssertTrue(textField.isFirstResponder)
-        let didActivate = await safecracker.waitForActiveTextInput()
+        let didActivate = await safecracker.waitForActiveTextInput(pulse: tripwire)
         XCTAssertTrue(didActivate)
     }
 

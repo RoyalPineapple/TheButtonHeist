@@ -354,7 +354,10 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
                 outcome: .timedOut(timeMs: 17),
                 finalObservation: SettleSessionFinalObservation(observation: observation),
                 tripwireSignal: signal,
-                instabilityDescription: "runtime lifecycle diagnostic"
+                delta: SettleTimeline.delta(
+                    from: [.make(label: "runtime lifecycle diagnostic-before")],
+                    to: [.make(label: "runtime lifecycle diagnostic-after")]
+                )
             )
         }
         _ = await stream.refreshVisibleObservation(
@@ -365,7 +368,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
             XCTFail("Expected settle failure diagnostic")
             return ""
         }
-        XCTAssertTrue(diagnostic.contains("runtime lifecycle diagnostic"))
+        XCTAssertTrue(diagnostic.contains("runtime lifecycle diagnostic-before"), diagnostic)
         return diagnostic
     }
 

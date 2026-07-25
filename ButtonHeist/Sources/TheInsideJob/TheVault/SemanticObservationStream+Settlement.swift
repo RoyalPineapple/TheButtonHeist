@@ -414,7 +414,6 @@ extension Observation.Stream {
     func admitSettledObservation(
         _ settleResult: SettleSession.Result,
         vault: TheVault,
-        layerGateWasClear: Bool? = nil,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
         lineageEvidence: ScreenLineageEvidence? = nil
     ) async -> CommittableInterfaceObservation? {
@@ -426,7 +425,7 @@ extension Observation.Stream {
                   lineageEvidence: lineageEvidence
               ) else {
             await recordFailedSettle(
-                SettleFailureDiagnostic.message(for: settleResult, layerGateWasClear: layerGateWasClear),
+                SettleFailureDiagnostic.message(for: settleResult),
                 observation: settleResult.finalObservation?.observation,
                 vault: vault
             )

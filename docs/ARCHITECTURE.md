@@ -206,33 +206,32 @@ its `AccessibilityObservationFallbackReason` in `transition.fallbackReason`.
 Notification delivery is best effort; absence is not evidence of replacement
 or stability.
 
-The active Inside Job runtime owns one UIKit idle tracker. Its typed
+The active Inside Job runtime owns one `AnimationObserver`. Its typed
 Objective-C swizzles remain installed from runtime activation until suspension
 or stop, call UIKit's original `UIViewAnimationState` start/stop methods first,
 and never need to mutate the process-global method table around each action.
 One aggregate animation counter runs continuously for that lifecycle, so a
 heist can observe an animation that began before its own execution scope.
-Outermost active-observation demand only opens permission to wait on that
-counter; nested heists and actions share the permission and its one-shot idle
-waiters. A public `CFRunLoopObserver` publishes one-shot main-loop
-`beforeWaiting` edges. Active settlement starts parsing immediately and admits
-either readiness proof under the current `Settlement.Session.Phase`. The UIKit
-proof waits for the aggregate animation count to reach zero, rechecks it at a
-main-loop idle edge, then admits the first parse from an explicitly registered
-future heartbeat only if the count is still zero on that heartbeat. The
-semantic proof admits a fingerprint that remains unchanged for
-60 ms, so a cosmetic infinite animation cannot pin the operation forever.
-Both proofs sample through Button Heist's one CADisplayLink heartbeat. The
-UIKit waiter is armed after the first heartbeat so UIKit has a chance to publish
-animation starts deferred until transaction commit. The heartbeat runs at the configured
-ambient rate and temporarily rises to the active screen's maximum refresh rate
-while an immediate one-shot waiter exists, then restores the ambient rate on
-observation, cancellation, timeout, or shutdown. No parser-owned timer or
-second display link exists. Tripwire generation changes invalidate both proofs
-and restart their evidence. If private idle tracking is unavailable, the
-semantic quiet-window proof remains sufficient. An already-zero counter
-completes its phase immediately, and an unmatched stop clamps at zero. Nested heists inherit
-the outermost demand; they never install parallel hooks. Returning to idle
+`animationSnapshot` reads that counter synchronously and needs no prior
+registration; nothing waits on it.
+
+Settlement has exactly one rule and one clock. `SettleSession` samples the
+parsed AX tree on Button Heist's one CADisplayLink tick and settles after
+`cyclesRequired` consecutive unchanged observation diffs, so a cosmetic
+infinite animation cannot pin the operation forever. The diff it produces —
+`SettleDelta` — travels on `Settlement.Readiness.Establishment`, so the
+reducer receives what changed rather than only that something settled.
+Callers tune the cycle count and the tick demand, never the criterion: there is
+no policy enum, no quiet-window alternative, and no second event source racing
+the tick. The tick runs at the configured ambient rate and temporarily rises to
+the active screen's maximum refresh rate while an immediate one-shot waiter
+exists, then restores the ambient rate on observation, cancellation, timeout,
+or shutdown. No parser-owned timer or second display link exists. Tripwire
+generation changes reset the settle baseline and restart the unchanged run. A
+tick reporting `unavailable` means the pulse is not running; that projects to
+`SettleOutcome.clockUnavailable`, distinct from `timedOut`, because a stopped
+clock is not a slow app. Nested heists inherit the outermost demand; they never
+install parallel hooks. Returning to idle
 demand cancels pending waiters but preserves lifecycle animation truth. Before
 a live heist—or a standalone action without an enclosing active context—opens
 its notification attribution scope, it commits one fresh composite baseline.

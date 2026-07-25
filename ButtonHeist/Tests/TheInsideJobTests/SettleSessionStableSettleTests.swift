@@ -8,15 +8,14 @@ import ButtonHeistSupport
 @MainActor
 extension SettleSessionTests {
 
-    func testSemanticQuietSettleUsesQuietWindowInsteadOfFixedCycles() async {
+    func testStableSettleLandsOnTheCycleThatCompletesTheRequiredRun() async {
         let element = makeElement(label: "Hello", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30))
         let stable = makeParseResult([element])
         let clock = ManualClock()
         let yieldCount = Counter()
-        let session = makeQuietSession(
+        let session = makeClockedSession(
             script: [stable],
             clock: clock,
-            quietWindowMs: 30,
             yieldCount: yieldCount
         )
 
@@ -29,7 +28,7 @@ extension SettleSessionTests {
         XCTAssertEqual(yieldCount.next(), 3)
     }
 
-    func testSemanticQuietSettleResetsQuietWindowWhenFingerprintChanges() async {
+    func testStableSettleRestartsTheRunWhenTheFingerprintChanges() async {
         let first = makeParseResult([
             makeElement(label: "Loading", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
         ])
@@ -37,10 +36,9 @@ extension SettleSessionTests {
             makeElement(label: "Ready", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
         ])
         let clock = ManualClock()
-        let session = makeQuietSession(
+        let session = makeClockedSession(
             script: [first, first, second, second, second, second],
-            clock: clock,
-            quietWindowMs: 30
+            clock: clock
         )
 
         let outcome = await session.run(
@@ -52,15 +50,14 @@ extension SettleSessionTests {
         XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
-    func testSemanticQuietSettleNotificationOnlySignalsDoNotStarveParser() async {
+    func testStableSettleNotificationOnlySignalsDoNotStarveParser() async {
         let stable = makeParseResult([
             makeElement(label: "Ready", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
         ])
         let clock = ManualClock()
-        let session = makeQuietSession(
+        let session = makeClockedSession(
             script: [stable],
             clock: clock,
-            quietWindowMs: 30,
             accessibilityNotificationSequence: [1, 2, 3, 4, 5]
         )
 
@@ -73,15 +70,14 @@ extension SettleSessionTests {
         XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
-    func testSemanticQuietSettleIgnoresNilParsesUntilAStableScreenArrives() async {
+    func testClockedSettleIgnoresNilParsesUntilAStableScreenArrives() async {
         let stable = makeParseResult([
             makeElement(label: "Ready", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
         ])
         let clock = ManualClock()
-        let session = makeQuietSession(
+        let session = makeClockedSession(
             script: [nil, nil, stable, stable, stable, stable],
             clock: clock,
-            quietWindowMs: 30,
             timeoutMs: 100
         )
 

@@ -8,16 +8,15 @@ import ButtonHeistSupport
 @MainActor
 extension SettleSessionTests {
 
-    func testSemanticQuietSettleTripwireChangeResetsBaseline() async {
+    func testClockedSettleTripwireChangeResetsBaseline() async {
         let stable = makeParseResult([
             makeElement(label: "Ready", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
         ])
         let clock = ManualClock()
         let changedVC = ObjectIdentifier(UIViewController())
-        let session = makeQuietSession(
+        let session = makeClockedSession(
             script: [stable],
             clock: clock,
-            quietWindowMs: 30,
             topVCSequence: [changedVC, changedVC, changedVC, changedVC]
         )
 
@@ -29,7 +28,7 @@ extension SettleSessionTests {
         XCTAssertEqual(outcome.outcome, .settled(timeMs: 50))
     }
 
-    func testSemanticQuietSettleTimesOutWhenFingerprintNeverStabilizes() async {
+    func testClockedSettleTimesOutWhenFingerprintNeverStabilizes() async {
         let clock = ManualClock()
         let counter = Counter()
         let session = SettleSession(
@@ -48,8 +47,8 @@ extension SettleSessionTests {
                 clock.advance(milliseconds: 10)
                 return .observed
             },
+            cyclesRequired: 3,
             clock: { clock.currentTime() },
-            quietWindowMs: 30,
             timeoutMs: 50
         )
 
@@ -60,7 +59,8 @@ extension SettleSessionTests {
 
         XCTAssertEqual(outcome.outcome, .timedOut(timeMs: 50))
         XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Tick 5")
-        XCTAssertNotNil(outcome.instabilityDescription)
+        XCTAssertNotNil(outcome.delta.changeDescription)
+        XCTAssertFalse(outcome.delta.isUnchanged)
     }
 
     func testFrameJitterInsideCoarseBucketSettlesAndKeepsFinalFrame() async {
@@ -92,7 +92,8 @@ extension SettleSessionTests {
         guard case .settled = outcome.outcome else {
             return XCTFail("Expected frame jitter inside the bucket to settle, got \(outcome.outcome)")
         }
-        XCTAssertNil(outcome.instabilityDescription)
+        XCTAssertNil(outcome.delta.changeDescription)
+        XCTAssertTrue(outcome.delta.isUnchanged)
         XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.shape.frame.origin.y, 428)
     }
 
@@ -108,7 +109,7 @@ extension SettleSessionTests {
             frame: CGRect(x: 561, y: 428, width: 90, height: 72)
         )
 
-        XCTAssertNil(SettleTimeline.changeDescription(from: [first], to: [jittered], bucket: 13))
+        XCTAssertNil(SettleTimeline.delta(from: [first], to: [jittered], bucket: 13).changeDescription)
     }
 
     func testChangeDescriptionNamesChangedFieldsAndIsBounded() {
@@ -140,7 +141,7 @@ extension SettleSessionTests {
             makeElement(label: "Sixth", traits: .staticText),
         ]
 
-        let diagnostic = SettleTimeline.changeDescription(from: before, to: after, bucket: 13)
+        let diagnostic = SettleTimeline.delta(from: before, to: after, bucket: 13).changeDescription
 
         XCTAssertTrue(diagnostic?.contains("count 5->6") == true, diagnostic ?? "missing diagnostic")
         XCTAssertTrue(diagnostic?.contains("label \"Old\"->\"New\"") == true, diagnostic ?? "missing diagnostic")
@@ -219,8 +220,8 @@ extension SettleSessionTests {
             return XCTFail("Expected .timedOut, got \(outcome.outcome)")
         }
         XCTAssertFalse(outcome.outcome.didSettleCleanly)
-        guard let diagnostic = outcome.instabilityDescription else {
-            return XCTFail("Expected instabilityDescription on timeout, got nil")
+        guard let diagnostic = outcome.delta.changeDescription else {
+            return XCTFail("Expected a change description on timeout, got nil")
         }
         XCTAssertTrue(diagnostic.contains("unstable accessibility changes"), diagnostic)
         XCTAssertTrue(diagnostic.contains("$ 9 Cash"), diagnostic)

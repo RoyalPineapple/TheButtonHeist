@@ -10,7 +10,6 @@ extension Observation {
 @MainActor
 internal final class Stream {
     private static let passiveSettleTimeoutMs = 1_000
-    private static let activeFallbackQuietWindowMs = 60
     private static let passiveDiscoveryCadence: Duration = .seconds(1)
 
     weak var vault: TheVault?
@@ -89,20 +88,17 @@ internal final class Stream {
         self.readTripwireSignal = { tripwire.tripwireSignal() }
         self.settleVisibleObservation = settleVisibleObservation ?? { vault, tripwire, demand, baseline, timeoutMs in
             let settlementStartedAt = RuntimeElapsed.now
-            let policy: SettlePolicy
-            switch demand {
-            case .active:
-                policy = .uikitIdleOrQuietWindow(
-                    milliseconds: Self.activeFallbackQuietWindowMs
-                )
-            case .idle:
-                policy = .consecutiveCycles(required: SettleSession.defaultCyclesRequired)
+            // One settle rule either way; demand only decides how hard the loop
+            // drives the shared tick while a command is in flight.
+            let tickDemand: TheTripwire.TickDemand = switch demand {
+            case .active: .immediate
+            case .idle: .ambient
             }
             return await SettleSession.live(
                 vault: vault,
                 tripwire: tripwire,
                 timeoutMs: timeoutMs,
-                policy: policy
+                demand: tickDemand
             ).run(
                 start: settlementStartedAt,
                 baselineTripwireSignal: baseline

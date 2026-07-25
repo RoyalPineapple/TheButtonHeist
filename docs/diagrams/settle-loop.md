@@ -14,7 +14,8 @@ handoff; current-state inspection returns its one admitted capture directly.
 `ButtonHeist/Sources/TheInsideJob/TheBrains/Settlement+Reducer.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/Settlement+Execution.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/Settlement+ResultProjection.swift`,
-`ButtonHeist/Sources/TheInsideJob/TheTripwire/UIKitIdleTracker.swift`
+`ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheBrains/SettleLoopRunner.swift`
 
 ## Three commands, one owner
 
@@ -138,12 +139,18 @@ handoff capture. If a qualifying observation was already admitted after the
 readiness boundary, it is reused. There is no fixed 30 ms stability delay and
 no blanket final predicate revalidation.
 
-The lifecycle-wide `UIKitIdleTracker` combines the aggregate animation counter
-with a main-run-loop `beforeWaiting` edge. The private start/stop hooks are
-installed for the active Inside Job runtime, not around each action. Nested
-heists share the outer observation demand. The existing semantic quiet-window
-path remains the fallback for unavailable private tracking and cosmetic
-infinite animations.
+Readiness is established by one settle rule with one clock. `SettleSession`
+samples the parsed AX tree on the tripwire tick and settles after
+`cyclesRequired` consecutive unchanged observation diffs. The diff it produces
+— `SettleDelta` — rides on `Readiness.Establishment`, so the reducer sees what
+changed rather than only that something settled. There is no second stability
+criterion, no second event source, and no policy enum: callers tune the cycle
+count and the tick demand, never the rule. Nested heists share the outer
+observation demand.
+
+A tick that reports `unavailable` means the pulse is not running. That projects
+to `SettleOutcome.clockUnavailable`, distinct from `timedOut`: a stopped clock
+is not a slow app and waiting longer cannot fix it.
 
 ## Terminal cleanup
 

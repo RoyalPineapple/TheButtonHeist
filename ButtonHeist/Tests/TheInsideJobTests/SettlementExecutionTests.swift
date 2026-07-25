@@ -361,7 +361,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
                     observation: visibleObservation
                 ),
                 tripwireSignal: baseline,
-                evidence: .semanticStability
+                delta: .unchanged
             )
         }
 

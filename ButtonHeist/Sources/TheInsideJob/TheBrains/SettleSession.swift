@@ -21,9 +21,14 @@ enum SettleOutcome: Equatable, Sendable {
     /// continue parsing/exploring on a dead session.
     case cancelled(timeMs: Int)
 
+    /// The clock stopped: the tripwire pulse is not running, so no further
+    /// observation can arrive. A stopped clock is not a slow app, and the
+    /// caller cannot fix it by waiting longer.
+    case clockUnavailable(timeMs: Int)
+
     var timeMs: Int {
         switch self {
-        case .settled(let ms), .timedOut(let ms), .cancelled(let ms):
+        case .settled(let ms), .timedOut(let ms), .cancelled(let ms), .clockUnavailable(let ms):
             return ms
         }
     }
@@ -33,7 +38,7 @@ enum SettleOutcome: Equatable, Sendable {
     var didSettleCleanly: Bool {
         switch self {
         case .settled: return true
-        case .timedOut, .cancelled: return false
+        case .timedOut, .cancelled, .clockUnavailable: return false
         }
     }
 
@@ -45,110 +50,38 @@ enum SettleOutcome: Equatable, Sendable {
             return "timed out after \(timeMs)ms"
         case .cancelled(let timeMs):
             return "cancelled after \(timeMs)ms"
+        case .clockUnavailable(let timeMs):
+            return "display clock unavailable after \(timeMs)ms"
         }
     }
 }
 
 // MARK: - Settle Loop Machine
 
-/// The settle loop has one reducer and one runner. This policy only selects
-/// the stability criterion and sampling cadence used by that runner.
-enum SettlePolicy: Equatable, Sendable {
-    case consecutiveCycles(required: Int)
-    case quietWindow(milliseconds: Int)
-    /// Samples semantics while UIKit is active. Either a composite UIKit idle
-    /// edge or presentation-safe accessibility quiet can prove settlement.
-    case uikitIdleOrQuietWindow(milliseconds: Int)
-}
-
-/// Evidence that proved the final accessibility observation had settled.
-enum SettleEvidence: Equatable, Sendable {
-    case semanticStability
-    case uikitIdle
-    case accessibilityQuietWindow
-}
-
 struct SettleObservationSample: Equatable, Sendable {
     let fingerprint: Int
 }
 
-private enum SettleLoopStability: Equatable, Sendable {
-    case consecutiveCycles(required: Int, completed: Int)
-    case quietWindow(milliseconds: Int, startedAtMs: Int?)
-    case uikitIdleOrQuietWindow(milliseconds: Int, startedAtMs: Int?, uikitIdleObserved: Bool)
+/// The one settle rule: N consecutive unchanged observation diffs.
+///
+/// There is no policy enum. "How many cycles" is a number, not a variant, and
+/// the diff is the only evidence — a cycle either changed the interface or it
+/// did not.
+private struct SettleLoopStability: Equatable, Sendable {
+    let cyclesRequired: Int
+    private(set) var consecutiveUnchangedCycles: Int = 0
 
-    init(policy: SettlePolicy) {
-        switch policy {
-        case .consecutiveCycles(let required):
-            self = .consecutiveCycles(required: required, completed: 0)
-        case .quietWindow(let milliseconds):
-            self = .quietWindow(milliseconds: milliseconds, startedAtMs: nil)
-        case .uikitIdleOrQuietWindow(let milliseconds):
-            self = .uikitIdleOrQuietWindow(
-                milliseconds: milliseconds,
-                startedAtMs: nil,
-                uikitIdleObserved: false
-            )
-        }
+    init(cyclesRequired: Int) {
+        self.cyclesRequired = cyclesRequired
     }
 
-    mutating func observe(repeatedFingerprint: Bool, elapsedMs: Int) -> SettleEvidence? {
-        switch self {
-        case .consecutiveCycles(let required, let completed):
-            let completed = repeatedFingerprint ? completed + 1 : 0
-            self = .consecutiveCycles(required: required, completed: completed)
-            return completed >= required ? .semanticStability : nil
-
-        case .quietWindow(let milliseconds, var startedAtMs):
-            if !repeatedFingerprint {
-                startedAtMs = elapsedMs
-            }
-            self = .quietWindow(milliseconds: milliseconds, startedAtMs: startedAtMs)
-            return startedAtMs.map { elapsedMs - $0 >= milliseconds }
-                == true ? .semanticStability : nil
-
-        case .uikitIdleOrQuietWindow(let milliseconds, var startedAtMs, let uikitIdleObserved):
-            if !repeatedFingerprint {
-                startedAtMs = elapsedMs
-            }
-            self = .uikitIdleOrQuietWindow(
-                milliseconds: milliseconds,
-                startedAtMs: startedAtMs,
-                uikitIdleObserved: uikitIdleObserved
-            )
-            if uikitIdleObserved, repeatedFingerprint {
-                return .uikitIdle
-            }
-            return startedAtMs.map { elapsedMs - $0 >= milliseconds }
-                == true ? .accessibilityQuietWindow : nil
-
-        }
-    }
-
-    mutating func observeUIKitIdle() {
-        guard case .uikitIdleOrQuietWindow(let milliseconds, let startedAtMs, _) = self else {
-            return
-        }
-        self = .uikitIdleOrQuietWindow(
-            milliseconds: milliseconds,
-            startedAtMs: startedAtMs,
-            uikitIdleObserved: true
-        )
+    mutating func observe(unchanged: Bool) -> Bool {
+        consecutiveUnchangedCycles = unchanged ? consecutiveUnchangedCycles + 1 : 0
+        return consecutiveUnchangedCycles >= cyclesRequired
     }
 
     mutating func reset() {
-        switch self {
-        case .consecutiveCycles(let required, _):
-            self = .consecutiveCycles(required: required, completed: 0)
-        case .quietWindow(let milliseconds, _):
-            self = .quietWindow(milliseconds: milliseconds, startedAtMs: nil)
-        case .uikitIdleOrQuietWindow(let milliseconds, _, _):
-            self = .uikitIdleOrQuietWindow(
-                milliseconds: milliseconds,
-                startedAtMs: nil,
-                uikitIdleObserved: false
-            )
-        }
+        consecutiveUnchangedCycles = 0
     }
 }
 
@@ -157,26 +90,17 @@ struct SettleLoopMachine: Equatable {
         fileprivate var tripwireBaseline: TheTripwire.TripwireSignal
         private var stability: SettleLoopStability
         private var previousFingerprint: Int?
-        private(set) var settlementEvidence: SettleEvidence?
 
-        init(policy: SettlePolicy, tripwireBaseline: TheTripwire.TripwireSignal) {
+        init(cyclesRequired: Int, tripwireBaseline: TheTripwire.TripwireSignal) {
             self.tripwireBaseline = tripwireBaseline
-            self.stability = SettleLoopStability(policy: policy)
+            self.stability = SettleLoopStability(cyclesRequired: cyclesRequired)
             self.previousFingerprint = nil
-            self.settlementEvidence = nil
         }
 
-        fileprivate mutating func observe(
-            _ observation: SettleObservationSample,
-            elapsedMs: Int
-        ) -> Bool {
-            let repeatedFingerprint = previousFingerprint == observation.fingerprint
+        fileprivate mutating func observe(_ observation: SettleObservationSample) -> Bool {
+            let unchanged = previousFingerprint == observation.fingerprint
             previousFingerprint = observation.fingerprint
-            settlementEvidence = stability.observe(
-                repeatedFingerprint: repeatedFingerprint,
-                elapsedMs: elapsedMs
-            )
-            return settlementEvidence != nil
+            return stability.observe(unchanged: unchanged)
         }
 
         fileprivate mutating func observe(_ signal: TheTripwire.TripwireSignal) -> Bool {
@@ -186,25 +110,15 @@ struct SettleLoopMachine: Equatable {
             tripwireBaseline = signal
             guard signal.requiresSettleBaselineReset(from: previous) else { return false }
 
-            resetStability()
-            return true
-        }
-
-        fileprivate mutating func observeUIKitIdle() {
-            stability.observeUIKitIdle()
-        }
-
-        private mutating func resetStability() {
             previousFingerprint = nil
-            settlementEvidence = nil
             stability.reset()
+            return true
         }
     }
 
     enum Event: Equatable, Sendable {
         case observation(SettleObservationSample, elapsedMs: Int)
         case tripwireSignal(TheTripwire.TripwireSignal)
-        case uikitIdle
     }
 
     enum Decision: Equatable, Sendable {
@@ -218,14 +132,11 @@ struct SettleLoopMachine: Equatable {
         let decision: Decision
         switch event {
         case .observation(let observation, let elapsedMs):
-            decision = state.observe(observation, elapsedMs: elapsedMs)
+            decision = state.observe(observation)
                 ? .terminal(.settled(timeMs: elapsedMs))
                 : .continuePolling
         case .tripwireSignal(let signal):
             decision = state.observe(signal) ? .baselineReset : .continuePolling
-        case .uikitIdle:
-            state.observeUIKitIdle()
-            decision = .continuePolling
         }
         return SettleLoopTransition(state: state, decision: decision)
     }
@@ -247,25 +158,18 @@ struct SettleSessionFinalObservation {
 
 /// Multi-cycle accessibility-tree settle loop.
 ///
-/// Samples the parsed AX tree on the shared UI heartbeat. Returns `.settled` after
-/// `cyclesRequired` consecutive identical fingerprints — with elements
-/// carrying `UIAccessibilityTraits.updatesFrequently` masked out so spinners
-/// don't block semantic settle. Active observations also race a UIKit
-/// animation/run-loop idle evidence against a semantic quiet window, so finite
-/// transitions can finish immediately while cosmetic loops cannot block
-/// settlement forever.
+/// Samples the parsed AX tree on the shared UI tick and settles after
+/// `cyclesRequired` consecutive unchanged observation diffs. Values on elements
+/// carrying `UIAccessibilityTraits.updatesFrequently` are masked so spinners
+/// don't block semantic settle; their geometry never is.
 ///
-/// **Settle signal boundary.** SettleSession watches settled AX semantics for
-/// both passive observation and active heists. Its policy selects consecutive
-/// fingerprint cycles, a quiet wall-clock window, a combined UIKit-idle and
-/// semantic-quiet race; the reducer and runner are shared.
-/// `TheTripwire.waitForAllClear`
-/// watches CALayers and is deliberately blind to the AX tree; "no layer
-/// motion" and "AX tree stable" disagree on every spinner-driven loading
-/// state. Viewport movement uses this same reducer with a two-cycle policy.
+/// **One clock, one comparison, one event.** The tripwire tick is the only time
+/// source and the AX-tree diff is the only evidence. Callers tune the cycle
+/// count, not the criterion: there is no second stability rule and no second
+/// event source racing the tick.
 ///
 /// The loop seeds `previousFingerprint` from a synchronous parse *before*
-/// the first heartbeat, so a static screen settles after exactly
+/// the first tick, so a static screen settles after exactly
 /// `cyclesRequired` cycles (300 ms with the default 3 × 100 ms), not
 /// `cyclesRequired + 1`.
 ///
@@ -297,11 +201,6 @@ struct SettleSessionFinalObservation {
         defaultCyclesRequired * defaultCycleIntervalMs
     ) / 1_000
 
-    /// Semantic quiet may outlive a cosmetic geometry animation. Give ordinary
-    /// presentation transitions time to finish, then let semantic evidence win
-    /// so an indefinite animation cannot wedge settlement.
-    static let presentationSettleGraceMs = 500
-
     /// Hard ceiling on how long the settle loop will wait for the AX tree
     /// to quiesce before giving up with `.timedOut`. 5 s is the longest
     /// any well-behaved iOS transition (push, modal, alert, tab switch)
@@ -321,39 +220,33 @@ struct SettleSessionFinalObservation {
     typealias TripwireSignalProvider = @MainActor () -> TheTripwire.TripwireSignal
     typealias Sleeper = @Sendable (UInt64) async -> Void
     typealias ObservationYield = @MainActor (Duration) async -> TheTripwire.TickWaitOutcome
-    typealias UIKitIdleWait = @MainActor (Duration) async -> Bool
-    typealias PresentationSettled = @MainActor () -> Bool
     typealias Clock = @MainActor () -> RuntimeElapsed.Instant
 
     let parseProvider: ParseProvider
     let tripwireSignalProvider: TripwireSignalProvider
     let observationYield: ObservationYield
-    let uikitIdleWait: UIKitIdleWait?
-    let presentationIsSettled: PresentationSettled
-    let policy: SettlePolicy
+    let cyclesRequired: Int
     let clock: Clock
     let timeoutMs: Int
 
-    private init(
+    init(
         parseProvider: @escaping ParseProvider,
         tripwireSignalProvider: @escaping TripwireSignalProvider,
         observationYield: @escaping ObservationYield,
-        uikitIdleWait: UIKitIdleWait? = nil,
-        presentationIsSettled: @escaping PresentationSettled = { true },
-        policy: SettlePolicy,
-        clock: @escaping Clock,
-        timeoutMs: Int
+        cyclesRequired: Int = SettleSession.defaultCyclesRequired,
+        clock: @escaping Clock = { RuntimeElapsed.now },
+        timeoutMs: Int = SettleSession.defaultTimeoutMs
     ) {
         self.parseProvider = parseProvider
         self.tripwireSignalProvider = tripwireSignalProvider
         self.observationYield = observationYield
-        self.uikitIdleWait = uikitIdleWait
-        self.presentationIsSettled = presentationIsSettled
-        self.policy = policy
+        self.cyclesRequired = cyclesRequired
         self.clock = clock
         self.timeoutMs = timeoutMs
     }
 
+    /// Sleep-driven wiring for unit tests that script parse results instead of
+    /// standing up a live UIKit hierarchy.
     init(
         parseProvider: @escaping ParseProvider,
         tripwireSignalProvider: @escaping TripwireSignalProvider,
@@ -369,94 +262,46 @@ struct SettleSessionFinalObservation {
                 await sleeper(UInt64(cycleIntervalMs) * 1_000_000)
                 return Task.isCancelled ? .cancelled : .observed
             },
-            uikitIdleWait: nil,
-            policy: .consecutiveCycles(required: cyclesRequired),
-            clock: { RuntimeElapsed.now },
+            cyclesRequired: cyclesRequired,
             timeoutMs: timeoutMs
         )
     }
 
-    init(
-        parseProvider: @escaping ParseProvider,
-        tripwireSignalProvider: @escaping TripwireSignalProvider,
-        observationYield: @escaping ObservationYield,
-        clock: @escaping Clock,
-        quietWindowMs: Int,
-        timeoutMs: Int
-    ) {
-        self.init(
-            parseProvider: parseProvider,
-            tripwireSignalProvider: tripwireSignalProvider,
-            observationYield: observationYield,
-            uikitIdleWait: nil,
-            policy: .quietWindow(milliseconds: quietWindowMs),
-            clock: clock,
-            timeoutMs: timeoutMs
-        )
-    }
-
-    /// Live wiring against the real vault/tripwire. The policy selects the
-    /// stability criterion while this type continues to own the entire loop.
+    /// Live wiring against the real vault/tripwire. `demand` only chooses how
+    /// hard the loop drives the shared tick; the settle rule is the same
+    /// either way.
     static func live(
         vault: TheVault,
         tripwire: TheTripwire,
         timeoutMs: Int = SettleSession.defaultTimeoutMs,
-        policy: SettlePolicy = .consecutiveCycles(
-            required: SettleSession.defaultCyclesRequired
-        )
-    ) -> SettleSession {
-        let observationYield: ObservationYield = switch policy {
-        case .consecutiveCycles:
-            { timeout in
-                await tripwire.waitForNextTick(timeout: timeout, demand: .ambient)
-            }
-        case .quietWindow:
-            { timeout in
-                await tripwire.waitForNextTick(timeout: timeout, demand: .immediate)
-            }
-        case .uikitIdleOrQuietWindow:
-            { timeout in
-                await tripwire.waitForNextTick(timeout: timeout, demand: .immediate)
-            }
-        }
-        let uikitIdleWait: UIKitIdleWait?
-        if policy.isUIKitIdleAware {
-            uikitIdleWait = { timeout in
-                await tripwire.uikitIdleTracker.waitUntilIdle(timeout: timeout)
-            }
-        } else {
-            uikitIdleWait = nil
-        }
-        return SettleSession(
-            parseProvider: { vault.refreshLiveCapture() },
-            tripwireSignalProvider: { tripwire.tripwireSignal() },
-            observationYield: observationYield,
-            uikitIdleWait: uikitIdleWait,
-            presentationIsSettled: { tripwire.allClear() },
-            policy: policy,
-            clock: { RuntimeElapsed.now },
-            timeoutMs: timeoutMs
-        )
-    }
-
-    /// Minimal stability criterion for a programmatic viewport transition. UIKit receives
-    /// two run-loop turns to lay out the new viewport, and the parser must
-    /// return the same semantic fingerprint across both repeat captures.
-    static func viewportTransition(
-        vault: TheVault,
-        tripwire: TheTripwire,
-        timeoutMs: Int
+        demand: TheTripwire.TickDemand = .ambient,
+        cyclesRequired: Int = SettleSession.defaultCyclesRequired
     ) -> SettleSession {
         SettleSession(
             parseProvider: { vault.refreshLiveCapture() },
             tripwireSignalProvider: { tripwire.tripwireSignal() },
             observationYield: { timeout in
-                await tripwire.waitForNextTick(timeout: timeout, demand: .immediate)
+                await tripwire.waitForNextTick(timeout: timeout, demand: demand)
             },
-            uikitIdleWait: nil,
-            policy: .consecutiveCycles(required: 2),
-            clock: { RuntimeElapsed.now },
+            cyclesRequired: cyclesRequired,
             timeoutMs: timeoutMs
+        )
+    }
+
+    /// Minimal stability criterion for a programmatic viewport transition. UIKit
+    /// receives two run-loop turns to lay out the new viewport, and the diff
+    /// must read unchanged across both.
+    static func viewportTransition(
+        vault: TheVault,
+        tripwire: TheTripwire,
+        timeoutMs: Int
+    ) -> SettleSession {
+        live(
+            vault: vault,
+            tripwire: tripwire,
+            timeoutMs: timeoutMs,
+            demand: .immediate,
+            cyclesRequired: 2
         )
     }
 
@@ -467,17 +312,15 @@ struct SettleSessionFinalObservation {
         let finalObservation: SettleSessionFinalObservation?
         /// Full tripwire signal paired with the final observed generation.
         let tripwireSignal: TheTripwire.TripwireSignal
-        let evidence: SettleEvidence?
-        /// Compact explanation of the most recent semantic instability when
-        /// the loop exits without a clean settle.
-        let instabilityDescription: String?
+        /// What the last comparison saw. On a clean settle this reads
+        /// `unchanged`; otherwise it names the fields that falsified stability.
+        let delta: SettleDelta
 
         init(
             outcome: SettleOutcome,
             finalObservation: SettleSessionFinalObservation?,
             tripwireSignal: TheTripwire.TripwireSignal,
-            evidence: SettleEvidence? = nil,
-            instabilityDescription: String? = nil
+            delta: SettleDelta = .baseline
         ) {
             precondition(
                 !outcome.didSettleCleanly || finalObservation != nil,
@@ -486,8 +329,7 @@ struct SettleSessionFinalObservation {
             self.outcome = outcome
             self.finalObservation = finalObservation
             self.tripwireSignal = tripwireSignal
-            self.evidence = evidence
-            self.instabilityDescription = instabilityDescription
+            self.delta = delta
         }
     }
 
@@ -500,12 +342,10 @@ struct SettleSessionFinalObservation {
             parseProvider: parseProvider,
             tripwireSignalProvider: tripwireSignalProvider,
             observationYield: observationYield,
-            uikitIdleWait: uikitIdleWait,
-            presentationIsSettled: presentationIsSettled,
             clock: clock,
             timeoutMs: timeoutMs,
             initial: SettleLoopMachine.State(
-                policy: policy,
+                cyclesRequired: cyclesRequired,
                 tripwireBaseline: baselineTripwireSignal
             )
         ).run(start: start)
@@ -522,20 +362,10 @@ struct SettleSessionFinalObservation {
                 SettleSessionFinalObservation(observation: $0.observation)
             },
             tripwireSignal: state.tripwireBaseline,
-            evidence: outcome.didSettleCleanly ? state.settlementEvidence : nil,
-            instabilityDescription: outcome.didSettleCleanly
-                ? nil
-                : observations.latestChangeDescription
+            delta: observations.latestDelta
         )
     }
 
-}
-
-private extension SettlePolicy {
-    var isUIKitIdleAware: Bool {
-        if case .uikitIdleOrQuietWindow = self { return true }
-        return false
-    }
 }
 
 #endif // DEBUG

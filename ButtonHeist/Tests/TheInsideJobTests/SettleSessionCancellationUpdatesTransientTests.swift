@@ -8,7 +8,7 @@ import ButtonHeistSupport
 @MainActor
 extension SettleSessionTests {
 
-    func testSemanticQuietSettleReturnsCancelledWhenObservationYieldSwallowsCancellation() async {
+    func testClockedSettleReturnsCancelledWhenObservationYieldSwallowsCancellation() async {
         let stable = makeParseResult([
             makeElement(label: "Ready", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
         ])
@@ -23,8 +23,8 @@ extension SettleSessionTests {
                 clock.advance(milliseconds: 10)
                 return completed ? .observed : .cancelled
             },
+            cyclesRequired: 3,
             clock: { clock.currentTime() },
-            quietWindowMs: 30,
             timeoutMs: 100
         )
         let task = Task {

@@ -6,8 +6,6 @@ struct SettleLoopRunner {
     let parseProvider: SettleSession.ParseProvider
     let tripwireSignalProvider: SettleSession.TripwireSignalProvider
     let observationYield: SettleSession.ObservationYield
-    let uikitIdleWait: SettleSession.UIKitIdleWait?
-    let presentationIsSettled: SettleSession.PresentationSettled
     let clock: SettleSession.Clock
     let timeoutMs: Int
     let initial: SettleLoopMachine.State
@@ -19,22 +17,17 @@ struct SettleLoopRunner {
         let machine = SettleLoopMachine()
         var state = initial
 
-        func reduce(_ event: SettleLoopMachine.Event) -> SettleLoopTransition {
-            let transition = machine.reduce(state, event: event)
-            state = transition.state
-            return transition
-        }
-
         func ingest(_ observation: InterfaceObservation) -> SettleSession.Result? {
             let recorded = observations.record(observation)
-            let transition = reduce(
-                .observation(
+            let transition = machine.reduce(
+                state,
+                event: .observation(
                     recorded.sample,
                     elapsedMs: deadline.elapsedMilliseconds(at: clock())
                 )
             )
+            state = transition.state
             guard case .terminal(let outcome) = transition.decision else { return nil }
-            guard presentationAdmitsSettlement(transition.state, deadline: deadline) else { return nil }
             return SettleSession.result(
                 outcome: outcome,
                 state: transition.state,
@@ -60,81 +53,30 @@ struct SettleLoopRunner {
 
         let source = SettleLoopEventSource()
         requestTick(from: source, deadline: deadline)
-        var idleTask: Task<Void, Never>?
-        defer {
-            idleTask?.cancel()
-            source.cancel()
-        }
+        defer { source.cancel() }
 
-        for await event in source.events {
-            switch event {
-            case .tick(let tick):
-                source.consumeTick()
-                if let outcome = evaluateTick(tick, deadline: deadline) {
-                    return result(outcome)
-                }
-                if idleTask == nil {
-                    idleTask = startIdleTask(deadline: deadline, continuation: source.continuation)
-                }
-
-                if observeTripwire(machine: machine, state: &state, observations: &observations) {
-                    requestTick(from: source, deadline: deadline)
-                    continue
-                }
-
-                guard let parse = parseProvider() else {
-                    requestTick(from: source, deadline: deadline)
-                    continue
-                }
-                if let outcome = ingest(parse) {
-                    return outcome
-                }
-                requestTick(from: source, deadline: deadline)
-
-            case .uikitIdle:
-                idleTask = nil
-                source.cancelTick()
-                _ = observeTripwire(machine: machine, state: &state, observations: &observations)
-
-                let tick = await observationYield(
-                    deadline.remainingDuration(at: clock())
-                )
-                if let outcome = evaluateTick(tick, deadline: deadline) {
-                    return result(outcome)
-                }
-
-                if observeTripwire(machine: machine, state: &state, observations: &observations) {
-                    requestTick(from: source, deadline: deadline)
-                    continue
-                }
-                guard await uikitIdleWait?(.zero) == true else {
-                    idleTask = startIdleTask(deadline: deadline, continuation: source.continuation)
-                    requestTick(from: source, deadline: deadline)
-                    continue
-                }
-                _ = reduce(.uikitIdle)
-                guard let parse = parseProvider() else {
-                    requestTick(from: source, deadline: deadline)
-                    continue
-                }
-                if let outcome = ingest(parse) {
-                    return outcome
-                }
-                requestTick(from: source, deadline: deadline)
+        for await tick in source.events {
+            source.consumeTick()
+            if let outcome = evaluateTick(tick, deadline: deadline) {
+                return result(outcome)
             }
+
+            if observeTripwire(machine: machine, state: &state, observations: &observations) {
+                requestTick(from: source, deadline: deadline)
+                continue
+            }
+
+            guard let parse = parseProvider() else {
+                requestTick(from: source, deadline: deadline)
+                continue
+            }
+            if let outcome = ingest(parse) {
+                return outcome
+            }
+            requestTick(from: source, deadline: deadline)
         }
 
         return result(await evaluateCompletion(source: source, deadline: deadline))
-    }
-
-    @MainActor
-    private func presentationAdmitsSettlement(
-        _ state: SettleLoopMachine.State,
-        deadline: SemanticObservationDeadline
-    ) -> Bool {
-        state.settlementEvidence != .accessibilityQuietWindow
-            || deadline.elapsedMilliseconds(at: clock()) >= SettleSession.presentationSettleGraceMs
-            || presentationIsSettled()
     }
 
     @MainActor
@@ -165,6 +107,10 @@ struct SettleLoopRunner {
         return Task.isCancelled ? .cancelled(timeMs: elapsedMs) : .timedOut(timeMs: elapsedMs)
     }
 
+    /// A stopped clock is not a slow app: `.unavailable` means the pulse is not
+    /// running, so no further observation can arrive no matter how long the
+    /// caller waits. It projects to its own outcome rather than collapsing into
+    /// `.timedOut`.
     @MainActor
     private func evaluateTick(
         _ tick: TheTripwire.TickWaitOutcome,
@@ -174,7 +120,14 @@ struct SettleLoopRunner {
         if tick == .cancelled || Task.isCancelled {
             return .cancelled(timeMs: elapsedMs)
         }
-        return tick == .observed ? nil : .timedOut(timeMs: elapsedMs)
+        switch tick {
+        case .observed:
+            return nil
+        case .unavailable:
+            return .clockUnavailable(timeMs: elapsedMs)
+        case .timedOut, .cancelled:
+            return .timedOut(timeMs: elapsedMs)
+        }
     }
 
     @MainActor
@@ -183,24 +136,11 @@ struct SettleLoopRunner {
         deadline: SemanticObservationDeadline
     ) {
         guard deadline.hasTimeRemaining(at: clock()) else {
-            source.continuation.yield(.tick(.timedOut))
+            source.continuation.yield(.timedOut)
             return
         }
         source.requestTick {
             await observationYield(deadline.remainingDuration(at: clock()))
-        }
-    }
-
-    @MainActor
-    private func startIdleTask(
-        deadline: SemanticObservationDeadline,
-        continuation: AsyncStream<SettleLoopEvent>.Continuation
-    ) -> Task<Void, Never>? {
-        uikitIdleWait.map { waitForIdle in
-            Task { @MainActor in
-                guard await waitForIdle(deadline.remainingDuration(at: clock())) else { return }
-                continuation.yield(.uikitIdle)
-            }
         }
     }
 }

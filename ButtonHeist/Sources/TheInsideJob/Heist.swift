@@ -245,7 +245,7 @@ extension TheInsideJob {
     ) async -> ActionResult {
         let shouldRestoreRuntime = !brains.semanticObservationIsActive
         if shouldRestoreRuntime {
-            tripwire.uikitIdleTracker.installIfAvailable()
+            tripwire.animationObserver.installIfAvailable()
             tripwire.startPulse()
             await brains.startSemanticObservation()
             brains.safecracker.startKeyboardObservation()
@@ -254,7 +254,7 @@ extension TheInsideJob {
             if shouldRestoreRuntime {
                 brains.stopSemanticObservation()
                 tripwire.stopPulse()
-                tripwire.uikitIdleTracker.uninstallIfNeeded()
+                tripwire.animationObserver.uninstallIfNeeded()
                 brains.safecracker.stopKeyboardObservation()
             }
         }

@@ -19,7 +19,11 @@ extension Settlement {
 
 extension Settlement.Readiness {
     internal enum Signal: Sendable, Equatable {
-        case established(path: Path, observationBoundary: ObservationBoundary)
+        case established(
+            path: Path,
+            observationBoundary: ObservationBoundary,
+            delta: SettleDelta? = nil
+        )
         case invalidated
     }
 }
@@ -714,13 +718,14 @@ extension Settlement {
                     fact: .announcementHistoryUnavailable(gap),
                     instant: RuntimeElapsed.now
                 )
-            case .readiness(.established(let path, let observationBoundary)):
+            case .readiness(.established(let path, let observationBoundary, let delta)):
                 guard let generation = state.session?.readiness.generation else { return nil }
                 return AdmittedSettlementFact(
                     fact: .readinessEstablished(.init(
                         generation: generation,
                         path: path,
-                        observationBoundary: observationBoundary
+                        observationBoundary: observationBoundary,
+                        delta: delta
                     )),
                     instant: RuntimeElapsed.now
                 )
@@ -1006,59 +1011,42 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
         })
     }
 
+    /// One readiness path for every command: run the settle loop and report the
+    /// diff it produced.
+    ///
+    /// Commands that dispatch wait for the refresh boundary recorded when
+    /// dispatch completed; commands that only observe start from the current
+    /// boundary. Both then read the same settle result, so the reducer sees the
+    /// same shape of evidence either way.
     @MainActor
     internal func armReadiness(
         _ deadline: Settlement.PhaseDeadline,
         sink: Settlement.ExecutionSink
     ) async {
-        if command.waitsForObservation || command.observationScope == .discovery {
-            lifecycle.armReadiness { [tripwire, vault] in
-                    let timeout = ContinuousClock.now.duration(to: deadline.instant)
-                    guard timeout > .zero,
-                          await tripwire.uikitIdleTracker.waitUntilIdle(timeout: timeout) else {
-                        return
-                    }
-                    let latest = await vault.semanticObservationStream.latestCommittedObservationMoment(
-                        scope: command.observationScope
-                    )
-                    guard let baseline = lifecycle.boundaryMoment else { return }
-                    sink.observeReadiness(.established(
-                        path: .uikitIdle,
-                        observationBoundary: .including(latest ?? baseline)
-                    ))
-                }
-            return
-        }
-
+        let dispatches = !(command.waitsForObservation || command.observationScope == .discovery)
         let baselineTripwireSignal = tripwire.tripwireSignal()
         lifecycle.armReadiness { [vault] in
-                guard let refreshBoundary = lifecycle.visibleRefreshBoundaryAfterDispatch() else {
-                    return
-                }
-                let timeout = ContinuousClock.now.duration(to: deadline.instant)
-                guard timeout > .zero else { return }
-                let settlement = await vault.semanticObservationStream
-                    .refreshVisibleObservation(
-                    after: refreshBoundary,
-                    baselineTripwireSignal: baselineTripwireSignal,
-                    timeoutMs: max(1, Int((timeout / .milliseconds(1)).rounded(.up)))
-                )
-                guard case .committed(let event) = settlement.commitOutcome,
-                      let evidence = settlement.settleResult.evidence else { return }
-                lifecycle.requestNotificationWindowConsumption()
-                let path: Settlement.Readiness.Path = switch evidence {
-                case .semanticStability:
-                    .semanticStability
-                case .uikitIdle:
-                    .uikitIdle
-                case .accessibilityQuietWindow:
-                    .accessibilityQuietWindow
-                }
-                sink.observeReadiness(.established(
-                    path: path,
-                    observationBoundary: .including(event.moment)
-                ))
-            }
+            let stream = vault.semanticObservationStream
+            guard let refreshBoundary = dispatches
+                    ? lifecycle.visibleRefreshBoundaryAfterDispatch()
+                    : stream.visibleRefreshBoundary()
+            else { return }
+            let timeout = ContinuousClock.now.duration(to: deadline.instant)
+            guard timeout > .zero else { return }
+            let settlement = await stream.refreshVisibleObservation(
+                after: refreshBoundary,
+                baselineTripwireSignal: baselineTripwireSignal,
+                timeoutMs: max(1, Int((timeout / .milliseconds(1)).rounded(.up)))
+            )
+            guard case .committed(let event) = settlement.commitOutcome,
+                  settlement.settleResult.outcome.didSettleCleanly else { return }
+            lifecycle.requestNotificationWindowConsumption()
+            sink.observeReadiness(.established(
+                path: .semanticStability,
+                observationBoundary: .including(event.moment),
+                delta: settlement.settleResult.delta
+            ))
+        }
     }
 
     @MainActor
