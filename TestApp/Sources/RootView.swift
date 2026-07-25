@@ -76,6 +76,9 @@ struct RootView: View {
                     NavigationLink("Analog Clock") {
                         AnalogClockDemo()
                     }
+                    NavigationLink("Settlement Cases") {
+                        SettlementCasesDemo()
+                    }
                 }
 
                 Section("Modals") {

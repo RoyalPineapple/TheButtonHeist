@@ -94,6 +94,23 @@ Activating a control, with `pre` = animation count sampled before dispatch:
 Case 3 is the only failure, and an explicit `noChange` predicate converts it to
 case 4. Any other predicate with no change fails.
 
+### What the animation count can and cannot see
+
+`AnimationObserver` counts `UIViewAnimationState` start/stop edges — that is,
+`UIView.animate` and friends. A raw `CAAnimation` added straight to a layer
+(`layer.add(_:forKey:)`) never touches that class, so it does **not** move
+`activeCount`.
+
+This is load-bearing, not a gap. `TestApp/Sources/AnalogClockDemo.swift` runs
+three infinite `CABasicAnimation`s on `CAShapeLayer`s with a deliberately static
+AX tree, and its contract is that taps still settle. Structurally that is case 3
+— indefinite animation, no AX change — and it passes only because the count
+never rises above baseline.
+
+So the rule fires on *view* animations that outlive the action, which is the
+case where the app is genuinely mid-transition. Decorative Core Animation is
+correctly ignored, exactly as the analog-clock fixture already asserts.
+
 Stated as one rule:
 
 > A cycle whose diff is `unchanged` **and** whose animation count exceeds the
