@@ -11,15 +11,15 @@ struct ButtonHeistImportContract {
         let checkoutContainer: AccessibilityTarget = .container(.label("Checkout"))
         let currentPredicate: AccessibilityPredicate = .exists(payTarget)
         let containerPredicate: AccessibilityPredicate = .exists(checkoutContainer)
-        let updatedPredicate: ChangeDeclaration.ElementAssertion = .updated(
+        let updatedPredicate: ElementAssertion = .updated(
             payTarget,
             .value("Paid")
         )
-        let changedPredicate: AccessibilityPredicate = .changed(.elements([updatedPredicate]))
+        let changedPredicate: AccessibilityPredicate = .elementsChanged([updatedPredicate])
         _ = (currentPredicate, containerPredicate, changedPredicate)
 
         return try HeistPlan("external-import-contract") {
-            Activate(.label("Pay")).expect(.changed(.screen()))
+            Activate(.label("Pay")).expect(.screenChanged)
         }
     }
 }
