@@ -173,13 +173,13 @@ import Testing
     let screenChangedAppeared = compileError(root(
         #"Activate(.label("Pay")).expect(.screenChanged([.appeared(.label("Receipt"))]))"#
     ))
-    expect(screenChangedAppeared, contains: ".elements([...]) for element assertions")
+    expect(screenChangedAppeared, contains: ".elementsChanged([...]) for element assertions")
 
     let screenChangedUpdated = compileError(root(
         #"Activate(.label("Pay")).expect("# +
             #".screenChanged([.updated(.label("Total"), .value("$3"))]))"#
     ))
-    expect(screenChangedUpdated, contains: ".elements([...]) for element assertions")
+    expect(screenChangedUpdated, contains: ".elementsChanged([...]) for element assertions")
 }
 
 @Test func `runtime parser rejects empty predicates`() throws {
