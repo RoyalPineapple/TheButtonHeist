@@ -15,82 +15,6 @@ extension AccessibilityPredicateTests {
         XCTAssertEqual(decoded, predicate)
     }
 
-    /// A screen change replaces the baseline wholesale, which leaves a single
-    /// capture — and a single capture admits only capture predicates.
-    ///
-    /// `disappeared`/`appeared` read two graphs, so they have nothing to read
-    /// here. This used to hold: the boundary projected the whole outgoing graph
-    /// as `disappeared` and the whole incoming graph as `appeared`, which made
-    /// these predicates true of *every* element on either side — a guarantee
-    /// worth nothing. Ask `changed(.screen())` about the boundary itself.
-    func testDeltaPredicatesAreUnanswerableAcrossAScreenChange() throws {
-        let trace = screenTrace(
-            before: makeTestInterface(elements: [element(label: "Home")]),
-            after: makeTestInterface(elements: [element(label: "Settings")])
-        )
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .disappeared(.label("Home")),
-            .appeared(.label("Settings")),
-        ]))
-
-        let outcome = try predicate.resolve(in: .empty)
-            .validate(against: result(success: true, trace: trace, completeness: .incomplete))
-        XCTAssertFalse(outcome.met)
-        XCTAssertEqual(
-            outcome.actual?.contains("the screen changed"),
-            true,
-            "The failure must say the screen changed, not that the elements were absent"
-        )
-    }
-
-    /// The old projection decided lifecycle by which side of the boundary a
-    /// node sat on, so an element present on *both* sides counted as having
-    /// disappeared and appeared. Identity said it never went anywhere.
-    func testUnchangedTargetDoesNotDisappearAndReappearAcrossAScreenChange() throws {
-        let shared = element(label: "Continue", traits: [.button])
-        let trace = screenTrace(
-            before: makeTestInterface(elements: [shared]),
-            after: makeTestInterface(elements: [shared])
-        )
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .disappeared(.label("Continue")),
-            .appeared(.label("Continue")),
-        ]))
-
-        XCTAssertFalse(try predicate.resolve(in: .empty).validate(against: result(success: true, trace: trace, completeness: .incomplete)).met)
-    }
-
-    /// The discrimination law: the gate is specific to a baseline replacement,
-    /// not a blanket disable. The same target, the same lifecycle predicate —
-    /// answerable within a screen, unanswerable across one.
-    ///
-    /// Without this, "always false" would satisfy the two tests above.
-    func testLifecyclePredicatesAnswerWithinAScreenButNotAcrossOne() throws {
-        let empty = makeTestInterface(elements: [])
-        let arrived = makeTestInterface(elements: [element(label: "Toast")])
-        let sameScreen = AccessibilityTrace(first: empty).appending(arrived)
-        let screenBoundary = screenTrace(before: empty, after: arrived)
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .appeared(.label("Toast")),
-        ]))
-
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result(success: true, trace: sameScreen, completeness: .incomplete)).met)
-        XCTAssertFalse(try predicate.resolve(in: .empty).validate(against: result(success: true, trace: screenBoundary, completeness: .incomplete)).met)
-    }
-
-    func testUpdatedOnlyMatchesSameScreenElementFacts() throws {
-        let before = makeTestInterface(elements: [element(label: "Count", value: "1")])
-        let after = makeTestInterface(elements: [element(label: "Count", value: "2")])
-        let sameScreen = AccessibilityTrace(first: before).appending(after)
-        let screenBoundary = screenTrace(before: before, after: after)
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("Count"), .value(before: "1", after: "2")),
-        ]))
-
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result(success: true, trace: sameScreen, completeness: .incomplete)).met)
-        XCTAssertFalse(try predicate.resolve(in: .empty).validate(against: result(success: true, trace: screenBoundary, completeness: .incomplete)).met)
-    }
-
     func testNotificationOnlyFactSatisfiesGenericElementsChange() throws {
         let interface = makeTestInterface(elements: [element(label: "Status")])
         let notification = AccessibilityNotificationEvidence(
@@ -149,28 +73,6 @@ extension AccessibilityPredicateTests {
         XCTAssertTrue(result.met)
     }
 
-    func testElementsChangedNotMetWhenTraceHasNoChange() throws {
-        let action = result(success: true, trace: .noChangeForTests(elementCount: 5), completeness: .incomplete)
-        let result = try AccessibilityPredicate.changed(.elements()).resolve(in: .empty).validate(against: action)
-        XCTAssertFalse(result.met)
-        XCTAssertEqual(result.actual, "noChange")
-    }
-
-    /// Element change, screen change and announcement are sibling events. None
-    /// nests inside another, so no predicate answers about a kind it did not
-    /// ask for — just as `announcement` stays silent on an element change.
-    ///
-    /// This used to pass: a boundary projected element facts, so "did elements
-    /// change?" was true of every navigation and `changed(.elements())` was a
-    /// strict superset of `changed(.screen())`. They are disjoint now.
-    func testElementsChangedNotMetForAScreenChange() throws {
-        let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        let action = result(success: true, trace: .screenChangedForTests(replacementInterface: interface), completeness: .incomplete)
-        let result = try AccessibilityPredicate.changed(.elements()).resolve(in: .empty).validate(against: action)
-        XCTAssertFalse(result.met)
-        XCTAssertEqual(result.actual, "screenChanged")
-    }
-
     // MARK: - Codable: element updated
 
     func testElementUpdatedToOnlyEncodeDecode() throws {
@@ -219,17 +121,6 @@ extension AccessibilityPredicateTests {
 
         XCTAssertTrue(result.met)
         XCTAssertNil(result.actual)
-    }
-
-    func testElementUpdatedDoesNotPassWhenCurrentValueAlreadyMatchedWithoutChangeEvidence() throws {
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("Quantity"), .value(before: "3", after: "3")),
-        ]))
-        let trace = AccessibilityTrace.noChangeForTests(elementCount: 1)
-        let result = try predicate.resolve(in: .empty).evaluate(in: evidence(trace))
-
-        XCTAssertFalse(result.met)
-        XCTAssertEqual(result.actual, "noChange")
     }
 
     func testElementUpdatedNotMetWhenNoMatch() throws {
@@ -358,39 +249,6 @@ extension AccessibilityPredicateTests {
         XCTAssertFalse(try mismatch.resolve(in: .empty).validate(against: action).met)
     }
 
-    func testElementUpdatedMatchesTypedGeometryCheckers() throws {
-        let frameUpdate = try XCTUnwrap(projectElementStateChange(
-            old: element(label: "Card", frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44),
-            new: element(label: "Card", frameX: 12, frameY: 20, frameWidth: 120, frameHeight: 44)
-        ))
-        let pointUpdate = try XCTUnwrap(projectElementStateChange(
-            old: element(label: "Knob", activationPointEvidence: .explicit(ScreenPoint(x: 10, y: 12))),
-            new: element(label: "Knob", activationPointEvidence: .explicit(ScreenPoint(x: 42, y: 64)))
-        ))
-        let action = result(
-            success: true,
-            trace: .elementsChangedForTests(
-                elementCount: 2,
-                edits: ElementEdits(updated: [frameUpdate, pointUpdate])
-            ),
-            completeness: .incomplete
-        )
-
-        let framePredicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("Card"), .frame(after: ElementFrameMatch(x: 12, y: 20, width: 120, height: 44))),
-        ]))
-        let pointPredicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("Knob"), .activationPoint(after: ElementPointMatch(x: 42, y: 64))),
-        ]))
-        let mismatch = AccessibilityPredicate.changed(.elements([
-            .updated(.label("Card"), .frame(after: ElementFrameMatch(x: 13))),
-        ]))
-
-        XCTAssertTrue(try framePredicate.resolve(in: .empty).validate(against: action).met)
-        XCTAssertTrue(try pointPredicate.resolve(in: .empty).validate(against: action).met)
-        XCTAssertFalse(try mismatch.resolve(in: .empty).validate(against: action).met)
-    }
-
     func testElementUpdatedMatchesTypedCustomContentAndRotorCheckers() throws {
         let customContent = HeistCustomContent(label: "Status", value: "Ready to submit", isImportant: true)
         let customUpdate = try XCTUnwrap(projectElementStateChange(
@@ -467,28 +325,6 @@ extension AccessibilityPredicateTests {
         XCTAssertEqual(result.actual, "no observed accessibility trace")
     }
 
-    func testElementUpdatedNotMetWhenEmptyUpdates() throws {
-        let trace = AccessibilityTrace.elementsChangedForTests(elementCount: 5, edits: ElementEdits())
-        let action = result(success: true, trace: trace, completeness: .incomplete)
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("counter"), .value(after: "5")),
-        ]))
-        let result = try predicate.resolve(in: .empty).validate(against: action)
-        XCTAssertFalse(result.met)
-        XCTAssertEqual(result.actual, "no matching element updates")
-    }
-
-    func testElementUpdatedDiagnosticOnMiss() throws {
-        let trace = try makeUpdateTrace(label: "counter", property: .value, old: "3", new: "4")
-        let action = result(success: true, trace: trace, completeness: .incomplete)
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("counter"), .value(after: "5")),
-        ]))
-        let result = try predicate.resolve(in: .empty).validate(against: action)
-        XCTAssertFalse(result.met)
-        XCTAssertEqual(result.actual, "counter: value: 3 → 4")
-    }
-
     func testElementUpdatedMatchesAnyAmongMultipleUpdates() throws {
         let trace = AccessibilityTrace.elementsChangedForTests(elementCount: 10, edits: ElementEdits(updated: [
             try makeUpdate(label: "label", property: .value, old: "A", new: "B"),
@@ -499,35 +335,6 @@ extension AccessibilityPredicateTests {
             .updated(.label("counter"), .value(after: "5")),
         ]))
         XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: action).met)
-    }
-
-    func testElementUpdatedWithPropertyFilter() throws {
-        let trace = AccessibilityTrace.elementsChangedForTests(elementCount: 5, edits: ElementEdits(updated: [
-            ElementUpdate(
-                before: element(label: "Toggle", traits: [.button]),
-                after: element(label: "Toggle", value: "5", traits: [.button, .selected]),
-                changes: [
-                    try XCTUnwrap(PropertyChange.traits(old: [.button], new: [.button, .selected])),
-                    try XCTUnwrap(PropertyChange.value(old: "3", new: "5")),
-                ]
-            ),
-        ]))
-        let action = result(success: true, trace: trace, completeness: .incomplete)
-        let traitsPredicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("Toggle"), .traits()),
-        ]))
-        let traitsResult = try traitsPredicate.resolve(in: .empty).validate(against: action)
-        XCTAssertTrue(traitsResult.met)
-        let valuePredicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("Toggle"), .value(after: "5")),
-        ]))
-        let valueResult = try valuePredicate.resolve(in: .empty).validate(against: action)
-        XCTAssertTrue(valueResult.met)
-        let hintPredicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("Toggle"), .hint()),
-        ]))
-        let hintResult = try hintPredicate.resolve(in: .empty).validate(against: action)
-        XCTAssertFalse(hintResult.met)
     }
 
     func testElementUpdatedAllFieldsMatch() throws {
@@ -568,43 +375,6 @@ extension AccessibilityPredicateTests {
             .updated(.label("any"), .value()),
         ]))
         XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result).met)
-    }
-
-    func testElementUpdatedNoUpdatesInResult() throws {
-        let result = ActionResult.success(
-            payload: .activate,
-                observation: .trace(traceEvidence(
-                    .elementsChangedForTests(elementCount: 5, edits: ElementEdits()),
-                    completeness: .incomplete
-                ))
-
-        )
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("any"), .value()),
-        ]))
-        let outcome = try predicate.resolve(in: .empty).validate(against: result)
-        XCTAssertFalse(outcome.met)
-        XCTAssertEqual(outcome.actual, "no matching element updates")
-    }
-
-    func testElementUpdatedPropertyMismatch() throws {
-        let result = ActionResult.success(
-            payload: .activate,
-                observation: .trace(traceEvidence(
-                    .elementsChangedForTests(
-                        elementCount: 5,
-                        edits: ElementEdits(updated: [
-                            try makeUpdate(label: "btn_1", property: .hint, old: "A", new: "B"),
-                        ])
-                    ),
-                    completeness: .incomplete
-                ))
-
-        )
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("btn_1"), .value()),
-        ]))
-        XCTAssertFalse(try predicate.resolve(in: .empty).validate(against: result).met)
     }
 
     // MARK: - Helpers

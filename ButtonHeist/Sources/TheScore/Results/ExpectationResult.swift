@@ -43,17 +43,6 @@ public struct AccessibilityTraceEvidence: Codable, Sendable, Equatable {
         completeness == .complete
     }
 
-    package var currentInterface: Interface {
-        guard let current = trace.captures.last?.interface else {
-            preconditionFailure("AccessibilityTraceEvidence requires a current capture")
-        }
-        return current
-    }
-
-    package var changeFacts: [AccessibilityTrace.ChangeFact] {
-        trace.changeFacts
-    }
-
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "AccessibilityTraceEvidence")
         let container = try decoder.container(keyedBy: CodingKeys.self)

@@ -30,9 +30,16 @@ import XCTest
 /// measure across it. An element already present at the baseline has no
 /// absent-tree behind it and cannot appear (row 7).
 ///
-/// **Ordered inside a step, independent between steps.** Two assertions
-/// written together are two steps; one tree answers both at once if it can,
-/// and neither blocks the other. Inside one step the pair stays ordered.
+/// **Ordered inside a step, independent between steps.** Inside one step, a
+/// half cannot drain until every half before it is gone — that ordering is what
+/// makes a pair mean a change rather than a coincidence. Between steps there is
+/// no ordering at all: two assertions written together are two steps, and
+/// neither blocks the other.
+///
+/// **A reading drains at most one half per step.** Every step is offered the
+/// same reading and advances if its tip is answered, so one tree can fulfil many
+/// predicates — but never two halves of the same one. That is what stops a
+/// single tree from being both sides of a change.
 ///
 /// **`noChange` drains nothing.** It is the stillness signal, not evidence: it
 /// passes every predicate untouched and only settles the gate. A predicate
@@ -107,7 +114,87 @@ final class PredicateTruthMatrixTests: XCTestCase {
                 predicate: .exists("Ready"), ticks: [], holds: false),
             Row(18, "a satisfied level survives later stillness",
                 predicate: .exists("Ready"), ticks: [ready], holds: true),
+
+            // # 19: a level drains on the first tree that answers it, and it
+            // stays drained. The element returning on a later tree does not
+            // un-answer it, because a drained half is gone from the list.
+            Row(19, "a level is answered by any tree, not by the last one",
+                predicate: .missing("Header"), ticks: [empty, ["Header"]], holds: true),
         ])
+    }
+
+    /// Two ordered sequences meet: the halves of a step, and the readings.
+    ///
+    /// A reading is offered to the tip of each step — the first half not yet
+    /// drained — and a half cannot drain until every half before it is gone.
+    /// That single ordering rule is what makes a pair mean a change rather than
+    /// a coincidence, and it means what a reading does to a step depends
+    /// entirely on how far that step has got.
+    ///
+    /// A screen boundary is not special. `vacated()` is an empty tree, so it is
+    /// simply a reading in which nothing is found, and the same tip rule decides
+    /// each case:
+    ///
+    /// - `missing(X)` has its only half at the tip, so the gap drains it — even
+    ///   with X on both screens. That is row 19 reaching the replay path.
+    /// - `appeared(X)` leads with `missing(X)`, so the gap drains that half and
+    ///   the screen after it drains the `exists`. Every replacement makes an
+    ///   appearance satisfiable by the screen that follows it.
+    /// - `disappeared(X)` leads with `exists(X)`, which the gap cannot answer.
+    ///   Its `missing` half cannot drain while the `exists` is still there, so
+    ///   the gap is never offered to it.
+    func testAReadingIsOfferedOnlyToTheTipOfEachStep() throws {
+        func acrossABoundary(_ predicate: ResolvedAccessibilityPredicate) -> Bool {
+            var expectation = Expectation([predicate])
+            expectation.vacated(at: Date())
+            expectation.screenChange(ScreenFacts(idAfter: "Second"))
+            expectation.snapshot(interface(["Header"]))
+            expectation.noChange()
+            return expectation.isMet
+        }
+
+        XCTAssertTrue(
+            try acrossABoundary(Shape.missing("Header").resolved()),
+            "the gap is a reading without Header"
+        )
+        XCTAssertTrue(
+            try acrossABoundary(Shape.appeared("Header").resolved()),
+            "the gap drains the missing half; the new screen drains the exists"
+        )
+        XCTAssertFalse(
+            try acrossABoundary(Shape.disappeared("Header").resolved()),
+            "the leading exists half was never drained, so the gap never reached the missing"
+        )
+    }
+
+    /// One reading fulfils as many steps as it can, but each one atomically:
+    /// every step is offered the same reading, and each advances by at most one
+    /// half.
+    ///
+    /// Three steps at different depths meet one tree holding "Ready". The
+    /// `exists` drains outright. `appeared` had already drained its `missing`, so
+    /// this tree drains its second half and completes it. `disappeared` is at its
+    /// `exists` tip, so this tree drains that half and leaves the `missing`
+    /// outstanding — one tree cannot carry it further, which is the atomicity.
+    func testOneReadingDrainsEveryStepButOnlyOneHalfOfEach() throws {
+        var expectation = try Expectation([
+            Shape.exists("Ready").resolved(),
+            Shape.appeared("Ready").resolved(),
+            Shape.disappeared("Ready").resolved(),
+        ])
+        expectation.snapshot(interface([]))
+        expectation.snapshot(interface(["Ready"]))
+        expectation.noChange()
+
+        XCTAssertFalse(expectation.isMet, "the disappearance still needs a tree without Ready")
+        XCTAssertEqual(
+            expectation.outstanding.count, 1,
+            "only the disappearance is outstanding: \(expectation.outstanding)"
+        )
+
+        expectation.snapshot(interface([]))
+        expectation.noChange()
+        XCTAssertTrue(expectation.isMet, "outstanding: \(expectation.outstanding)")
     }
 
     /// The nullary case is not a row: it names no element, so it has no target

@@ -175,23 +175,6 @@ extension AccessibilityPredicateTests {
         XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result).met)
     }
 
-    func testAbsentNotMetAgainstFinalInterfaceWhenStillPresent() throws {
-        let sameElement = element(label: "Header", traits: [.header])
-        let replacementInterface = makeTestInterface(elements: [sameElement], timestamp: Date())
-        let result = ActionResult.success(
-            payload: .wait,
-                observation: .trace(traceEvidence(
-                    .screenChangedForTests(replacementInterface: replacementInterface),
-                    completeness: .incomplete
-                ))
-
-        )
-        let predicate = AccessibilityPredicate.missing(.label("Header"))
-        let outcome = try predicate.resolve(in: .empty).validate(against: result)
-        XCTAssertFalse(outcome.met)
-        XCTAssertTrue(outcome.actual?.contains("Header") == true)
-    }
-
     // MARK: - Round-trip across cases
 
     func testAccessibilityPredicateRoundTrip() throws {

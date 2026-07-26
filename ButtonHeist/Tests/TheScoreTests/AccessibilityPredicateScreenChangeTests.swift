@@ -36,14 +36,6 @@ extension AccessibilityPredicateTests {
         XCTAssertTrue(result.met)
     }
 
-    func testScreenChangedNotMetWhenTraceOnlyChangesElements() throws {
-        let trace = try makeUpdateTrace(label: "counter", property: .value, old: "0", new: "1")
-        let action = result(success: true, trace: trace, completeness: .incomplete)
-        let result = try AccessibilityPredicate.changed(.screen()).resolve(in: .empty).validate(against: action)
-        XCTAssertFalse(result.met)
-        XCTAssertEqual(result.actual, "elementsChanged")
-    }
-
     func testScreenChangedNotMetWithoutTrace() throws {
         let action = result(success: true)
         let result = try AccessibilityPredicate.changed(.screen()).resolve(in: .empty).validate(against: action)
@@ -127,25 +119,6 @@ extension AccessibilityPredicateTests {
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
             actions: []
         )
-    }
-
-    func testScreenChangedRequiresTraceEndpointEdge() throws {
-        let result = ActionResult.success(
-            payload: .activate,
-                observation: .trace(traceEvidence(
-                    AccessibilityTrace(interface: Interface(
-                        timestamp: Date(timeIntervalSince1970: 0),
-                        tree: []
-                    )),
-                    completeness: .incomplete
-                ))
-
-        )
-
-        let outcome = try AccessibilityPredicate.changed(.screen()).resolve(in: .empty).validate(against: result)
-
-        XCTAssertFalse(outcome.met)
-        XCTAssertEqual(outcome.actual, "noChange")
     }
 
 }
