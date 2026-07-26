@@ -683,7 +683,7 @@ extension Settlement {
             self.handoff = .pending(.initial)
             self.observationHistory = nil
             self.latestObservation = nil
-            self.latestScreenName = boundary.moment.snapshot.screenName
+            self.latestScreenName = boundary.moment.snapshot.screenHeading
             self.timing = timing
             self.phase = switch command {
             case .observation(_, let deadline, _): .observation(deadline)

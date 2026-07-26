@@ -6,7 +6,7 @@ import Testing
     Activate(.label("Search"))
         .expect(.exists(.label("Results")))
     Activate(.label("Open Details"))
-        .expect(.changed(.screen([.exists(.label("Details"))])))
+        .expect(.changed(.screen("Details")))
     If(.exists(.value(.contains("Promo")))) {
         Warn("promo visible")
     }
@@ -25,7 +25,7 @@ import Testing
         .action(ActionStep(
             command: .activate(.predicate(.label("Open Details"))),
             expectationPolicy: .expect(ActionExpectation(
-                predicate: .changed(.screen([.exists(.label("Details"))])),
+                predicate: .changed(.screen("Details")),
                 timeout: 1
             )))),
         .conditional(try ConditionalStep(cases: [

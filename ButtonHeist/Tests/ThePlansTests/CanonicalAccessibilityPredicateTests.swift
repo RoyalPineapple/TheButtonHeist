@@ -4,10 +4,16 @@ import Testing
 
 @Suite("Canonical Accessibility Predicate")
 struct CanonicalAccessibilityPredicateTests {
-    @Test("screen JSON includes required empty assertions")
+    /// A screen predicate carries a match and never an assertion list, so its
+    /// wire shape has no `assertions` key to be empty. The unnamed form asks
+    /// only that a boundary happened, so it carries no `match` either.
+    @Test("screen JSON carries the arrived-at match and no assertion list")
     func screenJSON() throws {
-        let predicate = AccessibilityPredicate.changed(.screen())
-        #expect(try json(predicate) == #"{"assertions":[],"scope":"screen","type":"changed"}"#)
+        #expect(try json(AccessibilityPredicate.changed(.screen())) == #"{"scope":"screen","type":"changed"}"#)
+        #expect(
+            try json(AccessibilityPredicate.changed(.screen("Settings"))) ==
+            #"{"match":{"mode":"exact","value":"Settings"},"scope":"screen","type":"changed"}"#
+        )
     }
 
     @Test("elements JSON uses one canonical target and assertion language")
@@ -30,7 +36,7 @@ struct CanonicalAccessibilityPredicateTests {
     @Test("concrete assertion types share the canonical wire codec")
     func assertionJSON() throws {
         let root = AccessibilityPredicate.missing(.label("Loading"))
-        let screen = ChangeDeclaration.ScreenAssertion.missing(.label("Loading"))
+        let condition = PresenceCondition.missing(.label("Loading"))
         let elementPresence = ChangeDeclaration.ElementAssertion.missing(.label("Loading"))
         let elementUpdate = ChangeDeclaration.ElementAssertion.updated(
             .identifier("count"),
@@ -39,16 +45,16 @@ struct CanonicalAccessibilityPredicateTests {
 
         let presenceJSON = #"{"target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Loading"}}]},"type":"missing"}"#
         #expect(try json(root) == presenceJSON)
-        #expect(try json(screen) == presenceJSON)
+        #expect(try json(condition) == presenceJSON)
         #expect(try json(elementPresence) == presenceJSON)
         #expect(try JSONDecoder().decode(
             AccessibilityPredicate.self,
             from: JSONEncoder().encode(root)
         ) == root)
         #expect(try JSONDecoder().decode(
-            ChangeDeclaration.ScreenAssertion.self,
-            from: JSONEncoder().encode(screen)
-        ) == screen)
+            PresenceCondition.self,
+            from: JSONEncoder().encode(condition)
+        ) == condition)
         #expect(try JSONDecoder().decode(
             ChangeDeclaration.ElementAssertion.self,
             from: JSONEncoder().encode(elementPresence)
@@ -77,7 +83,7 @@ struct CanonicalAccessibilityPredicateTests {
         )
         #expect(throws: DecodingError.self) {
             _ = try JSONDecoder().decode(
-                ChangeDeclaration.ScreenAssertion.self,
+                PresenceCondition.self,
                 from: Data(#"{"type":"announcement"}"#.utf8)
             )
         }
@@ -95,15 +101,15 @@ struct CanonicalAccessibilityPredicateTests {
         }
     }
 
-    @Test("screen presence projects through distinct authored and resolved types")
-    func screenAssertionRootPredicate() throws {
-        let assertion = ChangeDeclaration.ScreenAssertion.exists(.label("Receipt"))
+    @Test("branch presence projects through distinct authored and resolved types")
+    func presenceConditionRootPredicate() throws {
+        let condition = PresenceCondition.exists(.label("Receipt"))
         let root = AccessibilityPredicate.exists(.label("Receipt"))
-        let resolvedAssertion: ResolvedScreenAssertion = try assertion.resolve(in: .empty)
+        let resolvedCondition: ResolvedPresenceCondition = try condition.resolve(in: .empty)
         let resolvedRoot: ResolvedAccessibilityPredicate = try root.resolve(in: .empty)
 
-        #expect(assertion.rootPredicate == root)
-        #expect(resolvedAssertion.rootPredicate == resolvedRoot)
+        #expect(condition.rootPredicate == root)
+        #expect(resolvedCondition.rootPredicate == resolvedRoot)
     }
 
     @Test("container-only targets use the canonical target slot")
@@ -129,14 +135,13 @@ struct CanonicalAccessibilityPredicateTests {
     @Test(
         "malformed changed JSON is rejected",
         arguments: [
-            #"{"type":"changed","scope":"screen"}"#,
-            #"{"type":"changed","scope":"screen","assertions":[],"unexpected":true}"#,
+            #"{"type":"changed","scope":"screen","unexpected":true}"#,
             #"{"type":"changed","scope":"invalid","assertions":[]}"#,
-            #"{"type":"changed","scope":"screen","assertions":[{"type":"updated","# +
+            #"{"type":"changed","scope":"elements","assertions":[{"type":"updated","# +
                 #""target":{"checks":[{"identifier":{"mode":"exact","value":"count"}}]},"# +
                 #""property":"value","after":{"mode":"exact","value":"2"}}]}"#,
             #"{"type":"changed","scope":"elements","assertions":["# +
-                #"{"type":"changed","scope":"screen","assertions":[]}]}"#,
+                #"{"type":"changed","scope":"screen"}]}"#,
             #"{"type":"exists","target":{"container":{"checks":["# +
                 #"{"kind":"semantic","semantic":{"kind":"identifier","# +
                 #""match":{"mode":"exact","value":"Checkout"}}}]},"ordinal":-1}}"#,
@@ -156,20 +161,23 @@ struct CanonicalAccessibilityPredicateTests {
         }
     }
 
+    /// Both screen spellings round-trip: bare `.screen()` for any boundary, and
+    /// `.screen("Name")` for the arrived-at screen. The element question that
+    /// used to ride inside `.screen([...])` is a sibling predicate now, so it
+    /// round-trips through its own `WaitFor`.
     @Test("source parser and renderer use only changed screen spelling")
     func sourceRoundTrip() throws {
         let source = """
         HeistPlan {
-            WaitFor(.changed(.screen([.exists(.label("Receipt"))])))
+            WaitFor(.changed(.screen()))
+            WaitFor(.changed(.screen("Receipt")))
             WaitFor(.exists(.container(.identifier("Checkout"), ordinal: 1)))
         }
         """
         let plan = try HeistSourceCompilation.compile(source)
         let expected = try HeistPlan(body: [
-            .wait(WaitStep(
-                predicate: .changed(.screen([.exists(.label("Receipt"))])),
-                timeout: defaultWaitTimeout
-            )),
+            .wait(WaitStep(predicate: .changed(.screen()), timeout: defaultWaitTimeout)),
+            .wait(WaitStep(predicate: .changed(.screen("Receipt")), timeout: defaultWaitTimeout)),
             .wait(WaitStep(
                 predicate: .exists(.container(.identifier("Checkout"), ordinal: 1)),
                 timeout: defaultWaitTimeout
@@ -177,7 +185,8 @@ struct CanonicalAccessibilityPredicateTests {
         ])
 
         #expect(plan == expected)
-        #expect(try plan.canonicalSwiftDSL().contains(".changed(.screen([.exists(.label(\"Receipt\"))]))"))
+        #expect(try plan.canonicalSwiftDSL().contains(".changed(.screen())"))
+        #expect(try plan.canonicalSwiftDSL().contains(".changed(.screen(\"Receipt\"))"))
         #expect(try plan.canonicalSwiftDSL().contains(".container(.identifier(\"Checkout\"), ordinal: 1)"))
     }
 

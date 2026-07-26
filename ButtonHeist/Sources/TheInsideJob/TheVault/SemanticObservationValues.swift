@@ -53,14 +53,24 @@ extension Observation {
         private let tree: InterfaceTree
         private let captureID: InterfaceCaptureID
 
-        /// What the classifier calls this screen.
+        /// The semantic state of this screen, for asking whether it moved.
         ///
-        /// A derived view like `observation`, computed here because the tree
-        /// stays private: the classifier reads a primary header to decide
-        /// whether two captures are the same screen, and that same reading is
-        /// the screen's name.
-        internal var screenName: String? {
-            ScreenClassifier.screenName(of: tree)
+        /// The hash and not `==`: `InterfaceTree` holds its `viewportCapture`,
+        /// so comparing two whole trees counts a scroll that revealed nothing
+        /// as a change. The hash is the semantic reading, which is the one the
+        /// question means.
+        internal var semanticHash: String {
+            tree.interfaceHash
+        }
+
+        /// What a screen predicate matches this screen by: its first heading.
+        ///
+        /// The same rule the replayed trace uses, deliberately — one reading, so
+        /// a caller writing `changed(.screen("Order Details"))` cannot match
+        /// live and miss on replay. Nil when the screen has no heading, which
+        /// makes a named predicate refuse: there is nothing to have matched.
+        internal var screenHeading: String? {
+            trace.captures.last.flatMap { InterfaceSummary.screenName(for: $0.interface) }
         }
 
         internal var observation: InterfaceObservation {

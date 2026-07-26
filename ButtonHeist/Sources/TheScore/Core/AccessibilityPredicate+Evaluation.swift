@@ -49,9 +49,8 @@ private extension ResolvedAccessibilityPredicate {
         guard facts.contains(where: \.isScreenChanged) else {
             return PredicateEvaluationResult(met: false, actual: facts.kindDescription)
         }
-        let arrived = InterfaceSummary.screenId(for: evidence.currentInterface)
-        let screenFacts = ScreenFacts(idBefore: nil, idAfter: arrived)
-        guard predicate.matches(screenFacts) else {
+        let arrived = InterfaceSummary.screenName(for: evidence.currentInterface)
+        guard predicate.matches(ScreenFacts(idAfter: arrived)) else {
             return PredicateEvaluationResult(met: false, actual: arrived ?? "unnamed screen")
         }
         return PredicateEvaluationResult(met: true, actual: nil)
@@ -96,7 +95,7 @@ private extension ResolvedAccessibilityPredicate {
         let failures = assertions.compactMap { assertion -> String? in
             guard assertion.isSnapshotPredicate || !elementFacts.isEmpty else {
                 return crossedScreenBoundary
-                    ? "\(assertion) asks about an element change, but the screen changed; use changed(.screen([...]))"
+                    ? "\(assertion) asks about an element change, but the screen changed; use changed(.screen())"
                     : facts.kindDescription
             }
             let result = evaluateElementAssertion(

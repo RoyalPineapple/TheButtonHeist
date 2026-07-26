@@ -153,7 +153,7 @@ import ThePlans
     let titleReference: HeistReferenceName = "title"
     let valueReference: HeistReferenceName = "valuePart"
     let screenReference: HeistReferenceName = "screenId"
-    let expression = AccessibilityPredicate.changed(.screen([
+    let expression = AccessibilityPredicate.changed(.elements([
         .exists(.label(.exact(titleReference))),
         .missing(.ref("ctaTarget")),
         .exists(.value(.contains(valueReference))),
@@ -166,7 +166,7 @@ import ThePlans
     )
 
     let resolved = try expression.resolve(in: environment)
-    let expected = try AccessibilityPredicate.changed(.screen([
+    let expected = try AccessibilityPredicate.changed(.elements([
         .exists(.label("Dashboard")),
         .missing(target),
         .exists(.value(.contains("Ready"))),

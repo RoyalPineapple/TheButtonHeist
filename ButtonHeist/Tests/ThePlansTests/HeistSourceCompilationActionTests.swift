@@ -102,7 +102,7 @@ import Testing
             .expect(.exists(.label("Payment Complete")))
 
         RunHeist("Checkout.pay")
-            .expect(.changed(.screen([.exists(.label("Receipt"))])))
+            .expect(.changed(.screen("Receipt")))
     }
     """)
     let expected = try HeistPlan(
@@ -154,7 +154,7 @@ import Testing
             .invoke(HeistInvocationStep(
                 path: "Checkout.pay",
                 expectation: WaitStep(
-                    predicate: .changed(.screen([.exists(.label("Receipt"))])),
+                    predicate: .changed(.screen("Receipt")),
                     timeout: defaultActionExpectationTimeout
                 )
             )),

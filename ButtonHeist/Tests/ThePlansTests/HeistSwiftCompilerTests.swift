@@ -356,7 +356,7 @@ struct HeistSwiftCompilerTests {
             #expect(error.diagnostics.allSatisfy { $0.path == "activate" })
             #expect(error.diagnostics.contains {
                 $0.message.contains("unsupported expectation composition")
-                    && $0.hint == "Use one canonical predicate per expectation, or add current-tree assertions inside .changed(.screen(...))."
+                    && $0.hint == "Use one predicate per expectation, or follow the action with a WaitFor."
             })
             #expect(error.diagnostics.contains {
                 $0.message.contains("multiple explicit expectation timeouts")
@@ -467,10 +467,7 @@ struct HeistSwiftCompilerTests {
                 try HeistPlan("PredicateComposition") {
                     WaitFor(.exists(.label("Receipt")))
                     WaitFor(.missing(.label("Loading")))
-                    WaitFor(.changed(.screen([
-                        .exists(.label("Receipt")),
-                        .missing(.label("Loading")),
-                    ])))
+                    WaitFor(.changed(.screen("Receipt")))
                     WaitFor(.changed(.elements([
                         .updated(.identifier("count"), .value("3")),
                     ])))

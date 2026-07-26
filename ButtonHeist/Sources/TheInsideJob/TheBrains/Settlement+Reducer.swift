@@ -257,16 +257,21 @@ private extension Settlement.Reducer {
         // hierarchy, not an explored one. Wire the emission to the exploration
         // stages when the tick stream can be paused.
         let interface = admission.event.moment.capture.interface
-        let screenName = admission.event.snapshot.screenName
+        let screenHeading = admission.event.snapshot.screenHeading
         if admission.event.continuity.isReplacement {
             session.requirement.expectation.vacated(at: interface.timestamp)
-            session.requirement.expectation.screenChange(ScreenFacts(
-                idBefore: session.latestScreenName,
-                idAfter: screenName
-            ))
+            session.requirement.expectation.screenChange(ScreenFacts(idAfter: screenHeading))
         }
-        session.requirement.expectation.snapshot(interface)
-        session.latestScreenName = screenName
+        // Every observation is a tick, and which tick it is was already decided
+        // by the one comparison the store made. A tree in a new state is a
+        // snapshot; one that came back the same is stillness. Nothing here
+        // compares anything again.
+        if admission.event.isChange || admission.event.continuity.isReplacement {
+            session.requirement.expectation.snapshot(interface)
+        } else {
+            session.requirement.expectation.noChange()
+        }
+        session.latestScreenName = screenHeading
         if case .established(let readiness) = session.readiness,
            session.command.waitsForObservation
                || session.requirement.predicate?.semantics == .currentState
@@ -297,7 +302,6 @@ private extension Settlement.Reducer {
         if case .established = session.readiness { return [] }
 
         session.readiness = .established(establishment)
-        session.requirement.expectation.noChange()
         if let latestObservation = session.latestObservation,
            let handoff = Settlement.Handoff.Admission.admit(
                latestObservation,

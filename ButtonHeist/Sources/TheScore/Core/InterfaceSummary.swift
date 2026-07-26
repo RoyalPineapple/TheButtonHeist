@@ -14,6 +14,19 @@ public enum InterfaceSummary {
         slugify(screenTitle(for: interface))
     }
 
+    /// What a screen predicate matches against: the first heading, as written.
+    ///
+    /// Not `screenId`, which slugs and truncates for display, and not the
+    /// classifier's reading, which prefers a header outside scrollable content.
+    /// A caller writing `changed(.screen("Order Details"))` means the words on
+    /// the screen, so the name is the label untouched — and one rule, so the
+    /// live tick and the replayed trace cannot disagree about it.
+    public static func screenName(for interface: Interface) -> String? {
+        interface.projectedElements
+            .first { $0.traits.contains(.header) && $0.label != nil }?
+            .label
+    }
+
     public static func screenTitle(for interface: Interface) -> String? {
         screenTitle(from: interface.projectedElements)
     }

@@ -58,6 +58,18 @@ extension Observation {
         internal let transition: Transition
 
         internal var snapshot: Snapshot { moment.snapshot }
+
+        /// Whether this observation found the tree in a new state.
+        ///
+        /// The one comparison. Every observation is either a change or it is
+        /// not, and that answer is what makes it a `snapshot` tick or a
+        /// `noChange` tick — nothing downstream asks again. The first
+        /// observation has nothing to differ from, so it counts as a change:
+        /// there was no earlier state for it to have been still relative to.
+        internal var isChange: Bool {
+            guard let previous else { return true }
+            return previous.semanticHash != snapshot.semanticHash
+        }
         internal var generation: ScreenGeneration { snapshot.generation }
         internal var scope: SemanticObservationScope { snapshot.sourceScope }
         internal var sequence: SettledObservationSequence { snapshot.sequence }

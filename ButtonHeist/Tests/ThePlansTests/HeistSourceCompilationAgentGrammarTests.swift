@@ -167,17 +167,19 @@ import Testing
     ))
     expect(beforeOnlyUpdate, contains: "value update predicate requires after when before is set")
 
+    // An element assertion written inside `.screen(...)` is the costume mistake:
+    // `.screen` names the arrived-at screen, so the correction has to point at
+    // `.elements([...])`, which is where an element question belongs.
     let screenChangedAppeared = compileError(root(
         #"Activate(.label("Pay")).expect(.changed(.screen([.appeared(.label("Receipt"))])))"#
     ))
-    expect(screenChangedAppeared, contains: "screen assertions accept only .exists and .missing")
+    expect(screenChangedAppeared, contains: ".elements([...]) for element assertions")
 
     let screenChangedUpdated = compileError(root(
         #"Activate(.label("Pay")).expect("# +
             #".changed(.screen([.updated(.label("Total"), .value("$3"))])))"#
     ))
-    expect(screenChangedUpdated, contains: "screen assertions accept only .exists and .missing")
-
+    expect(screenChangedUpdated, contains: ".elements([...]) for element assertions")
 }
 
 @Test func `runtime parser rejects empty predicates`() throws {
@@ -201,7 +203,7 @@ import Testing
         Warn("ready")
     }
     """#))
-    expect(ifAppeared, contains: "screen assertion accepts only .exists and .missing")
+    expect(ifAppeared, contains: "branch conditions accept only .exists and .missing")
 
     let caseUpdated = compileError(root(#"""
     If {
@@ -210,7 +212,7 @@ import Testing
         }
     }
     """#))
-    expect(caseUpdated, contains: "screen assertion accepts only .exists and .missing")
+    expect(caseUpdated, contains: "branch conditions accept only .exists and .missing")
 }
 
 @Test func `runtime parser rejects arbitrary Swift and bypass shapes`() throws {

@@ -15,6 +15,18 @@ extension AccessibilityPredicateTests {
         XCTAssertEqual(decoded, predicate)
     }
 
+    /// The name is the whole point of a named screen predicate, so it has to
+    /// survive the wire. A nameless one round-trips without exercising the
+    /// `match` key at all, which is how a decoder that rejected it stayed green.
+    func testANamedScreenPredicateKeepsItsNameAcrossTheWire() throws {
+        for match in [StringMatch.exact("Settings"), .contains("Sett"), .prefix("Set")] {
+            let predicate = AccessibilityPredicate.changed(.screen(match))
+            let data = try JSONEncoder().encode(predicate)
+            let decoded = try JSONDecoder().decode(AccessibilityPredicate.self, from: data)
+            XCTAssertEqual(decoded, predicate, "\(match) did not survive the wire")
+        }
+    }
+
     // MARK: - Validation: screen changed
 
     func testScreenChangedMetWhenTraceChangesScreen() throws {
@@ -79,17 +91,42 @@ extension AccessibilityPredicateTests {
         XCTAssertNil(outcome.actual)
     }
 
-    func testScreenAssertionsUseCurrentReplacementInterface() throws {
+    func testAScreenPredicateAsksAboutTheScreenAndNotItsElements() throws {
         let trace = screenTrace(
-            before: makeTestInterface(elements: [element(label: "Home")]),
-            after: makeTestInterface(elements: [element(label: "Settings")])
+            before: makeTestInterface(elements: [header(label: "Home")]),
+            after: makeTestInterface(elements: [header(label: "Settings")])
         )
-        let predicate = AccessibilityPredicate.changed(.screen([
-            .exists(.label("Settings")),
-            .missing(.label("Home")),
-        ]))
+        let result = result(success: true, trace: trace, completeness: .incomplete)
 
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result(success: true, trace: trace, completeness: .incomplete)).met)
+        // Any boundary answers a nameless one.
+        XCTAssertTrue(
+            try AccessibilityPredicate.changed(.screen())
+                .resolve(in: .empty).validate(against: result).met
+        )
+        // A named one asks only about the name. Which elements left and which
+        // arrived are element predicates, and they are siblings, not payload.
+        XCTAssertTrue(
+            try AccessibilityPredicate.changed(.screen("Settings"))
+                .resolve(in: .empty).validate(against: result).met
+        )
+        XCTAssertFalse(
+            try AccessibilityPredicate.changed(.screen("Home"))
+                .resolve(in: .empty).validate(against: result).met
+        )
+    }
+
+    /// A header is the only thing a screen name can come from, so a screen
+    /// predicate needs one to have anything to match against.
+    private func header(label: String) -> HeistElement {
+        HeistElement(
+            description: label,
+            label: label,
+            value: nil,
+            identifier: nil,
+            traits: [.header],
+            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
+            actions: []
+        )
     }
 
     func testScreenChangedRequiresTraceEndpointEdge() throws {

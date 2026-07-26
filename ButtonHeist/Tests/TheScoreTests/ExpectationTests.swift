@@ -8,38 +8,43 @@ import XCTest
 /// the list is empty; until the timeout fires, an outstanding list is not a
 /// failure but a list of things still being waited on.
 ///
-/// These tests are about the reduction — which predicates leave and in what
-/// order. What a delta composes into is `ElementAssertionCompositionTests`.
+/// These tests are about the reduction — which predicates leave, and when. One
+/// tree answers every question it can at once; the only order that survives is
+/// inside the pair a delta composes into. What a delta composes into is
+/// `ElementAssertionCompositionTests`.
 final class ExpectationTests: XCTestCase {
 
-    // MARK: - Order within a lane
+    // MARK: - One tree answers everything it can
 
-    func testAnUnsatisfiedPredicateBlocksLaterOnesInItsLane() throws {
+    /// Every element question is `exists` or `missing` against one tree, so a
+    /// snapshot answers as many of them as it can at once. An unsatisfied
+    /// predicate is not a barrier: the one behind it was answered by the same
+    /// graph, and which index it sat at is an artifact of using an array.
+    func testAnUnsatisfiedPredicateDoesNotBlockOneTheSameTreeAnswers() throws {
         var expectation = try Expectation([exists("Absent"), exists("Present")])
 
         expectation.snapshot(interface(["Present"]))
 
         XCTAssertEqual(
-            expectation.outstandingCount, 3,
-            "Absent blocks, so Present waits behind it and settlement behind that"
+            expectation.outstanding.count, 2,
+            "Present drained; only Absent and settlement are left"
         )
     }
 
-    func testThePredicateBehindABlockerDrainsOnceTheBlockerIsSatisfied() throws {
+    func testAPredicateDrainsOnTheTickThatAnswersIt() throws {
         var expectation = try Expectation([exists("Late"), exists("Early")])
 
         expectation.snapshot(interface(["Early"]))
-        XCTAssertEqual(expectation.outstandingCount, 3)
+        XCTAssertEqual(expectation.outstanding.count, 2)
 
         expectation.snapshot(interface(["Late", "Early"]))
         expectation.noChange()
         XCTAssertTrue(expectation.isMet)
     }
 
-    /// Evidence flows through the list until it hits a no. One settled tree can
-    /// evidence several arrivals at once, so the walk keeps going — otherwise
-    /// the verdict would depend on how finely the tripwire sampled.
-    func testOneSnapshotSatisfiesConsecutivePredicatesUntilOneRefuses() throws {
+    /// One settled tree evidences every arrival it holds, so the verdict does
+    /// not depend on how finely the tripwire sampled.
+    func testOneSnapshotSatisfiesEveryPredicateItAnswers() throws {
         var expectation = try Expectation([
             exists("A"), exists("B"), exists("Never"), exists("C"),
         ])
@@ -47,8 +52,39 @@ final class ExpectationTests: XCTestCase {
         expectation.snapshot(interface(["A", "B", "C"]))
 
         XCTAssertEqual(
-            expectation.outstandingCount, 3,
-            "Never blocks, C waits behind it, settlement behind that"
+            expectation.outstanding.count, 2,
+            "A, B and C all drained; only Never and settlement are left"
+        )
+    }
+
+    /// The real dogfood fixture: tapping Submit swaps the button for a spinner
+    /// in one frame, so both assertions are answered by the same two trees.
+    func testTwoAssertionsDescribingOneFrameAreBothSatisfied() throws {
+        var expectation = try Expectation([changed(
+            .appeared(.label("Processing")),
+            .disappeared(.label("Submit"))
+        )])
+
+        expectation.snapshot(interface(["Submit"]))
+        expectation.snapshot(interface(["Processing"]))
+        expectation.noChange()
+
+        XCTAssertTrue(expectation.isMet, "outstanding: \(expectation.outstanding)")
+    }
+
+    /// The pair a delta composes into is the one place order still rules, and
+    /// the reason chains exist: when only the first half has drained, the second
+    /// must keep its own slot. A tree that never held the element cannot satisfy
+    /// `disappeared` backwards.
+    func testADeltaHalfCannotDrainAheadOfTheOneBeforeIt() throws {
+        var expectation = try Expectation([changed(.disappeared(.label("Ghost")))])
+
+        expectation.snapshot(interface(["Unrelated"]))
+        expectation.noChange()
+
+        XCTAssertFalse(
+            expectation.isMet,
+            "Ghost was never seen present, so nothing disappeared"
         )
     }
 
@@ -60,7 +96,7 @@ final class ExpectationTests: XCTestCase {
         expectation.snapshot(interface(["Present"]))
 
         XCTAssertEqual(
-            expectation.outstandingCount, 2,
+            expectation.outstanding.count, 2,
             "the graph predicate drained past the announcement"
         )
     }
@@ -70,16 +106,16 @@ final class ExpectationTests: XCTestCase {
 
         expectation.announcement("Saved.")
 
-        XCTAssertEqual(expectation.outstandingCount, 2)
+        XCTAssertEqual(expectation.outstanding.count, 2)
     }
 
     func testAScreenTickDoesNotAnswerAGraphPredicate() throws {
         var expectation = try Expectation([exists("Detail")])
 
-        expectation.screenChange(to: interface(["Detail"]))
+        expectation.screenChange(ScreenFacts(idAfter: "Detail"))
 
         XCTAssertEqual(
-            expectation.outstandingCount, 2,
+            expectation.outstanding.count, 2,
             "a graph predicate is not in the screen lane"
         )
     }
@@ -91,13 +127,13 @@ final class ExpectationTests: XCTestCase {
     func testAnAppearanceDrainsAcrossTwoSnapshots() throws {
         var expectation = try Expectation([changed(.appeared(.label("Toast")))])
 
-        XCTAssertEqual(expectation.outstandingCount, 3, "two searches plus settlement")
+        XCTAssertEqual(expectation.outstanding.count, 3, "two searches plus settlement")
 
         expectation.snapshot(interface([]))
-        XCTAssertEqual(expectation.outstandingCount, 2)
+        XCTAssertEqual(expectation.outstanding.count, 2)
 
         expectation.snapshot(interface(["Toast"]))
-        XCTAssertEqual(expectation.outstandingCount, 1)
+        XCTAssertEqual(expectation.outstanding.count, 1)
     }
 
     /// The same element leaving and coming back — the case the ordered drain
@@ -138,7 +174,7 @@ final class ExpectationTests: XCTestCase {
         expectation.noChange()
 
         XCTAssertFalse(expectation.isMet)
-        XCTAssertEqual(expectation.outstandingCount, 1, "the tree is still, but Late never arrived")
+        XCTAssertEqual(expectation.outstanding.count, 1, "the tree is still, but Late never arrived")
     }
 
     /// Settlement is last and never leaves, so every tick flips it: a tree that
@@ -175,7 +211,7 @@ final class ExpectationTests: XCTestCase {
 
         expectation.snapshot(interface(["Other"]))
 
-        XCTAssertEqual(expectation.outstandingCount, 3)
+        XCTAssertEqual(expectation.outstanding.count, 3)
     }
 
     // MARK: - Helpers

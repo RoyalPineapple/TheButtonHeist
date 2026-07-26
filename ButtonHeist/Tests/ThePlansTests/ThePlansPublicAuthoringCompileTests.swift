@@ -15,12 +15,12 @@ func `canonical authoring module exposes predicates with concrete types`() throw
     let checkoutContainer: ContainerPredicate = .label("Checkout")
     let containerExists: AccessibilityPredicate = .exists(.container(checkoutContainer))
     let valueChanged: ElementPropertyChange = .value(after: "Ready")
-    let screenAssertion: ChangeDeclaration.ScreenAssertion = .exists(.label("Checkout"))
+    let branchCondition: PresenceCondition = .exists(.label("Checkout"))
     let elementAssertion: ChangeDeclaration.ElementAssertion = .updated(
         .identifier("checkout.status"),
         valueChanged
     )
-    let screenChanged: AccessibilityPredicate = .changed(.screen([screenAssertion]))
+    let screenChanged: AccessibilityPredicate = .changed(.screen("Checkout"))
     let changed: AccessibilityPredicate = .changed(.elements([
         elementAssertion,
     ]))
@@ -30,15 +30,18 @@ func `canonical authoring module exposes predicates with concrete types`() throw
         WaitFor(containerExists)
         WaitFor(screenChanged)
         WaitFor(changed)
-        WaitFor(.changed(.screen([.exists(.label("Checkout"))])))
+        WaitFor(.changed(.screen()))
         WaitFor(.changed(.elements([
             .exists(.identifier("checkout.status")),
             .appeared(.identifier("checkout.status")),
             .updated(.identifier("checkout.status"), valueChanged),
         ])))
+        If(branchCondition) {
+            Warn("checkout reachable")
+        }
     }
 
-    #expect(plan.body.count == 6)
+    #expect(plan.body.count == 7)
 }
 
 @Test

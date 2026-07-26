@@ -20,10 +20,6 @@ public struct ScreenPredicate: Codable, Sendable, Equatable, Hashable {
         self.match = match
     }
 
-    public init(_ name: String) {
-        self.init(match: .exact(name))
-    }
-
     package func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedScreenPredicate {
         ResolvedScreenPredicate(match: try match?.resolve(in: environment))
     }
@@ -50,14 +46,12 @@ extension ScreenPredicate: CustomStringConvertible {
 /// The facts a screen boundary carries.
 ///
 /// Identity only: no tree, which is what keeps an element question out of this
-/// lane. Both sides are named because a boundary is a crossing, and which screen
-/// was left is as much a fact about it as which was arrived at.
+/// lane. Which screen was left is not here because nothing asks — a predicate
+/// about the crossing is a predicate about where it landed.
 public struct ScreenFacts: Sendable, Equatable {
-    public let idBefore: String?
     public let idAfter: String?
 
-    public init(idBefore: String?, idAfter: String?) {
-        self.idBefore = idBefore
+    public init(idAfter: String?) {
         self.idAfter = idAfter
     }
 }

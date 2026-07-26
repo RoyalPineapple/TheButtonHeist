@@ -343,18 +343,22 @@ extension TheFenceHandlerTests {
         }
     }
 
+    /// `elements` is the only scope with an assertion list, so it is the only
+    /// place an announcement can be smuggled in as an assertion. A screen
+    /// predicate asks about the screen and reads no list at all.
     @ButtonHeistActor
-    func testParseExpectationRejectsAnnouncementInChangedAssertionContexts() async {
-        for (scope, context) in [("screen", "screen assertion"), ("elements", "elements assertion")] {
-            XCTAssertThrowsError(try parseTypedExpectation(.object([
-                "type": .string("changed"),
-                "scope": .string(scope),
-                "assertions": .array([.object([
-                    "type": .string("announcement"),
-                ])]),
-            ]))) { error in
-                XCTAssertTrue(String(describing: error).contains(context), "Unexpected error: \(error)")
-            }
+    func testParseExpectationRejectsAnnouncementInElementsAssertionContext() async {
+        XCTAssertThrowsError(try parseTypedExpectation(.object([
+            "type": .string("changed"),
+            "scope": .string("elements"),
+            "assertions": .array([.object([
+                "type": .string("announcement"),
+            ])]),
+        ]))) { error in
+            XCTAssertTrue(
+                String(describing: error).contains("elements assertion"),
+                "Unexpected error: \(error)"
+            )
         }
     }
 

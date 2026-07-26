@@ -14,12 +14,6 @@ public enum PresenceCondition: Codable, Sendable, Equatable {
     case exists(AccessibilityTarget)
     case missing(AccessibilityTarget)
 
-    public var target: AccessibilityTarget {
-        switch self {
-        case .exists(let target), .missing(let target): return target
-        }
-    }
-
     package var rootPredicate: AccessibilityPredicate {
         switch self {
         case .exists(let target): return .exists(target)

@@ -91,7 +91,7 @@ extension TheFenceCompactFormattingContractTests {
         let childAction = try HeistStep.action(ActionStep(
             command: .activate(.predicate(ElementPredicate(label: .exact("Submit")))),
             expectationPolicy: .expect(ActionExpectation(predicate: expected, timeout: 1))))
-        let casePredicate = ChangeDeclaration.ScreenAssertion.exists(.label("Home"))
+        let casePredicate = PresenceCondition.exists(.label("Home"))
         let casePredicateRuntime = AccessibilityPredicate.exists(.label("Home"))
         let conditional = try ConditionalStep(cases: [
             PredicateCase(predicate: casePredicate, body: [childAction]),
@@ -396,7 +396,7 @@ extension TheFenceCompactFormattingContractTests {
         let childAction = try HeistStep.action(ActionStep(
             command: .activate(.predicate(ElementPredicate(label: "Continue")))
         ))
-        let casePredicate = ChangeDeclaration.ScreenAssertion.exists(.label("Ready"))
+        let casePredicate = PresenceCondition.exists(.label("Ready"))
         let casePredicateRuntime = AccessibilityPredicate.exists(.label("Ready"))
         let conditional = try ConditionalStep(cases: [
             PredicateCase(predicate: casePredicate, body: [childAction]),
@@ -472,7 +472,7 @@ extension TheFenceCompactFormattingContractTests {
         let elseStep = try HeistStep.action(ActionStep(
             command: .activate(.predicate(ElementPredicate(label: "Fallback")))
         ))
-        let predicate = ChangeDeclaration.ScreenAssertion.exists(.label("Home"))
+        let predicate = PresenceCondition.exists(.label("Home"))
         let runtimePredicate = AccessibilityPredicate.exists(.label("Home"))
         let conditional = try ConditionalStep(
             cases: [

@@ -272,11 +272,11 @@ func runHeistBuildsHeistRunSteps() throws {
     ])
 
     let expectation = WaitStep(
-        predicate: .changed(.screen([.exists(.label("Receipt"))])),
+        predicate: .changed(.screen("Receipt")),
         timeout: ThePlans.defaultActionExpectationTimeout
     )
     let screenRun = ThePlans.RunHeist("Checkout.pay")
-        .expect(.changed(.screen([.exists(.label("Receipt"))])))
+        .expect(.changed(.screen("Receipt")))
     #expect(try admittedSteps(screenRun, declaredBy: paymentDefinition) == [
         .invoke(HeistInvocationStep(
             path: "Checkout.pay",
@@ -285,22 +285,30 @@ func runHeistBuildsHeistRunSteps() throws {
     ])
 }
 
+/// An expectation holds one predicate. Two `.expect` calls on one invocation are
+/// siblings, not a composition, so every chain is a diagnostic — matching
+/// timeouts do not rescue it, and conflicting timeouts add a second diagnostic
+/// on top.
 @Test
-func `run heist expectation composition preserves timeout semantics and diagnostics`() throws {
+func `run heist rejects chained expectations and reports timeout conflicts`() throws {
     let definition = HeistDef<Void>("Checkout.pay") { Warn("declared") }
-    let composed = ThePlans.RunHeist("Checkout.pay")
-        .expect(.changed(.screen()), timeout: 3)
-        .expect(.exists(.label("Receipt")), timeout: 3)
 
-    #expect(try admittedSteps(composed, declaredBy: definition) == [
-        .invoke(HeistInvocationStep(
-            path: "Checkout.pay",
-            expectation: WaitStep(
-                predicate: .changed(.screen([.exists(.label("Receipt"))])),
-                timeout: 3
-            )
-        )),
-    ])
+    do {
+        _ = try HeistPlan {
+            definition
+            ThePlans.RunHeist("Checkout.pay")
+                .expect(.changed(.screen()), timeout: 3)
+                .expect(.exists(.label("Receipt")), timeout: 3)
+        }
+        Issue.record("Expected HeistPlanBuildError")
+    } catch let error as HeistPlanBuildError {
+        let diagnostic = try #require(error.diagnostics.first)
+        #expect(error.diagnostics.count == 1)
+        #expect(diagnostic.code == .dslInvalidInvocationExpectation)
+        #expect(diagnostic.path == "Checkout.pay")
+        #expect(diagnostic.message.contains("unsupported expectation composition"))
+        #expect(diagnostic.hint == "Use one predicate per expectation, or follow the action with a WaitFor.")
+    }
 
     do {
         _ = try HeistPlan {
@@ -311,20 +319,12 @@ func `run heist expectation composition preserves timeout semantics and diagnost
         }
         Issue.record("Expected HeistPlanBuildError")
     } catch let error as HeistPlanBuildError {
-        let diagnostic = try #require(error.diagnostics.first)
-        #expect(diagnostic.code == .dslInvalidInvocationExpectation)
-        #expect(diagnostic.path == "Checkout.pay")
-        #expect(diagnostic.message == "multiple explicit expectation timeouts in one chain: 1 and 2")
-        #expect(diagnostic.hint == "Use one explicit timeout for the composed expectation.")
-    }
-
-    #expect(throws: HeistPlanBuildError.self) {
-        try HeistPlan {
-            definition
-            ThePlans.RunHeist("Checkout.pay")
-                .expect(.changed(.elements()))
-                .expect(.changed(.screen()))
-        }
+        #expect(error.diagnostics.count == 2)
+        let conflict = try #require(error.diagnostics.last)
+        #expect(conflict.code == .dslInvalidInvocationExpectation)
+        #expect(conflict.path == "Checkout.pay")
+        #expect(conflict.message == "multiple explicit expectation timeouts in one chain: 1 and 2")
+        #expect(conflict.hint == "Use one explicit timeout for the composed expectation.")
     }
 }
 

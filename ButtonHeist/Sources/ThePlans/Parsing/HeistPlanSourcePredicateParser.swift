@@ -41,6 +41,13 @@ extension HeistPlanSourceParser {
         // asks which screen it arrived at. Elements are never named here —
         // those are element assertions, answered by the snapshots either side.
         if consumeSymbol(")") { return .screen(ScreenPredicate()) }
+        if currentToken.isSymbol("[") {
+            throw error(
+                currentToken,
+                "screen predicates name the arrived-at screen, not elements: "
+                    + "use .screen() or .screen(\"Name\"), and .elements([...]) for element assertions"
+            )
+        }
         let expression = try parseStringMatchCallArgument(field: "screen")
         try expectSymbol(")")
         return .screen(ScreenPredicate(match: expression))
@@ -70,7 +77,7 @@ extension HeistPlanSourceParser {
     mutating func parsePresenceCondition() throws -> PresenceCondition {
         let name = try parseDotCallName()
         guard name == "exists" || name == "missing" else {
-            throw error(previous, "screen assertion accepts only .exists and .missing")
+            throw error(previous, "branch conditions accept only .exists and .missing")
         }
         let target = try parseCurrentTreeTarget()
         return name == "exists" ? .exists(target) : .missing(target)

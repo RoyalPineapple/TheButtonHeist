@@ -217,6 +217,20 @@ extension ChangeDeclaration.ElementAssertion {
     }
 }
 
+/// A branch condition is a presence question, so it shares the one presence wire
+/// shape — `{"type":"exists","target":{…}}` — with every other spelling of the
+/// same question. The synthesized enum coding would give `If`/`Case` predicates
+/// a private shape in `.heist` plan JSON, which is a contract, not an internal.
+extension PresenceCondition {
+    public init(from decoder: Decoder) throws {
+        self = try AccessibilityPredicateWireCodec.decodePresenceCondition(from: decoder)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        try AccessibilityPredicateWireCodec.encodePresenceCondition(self, to: encoder)
+    }
+}
+
 private enum AccessibilityPredicateWireCodec {
     static func decodeRoot(from decoder: Decoder) throws -> AccessibilityPredicate.Value {
         let container = try decoder.container(keyedBy: AccessibilityPredicateCodingKeys.self)
@@ -239,7 +253,10 @@ private enum AccessibilityPredicateWireCodec {
                 match: try container.decodeIfPresent(StringMatch.self, forKey: .match)
             ))
         case .changed:
-            try decoder.rejectUnknownKeys(allowed: ["type", "scope", "assertions"], typeName: "changed predicate")
+            try decoder.rejectUnknownKeys(
+                allowed: ["type", "scope", "assertions", "match"],
+                typeName: "changed predicate"
+            )
             let scopeString = try container.decode(String.self, forKey: .scope)
             guard let scope = AccessibilityChangedWireScope(rawValue: scopeString) else {
                 throw DecodingError.dataCorruptedError(
@@ -261,6 +278,31 @@ private enum AccessibilityPredicateWireCodec {
                     try decodeElementAssertion(from: $0)
                 }))
             }
+        }
+    }
+
+    static func decodePresenceCondition(from decoder: Decoder) throws -> PresenceCondition {
+        let container = try decoder.container(keyedBy: AccessibilityPredicateCodingKeys.self)
+        let typeString = try container.decode(String.self, forKey: .type)
+        guard let type = PresencePredicateWireType(rawValue: typeString) else {
+            throw invalidType(
+                typeString,
+                in: container,
+                context: "presence condition",
+                valid: PresencePredicateWireType.allCases.map(\.rawValue)
+            )
+        }
+        switch try decodePresence(type, from: decoder, container: container) {
+        case .exists(let target): return .exists(target)
+        case .missing(let target): return .missing(target)
+        }
+    }
+
+    static func encodePresenceCondition(_ condition: PresenceCondition, to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: AccessibilityPredicateCodingKeys.self)
+        switch condition {
+        case .exists(let target): try encodePresence(.exists, target: target, to: &container)
+        case .missing(let target): try encodePresence(.missing, target: target, to: &container)
         }
     }
 

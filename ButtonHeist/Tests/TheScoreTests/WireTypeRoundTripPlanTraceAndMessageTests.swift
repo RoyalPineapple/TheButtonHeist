@@ -60,7 +60,9 @@ extension WireTypeRoundTripTests {
         let predicate = try expectation.object("predicate")
         XCTAssertEqual(try predicate.string("type"), "changed")
         XCTAssertEqual(try predicate.string("scope"), "screen")
-        XCTAssertTrue(try predicate.array("assertions").isEmpty)
+        // A screen predicate carries no assertion list at all: elements are
+        // never named in this lane, so the key is absent rather than empty.
+        XCTAssertThrowsError(try predicate.array("assertions"))
         XCTAssertEqual(try expectation.double("timeout"), 2.5)
         XCTAssertEqual(try body[2].object("warn").string("message"), "optional step skipped")
         XCTAssertEqual(try body[3].object("fail").string("message"), "unexpected state")

@@ -59,7 +59,7 @@ func rootAccessibilityTargetPlanRendersCanonicalSwiftAndCompilesBack() async thr
         If {
             Case(.exists(target)) {
                 CustomAction("Archive", on: target)
-                    .expect(.changed(.screen([.exists(target)])), timeout: 3)
+                    .expect(.changed(.elements([.appeared(target)])), timeout: 3)
             }
 
             Else {
@@ -83,7 +83,7 @@ func rootAccessibilityTargetPlanRendersCanonicalSwiftAndCompilesBack() async thr
 
         If(.exists(target)) {
             CustomAction("Archive", on: target)
-                .expect(.changed(.screen([.exists(target)])), timeout: 3)
+                .expect(.changed(.elements([.appeared(target)])), timeout: 3)
         }
         .else {
             Fail("target missing")
@@ -142,16 +142,21 @@ func canonicalSwiftRendererPreservesHelperDefinitionDependencies() throws {
     """)
 }
 
+/// The subject is the string ref surviving the render round-trip wherever a
+/// predicate can name one. The screen boundary and the element that arrived are
+/// two questions, so they are two siblings — the boundary on the action, the
+/// element in the `WaitFor` that follows it.
 @Test
-func `canonical Swift renderer preserves composed expectation with string ref`() throws {
+func `canonical Swift renderer preserves string refs in sibling expectations`() throws {
     enum SearchScreen {
         static let search = HeistDef<String>("SearchScreen.search", parameter: "query") { query in
             TypeText(query, into: .label("Search"))
                 .expect(.exists(.value(query)))
 
             Activate(.label("Search"))
-                .expect(.changed(.screen()))
-                .expect(.exists(.label(query)), timeout: 5)
+                .expect(.changed(.screen()), timeout: 5)
+
+            WaitFor(.changed(.elements([.appeared(.label(query))])), timeout: 5)
         }
     }
 
@@ -166,7 +171,9 @@ func `canonical Swift renderer preserves composed expectation with string ref`()
                 .expect(.exists(.value(query)))
 
             Activate(.label("Search"))
-                .expect(.changed(.screen([.exists(.label(query))])), timeout: 5)
+                .expect(.changed(.screen()), timeout: 5)
+
+            WaitFor(.changed(.elements([.appeared(.label(query))])), timeout: 5)
         }
 
         RunHeist("SearchScreen.search", "milk")

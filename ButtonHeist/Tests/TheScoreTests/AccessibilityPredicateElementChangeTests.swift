@@ -22,7 +22,7 @@ extension AccessibilityPredicateTests {
     /// here. This used to hold: the boundary projected the whole outgoing graph
     /// as `disappeared` and the whole incoming graph as `appeared`, which made
     /// these predicates true of *every* element on either side — a guarantee
-    /// worth nothing. Ask `changed(.screen([...]))` about a new baseline.
+    /// worth nothing. Ask `changed(.screen())` about the boundary itself.
     func testDeltaPredicatesAreUnanswerableAcrossAScreenChange() throws {
         let trace = screenTrace(
             before: makeTestInterface(elements: [element(label: "Home")]),

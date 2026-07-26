@@ -149,7 +149,7 @@ func predicateContextsUseExplicitCanonicalAssertions() throws {
             .expect(.exists(.label("Results")))
 
         Activate(.label("Open Details"))
-            .expect(.changed(.screen([.exists(.label("Details"))])))
+            .expect(.changed(.screen("Details")))
 
         WaitFor(.exists(.identifier("ready")), timeout: 2)
 
@@ -165,7 +165,7 @@ func predicateContextsUseExplicitCanonicalAssertions() throws {
         .action(ActionStep(
             command: .activate(.label("Open Details")),
             expectationPolicy: .expect(ActionExpectation(
-                predicate: .changed(.screen([.exists(.label("Details"))])),
+                predicate: .changed(.screen("Details")),
                 timeout: 1
             )))),
         .wait(WaitStep(predicate: .exists(.identifier("ready")), timeout: 2)),
@@ -214,30 +214,29 @@ func forEachInfersStringValuesAndElementPredicates() throws {
     ]))
 }
 
+/// A screen boundary and an element on the arrived screen are two questions, and
+/// an expectation holds one predicate. Authored as siblings they are two steps —
+/// the boundary on the action, the element in the `WaitFor` after it.
 @Test
-func `chained screen and state expectations compose into one action expectation`() throws {
-    let forward = try HeistPlan {
+func `screen and element expectations are authored as sibling steps`() throws {
+    let plan = try HeistPlan {
         Activate(.label("Search"))
-            .expect(.changed(.screen()))
-            .expect(.exists(.label("Results")), timeout: 5)
-    }
-    let reversed = try HeistPlan {
-        Activate(.label("Search"))
-            .expect(.exists(.label("Results")), timeout: 5)
-            .expect(.changed(.screen()))
+            .expect(.changed(.screen()), timeout: 5)
+
+        WaitFor(.exists(.label("Results")), timeout: 5)
     }
     let expected = try HeistPlan(body: [
         .action(ActionStep(
             command: .activate(.label("Search")),
             expectationPolicy: .expect(ActionExpectation(
-                predicate: .changed(.screen([.exists(.label("Results"))])),
+                predicate: .changed(.screen()),
                 timeout: 5
             )))),
+        .wait(WaitStep(predicate: .exists(.label("Results")), timeout: 5)),
     ])
 
-    #expect(forward == expected)
-    #expect(reversed == expected)
-    #expect(forward.body.count == 1)
+    #expect(plan == expected)
+    #expect(plan.body.count == 2)
 }
 
 @Test
@@ -251,30 +250,25 @@ func `chained root expectations fail canonical validation`() {
     }
 }
 
+/// A named screen predicate does not absorb a second question either: chaining a
+/// presence expectation onto it is the same unsupported composition, in either
+/// authored order.
 @Test
-func `chained state expectation joins existing screen where clause`() throws {
-    let forward = try HeistPlan {
-        Activate(.label("Search"))
-            .expect(.changed(.screen([.exists(.label("Results"))])))
-            .expect(.exists(.label("Filter")))
+func `chained expectation onto a named screen predicate fails validation`() {
+    #expect(throws: HeistPlanBuildError.self) {
+        try HeistPlan {
+            Activate(.label("Search"))
+                .expect(.changed(.screen("Results")))
+                .expect(.exists(.label("Filter")))
+        }
     }
-    let reversed = try HeistPlan {
-        Activate(.label("Search"))
-            .expect(.exists(.label("Filter")))
-            .expect(.changed(.screen([.exists(.label("Results"))])))
+    #expect(throws: HeistPlanBuildError.self) {
+        try HeistPlan {
+            Activate(.label("Search"))
+                .expect(.exists(.label("Filter")))
+                .expect(.changed(.screen("Results")))
+        }
     }
-
-    let expected = try HeistPlan(body: [
-        .action(ActionStep(
-            command: .activate(.label("Search")),
-            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen([
-                .exists(.label("Results")),
-                .exists(.label("Filter"))
-            ])), timeout: 1)))),
-    ])
-
-    #expect(forward == expected)
-    #expect(reversed == expected)
 }
 
 @Test
@@ -287,9 +281,10 @@ func testAuthoredActionExpectationRejectsConflictingExplicitTimeouts() throws {
         }
         Issue.record("Expected HeistPlanBuildError")
     } catch let error as HeistPlanBuildError {
-        let diagnostic = try #require(error.diagnostics.first)
-
-        #expect(error.diagnostics.count == 1)
+        // Chaining is itself unsupported, so the conflicting timeout is the
+        // second diagnostic, not the only one.
+        #expect(error.diagnostics.count == 2)
+        let diagnostic = try #require(error.diagnostics.last)
         #expect(diagnostic.code == .dslInvalidActionExpectation)
         #expect(diagnostic.phase == .dslBuild)
         #expect(diagnostic.path == "activate")
@@ -311,15 +306,14 @@ func `unsupported chained change expectations fail validation without replacemen
     }
 }
 @Test
-func `string heist search flow preserves query ref in composed post activation expectation JSON`() throws {
+func `string heist search flow preserves query ref in post activation expectation JSON`() throws {
     enum SearchScreen {
         static let search = HeistDef<String>("SearchScreen.search", parameter: "query") { query in
             TypeText(query, into: .label("Search"))
                 .expect(.exists(.value(query)), timeout: 1)
 
             Activate(.label("Search"))
-                .expect(.changed(.screen()))
-                .expect(.exists(.label(query)), timeout: 5)
+                .expect(.changed(.elements([.exists(.label(query))])), timeout: 5)
         }
     }
 
@@ -341,7 +335,7 @@ func `string heist search flow preserves query ref in composed post activation e
         .action(ActionStep(
             command: .activate(.label("Search")),
             expectationPolicy: .expect(ActionExpectation(
-                predicate: .changed(.screen([
+                predicate: .changed(.elements([
                     .exists(.label(HeistReferenceName(stringLiteral: "query"))),
                 ])),
                 timeout: 5

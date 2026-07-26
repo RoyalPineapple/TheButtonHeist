@@ -647,8 +647,12 @@ extension Settlement {
         ) async -> AdmittedSettlementFact? {
             switch input {
             case .observation(.snapshot(let event), let instant):
+                // Every observation in this session's window is a tick, so the
+                // only thing turned away here is one from before the boundary,
+                // or one already admitted by the handoff path. Whether the tree
+                // moved is not asked: that is the observation's own answer, and
+                // `admit` reads it to pick the tick.
                 guard let baseline = state.session?.boundary.moment,
-                      event.moment != baseline,
                       event.moment.isSameOrAfter(baseline),
                       !admittedMoments.contains(event.moment) else { return nil }
                 admittedMoments.append(event.moment)
