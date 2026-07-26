@@ -444,18 +444,13 @@ private enum AccessibilityPredicateWireCodec {
 }
 
 extension AccessibilityPredicate: CustomStringConvertible {
+    /// The predicate as you would have written it.
+    ///
+    /// A predicate is a thing the DSL can express, so it describes itself in the
+    /// DSL rather than in a second vocabulary invented for reports: a failure
+    /// message names something you can paste back into a heist.
     public var description: String {
-        switch core {
-        case .presence(.exists(let target)):
-            return CanonicalValueDescription.call("exists", [target.description])
-        case .presence(.missing(let target)):
-            return CanonicalValueDescription.call("missing", [target.description])
-        case .announcement(let announcement): return announcement.description
-        case .screenChanged(let predicate):
-            return CanonicalValueDescription.call("screenChanged", [predicate.description])
-        case .elementsChanged(let assertions):
-            return CanonicalValueDescription.call("elementsChanged", assertions.map(\.description))
-        }
+        CanonicalDSLDescription.render(self) { try $0.render(predicate: self, environment: $1) }
     }
 }
 
@@ -476,13 +471,8 @@ extension ResolvedAccessibilityPredicate: CustomStringConvertible {
 
 extension ElementAssertion: CustomStringConvertible {
     public var description: String {
-        switch self {
-        case .exists(let target): return CanonicalValueDescription.call("exists", [target.description])
-        case .missing(let target): return CanonicalValueDescription.call("missing", [target.description])
-        case .appeared(let target): return CanonicalValueDescription.call("appeared", [target.description])
-        case .disappeared(let target): return CanonicalValueDescription.call("disappeared", [target.description])
-        case .updated(let target, let change):
-            return CanonicalValueDescription.call("updated", [target.description, change.description])
+        CanonicalDSLDescription.render(self) {
+            try $0.render(elementAssertion: self, environment: $1)
         }
     }
 }

@@ -71,11 +71,8 @@ class TestRunnerTests(unittest.TestCase):
         )
 
     def test_arguments_expand_suites_in_source_order(self) -> None:
-        args = RUNNER["parse_args"](
-            ["run", "TheScoreTests", "ButtonHeistTests", "--selection", "full"]
-        )
+        args = RUNNER["parse_args"](["run", "TheScoreTests", "ButtonHeistTests"])
         self.assertEqual(args.suites, ["TheScoreTests", "ButtonHeistTests"])
-        self.assertEqual(args.selection, "full")
 
     def test_arguments_parse_simulator_runtime(self) -> None:
         args = RUNNER["parse_args"](["run", "TheInsideJobTests", "--simulator-runtime", "26.3"])
@@ -200,21 +197,19 @@ class TestRunnerTests(unittest.TestCase):
             self.assertEqual(paths["derived"], Path(f"/derived/{name}"))
             self.assertEqual(paths["record"], Path(f"/artifacts/{name}/run.json"))
 
-    def test_local_run_owns_full_and_selective_flags(self) -> None:
+    def test_run_drives_xcodebuild_directly_and_never_tuist(self) -> None:
+        # `tuist test` reports a failing suite as "✖ Error" plus a forum link.
+        # Plain xcodebuild names the test and its assertion, which is the whole
+        # reason a runner exists.
         suite = SUITES["TheScoreTests"]
         paths = RUNNER["suite_paths"]("TheScoreTests")
-        selective = RUNNER["test_command"](
-            "run", "TheScoreTests", suite, paths, None, "selective"
-        )
-        full = RUNNER["test_command"](
-            "run", "TheScoreTests", suite, paths, None, "full"
-        )
-        self.assertIn("--selective-testing", selective)
-        self.assertNotIn("--no-selective-testing", selective)
-        self.assertIn("--no-selective-testing", full)
-        self.assertIn("platform=macOS", full)
-        self.assertIn(str(paths["result_bundle"]), full)
-        self.assertIn(str(paths["heist_results"]), full)
+        command = RUNNER["test_command"]("run", "TheScoreTests", suite, paths, None)
+        self.assertNotIn("tuist", command)
+        self.assertIn("xcodebuild", command)
+        self.assertIn("test", command)
+        self.assertIn("platform=macOS", command)
+        self.assertIn(str(paths["result_bundle"]), command)
+        self.assertIn(str(paths["heist_results"]), command)
 
     def test_focused_run_passes_only_testing_identifiers_to_canonical_command(self) -> None:
         suite = SUITES["TheScoreTests"]
@@ -225,7 +220,6 @@ class TestRunnerTests(unittest.TestCase):
             suite,
             paths,
             None,
-            "full",
             (
                 "TheScoreTests/AccessibilityPredicateTests",
                 "TheScoreTests/HeistResultContractTests",
@@ -290,11 +284,11 @@ class TestRunnerTests(unittest.TestCase):
         paths = RUNNER["suite_paths"]("TheInsideJobIntegrationTests")
         build = RUNNER["test_command"](
             "build-for-testing", "TheInsideJobIntegrationTests",
-            suite, paths, SIMULATOR, "full"
+            suite, paths, SIMULATOR
         )
         test = RUNNER["test_command"](
             "test-without-building", "TheInsideJobIntegrationTests",
-            suite, paths, SIMULATOR, "full"
+            suite, paths, SIMULATOR
         )
         expected_destination = "platform=iOS Simulator,id=TEST-UDID,arch=arm64"
         self.assertIn(expected_destination, build)
@@ -310,7 +304,7 @@ class TestRunnerTests(unittest.TestCase):
         unit_suite = SUITES["TheInsideJobTests"]
         unit_paths = RUNNER["suite_paths"]("TheInsideJobTests")
         unit_command = RUNNER["test_command"](
-            "run", "TheInsideJobTests", unit_suite, unit_paths, SIMULATOR, "full"
+            "run", "TheInsideJobTests", unit_suite, unit_paths, SIMULATOR
         )
         integration_suite = SUITES["TheInsideJobIntegrationTests"]
         integration_paths = RUNNER["suite_paths"]("TheInsideJobIntegrationTests")
@@ -320,12 +314,11 @@ class TestRunnerTests(unittest.TestCase):
             integration_suite,
             integration_paths,
             SIMULATOR,
-            "full",
         )
         hosted_suite = SUITES["HostedBehaviorTests"]
         hosted_paths = RUNNER["suite_paths"]("HostedBehaviorTests")
         hosted_command = RUNNER["test_command"](
-            "run", "HostedBehaviorTests", hosted_suite, hosted_paths, SIMULATOR, "full"
+            "run", "HostedBehaviorTests", hosted_suite, hosted_paths, SIMULATOR
         )
 
         self.assertIn("BUTTONHEIST_TEST_DISABLE_ANIMATIONS=1", unit_command)
@@ -342,7 +335,6 @@ class TestRunnerTests(unittest.TestCase):
             suite,
             paths,
             None,
-            "full",
             selected,
         )
         test = RUNNER["test_command"](
@@ -351,7 +343,6 @@ class TestRunnerTests(unittest.TestCase):
             suite,
             paths,
             None,
-            "full",
             selected,
         )
 
@@ -371,7 +362,7 @@ class TestRunnerTests(unittest.TestCase):
         paths = RUNNER["suite_paths"]("HostedBehaviorTests")
         command = RUNNER["test_command"](
             "test-without-building", "HostedBehaviorTests",
-            suite, paths, SIMULATOR, "full"
+            suite, paths, SIMULATOR
         )
         index = command.index("-parallel-testing-enabled")
         self.assertEqual(command[index + 1], "NO")

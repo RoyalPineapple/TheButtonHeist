@@ -37,7 +37,7 @@ flowchart TD
     Record --> Cleanup
 ```
 
-`run` uses selective testing unless the caller requests `--selection full`.
+Every mode runs the full suite through `xcodebuild`.
 CI's build-once lanes use `build-for-testing` followed by
 `test-without-building` against the same deterministic derived-data path.
 Every completed test phase must produce a nonzero test count from its result

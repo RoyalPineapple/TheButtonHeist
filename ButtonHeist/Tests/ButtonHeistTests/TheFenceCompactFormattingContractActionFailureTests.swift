@@ -259,7 +259,7 @@ extension TheFenceCompactFormattingContractTests {
         )
         XCTAssertTrue(compact.contains("[expectation FAILED: got noChange]"), compact)
         XCTAssertTrue(compact.contains("does not send activation-point tap dispatch"), compact)
-        XCTAssertTrue(human.contains("[expectation FAILED: expected changed(elements(*)), got noChange]"), human)
+        XCTAssertTrue(human.contains("[expectation FAILED: expected .elementsChanged, got noChange]"), human)
         XCTAssertTrue(human.contains("accessibility activation path is inert or mismatched"), human)
         XCTAssertTrue(
             arbitraryActualResponse.compactFormatted()

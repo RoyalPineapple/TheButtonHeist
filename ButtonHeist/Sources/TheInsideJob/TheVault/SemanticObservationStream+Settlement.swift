@@ -13,18 +13,15 @@ extension Observation.Stream {
         let subscription = subscribe(scope: .visible)
         defer { _ = subscription }
 
-        let timeoutMs = Self.timeoutMilliseconds(from: timeout)
         let deadline = SemanticObservationDeadline(
             start: RuntimeElapsed.now,
-            timeoutMs: timeoutMs
+            timeoutMs: Self.timeoutMilliseconds(from: timeout)
         )
         while deadline.hasTimeRemaining(at: RuntimeElapsed.now) {
             if let observation = await admittedObservation(scope: .visible, after: nil) {
                 return observation
             }
-            let settlement = await refreshVisibleObservation(
-                timeoutMs: max(1, Int((deadline.remainingSeconds() * 1_000).rounded(.up)))
-            )
+            let settlement = await refreshVisibleObservation()
             if case .committed(let event) = settlement.commitOutcome,
                let observation = await admittedObservation(scope: .visible, after: nil),
                observation.event.moment == event.moment {
@@ -48,9 +45,7 @@ extension Observation.Stream {
             timeoutMs: Self.timeoutMilliseconds(from: timeout)
         )
         while deadline.hasTimeRemaining(at: RuntimeElapsed.now) {
-            let settlement = await refreshVisibleObservation(
-                timeoutMs: max(1, Int((deadline.remainingSeconds() * 1_000).rounded(.up)))
-            )
+            let settlement = await refreshVisibleObservation()
             if case .committed(let event) = settlement.commitOutcome,
                let observation = await admittedObservation(scope: .visible, after: nil),
                observation.event.moment == event.moment {
@@ -252,17 +247,13 @@ extension Observation.Stream {
     }
 
     internal func refreshVisibleObservation(
-        baselineTripwireSignal: TheTripwire.TripwireSignal? = nil,
-        timeoutMs: Int
+        baselineTripwireSignal: TheTripwire.TripwireSignal? = nil
     ) async -> ObservationSettlement {
         if let refresh = visibleRefreshPhase.task {
             return await finishVisibleRefresh(refresh)
         }
         return await startVisibleRefresh(
-            baseline: SettleBaseline(
-                tripwireSignal: baselineTripwireSignal ?? currentTripwireSignal()
-            ),
-            timeoutMs: timeoutMs
+            tripwireSignal: baselineTripwireSignal ?? currentTripwireSignal()
         )
     }
 
@@ -272,29 +263,23 @@ extension Observation.Stream {
 
     internal func refreshVisibleObservation(
         after boundary: VisibleRefreshBoundary,
-        baselineTripwireSignal: TheTripwire.TripwireSignal,
-        timeoutMs: Int
+        baselineTripwireSignal: TheTripwire.TripwireSignal
     ) async -> ObservationSettlement {
         if let refresh = visibleRefreshPhase.task,
            refresh.token.rawValue < boundary.nextTokenRawValue {
             _ = await finishVisibleRefresh(refresh)
         }
         return await refreshVisibleObservation(
-            baselineTripwireSignal: baselineTripwireSignal,
-            timeoutMs: timeoutMs
+            baselineTripwireSignal: baselineTripwireSignal
         )
     }
 
     private func startVisibleRefresh(
-        baseline: SettleBaseline,
-        timeoutMs: Int
+        tripwireSignal: TheTripwire.TripwireSignal
     ) async -> ObservationSettlement {
-        await invalidateDeliveryIfSignalChanged(to: baseline.tripwireSignal)
+        await invalidateDeliveryIfSignalChanged(to: tripwireSignal)
         let task = Task { @MainActor in
-            await self.produceVisibleSettlement(
-                baseline: baseline,
-                timeoutMs: timeoutMs
-            )
+            await self.produceVisibleSettlement(tripwireSignal: tripwireSignal)
         }
         let refresh = VisibleRefreshTask(
             token: nextVisibleRefreshTokenValue(),
@@ -330,8 +315,7 @@ extension Observation.Stream {
     /// `.noChange` tick that answer produces, drained like any other predicate,
     /// so nothing needs to decide it here.
     private func produceVisibleSettlement(
-        baseline: SettleBaseline,
-        timeoutMs _: Int
+        tripwireSignal: TheTripwire.TripwireSignal
     ) async -> ObservationSettlement {
         await beforeVisibleReading()
         guard let vault, !Task.isCancelled else {
@@ -339,7 +323,7 @@ extension Observation.Stream {
         }
         guard let committableObservation = await admitCurrentObservation(
             vault: vault,
-            tripwireSignal: baseline.tripwireSignal
+            tripwireSignal: tripwireSignal
         ) else {
             return ObservationSettlement(commitOutcome: .unavailable)
         }

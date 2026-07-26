@@ -178,22 +178,7 @@ public indirect enum AccessibilityTarget: Codable, Sendable, Equatable, Hashable
 
 extension AccessibilityTarget: CustomStringConvertible {
     public var description: String {
-        switch self {
-        case .predicate(let predicate, let ordinal):
-            return CanonicalValueDescription.call("target", [
-                predicate.description,
-                CanonicalValueDescription.valueField("ordinal", ordinal),
-            ].compactMap { $0 })
-        case .container(let predicate, let ordinal):
-            return CanonicalValueDescription.call("container", [
-                predicate.description,
-                CanonicalValueDescription.valueField("ordinal", ordinal),
-            ].compactMap { $0 })
-        case .ref(let reference):
-            return CanonicalValueDescription.call("ref", [reference.description])
-        case .within(let container, let target):
-            return CanonicalValueDescription.call("within", [container.description, target.description])
-        }
+        CanonicalDSLDescription.render(self) { try $0.render(target: self, environment: $1) }
     }
 }
 

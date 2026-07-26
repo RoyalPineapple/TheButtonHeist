@@ -97,7 +97,7 @@ final class ElementPredicateTests: XCTestCase {
     func testAccessibilityTargetDescriptionComposesPredicateAndOrdinal() {
         let target = AccessibilityTarget.predicate(ElementPredicate(label: "Save", traits: [.button]), ordinal: 1)
 
-        XCTAssertEqual(target.description, #"target(predicate(label="Save" traits=[button]) ordinal=1)"#)
+        XCTAssertEqual(target.description, #".target(.element(.label("Save"), .traits([.button])), ordinal: 1)"#)
     }
 
     func testAccessibilityTargetRejectsOrdinalOnlySelector() throws {

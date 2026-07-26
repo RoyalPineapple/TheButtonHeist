@@ -4,25 +4,6 @@ import CoreGraphics
 import TheScore
 import UIKit
 
-// MARK: - Frame Placement
-
-enum FramePlacement: Hashable {
-    case at(minX: Int, minY: Int, width: Int, height: Int)
-    case masked
-    case unavailable
-
-    var hashFragment: String {
-        switch self {
-        case .at(let minX, let minY, let width, let height):
-            "\(minX)_\(minY)_\(width)_\(height)"
-        case .masked:
-            "masked"
-        case .unavailable:
-            "unavailable"
-        }
-    }
-}
-
 enum CoarseFrameComparison {
     /// The smallest distance that counts as having moved: one touch target,
     /// which is the smallest thing a user could have been aiming at.
@@ -32,20 +13,6 @@ enum CoarseFrameComparison {
 
     static func tolerance(for idiom: UIUserInterfaceIdiom) -> CGFloat {
         idiom == .pad ? 13 : 8
-    }
-
-    @MainActor static func placement(of frame: CGRect, bucket: CGFloat = currentTolerance) -> FramePlacement {
-        guard let frame = ScreenFrameEvidence(frame).rect?.cgRect else { return .unavailable }
-        return .at(
-            minX: component(frame.origin.x, bucket: bucket),
-            minY: component(frame.origin.y, bucket: bucket),
-            width: component(frame.size.width, bucket: bucket),
-            height: component(frame.size.height, bucket: bucket)
-        )
-    }
-
-    @MainActor static func hashFragment(for frame: CGRect, bucket: CGFloat = currentTolerance) -> String {
-        placement(of: frame, bucket: bucket).hashFragment
     }
 
     /// Whether two frames describe the same place, within the given tolerance.
@@ -69,13 +36,6 @@ enum CoarseFrameComparison {
             && abs(lhs.minY - rhs.minY) < tolerance
             && abs(lhs.width - rhs.width) < tolerance
             && abs(lhs.height - rhs.height) < tolerance
-    }
-
-    private static func component(_ value: CGFloat, bucket: CGFloat) -> Int {
-        let scaled = bucket > 0 && bucket.isFinite ? (value / bucket).rounded() : value.rounded()
-        if scaled >= CGFloat(Int.max) { return Int.max }
-        if scaled <= CGFloat(Int.min) { return Int.min }
-        return Int(scaled)
     }
 }
 

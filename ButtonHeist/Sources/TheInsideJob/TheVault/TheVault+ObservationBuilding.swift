@@ -1,6 +1,5 @@
 #if canImport(UIKit)
 #if DEBUG
-import CryptoKit
 import UIKit
 
 import TheScore
@@ -236,14 +235,9 @@ extension TheVault {
         identityContext: IdentityContext
     ) -> [TreePath: ContainerName] {
         let candidates = identityContext.containers.map { identity in
-            let readableName = containerName(
-                for: identity.container,
-                contentFrame: identity.contentFrame
-            )
-            return ContainerNameCandidate(
+            ContainerNameCandidate(
                 path: identity.path,
-                node: identity.subtree,
-                readableName: readableName
+                readableName: containerName(for: identity.container)
             )
         }
 
@@ -255,60 +249,30 @@ extension TheVault {
 
         var byPath: [TreePath: ContainerName] = [:]
         for candidate in candidates {
-            let containerName: ContainerName
-            if duplicateReadableNames.contains(candidate.readableName) {
-                containerName = captureLocalContainerId(
-                    readableName: candidate.readableName,
-                    node: candidate.node,
-                    path: candidate.path
-                )
-            } else {
-                containerName = candidate.readableName
-            }
-            byPath[candidate.path] = containerName
+            byPath[candidate.path] = duplicateReadableNames.contains(candidate.readableName)
+                ? captureLocalContainerId(readableName: candidate.readableName, path: candidate.path)
+                : candidate.readableName
         }
         return byPath
     }
 
+    /// Disambiguate containers that expose the same values by their position in
+    /// the parsed tree. The tree path is what already makes container identity
+    /// path-distinct, it is an exact integer sequence rather than a measurement,
+    /// and it is the same for two parses of an unchanged screen — so unlike the
+    /// frame hash it replaces, this suffix cannot be moved by layout noise.
     static func captureLocalContainerId(
         readableName: ContainerName,
-        node: AccessibilityHierarchy,
         path: TreePath
     ) -> ContainerName {
-        ContainerName(stringLiteral: "\(readableName.rawValue)-\(containerHash(node: node, path: path))")
-    }
-
-    private static func containerHash(node: AccessibilityHierarchy, path: TreePath) -> String {
-        let data = stableContainerHashData(node: node, path: path)
-        return SHA256.hash(data: data).prefix(6).map { String(format: "%02x", $0) }.joined()
-    }
-
-    private static func stableContainerHashData(node: AccessibilityHierarchy, path: TreePath) -> Data {
-        let payload = ContainerIdentityPayload(path: path.indices, subtree: node)
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        encoder.nonConformingFloatEncodingStrategy = .convertToString(
-            positiveInfinity: "Infinity",
-            negativeInfinity: "-Infinity",
-            nan: "NaN"
+        ContainerName(
+            stringLiteral: "\(readableName.rawValue)-\(path.indices.map(String.init).joined(separator: "_"))"
         )
-        switch Result(catching: { try encoder.encode(payload) }) {
-        case .success(let data):
-            return data
-        case .failure(let error):
-            preconditionFailure("Failed to encode container identity payload: \(error)")
-        }
     }
 
     private struct ContainerNameCandidate {
         let path: TreePath
-        let node: AccessibilityHierarchy
         let readableName: ContainerName
-    }
-
-    private struct ContainerIdentityPayload: Encodable {
-        let path: [Int]
-        let subtree: AccessibilityHierarchy
     }
 
     private enum ObservationElementCandidate {

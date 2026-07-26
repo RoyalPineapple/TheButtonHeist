@@ -85,18 +85,29 @@ extension Navigation {
         let transitionDeadline = SemanticObservationDeadline(start: RuntimeElapsed.now, timeoutMs: timeoutMs)
         repeat {
             // A page is read on the tick, not after a loop agrees the tree
-            // stopped: the hash comparison that used to gate this now happens in
-            // the store, and the reading either moved the graph or produced the
+            // stopped: the comparison that used to gate this now happens in the
+            // store, and the reading either moved the graph or produced the
             // stillness tick that says it did not.
+            //
+            // The tick only says time passed. The page still has to be re-read
+            // afterwards, or every iteration inspects the same observation the
+            // last one did and a scroll that is still settling looks like a
+            // scroll that never happened.
             _ = await tripwire.waitForNextTick(
                 timeout: transitionDeadline.remainingDuration(at: RuntimeElapsed.now),
                 demand: .immediate
             )
+            let page = vault.refreshLiveCapture()
             guard afterViewportMovement || !Task.isCancelled else { return nil }
             let transitionCanSettleAgain = transitionDeadline.remainingSeconds() * 1_000
                 >= Double(SemanticObservationTiming.viewportTransitionMinimumBudgetMs)
+            // Whether this page is the one we already have, asked so that a
+            // scroll counts. `interfaceHash` deliberately excludes geometry, so
+            // on its own it cannot tell a revealed page from an unmoved one: the
+            // labels are identical either way and only the frames moved. Pair it
+            // with the viewport placement, which is the half that saw the scroll.
             if let previousViewportHash,
-               vault.latestObservation.tree.interfaceHash == previousViewportHash,
+               (page ?? vault.latestObservation).tree.viewportPageKey == previousViewportHash,
                transitionCanSettleAgain {
                 continue
             }

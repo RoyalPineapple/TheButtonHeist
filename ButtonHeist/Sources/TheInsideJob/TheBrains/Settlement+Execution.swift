@@ -985,12 +985,10 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
                     ? lifecycle.visibleRefreshBoundaryAfterDispatch()
                     : stream.visibleRefreshBoundary()
             else { return }
-            let timeout = ContinuousClock.now.duration(to: deadline.instant)
-            guard timeout > .zero else { return }
+            guard ContinuousClock.now < deadline.instant else { return }
             let settlement = await stream.refreshVisibleObservation(
                 after: refreshBoundary,
-                baselineTripwireSignal: baselineTripwireSignal,
-                timeoutMs: max(1, Int((timeout / .milliseconds(1)).rounded(.up)))
+                baselineTripwireSignal: baselineTripwireSignal
             )
             guard case .committed(let event) = settlement.commitOutcome else { return }
             lifecycle.requestNotificationWindowConsumption()

@@ -1038,7 +1038,7 @@ is final. Treat the new input and response JSON shapes as public contracts.
 Run at minimum:
 
 ```bash
-scripts/test-runner.py run MacFrameworkTests --selection full
+scripts/test-runner.py run MacFrameworkTests
 ```
 
 Run the ButtonHeistMCP package tests through the repository gate:

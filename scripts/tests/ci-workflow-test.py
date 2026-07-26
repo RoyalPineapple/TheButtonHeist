@@ -92,7 +92,7 @@ class CIWorkflowTests(unittest.TestCase):
     def test_macos_frameworks_share_one_test_invocation(self) -> None:
         macos = job_blocks()["macos-tests"]
         self.assertIn(
-            "scripts/test-runner.py run MacFrameworkTests --selection full",
+            "scripts/test-runner.py run MacFrameworkTests",
             macos,
         )
         self.assertNotIn("for scheme in", macos)

@@ -47,9 +47,12 @@ extension TheTripwire {
         ///
         /// Accessibility notifications are intentionally excluded. They are a
         /// high-quality wake-up signal that should prompt another parse, but
-        /// they are not structural UIKit state. Treating a notification-only
-        /// sequence bump as a reset can starve the settle loop when UIKit posts
-        /// repeated layout/value notifications during a transition.
+        /// they are not structural UIKit state. A reset says the reading now
+        /// describes a different screen, so an admitted observation taken under
+        /// the old signal is thrown away; UIKit posts repeated layout/value
+        /// notifications during a transition, and treating each bump as a reset
+        /// would discard perfectly good readings of a screen that never
+        /// changed.
         func requiresSettleBaselineReset(from previous: TripwireSignal) -> Bool {
             topmostVC != previous.topmostVC
                 || navigation != previous.navigation

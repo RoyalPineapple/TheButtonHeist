@@ -128,7 +128,7 @@ struct CanonicalAccessibilityPredicateTests {
         #expect(object["type"] as? String == "exists")
         #expect(target["container"] != nil)
         #expect(target["ordinal"] as? Int == 1)
-        #expect(predicate.description.contains("ordinal=1"))
+        #expect(predicate.description.contains("ordinal: 1"))
         #expect(try JSONDecoder().decode(AccessibilityPredicate.self, from: data) == predicate)
     }
 

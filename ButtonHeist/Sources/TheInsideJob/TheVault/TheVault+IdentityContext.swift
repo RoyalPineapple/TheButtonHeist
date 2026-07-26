@@ -14,13 +14,8 @@ extension TheVault {
     struct ContainerIdentity {
         let path: TreePath
         let container: AccessibilityContainer
-        let children: [AccessibilityHierarchy]
         let contentFrame: ContentRect?
         let scrollMembership: InterfaceTree.ScrollMembership?
-
-        var subtree: AccessibilityHierarchy {
-            .container(container, children: children)
-        }
     }
 
     struct ElementIdentity {
@@ -93,7 +88,7 @@ extension TheVault {
                     )
                     return true
                 },
-                onContainer: { container, children, context, accumulator in
+                onContainer: { container, _, context, accumulator in
                     let membership = context.parentScrollContainerPath.map {
                         InterfaceTree.ScrollMembership(containerPath: $0, index: nil)
                     }
@@ -105,7 +100,6 @@ extension TheVault {
                         ContainerIdentity(
                             path: context.path,
                             container: container,
-                            children: children,
                             contentFrame: contentFrame,
                             scrollMembership: membership
                         )
@@ -142,44 +136,38 @@ extension TheVault {
     // MARK: - Container Naming
 
     /// Compute a readable generated name prefix for a parser container, derived
-    /// from its own exposed values. Container names are capture-local tree
-    /// projections; `buildContainerNameIndex` appends a deterministic
-    /// subtree hash when multiple containers share this prefix in one parse.
-    static func containerName(
-        for container: AccessibilityContainer,
-        contentFrame: ContentRect?
-    ) -> ContainerName {
-        let frameHash = contentFrame.map { coarseFrameHash($0.cgRect) } ?? "unavailable"
+    /// from the values the container itself exposes — role, identifier, semantic
+    /// label — and never from its frame. A name is a single value with nothing to
+    /// compare against, so the tolerance that makes frame *comparison* safe
+    /// cannot make a frame-derived *name* safe: a container parked on a bucket
+    /// edge would be renamed by a third of a point of layout noise. Container
+    /// names are capture-local tree projections; `buildContainerNamesByPath`
+    /// appends the container's tree path when several share this prefix in one
+    /// parse.
+    static func containerName(for container: AccessibilityContainer) -> ContainerName {
         let facts = container.containerPredicateFacts
+        let identifierSuffix = facts.identifier.map { "_\($0)" } ?? ""
         switch facts.role {
         case .none where facts.isScrollable:
-            return ContainerName(stringLiteral: "scrollable_\(frameHash)")
+            return ContainerName(stringLiteral: "scrollable\(identifierSuffix)")
         case .none:
-            let identifierSlug = facts.identifier ?? "anon"
-            return ContainerName(stringLiteral: "container_\(identifierSlug)_\(frameHash)")
+            return ContainerName(stringLiteral: "container_\(facts.identifier ?? "anon")")
         case .semanticGroup(let label, let value):
             let labelSlug = TheScore.slugify(label) ?? "anon"
             let valueSlug = TheScore.slugify(value) ?? ""
             let identifierSlug = facts.identifier ?? ""
             return ContainerName(stringLiteral: "semantic_\(identifierSlug)_\(labelSlug)_\(valueSlug)")
         case .list:
-            return ContainerName(stringLiteral: "list_\(frameHash)")
+            return ContainerName(stringLiteral: "list\(identifierSuffix)")
         case .landmark:
-            return ContainerName(stringLiteral: "landmark_\(frameHash)")
+            return ContainerName(stringLiteral: "landmark\(identifierSuffix)")
         case .tabBar:
-            return ContainerName(stringLiteral: "tabBar_\(frameHash)")
+            return ContainerName(stringLiteral: "tabBar\(identifierSuffix)")
         case .series:
-            return ContainerName(stringLiteral: "series_\(frameHash)")
+            return ContainerName(stringLiteral: "series\(identifierSuffix)")
         case .dataTable(let rows, let columns):
-            return ContainerName(stringLiteral: "table_\(rows)x\(columns)_\(frameHash)")
+            return ContainerName(stringLiteral: "table_\(rows)x\(columns)\(identifierSuffix)")
         }
-    }
-
-    /// Coarse frame hash used when deriving generated container names. The
-    /// bucket is device-dependent so iPad layouts get the same tolerance used
-    /// by settle fingerprinting.
-    static func coarseFrameHash(_ frame: CGRect) -> String {
-        CoarseFrameComparison.hashFragment(for: frame)
     }
 
 }

@@ -9,7 +9,6 @@ import TheScore
 extension Observation {
 @MainActor
 internal final class Stream {
-    private static let passiveSettleTimeoutMs = 1_000
     private static let passiveDiscoveryCadence: Duration = .seconds(1)
 
     weak var vault: TheVault?
@@ -263,9 +262,7 @@ internal final class Stream {
         )
         await invalidateDeliveryIfSignalChanged(to: currentTripwireSignal())
         guard !Task.isCancelled else { return false }
-        _ = await refreshVisibleObservation(
-            timeoutMs: Self.passiveSettleTimeoutMs
-        )
+        _ = await refreshVisibleObservation()
         return !Task.isCancelled
     }
 
@@ -280,17 +277,6 @@ internal final class Stream {
 }
 
 extension Observation.Stream {
-    /// The pre-action reading a settle run compares against: the tripwire
-    /// signal, sampled before the action, deciding when the settle baseline
-    /// resets.
-    internal struct SettleBaseline: Sendable, Equatable {
-        internal let tripwireSignal: TheTripwire.TripwireSignal
-
-        internal init(tripwireSignal: TheTripwire.TripwireSignal) {
-            self.tripwireSignal = tripwireSignal
-        }
-    }
-
     struct VisibleRefreshToken: Equatable {
         let rawValue: UInt64
     }

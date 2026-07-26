@@ -153,27 +153,27 @@ Calling `tuist generate` directly still works for quick iteration, but prefer th
 
 ## Canonical Test Runner
 
-Use `scripts/test-runner.py` as the canonical way to run repository test suites locally and in CI. The runner is the sole owner of suite names, schemes, destinations, selection behavior, result bundles, heist result directories, and split build/test execution.
+Use `scripts/test-runner.py` as the canonical way to run repository test suites locally and in CI. The runner is the sole owner of suite names, schemes, destinations, result bundles, heist result directories, and split build/test execution.
 
 - Do not use `swift test` for normal verification. SwiftPM does not model the hosted iOS test setup correctly and can produce misleading failures in this mixed macOS/iOS repo.
 - Do not call `tuist test` or test-driving `xcodebuild` commands directly. Use them only when debugging the runner, Tuist, or Xcode behavior.
-- `run` uses selective testing by default. Pass `--selection full` when every test must run.
+- Every mode runs the full suite. The runner drives `xcodebuild` directly and never `tuist test`, which reports a failing suite as `✖ Error` plus a forum link where `xcodebuild` names the test and its assertion.
 - The runner selects an explicit iOS simulator and emits its resolved UDID destination. Agents should pass their task slug with `--simulator-name` to preserve simulator isolation.
 - CI's build-once optimization uses the runner's `build-for-testing` and `test-without-building` commands. Those commands are full-suite phases and share one deterministic derived-data path.
 
 Recommended commands:
 
 ```bash
-scripts/test-runner.py run MacFrameworkTests --selection full
-scripts/test-runner.py run TheInsideJobTests --selection full
-scripts/test-runner.py run TheInsideJobIntegrationTests --selection full
-scripts/test-runner.py run HostedBehaviorTests --selection full
+scripts/test-runner.py run MacFrameworkTests
+scripts/test-runner.py run TheInsideJobTests
+scripts/test-runner.py run TheInsideJobIntegrationTests
+scripts/test-runner.py run HostedBehaviorTests
 ```
 
 From a clean checkout, install declared dependencies and run a portable suite with:
 
 ```bash
-scripts/test-runner.py run MacFrameworkTests --selection full --install-dependencies
+scripts/test-runner.py run MacFrameworkTests --install-dependencies
 ```
 
 ### Adding a dependency
@@ -333,10 +333,10 @@ Before pushing any commit, verify the following:
 ### 3. Tests Pass
 - **All existing tests must pass.** Run the test suite:
   ```bash
-  scripts/test-runner.py run MacFrameworkTests --selection full
-  scripts/test-runner.py run TheInsideJobTests --selection full
-  scripts/test-runner.py run TheInsideJobIntegrationTests --selection full
-  scripts/test-runner.py run HostedBehaviorTests --selection full
+  scripts/test-runner.py run MacFrameworkTests
+  scripts/test-runner.py run TheInsideJobTests
+  scripts/test-runner.py run TheInsideJobIntegrationTests
+  scripts/test-runner.py run HostedBehaviorTests
   ```
 - If tests fail, fix the code or update tests to reflect intentional changes.
 
@@ -368,7 +368,6 @@ Before pushing any commit, verify the following:
 - `TheScoreTests` and `ButtonHeistTests` are canonical portable suites. `MacFrameworkTests` is the real aggregate scheme used by the consolidated CI lane.
 - The hosted iOS suite has three canonical schemes: core `TheInsideJobTests`, isolated `TheInsideJobIntegrationTests`, and aggregate `HostedBehaviorTests`, which owns the dogfood and adversarial targets.
 - All three hosted schemes run via the `BH Demo` test host. The runner resolves and records their explicit simulator destination; running only `TheInsideJobTests` skips integration and hosted behavior.
-- Use `--selection full` when you need to force the full suite instead of the runner's default selective run.
 - Treat `swift test` as a package-debugging tool, not as the source of truth for CI-style verification.
 
 ### Test Framework

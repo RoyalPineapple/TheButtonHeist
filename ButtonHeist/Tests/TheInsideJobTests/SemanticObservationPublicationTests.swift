@@ -113,15 +113,14 @@ final class SemanticObservationPublicationTests: SemanticObservationStreamTestCa
         defer { releaseSettle?.resume() }
 
         let inFlight = Task { @MainActor in
-            await stream.refreshVisibleObservation(timeoutMs: 1_000)
+            await stream.refreshVisibleObservation()
         }
         await waitForSettleCount(1, current: settleCount)
         let boundary = stream.visibleRefreshBoundary()
         let postDispatch = Task { @MainActor in
             await stream.refreshVisibleObservation(
                 after: boundary,
-                baselineTripwireSignal: signal,
-                timeoutMs: 1_000
+                baselineTripwireSignal: signal
             )
         }
 
@@ -149,14 +148,13 @@ final class SemanticObservationPublicationTests: SemanticObservationStreamTestCa
 
         let boundary = stream.visibleRefreshBoundary()
         let inFlight = Task { @MainActor in
-            await stream.refreshVisibleObservation(timeoutMs: 1_000)
+            await stream.refreshVisibleObservation()
         }
         await waitForSettleCount(1, current: settleCount)
         let postDispatch = Task { @MainActor in
             await stream.refreshVisibleObservation(
                 after: boundary,
-                baselineTripwireSignal: signal,
-                timeoutMs: 1_000
+                baselineTripwireSignal: signal
             )
         }
 

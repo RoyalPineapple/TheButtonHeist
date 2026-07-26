@@ -558,12 +558,7 @@ extension ElementInflationProductTests {
         if let capturedName = capturedInnerContainer?.containerName {
             innerContainerName = capturedName
         } else {
-            innerContainerName = TheVault.containerName(
-                for: innerContainer,
-                contentFrame: try ContentRect(
-                    validating: CGRect(origin: .zero, size: fixture.innerScrollView.frame.size)
-                )
-            )
+            innerContainerName = TheVault.containerName(for: innerContainer)
         }
         let element = makeElement(
             label: fixture.label,

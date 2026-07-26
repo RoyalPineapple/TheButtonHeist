@@ -61,7 +61,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         }
     }
 
-    private func render(
+    func render(
         elementAssertion assertion: ElementAssertion,
         environment: RenderEnvironment
     ) throws -> String {

@@ -187,15 +187,19 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public var accessibilityTrace: AccessibilityTrace? { evidence.accessibilityTrace }
     /// Source-of-truth trace and observation-completeness evidence for this action.
     public var traceEvidence: AccessibilityTraceEvidence? { evidence.traceEvidence }
-    /// True when the response represents a settled UI state — either the
-    /// AX tree reached multi-cycle stability, or a screen transition
-    /// preempted the settle loop and the new screen has been observed via
-    /// the existing repopulation pipeline. False *only* when the hard
-    /// settle timeout elapsed while the tree was still changing — the
-    /// endpoint delta projection may not be a final state.
+    /// True when the runtime saw the tree come to rest: a reading arrived whose
+    /// comparison against the one before it found nothing new, so the action's
+    /// effects had finished landing before the response was built.
+    ///
+    /// False means the timeout elapsed first, and timeout is the only way this
+    /// is false. So a caller can conclude one thing from `false`: nobody ever
+    /// observed the tree stop. It does not say the action failed, and it does
+    /// not say the reported state is wrong — the trace is a real reading, just
+    /// one taken while the tree may still have been moving, so an element's
+    /// position or a value mid-animation may not be where it ended up.
     public var settled: Bool? { evidence.settlement?.settled }
-    /// Wall-clock milliseconds from action start to settle decision
-    /// (settled, screen-changed, or timed out).
+    /// Wall-clock milliseconds from action start to the reading that resolved
+    /// this settlement — the one that came to rest, or the timeout.
     public var settleTimeMs: ElapsedMilliseconds? { evidence.settlement?.durationMs }
     /// Semantic subject the runtime resolved before dispatching the action.
     public var subjectEvidence: ActionSubjectEvidence? { evidence.subjectEvidence }
