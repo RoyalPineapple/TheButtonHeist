@@ -426,21 +426,6 @@ final class TheBrainsPipelineTests: XCTestCase {
             contentFrame: container.frame.cgRect
         )
     }
-
-    func settledResult(
-        finalScreen: InterfaceObservation?,
-        outcome: SettleOutcome = .settled(timeMs: 0)
-    ) -> SettleSession.Result {
-        if let finalScreen {
-            brains.vault.observeInterface(finalScreen)
-        }
-        return SettleSession.Result(
-            outcome: outcome,
-            finalObservation: finalScreen.map { SettleSessionFinalObservation(observation: $0) },
-            tripwireSignal: brains.vault.semanticObservationStream.currentTripwireSignal()
-        )
-    }
-
 }
 
 #endif

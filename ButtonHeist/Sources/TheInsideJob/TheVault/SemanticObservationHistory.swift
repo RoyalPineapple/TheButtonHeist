@@ -66,9 +66,38 @@ extension Observation {
         /// `noChange` tick — nothing downstream asks again. The first
         /// observation has nothing to differ from, so it counts as a change:
         /// there was no earlier state for it to have been still relative to.
+        ///
+        /// Two readings, because "the tree moved" has two ways to be true.
+        /// Semantics change when a label or value does. Placements change while
+        /// an element is still travelling — invisible to the semantic hash,
+        /// which deliberately excludes geometry so that scrolling is not
+        /// mistaken for semantic change. Stillness has to see both, or a
+        /// reading taken mid-motion would claim the tree had stopped.
         internal var isChange: Bool {
             guard let previous else { return true }
-            return previous.semanticHash != snapshot.semanticHash
+            guard previous.semanticHash == snapshot.semanticHash else { return true }
+            return !Self.everyElementHeldStill(
+                from: previous.viewportFrames,
+                to: snapshot.viewportFrames,
+                tolerance: snapshot.placementTolerance
+            )
+        }
+
+        /// Whether every element the viewport still shows is where it was.
+        ///
+        /// Elements arriving or leaving are a semantic change, which the hash
+        /// above already caught, so this only asks about the ones present in
+        /// both readings: are any of them still travelling.
+        private static func everyElementHeldStill(
+            from previous: [HeistId: CGRect],
+            to current: [HeistId: CGRect],
+            tolerance: CGFloat
+        ) -> Bool {
+            guard Set(previous.keys) == Set(current.keys) else { return false }
+            return previous.allSatisfy { heistId, frame in
+                guard let now = current[heistId] else { return false }
+                return frame.isInSamePlace(as: now, tolerance: tolerance)
+            }
         }
         internal var generation: ScreenGeneration { snapshot.generation }
         internal var scope: SemanticObservationScope { snapshot.sourceScope }

@@ -92,17 +92,13 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
     func testDiscoverySettlementRejectsTripwireChangeBeforeCommit() async {
         let observation = observation(label: "Candidate", heistId: "candidate")
         vault.observeInterface(observation)
-        let settledSignal = tripwireSignal(sequence: 1)
         let currentSignal = tripwireSignal(sequence: 2)
         vault.semanticObservationStream.readTripwireSignal = { currentSignal }
-        let event = await vault.semanticObservationStream.commitSettledDiscoveryObservation(
-            settleResult(
-                .settled(timeMs: 1),
-                observation: observation,
-                tripwireSignal: settledSignal
-            ),
+        let event = await vault.semanticObservationStream.admitCurrentObservation(
+            vault: vault,
+            tripwireSignal: tripwireSignal(sequence: 1),
             discoveryCommitPolicy: .mergeIntoInterface,
-            afterViewportMovement: true
+            lineageEvidence: .viewportMovement
         )
 
         XCTAssertNil(event)

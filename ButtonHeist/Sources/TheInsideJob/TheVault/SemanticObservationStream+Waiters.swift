@@ -186,7 +186,7 @@ extension Observation.Stream {
     }
 
     static func timeoutMilliseconds(from timeout: Double?) -> Int {
-        guard let timeout else { return SettleSession.defaultTimeoutMs }
+        guard let timeout else { return SemanticObservationTiming.defaultTimeoutMs }
         guard timeout > 0 else { return 0 }
         let milliseconds = (timeout * 1_000).rounded(.up)
         return milliseconds >= Double(Int.max) ? Int.max : max(1, Int(milliseconds))

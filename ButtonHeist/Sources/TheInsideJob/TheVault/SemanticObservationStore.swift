@@ -223,7 +223,9 @@ extension Observation {
                 captureID: admission.captureID,
                 semanticSignal: admission.tripwireSignal.semanticValue,
                 notificationSequence: notifications.through.sequence,
-                trace: trace
+                trace: trace,
+                viewportFrames: admission.viewportFrames,
+                placementTolerance: admission.placementTolerance
             )
 
             var next = self

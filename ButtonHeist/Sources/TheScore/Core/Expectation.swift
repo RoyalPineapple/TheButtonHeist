@@ -224,9 +224,16 @@ package struct Expectation: Equatable, Sendable {
 
     /// Fold in the ticks of one observation.
     ///
-    /// Settlement has already made the one comparison, so it says what it saw
-    /// and this names the ticks: a replacement is three ordered ticks, a tree in
-    /// a new state is one, and stillness is one. Nothing is compared here.
+    /// The store has already made the one comparison — semantics and placements
+    /// against the reading before — so this names the ticks and compares
+    /// nothing: a replacement is its ordered ticks, a tree in a new state is
+    /// one, and a tree that came back the same is stillness.
+    ///
+    /// A reading that found no change *is* the proof of stillness, and it is the
+    /// only proof there is. Nothing polls a quiet tree to confirm it a second
+    /// time: the next reading arrives when the tree moves, so an expectation
+    /// whose predicate had already drained would wait forever for a stillness
+    /// tick that no one was going to send.
     package mutating func observe(
         _ interface: Interface,
         isChange: Bool,

@@ -200,7 +200,7 @@ final class TheVaultIdentityContextTests: XCTestCase {
 
     /// Locks in the no-change-for-normal-inputs invariant for `coarseFrameHash`.
     func testCoarseFrameHashUnchangedForOrdinaryFrame() {
-        let bucket = CoarseFrameComparison.currentBucket
+        let bucket = CoarseFrameComparison.currentTolerance
         let frame = CGRect(x: bucket * 2, y: bucket * 12, width: bucket * 40, height: bucket * 5)
         XCTAssertEqual(TheVault.coarseFrameHash(frame), "2_12_40_5")
     }
@@ -212,9 +212,34 @@ final class TheVaultIdentityContextTests: XCTestCase {
         )
     }
 
-    func testCoarseFrameComparisonUsesDeviceBuckets() {
-        XCTAssertEqual(CoarseFrameComparison.bucket(for: .phone), 8)
-        XCTAssertEqual(CoarseFrameComparison.bucket(for: .pad), 13)
+    func testCoarseFrameComparisonUsesDeviceTolerances() {
+        XCTAssertEqual(CoarseFrameComparison.tolerance(for: .phone), 8)
+        XCTAssertEqual(CoarseFrameComparison.tolerance(for: .pad), 13)
+    }
+
+    /// The reason the comparison is a tolerance and not a grid: a frame parked
+    /// on a bucket edge flips buckets under noise no user could see, so grid
+    /// comparison would call the stillest elements the ones that moved.
+    func testFramesWithinToleranceAreInTheSamePlaceEvenAcrossABucketEdge() {
+        let onEdge = CGRect(x: 0, y: 100, width: 200, height: 44)
+        let jittered = onEdge.offsetBy(dx: 0, dy: 0.3)
+        XCTAssertTrue(onEdge.isInSamePlace(as: jittered, tolerance: 8))
+        XCTAssertEqual(
+            CoarseFrameComparison.hashFragment(for: onEdge, bucket: 8),
+            "0_13_25_6"
+        )
+        XCTAssertEqual(
+            CoarseFrameComparison.hashFragment(for: jittered, bucket: 8),
+            "0_13_25_6"
+        )
+        XCTAssertFalse(onEdge.isInSamePlace(as: onEdge.offsetBy(dx: 0, dy: 9), tolerance: 8))
+    }
+
+    /// Unreadable geometry is never in the same place as anything, including
+    /// itself: a frame we could not read is not a frame we saw hold still.
+    func testUnreadableFrameIsNeverInTheSamePlace() {
+        let unreadable = CGRect(x: 0, y: 0, width: -1, height: 44)
+        XCTAssertFalse(unreadable.isInSamePlace(as: unreadable, tolerance: 8))
     }
 
     func testDuplicateReadableContainerIdsGetCaptureLocalHashes() {

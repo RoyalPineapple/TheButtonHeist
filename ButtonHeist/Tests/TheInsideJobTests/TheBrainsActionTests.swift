@@ -480,7 +480,9 @@ final class TheBrainsActionTests: XCTestCase {
             observation: event.snapshot.observation,
             semanticSignal: event.snapshot.semanticSignal,
             notificationSequence: event.notificationSequence,
-            trace: AccessibilityTrace(capture: capture)
+            trace: AccessibilityTrace(capture: capture),
+            viewportFrames: event.snapshot.viewportFrames,
+            placementTolerance: event.snapshot.placementTolerance
         )
         var log = Observation.Log(retentionLimit: 1)
         do {
@@ -513,7 +515,9 @@ final class TheBrainsActionTests: XCTestCase {
                 observation: event.snapshot.observation,
                 semanticSignal: .empty,
                 notificationSequence: UInt64(index + 1),
-                trace: trace
+                trace: trace,
+                viewportFrames: event.snapshot.viewportFrames,
+                placementTolerance: event.snapshot.placementTolerance
             )
             do {
                 let event = try log.record(snapshot: snapshot, continuity: .sameGeneration)
@@ -558,7 +562,7 @@ final class TheBrainsActionTests: XCTestCase {
                 let settlementCommand = Settlement.Command.action(.init(
                     command: command,
                     predicate: expectation.predicate,
-                    allowances: .init(readiness: .milliseconds(Int64(SettleSession.defaultTimeoutMs)),
+                    allowances: .init(readiness: .milliseconds(Int64(SemanticObservationTiming.defaultTimeoutMs)),
                         expectation: expectation.allowance
                     ),
                     baseline: .capture
@@ -785,7 +789,9 @@ private final class ScriptedHeistObservationSource {
             observation: sourceEvent.snapshot.observation,
             semanticSignal: .empty,
             notificationSequence: 0,
-            trace: trace
+            trace: trace,
+            viewportFrames: sourceEvent.snapshot.viewportFrames,
+            placementTolerance: sourceEvent.snapshot.placementTolerance
         )
         do {
             return try log.record(snapshot: snapshot, continuity: .sameGeneration)

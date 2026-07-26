@@ -563,7 +563,9 @@ private final class SettlementResultScript {
             observation: sourceEvent.snapshot.observation,
             semanticSignal: .empty,
             notificationSequence: 0,
-            trace: trace
+            trace: trace,
+            viewportFrames: sourceEvent.snapshot.viewportFrames,
+            placementTolerance: sourceEvent.snapshot.placementTolerance
         )
         let event: Observation.SnapshotEvent
         do {

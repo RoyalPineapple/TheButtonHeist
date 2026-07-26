@@ -216,16 +216,20 @@ extension TheVaultResolutionTests {
         XCTAssertTrue(secondEvent.trace.changeFacts.isEmpty)
     }
 
+    /// An admission carries the reading it was taken from, not whatever landed
+    /// afterwards. Two observations can agree on every semantic field and still
+    /// be different captures, so identity is the capture ID and nothing else.
     func testSettlementAdmissionCarriesTheExactObservation() async throws {
         let stableElement = element(label: "Stable")
         let settled = InterfaceObservation.makeForTests(elements: [(stableElement, "stable")])
-        let finalObservation = SettleSessionFinalObservation(observation: settled)
-        let settleResult = SettleSession.Result(
-            outcome: .settled(timeMs: 1),
-            finalObservation: finalObservation,
-            tripwireSignal: bagman.tripwire.tripwireSignal()
-        )
         bagman.observeInterface(settled)
+        let signal = bagman.tripwire.tripwireSignal()
+
+        let admitted = await bagman.semanticObservationStream.admitCurrentObservation(
+            vault: bagman,
+            tripwireSignal: signal
+        )
+        let committableObservation = try XCTUnwrap(admitted)
 
         let replacement = InterfaceObservation.makeForTests(elements: [(stableElement, "stable")])
         XCTAssertEqual(replacement.tree, settled.tree)
@@ -233,27 +237,27 @@ extension TheVaultResolutionTests {
         XCTAssertNotEqual(replacement.captureID, settled.captureID)
         bagman.observeInterface(replacement)
 
-        let committableObservation = try XCTUnwrap(CommittableInterfaceObservation.admit(settleResult))
         XCTAssertEqual(committableObservation.observation.captureID, settled.captureID)
         XCTAssertNotEqual(committableObservation.observation.captureID, replacement.captureID)
     }
 
-    func testViewportMovementLineageRequiresDedicatedAdmissionConstructor() async throws {
+    func testViewportMovementLineageIsCarriedOnlyWhenAskedFor() async throws {
         let observation = InterfaceObservation.makeForTests(elements: [(element(label: "Stable"), "stable")])
         bagman.observeInterface(observation)
-        let settleResult = SettleSession.Result(
-            outcome: .settled(timeMs: 1),
-            finalObservation: SettleSessionFinalObservation(observation: observation),
-            tripwireSignal: bagman.tripwire.tripwireSignal()
-        )
+        let stream = bagman.semanticObservationStream
+        let signal = bagman.tripwire.tripwireSignal()
 
-        let ordinary = try XCTUnwrap(CommittableInterfaceObservation.admit(settleResult))
-        let afterMovement = try XCTUnwrap(
-            CommittableInterfaceObservation.admit(
-                settleResult,
-                lineageEvidence: .viewportMovement
-            )
+        let admitted = await stream.admitCurrentObservation(
+            vault: bagman,
+            tripwireSignal: signal
         )
+        let admittedAfterMovement = await stream.admitCurrentObservation(
+            vault: bagman,
+            tripwireSignal: signal,
+            lineageEvidence: .viewportMovement
+        )
+        let ordinary = try XCTUnwrap(admitted)
+        let afterMovement = try XCTUnwrap(admittedAfterMovement)
 
         XCTAssertNil(ordinary.lineageEvidence)
         XCTAssertEqual(afterMovement.lineageEvidence, .viewportMovement)

@@ -54,6 +54,26 @@ struct InterfaceTree: Sendable, Equatable {
         elements[heistId]
     }
 
+    /// Where every visible element sits, for asking whether the tree moved.
+    ///
+    /// Geometry is not in `interfaceHash` and must not be: a predicate asks
+    /// about labels and values, and a scroll that reveals nothing new is not a
+    /// semantic change. But an element sliding into place *is* movement, and a
+    /// reading taken mid-slide is not a still one — so stillness needs a second
+    /// question that the semantic hash cannot answer.
+    ///
+    /// Only viewport elements carry live geometry, so only they are asked.
+    /// Placements round to the touch-target grid, which is what keeps sub-pixel
+    /// layout noise from holding settlement open forever.
+    var viewportFrames: [HeistId: CGRect] {
+        var frames: [HeistId: CGRect] = [:]
+        for heistId in viewportElementIDs {
+            guard let element = elements[heistId] else { continue }
+            frames[heistId] = element.element.bhFrame
+        }
+        return frames
+    }
+
     /// Hash of semantic accessibility state. Deliberately excludes
     /// viewport-only facts like live object refs, visible ids, current scroll
     /// offset, and live geometry.

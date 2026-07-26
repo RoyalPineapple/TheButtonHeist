@@ -97,7 +97,6 @@ extension Observation.Stream {
 
     @discardableResult
     internal func commitSettledDiscoveryObservation(
-        _ settleResult: SettleSession.Result,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy,
         afterViewportMovement: Bool,
         notificationBatch: AccessibilityNotificationBatch? = nil
@@ -105,9 +104,9 @@ extension Observation.Stream {
         guard let vault else {
             preconditionFailure("Observation.Stream cannot admit after TheVault is released")
         }
-        guard let committableObservation = await admitSettledObservation(
-            settleResult,
+        guard let committableObservation = await admitCurrentObservation(
             vault: vault,
+            tripwireSignal: currentTripwireSignal(),
             discoveryCommitPolicy: discoveryCommitPolicy,
             lineageEvidence: afterViewportMovement ? .viewportMovement : nil
         ) else { return nil }
@@ -157,7 +156,9 @@ extension Observation.Stream {
             scope: scope,
             notificationAdmission: notificationAdmission,
             keyboardVisible: vault.keyboardVisible,
-            timestamp: Date()
+            timestamp: Date(),
+            viewportFrames: sourceObservation.tree.viewportFrames,
+            placementTolerance: CoarseFrameComparison.currentTolerance
         )
         var delivery: Observation.StoreOwner.CommittedDelivery
         do {
@@ -319,57 +320,44 @@ extension Observation.Stream {
         return token
     }
 
+    /// Reads the tree once and commits what it read.
+    ///
+    /// There is no settle loop here any more. A reading is not held back until
+    /// some separate machinery agrees the tree stopped moving: it is committed,
+    /// and whether it moved is the store's own answer, carried on the event —
+    /// the semantic hash for labels and values, a tolerance comparison of the
+    /// viewport frames for elements still travelling. Stillness is the
+    /// `.noChange` tick that answer produces, drained like any other predicate,
+    /// so nothing needs to decide it here.
     private func produceVisibleSettlement(
         baseline: SettleBaseline,
-        timeoutMs: Int
+        timeoutMs _: Int
     ) async -> ObservationSettlement {
-        guard let vault else {
-            return ObservationSettlement(
-                settleResult: SettleSession.Result(
-                    outcome: .cancelled(timeMs: 0),
-                    finalObservation: nil,
-                    tripwireSignal: baseline.tripwireSignal
-                ),
-                commitOutcome: .unavailable
-            )
+        await beforeVisibleReading()
+        guard let vault, !Task.isCancelled else {
+            return ObservationSettlement(commitOutcome: .unavailable)
         }
-        let settleResult = await settleVisibleObservation(
-            vault,
-            tripwire,
-            activeObservationDemandState,
-            baseline,
-            timeoutMs
+        guard let committableObservation = await admitCurrentObservation(
+            vault: vault,
+            tripwireSignal: baseline.tripwireSignal
+        ) else {
+            return ObservationSettlement(commitOutcome: .unavailable)
+        }
+        let notificationIndex = await storeOwner.notificationIndex()
+        let notificationBatch = vault.accessibilityNotifications.checkpoint(
+            after: notificationIndex
         )
-        if Task.isCancelled {
-            return ObservationSettlement(
-                settleResult: settleResult,
-                commitOutcome: .unavailable
-            )
-        }
-        if let committableObservation = await admitSettledObservation(settleResult, vault: vault) {
-            let notificationIndex = await storeOwner.notificationIndex()
-            let notificationBatch = vault.accessibilityNotifications.checkpoint(
-                after: notificationIndex
-            )
-            let outcome = await commitSettledVisibleObservation(
-                committableObservation,
-                notificationBatch: notificationBatch,
-                notificationIdentityObservation: committableObservation.observation
-            )
-            switch outcome {
-            case .delivered(let event):
-                return ObservationSettlement(settleResult: settleResult, commitOutcome: .committed(event))
-            case .superseded:
-                return ObservationSettlement(
-                    settleResult: settleResult,
-                    commitOutcome: .unavailable
-                )
-            }
-        }
-        return ObservationSettlement(
-            settleResult: settleResult,
-            commitOutcome: .unavailable
+        let outcome = await commitSettledVisibleObservation(
+            committableObservation,
+            notificationBatch: notificationBatch,
+            notificationIdentityObservation: committableObservation.observation
         )
+        switch outcome {
+        case .delivered(let event):
+            return ObservationSettlement(commitOutcome: .committed(event))
+        case .superseded:
+            return ObservationSettlement(commitOutcome: .unavailable)
+        }
     }
 
     internal func requireScreenReplacement() async {
@@ -413,27 +401,32 @@ extension Observation.Stream {
         synchronizeDeliveryGeneration(generation, clearingSource: true)
     }
 
-    func admitSettledObservation(
-        _ settleResult: SettleSession.Result,
+    /// Admits the tree as it stands right now.
+    ///
+    /// The only question left is identity: a reading belongs to the signal it
+    /// was taken under, so a tripwire signal that moved underneath it means the
+    /// reading describes a screen we are no longer looking at. Whether the tree
+    /// moved is not asked here — that is the store's comparison, not a
+    /// precondition for committing.
+    func admitCurrentObservation(
         vault: TheVault,
+        tripwireSignal: TheTripwire.TripwireSignal,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
         lineageEvidence: ScreenLineageEvidence? = nil
     ) async -> CommittableInterfaceObservation? {
-        guard settleResult.tripwireSignal == currentTripwireSignal(),
-              settleResult.finalObservation?.observation.captureID == vault.latestObservation.captureID,
-              let committableObservation = CommittableInterfaceObservation.admit(
-                  settleResult,
-                  discoveryCommitPolicy: discoveryCommitPolicy,
-                  lineageEvidence: lineageEvidence
-              ) else {
+        guard tripwireSignal == currentTripwireSignal() else {
             await recordFailedSettle(
-                SettleFailureDiagnostic.message(for: settleResult),
-                observation: settleResult.finalObservation?.observation,
+                "the tripwire signal changed while the reading was taken",
+                observation: vault.latestObservation,
                 vault: vault
             )
             return nil
         }
-        return committableObservation
+        return CommittableInterfaceObservation.admitCaptured(
+            vault.latestObservation,
+            tripwireSignal: tripwireSignal,
+            lineageEvidence: lineageEvidence
+        )
     }
 
     private func recordFailedSettle(

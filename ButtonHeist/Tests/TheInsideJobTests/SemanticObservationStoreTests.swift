@@ -146,7 +146,9 @@ final class SemanticObservationStoreTests: XCTestCase {
                 gap: nil
             )),
             keyboardVisible: nil,
-            timestamp: Date(timeIntervalSince1970: 0)
+            timestamp: Date(timeIntervalSince1970: 0),
+            viewportFrames: observation.tree.viewportFrames,
+            placementTolerance: CoarseFrameComparison.currentTolerance
         )
     }
 
@@ -164,7 +166,9 @@ final class SemanticObservationStoreTests: XCTestCase {
             observation: observation,
             semanticSignal: .empty,
             notificationSequence: sequence,
-            trace: AccessibilityTrace(capture: capture)
+            trace: AccessibilityTrace(capture: capture),
+            viewportFrames: observation.tree.viewportFrames,
+            placementTolerance: CoarseFrameComparison.currentTolerance
         )
     }
 }

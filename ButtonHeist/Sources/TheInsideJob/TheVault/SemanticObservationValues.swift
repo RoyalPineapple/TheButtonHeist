@@ -63,6 +63,22 @@ extension Observation {
             tree.interfaceHash
         }
 
+        /// Where this screen's visible elements sat when it was read.
+        ///
+        /// Paired with `semanticHash` to ask whether the tree moved at all:
+        /// semantics catch a label or a value changing, placements catch an
+        /// element still sliding into position. A reading that matches on both
+        /// is the still one.
+        ///
+        /// Held as frames rather than a digest because the comparison is a
+        /// tolerance, not an equality: "within 8pt of" has nothing to hash.
+        internal let viewportFrames: [HeistId: CGRect]
+
+        /// How far an element may drift and still count as having held still.
+        /// Read from the device when this observation was taken, because the
+        /// comparison happens off the main actor and cannot ask.
+        internal let placementTolerance: CGFloat
+
         /// What a screen predicate matches this screen by: its first heading.
         ///
         /// The same rule the replayed trace uses, deliberately — one reading, so
@@ -93,7 +109,9 @@ extension Observation {
             captureID: InterfaceCaptureID,
             semanticSignal: TheTripwire.SemanticSignal,
             notificationSequence: UInt64,
-            trace: AccessibilityTrace
+            trace: AccessibilityTrace,
+            viewportFrames: [HeistId: CGRect],
+            placementTolerance: CGFloat
         ) {
             self.sequence = sequence
             self.generation = generation
@@ -103,6 +121,8 @@ extension Observation {
             self.trace = trace
             self.tree = tree
             self.captureID = captureID
+            self.viewportFrames = viewportFrames
+            self.placementTolerance = placementTolerance
         }
 
         internal init(
@@ -112,7 +132,9 @@ extension Observation {
             observation: InterfaceObservation,
             semanticSignal: TheTripwire.SemanticSignal,
             notificationSequence: UInt64,
-            trace: AccessibilityTrace
+            trace: AccessibilityTrace,
+            viewportFrames: [HeistId: CGRect],
+            placementTolerance: CGFloat
         ) {
             self.init(
                 sequence: sequence,
@@ -122,7 +144,9 @@ extension Observation {
                 captureID: observation.captureID,
                 semanticSignal: semanticSignal,
                 notificationSequence: notificationSequence,
-                trace: trace
+                trace: trace,
+                viewportFrames: viewportFrames,
+                placementTolerance: placementTolerance
             )
         }
     }
@@ -149,6 +173,12 @@ extension Observation {
         internal let notificationAdmission: NotificationAdmission
         internal let keyboardVisible: Bool?
         internal let timestamp: Date
+        /// Where the read tree's visible elements sat. Only the viewport has
+        /// live geometry, so only the viewport is asked.
+        internal let viewportFrames: [HeistId: CGRect]
+        /// The device's touch-target size, read here because the comparison
+        /// that uses it runs off the main actor.
+        internal let placementTolerance: CGFloat
     }
 
     internal enum NotificationAdmission: Sendable {
@@ -246,31 +276,16 @@ internal struct CommittableInterfaceObservation {
         )
     }
 
-    @MainActor internal static func admit(
-        _ settleResult: SettleSession.Result,
-        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
-        lineageEvidence: ScreenLineageEvidence? = nil
-    ) -> CommittableInterfaceObservation? {
-        guard settleResult.outcome.didSettleCleanly,
-              let finalObservation = settleResult.finalObservation else { return nil }
-        return CommittableInterfaceObservation(
-            observation: finalObservation.observation,
-            tripwireSignal: settleResult.tripwireSignal,
-            discoveryCommitPolicy: discoveryCommitPolicy,
-            lineageEvidence: lineageEvidence
-        )
-    }
 }
 
 /// The settlement result available after an action observation attempt.
 @MainActor
-    internal struct ObservationSettlement {
+internal struct ObservationSettlement {
     internal enum CommitOutcome {
         case committed(Observation.SnapshotEvent)
         case unavailable
     }
 
-    internal let settleResult: SettleSession.Result
     internal let commitOutcome: CommitOutcome
 }
 

@@ -16,7 +16,6 @@ internal final class Stream {
     let tripwire: TheTripwire
     var visibleRefreshPhase = VisibleRefreshPhase.idle
     var nextVisibleRefreshToken: UInt64 = 0
-    var settleVisibleObservation: VisibleObservationSettler
     var readTripwireSignal: @MainActor () -> TheTripwire.TripwireSignal
     private var lastPassiveDiscoveryStartedAt: RuntimeElapsed.Instant?
     // MARK: - Observation Bookkeeping
@@ -29,6 +28,10 @@ internal final class Stream {
     private var publicationWaiters: [
         StoreOwner.DeliveryToken: CheckedContinuation<PublicationOutcome, Never>
     ] = [:]
+    /// Runs at the top of every visible reading, before the tree is read.
+    /// The seam tests use to count readings and to hold one open while they
+    /// check whether a second consumer starts its own or joins this one.
+    var beforeVisibleReading: @MainActor () async -> Void = {}
     var beforeCommittedDelivery: @MainActor (StoreOwner.DeliveryToken) async -> Void = { _ in }
     var beforeResolvedDeliveryEnqueue: @MainActor (StoreOwner.DeliveryToken) async -> Void = { _ in }
     var latestDeliveredSnapshotEvent: SnapshotEvent?
@@ -80,30 +83,11 @@ internal final class Stream {
 
     internal init(
         vault: TheVault,
-        tripwire: TheTripwire,
-        settleVisibleObservation: VisibleObservationSettler? = nil
+        tripwire: TheTripwire
     ) {
         self.vault = vault
         self.tripwire = tripwire
         self.readTripwireSignal = { tripwire.tripwireSignal() }
-        self.settleVisibleObservation = settleVisibleObservation ?? { vault, tripwire, demand, baseline, timeoutMs in
-            let settlementStartedAt = RuntimeElapsed.now
-            // One settle rule either way; demand only decides how hard the loop
-            // drives the shared tick while a command is in flight.
-            let tickDemand: TheTripwire.TickDemand = switch demand {
-            case .active: .immediate
-            case .idle: .ambient
-            }
-            return await SettleSession.live(
-                vault: vault,
-                tripwire: tripwire,
-                timeoutMs: timeoutMs,
-                demand: tickDemand
-            ).run(
-                start: settlementStartedAt,
-                baselineTripwireSignal: baseline.tripwireSignal
-            )
-        }
     }
 
     internal func start(
@@ -260,21 +244,25 @@ internal final class Stream {
         }
     }
 
+    /// One pulse, one reading, committed either way.
+    ///
+    /// This used to return early whenever the admitted observation still held —
+    /// nothing to settle, so nothing was read. But "nothing changed" is the
+    /// answer stillness is waiting for, and skipping the read is what made it
+    /// unobtainable: the next reading only arrived when the tree moved, so a
+    /// tree that reached the asked-for state and then stayed there never said
+    /// so, and every expectation with a drained predicate timed out waiting for
+    /// the tree to stop changing.
+    ///
+    /// So the reading always happens and always commits. Whether it moved is
+    /// the store's comparison, not a precondition for taking it.
     private func observeVisibleSemanticState() async -> Bool {
-        if await admittedObservation(scope: .visible, after: nil) != nil {
-            // The current observation still holds, so there is nothing to
-            // settle. Wait for the screen's next pulse tick: a tick arriving
-            // proves the MainActor serviced the display link this frame, and a
-            // timed-out beat is the honest signal that it did not. Either
-            // outcome ends the cycle and the loop re-awaits.
-            _ = await tripwire.waitForNextTick(
-                timeout: .milliseconds(Int(TheTripwire.singleTickSettleTimeout * 1_000)),
-                demand: .ambient
-            )
-            await invalidateDeliveryIfSignalChanged(to: currentTripwireSignal())
-            return !Task.isCancelled
-        }
-
+        _ = await tripwire.waitForNextTick(
+            timeout: .milliseconds(Int(TheTripwire.singleTickSettleTimeout * 1_000)),
+            demand: .ambient
+        )
+        await invalidateDeliveryIfSignalChanged(to: currentTripwireSignal())
+        guard !Task.isCancelled else { return false }
         _ = await refreshVisibleObservation(
             timeoutMs: Self.passiveSettleTimeoutMs
         )
@@ -302,14 +290,6 @@ extension Observation.Stream {
             self.tripwireSignal = tripwireSignal
         }
     }
-
-    internal typealias VisibleObservationSettler = @MainActor (
-        TheVault,
-        TheTripwire,
-        SemanticObservationDemandState,
-        SettleBaseline,
-        Int
-    ) async -> SettleSession.Result
 
     struct VisibleRefreshToken: Equatable {
         let rawValue: UInt64

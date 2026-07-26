@@ -345,30 +345,20 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         XCTAssertNil(job.retainedIdleTimerBaseline, file: file, line: line)
     }
 
+    /// Drives the one thing that records a settle diagnostic: a reading whose
+    /// tripwire signal no longer matches the screen it was taken under.
+    /// `.empty` can never match a live signal, so this always fails that check.
     private func recordSettleFailureDiagnostic(on job: TheInsideJob) async -> String {
         let stream = job.brains.vault.semanticObservationStream
-        stream.settleVisibleObservation = { vault, _, _, baseline, _ in
-            let observation = InterfaceObservation.makeForTests()
-            vault.observeInterface(observation)
-            return SettleSession.Result(
-                outcome: .timedOut(timeMs: 17),
-                finalObservation: SettleSessionFinalObservation(observation: observation),
-                tripwireSignal: baseline.tripwireSignal,
-                delta: SettleTimeline.delta(
-                    from: [.make(label: "runtime lifecycle diagnostic-before")],
-                    to: [.make(label: "runtime lifecycle diagnostic-after")]
-                )
-            )
-        }
-        _ = await stream.refreshVisibleObservation(
-            baselineTripwireSignal: job.tripwire.tripwireSignal(),
-            timeoutMs: 1
+        _ = await stream.admitCurrentObservation(
+            vault: job.brains.vault,
+            tripwireSignal: .empty
         )
         guard let diagnostic = await stream.latestSettleFailureDiagnostic() else {
             XCTFail("Expected settle failure diagnostic")
             return ""
         }
-        XCTAssertTrue(diagnostic.contains("runtime lifecycle diagnostic-before"), diagnostic)
+        XCTAssertTrue(diagnostic.contains("tripwire signal changed"), diagnostic)
         return diagnostic
     }
 

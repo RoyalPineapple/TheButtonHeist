@@ -311,16 +311,8 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
             visibleObservationSource: { _ in visibleObservation }
         )
         defer { actionVault.semanticObservationStream.stop() }
-        actionVault.semanticObservationStream.settleVisibleObservation = { vault, _, _, baseline, _ in
-            vault.observeInterface(visibleObservation)
-            return SettleSession.Result(
-                outcome: .settled(timeMs: 1),
-                finalObservation: SettleSessionFinalObservation(
-                    observation: visibleObservation
-                ),
-                tripwireSignal: baseline.tripwireSignal,
-                delta: .unchanged
-            )
+        actionVault.semanticObservationStream.beforeVisibleReading = { [actionVault] in
+            actionVault.observeInterface(visibleObservation)
         }
 
         func executeAction(

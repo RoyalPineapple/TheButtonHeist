@@ -72,7 +72,9 @@ final class SemanticObservationLifecycleTests: SemanticObservationStreamTestCase
                 gap: notificationBatch.gap
             )),
             keyboardVisible: false,
-            timestamp: timestamp
+            timestamp: timestamp,
+            viewportFrames: screen.tree.viewportFrames,
+            placementTolerance: CoarseFrameComparison.currentTolerance
         ))
 
         XCTAssertEqual(commit.event.sequence, 1)

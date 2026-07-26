@@ -94,18 +94,6 @@ class SemanticObservationStreamTestCase: XCTestCase {
         )
     }
 
-    func settleResult(
-        _ outcome: SettleOutcome,
-        observation: InterfaceObservation,
-        tripwireSignal: TheTripwire.TripwireSignal
-    ) -> SettleSession.Result {
-        SettleSession.Result(
-            outcome: outcome,
-            finalObservation: SettleSessionFinalObservation(observation: observation),
-            tripwireSignal: tripwireSignal
-        )
-    }
-
     func tripwireSignal(sequence: UInt64) -> TheTripwire.TripwireSignal {
         TheTripwire.TripwireSignal(
             topmostVC: nil,
@@ -115,22 +103,18 @@ class SemanticObservationStreamTestCase: XCTestCase {
         )
     }
 
+    /// Counts visible readings and makes the tree stable, so a test can ask
+    /// whether a second consumer started its own reading or joined the first.
     func installSettler(
         signal: @escaping @MainActor () -> TheTripwire.TripwireSignal,
         beforeSettle: @escaping @MainActor () async -> Void = {}
     ) -> @MainActor () -> Int {
         var count = 0
         vault.semanticObservationStream.readTripwireSignal = signal
-        vault.semanticObservationStream.settleVisibleObservation = { vault, _, _, baseline, _ in
+        vault.semanticObservationStream.beforeVisibleReading = { [self] in
             count += 1
             await beforeSettle()
-            let observation = self.observation(label: "Stable", heistId: "stable")
-            vault.observeInterface(observation)
-            return self.settleResult(
-                .settled(timeMs: count),
-                observation: observation,
-                tripwireSignal: baseline.tripwireSignal
-            )
+            vault.observeInterface(observation(label: "Stable", heistId: "stable"))
         }
         return { count }
     }
