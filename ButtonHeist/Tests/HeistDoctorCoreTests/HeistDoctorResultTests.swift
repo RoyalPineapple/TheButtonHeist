@@ -55,7 +55,7 @@ import TheScore
         ])
         let dispatchTrace = AccessibilityTrace(first: before).appending(dispatchAfter)
         let actionTrace = dispatchTrace.appending(expectationAfter)
-        let predicate = AccessibilityPredicate.changed(.screen())
+        let predicate = AccessibilityPredicate.screenChanged
         let failure = HeistFailureDetail(
             category: .expectation,
             contract: "action expectation is met",

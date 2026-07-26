@@ -225,12 +225,12 @@ func runHeistBuildsHeistRunSteps() throws {
     ])
 
     let expectedSubtotal = WaitStep(
-        predicate: .changed(.elements([.appeared(.label("subtotal"))])),
+        predicate: .elementsChanged([.appeared(.label("subtotal"))]),
         timeout: ThePlans.defaultActionExpectationTimeout
     )
     let addItemDefinition = HeistDef<String>("Cart.addItem") { _ in Warn("declared") }
     let expectedRun = ThePlans.RunHeist("Cart.addItem", "Milk")
-        .expect(.changed(.elements([.appeared(.label("subtotal"))])))
+        .expect(.elementsChanged([.appeared(.label("subtotal"))]))
     #expect(try admittedSteps(expectedRun, declaredBy: addItemDefinition) == [
         .invoke(HeistInvocationStep(
             path: "Cart.addItem",
@@ -240,15 +240,15 @@ func runHeistBuildsHeistRunSteps() throws {
     ])
 
     let expectedStatus = WaitStep(
-        predicate: .changed(.elements([
+        predicate: .elementsChanged([
             .updated(.label("subtotal"), .value(after: .contains("2 items"))),
-        ])),
+        ]),
         timeout: ThePlans.defaultActionExpectationTimeout
     )
     let updatedRun = ThePlans.RunHeist("Cart.addItem", "Eggs")
-        .expect(.changed(.elements([
+        .expect(.elementsChanged([
             .updated(.label("subtotal"), .value(.contains("2 items"))),
-        ])))
+        ]))
     #expect(try admittedSteps(updatedRun, declaredBy: addItemDefinition) == [
         .invoke(HeistInvocationStep(
             path: "Cart.addItem",
@@ -272,11 +272,11 @@ func runHeistBuildsHeistRunSteps() throws {
     ])
 
     let expectation = WaitStep(
-        predicate: .changed(.screen("Receipt")),
+        predicate: .screenChanged("Receipt"),
         timeout: ThePlans.defaultActionExpectationTimeout
     )
     let screenRun = ThePlans.RunHeist("Checkout.pay")
-        .expect(.changed(.screen("Receipt")))
+        .expect(.screenChanged("Receipt"))
     #expect(try admittedSteps(screenRun, declaredBy: paymentDefinition) == [
         .invoke(HeistInvocationStep(
             path: "Checkout.pay",
@@ -297,7 +297,7 @@ func `run heist rejects chained expectations and reports timeout conflicts`() th
         _ = try HeistPlan {
             definition
             ThePlans.RunHeist("Checkout.pay")
-                .expect(.changed(.screen()), timeout: 3)
+                .expect(.screenChanged, timeout: 3)
                 .expect(.exists(.label("Receipt")), timeout: 3)
         }
         Issue.record("Expected HeistPlanBuildError")
@@ -314,7 +314,7 @@ func `run heist rejects chained expectations and reports timeout conflicts`() th
         _ = try HeistPlan {
             definition
             ThePlans.RunHeist("Checkout.pay")
-                .expect(.changed(.screen()), timeout: 1)
+                .expect(.screenChanged, timeout: 1)
                 .expect(.exists(.label("Receipt")), timeout: 2)
         }
         Issue.record("Expected HeistPlanBuildError")
@@ -354,12 +354,12 @@ func runHeistRendersAsRunHeistInCanonicalSwift() throws {
         ],
         body: [.invoke(HeistInvocationStep(
             path: "CartScreen.checkout",
-            expectation: WaitStep(predicate: .changed(.screen()), timeout: ThePlans.defaultActionExpectationTimeout)
+            expectation: WaitStep(predicate: .screenChanged, timeout: ThePlans.defaultActionExpectationTimeout)
         ))]
     )
     let rendered = try plan.canonicalSwiftDSL()
     #expect(rendered.contains("RunHeist(\"CartScreen.checkout\")"))
-    #expect(rendered.contains(".expect(.changed(.screen()))"))
+    #expect(rendered.contains(".expect(.screenChanged)"))
     #expect(!rendered.contains("CartScreen.checkout()"))
 }
 

@@ -25,8 +25,15 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .announcement(let announcement):
             guard let match = announcement.match else { return ".announcement" }
             return try ".announcement(\(renderStringArgument(match, environment: environment)))"
-        case .changed(let declaration):
-            return try ".changed(\(render(change: declaration, environment: environment)))"
+        case .screenChanged(let predicate):
+            guard let match = predicate.match else { return ".screenChanged" }
+            return try ".screenChanged(\(renderStringArgument(match, environment: environment)))"
+        case .elementsChanged(let assertions):
+            guard !assertions.isEmpty else { return ".elementsChanged" }
+            let rendered = try assertions.map {
+                try render(elementAssertion: $0, environment: environment)
+            }
+            return ".elementsChanged([\(rendered.joined(separator: ", "))])"
         }
     }
 
@@ -43,23 +50,6 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     private func render(
-        change: ChangeDeclaration,
-        environment: RenderEnvironment
-    ) throws -> String {
-        switch change {
-        case .screen(let predicate):
-            guard let match = predicate.match else { return ".screen()" }
-            return try ".screen(\(renderStringArgument(match, environment: environment)))"
-        case .elements(let assertions):
-            guard !assertions.isEmpty else { return ".elements()" }
-            let rendered = try assertions.map {
-                try render(elementAssertion: $0, environment: environment)
-            }
-            return ".elements([\(rendered.joined(separator: ", "))])"
-        }
-    }
-
-    private func render(
         presenceCondition assertion: PresenceCondition,
         environment: RenderEnvironment
     ) throws -> String {
@@ -72,7 +62,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     private func render(
-        elementAssertion assertion: ChangeDeclaration.ElementAssertion,
+        elementAssertion assertion: ElementAssertion,
         environment: RenderEnvironment
     ) throws -> String {
         switch assertion {

@@ -502,8 +502,8 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
     private func observationCommand() -> Settlement.Command {
         .observation(
             predicate: Settlement.Predicate(
-                authored: .changed(.elements()),
-                resolved: .changed(.elements([]))
+                authored: .elementsChanged,
+                resolved: .elementsChanged([])
             ),
             deadline: .init(
                 phase: .observation,
@@ -521,8 +521,8 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
             command: .dismiss,
             predicate: predicate ?? expectation.map { _ in
                 Settlement.Predicate(
-                    authored: .changed(.elements()),
-                    resolved: .changed(.elements([]))
+                    authored: .elementsChanged,
+                    resolved: .elementsChanged([])
                 )
             },
             allowances: .init(readiness: .seconds(5), expectation: expectation),
@@ -557,8 +557,8 @@ final class SettlementExecutionPerformanceTests: SemanticObservationStreamTestCa
         )
         let command = Settlement.Command.observation(
             predicate: Settlement.Predicate(
-                authored: .changed(.elements()),
-                resolved: .changed(.elements([]))
+                authored: .elementsChanged,
+                resolved: .elementsChanged([])
             ),
             deadline: .init(
                 phase: .observation,

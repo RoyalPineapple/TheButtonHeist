@@ -4,14 +4,14 @@ import Testing
 @Test func `screen action namespace compiles regular actions`() throws {
     let plan = try HeistSourceCompilation.compile(root("""
     ScreenActions.Dismiss()
-        .expect(.changed(.screen()))
+        .expect(.screenChanged)
     ScreenActions.MagicTap()
         .withoutExpectation("Magic tap toggles process-local playback state")
     """))
     let expected = try HeistPlan(body: [
         .action(ActionStep(
             command: .dismiss,
-            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .screenChanged, timeout: 1)))),
         .action(ActionStep(
             command: .magicTap,
             expectationPolicy: .waived("Magic tap toggles process-local playback state"))),
@@ -70,12 +70,12 @@ import Testing
 
 @Test func `inline plan source chained expectation compiles`() throws {
     let plan = try HeistSourceCompilation.compile(root("""
-    Activate(.label("Pay")).expect(.changed(.screen()))
+    Activate(.label("Pay")).expect(.screenChanged)
     """))
     let expected = try HeistPlan(body: [
         .action(ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .screenChanged, timeout: 1)))),
     ])
 
     #expect(plan == expected)
@@ -93,16 +93,16 @@ import Testing
         }
 
         RunHeist("Cart.addItem", "Milk")
-            .expect(.changed(.elements([.appeared(.label("subtotal"))])))
+            .expect(.elementsChanged([.appeared(.label("subtotal"))]))
 
         RunHeist("Cart.addItem", "Eggs")
-            .expect(.changed(.elements([.updated(.label("subtotal"), .value(.contains("2 items")))])))
+            .expect(.elementsChanged([.updated(.label("subtotal"), .value(.contains("2 items")))]))
 
         RunHeist("Checkout.pay")
             .expect(.exists(.label("Payment Complete")))
 
         RunHeist("Checkout.pay")
-            .expect(.changed(.screen("Receipt")))
+            .expect(.screenChanged("Receipt"))
     }
     """)
     let expected = try HeistPlan(
@@ -130,7 +130,7 @@ import Testing
                 path: "Cart.addItem",
                 argument: .string("Milk"),
                 expectation: WaitStep(
-                    predicate: .changed(.elements([.appeared(.label("subtotal"))])),
+                    predicate: .elementsChanged([.appeared(.label("subtotal"))]),
                     timeout: defaultActionExpectationTimeout
                 )
             )),
@@ -138,9 +138,9 @@ import Testing
                 path: "Cart.addItem",
                 argument: .string("Eggs"),
                 expectation: WaitStep(
-                    predicate: .changed(.elements([
+                    predicate: .elementsChanged([
                         .updated(.label("subtotal"), .value(after: .contains("2 items"))),
-                    ])),
+                    ]),
                     timeout: defaultActionExpectationTimeout
                 )
             )),
@@ -154,7 +154,7 @@ import Testing
             .invoke(HeistInvocationStep(
                 path: "Checkout.pay",
                 expectation: WaitStep(
-                    predicate: .changed(.screen("Receipt")),
+                    predicate: .screenChanged("Receipt"),
                     timeout: defaultActionExpectationTimeout
                 )
             )),
@@ -191,25 +191,25 @@ import Testing
 @Test func `inline plan source property update expectations compile`() throws {
     let scoped = try HeistSourceCompilation.compile(root(#"""
     TypeText("Bruschetta", into: .identifier("Search"))
-        .expect(.changed(.elements([.updated(.identifier("Search"), .value("Bruschetta"))])))
+        .expect(.elementsChanged([.updated(.identifier("Search"), .value("Bruschetta"))]))
     """#))
     let unscoped = try HeistSourceCompilation.compile(root(#"""
     Increment(.identifier("Quantity"))
-        .expect(.changed(.elements([.updated(.identifier("Quantity"), .value("3"))])))
+        .expect(.elementsChanged([.updated(.identifier("Quantity"), .value("3"))]))
     """#))
     let beforeAfter = try HeistSourceCompilation.compile(root(#"""
     Increment(.identifier("Quantity"))
-        .expect(.changed(.elements([.updated(
+        .expect(.elementsChanged([.updated(
             .identifier("Quantity"),
             .value(before: "2", after: "3")
-        )])))
+        )]))
     """#))
     let broadBeforeAfter = try HeistSourceCompilation.compile(root(#"""
     Increment(.identifier("Quantity"))
-        .expect(.changed(.elements([.updated(
+        .expect(.elementsChanged([.updated(
             .identifier("Quantity"),
             .value(before: .prefix("cart:"), after: .contains("items"))
-        )])))
+        )]))
     """#))
 
     let expectedScoped = try HeistPlan(body: [
@@ -218,33 +218,33 @@ import Testing
                 text: "Bruschetta",
                 target: .predicate(.identifier("Search"))
             ),
-            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+            expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                 .updated(.identifier("Search"), .value(after: "Bruschetta")),
-            ])), timeout: 1)))),
+            ]), timeout: 1)))),
     ])
     let expectedUnscoped = try HeistPlan(body: [
         .action(ActionStep(
             command: .increment(.predicate(.identifier("Quantity"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+            expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                 .updated(.identifier("Quantity"), .value(after: "3")),
-            ])), timeout: 1)))),
+            ]), timeout: 1)))),
     ])
     let expectedBeforeAfter = try HeistPlan(body: [
         .action(ActionStep(
             command: .increment(.predicate(.identifier("Quantity"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+            expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                 .updated(.identifier("Quantity"), .value(before: "2", after: "3")),
-            ])), timeout: 1)))),
+            ]), timeout: 1)))),
     ])
     let expectedBroadBeforeAfter = try HeistPlan(body: [
         .action(ActionStep(
             command: .increment(.predicate(.identifier("Quantity"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+            expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                 .updated(
                     .identifier("Quantity"),
                     .value(before: .prefix("cart:"), after: .contains("items"))
                 ),
-            ])), timeout: 1)))),
+            ]), timeout: 1)))),
     ])
 
     #expect(scoped == expectedScoped)
@@ -257,20 +257,20 @@ import Testing
 
 @Test func `inline plan source custom content update queries label and value`() throws {
     let plan = try HeistSourceCompilation.compile(root(#"""
-    WaitFor(.changed(.elements([.updated(.identifier("status"), .customContent(after: .init(
+    WaitFor(.elementsChanged([.updated(.identifier("status"), .customContent(after: .init(
         label: "Status",
         value: .contains("Ready"),
         isImportant: true
-    )))])))
+    )))]))
     """#))
     let expected = try HeistPlan(body: [
-        .wait(WaitStep(predicate: .changed(.elements([
+        .wait(WaitStep(predicate: .elementsChanged([
             .updated(.identifier("status"), .customContent(after: CustomContentMatch(
                 label: .exact("Status"),
                 value: .contains("Ready"),
                 isImportant: true
             ))),
-        ])))),
+        ]))),
     ])
 
     #expect(plan == expected)
@@ -283,65 +283,65 @@ import Testing
 @Test func `inline plan source accepts canonical direct delta predicates`() throws {
     let appeared = try HeistSourceCompilation.compile(root(#"""
     Activate(.label("Add"))
-        .expect(.changed(.elements([.appeared(.label("Back"))])))
+        .expect(.elementsChanged([.appeared(.label("Back"))]))
     """#))
     let disappeared = try HeistSourceCompilation.compile(root(#"""
     Activate(.label("Clear"))
-        .expect(.changed(.elements([.disappeared(.identifier("row-1"))])))
+        .expect(.elementsChanged([.disappeared(.identifier("row-1"))]))
     """#))
     let updatedPropertyOnly = try HeistSourceCompilation.compile(root(#"""
     TypeText("milk", into: .identifier("Search"))
-        .expect(.changed(.elements([.updated(.identifier("Search"), .value())])))
+        .expect(.elementsChanged([.updated(.identifier("Search"), .value())]))
     """#))
     let updatedBeforeAfterOnly = try HeistSourceCompilation.compile(root(#"""
     TypeText("milk", into: .identifier("Search"))
-        .expect(.changed(.elements([.updated(
+        .expect(.elementsChanged([.updated(
             .identifier("Search"),
             .value(before: "", after: "milk")
-        )])))
+        )]))
     """#))
     let updatedAllFields = try HeistSourceCompilation.compile(root(#"""
     TypeText("milk", into: .identifier("Search"))
-        .expect(.changed(.elements([.updated(
+        .expect(.elementsChanged([.updated(
             .identifier("Search"),
             .value(before: "", after: "milk")
-        )])))
+        )]))
     """#))
 
     let expectedAppeared = try HeistPlan(body: [
         .action(ActionStep(
             command: .activate(.predicate(.label("Add"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+            expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                 .appeared(.label("Back")),
-            ])), timeout: 1)))),
+            ]), timeout: 1)))),
     ])
     let expectedDisappeared = try HeistPlan(body: [
         .action(ActionStep(
             command: .activate(.predicate(.label("Clear"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+            expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                 .disappeared(.identifier("row-1")),
-            ])), timeout: 1)))),
+            ]), timeout: 1)))),
     ])
     let expectedUpdatedPropertyOnly = try HeistPlan(body: [
         .action(ActionStep(
             command: .typeText(text: "milk", target: .predicate(.identifier("Search"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+            expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                 .updated(.identifier("Search"), .value()),
-            ])), timeout: 1)))),
+            ]), timeout: 1)))),
     ])
     let expectedUpdatedBeforeAfterOnly = try HeistPlan(body: [
         .action(ActionStep(
             command: .typeText(text: "milk", target: .predicate(.identifier("Search"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+            expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                 .updated(.identifier("Search"), .value(before: "", after: "milk")),
-            ])), timeout: 1)))),
+            ]), timeout: 1)))),
     ])
     let expectedUpdatedAllFields = try HeistPlan(body: [
         .action(ActionStep(
             command: .typeText(text: "milk", target: .predicate(.identifier("Search"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+            expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                 .updated(.identifier("Search"), .value(before: "", after: "milk")),
-            ])), timeout: 1)))),
+            ]), timeout: 1)))),
     ])
     #expect(appeared == expectedAppeared)
     #expect(disappeared == expectedDisappeared)

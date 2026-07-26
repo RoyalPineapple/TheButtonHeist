@@ -128,6 +128,228 @@ final class PredicateTruthMatrixTests: XCTestCase {
         ])
     }
 
+    // MARK: - The decomposition
+
+    /// What each predicate becomes before any tick arrives.
+    ///
+    /// The truth table above asks whether a run of ticks satisfies a predicate.
+    /// This asks the earlier question: what legs is it made of. One leg asks
+    /// about a moment, two ask about a change — and the lane is the leg's own
+    /// property, so a step never mixes them.
+    ///
+    /// Every authored form has a row. A form with no row is a decomposition
+    /// nobody agreed to.
+    func testEveryPredicateDecomposition() throws {
+        let pay = AccessibilityTarget.label("Pay")
+
+        let exists = "exists(target(predicate(label=\"Pay\")))"
+        let missing = "missing(target(predicate(label=\"Pay\")))"
+        let boundary = "the screen to change"
+        let elementChange = "the elements to change"
+
+        try assert(decompositions: [
+            // A moment: one search against one tree.
+            Decomposition("exists", .exists(pay), legs: [exists]),
+            Decomposition("missing", .missing(pay), legs: [missing]),
+
+            // A moment in the speech lane.
+            Decomposition("announcement", .announcement(AnnouncementPredicate()),
+                          legs: ["announcement"]),
+            Decomposition("announcement, matched", .announcement(AnnouncementPredicate(match: .exact("Saved"))),
+                          legs: ["announcement(\"Saved\")"]),
+
+            // A moment in the boundary lane: naming the destination asks which
+            // screen, and only the tick carries the heading.
+            Decomposition("screen, named", .screenChanged("Settings"),
+                          legs: ["the screen to change to \"Settings\""]),
+
+            // Nothing named in the boundary lane: one leg, because a boundary
+            // tick is the evidence for a boundary and nothing constrains where
+            // it landed.
+            Decomposition("screen, nothing named", .screenChanged,
+                          legs: [boundary]),
+
+            // Nothing named in the element lane: two legs any snapshot answers,
+            // so only the reading separates them.
+            Decomposition("elements, nothing named", .elementsChanged([]),
+                          legs: [elementChange, elementChange]),
+
+            // A change with an element named: the pair the assertion composes
+            // into, in order. The order is the meaning.
+            Decomposition("appeared", .elementsChanged([.appeared(pay)]),
+                          legs: [missing, exists]),
+            Decomposition("disappeared", .elementsChanged([.disappeared(pay)]),
+                          legs: [exists, missing], drainsFirstLegOn: ["Pay"]),
+
+            // `updated` with no property: both legs are the bare anchor, so the
+            // reading at the named scope is the only thing that can separate them.
+            Decomposition("updated, no property", .elementsChanged([.updated(pay, .value(after: nil))]),
+                          legs: [exists, exists], drainsFirstLegOn: ["Pay"]),
+        ])
+    }
+
+    // MARK: - The latch
+
+    /// Met is a conjunction: every predicate drained, *and* stillness arrived.
+    ///
+    /// The gate is the second half and it is not optional — a run whose legs are
+    /// all satisfied is still not met until a `noChange` tick says the tree
+    /// stopped moving. Nothing else can supply it: more snapshots are more
+    /// change, which is the opposite of stillness.
+    func testMetRequiresEveryLegAndStillnessAsTheFinalTick() throws {
+        var expectation = try Expectation([
+            Shape.appeared("Ready").resolved(),
+            Shape.disappeared("Spinner").resolved(),
+        ])
+
+        expectation.snapshot(interface(["Spinner"]))
+        XCTAssertFalse(expectation.isMet, "neither pair has finished")
+
+        expectation.snapshot(interface(["Ready"]))
+        XCTAssertEqual(legs(of: expectation), [], "both pairs drained")
+        XCTAssertFalse(expectation.isMet, "drained legs are not a settled tree")
+
+        expectation.noChange()
+        XCTAssertTrue(expectation.isMet, "outstanding: \(expectation.outstanding)")
+    }
+
+    /// Stillness does not stand in for a leg. It drains nothing, so an
+    /// outstanding predicate is still outstanding after it, and the run is not
+    /// met however many times it arrives.
+    func testStillnessDoesNotSatisfyAnOutstandingLeg() throws {
+        var expectation = try Expectation([Shape.appeared("Ready").resolved()])
+        expectation.snapshot(interface([]))
+        expectation.noChange()
+        expectation.noChange()
+
+        XCTAssertFalse(expectation.isMet)
+        XCTAssertEqual(legs(of: expectation), ["exists(target(predicate(label=\"Ready\")))"])
+    }
+
+    /// One unsatisfied leg withholds the whole run, however many others drained.
+    func testOneOutstandingLegWithholdsTheRun() throws {
+        var expectation = try Expectation([
+            Shape.exists("Ready").resolved(),
+            Shape.appeared("Ghost").resolved(),
+        ])
+        expectation.snapshot(interface(["Ready"]))
+        expectation.noChange()
+
+        XCTAssertFalse(expectation.isMet, "Ghost never appeared")
+        XCTAssertEqual(legs(of: expectation).count, 1)
+    }
+
+    /// The second leg needs both conditions, and a differing reading alone is
+    /// not one of them.
+    ///
+    /// `appeared("Pay")` drains its `missing` half on the empty tree, then meets a
+    /// tree holding something else. That reads differently — so the hash would
+    /// allow it — but the `exists("Pay")` search still fails, so the leg stays.
+    func testADifferingReadingDoesNotDrainALegThatIsNotSatisfied() throws {
+        var expectation = try Expectation([
+            AccessibilityPredicate.elementsChanged([.appeared(.label("Pay"))])
+                .resolve(in: .empty),
+        ])
+        expectation.snapshot(interface([]))
+        expectation.snapshot(interface(["Cancel"]))
+        expectation.noChange()
+
+        XCTAssertFalse(expectation.isMet, "Pay never arrived")
+        XCTAssertEqual(expectation.outstanding.count, 1)
+    }
+
+    /// An assertion list is one step per assertion, not one step of many legs:
+    /// two assertions written side by side were never a claim about order.
+    func testAnAssertionListIsOneStepPerAssertion() throws {
+        let steps = try AccessibilityPredicate.elementsChanged([
+            .appeared(.label("Processing")),
+            .disappeared(.label("Submit")),
+        ]).resolve(in: .empty).pendingSteps
+
+        XCTAssertEqual(steps.count, 2)
+        XCTAssertEqual(steps.map(\.descriptions.count), [2, 2])
+    }
+
+    /// What the expectation is still waiting on, without the settlement gate —
+    /// which is outstanding until stillness arrives and is not a leg.
+    private func legs(of expectation: Expectation) -> [String] {
+        expectation.outstanding.filter { $0 != "the tree to stop changing" }
+    }
+
+    private struct Decomposition {
+        let says: String
+        let predicate: AccessibilityPredicate
+        let legs: [String]
+        /// A tree the first leg accepts. Only two-leg rows need one, and the
+        /// default is the empty tree — which `missing` and `anyChange` both take.
+        let drainsFirstLegOn: [String]
+
+        init(
+            _ says: String,
+            _ predicate: AccessibilityPredicate,
+            legs: [String],
+            drainsFirstLegOn: [String] = []
+        ) {
+            self.says = says
+            self.predicate = predicate
+            self.legs = legs
+            self.drainsFirstLegOn = drainsFirstLegOn
+        }
+    }
+
+    private func assert(
+        decompositions: [Decomposition],
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        for row in decompositions {
+            let resolved = try row.predicate.resolve(in: .empty)
+            let steps = resolved.pendingSteps
+            XCTAssertEqual(
+                steps.count, 1,
+                "\(row.says): one assertion is one step", file: file, line: line
+            )
+            XCTAssertEqual(
+                steps.first?.descriptions, row.legs,
+                "\(row.says)", file: file, line: line
+            )
+            guard row.legs.count == 2 else { continue }
+            assertOneTickReachesOnlyTheFirstLeg(resolved, row, file: file, line: line)
+        }
+    }
+
+    /// A tick enters a step once. It is offered to the first leg that has not
+    /// drained, and if that leg takes it the reading is saved at the step's own
+    /// scope. The second leg then drains only when a *later* tick both satisfies
+    /// it and reads differently — two conditions, and either one alone leaves it
+    /// outstanding.
+    ///
+    /// Every two-leg row is checked the same way, whatever its lane.
+    private func assertOneTickReachesOnlyTheFirstLeg(
+        _ predicate: ResolvedAccessibilityPredicate,
+        _ row: Decomposition,
+        file: StaticString,
+        line: UInt
+    ) {
+        var expectation = Expectation([predicate])
+        expectation.snapshot(interface(row.drainsFirstLegOn))
+        XCTAssertEqual(
+            legs(of: expectation), [row.legs[1]],
+            "\(row.says): a tick enters a step once, so the second leg is left",
+            file: file, line: line
+        )
+
+        // The same tree again. Where the second leg is the same search as the
+        // first it *is* satisfied here, so only the matching reading can refuse
+        // it — which is the whole job of the saved hash.
+        expectation.snapshot(interface(row.drainsFirstLegOn))
+        XCTAssertFalse(
+            expectation.isMet,
+            "\(row.says): satisfied is not enough, the reading must also differ",
+            file: file, line: line
+        )
+    }
+
     /// Two ordered sequences meet: the halves of a step, and the readings.
     ///
     /// A reading is offered to the tip of each step — the first half not yet
@@ -154,7 +376,7 @@ final class PredicateTruthMatrixTests: XCTestCase {
         func acrossABoundary(_ predicate: ResolvedAccessibilityPredicate) -> Bool {
             var expectation = Expectation([predicate])
             expectation.empty(at: Date())
-            expectation.screenChange(ScreenFacts(idAfter: "Second"))
+            expectation.screenChanged(ScreenFacts(idAfter: "Second"))
             expectation.snapshot(interface(["Header"]))
             expectation.noChange()
             return expectation.isMet
@@ -287,9 +509,9 @@ final class PredicateTruthMatrixTests: XCTestCase {
     /// when two different elements on it answer the two halves separately.
     func testAnUpdateIsNotSatisfiedByOneTree() throws {
         var expectation = try Expectation([
-            AccessibilityPredicate.changed(.elements([
+            AccessibilityPredicate.elementsChanged([
                 .updated(.label("Count"), .value(before: "1", after: "2")),
-            ])).resolve(in: .empty)
+            ]).resolve(in: .empty)
         ])
         // Two elements match the target, at the two values the assertion names.
         let tree = makeTestInterface(elements: [
@@ -361,14 +583,14 @@ final class PredicateTruthMatrixTests: XCTestCase {
             case .missing(let label):
                 return .missing(.label(label))
             case .appeared(let label):
-                return .changed(.elements([.appeared(.label(label))]))
+                return .elementsChanged([.appeared(.label(label))])
             case .disappeared(let label):
-                return .changed(.elements([.disappeared(.label(label))]))
+                return .elementsChanged([.disappeared(.label(label))])
             case .pair(let appeared, let disappeared):
-                return .changed(.elements([
+                return .elementsChanged([
                     .appeared(.label(appeared)),
                     .disappeared(.label(disappeared)),
-                ]))
+                ])
             }
         }
     }
@@ -376,7 +598,7 @@ final class PredicateTruthMatrixTests: XCTestCase {
     // MARK: - Helpers
 
     private func nameless() throws -> ResolvedAccessibilityPredicate {
-        try AccessibilityPredicate.changed(.elements([])).resolve(in: .empty)
+        try AccessibilityPredicate.elementsChanged([]).resolve(in: .empty)
     }
 
     private func interface(_ labels: [String]) -> Interface {

@@ -655,7 +655,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(didObserveBaseline)
 
         let result = await changedWait(
-            expectation: .changed(.elements()),
+            expectation: .elementsChanged,
             timeout: 0.2
         )
 
@@ -722,7 +722,7 @@ final class WaitForIntegrationTests: XCTestCase {
         defer { label.removeFromSuperview() }
 
         let result = await changedWait(
-            expectation: .changed(.screen()),
+            expectation: .screenChanged,
             timeout: 0.2
         )
         let message = try XCTUnwrap(result.message)
@@ -739,7 +739,7 @@ final class WaitForIntegrationTests: XCTestCase {
         defer { label.removeFromSuperview() }
 
         let result = await changedWait(
-            expectation: .changed(.elements()),
+            expectation: .elementsChanged,
             timeout: 0.2
         )
         let message = try XCTUnwrap(result.message)
@@ -756,10 +756,10 @@ final class WaitForIntegrationTests: XCTestCase {
         defer { label.removeFromSuperview() }
 
         let result = await changedWait(
-            expectation: .changed(.elements([.updated(
+            expectation: .elementsChanged([.updated(
                 .label("WaitForChange-UpdateOldValue"),
                 .value(before: "Loading", after: "Ready")
-            )])),
+            )]),
             timeout: 0.2
         )
 

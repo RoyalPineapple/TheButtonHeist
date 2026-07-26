@@ -112,7 +112,7 @@ final class ExpectationTests: XCTestCase {
     func testAScreenTickDoesNotAnswerAGraphPredicate() throws {
         var expectation = try Expectation([exists("Detail")])
 
-        expectation.screenChange(ScreenFacts(idAfter: "Detail"))
+        expectation.screenChanged(ScreenFacts(idAfter: "Detail"))
 
         XCTAssertEqual(
             expectation.outstanding.count, 2,
@@ -225,9 +225,9 @@ final class ExpectationTests: XCTestCase {
     }
 
     private func changed(
-        _ assertions: ChangeDeclaration.ElementAssertion...
+        _ assertions: ElementAssertion...
     ) throws -> ResolvedAccessibilityPredicate {
-        try AccessibilityPredicate.changed(.elements(assertions)).resolve(in: .empty)
+        try AccessibilityPredicate.elementsChanged(assertions).resolve(in: .empty)
     }
 
     private func interface(_ labels: [String]) -> Interface {

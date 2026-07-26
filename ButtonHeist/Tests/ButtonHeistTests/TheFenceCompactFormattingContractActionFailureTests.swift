@@ -167,7 +167,7 @@ extension TheFenceCompactFormattingContractTests {
             result: result,
             expectation: ExpectationResult(
                 met: false,
-                predicate: .changed(.screen()),
+                predicate: .screenChanged,
                 actual: "elementsChanged"
             )
         )
@@ -176,7 +176,7 @@ extension TheFenceCompactFormattingContractTests {
             result: result,
             expectation: ExpectationResult(
                 met: false,
-                predicate: .changed(.screen()),
+                predicate: .screenChanged,
                 actual: "arbitrary diagnostic"
             )
         )
@@ -190,10 +190,10 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertEqual(try expectation.bool("met"), false)
         XCTAssertEqual(try expectation.string("actual"), "elementsChanged")
         XCTAssertTrue(compact.contains("[expectation FAILED: got elementsChanged]"), compact)
-        XCTAssertTrue(compact.contains(".changed(.screen()) requires a screen-level transition"), compact)
+        XCTAssertTrue(compact.contains(".screenChanged requires a screen-level transition"), compact)
         XCTAssertTrue(
             arbitraryActualResponse.compactFormatted()
-                .contains(".changed(.screen()) requires a screen-level transition")
+                .contains(".screenChanged requires a screen-level transition")
         )
         XCTAssertTrue(response.isFailure)
     }
@@ -204,7 +204,7 @@ extension TheFenceCompactFormattingContractTests {
             result: HeistResultFixture.actionResult(),
             expectation: ExpectationResult(
                 met: false,
-                predicate: .changed(.screen()),
+                predicate: .screenChanged,
                 actual: "elementsChanged"
             )
         )
@@ -213,7 +213,7 @@ extension TheFenceCompactFormattingContractTests {
         let compact = response.compactFormatted()
 
         try expectation.assertMissing("hint")
-        XCTAssertFalse(compact.contains(".changed(.screen()) requires a screen-level transition"), compact)
+        XCTAssertFalse(compact.contains(".screenChanged requires a screen-level transition"), compact)
     }
 
     func testActivateNoChangeExpectationFailureUsesTypedSettledTraceRegardlessOfActualText() throws {
@@ -231,7 +231,7 @@ extension TheFenceCompactFormattingContractTests {
             result: result,
             expectation: ExpectationResult(
                 met: false,
-                predicate: .changed(.elements()),
+                predicate: .elementsChanged,
                 actual: "noChange"
             )
         )
@@ -240,7 +240,7 @@ extension TheFenceCompactFormattingContractTests {
             result: result,
             expectation: ExpectationResult(
                 met: false,
-                predicate: .changed(.elements()),
+                predicate: .elementsChanged,
                 actual: "arbitrary diagnostic"
             )
         )
@@ -281,7 +281,7 @@ extension TheFenceCompactFormattingContractTests {
             ),
             expectation: ExpectationResult(
                 met: false,
-                predicate: .changed(.elements()),
+                predicate: .elementsChanged,
                 actual: "noChange"
             )
         )
@@ -302,7 +302,7 @@ extension TheFenceCompactFormattingContractTests {
         )
         let expectation = ExpectationResult(
             met: false,
-            predicate: .changed(.elements()),
+            predicate: .elementsChanged,
             actual: "noChange"
         )
         let customActionResult = ActionResult.success(

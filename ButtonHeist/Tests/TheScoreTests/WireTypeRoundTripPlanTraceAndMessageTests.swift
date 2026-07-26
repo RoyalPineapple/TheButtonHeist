@@ -27,7 +27,7 @@ extension WireTypeRoundTripTests {
                         ElementPredicate(label: "Settings", traits: [.button]),
                         ordinal: 1
                     )),
-                    expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 2.5)))),
+                    expectationPolicy: .expect(ActionExpectation(predicate: .screenChanged, timeout: 2.5)))),
                 .action(ActionStep(
                     command: .setPasteboard(SetPasteboardTarget(text: "ready"))
                 )),
@@ -340,7 +340,7 @@ extension WireTypeRoundTripTests {
     }
 
     func testWaitTargetChangedResolvedDefaults() {
-        let target = WaitTarget(predicate: .changed(.elements()))
+        let target = WaitTarget(predicate: .elementsChanged)
         XCTAssertEqual(target.resolvedTimeout, defaultWaitTimeout)
     }
 }

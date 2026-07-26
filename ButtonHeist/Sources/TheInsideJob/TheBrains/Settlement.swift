@@ -75,6 +75,14 @@ extension Settlement {
         }
     }
 
+    /// Where the run's readings start.
+    ///
+    /// This names one moment in the observation stream, not a tree to measure
+    /// against. Everything the run may read — observations, announcement
+    /// history — is what arrives at or after this moment; anything earlier
+    /// belongs to some other run. A caller that already holds a settled moment
+    /// supplies it so a nested run reads from the same place its parent
+    /// stopped; otherwise the run captures one first.
     internal enum Baseline: Sendable, Equatable {
         case capture
         case supplied(EvidenceBoundary)
@@ -127,6 +135,11 @@ extension Settlement {
         case actionExpectation
     }
 
+    /// The moment a run's readings start from.
+    ///
+    /// A cursor, not a comparison target: `moment` bounds which observations
+    /// the run may admit and `announcementCursor` bounds which announcements
+    /// count as its own.
     internal struct EvidenceBoundary: Sendable, Equatable {
         internal let moment: Observation.Moment
 
@@ -175,8 +188,12 @@ extension Settlement.Predicate.Semantics {
         switch predicate {
         case .exists, .missing:
             self = .currentState
-        case .changed:
+        case .screenChanged, .elementsChanged:
             self = .positiveTransition
+        case .noChange:
+            // The settlement gate reads the whole trace for stillness rather
+            // than waiting for one positive transition.
+            self = .completeHistory
         case .announcement:
             self = .announcement
         }
@@ -619,6 +636,8 @@ extension Settlement.Result {
 
 extension Settlement {
     internal enum State: Sendable {
+        /// Waiting on the moment the run reads from. Nothing can be admitted
+        /// yet because there is no cursor to admit it relative to.
         case awaitingBaseline(Command)
         case armed(Session)
         case active(Session)

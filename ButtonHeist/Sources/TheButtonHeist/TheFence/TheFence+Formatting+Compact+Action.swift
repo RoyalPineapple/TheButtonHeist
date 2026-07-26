@@ -87,10 +87,10 @@ extension FenceResponse {
               )?.kind
         else { return nil }
 
-        if expectation.predicate == .changed(.screen()),
+        if expectation.predicate == .screenChanged,
            changeKind == .elementsChanged {
-            return ".changed(.screen()) requires a screen-level transition; " +
-                "use .changed(.elements()) for same-screen element updates " +
+            return ".screenChanged requires a screen-level transition; " +
+                "use .elementsChanged for same-screen element updates " +
                 "or wait when the UI may settle asynchronously"
         }
 
@@ -109,10 +109,12 @@ extension FenceResponse {
     ) -> Bool {
         guard changeKind == .noChange,
               result.method == .activate,
-              let predicate = expectation.predicate,
-              case .changed = predicate.core
+              let predicate = expectation.predicate
         else { return false }
-        return true
+        switch predicate.core {
+        case .screenChanged, .elementsChanged: return true
+        case .presence, .announcement: return false
+        }
     }
 
     static func compactActivationTrace(_ trace: ActivationTrace) -> String {

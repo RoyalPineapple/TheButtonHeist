@@ -154,8 +154,8 @@ final class SettlementTerminalLogTests: SemanticObservationStreamTestCase {
 
     private var observationPredicate: Settlement.Predicate {
         .init(
-            authored: .changed(.elements()),
-            resolved: .changed(.elements([]))
+            authored: .elementsChanged,
+            resolved: .elementsChanged([])
         )
     }
 

@@ -104,6 +104,9 @@ struct SettleLoopMachine: Equatable {
 
     enum Decision: Equatable, Sendable {
         case continuePolling
+        /// The screen was replaced, so the reading the loop was comparing
+        /// against belongs to a screen that is gone. It is dropped and the next
+        /// observation becomes the first of the new comparison.
         case baselineReset
         case terminal(SettleOutcome)
     }
@@ -289,10 +292,10 @@ struct SettleSessionFinalObservation {
         }
     }
 
-    /// Run the settle loop with the full tripwire signal captured before the
-    /// action. Visible window/navigation/key changes reset the settle baseline,
-    /// then the loop proves the post-transition AX tree is stable before
-    /// returning.
+    /// Run the settle loop from the full tripwire signal the run starts with.
+    /// A visible window/navigation/key change means the screen was replaced, so
+    /// the loop drops the reading it was comparing against and proves the tree
+    /// that arrived is stable before returning.
     func run(
         start: RuntimeElapsed.Instant,
         baselineTripwireSignal: TheTripwire.TripwireSignal

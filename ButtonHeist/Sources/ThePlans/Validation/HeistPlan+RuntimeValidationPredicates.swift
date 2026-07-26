@@ -4,10 +4,8 @@ extension HeistPlanRuntimeSafetyValidator {
     mutating func validatePredicate(
         _ predicate: AccessibilityPredicate,
         path: HeistPlanPath,
-        depth: Int,
         scope: HeistReferenceScope
     ) {
-        checkPredicateDepth(depth, path: path)
         switch predicate.core {
         case .presence(let presence):
             validatePresence(presence, path: path, scope: scope)
@@ -15,18 +13,30 @@ extension HeistPlanRuntimeSafetyValidator {
             if let match = announcement.match {
                 validateString(match, path: path.child(.match), scope: scope)
             }
-        case .changed(let declaration):
-            validateChange(declaration, path: path.child(.changed), depth: depth + 1, scope: scope)
+        case .screenChanged(let screen):
+            // A screen predicate names no elements: there is no child list to
+            // bound and no target to resolve, only the name it arrived at.
+            if let match = screen.match {
+                validateString(match, path: path.child(.match), scope: scope)
+            }
+        case .elementsChanged(let assertions):
+            let assertionsPath = path.child(.assertions)
+            validateAllChildCount(assertions.count, path: assertionsPath)
+            for (index, assertion) in assertions.enumerated() {
+                validateElementAssertion(
+                    assertion,
+                    path: assertionsPath.index(index),
+                    scope: scope
+                )
+            }
         }
     }
 
     mutating func validatePredicate(
         _ predicate: PresenceCondition,
         path: HeistPlanPath,
-        depth: Int,
         scope: HeistReferenceScope
     ) {
-        checkPredicateDepth(depth, path: path)
         switch predicate {
         case .exists(let target), .missing(let target):
             validateTarget(target, path: path.child(.target), scope: scope)
@@ -44,38 +54,11 @@ extension HeistPlanRuntimeSafetyValidator {
         }
     }
 
-    private mutating func validateChange(
-        _ declaration: ChangeDeclaration,
-        path: HeistPlanPath,
-        depth: Int,
-        scope: HeistReferenceScope
-    ) {
-        checkPredicateDepth(depth, path: path)
-        switch declaration {
-        case .screen:
-            // A screen predicate names no elements: there is no child list to
-            // bound and no target to resolve.
-            break
-        case .elements(let assertions):
-            validateAllChildCount(assertions.count, path: path.child(.assertions))
-            for (index, assertion) in assertions.enumerated() {
-                validateElementAssertion(
-                    assertion,
-                    path: path.child(.assertions).index(index),
-                    depth: depth + 1,
-                    scope: scope
-                )
-            }
-        }
-    }
-
     private mutating func validatePresenceCondition(
         _ assertion: PresenceCondition,
         path: HeistPlanPath,
-        depth: Int,
         scope: HeistReferenceScope
     ) {
-        checkPredicateDepth(depth, path: path)
         switch assertion {
         case .exists(let target), .missing(let target):
             validateTarget(target, path: path.child(.target), scope: scope)
@@ -83,12 +66,10 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func validateElementAssertion(
-        _ assertion: ChangeDeclaration.ElementAssertion,
+        _ assertion: ElementAssertion,
         path: HeistPlanPath,
-        depth: Int,
         scope: HeistReferenceScope
     ) {
-        checkPredicateDepth(depth, path: path)
         switch assertion {
         case .exists(let target), .missing(let target), .appeared(let target), .disappeared(let target):
             validateTarget(target, path: path.child(.target), scope: scope)
@@ -177,17 +158,6 @@ extension HeistPlanRuntimeSafetyValidator {
         }
         for (index, exclude) in match.exclude.enumerated() {
             validateString(exclude, path: path.child(.exclude).index(index), scope: scope)
-        }
-    }
-
-    mutating func checkPredicateDepth(_ depth: Int, path: HeistPlanPath) {
-        if depth > limits.maxPredicateDepth {
-            fail(
-                path: path,
-                contract: "max predicate depth",
-                observed: "depth \(depth)",
-                correction: "Use predicates nested \(limits.maxPredicateDepth) levels or fewer."
-            )
         }
     }
 

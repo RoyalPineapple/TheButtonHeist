@@ -446,7 +446,7 @@ private extension Settlement.ResultProjector {
                 ),
                 Strings.Diagnostic.nextStep,
             ]
-        case (.announcement, _, _), (.changed, _, _):
+        case (.announcement, _, _), (.noChange, _, _), (.screenChanged, _, _), (.elementsChanged, _, _):
             parts.append(Strings.Diagnostic.expected(predicate.authored.description))
             parts.append(Strings.Timeout.stillWaitingOn(
                 outstanding.first ?? Strings.Diagnostic.none

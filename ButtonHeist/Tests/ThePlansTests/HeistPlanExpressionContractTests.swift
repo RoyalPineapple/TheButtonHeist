@@ -78,7 +78,7 @@ import ThePlans
     #expect(resolved == expected)
 
     let fromPart: HeistReferenceName = "fromPart"
-    let update = ChangeDeclaration.ElementAssertion.updated(
+    let update = ElementAssertion.updated(
         .label("Count"),
         .value(before: .contains(fromPart))
     )
@@ -153,12 +153,12 @@ import ThePlans
     let titleReference: HeistReferenceName = "title"
     let valueReference: HeistReferenceName = "valuePart"
     let screenReference: HeistReferenceName = "screenId"
-    let expression = AccessibilityPredicate.changed(.elements([
+    let expression = AccessibilityPredicate.elementsChanged([
         .exists(.label(.exact(titleReference))),
         .missing(.ref("ctaTarget")),
         .exists(.value(.contains(valueReference))),
         .exists(.container(.identifier(screenReference))),
-    ]))
+    ])
 
     let environment = HeistExecutionEnvironment(
         targets: ["ctaTarget": resolvedTarget],
@@ -166,12 +166,12 @@ import ThePlans
     )
 
     let resolved = try expression.resolve(in: environment)
-    let expected = try AccessibilityPredicate.changed(.elements([
+    let expected = try AccessibilityPredicate.elementsChanged([
         .exists(.label("Dashboard")),
         .missing(target),
         .exists(.value(.contains("Ready"))),
         .exists(.container(.identifier("DashboardScreen"))),
-    ])).resolve(in: .empty)
+    ]).resolve(in: .empty)
 
     #expect(resolved == expected)
 }
@@ -203,7 +203,7 @@ import ThePlans
 
     let itemReference: HeistReferenceName = "item"
     let oldReference: HeistReferenceName = "old"
-    let change = AccessibilityPredicate.changed(.elements([
+    let change = AccessibilityPredicate.elementsChanged([
         .updated(
             .label(.exact(itemReference)),
             .value(
@@ -211,7 +211,7 @@ import ThePlans
                 after: .exact("new")
             )
         ),
-    ]))
+    ])
     let expectedChangeJSON = """
         {"assertions":[{"after":{"mode":"exact","value":"new"},\
         "before":{"mode":"exact","value":{"ref":"old"}},\

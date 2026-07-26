@@ -34,7 +34,7 @@ package enum DogfoodHome {
                 backToRoot
 
                 Activate(.predicate(ElementPredicate(label: .exact(screen), traits: [.button])))
-                    .expect(.changed(.screen()), timeout: 8)
+                    .expect(.screenChanged, timeout: 8)
                 WaitFor(.exists(.predicate(destinationTitle)), timeout: 8)
             }
         }
@@ -44,7 +44,7 @@ package enum DogfoodHome {
 package enum ControlsDemoScreen {
     package static let openScreen = HeistDef<String>("ControlsDemo.openScreen", parameter: "screen") { screen in
         Activate(.predicate(ElementPredicate(label: .exact(screen), traits: [.button])))
-            .expect(.changed(.screen()), timeout: 8)
+            .expect(.screenChanged, timeout: 8)
         WaitFor(.exists(.label(screen)), timeout: 8)
     }
 }
@@ -102,7 +102,7 @@ package enum CalculatorScreen {
             .expect(.exists(.label("7")), timeout: 1)
 
         Activate(.element(.label("+"), .traits([.button])))
-            .expect(.changed(.elements()), timeout: 1)
+            .expect(.elementsChanged, timeout: 1)
 
         Activate(.element(.label("5"), .traits([.button])))
             .expect(.exists(.label("5")), timeout: 1)
@@ -113,10 +113,10 @@ package enum CalculatorScreen {
 }
 
 package enum TransientFlowScreen {
-    package static let lifecycle = AccessibilityPredicate.changed(.elements([
+    package static let lifecycle = AccessibilityPredicate.elementsChanged([
         .appeared(.label("Processing")),
         .disappeared(.label("Submit")),
-    ]))
+    ])
     package static let announcement = AccessibilityPredicate.announcement("Ticket saved.")
     package static let exactToastText = AccessibilityPredicate.exists(.label("Ticket saved."))
 }

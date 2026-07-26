@@ -34,13 +34,13 @@ final class ProgressButtonOrderedExpectationTests: XCTestCase {
 
             Activate(.label("Ready"))
                 .expect(
-                    .changed(.elements([
+                    .elementsChanged([
                         .disappeared(.label("Ready")),
                         .appeared(.label("Loading")),
                         .appeared(.label("Loading").and(.value(.exact("100%")))),
                         .disappeared(.label("Loading")),
                         .appeared(.label("Ready")),
-                    ])),
+                    ]),
                     timeout: 8
                 )
         }

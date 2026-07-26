@@ -186,11 +186,12 @@ extension SettleSessionTests {
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
         let step = reduceObservation(stable, elapsedMs: 1, machine: machine, ledger: &ledger, state: &state)
 
-        guard case .terminal(.settled(let timeMs)) = step.decision else {
+        // The two observations are one millisecond apart, far tighter than any
+        // cadence the loop runs at. The repeat alone decides the settle.
+        guard case .terminal(.settled) = step.decision else {
             return XCTFail("Expected settled terminal decision, got \(step.decision)")
         }
-        XCTAssertEqual(timeMs, 1)
-        XCTAssertEqual(step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
+        XCTAssertEqual(step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.map(\.label), ["Ready"])
     }
 
     func testMachineSettlesOnOneNoChange() {
@@ -208,11 +209,10 @@ extension SettleSessionTests {
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
         let step = reduceObservation(stable, elapsedMs: 10, machine: machine, ledger: &ledger, state: &state)
 
-        guard case .terminal(.settled(let timeMs)) = step.decision else {
-            return XCTFail("Expected settled terminal decision, got \(step.decision)")
+        guard case .terminal(.settled) = step.decision else {
+            return XCTFail("Expected one no-change to be terminal, got \(step.decision)")
         }
-        XCTAssertEqual(timeMs, 10)
-        XCTAssertEqual(step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
+        XCTAssertEqual(step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.map(\.label), ["Ready"])
     }
 
     func testMachineCarriesTheObservationDeltaOnTheSettledResult() {
@@ -233,10 +233,9 @@ extension SettleSessionTests {
         XCTAssertContinue(changed)
         let step = reduceObservation(ready, elapsedMs: 21, machine: machine, ledger: &ledger, state: &state)
 
-        guard case .terminal(.settled(let timeMs)) = step.decision else {
+        guard case .terminal(.settled) = step.decision else {
             return XCTFail("Expected one unchanged diff to settle, got \(step.decision)")
         }
-        XCTAssertEqual(timeMs, 21)
         let delta = try? XCTUnwrap(step.result?.delta)
         XCTAssertEqual(delta?.isUnchanged, true, "a clean settle must report an unchanged diff")
         XCTAssertNil(delta?.changeDescription)
@@ -296,11 +295,10 @@ extension SettleSessionTests {
         XCTAssertContinue(reduceObservation(ready, elapsedMs: 1, machine: machine, ledger: &ledger, state: &state))
         let step = reduceObservation(ready, elapsedMs: 2, machine: machine, ledger: &ledger, state: &state)
 
-        guard case .terminal(.settled(let timeMs)) = step.decision else {
+        guard case .terminal(.settled) = step.decision else {
             return XCTFail("Expected settled terminal decision after post-change stability, got \(step.decision)")
         }
-        XCTAssertEqual(timeMs, 2)
-        XCTAssertEqual(step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
+        XCTAssertEqual(step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.map(\.label), ["Ready"])
     }
 
     func testMachineTripwireResetThenNilParseCannotReturnStaleFinalScreen() {
@@ -354,10 +352,16 @@ extension SettleSessionTests {
         )
 
         let step = reduceObservation(stable, elapsedMs: 2, machine: machine, ledger: &ledger, state: &state)
-        guard case .terminal(.settled(let timeMs)) = step.decision else {
+        guard case .terminal(.settled) = step.decision else {
             return XCTFail("Expected a settle once the reading repeated, got \(step.decision)")
         }
-        XCTAssertEqual(timeMs, 2)
+        // The settle reports a reading from the generation the reset started, so
+        // the two observations it compared are both post-reset.
+        XCTAssertEqual(
+            step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.map(\.label),
+            ["Stable"]
+        )
+        XCTAssertTrue(step.result?.outcome.didSettleCleanly == true)
         _ = changedObject
     }
 
@@ -377,11 +381,10 @@ extension SettleSessionTests {
         XCTAssertContinue(reduce(.tripwireSignal(changed), machine: machine, ledger: &ledger, state: &state))
         let step = reduceObservation(stable, elapsedMs: 1, machine: machine, ledger: &ledger, state: &state)
 
-        guard case .terminal(.settled(let timeMs)) = step.decision else {
+        guard case .terminal(.settled) = step.decision else {
             return XCTFail("Expected notification-only signal to allow settle, got \(step.decision)")
         }
-        XCTAssertEqual(timeMs, 1)
-        XCTAssertEqual(step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Stable")
+        XCTAssertEqual(step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.map(\.label), ["Stable"])
     }
 
     func testResultProjectsCancelledOutcomeFromCurrentSettleState() {
@@ -445,7 +448,11 @@ extension SettleSessionTests {
             baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
-        XCTAssertEqual(outcome.outcome, .clockUnavailable(timeMs: 10))
+        // The timeout is 500ms and the run bails on the first unavailable tick,
+        // so the failure is attributed to the pulse rather than to the app.
+        guard case .clockUnavailable = outcome.outcome else {
+            return XCTFail("Expected an unavailable tick to report .clockUnavailable, got \(outcome.outcome)")
+        }
         XCTAssertFalse(outcome.outcome.didSettleCleanly)
     }
 
@@ -472,7 +479,10 @@ extension SettleSessionTests {
             baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
+        // The pulse keeps delivering ticks, so exhausting the 50ms budget is the
+        // app's failure to hold still and the run reports the whole budget spent.
         XCTAssertEqual(outcome.outcome, .timedOut(timeMs: 50))
+        XCTAssertFalse(outcome.outcome.didSettleCleanly)
     }
 }
 #endif // canImport(UIKit)

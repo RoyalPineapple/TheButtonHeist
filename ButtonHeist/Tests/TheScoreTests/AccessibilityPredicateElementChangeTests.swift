@@ -9,7 +9,7 @@ extension AccessibilityPredicateTests {
     // MARK: - Codable
 
     func testElementsChangedEncodeDecode() throws {
-        let predicate = AccessibilityPredicate.changed(.elements())
+        let predicate = AccessibilityPredicate.elementsChanged
         let data = try JSONEncoder().encode(predicate)
         let decoded = try JSONDecoder().decode(AccessibilityPredicate.self, from: data)
         XCTAssertEqual(decoded, predicate)
@@ -40,7 +40,7 @@ extension AccessibilityPredicateTests {
         )
 
         XCTAssertFalse(
-            try AccessibilityPredicate.changed(.elements())
+            try AccessibilityPredicate.elementsChanged
                 .resolve(in: .empty)
                 .validate(against: result(success: true, trace: unmoved, completeness: .incomplete)).met,
             "the same tree twice is one reading, whatever the notification claims"
@@ -51,7 +51,7 @@ extension AccessibilityPredicateTests {
         )
 
         XCTAssertTrue(
-            try AccessibilityPredicate.changed(.elements())
+            try AccessibilityPredicate.elementsChanged
                 .resolve(in: .empty)
                 .validate(against: result(success: true, trace: moved, completeness: .incomplete)).met,
             "two readings are a change with no element named and no notification needed"
@@ -79,9 +79,9 @@ extension AccessibilityPredicateTests {
                 observation: .trace(traceEvidence(trace, completeness: .incomplete))
 
         )
-        let changePredicate = AccessibilityPredicate.changed(.elements([
+        let changePredicate = AccessibilityPredicate.elementsChanged([
             .updated(.label("Counter"), .value(before: "0", after: "1")),
-        ]))
+        ])
 
         XCTAssertTrue(try changePredicate.resolve(in: .empty).validate(against: action).met)
     }
@@ -91,25 +91,25 @@ extension AccessibilityPredicateTests {
     func testElementsChangedMetWhenTraceChangesElements() throws {
         let trace = try makeUpdateTrace(label: "counter", property: .value, old: "0", new: "1")
         let action = result(success: true, trace: trace, completeness: .incomplete)
-        let result = try AccessibilityPredicate.changed(.elements()).resolve(in: .empty).validate(against: action)
+        let result = try AccessibilityPredicate.elementsChanged.resolve(in: .empty).validate(against: action)
         XCTAssertTrue(result.met)
     }
 
     // MARK: - Codable: element updated
 
     func testElementUpdatedToOnlyEncodeDecode() throws {
-        let predicate = AccessibilityPredicate.changed(.elements([
+        let predicate = AccessibilityPredicate.elementsChanged([
             .updated(.label("counter"), .value(after: "5")),
-        ]))
+        ])
         let data = try JSONEncoder().encode(predicate)
         let decoded = try JSONDecoder().decode(AccessibilityPredicate.self, from: data)
         XCTAssertEqual(decoded, predicate)
     }
 
     func testElementUpdatedAllFieldsEncodeDecode() throws {
-        let predicate = AccessibilityPredicate.changed(.elements([
+        let predicate = AccessibilityPredicate.elementsChanged([
             .updated(.label("Counter"), .value(before: "3", after: "5")),
-        ]))
+        ])
         let data = try JSONEncoder().encode(predicate)
         let decoded = try JSONDecoder().decode(AccessibilityPredicate.self, from: data)
         XCTAssertEqual(decoded, predicate)
@@ -118,7 +118,7 @@ extension AccessibilityPredicateTests {
     func testElementUpdatedRequiresTargetAndPropertyAtEncodeBoundary() throws {
         let stale = Data(#"{"type":"updated","target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"counter"}}]}}"#.utf8)
         XCTAssertThrowsError(
-            try JSONDecoder().decode(ChangeDeclaration.ElementAssertion.self, from: stale)
+            try JSONDecoder().decode(ElementAssertion.self, from: stale)
         )
     }
 
@@ -127,18 +127,18 @@ extension AccessibilityPredicateTests {
     func testElementUpdatedMetWhenNewValueMatches() throws {
         let trace = try makeUpdateTrace(label: "counter", property: .value, old: "3", new: "5")
         let action = result(success: true, trace: trace, completeness: .incomplete)
-        let predicate = AccessibilityPredicate.changed(.elements([
+        let predicate = AccessibilityPredicate.elementsChanged([
             .updated(.label("counter"), .value(after: "5")),
-        ]))
+        ])
         XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: action).met)
     }
 
     func testElementUpdatedPassReportsObservedPropertyEvidence() throws {
         let trace = try makeUpdateTrace(label: "Quantity", property: .value, old: "2", new: "3")
         let action = result(success: true, trace: trace, completeness: .incomplete)
-        let predicate = AccessibilityPredicate.changed(.elements([
+        let predicate = AccessibilityPredicate.elementsChanged([
             .updated(.label("Quantity"), .value(before: "2", after: "3")),
-        ]))
+        ])
         let result = try predicate.resolve(in: .empty).validate(against: action)
 
         XCTAssertTrue(result.met)
@@ -148,9 +148,9 @@ extension AccessibilityPredicateTests {
     func testElementUpdatedNotMetWhenNoMatch() throws {
         let trace = try makeUpdateTrace(label: "counter", property: .value, old: "3", new: "4")
         let action = result(success: true, trace: trace, completeness: .incomplete)
-        let predicate = AccessibilityPredicate.changed(.elements([
+        let predicate = AccessibilityPredicate.elementsChanged([
             .updated(.label("counter"), .value(after: "5")),
-        ]))
+        ])
         XCTAssertFalse(try predicate.resolve(in: .empty).validate(against: action).met)
     }
 
@@ -160,36 +160,36 @@ extension AccessibilityPredicateTests {
             try makeUpdate(label: "Counter", property: .value, old: "3", new: "5"),
         ]))
         let action = result(success: true, trace: trace, completeness: .incomplete)
-        let predicate = AccessibilityPredicate.changed(.elements([
+        let predicate = AccessibilityPredicate.elementsChanged([
             .updated(.label("Counter"), .value(after: "5")),
-        ]))
+        ])
         XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: action).met)
     }
 
     func testElementUpdatedNotMetWhenElementPredicateDoesNotMatch() throws {
         let trace = try makeUpdateTrace(label: "Other", property: .value, old: "3", new: "5")
         let action = result(success: true, trace: trace, completeness: .incomplete)
-        let predicate = AccessibilityPredicate.changed(.elements([
+        let predicate = AccessibilityPredicate.elementsChanged([
             .updated(.label("Counter"), .value(after: "5")),
-        ]))
+        ])
         XCTAssertFalse(try predicate.resolve(in: .empty).validate(against: action).met)
     }
 
     func testElementUpdatedMetWhenOldAndNewValueMatch() throws {
         let trace = try makeUpdateTrace(label: "counter", property: .value, old: "3", new: "5")
         let action = result(success: true, trace: trace, completeness: .incomplete)
-        let predicate = AccessibilityPredicate.changed(.elements([
+        let predicate = AccessibilityPredicate.elementsChanged([
             .updated(.label("counter"), .value(before: "3", after: "5")),
-        ]))
+        ])
         XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: action).met)
     }
 
     func testElementUpdatedUsesConfiguredStringMatchForOldAndNewValues() throws {
         let trace = try makeUpdateTrace(label: "cart", property: .value, old: "cart: empty", new: "3 items")
         let action = result(success: true, trace: trace, completeness: .incomplete)
-        let predicate = AccessibilityPredicate.changed(.elements([
+        let predicate = AccessibilityPredicate.elementsChanged([
             .updated(.label("cart"), .value(before: .prefix("cart:"), after: .suffix("items"))),
-        ]))
+        ])
 
         XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: action).met)
     }
@@ -210,9 +210,9 @@ extension AccessibilityPredicateTests {
         ]
 
         for change in changes {
-            let predicate = AccessibilityPredicate.changed(.elements([
+            let predicate = AccessibilityPredicate.elementsChanged([
                 .updated(.label("Search Field"), change),
-            ]))
+            ])
             XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: action).met)
         }
     }
@@ -226,18 +226,18 @@ extension AccessibilityPredicateTests {
             completeness: .incomplete
         )
 
-        let selectedGain = AccessibilityPredicate.changed(.elements([
+        let selectedGain = AccessibilityPredicate.elementsChanged([
             .updated(
                 .label("Favorites"),
                 .traits(before: .init(exclude: [.selected]), after: .init(include: [.selected]))
             ),
-        ]))
-        let enabledLoss = AccessibilityPredicate.changed(.elements([
+        ])
+        let enabledLoss = AccessibilityPredicate.elementsChanged([
             .updated(
                 .label("Disabled"),
                 .traits(before: .init(include: [.notEnabled]), after: .init(exclude: [.notEnabled]))
             ),
-        ]))
+        ])
 
         XCTAssertTrue(try selectedGain.resolve(in: .empty).validate(against: action).met)
         XCTAssertTrue(try enabledLoss.resolve(in: .empty).validate(against: action).met)
@@ -254,7 +254,7 @@ extension AccessibilityPredicateTests {
             completeness: .incomplete
         )
 
-        let predicate = AccessibilityPredicate.changed(.elements([
+        let predicate = AccessibilityPredicate.elementsChanged([
             .updated(
                 .label("Stepper"),
                 .actions(
@@ -262,10 +262,10 @@ extension AccessibilityPredicateTests {
                     after: ActionSetMatch(include: Set<ElementAction>([.activate]))
                 )
             ),
-        ]))
-        let mismatch = AccessibilityPredicate.changed(.elements([
+        ])
+        let mismatch = AccessibilityPredicate.elementsChanged([
             .updated(.label("Stepper"), .actions(after: ActionSetMatch(exclude: [.activate]))),
-        ]))
+        ])
 
         XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: action).met)
         XCTAssertFalse(try mismatch.resolve(in: .empty).validate(against: action).met)
@@ -290,7 +290,7 @@ extension AccessibilityPredicateTests {
             completeness: .incomplete
         )
 
-        let customPredicate = AccessibilityPredicate.changed(.elements([
+        let customPredicate = AccessibilityPredicate.elementsChanged([
             .updated(
                 .label("Form"),
                 .customContent(after: CustomContentMatch(
@@ -299,8 +299,8 @@ extension AccessibilityPredicateTests {
                     isImportant: true
                 ))
             ),
-        ]))
-        let rotorPredicate = AccessibilityPredicate.changed(.elements([
+        ])
+        let rotorPredicate = AccessibilityPredicate.elementsChanged([
             .updated(
                 .label("Article"),
                 .rotors(
@@ -308,8 +308,8 @@ extension AccessibilityPredicateTests {
                     after: RotorSetMatch(include: [StringMatch.contains("Head")])
                 )
             ),
-        ]))
-        let mismatch = AccessibilityPredicate.changed(.elements([
+        ])
+        let mismatch = AccessibilityPredicate.elementsChanged([
             .updated(
                 .label("Form"),
                 .customContent(after: CustomContentMatch(
@@ -317,7 +317,7 @@ extension AccessibilityPredicateTests {
                     isImportant: false
                 ))
             ),
-        ]))
+        ])
 
         XCTAssertTrue(try customPredicate.resolve(in: .empty).validate(against: action).met)
         XCTAssertTrue(try rotorPredicate.resolve(in: .empty).validate(against: action).met)
@@ -331,17 +331,17 @@ extension AccessibilityPredicateTests {
         XCTAssertEqual(trace.capture(ref: edge.after)?.sequence, edge.after.sequence)
 
         let action = result(success: true, trace: trace, completeness: .incomplete)
-        let predicate = AccessibilityPredicate.changed(.elements([
+        let predicate = AccessibilityPredicate.elementsChanged([
             .updated(.label("counter"), .value()),
-        ]))
+        ])
         XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: action).met)
     }
 
     func testElementUpdatedNotMetWithoutTrace() throws {
         let action = result(success: true)
-        let predicate = AccessibilityPredicate.changed(.elements([
+        let predicate = AccessibilityPredicate.elementsChanged([
             .updated(.label("counter"), .value(after: "5")),
-        ]))
+        ])
         let result = try predicate.resolve(in: .empty).validate(against: action)
         XCTAssertFalse(result.met)
         XCTAssertEqual(result.actual, "no observed accessibility trace")
@@ -353,9 +353,9 @@ extension AccessibilityPredicateTests {
             try makeUpdate(label: "counter", property: .value, old: "3", new: "5"),
         ]))
         let action = result(success: true, trace: trace, completeness: .incomplete)
-        let predicate = AccessibilityPredicate.changed(.elements([
+        let predicate = AccessibilityPredicate.elementsChanged([
             .updated(.label("counter"), .value(after: "5")),
-        ]))
+        ])
         XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: action).met)
     }
 
@@ -373,9 +373,9 @@ extension AccessibilityPredicateTests {
                 ))
 
         )
-        let predicate = AccessibilityPredicate.changed(.elements([
+        let predicate = AccessibilityPredicate.elementsChanged([
             .updated(.label("btn_1"), .value(before: "OFF", after: "ON")),
-        ]))
+        ])
         XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result).met)
     }
 
@@ -393,9 +393,9 @@ extension AccessibilityPredicateTests {
                 ))
 
         )
-        let predicate = AccessibilityPredicate.changed(.elements([
+        let predicate = AccessibilityPredicate.elementsChanged([
             .updated(.label("any"), .value()),
-        ]))
+        ])
         XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result).met)
     }
 

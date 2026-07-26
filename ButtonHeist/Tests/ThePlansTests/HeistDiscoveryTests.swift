@@ -19,7 +19,7 @@ private func existsLabel(_ label: String) -> AccessibilityPredicate {
     .exists(.label(label))
 }
 
-private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
+private let screenChangePredicate = AccessibilityPredicate.screenChanged
 
 @Test func `list heists includes root only entry`() throws {
     let catalog = try HeistPlan(
@@ -342,7 +342,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
             .action(ActionStep(
                 command: .activate(.predicate(.label("Submit"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done")), timeout: 1)))),
-            .wait(WaitStep(predicate: .changed(.screen()), timeout: 2)),
+            .wait(WaitStep(predicate: .screenChanged, timeout: 2)),
             .wait(WaitStep(predicate: announcement, timeout: 2)),
         ]
     ).describeHeist(at: "submit")

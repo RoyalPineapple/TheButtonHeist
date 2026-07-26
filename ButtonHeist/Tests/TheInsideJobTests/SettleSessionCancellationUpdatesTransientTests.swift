@@ -37,8 +37,14 @@ extension SettleSessionTests {
         task.cancel()
         let outcome = await task.value
 
-        XCTAssertEqual(outcome.outcome, .cancelled(timeMs: 10))
-        XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
+        // The yield reports `.cancelled` instead of throwing, and the run has to
+        // honour that as cancellation while still handing back the reading it
+        // already took.
+        guard case .cancelled = outcome.outcome else {
+            return XCTFail("Expected a swallowed cancellation to surface as .cancelled, got \(outcome.outcome)")
+        }
+        XCTAssertFalse(outcome.outcome.didSettleCleanly)
+        XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.map(\.label), ["Ready"])
     }
 
     func testCancellationPropagatesAsCancelledOutcome() async {
@@ -96,11 +102,18 @@ extension SettleSessionTests {
             baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
-        if case .settled = outcome.outcome {
-            // Expected.
-        } else {
-            XCTFail("Spinner with .updatesFrequently must not block settle. Got \(outcome.outcome)")
+        guard case .settled = outcome.outcome else {
+            return XCTFail("Spinner with .updatesFrequently must not block settle. Got \(outcome.outcome)")
         }
+        // Settling is half the claim; the other half is *when*. Masking holds the
+        // fingerprint still from the second parse, so the settle lands while the
+        // spinner is mid-cycle rather than waiting for its value to come back
+        // around to where it started.
+        XCTAssertEqual(
+            outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.map(\.value),
+            [nil, "B"],
+            "expected the settle on the second parse, with the spinner still churning"
+        )
     }
 
     func testUpdatesFrequentlyMaskingKeepsSettlingWhenGeometryHolds() async {

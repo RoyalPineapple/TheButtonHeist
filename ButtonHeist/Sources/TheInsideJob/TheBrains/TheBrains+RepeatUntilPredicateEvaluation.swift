@@ -137,8 +137,8 @@ extension TheBrains {
         }
         let command: Settlement.Command
         if let observation {
-            let authored = AccessibilityPredicate.changed(.elements())
-            let resolved = ResolvedAccessibilityPredicate.changed(.elements([]))
+            let authored = AccessibilityPredicate.elementsChanged
+            let resolved = ResolvedAccessibilityPredicate.elementsChanged([])
             command = Settlement.Command(
                 observing: authored,
                 resolved: resolved,

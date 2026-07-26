@@ -32,7 +32,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         let target = AccessibilityTarget.predicate(ElementPredicate(label: "Save"))
         let authored = [
             AccessibilityPredicate.exists(target),
-            .changed(.elements([.appeared(target)])),
+            .elementsChanged([.appeared(target)]),
             .announcement("Saved"),
         ]
         let environment = HeistExecutionEnvironment()
@@ -421,8 +421,8 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
 
     private func transitionPredicate() -> Settlement.Predicate {
         Settlement.Predicate(
-            authored: .changed(.elements()),
-            resolved: .changed(.elements([]))
+            authored: .elementsChanged,
+            resolved: .elementsChanged([])
         )
     }
 

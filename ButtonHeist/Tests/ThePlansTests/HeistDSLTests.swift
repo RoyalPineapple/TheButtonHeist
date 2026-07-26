@@ -72,9 +72,9 @@ func actionUntilBuildsRepeatUntilWithDefaultProgressExpectation() throws {
 func actionExpectationSupportsScopedPropertyUpdateDelta() throws {
     let heist = try HeistPlan {
         TypeText("Bruschetta", into: .identifier("Search"))
-            .expect(.changed(.elements([
+            .expect(.elementsChanged([
                 .updated(.identifier("Search"), .value("Bruschetta")),
-            ])))
+            ]))
     }
 
     #expect(try heist == HeistPlan(body: [
@@ -83,9 +83,9 @@ func actionExpectationSupportsScopedPropertyUpdateDelta() throws {
                 text: "Bruschetta",
                 target: .identifier("Search")
             ),
-            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+            expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                 .updated(.identifier("Search"), .value(after: "Bruschetta")),
-            ])), timeout: 1)))),
+            ]), timeout: 1)))),
     ]))
 }
 
@@ -93,30 +93,30 @@ func actionExpectationSupportsScopedPropertyUpdateDelta() throws {
 func actionExpectationUsesCanonicalElementChangeAssertions() throws {
     let appeared = try HeistPlan {
         Activate(.label("Add Bruschetta"))
-            .expect(.changed(.elements([
+            .expect(.elementsChanged([
                 .appeared(.label(.contains("Bruschetta, $9.00"))),
-            ])))
+            ]))
     }
     let disappeared = try HeistPlan {
         Activate(.label("Remove Bruschetta"))
-            .expect(.changed(.elements([
+            .expect(.elementsChanged([
                 .disappeared(.identifier("cart-row-bruschetta")),
-            ])))
+            ]))
     }
     let updated = try HeistPlan {
         TypeText("Bruschetta", into: .identifier("Search"))
-            .expect(.changed(.elements([
+            .expect(.elementsChanged([
                 .updated(.identifier("Search"), .value("Bruschetta")),
-            ])))
+            ]))
     }
 
     #expect(try appeared == HeistPlan(body: [
         .action(ActionStep(
             command: .activate(.label("Add Bruschetta")),
             expectationPolicy: .expect(ActionExpectation(
-                predicate: .changed(.elements([
+                predicate: .elementsChanged([
                     .appeared(.label(.contains("Bruschetta, $9.00"))),
-                ])),
+                ]),
                 timeout: 1
             )))),
     ]))
@@ -124,9 +124,9 @@ func actionExpectationUsesCanonicalElementChangeAssertions() throws {
         .action(ActionStep(
             command: .activate(.label("Remove Bruschetta")),
             expectationPolicy: .expect(ActionExpectation(
-                predicate: .changed(.elements([
+                predicate: .elementsChanged([
                     .disappeared(.identifier("cart-row-bruschetta")),
-                ])),
+                ]),
                 timeout: 1
             )))),
     ]))
@@ -136,9 +136,9 @@ func actionExpectationUsesCanonicalElementChangeAssertions() throws {
                 text: "Bruschetta",
                 target: .identifier("Search")
             ),
-            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+            expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                 .updated(.identifier("Search"), .value(after: "Bruschetta")),
-            ])), timeout: 1)))),
+            ]), timeout: 1)))),
     ]))
 }
 
@@ -149,7 +149,7 @@ func predicateContextsUseExplicitCanonicalAssertions() throws {
             .expect(.exists(.label("Results")))
 
         Activate(.label("Open Details"))
-            .expect(.changed(.screen("Details")))
+            .expect(.screenChanged("Details"))
 
         WaitFor(.exists(.identifier("ready")), timeout: 2)
 
@@ -165,7 +165,7 @@ func predicateContextsUseExplicitCanonicalAssertions() throws {
         .action(ActionStep(
             command: .activate(.label("Open Details")),
             expectationPolicy: .expect(ActionExpectation(
-                predicate: .changed(.screen("Details")),
+                predicate: .screenChanged("Details"),
                 timeout: 1
             )))),
         .wait(WaitStep(predicate: .exists(.identifier("ready")), timeout: 2)),
@@ -221,7 +221,7 @@ func forEachInfersStringValuesAndElementPredicates() throws {
 func `screen and element expectations are authored as sibling steps`() throws {
     let plan = try HeistPlan {
         Activate(.label("Search"))
-            .expect(.changed(.screen()), timeout: 5)
+            .expect(.screenChanged, timeout: 5)
 
         WaitFor(.exists(.label("Results")), timeout: 5)
     }
@@ -229,7 +229,7 @@ func `screen and element expectations are authored as sibling steps`() throws {
         .action(ActionStep(
             command: .activate(.label("Search")),
             expectationPolicy: .expect(ActionExpectation(
-                predicate: .changed(.screen()),
+                predicate: .screenChanged,
                 timeout: 5
             )))),
         .wait(WaitStep(predicate: .exists(.label("Results")), timeout: 5)),
@@ -258,7 +258,7 @@ func `chained expectation onto a named screen predicate fails validation`() {
     #expect(throws: HeistPlanBuildError.self) {
         try HeistPlan {
             Activate(.label("Search"))
-                .expect(.changed(.screen("Results")))
+                .expect(.screenChanged("Results"))
                 .expect(.exists(.label("Filter")))
         }
     }
@@ -266,7 +266,7 @@ func `chained expectation onto a named screen predicate fails validation`() {
         try HeistPlan {
             Activate(.label("Search"))
                 .expect(.exists(.label("Filter")))
-                .expect(.changed(.screen("Results")))
+                .expect(.screenChanged("Results"))
         }
     }
 }
@@ -276,7 +276,7 @@ func testAuthoredActionExpectationRejectsConflictingExplicitTimeouts() throws {
     do {
         _ = try HeistPlan {
             Activate(.label("Save"))
-                .expect(.changed(.screen()), timeout: 1)
+                .expect(.screenChanged, timeout: 1)
                 .expect(.exists(.label("B")), timeout: 2)
         }
         Issue.record("Expected HeistPlanBuildError")
@@ -300,8 +300,8 @@ func `unsupported chained change expectations fail validation without replacemen
     #expect(throws: HeistPlanBuildError.self) {
         try HeistPlan {
             Activate(.label("Save"))
-                .expect(.changed(.elements()))
-                .expect(.changed(.screen()))
+                .expect(.elementsChanged)
+                .expect(.screenChanged)
         }
     }
 }
@@ -313,7 +313,7 @@ func `string heist search flow preserves query ref in post activation expectatio
                 .expect(.exists(.value(query)), timeout: 1)
 
             Activate(.label("Search"))
-                .expect(.changed(.elements([.exists(.label(query))])), timeout: 5)
+                .expect(.elementsChanged([.exists(.label(query))]), timeout: 5)
         }
     }
 
@@ -335,9 +335,9 @@ func `string heist search flow preserves query ref in post activation expectatio
         .action(ActionStep(
             command: .activate(.label("Search")),
             expectationPolicy: .expect(ActionExpectation(
-                predicate: .changed(.elements([
+                predicate: .elementsChanged([
                     .exists(.label(HeistReferenceName(stringLiteral: "query"))),
-                ])),
+                ]),
                 timeout: 5
             )))),
     ])
@@ -406,7 +406,7 @@ func spatialGestureVerbsBuildExplicitEscapeHatches() throws {
 func screenActionsNamespaceBuildsActions() throws {
     let heist = try HeistPlan {
         ScreenActions.Dismiss()
-            .expect(.changed(.screen()))
+            .expect(.screenChanged)
         ScreenActions.MagicTap()
             .withoutExpectation("Magic tap toggles process-local playback state")
     }
@@ -414,7 +414,7 @@ func screenActionsNamespaceBuildsActions() throws {
     #expect(heist.body == [
         .action(ActionStep(
             command: .dismiss,
-            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .screenChanged, timeout: 1)))),
         .action(ActionStep(
             command: .magicTap,
             expectationPolicy: .waived("Magic tap toggles process-local playback state"))),
@@ -425,7 +425,7 @@ func screenActionsNamespaceBuildsActions() throws {
 func customActionAndRotorBuildSemanticActionSteps() throws {
     let heist = try HeistPlan {
         CustomAction("Archive", on: .label("Message"))
-            .expect(.changed(.elements()), timeout: 1)
+            .expect(.elementsChanged, timeout: 1)
         Rotor("Headings", on: .label("Article"), direction: .next)
             .withoutExpectation("Navigation cursor only")
     }
@@ -433,7 +433,7 @@ func customActionAndRotorBuildSemanticActionSteps() throws {
     #expect(heist.body == [
         .action(ActionStep(
             command: .customAction(name: "Archive", target: .label("Message")),
-            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements()), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged, timeout: 1)))),
         .action(ActionStep(
             command: .rotor(selection: .named("Headings"), target: .label("Article"), direction: .next),
             expectationPolicy: .waived("Navigation cursor only"))),
@@ -546,7 +546,7 @@ func canonicalProductDemoCompilesAsAccessibilityContractProgram() throws {
             .expect(.exists(.element(.label("Search"), .value("milk"))), timeout: 2)
 
         Activate(.label("Search"))
-            .expect(.changed(.screen()), timeout: 5)
+            .expect(.screenChanged, timeout: 5)
 
         WaitFor(.exists(.label("Results")), timeout: 5)
             .else {

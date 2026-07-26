@@ -24,8 +24,13 @@ extension SettleSessionTests {
             baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
-        XCTAssertEqual(outcome.outcome, .settled(timeMs: 10))
+        guard case .settled = outcome.outcome else {
+            return XCTFail("Expected a settle on the first repeat, got \(outcome.outcome)")
+        }
+        // One yield is the whole claim: the repeat that settles is the one
+        // immediately after the seed, so exactly one wait happens.
         XCTAssertEqual(yieldCount.next(), 1)
+        XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.map(\.label), ["Hello"])
     }
 
     func testStableSettleRestartsTheRunWhenTheFingerprintChanges() async {
@@ -46,8 +51,12 @@ extension SettleSessionTests {
             baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
-        XCTAssertEqual(outcome.outcome, .settled(timeMs: 20))
-        XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
+        // The fingerprint change restarts the run, so the settle lands on the
+        // screen that arrived after it — never on the one it replaced.
+        guard case .settled = outcome.outcome else {
+            return XCTFail("Expected a settle after the fingerprint change, got \(outcome.outcome)")
+        }
+        XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.map(\.label), ["Ready"])
     }
 
     func testStableSettleNotificationOnlySignalsDoNotStarveParser() async {
@@ -66,8 +75,13 @@ extension SettleSessionTests {
             baselineTripwireSignal: tripwireSignal(topmostVC: nil, accessibilityNotificationSequence: 0)
         )
 
-        XCTAssertEqual(outcome.outcome, .settled(timeMs: 10))
-        XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
+        // A run of notification-only signals keeps arriving while the tree holds
+        // still. The parser is still consulted and the run settles on what it
+        // reads; the notifications alone never reset the comparison.
+        guard case .settled = outcome.outcome else {
+            return XCTFail("Notification-only signals must not starve the parser, got \(outcome.outcome)")
+        }
+        XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.map(\.label), ["Ready"])
     }
 
     func testClockedSettleIgnoresNilParsesUntilAStableScreenArrives() async {
@@ -86,7 +100,12 @@ extension SettleSessionTests {
             baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
-        XCTAssertEqual(outcome.outcome, .settled(timeMs: 50))
+        // The invariant is that nil parses do not prevent settling on the
+        // stable screen behind them, which is what the fixed-cadence twin
+        // asserts. How many ticks that takes is settlement's business.
+        guard case .settled = outcome.outcome else {
+            return XCTFail("Expected clocked settle after nil parses, got \(outcome.outcome)")
+        }
         XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 

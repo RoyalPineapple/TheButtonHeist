@@ -246,9 +246,9 @@ import Testing
         (
             "expect any element delta",
             try HeistPlan {
-                Activate(.label("Pay")).expect(.changed(.elements()))
+                Activate(.label("Pay")).expect(.elementsChanged)
             },
-            WaitStep(predicate: .changed(.elements()), timeout: 1)
+            WaitStep(predicate: .elementsChanged, timeout: 1)
         ),
         (
             "expect default timeout",

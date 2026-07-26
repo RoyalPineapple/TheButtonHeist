@@ -4,17 +4,10 @@ extension HeistPlanSourceParser {
     mutating func parseAccessibilityPredicateExpr() throws -> AccessibilityPredicate {
         let name = try parseDotCallName()
         switch name {
-        case "changed":
-            try expectSymbol("(")
-            let scopeName = try parseDotCallName()
-            let predicate: AccessibilityPredicate
-            switch scopeName {
-            case "screen": predicate = .changed(try parseScreenDelta())
-            case "elements": predicate = .changed(try parseElementsDelta())
-            default: throw error(previous, "unsupported changed scope '.\(scopeName)'. Valid: screen, elements")
-            }
-            try expectSymbol(")")
-            return predicate
+        case "screenChanged":
+            return try parseScreenChanged()
+        case "elementsChanged":
+            return try parseElementsChanged()
         case "announcement":
             return try parseAnnouncementPredicate()
         case "exists", "missing":
@@ -35,27 +28,29 @@ extension HeistPlanSourceParser {
         return .announcement(expression)
     }
 
-    mutating func parseScreenDelta() throws -> ChangeDeclaration {
-        try expectSymbol("(")
-        // `.screen()` asks only that a boundary was crossed; `.screen("Name")`
-        // asks which screen it arrived at. Elements are never named here —
-        // those are element assertions, answered by the snapshots either side.
-        if consumeSymbol(")") { return .screen(ScreenPredicate()) }
+    mutating func parseScreenChanged() throws -> AccessibilityPredicate {
+        // `.screenChanged` asks only that a boundary was crossed;
+        // `.screenChanged("Name")` asks which screen it arrived at. Elements are
+        // never named here — those are element assertions, answered by the
+        // snapshots either side.
+        guard consumeSymbol("(") else { return .screenChanged }
+        if consumeSymbol(")") { return .screenChanged }
         if currentToken.isSymbol("[") {
             throw error(
                 currentToken,
                 "screen predicates name the arrived-at screen, not elements: "
-                    + "use .screen() or .screen(\"Name\"), and .elements([...]) for element assertions"
+                    + "use .screenChanged or .screenChanged(\"Name\"), "
+                    + "and .elementsChanged([...]) for element assertions"
             )
         }
-        let expression = try parseStringMatchCallArgument(field: "screen")
+        let expression = try parseStringMatchCallArgument(field: "screenChanged")
         try expectSymbol(")")
-        return .screen(ScreenPredicate(match: expression))
+        return .screenChanged(ScreenPredicate(match: expression))
     }
 
-    mutating func parseElementsDelta() throws -> ChangeDeclaration {
-        try expectSymbol("(")
-        var assertions: [ChangeDeclaration.ElementAssertion] = []
+    mutating func parseElementsChanged() throws -> AccessibilityPredicate {
+        guard consumeSymbol("(") else { return .elementsChanged }
+        var assertions: [ElementAssertion] = []
         if !consumeSymbol(")") {
             try expectSymbol("[")
             repeat {
@@ -64,7 +59,7 @@ extension HeistPlanSourceParser {
             try expectSymbol("]")
             try expectSymbol(")")
         }
-        return .elements(assertions)
+        return .elementsChanged(assertions)
     }
 
     mutating func parseCurrentTreeTarget() throws -> AccessibilityTarget {
@@ -83,7 +78,7 @@ extension HeistPlanSourceParser {
         return name == "exists" ? .exists(target) : .missing(target)
     }
 
-    mutating func parseElementsAssertion() throws -> ChangeDeclaration.ElementAssertion {
+    mutating func parseElementsAssertion() throws -> ElementAssertion {
         let name = try parseDotCallName()
         switch name {
         case "exists", "missing":
@@ -103,7 +98,7 @@ extension HeistPlanSourceParser {
         }
     }
 
-    mutating func parseUpdatedAssertion() throws -> ChangeDeclaration.ElementAssertion {
+    mutating func parseUpdatedAssertion() throws -> ElementAssertion {
         try expectSymbol("(")
         let target = try parseTargetExpr()
         try expectSymbol(",")

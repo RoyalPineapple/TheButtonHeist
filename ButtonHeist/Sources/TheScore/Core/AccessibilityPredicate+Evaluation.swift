@@ -16,7 +16,7 @@ package extension ResolvedAccessibilityPredicate {
             if let previous,
                AccessibilityObservationChangeReducer.reduce(between: previous, and: capture) == .screenChanged {
                 expectation.empty(at: capture.interface.timestamp)
-                expectation.screenChange(ScreenFacts(
+                expectation.screenChanged(ScreenFacts(
                     idAfter: InterfaceSummary.screenName(for: capture.interface)
                 ))
             }

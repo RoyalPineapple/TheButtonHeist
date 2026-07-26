@@ -166,47 +166,47 @@ private func assertCanonicalSourceRoundTripPreservesBranchSemantics() throws {
             34
         ),
         (
-            #"WaitFor(.changed(.elements([.updated(.label("Total"), .label(before: "Old", after: "New"))])))"#,
+            #"WaitFor(.elementsChanged([.updated(.label("Total"), .label(before: "Old", after: "New"))]))"#,
             "unsupported element update property '.label'. Valid: value, traits, hint, actions, frame, activationPoint, customContent, rotors",
             72
         ),
         (
-            #"WaitFor(.changed(.elements([.updated(.label("Total"), .identifier(before: "old", after: "new"))])))"#,
+            #"WaitFor(.elementsChanged([.updated(.label("Total"), .identifier(before: "old", after: "new"))]))"#,
             "unsupported element update property '.identifier'. Valid: value, traits, hint, actions, frame, activationPoint, customContent, rotors",
             77
         ),
         (
-            #"WaitFor(.changed(.elements([.updated(.label("Total"), .value(from: "$2", to: "$3"))])))"#,
+            #"WaitFor(.elementsChanged([.updated(.label("Total"), .value(from: "$2", to: "$3"))]))"#,
             "value update predicate accepts before and after",
             73
         ),
         (
-            #"WaitFor(.changed(.elements([.updated(.label("Total"), .traits(after: .include([.selected])))])))"#,
+            #"WaitFor(.elementsChanged([.updated(.label("Total"), .traits(after: .include([.selected])))]))"#,
             "trait set match must use .init(...)",
             82
         ),
         (
-            #"WaitFor(.changed(.elements([.updated(.label("Total"), .activationPoint(after: .match(x: 1)))])))"#,
+            #"WaitFor(.elementsChanged([.updated(.label("Total"), .activationPoint(after: .match(x: 1)))]))"#,
             "activation point match must use .init(...)",
             91
         ),
         (
-            #"WaitFor(.changed(.elements([.updated(.identifier("item"), .actions(after: .exclude([.activate])))])))"#,
+            #"WaitFor(.elementsChanged([.updated(.identifier("item"), .actions(after: .exclude([.activate])))]))"#,
             "action set match must use .init(...)",
             87
         ),
         (
-            #"WaitFor(.changed(.elements([.updated(.identifier("item"), .frame(after: .exact(x: 0, y: 0, width: 10, height: 10)))])))"#,
+            #"WaitFor(.elementsChanged([.updated(.identifier("item"), .frame(after: .exact(x: 0, y: 0, width: 10, height: 10)))]))"#,
             "frame match must use .init(...)",
             85
         ),
         (
-            #"WaitFor(.changed(.elements([.updated(.identifier("item"), .customContent(after: .match(label: "Status")))])))"#,
+            #"WaitFor(.elementsChanged([.updated(.identifier("item"), .customContent(after: .match(label: "Status")))]))"#,
             "custom content match must use .init(...)",
             93
         ),
         (
-            #"WaitFor(.changed(.elements([.updated(.identifier("item"), .rotors(after: .include(["Headings"])))])))"#,
+            #"WaitFor(.elementsChanged([.updated(.identifier("item"), .rotors(after: .include(["Headings"])))]))"#,
             "rotor set match must use .init(...)",
             86
         ),

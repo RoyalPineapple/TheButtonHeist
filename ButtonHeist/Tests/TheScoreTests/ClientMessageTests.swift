@@ -187,7 +187,7 @@ final class ClientMessageTests: XCTestCase {
         let plan = try HeistPlan(body: [
                 .action(ActionStep(
                     command: .activate(saveTarget),
-                    expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 10)))),
+                    expectationPolicy: .expect(ActionExpectation(predicate: .screenChanged, timeout: 10)))),
                 .wait(WaitStep(
                     predicate: .exists(.element(.label("Save"), traits: [.button])),
                     timeout: 2.5
@@ -210,7 +210,7 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertEqual(decodedRun.argument, HeistArgument.none)
         XCTAssertEqual(decodedPlan.body.count, 3)
         guard case .action(let decodedAction) = decodedPlan.body[0],
-              decodedAction.expectationPolicy.expectedStep?.predicate == .changed(.screen()) else {
+              decodedAction.expectationPolicy.expectedStep?.predicate == .screenChanged else {
             return XCTFail("Expected activate command with screen change predicate")
         }
         XCTAssertEqual(decodedAction.command, .activate(saveTarget))
@@ -277,11 +277,11 @@ final class ClientMessageTests: XCTestCase {
     func testHeistActionDescriptionUsesNormalCommandIdentity() throws {
         let step = ActionStep(
             command: .activate(.predicate(ElementPredicate(label: "Save"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 10)))
+            expectationPolicy: .expect(ActionExpectation(predicate: .screenChanged, timeout: 10)))
 
         XCTAssertEqual(
             step.description,
-            #"action(command=activate expect=wait(changed(screen(the screen to change)) timeout=10))"#
+            #"action(command=activate expect=wait(screenChanged(the screen to change) timeout=10))"#
         )
     }
 
@@ -558,11 +558,11 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testWaitChangedScreenRoundTrip() throws {
-        let target = WaitTarget(predicate: .changed(.screen()), timeout: 15.0)
+        let target = WaitTarget(predicate: .screenChanged, timeout: 15.0)
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(WaitTarget.self, from: data)
 
-        XCTAssertEqual(decoded.predicate, .changed(.screen()))
+        XCTAssertEqual(decoded.predicate, .screenChanged)
         XCTAssertEqual(decoded.timeout, 15.0)
     }
 
@@ -577,7 +577,7 @@ final class ClientMessageTests: XCTestCase {
 
     func testWaitEnvelopeUsesHeistPlan() throws {
         let plan = try HeistPlan(body: [
-            .wait(WaitStep(predicate: .changed(.elements()), timeout: 8.0)),
+            .wait(WaitStep(predicate: .elementsChanged, timeout: 8.0)),
         ])
         let envelope = RequestEnvelope(
             requestId: "wait-1",
@@ -591,7 +591,7 @@ final class ClientMessageTests: XCTestCase {
               case .wait(let target)? = run.plan.body.first else {
             return XCTFail("Expected heistPlan wait, got \(decoded.message)")
         }
-        XCTAssertEqual(target.predicate, .changed(.elements()))
+        XCTAssertEqual(target.predicate, .elementsChanged)
         XCTAssertEqual(target.timeout, 8.0)
     }
 

@@ -23,7 +23,7 @@ extension TheBrains {
         }
         defer { finishChangedWait() }
 
-        let predicate = expectation ?? .changed(.elements())
+        let predicate = expectation ?? .elementsChanged
         let resolvedTimeout: WaitTimeout
         let resolved: ResolvedAccessibilityPredicate
         do {

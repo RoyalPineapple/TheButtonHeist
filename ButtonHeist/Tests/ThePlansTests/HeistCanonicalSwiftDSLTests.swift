@@ -59,7 +59,7 @@ func rootAccessibilityTargetPlanRendersCanonicalSwiftAndCompilesBack() async thr
         If {
             Case(.exists(target)) {
                 CustomAction("Archive", on: target)
-                    .expect(.changed(.elements([.appeared(target)])), timeout: 3)
+                    .expect(.elementsChanged([.appeared(target)]), timeout: 3)
             }
 
             Else {
@@ -83,7 +83,7 @@ func rootAccessibilityTargetPlanRendersCanonicalSwiftAndCompilesBack() async thr
 
         If(.exists(target)) {
             CustomAction("Archive", on: target)
-                .expect(.changed(.elements([.appeared(target)])), timeout: 3)
+                .expect(.elementsChanged([.appeared(target)]), timeout: 3)
         }
         .else {
             Fail("target missing")
@@ -154,9 +154,9 @@ func `canonical Swift renderer preserves string refs in sibling expectations`() 
                 .expect(.exists(.value(query)))
 
             Activate(.label("Search"))
-                .expect(.changed(.screen()), timeout: 5)
+                .expect(.screenChanged, timeout: 5)
 
-            WaitFor(.changed(.elements([.appeared(.label(query))])), timeout: 5)
+            WaitFor(.elementsChanged([.appeared(.label(query))]), timeout: 5)
         }
     }
 
@@ -171,9 +171,9 @@ func `canonical Swift renderer preserves string refs in sibling expectations`() 
                 .expect(.exists(.value(query)))
 
             Activate(.label("Search"))
-                .expect(.changed(.screen()), timeout: 5)
+                .expect(.screenChanged, timeout: 5)
 
-            WaitFor(.changed(.elements([.appeared(.label(query))])), timeout: 5)
+            WaitFor(.elementsChanged([.appeared(.label(query))]), timeout: 5)
         }
 
         RunHeist("SearchScreen.search", "milk")

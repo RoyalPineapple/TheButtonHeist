@@ -69,7 +69,7 @@ extension TheBrainsActionTests {
         let events = observationEvents(for: [initialState, finalState])
         var nextObservationIndex = 0
         let expectation = WaitStep(
-            predicate: .changed(.elements([.appeared(.label("subtotal"))])),
+            predicate: .elementsChanged([.appeared(.label("subtotal"))]),
             timeout: defaultActionExpectationTimeout
         )
         let runtime = heistRuntime(
@@ -210,10 +210,10 @@ extension TheBrainsActionTests {
                     path: "Cart.addItem",
                     argument: .string("Eggs"),
                     expectation: WaitStep(
-                        predicate: .changed(.elements([.updated(
+                        predicate: .elementsChanged([.updated(
                             .label("subtotal"),
                             .value(after: .contains("2 items"))
-                        )])),
+                        )]),
                         timeout: defaultActionExpectationTimeout
                     )
                 )),
@@ -252,7 +252,7 @@ extension TheBrainsActionTests {
                 .invoke(HeistInvocationStep(
                     path: "Checkout.pay",
                     expectation: WaitStep(
-                        predicate: .changed(.screen()),
+                        predicate: .screenChanged,
                         timeout: defaultActionExpectationTimeout
                     )
                 )),
@@ -302,10 +302,10 @@ extension TheBrainsActionTests {
                     path: "Cart.addItem",
                     argument: .string("Eggs"),
                     expectation: WaitStep(
-                        predicate: .changed(.elements([.updated(
+                        predicate: .elementsChanged([.updated(
                             .label("subtotal"),
                             .value(after: .contains("2 items"))
-                        )])),
+                        )]),
                         timeout: defaultActionExpectationTimeout
                     )
                 )),

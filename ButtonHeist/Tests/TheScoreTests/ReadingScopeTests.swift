@@ -30,26 +30,64 @@ final class ReadingScopeTests: XCTestCase {
     // MARK: - Nothing named at all
 
     func testOneSnapshotAloneDoesNotProveANamelessChange() throws {
-        var expectation = try Expectation([resolved(.changed(.elements([])))])
+        var expectation = try Expectation([resolved(.elementsChanged([]))])
         expectation.snapshot(tree(["Ready"]))
         expectation.noChange()
         XCTAssertFalse(expectation.isMet, "one tick is one reading: nothing was shown to change")
     }
 
     func testTheSameTreeTwiceDoesNotProveANamelessChange() throws {
-        var expectation = try Expectation([resolved(.changed(.elements([])))])
+        var expectation = try Expectation([resolved(.elementsChanged([]))])
         expectation.snapshot(tree(["Ready"]))
         expectation.snapshot(tree(["Ready"]))
         expectation.noChange()
         XCTAssertFalse(expectation.isMet, "the same tree twice is one reading")
     }
 
+    // MARK: - A boundary, with nothing named about it
+
+    /// A boundary is proved by a boundary tick, because that is the evidence for
+    /// a boundary. Snapshots answer element questions, whichever screen they
+    /// were taken on.
+    func testABoundaryWithNothingNamedIsProvedByTheBoundaryTick() throws {
+        var expectation = try Expectation([resolved(.screenChanged)])
+        expectation.screenChanged(ScreenFacts(idAfter: "Settings"))
+        expectation.noChange()
+        XCTAssertTrue(expectation.isMet, "outstanding: \(expectation.outstanding)")
+    }
+
+    func testSnapshotsAloneNeverProveABoundary() throws {
+        var expectation = try Expectation([resolved(.screenChanged)])
+        expectation.snapshot(tree(["Home"]))
+        expectation.snapshot(tree(["Settings"]))
+        expectation.noChange()
+        XCTAssertFalse(
+            expectation.isMet,
+            "two trees differing is the elements changing, not a screen boundary"
+        )
+    }
+
+    /// A named destination reads the boundary tick, because the heading is the
+    /// one fact a tree does not carry.
+    func testANamedDestinationReadsTheBoundaryTickAndNotSnapshots() throws {
+        var snapshots = try Expectation([resolved(.screenChanged("Settings"))])
+        snapshots.snapshot(tree(["Home"]))
+        snapshots.snapshot(tree(["Settings"]))
+        snapshots.noChange()
+        XCTAssertFalse(snapshots.isMet, "snapshots cannot name the screen they arrived at")
+
+        var named = try Expectation([resolved(.screenChanged("Settings"))])
+        named.screenChanged(ScreenFacts(idAfter: "Settings"))
+        named.noChange()
+        XCTAssertTrue(named.isMet, "outstanding: \(named.outstanding)")
+    }
+
     // MARK: - An element named, no property constrained
 
     func testAnUnconstrainedUpdateIsNotSatisfiedByTheElementMerelyPersisting() throws {
-        let predicate = AccessibilityPredicate.changed(.elements([
+        let predicate = AccessibilityPredicate.elementsChanged([
             .updated(.label("Count"), .value(after: nil)),
-        ]))
+        ])
         var expectation = try Expectation([resolved(predicate)])
         expectation.snapshot(counter("1"))
         expectation.snapshot(counter("1"))
@@ -61,9 +99,9 @@ final class ReadingScopeTests: XCTestCase {
     }
 
     func testAnUnconstrainedUpdateHoldsWhenTheNamedPropertyMoved() throws {
-        let predicate = AccessibilityPredicate.changed(.elements([
+        let predicate = AccessibilityPredicate.elementsChanged([
             .updated(.label("Count"), .value(after: nil)),
-        ]))
+        ])
         var expectation = try Expectation([resolved(predicate)])
         expectation.snapshot(counter("1"))
         expectation.snapshot(counter("2"))
@@ -74,9 +112,9 @@ final class ReadingScopeTests: XCTestCase {
     /// The scope is the property named, so churn elsewhere is not the change the
     /// assertion asked about.
     func testAnUpdateIgnoresChurnOutsideTheNamedProperty() throws {
-        let predicate = AccessibilityPredicate.changed(.elements([
+        let predicate = AccessibilityPredicate.elementsChanged([
             .updated(.label("Count"), .value(after: nil)),
-        ]))
+        ])
         var expectation = try Expectation([resolved(predicate)])
         expectation.snapshot(counter("1"))
         expectation.snapshot(makeTestInterface(elements: [

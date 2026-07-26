@@ -134,36 +134,36 @@ import Testing
 }
 
 @Test func `reported agent update grammar mistakes fail with corrections`() throws {
-    let emptyUpdated = compileError(root(#"Activate(.label("Pay")).expect(.changed(.elements([.updated()])))"#))
+    let emptyUpdated = compileError(root(#"Activate(.label("Pay")).expect(.elementsChanged([.updated()]))"#))
     expect(emptyUpdated, contains: "expected a ButtonHeist expression beginning with '.'")
 
     let elementOnlyUpdated = compileError(root(
-        #"Activate(.label("Pay")).expect(.changed(.elements([.updated(.label("Total"))])))"#
+        #"Activate(.label("Pay")).expect(.elementsChanged([.updated(.label("Total"))]))"#
     ))
     expect(elementOnlyUpdated, contains: "expected ','")
 
     let explicitlyElementOnlyUpdated = compileError(root(
         #"Activate(.label("Pay")).expect("# +
-            #".changed(.elements([.updated(.element(.label("Quantity")))])))"#
+            #".elementsChanged([.updated(.element(.label("Quantity")))]))"#
     ))
     expect(explicitlyElementOnlyUpdated, contains: "expected ','")
 
     let labeledElementUpdated = compileError(root(
         #"Activate(.label("Pay")).expect("# +
-            #".changed(.elements([.updated(element: .label("Total"), .value("$3"))])))"#
+            #".elementsChanged([.updated(element: .label("Total"), .value("$3"))]))"#
     ))
     expect(labeledElementUpdated, contains: "expected a ButtonHeist expression beginning with '.'")
 
     let labeledExplicitElementUpdated = compileError(root(
         #"Activate(.label("Pay")).expect("# +
-            #".changed(.elements([.updated(element: .element(.label("Total")), "# +
-            #".value("$3"))])))"#
+            #".elementsChanged([.updated(element: .element(.label("Total")), "# +
+            #".value("$3"))]))"#
     ))
     expect(labeledExplicitElementUpdated, contains: "expected a ButtonHeist expression beginning with '.'")
 
     let beforeOnlyUpdate = compileError(root(
         #"Activate(.label("Pay")).expect("# +
-            #".changed(.elements([.updated(.label("Total"), .value(before: "$2"))])))"#
+            #".elementsChanged([.updated(.label("Total"), .value(before: "$2"))]))"#
     ))
     expect(beforeOnlyUpdate, contains: "value update predicate requires after when before is set")
 
@@ -171,13 +171,13 @@ import Testing
     // `.screen` names the arrived-at screen, so the correction has to point at
     // `.elements([...])`, which is where an element question belongs.
     let screenChangedAppeared = compileError(root(
-        #"Activate(.label("Pay")).expect(.changed(.screen([.appeared(.label("Receipt"))])))"#
+        #"Activate(.label("Pay")).expect(.screenChanged([.appeared(.label("Receipt"))]))"#
     ))
     expect(screenChangedAppeared, contains: ".elements([...]) for element assertions")
 
     let screenChangedUpdated = compileError(root(
         #"Activate(.label("Pay")).expect("# +
-            #".changed(.screen([.updated(.label("Total"), .value("$3"))])))"#
+            #".screenChanged([.updated(.label("Total"), .value("$3"))]))"#
     ))
     expect(screenChangedUpdated, contains: ".elements([...]) for element assertions")
 }
@@ -189,10 +189,10 @@ import Testing
     let emptyMissing = compileError(root(#"WaitFor(.missing())"#))
     expect(emptyMissing, contains: "expected a ButtonHeist expression beginning with '.'")
 
-    let emptyAppeared = compileError(root(#"WaitFor(.changed(.elements([.appeared()])))"#))
+    let emptyAppeared = compileError(root(#"WaitFor(.elementsChanged([.appeared()]))"#))
     expect(emptyAppeared, contains: "expected a ButtonHeist expression beginning with '.'")
 
-    let emptyDisappeared = compileError(root(#"WaitFor(.changed(.elements([.disappeared()])))"#))
+    let emptyDisappeared = compileError(root(#"WaitFor(.elementsChanged([.disappeared()]))"#))
     expect(emptyDisappeared, contains: "expected a ButtonHeist expression beginning with '.'")
 
 }

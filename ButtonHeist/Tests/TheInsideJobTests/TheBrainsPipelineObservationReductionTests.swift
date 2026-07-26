@@ -223,8 +223,8 @@ extension TheBrainsPipelineTests {
             completeness: .complete
         ))
 
-        let screenExpression = AccessibilityPredicate.changed(.screen())
-        let elementExpression = AccessibilityPredicate.changed(.elements())
+        let screenExpression = AccessibilityPredicate.screenChanged
+        let elementExpression = AccessibilityPredicate.elementsChanged
         let screenPredicate = ExpectationResult(
             try resolvedPredicate(screenExpression).evaluate(in: screenEvidence),
             predicate: screenExpression

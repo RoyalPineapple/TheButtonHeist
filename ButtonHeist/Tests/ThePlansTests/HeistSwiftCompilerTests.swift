@@ -302,7 +302,7 @@ struct HeistSwiftCompilerTests {
             func heist() throws -> HeistPlan {
                 try HeistPlan("TrustedFrontend") {
                     Activate(.label(payLabel()))
-                        .expect(.changed(.screen()))
+                        .expect(.screenChanged)
                 }
             }
             """
@@ -314,7 +314,7 @@ struct HeistSwiftCompilerTests {
         #expect(plan.body == [
             .action(ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 1)))),
+                expectationPolicy: .expect(ActionExpectation(predicate: .screenChanged, timeout: 1)))),
         ])
     }
 
@@ -467,10 +467,10 @@ struct HeistSwiftCompilerTests {
                 try HeistPlan("PredicateComposition") {
                     WaitFor(.exists(.label("Receipt")))
                     WaitFor(.missing(.label("Loading")))
-                    WaitFor(.changed(.screen("Receipt")))
-                    WaitFor(.changed(.elements([
+                    WaitFor(.screenChanged("Receipt"))
+                    WaitFor(.elementsChanged([
                         .updated(.identifier("count"), .value("3")),
-                    ])))
+                    ]))
                 }
             }
             """

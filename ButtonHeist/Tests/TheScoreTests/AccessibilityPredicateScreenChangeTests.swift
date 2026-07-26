@@ -9,7 +9,7 @@ extension AccessibilityPredicateTests {
     // MARK: - Codable
 
     func testScreenChangedEncodeDecode() throws {
-        let predicate = AccessibilityPredicate.changed(.screen())
+        let predicate = AccessibilityPredicate.screenChanged
         let data = try JSONEncoder().encode(predicate)
         let decoded = try JSONDecoder().decode(AccessibilityPredicate.self, from: data)
         XCTAssertEqual(decoded, predicate)
@@ -20,7 +20,7 @@ extension AccessibilityPredicateTests {
     /// `match` key at all, which is how a decoder that rejected it stayed green.
     func testANamedScreenPredicateKeepsItsNameAcrossTheWire() throws {
         for match in [StringMatch.exact("Settings"), .contains("Sett"), .prefix("Set")] {
-            let predicate = AccessibilityPredicate.changed(.screen(match))
+            let predicate = AccessibilityPredicate.screenChanged(match)
             let data = try JSONEncoder().encode(predicate)
             let decoded = try JSONDecoder().decode(AccessibilityPredicate.self, from: data)
             XCTAssertEqual(decoded, predicate, "\(match) did not survive the wire")
@@ -29,16 +29,30 @@ extension AccessibilityPredicateTests {
 
     // MARK: - Validation: screen changed
 
+    /// The trace leaves an empty screen and arrives at one holding something, so
+    /// the two readings differ and the boundary is proved by the captures
+    /// themselves rather than by the notification that flagged them.
     func testScreenChangedMetWhenTraceChangesScreen() throws {
-        let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        let action = result(success: true, trace: .screenChangedForTests(replacementInterface: interface), completeness: .incomplete)
-        let result = try AccessibilityPredicate.changed(.screen()).resolve(in: .empty).validate(against: action)
-        XCTAssertTrue(result.met)
+        let arrived = makeTestInterface(elements: [
+            makeTestHeistElement(description: "Settings", label: "Settings"),
+        ])
+        let action = result(success: true, trace: .screenChangedForTests(replacementInterface: arrived), completeness: .incomplete)
+        let result = try AccessibilityPredicate.screenChanged.resolve(in: .empty).validate(against: action)
+        XCTAssertTrue(result.met, "outstanding: \(result.actual ?? "-")")
+    }
+
+    /// The boundary tick is the evidence, so a nameless boundary holds even when
+    /// both sides read alike: what changed was the screen, not its elements.
+    func testScreenChangedMetWhenBothSidesOfTheBoundaryReadTheSame() throws {
+        let empty = makeTestInterface(elements: [])
+        let action = result(success: true, trace: .screenChangedForTests(replacementInterface: empty), completeness: .incomplete)
+        let result = try AccessibilityPredicate.screenChanged.resolve(in: .empty).validate(against: action)
+        XCTAssertTrue(result.met, "outstanding: \(result.actual ?? "-")")
     }
 
     func testScreenChangedNotMetWithoutTrace() throws {
         let action = result(success: true)
-        let result = try AccessibilityPredicate.changed(.screen()).resolve(in: .empty).validate(against: action)
+        let result = try AccessibilityPredicate.screenChanged.resolve(in: .empty).validate(against: action)
         XCTAssertFalse(result.met)
         XCTAssertEqual(result.actual, "no observed accessibility trace")
     }
@@ -77,7 +91,7 @@ extension AccessibilityPredicateTests {
 
         )
 
-        let outcome = try AccessibilityPredicate.changed(.screen()).resolve(in: .empty).validate(against: result)
+        let outcome = try AccessibilityPredicate.screenChanged.resolve(in: .empty).validate(against: result)
 
         XCTAssertTrue(outcome.met)
         XCTAssertNil(outcome.actual)
@@ -92,17 +106,17 @@ extension AccessibilityPredicateTests {
 
         // Any boundary answers a nameless one.
         XCTAssertTrue(
-            try AccessibilityPredicate.changed(.screen())
+            try AccessibilityPredicate.screenChanged
                 .resolve(in: .empty).validate(against: result).met
         )
         // A named one asks only about the name. Which elements left and which
         // arrived are element predicates, and they are siblings, not payload.
         XCTAssertTrue(
-            try AccessibilityPredicate.changed(.screen("Settings"))
+            try AccessibilityPredicate.screenChanged("Settings")
                 .resolve(in: .empty).validate(against: result).met
         )
         XCTAssertFalse(
-            try AccessibilityPredicate.changed(.screen("Home"))
+            try AccessibilityPredicate.screenChanged("Home")
                 .resolve(in: .empty).validate(against: result).met
         )
     }

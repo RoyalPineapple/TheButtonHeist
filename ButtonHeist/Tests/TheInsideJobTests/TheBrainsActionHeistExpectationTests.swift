@@ -78,9 +78,9 @@ extension TheBrainsActionTests {
             .action(ActionStep(
                 command: .activate(.label("Save")),
                 expectationPolicy: .expect(try ActionExpectation(WaitStep(
-                    predicate: .changed(.elements([
+                    predicate: .elementsChanged([
                         .appeared(.label("Saved")),
-                    ])),
+                    ]),
                     timeout: .seconds(1)
                 )))
             )),
@@ -146,18 +146,18 @@ extension TheBrainsActionTests {
             .action(ActionStep(
                 command: .activate(.label("Save")),
                 expectationPolicy: .expect(try ActionExpectation(WaitStep(
-                    predicate: .changed(.elements([.appeared(.label("Saved"))])),
+                    predicate: .elementsChanged([.appeared(.label("Saved"))]),
                     timeout: .seconds(1)
                 )))
             )),
         ]))
         await committedObservations.wait()
         let appeared = await brains.performWait(step: WaitStep(
-            predicate: .changed(.elements([.appeared(.label("Saved"))])),
+            predicate: .elementsChanged([.appeared(.label("Saved"))]),
             timeout: try .milliseconds(1)
         ))
         let disappeared = await brains.performWait(step: WaitStep(
-            predicate: .changed(.elements([.disappeared(.label("Saved"))])),
+            predicate: .elementsChanged([.disappeared(.label("Saved"))]),
             timeout: try .milliseconds(1)
         ))
         let exists = await brains.performWait(step: WaitStep(
@@ -215,7 +215,7 @@ extension TheBrainsActionTests {
         await installSyntheticObservation(ready)
 
         let result = await brains.performWait(step: WaitStep(
-            predicate: .changed(.elements([.appeared(.label("Ready"))])),
+            predicate: .elementsChanged([.appeared(.label("Ready"))]),
             timeout: try .milliseconds(1)
         ))
 

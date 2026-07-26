@@ -260,7 +260,7 @@ private extension Settlement.Reducer {
         let screenHeading = admission.event.snapshot.screenHeading
         if admission.event.continuity.isReplacement {
             session.requirement.expectation.empty(at: interface.timestamp)
-            session.requirement.expectation.screenChange(ScreenFacts(idAfter: screenHeading))
+            session.requirement.expectation.screenChanged(ScreenFacts(idAfter: screenHeading))
         }
         // Every observation is a tick, and which tick it is was already decided
         // by the one comparison the store made. A tree in a new state is a

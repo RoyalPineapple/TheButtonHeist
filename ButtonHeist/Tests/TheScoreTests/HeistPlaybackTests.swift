@@ -320,11 +320,11 @@ final class HeistPlanTests: XCTestCase {
     func testActionStepDescriptionComposesCommandAndExpectation() throws {
         let step = ActionStep(
             command: .activate(.predicate(ElementPredicate(label: "Save", traits: [.button]))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 2)))
+            expectationPolicy: .expect(ActionExpectation(predicate: .screenChanged, timeout: 2)))
 
         XCTAssertEqual(
             step.description,
-            #"action(command=activate expect=wait(changed(screen(the screen to change)) timeout=2))"#
+            #"action(command=activate expect=wait(screenChanged(the screen to change) timeout=2))"#
         )
     }
 

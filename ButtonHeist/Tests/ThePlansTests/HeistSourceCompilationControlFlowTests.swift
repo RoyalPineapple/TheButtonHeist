@@ -6,7 +6,7 @@ import Testing
     Activate(.label("Search"))
         .expect(.exists(.label("Results")))
     Activate(.label("Open Details"))
-        .expect(.changed(.screen("Details")))
+        .expect(.screenChanged("Details"))
     If(.exists(.value(.contains("Promo")))) {
         Warn("promo visible")
     }
@@ -25,7 +25,7 @@ import Testing
         .action(ActionStep(
             command: .activate(.predicate(.label("Open Details"))),
             expectationPolicy: .expect(ActionExpectation(
-                predicate: .changed(.screen("Details")),
+                predicate: .screenChanged("Details"),
                 timeout: 1
             )))),
         .conditional(try ConditionalStep(cases: [
@@ -78,7 +78,7 @@ import Testing
             Activate(.label(item))
         }
 
-        Activate(.label("Pay")).expect(.changed(.screen()))
+        Activate(.label("Pay")).expect(.screenChanged)
 
         WaitFor(.exists(.label("Receipt")), timeout: 5).else {
             Fail("Receipt did not appear")
@@ -100,7 +100,7 @@ import Testing
     #expect(plan.body == [
         .action(ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .screenChanged, timeout: 1)))),
         .wait(WaitStep(
             predicate: .exists(.label("Receipt")),
             timeout: 5,
@@ -136,7 +136,7 @@ import Testing
 
         Activate(rootTarget)
         Activate(.label("Pay"))
-            .expect(.changed(.screen()))
+            .expect(.screenChanged)
 
         WaitFor(.exists(.label("Receipt")), timeout: 5).else {
             Fail("Receipt did not appear")

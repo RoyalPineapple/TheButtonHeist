@@ -78,7 +78,7 @@ extension TheFenceHandlerTests {
         guard let step = mockConn.sent.sentWaitSteps.last else {
             return XCTFail("Expected wait step")
         }
-        XCTAssertEqual(step.predicate, .changed(.screen()))
+        XCTAssertEqual(step.predicate, .screenChanged)
         XCTAssertEqual(step.timeout, 60.0)
     }
 
@@ -156,7 +156,7 @@ extension TheFenceHandlerTests {
             "scope": .string("screen"),
             "assertions": .array([]),
         ]))
-        XCTAssertEqual(result, .changed(.screen()))
+        XCTAssertEqual(result, .screenChanged)
     }
 
     @ButtonHeistActor
@@ -193,9 +193,9 @@ extension TheFenceHandlerTests {
 
     @ButtonHeistActor
     func testHeistPlanCarriesTypedActionExpectation() async throws {
-        let expectation = AccessibilityPredicate.changed(.elements([
+        let expectation = AccessibilityPredicate.elementsChanged([
             .updated(.identifier("counter"), .value(after: "5")),
-        ]))
+        ])
         let sourceStep = HeistStep.action(ActionStep(
             command: .activate(.predicate(ElementPredicate(identifier: .exact("counter")))),
             expectationPolicy: .expect(ActionExpectation(predicate: expectation, timeout: 10))))
@@ -224,9 +224,9 @@ extension TheFenceHandlerTests {
         ]))
         XCTAssertEqual(
             result,
-            .changed(.elements([
+            .elementsChanged([
                 .updated(.identifier("slider"), .value(before: "0", after: "50")),
-            ]))
+            ])
         )
     }
 

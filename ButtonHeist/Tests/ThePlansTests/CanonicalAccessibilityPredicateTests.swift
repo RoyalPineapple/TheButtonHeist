@@ -9,22 +9,22 @@ struct CanonicalAccessibilityPredicateTests {
     /// only that a boundary happened, so it carries no `match` either.
     @Test("screen JSON carries the arrived-at match and no assertion list")
     func screenJSON() throws {
-        #expect(try json(AccessibilityPredicate.changed(.screen())) == #"{"scope":"screen","type":"changed"}"#)
+        #expect(try json(AccessibilityPredicate.screenChanged) == #"{"scope":"screen","type":"changed"}"#)
         #expect(
-            try json(AccessibilityPredicate.changed(.screen("Settings"))) ==
+            try json(AccessibilityPredicate.screenChanged("Settings")) ==
             #"{"match":{"mode":"exact","value":"Settings"},"scope":"screen","type":"changed"}"#
         )
     }
 
     @Test("elements JSON uses one canonical target and assertion language")
     func elementsJSON() throws {
-        let predicate = AccessibilityPredicate.changed(.elements([
+        let predicate = AccessibilityPredicate.elementsChanged([
             .exists(.label("Current")),
             .missing(.label("Gone")),
             .appeared(.label("New")),
             .disappeared(.label("Old")),
             .updated(.identifier("count"), .value(before: "1", after: "2")),
-        ]))
+        ])
 
         let decoded = try JSONDecoder().decode(
             AccessibilityPredicate.self,
@@ -37,8 +37,8 @@ struct CanonicalAccessibilityPredicateTests {
     func assertionJSON() throws {
         let root = AccessibilityPredicate.missing(.label("Loading"))
         let condition = PresenceCondition.missing(.label("Loading"))
-        let elementPresence = ChangeDeclaration.ElementAssertion.missing(.label("Loading"))
-        let elementUpdate = ChangeDeclaration.ElementAssertion.updated(
+        let elementPresence = ElementAssertion.missing(.label("Loading"))
+        let elementUpdate = ElementAssertion.updated(
             .identifier("count"),
             .value(before: "1", after: "2")
         )
@@ -56,11 +56,11 @@ struct CanonicalAccessibilityPredicateTests {
             from: JSONEncoder().encode(condition)
         ) == condition)
         #expect(try JSONDecoder().decode(
-            ChangeDeclaration.ElementAssertion.self,
+            ElementAssertion.self,
             from: JSONEncoder().encode(elementPresence)
         ) == elementPresence)
         #expect(try JSONDecoder().decode(
-            ChangeDeclaration.ElementAssertion.self,
+            ElementAssertion.self,
             from: JSONEncoder().encode(elementUpdate)
         ) == elementUpdate)
     }
@@ -89,7 +89,7 @@ struct CanonicalAccessibilityPredicateTests {
         }
         #expect(throws: DecodingError.self) {
             _ = try JSONDecoder().decode(
-                ChangeDeclaration.ElementAssertion.self,
+                ElementAssertion.self,
                 from: Data(#"{"type":"announcement"}"#.utf8)
             )
         }
@@ -169,15 +169,15 @@ struct CanonicalAccessibilityPredicateTests {
     func sourceRoundTrip() throws {
         let source = """
         HeistPlan {
-            WaitFor(.changed(.screen()))
-            WaitFor(.changed(.screen("Receipt")))
+            WaitFor(.screenChanged)
+            WaitFor(.screenChanged("Receipt"))
             WaitFor(.exists(.container(.identifier("Checkout"), ordinal: 1)))
         }
         """
         let plan = try HeistSourceCompilation.compile(source)
         let expected = try HeistPlan(body: [
-            .wait(WaitStep(predicate: .changed(.screen()), timeout: defaultWaitTimeout)),
-            .wait(WaitStep(predicate: .changed(.screen("Receipt")), timeout: defaultWaitTimeout)),
+            .wait(WaitStep(predicate: .screenChanged, timeout: defaultWaitTimeout)),
+            .wait(WaitStep(predicate: .screenChanged("Receipt"), timeout: defaultWaitTimeout)),
             .wait(WaitStep(
                 predicate: .exists(.container(.identifier("Checkout"), ordinal: 1)),
                 timeout: defaultWaitTimeout
@@ -185,8 +185,8 @@ struct CanonicalAccessibilityPredicateTests {
         ])
 
         #expect(plan == expected)
-        #expect(try plan.canonicalSwiftDSL().contains(".changed(.screen())"))
-        #expect(try plan.canonicalSwiftDSL().contains(".changed(.screen(\"Receipt\"))"))
+        #expect(try plan.canonicalSwiftDSL().contains(".screenChanged"))
+        #expect(try plan.canonicalSwiftDSL().contains(".screenChanged(\"Receipt\")"))
         #expect(try plan.canonicalSwiftDSL().contains(".container(.identifier(\"Checkout\"), ordinal: 1)"))
     }
 

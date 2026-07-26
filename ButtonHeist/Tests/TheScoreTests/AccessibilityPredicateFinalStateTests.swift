@@ -181,11 +181,11 @@ extension AccessibilityPredicateTests {
         let predicates: [AccessibilityPredicate] = [
             .exists(.label("Done")),
             .missing(.label("Loading")),
-            .changed(.screen()),
-            .changed(.elements()),
-            .changed(.elements([
+            .screenChanged,
+            .elementsChanged,
+            .elementsChanged([
                 .updated(.label("btn"), .value(before: "A", after: "B")),
-            ])),
+            ]),
         ]
         let encoder = JSONEncoder()
         let decoder = JSONDecoder()

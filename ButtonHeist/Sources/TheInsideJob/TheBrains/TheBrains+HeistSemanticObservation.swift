@@ -17,10 +17,11 @@ extension ResolvedAccessibilityPredicate {
         switch self {
         case .exists(let target), .missing(let target):
             return target.observationScope
-        // A screen boundary names no element, so it widens no scope.
-        case .changed(.screen):
+        // A screen boundary names no element, so it widens no scope. Neither
+        // does the settlement gate.
+        case .screenChanged, .noChange:
             return .visible
-        case .changed(.elements(let assertions)):
+        case .elementsChanged(let assertions):
             return assertions.map(\.observationScope).max() ?? .visible
         case .announcement:
             return .visible

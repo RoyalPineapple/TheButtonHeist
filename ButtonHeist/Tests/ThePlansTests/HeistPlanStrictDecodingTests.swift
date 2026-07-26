@@ -80,7 +80,7 @@ func `element update property checkers reject unknown fields`() {
     }
 
     expectUnknownField("nested frame update", contains: #"Unknown frame match field "unexpected""#) {
-        _ = try JSONDecoder().decode(ChangeDeclaration.ElementAssertion.self, from: Data("""
+        _ = try JSONDecoder().decode(ElementAssertion.self, from: Data("""
         {
           "type": "updated",
           "target": {

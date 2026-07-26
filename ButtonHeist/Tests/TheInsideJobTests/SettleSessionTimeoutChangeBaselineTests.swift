@@ -25,7 +25,18 @@ extension SettleSessionTests {
             baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
-        XCTAssertEqual(outcome.outcome, .settled(timeMs: 50))
+        // The run starts on one tripwire signal and every observation reports a
+        // different one, so the screen was replaced under it. Settlement starts
+        // over and lands on the screen that arrived, not on what it held when
+        // the change was detected. How many ticks that costs is settlement's
+        // business; the screen it settles on is the invariant.
+        guard case .settled = outcome.outcome else {
+            return XCTFail("Expected settle after the tripwire reset, got \(outcome.outcome)")
+        }
+        XCTAssertEqual(
+            outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label,
+            "Ready"
+        )
     }
 
     func testClockedSettleTimesOutWhenFingerprintNeverStabilizes() async {

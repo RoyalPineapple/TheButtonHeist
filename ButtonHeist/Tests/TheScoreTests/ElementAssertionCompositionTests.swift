@@ -99,7 +99,7 @@ final class ElementAssertionCompositionTests: XCTestCase {
     // MARK: - Helpers
 
     private func assertion(
-        _ assertion: ChangeDeclaration.ElementAssertion
+        _ assertion: ElementAssertion
     ) throws -> ResolvedElementAssertion {
         try assertion.resolve(in: .empty)
     }

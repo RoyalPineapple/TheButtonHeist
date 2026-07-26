@@ -401,9 +401,9 @@ final class AccessibilityPredicateTests: XCTestCase {
     func testExpectationResultEncodeDecode() throws {
         let result = ExpectationResult(
             met: false,
-            predicate: .changed(.elements([
+            predicate: .elementsChanged([
                 .updated(.label("counter"), .value(after: "hello")),
-            ])),
+            ]),
             actual: "counter: value: world → hell"
         )
         let data = try JSONEncoder().encode(result)
@@ -421,7 +421,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     func testExpectationResultRoundTrip() throws {
         let result = ExpectationResult(
             met: false,
-            predicate: .changed(.screen()),
+            predicate: .screenChanged,
             actual: "noChange"
         )
         let data = try JSONEncoder().encode(result)
