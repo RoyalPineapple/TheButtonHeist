@@ -21,8 +21,7 @@ extension Settlement.Readiness {
     internal enum Signal: Sendable, Equatable {
         case established(
             path: Path,
-            observationBoundary: ObservationBoundary,
-            delta: SettleDelta? = nil
+            observationBoundary: ObservationBoundary
         )
         case invalidated
     }
@@ -679,14 +678,13 @@ extension Settlement {
                     fact: .announcementHistoryUnavailable(gap),
                     instant: RuntimeElapsed.now
                 )
-            case .readiness(.established(let path, let observationBoundary, let delta)):
+            case .readiness(.established(let path, let observationBoundary)):
                 guard let generation = state.session?.readiness.generation else { return nil }
                 return AdmittedSettlementFact(
                     fact: .readinessEstablished(.init(
                         generation: generation,
                         path: path,
-                        observationBoundary: observationBoundary,
-                        delta: delta
+                        observationBoundary: observationBoundary
                     )),
                     instant: RuntimeElapsed.now
                 )
@@ -998,13 +996,11 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
                 baselineTripwireSignal: baselineTripwireSignal,
                 timeoutMs: max(1, Int((timeout / .milliseconds(1)).rounded(.up)))
             )
-            guard case .committed(let event) = settlement.commitOutcome,
-                  settlement.settleResult.outcome.didSettleCleanly else { return }
+            guard case .committed(let event) = settlement.commitOutcome else { return }
             lifecycle.requestNotificationWindowConsumption()
             sink.observeReadiness(.established(
                 path: .semanticStability,
-                observationBoundary: .including(event.moment),
-                delta: settlement.settleResult.delta
+                observationBoundary: .including(event.moment)
             ))
         }
     }

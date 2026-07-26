@@ -79,30 +79,28 @@ extension Navigation {
                 || (!Task.isCancelled && hasTimeRemaining(before: deadline))
         else { return nil }
         let timeoutMs = min(
-            SettleSession.viewportTransitionTimeoutMs,
+            SemanticObservationTiming.viewportTransitionTimeoutMs,
             deadline.map { max(1, Int(($0.remainingSeconds() * 1_000).rounded(.up))) } ?? .max
         )
         let transitionDeadline = SemanticObservationDeadline(start: RuntimeElapsed.now, timeoutMs: timeoutMs)
         repeat {
-            let settleTimeoutMs = max(1, Int((transitionDeadline.remainingSeconds() * 1_000).rounded(.up)))
-            let settle = await SettleSession.viewportTransition(
-                vault: vault,
-                tripwire: tripwire,
-                timeoutMs: settleTimeoutMs
-            ).run(
-                start: RuntimeElapsed.now,
-                baselineTripwireSignal: tripwire.tripwireSignal()
+            // A page is read on the tick, not after a loop agrees the tree
+            // stopped: the hash comparison that used to gate this now happens in
+            // the store, and the reading either moved the graph or produced the
+            // stillness tick that says it did not.
+            _ = await tripwire.waitForNextTick(
+                timeout: transitionDeadline.remainingDuration(at: RuntimeElapsed.now),
+                demand: .immediate
             )
             guard afterViewportMovement || !Task.isCancelled else { return nil }
             let transitionCanSettleAgain = transitionDeadline.remainingSeconds() * 1_000
-                >= Double(SettleSession.viewportTransitionMinimumBudgetMs)
+                >= Double(SemanticObservationTiming.viewportTransitionMinimumBudgetMs)
             if let previousViewportHash,
-               settle.finalObservation?.observation.tree.interfaceHash == previousViewportHash,
+               vault.latestObservation.tree.interfaceHash == previousViewportHash,
                transitionCanSettleAgain {
                 continue
             }
             if let event = await vault.semanticObservationStream.commitSettledDiscoveryObservation(
-                settle,
                 discoveryCommitPolicy: discoveryCommitPolicy,
                 afterViewportMovement: afterViewportMovement,
                 notificationBatch: notificationWindow?.capture()

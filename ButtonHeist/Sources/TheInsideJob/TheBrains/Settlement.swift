@@ -282,21 +282,15 @@ extension Settlement.Readiness {
         internal let generation: Generation
         internal let path: Path
         internal let observationBoundary: ObservationBoundary
-        /// What the settle loop's final comparison actually saw. `nil` when
-        /// readiness came from a path that runs no diff (current-state
-        /// capture). This is the raw change data the settle seam used to drop.
-        internal let delta: SettleDelta?
 
         internal init(
             generation: Generation,
             path: Path,
-            observationBoundary: ObservationBoundary,
-            delta: SettleDelta? = nil
+            observationBoundary: ObservationBoundary
         ) {
             self.generation = generation
             self.path = path
             self.observationBoundary = observationBoundary
-            self.delta = delta
         }
     }
 
@@ -318,11 +312,6 @@ extension Settlement.Readiness {
             }
         }
 
-        /// The observation change that established readiness, once it has.
-        internal var delta: SettleDelta? {
-            guard case .established(let establishment) = self else { return nil }
-            return establishment.delta
-        }
     }
 }
 

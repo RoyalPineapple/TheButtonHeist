@@ -6,7 +6,7 @@ import TheScore
 
 @MainActor
 final class InteractionCoordinator {
-    private static let defaultVisibleStateTimeout = Double(SettleSession.defaultTimeoutMs) / 1_000
+    private static let defaultVisibleStateTimeout = Double(SemanticObservationTiming.defaultTimeoutMs) / 1_000
 
     private let vault: TheVault
 

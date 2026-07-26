@@ -4,6 +4,16 @@ import Foundation
 
 enum SemanticObservationTiming {
     static let defaultTimeout: Double = 1
+
+    /// How long a caller waits on a reading before the timeout answers instead.
+    /// Timeout is the only failure, so this is the only budget there is.
+    static let defaultTimeoutMs: Int = 5_000
+
+    static let viewportTransitionTimeoutMs = Int(defaultTimeout * 1_000)
+
+    /// Below this there is no point starting a viewport transition: the move
+    /// would not have time to be read before the budget ran out.
+    static let viewportTransitionMinimumBudgetMs = 32
 }
 
 struct SemanticObservationDeadline: Sendable, Equatable {

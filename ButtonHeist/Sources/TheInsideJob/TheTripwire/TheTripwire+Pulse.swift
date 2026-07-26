@@ -121,7 +121,7 @@ extension TheTripwire {
     /// of layout passes (post-scroll CATransaction flush, intra-swipe
     /// frame stepping) without subscribing to the persistent pulse. For
     /// signal-driven waits, see `waitForNextTick` (tick) or
-    /// `SettleSession` (AX tree).
+    /// the observation stream (AX tree).
     func yieldFrames(_ count: Int) async {
         for _ in 0..<count {
             CATransaction.flush()

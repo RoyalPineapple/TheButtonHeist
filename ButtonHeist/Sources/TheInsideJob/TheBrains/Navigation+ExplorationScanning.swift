@@ -407,7 +407,7 @@ extension Navigation {
 
             let restorationDeadline = SemanticObservationDeadline(
                 start: RuntimeElapsed.now,
-                timeoutMs: SettleSession.viewportTransitionTimeoutMs
+                timeoutMs: SemanticObservationTiming.viewportTransitionTimeoutMs
             )
             for viewportOrigin in state.origins.reversed() {
                 switch await restoreOrigin(

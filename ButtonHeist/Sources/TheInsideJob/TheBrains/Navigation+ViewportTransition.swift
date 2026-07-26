@@ -60,7 +60,7 @@ extension Navigation {
             guard case .restoreVisualOrigin = intent else { return .unavailable() }
         }
         guard deadline.map({
-                  $0.remainingSeconds() >= Double(SettleSession.viewportTransitionMinimumBudgetMs) / 1_000
+                  $0.remainingSeconds() >= Double(SemanticObservationTiming.viewportTransitionMinimumBudgetMs) / 1_000
               }) ?? true
         else { return .unavailable() }
         let previousViewportHash = vault.latestObservation.tree.viewportOnly.interfaceHash
