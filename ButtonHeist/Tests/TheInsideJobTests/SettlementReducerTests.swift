@@ -92,7 +92,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         XCTAssertFalse(decision.effects.contains(where: \.armsChannels))
     }
 
-    func testArmedAndActiveTerminalCausesEnterQuiescenceWithoutResult() async {
+    func testArmedAndActiveTerminalCausesEnterFinalizationWithoutResult() async {
         let baseline = await commit(label: "Baseline")
         var armed = Settlement.Reducer.begin(.observation(
             predicate: transitionPredicate(),
@@ -106,7 +106,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             ("armed", reduce(armed, .cancelled)),
             ("active", reduce(active, .cancelled)),
         ] {
-            assertQuiescing(decision, name)
+            assertFinalizing(decision, name)
         }
     }
 
@@ -131,7 +131,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             .retained,
             .superseded,
         ] {
-            let decision = reduce(settled, .quiesced(viewportExit))
+            let decision = reduce(settled, .finalized(viewportExit))
             guard case .terminal(.action(.settled)) = decision.state else {
                 return XCTFail("Expected \(viewportExit) to preserve settled action")
             }
@@ -149,7 +149,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         ] {
             let decision = reduce(
                 intended,
-                .quiesced(.failed(.originUnavailable))
+                .finalized(.failed(.originUnavailable))
             )
             guard case .terminal(let result) = decision.state else {
                 return XCTFail("Expected failed viewport exit to terminalize \(name)")
@@ -177,7 +177,8 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
                 observationBoundary: .including(ready.moment)
             ))
         )
-        decision = completeQuiescence(decision)
+        guard let finalized = completeFinalization(decision) else { return }
+        decision = finalized
         guard case .terminal(.action(.settled(let result))) = decision.state else {
             return XCTFail("Expected settled action")
         }
@@ -238,7 +239,8 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             ))
         )
 
-        decision = completeQuiescence(decision)
+        guard let finalized = completeFinalization(decision) else { return }
+        decision = finalized
         guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected only the active readiness generation to admit a handoff")
         }
@@ -274,7 +276,8 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             ))
         )
 
-        decision = completeQuiescence(decision)
+        guard let finalized = completeFinalization(decision) else { return }
+        decision = finalized
         guard case .terminal(let result) = decision.state else {
             return XCTFail("Expected failed handoff capture to time out")
         }
@@ -591,26 +594,38 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         )
     }
 
-    private func completeQuiescence(
+    /// Drives a finalizing decision to its terminal state.
+    ///
+    /// Returns `nil` rather than reducing when the decision is not finalizing.
+    /// `.finalized` is only legal from `.finalizing`; the reducer traps on it
+    /// anywhere else, and `XCTFail` does not stop the caller. Continuing past a
+    /// failed precondition would turn one wrong expectation into a
+    /// `preconditionFailure` that takes down the test host and reports every
+    /// test after it as failed.
+    private func completeFinalization(
         _ decision: Settlement.Decision,
         viewportExit: Navigation.ViewportExit.Outcome = .restored
-    ) -> Settlement.Decision {
-        assertQuiescing(decision)
-        return reduce(decision, .quiesced(viewportExit))
+    ) -> Settlement.Decision? {
+        guard assertFinalizing(decision) else { return nil }
+        return reduce(decision, .finalized(viewportExit))
     }
 
-    private func assertQuiescing(
+    @discardableResult
+    private func assertFinalizing(
         _ decision: Settlement.Decision,
         _ message: String = ""
-    ) {
+    ) -> Bool {
         XCTAssertNil(decision.state.result, message)
-        guard case .quiescing = decision.state else {
-            return XCTFail("Expected Settlement to quiesce before terminal state \(message)")
+        guard case .finalizing = decision.state else {
+            XCTFail("Expected Settlement to finalize before terminal state \(message)")
+            return false
         }
         XCTAssertEqual(decision.effects.count, 1, message)
-        guard case .quiesce = decision.effects.first else {
-            return XCTFail("Expected exactly one quiescence effect \(message)")
+        guard case .finalize = decision.effects.first else {
+            XCTFail("Expected exactly one finalization effect \(message)")
+            return false
         }
+        return true
     }
 }
 
@@ -660,7 +675,7 @@ private extension Array where Element == Settlement.Effect {
                  .arm,
                  .armReadiness,
                  .dispatchAction,
-                 .quiesce:
+                 .finalize:
                 nil
             }
         }.first

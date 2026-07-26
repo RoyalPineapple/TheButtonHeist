@@ -63,7 +63,6 @@ extension Navigation {
                   $0.remainingSeconds() >= Double(SemanticObservationTiming.viewportTransitionMinimumBudgetMs) / 1_000
               }) ?? true
         else { return .unavailable() }
-        let previousViewportHash = vault.latestObservation.tree.viewportPageKey
         let previousVisibleIds = vault.viewportElementIDs
         let notificationWindow = vault.accessibilityNotifications.beginActionWindow()
         let primitiveOutcome = await dispatchViewportMovement(intent)
@@ -73,7 +72,7 @@ extension Navigation {
                 deadline: deadline,
                 discoveryCommitPolicy: discoveryCommitPolicy,
                 notificationWindow: notificationWindow,
-                previousViewportHash: previousViewportHash
+                afterViewportMovement: true
             )
             guard let event else {
                 return .unavailable(previousVisibleIds: previousVisibleIds)

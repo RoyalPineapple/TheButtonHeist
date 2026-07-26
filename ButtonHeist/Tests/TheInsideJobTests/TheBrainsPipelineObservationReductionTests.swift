@@ -30,15 +30,14 @@ extension TheBrainsPipelineTests {
             newScreenEvent.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
             [.screenChanged]
         )
+        // A boundary is three facts in causal order: the old screen's nodes
+        // depart, the identity moves, the new screen's nodes arrive. The two
+        // screens carry the same element here, but no element identity survives
+        // a replacement — the header on the new screen is a new object, so it
+        // arrives rather than persisting.
         XCTAssertEqual(
             transitionTrace.changeFacts.map(\.kind),
-            [.screenChanged]
-        )
-        XCTAssertTrue(
-            transitionTrace.changeFacts.allSatisfy { fact in
-                if case .elementsChanged = fact { false } else { true }
-            },
-            "A new screen generation replaces the baseline; it is not an element change"
+            [.elementsChanged, .screenChanged, .elementsChanged]
         )
 
         let newBaseline = try XCTUnwrap(newScreenEvent.moment)
@@ -110,7 +109,7 @@ extension TheBrainsPipelineTests {
         )
         XCTAssertEqual(
             after.trace.changeFacts.map(\.kind),
-            [.screenChanged]
+            [.elementsChanged, .screenChanged, .elementsChanged]
         )
     }
 
@@ -207,9 +206,23 @@ extension TheBrainsPipelineTests {
             after.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
             [.unknown(4_002)]
         )
-        XCTAssertEqual(after.trace.changeFacts.map(\.kind), [.screenChanged])
+        XCTAssertEqual(
+            after.trace.changeFacts.map(\.kind),
+            [.elementsChanged, .screenChanged, .elementsChanged]
+        )
     }
 
+    /// The two directions are not symmetric, and the asymmetry is the point.
+    ///
+    /// A boundary is projected as three ticks — the old screen's nodes depart,
+    /// the identity moves, the new screen's nodes arrive — and the lifecycle
+    /// legs are ordinary element ticks. A predicate reads ticks and cannot ask
+    /// whether a screen change sits between two of them, so `.elementsChanged`
+    /// matches a boundary; having it detect and decline one would put back the
+    /// coupling that projecting three ticks exists to remove.
+    ///
+    /// The reverse does not hold. A same-screen change produces no screen tick
+    /// at all, so `.screenChanged` has nothing to read and stays unmet.
     func testChangePredicatesReadScreenAndElementFactsSeparately() async throws {
         _ = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Menu", .header, "menu_header")])
@@ -234,8 +247,7 @@ extension TheBrainsPipelineTests {
             predicate: elementExpression
         )
         XCTAssertTrue(screenPredicate.met)
-        XCTAssertFalse(elementPredicateAgainstScreen.met)
-        XCTAssertEqual(elementPredicateAgainstScreen.actual, "screenChanged")
+        XCTAssertTrue(elementPredicateAgainstScreen.met)
 
         _ = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")

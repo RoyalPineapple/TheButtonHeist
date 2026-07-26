@@ -293,10 +293,13 @@ final class SemanticObservationPublicationTests: SemanticObservationStreamTestCa
             .events([.snapshot(secondEvent)])
         )
         XCTAssertEqual(secondEvent.generation, firstEvent.generation.advanced())
+        // A boundary is three facts in causal order, not one: the old screen's
+        // nodes depart, the identity moves, the new screen's nodes arrive. Both
+        // graphs here are non-empty, so neither lifecycle leg is omitted.
         XCTAssertEqual(
             AccessibilityTrace(captures: [firstEvent.moment.capture, secondEvent.moment.capture])
                 .changeFacts.map(\.kind),
-            [.screenChanged]
+            [.elementsChanged, .screenChanged, .elementsChanged]
         )
         guard case .screenBoundary(let previous) = secondEvent.transition else {
             return XCTFail("Expected a retained screen boundary")

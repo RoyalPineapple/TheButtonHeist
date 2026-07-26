@@ -74,27 +74,6 @@ struct InterfaceTree: Sendable, Equatable {
         return frames
     }
 
-    /// Which page of a scrolling container the viewport is showing.
-    ///
-    /// Exploration asks this to decide whether a scroll actually revealed
-    /// anything, and `interfaceHash` alone cannot answer: it excludes geometry
-    /// on purpose, so a list scrolled by one row has the same semantic hash as a
-    /// list that never moved — same labels, different frames. Pairing the two
-    /// makes the frames count.
-    ///
-    /// A digest and not a tolerance, deliberately. This is page *identity*, not
-    /// the stillness question: two readings of the same page must produce the
-    /// same key, and there is no earlier frame here to measure a distance
-    /// against. Sub-pixel drift is not a concern because the caller compares
-    /// pages across a deliberate scroll, not across a layout pass.
-    var viewportPageKey: String {
-        let placements = viewportFrames
-            .sorted { $0.key < $1.key }
-            .map { "\($0.key):\($0.value.origin.x),\($0.value.origin.y)" }
-            .joined(separator: ";")
-        return viewportOnly.interfaceHash + "|" + placements
-    }
-
     /// Hash of semantic accessibility state. Deliberately excludes
     /// viewport-only facts like live object refs, visible ids, current scroll
     /// offset, and live geometry.

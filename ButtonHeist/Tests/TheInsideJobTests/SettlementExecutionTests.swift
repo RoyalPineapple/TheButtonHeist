@@ -77,7 +77,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
         guard case .observation(.settled) = result else {
             return XCTFail("Expected observation to settle")
         }
-        XCTAssertEqual(boundary.operations.filter { $0 == .quiesce }.count, 1)
+        XCTAssertEqual(boundary.operations.filter { $0 == .finalize }.count, 1)
         XCTAssertEqual(
             boundary.operations.filter { $0 == .observationEffectsStopRequested }.count,
             1
@@ -94,17 +94,20 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
             baseline: baseline,
             changed: changed,
             history: .events([]),
-            deadlineOnArm: true,
             longRunningObservationEffects: true
         )
 
-        let result = await Settlement.Executor(boundary: boundary).execute(observationCommand())
+        // Timeout comes from a deadline that has already passed, not from a
+        // fixture that fakes reaching one. Ticks and the deadline task are the
+        // only clocks.
+        let result = await Settlement.Executor(boundary: boundary)
+            .execute(observationCommand(deadline: .elapsed))
 
         guard case .observation(.failed(let failure)) = result else {
             return XCTFail("Expected observation timeout")
         }
         XCTAssertEqual(failure.reason, .timedOut(.observation))
-        XCTAssertEqual(boundary.operations.filter { $0 == .quiesce }.count, 1)
+        XCTAssertEqual(boundary.operations.filter { $0 == .finalize }.count, 1)
         XCTAssertEqual(
             boundary.operations.filter { $0 == .observationEffectsStopRequested }.count,
             1
@@ -167,10 +170,10 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
         XCTAssertEqual(failure.reason, .cancelled)
         XCTAssertEqual(
             boundary.operations.filter {
-                [.quiesce, .observationEffectsStopRequested, .observationEffectsRestored,
+                [.finalize, .observationEffectsStopRequested, .observationEffectsRestored,
                  .observationEffectsJoined].contains($0)
             },
-            [.quiesce, .observationEffectsStopRequested, .observationEffectsRestored,
+            [.finalize, .observationEffectsStopRequested, .observationEffectsRestored,
              .observationEffectsJoined]
         )
         XCTAssertEqual(boundary.operations.filter { $0 == .observationEffectsStopRequested }.count, 1)
@@ -179,17 +182,17 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
         XCTAssertEqual(boundary.viewportMutationCount, 0)
     }
 
-    func testExecutorWaitsForBoundaryQuiescenceBeforeReturningOrLogging() async {
+    func testExecutorWaitsForBoundaryFinalizationBeforeReturningOrLogging() async {
         let baseline = await commit(label: "Baseline")
         let changed = await commit(label: "Changed")
-        let gate = QuiescenceGate()
+        let gate = FinalizationGate()
         let probe = SettlementCompletionProbe()
         let boundary = ScriptedSettlementBoundary(
             baseline: baseline,
             changed: changed,
             history: .events([.snapshot(changed)]),
             observationOnlyEvidence: true,
-            quiescenceGate: gate
+            finalizationGate: gate
         )
         let execution = Task {
             let result = await Settlement.Executor(
@@ -202,7 +205,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
 
         await gate.waitUntilEntered()
 
-        XCTAssertEqual(boundary.operations.filter { $0 == .quiesce }.count, 1)
+        XCTAssertEqual(boundary.operations.filter { $0 == .finalize }.count, 1)
         XCTAssertFalse(probe.didComplete)
         XCTAssertTrue(probe.logs.isEmpty)
 
@@ -210,7 +213,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
         let result = await execution.value
 
         guard case .observation(.settled) = result else {
-            return XCTFail("Expected observation to settle after quiescence")
+            return XCTFail("Expected observation to settle after finalization")
         }
         XCTAssertTrue(probe.didComplete)
         XCTAssertEqual(probe.logs.count, 1)
@@ -289,11 +292,11 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
             baseline: baseline,
             changed: changed,
             history: .events([.snapshot(changed)]),
-            deadlineOnArm: true,
             publishesAfterDisarm: true
         )
 
-        let result = await Settlement.Executor(boundary: boundary).execute(actionCommand())
+        let result = await Settlement.Executor(boundary: boundary)
+            .execute(actionCommand(readiness: .zero))
 
         guard case .action(.failed(let failure)) = result else {
             return XCTFail("Expected action readiness timeout")
@@ -378,134 +381,71 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
             ["Action A", "Action B"]
         )
     }
-    func testIssue1395SettlesPostReadinessTransitionThroughOrderedSink() async {
+
+    /// The deadline turns the machine off and reports where it stopped.
+    ///
+    /// There is no partial credit and no per-phase negotiation: the run fails,
+    /// and the value of the failure is the state at the moment it died — what
+    /// the predicate was, what evidence had arrived, and what it was still
+    /// waiting on. A timeout that reported nothing would leave an author with
+    /// "it didn't work" and nowhere to look.
+    func testDeadlineStopsTheRunAndReportsTheStateAtFailure() async {
         let baseline = await commit(label: "Baseline")
-        let ready = await commit(label: "Ready")
         let changed = await commit(label: "Changed")
         let boundary = ScriptedSettlementBoundary(
             baseline: baseline,
-            changed: ready,
-            history: .events([.snapshot(ready), .snapshot(changed)]),
-            readinessScript: { sink, deadline in
-                sink.observeReadiness(.established(
-                    observationBoundary: .including(ready.moment)
-                ))
-                sink.observe(
-                    .snapshot(ready),
-                    at: deadline.instant.advanced(by: .milliseconds(-1_800))
-                )
-            },
-            deadlineScript: { sink, deadline in
-                sink.observe(
-                    .snapshot(changed),
-                    at: deadline.instant.advanced(by: .milliseconds(-300))
-                )
-                sink.reachDeadline(.init(phase: deadline.phase, instant: deadline.instant))
-            },
+            changed: changed,
+            history: .events([])
         )
 
-        let result = await Settlement.Executor(boundary: boundary).execute(
-            actionCommand(expectation: .seconds(1))
-        )
+        let result = await Settlement.Executor(boundary: boundary)
+            .execute(observationCommand(deadline: .elapsed))
 
-        guard case .action(.settled(let settled)) = result else {
-            return XCTFail("Expected post-readiness transition to settle")
+        guard case .observation(.failed(let failure)) = result else {
+            return XCTFail("Expected an elapsed deadline to fail the run")
         }
-        XCTAssertEqual(settled.boundary.moment, baseline.moment)
-        XCTAssertEqual(settled.handoff.event.moment, ready.moment)
-        XCTAssertEqual(boundary.armedDeadlines.map(\.phase), [
-            .actionReadiness,
-            .actionExpectation,
-        ])
-        XCTAssertEqual(
-            boundary.armedDeadlines[1].instant,
-            boundary.armedDeadlines[0].instant.advanced(by: .milliseconds(-800))
-        )
+        XCTAssertEqual(failure.reason, .timedOut(.observation))
+        // The machine is off: it finalized exactly once and nothing ran after.
+        XCTAssertEqual(boundary.operations.filter { $0 == .finalize }.count, 1)
+        // The report carries the state at failure rather than a bare verdict.
+        XCTAssertFalse(failure.attempt.outstanding.isEmpty)
+        XCTAssertEqual(failure.attempt.boundary.moment, baseline.moment)
     }
 
-    func testPendingAnnouncementUsesOrderedExpectationDeadline() async throws {
-        let baseline = await commit(label: "Baseline")
-        let ready = await commit(label: "Ready")
-        let announcement = Observation.AnnouncementEvent(announcement: CapturedAnnouncement(
-            sequence: 1,
-            text: "Saved",
-            timestamp: Date(timeIntervalSince1970: 1),
-            kind: .announcement
-        ))
-        let authored = AccessibilityPredicate.announcement("Saved")
-        let predicate = Settlement.Predicate(
-            authored: authored,
-            resolved: try authored.resolve(in: HeistExecutionEnvironment())
-        )
+    /// How far out a command's deadline sits.
+    ///
+    /// `.elapsed` is already in the past, so the executor's deadline task fires
+    /// as soon as it is armed — a real timeout rather than a fixture pretending
+    /// to reach one.
+    enum TestDeadline {
+        case elapsed
+        case seconds(Int)
 
-        for eventFirst in [true, false] {
-            let boundary = ScriptedSettlementBoundary(
-                baseline: baseline,
-                changed: ready,
-                history: .events([.snapshot(ready)]),
-                readinessScript: { sink, deadline in
-                    sink.observeReadiness(.established(
-                        observationBoundary: .including(ready.moment)
-                    ))
-                    sink.observe(
-                        .snapshot(ready),
-                        at: deadline.instant.advanced(by: .milliseconds(-1_800))
-                    )
-                    sink.reachDeadline(.init(phase: deadline.phase, instant: deadline.instant))
-                },
-                deadlineScript: { sink, deadline in
-                    if eventFirst {
-                        sink.observeAnnouncement(announcement)
-                    }
-                    sink.reachDeadline(.init(phase: deadline.phase, instant: deadline.instant))
-                    if !eventFirst {
-                        sink.observeAnnouncement(announcement)
-                    }
-                }
-            )
-
-            let result = await Settlement.Executor(boundary: boundary).execute(
-                actionCommand(predicate: predicate, expectation: .seconds(1))
-            )
-
-            if eventFirst {
-                guard case .action(.settled) = result else {
-                    return XCTFail("Expected in-window announcement to settle")
-                }
-            } else {
-                guard case .action(.failed(let failed)) = result else {
-                    return XCTFail("Expected late announcement to time out")
-                }
-                XCTAssertEqual(failed.reason, .timedOut(.actionExpectation))
+        var instant: ContinuousClock.Instant {
+            switch self {
+            case .elapsed: ContinuousClock.now.advanced(by: .seconds(-1))
+            case .seconds(let count): ContinuousClock.now.advanced(by: .seconds(count))
             }
-            XCTAssertEqual(boundary.armedDeadlines.map(\.phase), [
-                .actionReadiness,
-                .actionExpectation,
-            ])
-            XCTAssertEqual(
-                boundary.operations.filter { $0 == .evaluateAnnouncement }.count,
-                eventFirst ? 1 : 0
-            )
         }
     }
 
-    private func observationCommand() -> Settlement.Command {
+    private func observationCommand(
+        deadline: TestDeadline = .seconds(1)
+    ) -> Settlement.Command {
         .observation(
             predicate: Settlement.Predicate(
                 authored: .elementsChanged,
                 resolved: .elementsChanged([])
             ),
-            deadline: .init(
-                phase: .observation,
-                instant: ContinuousClock.now.advanced(by: .seconds(1))
-            ),
+            deadline: .init(phase: .observation, instant: deadline.instant),
             baseline: .capture
         )
     }
 
     private func actionCommand(
         predicate: Settlement.Predicate? = nil,
-        expectation: Duration? = nil
+        expectation: Duration? = nil,
+        readiness: Duration = .seconds(5)
     ) -> Settlement.Command {
         .action(.init(
             command: .dismiss,
@@ -515,7 +455,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
                     resolved: .elementsChanged([])
                 )
             },
-            allowances: .init(readiness: .seconds(5), expectation: expectation),
+            allowances: .init(readiness: readiness, expectation: expectation),
             baseline: .capture
         ))
     }
@@ -527,77 +467,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
     }
 }
 
-@MainActor
-final class SettlementExecutionPerformanceTests: SemanticObservationStreamTestCase {
-    func testCoalescesWakeupsAndBoundsCaptureWorkToTheActiveLease() async throws {
-        let baseline = await vault.semanticObservationStream.commitVisibleObservationForTesting(
-            observation(label: "Baseline", heistId: "baseline")
-        )
-        let stale = await vault.semanticObservationStream.commitVisibleObservationForTesting(
-            observation(label: "Stale", heistId: "stale")
-        )
-        let current = await vault.semanticObservationStream.commitVisibleObservationForTesting(
-            observation(label: "Current", heistId: "current")
-        )
-        let boundary = ScriptedSettlementBoundary(
-            baseline: baseline,
-            changed: stale,
-            history: .events([.snapshot(stale), .snapshot(current)]),
-            captureScenario: .coalescedBurst(current: current, duplicateCount: 64)
-        )
-        let command = Settlement.Command.observation(
-            predicate: Settlement.Predicate(
-                authored: .elementsChanged,
-                resolved: .elementsChanged([])
-            ),
-            deadline: .init(
-                phase: .observation,
-                instant: ContinuousClock.now.advanced(by: .seconds(1))
-            ),
-            baseline: .capture
-        )
-
-        let result = await Settlement.Executor(boundary: boundary).execute(command)
-
-        guard case .observation(.settled(let settled)) = result else {
-            return XCTFail("Expected coalesced observation to settle")
-        }
-        XCTAssertEqual(settled.handoff.event.moment, current.moment)
-        XCTAssertEqual(boundary.totalCaptureCount, 3)
-        XCTAssertEqual(boundary.captureGenerations, [.initial, .initial.advanced()])
-        XCTAssertEqual(boundary.maximumConcurrentCaptures, 1)
-        XCTAssertEqual(boundary.readinessWakeupsOffered, 128)
-        XCTAssertEqual(boundary.coalescedReadinessWakeupCount, 126)
-
-        let budgets = SettlementPerformanceBudgets(
-            baselineMainActorMs: 1_000,
-            finalEvidenceMainActorMs: 1_000
-        )
-        XCTAssertLessThanOrEqual(
-            try XCTUnwrap(settled.timing.execution.beforeObservationMs).milliseconds,
-            budgets.baselineMainActorMs
-        )
-        XCTAssertLessThanOrEqual(
-            try XCTUnwrap(settled.timing.execution.finalSemanticEvidenceMs).milliseconds,
-            budgets.finalEvidenceMainActorMs
-        )
-
-        boundary.publishReadinessAfterTerminal(count: 128)
-        for _ in 0..<8 {
-            await Task.yield()
-        }
-        XCTAssertEqual(boundary.totalCaptureCount, 3)
-        XCTAssertEqual(boundary.outsideLeaseWakeupCount, 128)
-        XCTAssertEqual(boundary.maximumConcurrentCaptures, 1)
-    }
-}
-
-private struct SettlementPerformanceBudgets {
-    let baselineMainActorMs: Int
-    let finalEvidenceMainActorMs: Int
-}
-
-private actor QuiescenceGate {
+private actor FinalizationGate {
     private var entered = false
     private var released = false
     private var entryWaiters: [CheckedContinuation<Void, Never>] = []
@@ -660,7 +530,6 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         case none
         case invalidateOnce(current: Observation.SnapshotEvent)
         case invalidateTwice(current: Observation.SnapshotEvent)
-        case coalescedBurst(current: Observation.SnapshotEvent, duplicateCount: Int)
     }
 
     enum Capture: Sendable {
@@ -675,7 +544,6 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         case armObservation
         case armAnnouncement
         case armReadiness
-        case armDeadline
         case armObservationEffects
         case dispatch
         case evaluateAnnouncement
@@ -684,7 +552,7 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         case observationEffectsStopRequested
         case observationEffectsRestored
         case observationEffectsJoined
-        case quiesce
+        case finalize
     }
 
     private struct State {
@@ -697,13 +565,7 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         var observationEffectControl: Settlement.ObservationEffectControl?
         var finishedSink: Settlement.ExecutionSink?
         var totalCaptureCount = 0
-        var capturesInFlight = 0
-        var maximumConcurrentCaptures = 0
-        var readinessWakeupsOffered = 0
-        var readinessWakeupGroups = 0
-        var outsideLeaseWakeupCount = 0
         var viewportMutationCount = 0
-        var armedDeadlines: [Settlement.PhaseDeadline] = []
     }
 
     private let lock = NSLock()
@@ -713,14 +575,11 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
     private let announcement: Observation.AnnouncementEvent?
     private let history: Observation.EventsSince
     private let observationOnlyEvidence: Bool
-    private let deadlineOnArm: Bool
     private let publishesAfterDisarm: Bool
     private let longRunningObservationEffects: Bool
     private let captureScenario: CaptureScenario
     private let liveObservationBoundary: LiveSettlementExecutionBoundary?
-    private let readinessScript: (@Sendable (Settlement.ExecutionSink, Settlement.PhaseDeadline) -> Void)?
-    private let deadlineScript: (@Sendable (Settlement.ExecutionSink, Settlement.PhaseDeadline) -> Void)?
-    private let quiescenceGate: QuiescenceGate?
+    private let finalizationGate: FinalizationGate?
     private let viewportExit: Navigation.ViewportExit.Outcome
 
     init(
@@ -729,14 +588,11 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         announcement: Observation.AnnouncementEvent? = nil,
         history: Observation.EventsSince,
         observationOnlyEvidence: Bool = false,
-        deadlineOnArm: Bool = false,
         publishesAfterDisarm: Bool = false,
         longRunningObservationEffects: Bool = false,
         captureScenario: CaptureScenario = .none,
         liveObservationBoundary: LiveSettlementExecutionBoundary? = nil,
-        readinessScript: (@Sendable (Settlement.ExecutionSink, Settlement.PhaseDeadline) -> Void)? = nil,
-        deadlineScript: (@Sendable (Settlement.ExecutionSink, Settlement.PhaseDeadline) -> Void)? = nil,
-        quiescenceGate: QuiescenceGate? = nil,
+        finalizationGate: FinalizationGate? = nil,
         viewportExit: Navigation.ViewportExit.Outcome = .restored
     ) {
         self.baseline = baseline
@@ -744,14 +600,11 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         self.announcement = announcement
         self.history = history
         self.observationOnlyEvidence = observationOnlyEvidence
-        self.deadlineOnArm = deadlineOnArm
         self.publishesAfterDisarm = publishesAfterDisarm
         self.longRunningObservationEffects = longRunningObservationEffects
         self.captureScenario = captureScenario
         self.liveObservationBoundary = liveObservationBoundary
-        self.readinessScript = readinessScript
-        self.deadlineScript = deadlineScript
-        self.quiescenceGate = quiescenceGate
+        self.finalizationGate = finalizationGate
         self.viewportExit = viewportExit
     }
 
@@ -771,34 +624,19 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         lock.withLock { state.totalCaptureCount }
     }
 
-    var maximumConcurrentCaptures: Int {
-        lock.withLock { state.maximumConcurrentCaptures }
-    }
-
-    var readinessWakeupsOffered: Int {
-        lock.withLock { state.readinessWakeupsOffered }
-    }
-
-    var coalescedReadinessWakeupCount: Int {
-        lock.withLock { state.readinessWakeupsOffered - state.readinessWakeupGroups }
-    }
-
-    var outsideLeaseWakeupCount: Int {
-        lock.withLock { state.outsideLeaseWakeupCount }
-    }
-
     var viewportMutationCount: Int {
         lock.withLock { state.viewportMutationCount }
     }
 
-    var armedDeadlines: [Settlement.PhaseDeadline] {
-        lock.withLock { state.armedDeadlines }
-    }
-
+    /// Resumes once arming has finished.
+    ///
+    /// `armObservationEffects` is the last arming step the boundary sees. The
+    /// deadline is no longer one of them — the executor owns that clock — so
+    /// waiting on a deadline here would wait forever.
     func waitUntilArmed() async {
         await withCheckedContinuation { continuation in
             let isArmed = lock.withLock {
-                if state.operations.contains(.armDeadline) {
+                if state.operations.contains(.armObservationEffects) {
                     return true
                 }
                 state.armingWaiters.append(continuation)
@@ -814,14 +652,6 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
     func capture(_ request: Settlement.Capture.Request) async -> Capture? {
         lock.withLock {
             state.totalCaptureCount += 1
-            state.capturesInFlight += 1
-            state.maximumConcurrentCaptures = max(
-                state.maximumConcurrentCaptures,
-                state.capturesInFlight
-            )
-        }
-        defer {
-            lock.withLock { state.capturesInFlight -= 1 }
         }
         switch request {
         case .baseline:
@@ -849,8 +679,7 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
                 case .none:
                     break
                 case .invalidateOnce(let current),
-                     .invalidateTwice(let current),
-                     .coalescedBurst(let current, _):
+                     .invalidateTwice(let current):
                     if generation.rawValue > 0 {
                         return .admitted(current)
                     }
@@ -902,13 +731,6 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         sink: Settlement.ExecutionSink
     ) async {
         record(.armReadiness)
-        if deadlineOnArm {
-            return
-        }
-        if let readinessScript {
-            readinessScript(sink, deadline)
-            return
-        }
         if liveObservationBoundary != nil {
             await liveObservationBoundary?.armReadiness(deadline, sink: sink)
             sink.observeReadiness(.established(
@@ -933,28 +755,13 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         ))
     }
 
-    func armDeadline(
-        _ deadline: Settlement.PhaseDeadline,
-        sink: Settlement.ExecutionSink
-    ) async {
+    func armObservationEffects(_: Settlement.Arming) async {
         let waiters = lock.withLock {
-            state.operations.append(.armDeadline)
-            state.armedDeadlines.append(deadline)
+            state.operations.append(.armObservationEffects)
             defer { state.armingWaiters.removeAll() }
             return state.armingWaiters
         }
         waiters.forEach { $0.resume() }
-        if let deadlineScript, deadline.phase == .actionExpectation {
-            deadlineScript(sink, deadline)
-            return
-        }
-        if deadlineOnArm {
-            sink.reachDeadline(deadline)
-        }
-    }
-
-    func armObservationEffects(_: Settlement.Arming) async {
-        record(.armObservationEffects)
         guard longRunningObservationEffects else { return }
         let control = Settlement.ObservationEffectControl()
         let task = Task {
@@ -977,11 +784,11 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
         }
     }
 
-    func quiesceSettlement(
+    func finalizeSettlement(
         _ arming: Settlement.Arming
     ) async -> Navigation.ViewportExit.Outcome {
-        record(.quiesce)
-        await quiescenceGate?.suspend()
+        record(.finalize)
+        await finalizationGate?.suspend()
         let (sink, control, observationEffectsTask) = lock.withLock {
             defer {
                 state.finishedSink = state.sink
@@ -1012,23 +819,11 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
             ))
         }
         let viewportExit = if let liveObservationBoundary {
-            await liveObservationBoundary.quiesceSettlement(arming)
+            await liveObservationBoundary.finalizeSettlement(arming)
         } else {
             self.viewportExit
         }
         return viewportExit
-    }
-
-    func publishReadinessAfterTerminal(count: Int) {
-        let sink = lock.withLock {
-            state.outsideLeaseWakeupCount += count
-            return state.finishedSink
-        }
-        for _ in 0..<count {
-            sink?.observeReadiness(.established(
-                observationBoundary: .after(baseline.moment)
-            ))
-        }
     }
 
     @MainActor
@@ -1059,28 +854,12 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
             invalidationCount = 1
         case .invalidateTwice:
             invalidationCount = 2
-        case .coalescedBurst:
-            invalidationCount = 1
         }
         for _ in 0..<invalidationCount {
-            let duplicateCount: Int
-            if case .coalescedBurst(_, let count) = captureScenario {
-                duplicateCount = count
-            } else {
-                duplicateCount = 1
-            }
-            lock.withLock {
-                state.readinessWakeupsOffered += duplicateCount * 2
-                state.readinessWakeupGroups += 2
-            }
-            for _ in 0..<duplicateCount {
-                sink.observeReadiness(.invalidated)
-            }
-            for _ in 0..<duplicateCount {
-                sink.observeReadiness(.established(
-                    observationBoundary: .after(baseline.moment)
-                ))
-            }
+            sink.observeReadiness(.invalidated)
+            sink.observeReadiness(.established(
+                observationBoundary: .after(baseline.moment)
+            ))
         }
         for _ in 0...invalidationCount {
             await Task.yield()

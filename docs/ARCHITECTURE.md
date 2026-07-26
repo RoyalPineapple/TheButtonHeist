@@ -167,7 +167,7 @@ delivery before action dispatch. Every capture follows capture → admit → com
 → publish → evaluate.
 `Settlement.Reducer` owns the explicit state machine and produces typed effects;
 boundary code alone performs UIKit work. `Settlement.State` has exactly five
-structural phases: `awaitingBaseline`, `armed`, `active`, `quiescing`, and
+structural phases: `awaitingBaseline`, `armed`, `active`, `finalizing`, and
 `terminal`.
 `Settlement.Session` is the sole active evidence aggregate. `Settlement.Result`
 then admits only command-specific terminal cases: current-state, observation,
@@ -181,13 +181,13 @@ stateDiagram-v2
     [*] --> awaitingBaseline
     awaitingBaseline --> armed: baseline admitted
     armed --> active: channels armed
-    active --> quiescing: intended outcome known
-    quiescing --> terminal: producers stopped, work drained, viewport exited, resources released
+    active --> finalizing: intended outcome known
+    finalizing --> terminal: producers stopped, work drained, viewport exited, resources released
     terminal --> [*]: project Result
 ```
 
-Timed settlement enters `quiescing` after its intended outcome is known.
-Quiescing stops producers, cancels and joins executor work, restores or retains
+Timed settlement enters `finalizing` after its intended outcome is known.
+Finalizing stops producers, cancels and joins executor work, restores or retains
 the viewport unless a genuine screen replacement supersedes restoration, and
 releases observation resources. Only the resulting `ViewportExit` evidence
 admits terminal `Settlement.Result`: `.restored`, `.retained`, and
@@ -517,7 +517,7 @@ pipelines are explicit:
 | Result interpretation | `HeistReport.project(result:)` in `HeistResult+Report.swift` | JSON, compact, human, JUnit, doctor, and metric renderers |
 | Result recording decision | `HeistResult.Outcome` and `HeistResultRecordingMode` | `HeistResultRecording` filesystem boundary |
 | Offline validation algebra | `HeistValidation.Result<Value>` composed by `HeistValidation.Report` | Public JSON and text projections |
-| Settlement lifecycle | `Settlement.State` (`awaitingBaseline`, `armed`, `active`, `quiescing`, `terminal`); `Settlement.Session` owns active evidence and command-specific `Settlement.Result` cases own terminal truth | `Settlement.Reducer` produces transitions and effects; `Settlement.Executor` stops producers, drains work, admits `ViewportExit`, and releases resources before terminal result projection |
+| Settlement lifecycle | `Settlement.State` (`awaitingBaseline`, `armed`, `active`, `finalizing`, `terminal`); `Settlement.Session` owns active evidence and command-specific `Settlement.Result` cases own terminal truth | `Settlement.Reducer` produces transitions and effects; `Settlement.Executor` stops producers, drains work, admits `ViewportExit`, and releases resources before terminal result projection |
 | Semantic observation scheduling | `Observation.Stream` in `SemanticObservationStream.swift` | Capture scheduling, publication, and observation demand |
 | Semantic observation state | `Observation.StoreOwner` and `Observation.Store` | Actor-owned atomic commit of graph, Log, lineage, positions, and admitted-read state |
 | Semantic observation history | `Observation.Log` in `SemanticObservationHistory.swift` | Private collection indices, Moments, direct `events(since:)`, retention, and typed gaps |
@@ -871,7 +871,7 @@ A standalone wait cannot consume evidence from a prior action or heist.
 
 A standalone observation command owns its authored deadline from command
 admission. When predicate, readiness, and handoff evidence are complete, the
-reducer enters `quiescing` immediately—there is no extra stability sleep or
+reducer enters `finalizing` immediately—there is no extra stability sleep or
 final predicate revalidation. The lifecycle suppresses new callbacks, joins
 child work, admits the viewport exit, and releases its outer notification and
 observation leases before the reducer constructs the terminal result.

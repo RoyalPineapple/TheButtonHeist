@@ -71,9 +71,8 @@ extension Navigation {
         deadline: SemanticObservationDeadline?,
         discoveryCommitPolicy: DiscoveryCommitPolicy,
         notificationWindow: AccessibilityNotificationScopeLease? = nil,
-        previousViewportHash: String? = nil
+        afterViewportMovement: Bool = false
     ) async -> Observation.SnapshotEvent? {
-        let afterViewportMovement = previousViewportHash != nil
         defer { notificationWindow?.cancel() }
         guard afterViewportMovement
                 || (!Task.isCancelled && hasTimeRemaining(before: deadline))
@@ -97,20 +96,15 @@ extension Navigation {
                 timeout: transitionDeadline.remainingDuration(at: RuntimeElapsed.now),
                 demand: .immediate
             )
-            let page = vault.refreshLiveCapture()
+            vault.refreshLiveCapture()
             guard afterViewportMovement || !Task.isCancelled else { return nil }
-            let transitionCanSettleAgain = transitionDeadline.remainingSeconds() * 1_000
-                >= Double(SemanticObservationTiming.viewportTransitionMinimumBudgetMs)
-            // Whether this page is the one we already have, asked so that a
-            // scroll counts. `interfaceHash` deliberately excludes geometry, so
-            // on its own it cannot tell a revealed page from an unmoved one: the
-            // labels are identical either way and only the frames moved. Pair it
-            // with the viewport placement, which is the half that saw the scroll.
-            if let previousViewportHash,
-               (page ?? vault.latestObservation).tree.viewportPageKey == previousViewportHash,
-               transitionCanSettleAgain {
-                continue
-            }
+            // Nothing re-reads the page against the pre-scroll one here. The
+            // caller dispatched the scroll once and this loop only waits for it
+            // to land, so a page that still looks unmoved is a page mid-flight,
+            // not a scroll that failed — spinning until it differs would burn
+            // the caller's whole reveal budget on one attempt and never let the
+            // next one run. Whether the reading counts as a change is the
+            // store's question, and it already answers it on commit.
             if let event = await vault.semanticObservationStream.commitSettledDiscoveryObservation(
                 discoveryCommitPolicy: discoveryCommitPolicy,
                 afterViewportMovement: afterViewportMovement,

@@ -620,20 +620,20 @@ extension Settlement {
         case awaitingBaseline(Command)
         case armed(Session)
         case active(Session)
-        case quiescing(Quiescence)
+        case finalizing(Finalization)
         case terminal(Result)
 
         internal var result: Result? {
             switch self {
             case .terminal(let result):
                 result
-            case .awaitingBaseline, .armed, .active, .quiescing:
+            case .awaitingBaseline, .armed, .active, .finalizing:
                 nil
             }
         }
     }
 
-    internal struct Quiescence: Sendable {
+    internal struct Finalization: Sendable {
         internal let session: Session
         internal let intendedOutcome: TerminalIntent
         internal let elapsed: ElapsedMilliseconds
@@ -719,7 +719,7 @@ extension Settlement {
         case armReadiness(PhaseDeadline)
         case armDeadline(PhaseDeadline)
         case dispatchAction(ResolvedHeistActionCommand)
-        case quiesce(Arming)
+        case finalize(Arming)
     }
 }
 
@@ -772,7 +772,7 @@ extension Settlement.Event {
         case handoffCaptureFailed(Settlement.Readiness.Generation, Settlement.Capture.Failure)
         case deadlineReached(Settlement.PhaseDeadline)
         case cancelled
-        case quiesced(Navigation.ViewportExit.Outcome)
+        case finalized(Navigation.ViewportExit.Outcome)
     }
 }
 
