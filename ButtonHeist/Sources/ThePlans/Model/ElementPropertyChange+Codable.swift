@@ -38,48 +38,6 @@ extension ActionSetMatch: Codable {
     }
 }
 
-extension ElementFrameMatch: Codable {
-    private enum CodingKeys: String, CodingKey, CaseIterable { case x, y, width, height }
-
-    public init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "frame match")
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(
-            x: try container.decodeIfPresent(Int.self, forKey: .x),
-            y: try container.decodeIfPresent(Int.self, forKey: .y),
-            width: try container.decodeIfPresent(Int.self, forKey: .width),
-            height: try container.decodeIfPresent(Int.self, forKey: .height)
-        )
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(x, forKey: .x)
-        try container.encodeIfPresent(y, forKey: .y)
-        try container.encodeIfPresent(width, forKey: .width)
-        try container.encodeIfPresent(height, forKey: .height)
-    }
-}
-
-extension ElementPointMatch: Codable {
-    private enum CodingKeys: String, CodingKey, CaseIterable { case x, y }
-
-    public init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "activation point match")
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(
-            x: try container.decodeIfPresent(Int.self, forKey: .x),
-            y: try container.decodeIfPresent(Int.self, forKey: .y)
-        )
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(x, forKey: .x)
-        try container.encodeIfPresent(y, forKey: .y)
-    }
-}
-
 private enum CustomContentMatchCodingKeys: String, CodingKey, CaseIterable {
     case label, value, isImportant
 }
@@ -200,20 +158,9 @@ private func encodeUnlabeledAssociatedValue<Value: Encodable, Key: CodingKey>(
 
 extension AuthoredElementPropertyChange: Codable {
     package init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: ElementProperty.self)
-        let keys = container.allKeys
-        guard keys.count == 1, let key = keys.first else {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: decoder.codingPath,
-                debugDescription: "Expected exactly one property change case"
-            ))
-        }
+        let container = try decoder.container(keyedBy: AssertableProperty.self)
+        let key = try container.singlePropertyChangeKey(at: decoder.codingPath)
         switch key {
-        case .label, .identifier:
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: container.codingPath,
-                debugDescription: "\(key.rawValue) is not an update property"
-            ))
         case .value:
             self = .value(try decodeUnlabeledAssociatedValue(
                 PropertyChangeCore<StringMatch>.self, forKey: key, from: container
@@ -229,14 +176,6 @@ extension AuthoredElementPropertyChange: Codable {
         case .actions:
             self = .actions(try decodeUnlabeledAssociatedValue(
                 PropertyChangeCore<ActionSetMatch>.self, forKey: key, from: container
-            ))
-        case .frame:
-            self = .frame(try decodeUnlabeledAssociatedValue(
-                PropertyChangeCore<ElementFrameMatch>.self, forKey: key, from: container
-            ))
-        case .activationPoint:
-            self = .activationPoint(try decodeUnlabeledAssociatedValue(
-                PropertyChangeCore<ElementPointMatch>.self, forKey: key, from: container
             ))
         case .customContent:
             self = .customContent(try decodeUnlabeledAssociatedValue(
@@ -250,7 +189,7 @@ extension AuthoredElementPropertyChange: Codable {
     }
 
     package func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: ElementProperty.self)
+        var container = encoder.container(keyedBy: AssertableProperty.self)
         switch self {
         case .value(let change):
             try encodeUnlabeledAssociatedValue(change, forKey: .value, to: &container)
@@ -260,10 +199,6 @@ extension AuthoredElementPropertyChange: Codable {
             try encodeUnlabeledAssociatedValue(change, forKey: .hint, to: &container)
         case .actions(let change):
             try encodeUnlabeledAssociatedValue(change, forKey: .actions, to: &container)
-        case .frame(let change):
-            try encodeUnlabeledAssociatedValue(change, forKey: .frame, to: &container)
-        case .activationPoint(let change):
-            try encodeUnlabeledAssociatedValue(change, forKey: .activationPoint, to: &container)
         case .customContent(let change):
             try encodeUnlabeledAssociatedValue(change, forKey: .customContent, to: &container)
         case .rotors(let change):
@@ -273,22 +208,31 @@ extension AuthoredElementPropertyChange: Codable {
 
 }
 
-extension ResolvedElementPropertyChangeValue: Codable {
-    package init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: ElementProperty.self)
-        let keys = container.allKeys
-        guard keys.count == 1, let key = keys.first else {
+extension KeyedDecodingContainer where Key == AssertableProperty {
+    /// The one property this change names.
+    ///
+    /// A geometry key lands here as no key at all, because `AssertableProperty`
+    /// has no case for it, so the count check is what reports it. The message
+    /// names the vocabulary rather than the key, since the key is precisely what
+    /// could not be understood.
+    func singlePropertyChangeKey(at codingPath: [CodingKey]) throws -> AssertableProperty {
+        guard allKeys.count == 1, let key = allKeys.first else {
             throw DecodingError.dataCorrupted(.init(
-                codingPath: decoder.codingPath,
-                debugDescription: "Expected exactly one property change case"
+                codingPath: codingPath,
+                debugDescription: """
+                    Expected exactly one property change case. Valid: \(AssertableProperty.nameList)
+                    """
             ))
         }
+        return key
+    }
+}
+
+extension ResolvedElementPropertyChangeValue: Codable {
+    package init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: AssertableProperty.self)
+        let key = try container.singlePropertyChangeKey(at: decoder.codingPath)
         switch key {
-        case .label, .identifier:
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: container.codingPath,
-                debugDescription: "\(key.rawValue) is not an update property"
-            ))
         case .value:
             self = .value(try decodeUnlabeledAssociatedValue(
                 PropertyChangeCore<ResolvedStringMatch>.self, forKey: key, from: container
@@ -305,14 +249,6 @@ extension ResolvedElementPropertyChangeValue: Codable {
             self = .actions(try decodeUnlabeledAssociatedValue(
                 PropertyChangeCore<ActionSetMatch>.self, forKey: key, from: container
             ))
-        case .frame:
-            self = .frame(try decodeUnlabeledAssociatedValue(
-                PropertyChangeCore<ElementFrameMatch>.self, forKey: key, from: container
-            ))
-        case .activationPoint:
-            self = .activationPoint(try decodeUnlabeledAssociatedValue(
-                PropertyChangeCore<ElementPointMatch>.self, forKey: key, from: container
-            ))
         case .customContent:
             self = .customContent(try decodeUnlabeledAssociatedValue(
                 PropertyChangeCore<ResolvedCustomContentMatch>.self, forKey: key, from: container
@@ -325,7 +261,7 @@ extension ResolvedElementPropertyChangeValue: Codable {
     }
 
     package func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: ElementProperty.self)
+        var container = encoder.container(keyedBy: AssertableProperty.self)
         switch self {
         case .value(let change):
             try encodeUnlabeledAssociatedValue(change, forKey: .value, to: &container)
@@ -335,10 +271,6 @@ extension ResolvedElementPropertyChangeValue: Codable {
             try encodeUnlabeledAssociatedValue(change, forKey: .hint, to: &container)
         case .actions(let change):
             try encodeUnlabeledAssociatedValue(change, forKey: .actions, to: &container)
-        case .frame(let change):
-            try encodeUnlabeledAssociatedValue(change, forKey: .frame, to: &container)
-        case .activationPoint(let change):
-            try encodeUnlabeledAssociatedValue(change, forKey: .activationPoint, to: &container)
         case .customContent(let change):
             try encodeUnlabeledAssociatedValue(change, forKey: .customContent, to: &container)
         case .rotors(let change):
@@ -371,15 +303,34 @@ package enum ElementUpdateCodingKeys: String, CodingKey, CaseIterable {
     case type, element, target, before, after, property
 }
 
-private func unsupportedUpdateProperty(
-    _ property: ElementProperty,
-    in container: KeyedDecodingContainer<ElementUpdateCodingKeys>
-) -> DecodingError {
-    DecodingError.dataCorruptedError(
-        forKey: .property,
-        in: container,
-        debugDescription: "\(property.rawValue) is an element identity matcher, not an update property"
-    )
+extension KeyedDecodingContainer where Key == ElementUpdateCodingKeys {
+    /// The assertable property this update names, if it named one.
+    ///
+    /// The wire speaks the observation vocabulary, so it can name a property the
+    /// predicate language has no case for. That is a decode error rather than a
+    /// silently ignored field: a plan asserting on geometry does not mean what it
+    /// looks like it means, so it is refused rather than reinterpreted.
+    func decodeAssertablePropertyIfPresent() throws -> AssertableProperty? {
+        guard let observed = try decodeIfPresent(ElementProperty.self, forKey: .property) else {
+            return nil
+        }
+        guard let assertable = observed.assertable else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .property,
+                in: self,
+                debugDescription: observed.isGeometry
+                    ? """
+                        \(observed.rawValue) is geometry, which predicates cannot reason about. \
+                        Valid: \(AssertableProperty.nameList)
+                        """
+                    : """
+                        \(observed.rawValue) is an element identity matcher, not an update property. \
+                        Valid: \(AssertableProperty.nameList)
+                        """
+            )
+        }
+        return assertable
+    }
 }
 
 package extension ElementPropertyChange {
@@ -398,7 +349,7 @@ package extension ElementPropertyChange {
     ) throws -> AuthoredElementPropertyChange? {
         let hasBefore = container.contains(.before)
         let hasAfter = container.contains(.after)
-        guard let property = try container.decodeIfPresent(ElementProperty.self, forKey: .property) else {
+        guard let property = try container.decodeAssertablePropertyIfPresent() else {
             guard !hasBefore && !hasAfter else {
                 throw DecodingError.dataCorruptedError(
                     forKey: .property,
@@ -418,7 +369,7 @@ package extension ResolvedElementPropertyChange {
     ) throws -> ResolvedElementPropertyChange? {
         let hasBefore = container.contains(.before)
         let hasAfter = container.contains(.after)
-        guard let property = try container.decodeIfPresent(ElementProperty.self, forKey: .property) else {
+        guard let property = try container.decodeAssertablePropertyIfPresent() else {
             guard !hasBefore && !hasAfter else {
                 throw DecodingError.dataCorruptedError(
                     forKey: .property,
@@ -440,12 +391,10 @@ package extension ResolvedElementPropertyChange {
 
 private extension AuthoredElementPropertyChange {
     static func decode(
-        property: ElementProperty,
+        property: AssertableProperty,
         from container: KeyedDecodingContainer<ElementUpdateCodingKeys>
     ) throws -> Self {
         switch property {
-        case .label, .identifier:
-            throw unsupportedUpdateProperty(property, in: container)
         case .value:
             return .value(try PropertyChangeCore<StringMatch>(from: container))
         case .traits:
@@ -454,10 +403,6 @@ private extension AuthoredElementPropertyChange {
             return .hint(try PropertyChangeCore<StringMatch>(from: container))
         case .actions:
             return .actions(try PropertyChangeCore<ActionSetMatch>(from: container))
-        case .frame:
-            return .frame(try PropertyChangeCore<ElementFrameMatch>(from: container))
-        case .activationPoint:
-            return .activationPoint(try PropertyChangeCore<ElementPointMatch>(from: container))
         case .customContent:
             return .customContent(try PropertyChangeCore<CustomContentMatch>(from: container))
         case .rotors:
@@ -466,14 +411,12 @@ private extension AuthoredElementPropertyChange {
     }
 
     func encodeFields(to container: inout KeyedEncodingContainer<ElementUpdateCodingKeys>) throws {
-        try container.encode(property, forKey: .property)
+        try container.encode(property.observed, forKey: .property)
         switch self {
         case .value(let change): try change.encodeFields(to: &container)
         case .traits(let change): try change.encodeFields(to: &container)
         case .hint(let change): try change.encodeFields(to: &container)
         case .actions(let change): try change.encodeFields(to: &container)
-        case .frame(let change): try change.encodeFields(to: &container)
-        case .activationPoint(let change): try change.encodeFields(to: &container)
         case .customContent(let change): try change.encodeFields(to: &container)
         case .rotors(let change): try change.encodeFields(to: &container)
         }
@@ -482,12 +425,10 @@ private extension AuthoredElementPropertyChange {
 
 private extension ResolvedElementPropertyChangeValue {
     static func decode(
-        property: ElementProperty,
+        property: AssertableProperty,
         from container: KeyedDecodingContainer<ElementUpdateCodingKeys>
     ) throws -> Self {
         switch property {
-        case .label, .identifier:
-            throw unsupportedUpdateProperty(property, in: container)
         case .value:
             return .value(try PropertyChangeCore<ResolvedStringMatch>(from: container))
         case .traits:
@@ -496,10 +437,6 @@ private extension ResolvedElementPropertyChangeValue {
             return .hint(try PropertyChangeCore<ResolvedStringMatch>(from: container))
         case .actions:
             return .actions(try PropertyChangeCore<ActionSetMatch>(from: container))
-        case .frame:
-            return .frame(try PropertyChangeCore<ElementFrameMatch>(from: container))
-        case .activationPoint:
-            return .activationPoint(try PropertyChangeCore<ElementPointMatch>(from: container))
         case .customContent:
             return .customContent(try PropertyChangeCore<ResolvedCustomContentMatch>(from: container))
         case .rotors:
@@ -508,14 +445,12 @@ private extension ResolvedElementPropertyChangeValue {
     }
 
     func encodeFields(to container: inout KeyedEncodingContainer<ElementUpdateCodingKeys>) throws {
-        try container.encode(property, forKey: .property)
+        try container.encode(property.observed, forKey: .property)
         switch self {
         case .value(let change): try change.encodeFields(to: &container)
         case .traits(let change): try change.encodeFields(to: &container)
         case .hint(let change): try change.encodeFields(to: &container)
         case .actions(let change): try change.encodeFields(to: &container)
-        case .frame(let change): try change.encodeFields(to: &container)
-        case .activationPoint(let change): try change.encodeFields(to: &container)
         case .customContent(let change): try change.encodeFields(to: &container)
         case .rotors(let change): try change.encodeFields(to: &container)
         }

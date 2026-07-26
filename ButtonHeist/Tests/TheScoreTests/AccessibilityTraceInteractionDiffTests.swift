@@ -70,17 +70,14 @@ final class AccessibilityTraceInteractionDiffTests: AccessibilityTraceDiffTestCa
         ) else {
             return XCTFail("Expected predicate evidence")
         }
-        let framePredicate = AccessibilityPredicate.elementsChanged([
-            .updated(
-                .label("Checkout"),
-                .frame(after: ElementFrameMatch(x: 10, y: 20, width: 100, height: 44))
-            ),
-        ])
+        // Geometry is not in the predicate language, so there is no frame
+        // predicate to write here: a moved element is reported, and asked about
+        // semantically or not at all. Movement alone does not answer a semantic
+        // question.
         let semanticPredicate = AccessibilityPredicate.elementsChanged([
             .updated(.label("Checkout"), .value(after: "Moved")),
         ])
 
-        XCTAssertTrue(try framePredicate.resolve(in: .empty).evaluate(in: evidence).met)
         XCTAssertFalse(try semanticPredicate.resolve(in: .empty).evaluate(in: evidence).met)
     }
 

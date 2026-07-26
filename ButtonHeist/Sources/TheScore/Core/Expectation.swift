@@ -226,7 +226,7 @@ package struct Expectation: Equatable {
 }
 
 enum ReadingScope: Equatable {
-    case property(ElementProperty, of: ResolvedAccessibilityTarget)
+    case property(AssertableProperty, of: ResolvedAccessibilityTarget)
 
     case element(ResolvedAccessibilityTarget)
 
@@ -257,18 +257,20 @@ enum ReadingScope: Equatable {
     }
 }
 
-extension ElementProperty {
+extension AssertableProperty {
+    /// This property's contribution to a reading.
+    ///
+    /// Total, because every assertable property is one the projection carries.
+    /// Geometry has no arm here and needs none: it is not in this enum, so a
+    /// reading can never be asked to take it.
     func combine(_ element: HeistElement, into hasher: inout Hasher) {
         switch self {
-        case .label: hasher.combine(element.label)
-        case .identifier: hasher.combine(element.identifier)
         case .value: hasher.combine(element.value)
         case .hint: hasher.combine(element.hint)
         case .traits: hasher.combine(Set(element.traits))
         case .actions: hasher.combine(Set(element.actions))
         case .customContent: hasher.combine(element.customContent)
         case .rotors: hasher.combine(element.rotors?.map(\.name))
-        case .frame, .activationPoint: break
         }
     }
 }

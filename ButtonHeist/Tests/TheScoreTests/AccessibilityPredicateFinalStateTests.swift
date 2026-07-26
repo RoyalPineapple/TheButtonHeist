@@ -36,8 +36,6 @@ extension AccessibilityPredicateTests {
         let cases = [
             ("traits", "Unknown trait set match field"),
             ("actions", "Unknown action set match field"),
-            ("frame", "Unknown frame match field"),
-            ("activationPoint", "Unknown activation point match field"),
             ("customContent", "Unknown custom content match field"),
             ("rotors", "Unknown rotor set match field"),
         ]
@@ -66,7 +64,6 @@ extension AccessibilityPredicateTests {
     func testElementUpdatedRejectsElementMatcherFieldsInsideTypedCheckerObjects() throws {
         let cases = [
             ("traits", #"Unknown trait set match field "label""#),
-            ("frame", #"Unknown frame match field "label""#),
         ]
         for (property, expectedMessage) in cases {
             assertAccessibilityPredicateDecodeFails(
@@ -102,14 +99,39 @@ extension AccessibilityPredicateTests {
                 {
                   "type": "updated",
                   "target": {"checks":[{"kind":"label","match":{"mode":"exact","value":"Card"}}]},
-                  "property": "frame",
-                  "after": { "x": 1, "unexpected": true }
+                  "property": "customContent",
+                  "after": { "label": { "mode": "exact", "value": "Total" }, "unexpected": true }
                 }
               ]
             }
             """,
-            contains: #"Unknown frame match field "unexpected""#
+            contains: #"Unknown custom content match field "unexpected""#
         )
+    }
+
+    /// Geometry is refused at the property rather than at its fields, because
+    /// there is no geometry checker left to parse fields out of.
+    func testElementUpdatedRejectsGeometryProperties() throws {
+        for property in ["frame", "activationPoint"] {
+            assertAccessibilityPredicateDecodeFails(
+                """
+                {
+                  "type": "changed",
+                  "scope": "elements",
+                  "assertions": [
+                    {
+                      "type": "updated",
+                      "target": {"checks":[{"kind":"label","match":{"mode":"exact","value":"Card"}}]},
+                      "property": "\(property)",
+                      "after": { "x": 1 }
+                    }
+                  ]
+                }
+                """,
+                contains: "geometry, which predicates cannot reason about",
+                "\(property) was accepted as an update property"
+            )
+        }
     }
 
     // MARK: - final state predicates

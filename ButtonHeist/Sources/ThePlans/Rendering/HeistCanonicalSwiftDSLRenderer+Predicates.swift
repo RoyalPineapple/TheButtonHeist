@@ -108,20 +108,6 @@ extension HeistCanonicalSwiftDSLRenderer {
                 after: change.after,
                 render: render(actionSet:)
             )
-        case .frame(let change):
-            return renderPropertyChange(
-                "frame",
-                before: change.before,
-                after: change.after,
-                render: render(frame:)
-            )
-        case .activationPoint(let change):
-            return renderPropertyChange(
-                "activationPoint",
-                before: change.before,
-                after: change.after,
-                render: render(point:)
-            )
         case .customContent(let change):
             return try renderPropertyChange(
                 "customContent",
@@ -191,24 +177,6 @@ extension HeistCanonicalSwiftDSLRenderer {
             include: match.include.isEmpty ? nil : renderActionArray(match.include),
             exclude: match.exclude.isEmpty ? nil : renderActionArray(match.exclude)
         )
-        return ".init(\(fields))"
-    }
-
-    private func render(frame match: ElementFrameMatch) -> String {
-        let fields = renderIntegerFields([
-            ("x", match.x),
-            ("y", match.y),
-            ("width", match.width),
-            ("height", match.height),
-        ])
-        return ".init(\(fields))"
-    }
-
-    private func render(point match: ElementPointMatch) -> String {
-        let fields = renderIntegerFields([
-            ("x", match.x),
-            ("y", match.y),
-        ])
         return ".init(\(fields))"
     }
 

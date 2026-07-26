@@ -36,30 +36,6 @@ public struct ActionSetMatch: Sendable, Equatable {
     }
 }
 
-public struct ElementFrameMatch: Sendable, Equatable {
-    public let x: Int?
-    public let y: Int?
-    public let width: Int?
-    public let height: Int?
-
-    public init(x: Int? = nil, y: Int? = nil, width: Int? = nil, height: Int? = nil) {
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
-    }
-}
-
-public struct ElementPointMatch: Sendable, Equatable {
-    public let x: Int?
-    public let y: Int?
-
-    public init(x: Int? = nil, y: Int? = nil) {
-        self.x = x
-        self.y = y
-    }
-}
-
 public struct CustomContentMatch: Codable, Sendable, Equatable, Hashable {
     public let label: StringMatch?
     public let value: StringMatch?

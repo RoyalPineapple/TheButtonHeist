@@ -46,17 +46,17 @@ extension ResolvedElementAssertion {
     /// `updated` is the case that needs it, because both its legs are `exists` and
     /// with no before or after they are the *same* search — only the reading can
     /// say the element moved.
+    ///
+    /// Every property an `updated` can name is one a reading can be taken over,
+    /// because `AssertableProperty` holds no geometry — so there is no widening
+    /// case here.
     var readingScope: ReadingScope {
         switch self {
         case .exists(let target), .missing(let target),
              .appeared(let target), .disappeared(let target):
             return .element(target)
         case .updated(let target, let change):
-            let property = change.value.property
-            // Geometry is not in the projection a reading is taken over, so there
-            // is no narrower reading to take: `frame` and `activationPoint` fall
-            // back to the element, which is the next scope out.
-            return property.isGeometry ? .element(target) : .property(property, of: target)
+            return .property(change.value.property, of: target)
         }
     }
 }
@@ -96,7 +96,7 @@ extension ResolvedAccessibilityTarget {
 
 extension ResolvedElementPropertyChangeValue {
     /// Which property this change is about.
-    var property: ElementProperty {
+    var property: AssertableProperty {
         switch self {
         case .value: return .value
         case .hint: return .hint
@@ -104,8 +104,6 @@ extension ResolvedElementPropertyChangeValue {
         case .traits: return .traits
         case .actions: return .actions
         case .rotors: return .rotors
-        case .frame: return .frame
-        case .activationPoint: return .activationPoint
         }
     }
 
@@ -117,11 +115,6 @@ extension ResolvedElementPropertyChangeValue {
     /// an empty include is vacuously true, so an *excluded* empty set would be
     /// unsatisfiable, and dropping it is what makes "only say what changed"
     /// work.
-    ///
-    /// `frame` and `activationPoint` yield none: geometry is not something an
-    /// element predicate can ask for, so the anchor alone carries that side.
-    /// Those two still work as `updated` assertions, they just say no more than
-    /// "this element was here, and is still here".
     func checks(_ side: PropertyChangeSide) -> [ResolvedElementPredicateCheck] {
         switch self {
         case .value(let change):
@@ -136,8 +129,6 @@ extension ResolvedElementPropertyChangeValue {
             return side.pick(change).map { setChecks($0.include, $0.exclude, as: ResolvedElementPredicateCheck.actions) } ?? []
         case .rotors(let change):
             return side.pick(change).map { setChecks($0.include, $0.exclude, as: ResolvedElementPredicateCheck.rotors) } ?? []
-        case .frame, .activationPoint:
-            return []
         }
     }
 

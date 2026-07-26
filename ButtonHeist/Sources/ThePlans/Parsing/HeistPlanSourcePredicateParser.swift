@@ -140,22 +140,6 @@ extension HeistPlanSourceParser {
                 if isBefore { before = value } else { after = value }
             }
             change = .actions(before: before, after: after)
-        case "frame":
-            var before: ElementFrameMatch?
-            var after: ElementFrameMatch?
-            try parsePropertyChangeFields(property: name) { parser, isBefore, _, role in
-                let value = try parser.parseElementFrameMatch(role: role)
-                if isBefore { before = value } else { after = value }
-            }
-            change = .frame(before: before, after: after)
-        case "activationPoint":
-            var before: ElementPointMatch?
-            var after: ElementPointMatch?
-            try parsePropertyChangeFields(property: name) { parser, isBefore, _, role in
-                let value = try parser.parseElementPointMatch(role: role)
-                if isBefore { before = value } else { after = value }
-            }
-            change = .activationPoint(before: before, after: after)
         case "customContent":
             var before: CustomContentMatch?
             var after: CustomContentMatch?
@@ -298,63 +282,6 @@ extension HeistPlanSourceParser {
         }
     }
 
-    mutating func parseElementFrameMatch(role: String) throws -> ElementFrameMatch {
-        try expectContextualInitializer(role: "frame match")
-        let fields = try parseIntegerMatchFields(role: role, allowsSize: true)
-        try expectSymbol(")")
-        return ElementFrameMatch(
-            x: fields.x,
-            y: fields.y,
-            width: fields.width,
-            height: fields.height
-        )
-    }
-
-    mutating func parseElementPointMatch(role: String) throws -> ElementPointMatch {
-        try expectContextualInitializer(role: "activation point match")
-        let fields = try parseIntegerMatchFields(role: role, allowsSize: false)
-        try expectSymbol(")")
-        return ElementPointMatch(x: fields.x, y: fields.y)
-    }
-
-    mutating func parseIntegerMatchFields(
-        role: String,
-        allowsSize: Bool
-    ) throws -> (x: Int?, y: Int?, width: Int?, height: Int?) {
-        var fields: (x: Int?, y: Int?, width: Int?, height: Int?) = (nil, nil, nil, nil)
-        if !currentToken.isSymbol(")") {
-            while true {
-                let token = currentToken
-                let name = try parseIdentifier()
-                guard name == "x" || name == "y" || (allowsSize && (name == "width" || name == "height")) else {
-                    throw error(token, "\(role) does not accept '\(name)'")
-                }
-                try expectSymbol(":")
-                let isDuplicate = switch name {
-                case "x": fields.x != nil
-                case "y": fields.y != nil
-                case "width": fields.width != nil
-                case "height": fields.height != nil
-                default: false
-                }
-                guard !isDuplicate else {
-                    throw error(token, "\(role) accepts \(name) only once")
-                }
-                let value = try parseSignedInteger()
-                switch name {
-                case "x": fields.x = value
-                case "y": fields.y = value
-                case "width": fields.width = value
-                case "height": fields.height = value
-                default:
-                    preconditionFailure("admitted integer match field must be assignable")
-                }
-                guard consumeSymbol(",") else { break }
-            }
-        }
-        return fields
-    }
-
     mutating func parseSignedInteger() throws -> Int {
         let token = currentToken
         let value = try parseNumber()
@@ -431,10 +358,10 @@ extension HeistPlanSourceParser {
     }
 
     private static var validElementPropertyNames: Set<String> {
-        Set(ElementProperty.updateProperties.map(\.rawValue))
+        Set(AssertableProperty.allCases.map(\.rawValue))
     }
 
     private static var validElementProperties: String {
-        ElementProperty.updatePropertyNameList
+        AssertableProperty.nameList
     }
 }

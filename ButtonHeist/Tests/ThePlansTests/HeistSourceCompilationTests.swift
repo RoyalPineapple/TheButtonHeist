@@ -167,12 +167,12 @@ private func assertCanonicalSourceRoundTripPreservesBranchSemantics() throws {
         ),
         (
             #"WaitFor(.elementsChanged([.updated(.label("Total"), .label(before: "Old", after: "New"))]))"#,
-            "unsupported element update property '.label'. Valid: value, traits, hint, actions, frame, activationPoint, customContent, rotors",
+            "unsupported element update property '.label'. Valid: value, traits, hint, actions, customContent, rotors",
             72
         ),
         (
             #"WaitFor(.elementsChanged([.updated(.label("Total"), .identifier(before: "old", after: "new"))]))"#,
-            "unsupported element update property '.identifier'. Valid: value, traits, hint, actions, frame, activationPoint, customContent, rotors",
+            "unsupported element update property '.identifier'. Valid: value, traits, hint, actions, customContent, rotors",
             77
         ),
         (
@@ -186,19 +186,9 @@ private func assertCanonicalSourceRoundTripPreservesBranchSemantics() throws {
             82
         ),
         (
-            #"WaitFor(.elementsChanged([.updated(.label("Total"), .activationPoint(after: .match(x: 1)))]))"#,
-            "activation point match must use .init(...)",
-            91
-        ),
-        (
             #"WaitFor(.elementsChanged([.updated(.identifier("item"), .actions(after: .exclude([.activate])))]))"#,
             "action set match must use .init(...)",
             87
-        ),
-        (
-            #"WaitFor(.elementsChanged([.updated(.identifier("item"), .frame(after: .exact(x: 0, y: 0, width: 10, height: 10)))]))"#,
-            "frame match must use .init(...)",
-            85
         ),
         (
             #"WaitFor(.elementsChanged([.updated(.identifier("item"), .customContent(after: .match(label: "Status")))]))"#,

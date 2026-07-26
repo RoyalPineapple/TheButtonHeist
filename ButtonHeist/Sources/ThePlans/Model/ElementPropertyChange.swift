@@ -6,7 +6,7 @@ public struct ElementPropertyChange: Codable, Sendable, Equatable {
         self.value = value
     }
 
-    public var property: ElementProperty { value.property }
+    public var property: AssertableProperty { value.property }
 
     package func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedElementPropertyChange {
         ResolvedElementPropertyChange(value: try value.resolve(in: environment))
@@ -21,5 +21,5 @@ package struct ResolvedElementPropertyChange: Codable, Sendable, Equatable {
         self.value = value
     }
 
-    package var property: ElementProperty { value.property }
+    package var property: AssertableProperty { value.property }
 }

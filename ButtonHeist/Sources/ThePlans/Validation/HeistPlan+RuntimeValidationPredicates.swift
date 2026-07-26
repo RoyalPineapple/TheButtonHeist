@@ -87,7 +87,7 @@ extension HeistPlanRuntimeSafetyValidator {
         switch change.value {
         case .value(let change), .hint(let change):
             validateStringPropertyChange(change, path: path, scope: scope)
-        case .traits, .actions, .frame, .activationPoint:
+        case .traits, .actions:
             break
         case .customContent(let change):
             validateCustomContentPropertyChange(change, path: path, scope: scope)

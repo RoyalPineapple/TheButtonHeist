@@ -16,23 +16,6 @@ extension ActionSetMatch: CustomStringConvertible {
     }
 }
 
-extension ElementFrameMatch: CustomStringConvertible {
-    public var description: String {
-        CanonicalValueDescription.call("frame", [
-            CanonicalValueDescription.valueField("x", x), CanonicalValueDescription.valueField("y", y),
-            CanonicalValueDescription.valueField("width", width), CanonicalValueDescription.valueField("height", height),
-        ].compactMap { $0 })
-    }
-}
-
-extension ElementPointMatch: CustomStringConvertible {
-    public var description: String {
-        CanonicalValueDescription.call("point", [
-            CanonicalValueDescription.valueField("x", x), CanonicalValueDescription.valueField("y", y),
-        ].compactMap { $0 })
-    }
-}
-
 extension CustomContentMatch: CustomStringConvertible {
     public var description: String {
         CanonicalValueDescription.call("customContent", [
@@ -86,8 +69,6 @@ extension AuthoredElementPropertyChange: CustomStringConvertible {
         case .traits(let change): return change.description(property: .traits)
         case .hint(let change): return change.description(property: .hint)
         case .actions(let change): return change.description(property: .actions)
-        case .frame(let change): return change.description(property: .frame)
-        case .activationPoint(let change): return change.description(property: .activationPoint)
         case .customContent(let change): return change.description(property: .customContent)
         case .rotors(let change): return change.description(property: .rotors)
         }
@@ -101,8 +82,6 @@ extension ResolvedElementPropertyChangeValue: CustomStringConvertible {
         case .traits(let change): return change.description(property: .traits)
         case .hint(let change): return change.description(property: .hint)
         case .actions(let change): return change.description(property: .actions)
-        case .frame(let change): return change.description(property: .frame)
-        case .activationPoint(let change): return change.description(property: .activationPoint)
         case .customContent(let change): return change.description(property: .customContent)
         case .rotors(let change): return change.description(property: .rotors)
         }
@@ -110,7 +89,7 @@ extension ResolvedElementPropertyChangeValue: CustomStringConvertible {
 }
 
 private extension PropertyChangeCore {
-    func description(property: ElementProperty) -> String {
+    func description(property: AssertableProperty) -> String {
         CanonicalValueDescription.call("change", [
             "property=.\(property.rawValue)",
             before.map { "before=\($0)" },
