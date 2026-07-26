@@ -232,15 +232,12 @@ struct ToolSyncTests {
             schemaValue(at: ["properties", "predicate", "properties"], in: wait)?.objectValue
         )
         #expect(Set(predicateProperties.keys) == ["type", "target", "match", "scope", "assertions"])
+        // The authored vocabulary, which is what an agent can write. `noChange`
+        // is absent because it is not authorable: it exists only on the resolved
+        // predicate, where settlement uses it as its gate.
         #expect(
             schemaValue(at: ["properties", "predicate", "properties", "type", "enum"], in: wait)
-                == .array([
-                    .string("exists"),
-                    .string("missing"),
-                    .string("announcement"),
-                    .string("changed"),
-                    .string("no_change"),
-                ])
+                == .array(AccessibilityPredicate.wireTypeValues.map(Value.string))
         )
     }
 
