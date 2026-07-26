@@ -7,14 +7,20 @@ import ThePlans
 /// - The policy sets carry only known `HeistTrait` cases (no `.unknown`).
 /// - `synthesisPriority` is duplicate-free and contains only traits that
 ///   appear in `HeistTrait.allCases`.
-/// - `stateTraits` and `interactiveTraits` are disjoint — a trait
-///   cannot simultaneously mark "state, not identity" and "user interacts
-///   with this".
+/// - identity and state partition every trait: each one is exactly one of
+///   the two, and together they account for all of `HeistTrait.allCases`.
+/// - `staticOnlyTraits` and `interactiveTraits` are disjoint — "static only"
+///   means "not interactive", so membership in both is a contradiction.
+///
+/// Interaction is a third axis, orthogonal to the identity/state partition: a
+/// trait may be interactive and identity (`.button`) or interactive and state
+/// (`.notEnabled`). Nothing reads the two classifications together, so the
+/// axes are free to overlap.
 final class AccessibilityPolicyTests: XCTestCase {
 
     // MARK: - Known traits only
 
-    func testTransientTraitsContainsNoUnknowns() {
+    func testStateTraitsContainsNoUnknowns() {
         for trait in AccessibilityPolicy.stateTraits {
             XCTAssertTrue(HeistTrait.allCases.contains(trait),
                           "stateTraits contains a trait outside HeistTrait.allCases: \(trait)")
@@ -57,11 +63,47 @@ final class AccessibilityPolicyTests: XCTestCase {
                        "synthesisPriority has duplicate entries")
     }
 
-    func testTransientAndInteractiveAreDisjoint() {
-        let overlap = AccessibilityPolicy.stateTraits
-            .intersection(AccessibilityPolicy.interactiveTraits)
-        XCTAssertTrue(overlap.isEmpty,
-                      "stateTraits and interactiveTraits must be disjoint; overlap: \(overlap)")
+    // MARK: - Every trait is identity or state, and never both
+
+    /// The two kinds partition the traits: a trait either contributes to what
+    /// an element *is* or to what state it is *in*, and every trait is one of
+    /// them. Asked through the classifier rather than by set arithmetic, because
+    /// the classifier is what callers consult — `stateTraits` is the only set
+    /// written down, and identity is everything else, so a trait the classifier
+    /// mishandles is invisible to a test that only compares the sets.
+    func testEveryTraitIsEitherIdentityOrState() {
+        var identity: Set<HeistTrait> = []
+        var state: Set<HeistTrait> = []
+
+        for trait in HeistTrait.allCases {
+            switch AccessibilityPolicy.matcherFactStability(.trait(trait)) {
+            case .identity:
+                identity.insert(trait)
+            case .state:
+                state.insert(trait)
+            case nil:
+                XCTFail("\(trait) is neither identity nor state")
+            }
+        }
+
+        XCTAssertTrue(
+            identity.isDisjoint(with: state),
+            "a trait cannot be both: \(identity.intersection(state))"
+        )
+        XCTAssertEqual(
+            identity.union(state), Set(HeistTrait.allCases),
+            "every trait must be classified"
+        )
+        XCTAssertFalse(identity.isEmpty, "no trait establishes identity")
+        XCTAssertFalse(state.isEmpty, "no trait carries state")
+    }
+
+    /// The set that is written down is the state half, exactly.
+    func testStateTraitsAreTheStateHalfOfThePartition() {
+        let classified = Set(HeistTrait.allCases.filter {
+            AccessibilityPolicy.matcherFactStability(.trait($0)) == .state
+        })
+        XCTAssertEqual(classified, AccessibilityPolicy.stateTraits)
     }
 
     func testStaticOnlyAndInteractiveAreDisjoint() {
@@ -86,7 +128,7 @@ final class AccessibilityPolicyTests: XCTestCase {
     /// fields appear in `ElementIdentitySignature` (functional-move
     /// pairing) and what gets stripped from minimal matchers in heists.
     /// Changes here ripple into generated `.heist` artifacts.
-    func testTransientTraitsContentLocked() {
+    func testStateTraitsContentLocked() {
         XCTAssertEqual(AccessibilityPolicy.stateTraits, [
             .selected,
             .notEnabled,

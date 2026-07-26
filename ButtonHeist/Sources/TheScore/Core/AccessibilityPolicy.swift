@@ -29,6 +29,26 @@ public enum AccessibilityMatcherFact: Sendable, Equatable {
 /// format) read the same `Set<HeistTrait>`. UIKit-bitmask derivations
 /// live in TheInsideJob as `AccessibilityPolicy+UIKit`.
 ///
+/// Traits are classified on two independent axes, so a trait is placed by
+/// answering two separate questions:
+///
+/// - **Identity or state.** Identity traits define the element — what it *is*.
+///   State traits change during the element's lifecycle. Every trait is
+///   exactly one of the two, so only `stateTraits` is written down and
+///   identity is everything else.
+/// - **Interactive or not.** Whether Button Heist can act on the element.
+///
+/// The axes cut across each other: `.button` is identity *and* interactive —
+/// being a button is what it is. `.notEnabled` is state *and* about
+/// interactivity, but negatively: it says the element cannot be acted on right
+/// now. `interactiveTraits` holds only the positive capability, because
+/// `Interactivity` reads membership as "advertises an action"; a trait that
+/// withdraws interactivity is expressed by excluding it at the call site
+/// (`.exclude(.traits([.notEnabled]))`), not by joining the set.
+///
+/// Nothing consults identity/state and interactivity together, so overlap
+/// between the axes costs nothing.
+///
 /// Rules:
 /// - Add a new state trait → edit `stateTraits` only.
 /// - Add a new interactive trait → edit `interactiveTraits` only.
