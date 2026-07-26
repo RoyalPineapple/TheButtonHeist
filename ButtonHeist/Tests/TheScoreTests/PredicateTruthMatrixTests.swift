@@ -1,0 +1,232 @@
+import AccessibilitySnapshotModel
+import ButtonHeistTestSupport
+import ThePlans
+import XCTest
+@testable import TheScore
+
+/// The truth table for the predicate algebra: one predicate, one tick
+/// sequence, one verdict.
+///
+/// `ExpectationTests` asks *when* a predicate drains — which tick answers it,
+/// what order survives. This asks the flatter question: given a run of ticks,
+/// is the predicate satisfied or not. Every row is a closed statement about
+/// the algebra, and the table is the point — a shape with no row is a hole you
+/// can see.
+///
+/// # The rules the table encodes
+///
+/// **Everything is `exists` or `missing`.** A predicate decomposes into one or
+/// two element searches against one tree. `appeared(X)` is `missing(X)` then
+/// `exists(X)`; `disappeared(X)` is the reverse. Nothing else exists, so
+/// nothing else needs a rule.
+///
+/// **A level is not a transition.** `exists(X)` asks about one tree and holds
+/// on the first tree that has X — including the baseline. `appeared(X)`
+/// composes two halves and needs a tree without X *before* a tree with it, so
+/// an element that was always there never appears (rows 1-4). This is the only
+/// reason the halves are ordered: relax it and `appeared` means `disappeared`.
+///
+/// **The baseline is the first tick.** Nothing precedes it, so a delta cannot
+/// measure across it. An element already present at the baseline has no
+/// absent-tree behind it and cannot appear (row 7).
+///
+/// **Ordered inside a step, independent between steps.** Two assertions
+/// written together are two steps; one tree answers both at once if it can,
+/// and neither blocks the other. Inside one step the pair stays ordered.
+///
+/// **`noChange` drains nothing.** It is the stillness signal, not evidence: it
+/// passes every predicate untouched and only settles the gate. A predicate
+/// still outstanding when stillness arrives is still outstanding.
+final class PredicateTruthMatrixTests: XCTestCase {
+
+    // MARK: - The table
+
+    /// Rows 1-7 are the invariants rescued from the deleted evidence-kind
+    /// truth matrix, re-expressed as tick sequences. The rest close the shapes
+    /// that matrix never stated.
+    func testTheTruthTable() throws {
+        let ready = ["Ready"]
+        let empty: [String] = []
+
+        try assert(rows: [
+            // # 1-4: a level is not a transition.
+            Row(1, "always-present exists is a level",
+                predicate: .exists("Ready"), ticks: [ready, ready], holds: true),
+            Row(2, "always-present does not appear",
+                predicate: .appeared("Ready"), ticks: [ready, ready], holds: false),
+            Row(3, "always-absent missing is a level",
+                predicate: .missing("Ready"), ticks: [empty, empty], holds: true),
+            Row(4, "always-absent does not disappear",
+                predicate: .disappeared("Ready"), ticks: [empty, empty], holds: false),
+
+            // # 5: the two halves, in order, over two trees.
+            Row(5, "absent then present is an appearance",
+                predicate: .appeared("Ready"), ticks: [empty, ready], holds: true),
+            Row(6, "present then absent is a disappearance",
+                predicate: .disappeared("Ready"), ticks: [ready, empty], holds: true),
+
+            // # 7: the baseline is the first tick, so nothing precedes it.
+            Row(7, "appearance before the baseline is excluded",
+                predicate: .appeared("Ready"), ticks: [ready], holds: false),
+
+            // # 8-9: an exact matcher is not promoted by a longer label.
+            Row(8, "exact match is not satisfied by a combined label",
+                predicate: .appeared("Ticket saved."),
+                ticks: [empty, ["Ticket saved., Dismiss"]], holds: false),
+            Row(9, "exact match is satisfied by the exact label",
+                predicate: .appeared("Ticket saved."),
+                ticks: [empty, ["Ticket saved."]], holds: true),
+
+            // # 10-11: a transient lives inside the run, and the halves that
+            // read it drain when they see it — a later tree cannot un-see it.
+            Row(10, "an appearance inside the run drains at the tick that shows it",
+                predicate: .appeared("Ready"), ticks: [empty, ready, empty], holds: true),
+            Row(11, "a level reads the tick it lands on, not the run",
+                predicate: .exists("Ready"), ticks: [empty, empty], holds: false),
+
+            // # 12-13: the halves are ordered, and the order is the meaning.
+            Row(12, "a departure is not satisfied by an arrival",
+                predicate: .disappeared("Ready"), ticks: [empty, ready], holds: false),
+            Row(13, "an arrival is not satisfied by a departure",
+                predicate: .appeared("Ready"), ticks: [ready, empty], holds: false),
+
+            // # 14-16: steps are independent of each other.
+            Row(14, "two assertions about one frame are both satisfied",
+                predicate: .pair(appeared: "Processing", disappeared: "Submit"),
+                ticks: [["Submit"], ["Processing"]], holds: true),
+            Row(15, "an unsatisfiable sibling does not block the other",
+                predicate: .pair(appeared: "Processing", disappeared: "Ghost"),
+                ticks: [["Submit"], ["Processing"]], holds: false),
+            Row(16, "order between assertions does not matter",
+                predicate: .pair(appeared: "Submit", disappeared: "Processing"),
+                ticks: [["Processing"], ["Submit"]], holds: true),
+
+            // # 17-18: nothing asked still waits for stillness; a level with
+            // no tree to read is not satisfied by stillness alone.
+            Row(17, "a level is not answered by stillness",
+                predicate: .exists("Ready"), ticks: [], holds: false),
+            Row(18, "a satisfied level survives later stillness",
+                predicate: .exists("Ready"), ticks: [ready], holds: true),
+        ])
+    }
+
+    /// The nullary case is not a row: it names no element, so it has no target
+    /// to search for and cannot decompose into `exists`/`missing` like every
+    /// other predicate. It is answerable anyway, because it asks about the tick
+    /// stream rather than about a tree — a `snapshot` tick *is* a change now
+    /// that the producer decides change-vs-stillness, so any snapshot answers
+    /// it. A quiet tree must not, or a wait on it returns immediately.
+    func testANamelessChangeNeedsMovementAndNotMerelyStillness() throws {
+        var quiet = try Expectation([nameless()])
+        quiet.noChange()
+        XCTAssertFalse(quiet.isMet, "stillness alone is not a change")
+
+        var moved = try Expectation([nameless()])
+        moved.snapshot(interface(["Ready"]))
+        moved.snapshot(interface([]))
+        moved.noChange()
+        XCTAssertTrue(moved.isMet, "outstanding: \(moved.outstanding)")
+    }
+
+    /// One tree is one reading, so it cannot be both sides of a change — even
+    /// when two different elements on it answer the two halves separately.
+    func testAnUpdateIsNotSatisfiedByOneTree() throws {
+        var expectation = try Expectation([
+            AccessibilityPredicate.changed(.elements([
+                .updated(.label("Count"), .value(before: "1", after: "2")),
+            ])).resolve(in: .empty)
+        ])
+        // Two elements match the target, at the two values the assertion names.
+        let tree = makeTestInterface(elements: [
+            makeTestHeistElement(description: "Count", label: "Count", value: "1"),
+            makeTestHeistElement(description: "Count", label: "Count", value: "2"),
+        ])
+        expectation.snapshot(tree)
+        expectation.noChange()
+        XCTAssertFalse(
+            expectation.isMet,
+            "one tree answered both halves, so nothing changed"
+        )
+    }
+
+    // MARK: - The runner
+
+    /// Every row is the same fold: feed the trees as snapshot ticks, then the
+    /// `noChange` that ends any real run, and read the verdict. Settlement is
+    /// part of `isMet`, so the trailing `noChange` is what makes a satisfied
+    /// predicate list into a met expectation.
+    private func assert(rows: [Row], file: StaticString = #filePath, line: UInt = #line) throws {
+        for row in rows {
+            var expectation = try Expectation([row.predicate.resolved()])
+            for labels in row.ticks {
+                expectation.snapshot(interface(labels))
+            }
+            expectation.noChange()
+            XCTAssertEqual(
+                expectation.isMet, row.holds,
+                "row \(row.number): \(row.name) — outstanding: \(expectation.outstanding)",
+                file: file, line: line
+            )
+        }
+    }
+
+    private struct Row {
+        let number: Int
+        let name: String
+        let predicate: Shape
+        let ticks: [[String]]
+        let holds: Bool
+
+        init(_ number: Int, _ name: String, predicate: Shape, ticks: [[String]], holds: Bool) {
+            self.number = number
+            self.name = name
+            self.predicate = predicate
+            self.ticks = ticks
+            self.holds = holds
+        }
+    }
+
+    /// The predicate shapes the algebra admits. `exists`/`missing` are the
+    /// single-half ones; the rest compose into two halves or two steps.
+    private enum Shape {
+        case exists(String)
+        case missing(String)
+        case appeared(String)
+        case disappeared(String)
+        case pair(appeared: String, disappeared: String)
+
+        func resolved() throws -> ResolvedAccessibilityPredicate {
+            try authored().resolve(in: .empty)
+        }
+
+        private func authored() -> AccessibilityPredicate {
+            switch self {
+            case .exists(let label):
+                return .exists(.label(label))
+            case .missing(let label):
+                return .missing(.label(label))
+            case .appeared(let label):
+                return .changed(.elements([.appeared(.label(label))]))
+            case .disappeared(let label):
+                return .changed(.elements([.disappeared(.label(label))]))
+            case .pair(let appeared, let disappeared):
+                return .changed(.elements([
+                    .appeared(.label(appeared)),
+                    .disappeared(.label(disappeared)),
+                ]))
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func nameless() throws -> ResolvedAccessibilityPredicate {
+        try AccessibilityPredicate.changed(.elements([])).resolve(in: .empty)
+    }
+
+    private func interface(_ labels: [String]) -> Interface {
+        makeTestInterface(
+            elements: labels.map { makeTestHeistElement(description: $0, label: $0) }
+        )
+    }
+}

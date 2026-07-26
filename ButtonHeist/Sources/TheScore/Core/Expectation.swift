@@ -9,7 +9,8 @@ import ThePlans
 /// fires first, whatever is left is the failure. Nothing here decides that —
 /// waiting and failing are the same state, and only the clock tells them apart.
 package struct Expectation: Equatable {
-    private var pending: [PendingPredicate]
+    /// One step per authored assertion, each draining independently.
+    private var pending: [PendingStep]
 
     /// The gate at the end of the pipe.
     ///
@@ -33,7 +34,7 @@ package struct Expectation: Equatable {
     /// an action with no expectation ends on the first stillness, which is the
     /// whole of what settling used to mean.
     package init(_ authored: [ResolvedAccessibilityPredicate] = []) {
-        pending = authored.flatMap(\.pendingPredicates)
+        pending = authored.flatMap(\.pendingSteps)
     }
 
     /// True once everything asked for has happened *and* the tree went still.
@@ -49,11 +50,8 @@ package struct Expectation: Equatable {
     /// first entry is where the run got stuck; everything behind it was never
     /// asked.
     package var outstanding: [String] {
-        pending.map(\.description) + (isStill ? [] : [Self.gate.description])
+        pending.flatMap(\.descriptions) + (isStill ? [] : [Self.gate.description])
     }
-
-    /// How many predicates are still outstanding, settlement included.
-    package var outstandingCount: Int { outstanding.count }
 
     // MARK: - Ticks
 
@@ -102,37 +100,82 @@ package struct Expectation: Equatable {
 
     // MARK: - Evaluating a tick
 
-    /// A tick walks the list from the front and stops at the first no, then
-    /// meets the gate at the end.
+    /// Every step is offered the tick, then the gate answers last.
     ///
-    /// A predicate that does not read this kind of tick is never asked — an
-    /// unspoken announcement is not a refusal, so the walk carries on past it
-    /// and the graph predicate behind it still gets its turn. Everything that
-    /// *is* asked answers plainly: yes takes it off the list, no ends the walk
-    /// and leaves the rest for a later tick.
-    ///
-    /// One tick can therefore satisfy several consecutive predicates, which is
-    /// what keeps the verdict independent of how finely the tripwire sampled.
-    /// "Satisfied" is not a flag; it means gone from the list.
+    /// One tick satisfies as much as it can — every step this tick answers
+    /// advances, because a tick is one moment and everything true of that moment
+    /// is true at once. "Satisfied" is not a flag; it means gone from the list.
     private mutating func evaluate(_ tick: Tick) {
-        pending = Self.draining(pending, tick)
+        pending = pending.compactMap { $0.draining(tick) }
         isStill = Self.gate.admits(tick)
     }
+}
 
-    /// The list with this tick's answers removed from the front.
+/// One authored assertion, and how much of it is left.
+///
+/// A delta is not a primitive: `appeared(X)` is `missing(X)` then `exists(X)`,
+/// and it means *appeared* only because the second half cannot be asked until
+/// the first has drained. So a step is a short ordered run of presence
+/// predicates, and it is a type rather than a nested array because the pairing
+/// is the meaning — when only the first half has drained, the second has to keep
+/// its own place, or a leftover `exists(X)` is indistinguishable from an
+/// unrelated predicate that happened to land at that index.
+///
+/// Between steps there is nothing to order. Every element question is `exists`
+/// or `missing` against one tree, so a snapshot answers as many steps as it can
+/// at once: two assertions written side by side describe one frame, not a
+/// sequence. `[appeared(Processing), disappeared(Submit)]` is one transition
+/// seen twice.
+///
+/// The one thing a drained half leaves behind is a hash of what it matched, and
+/// the next half must match something that hashes differently. That is the whole
+/// of what makes a pair a *change* — not a baseline, not a diff record, not an
+/// ordering rule the fold has to enforce.
+///
+/// One rule covers every pair. `appeared(X)` reads a tree without X and then one
+/// with it, two readings, two hashes. `updated(X, v1, v2)` reads a tree where X
+/// is v1 and then one where it is v2 — and if both halves are offered the same
+/// tree, they are offered the same reading, so the second refuses. A change needs
+/// two moments, and the hash is what says whether it got them.
+struct PendingStep: Equatable {
+    private let remaining: [PendingPredicate]
+    private let matched: Int?
+
+    init(_ remaining: [PendingPredicate], matched: Int? = nil) {
+        self.remaining = remaining
+        self.matched = matched
+    }
+
+    var descriptions: [String] {
+        remaining.map(\.description)
+    }
+
+    /// This step with the tick's answers removed, or nil once nothing is left.
     ///
-    /// Three cases and no state: a predicate outside the tick's lane has no
-    /// opinion and passes through, one that answers is dropped, and the first
-    /// that refuses ends the walk with everything from it onward intact.
+    /// A predicate outside the tick's lane has no opinion and passes through,
+    /// one that answers is dropped, and the first that refuses ends the walk
+    /// with everything from it onward intact.
+    fileprivate func draining(_ tick: Tick) -> Self? {
+        var carried = matched
+        let next = Self.draining(remaining, tick, &carried)
+        return next.isEmpty ? nil : Self(next, matched: carried)
+    }
+
     private static func draining(
-        _ pending: [PendingPredicate],
-        _ tick: Tick
+        _ remaining: [PendingPredicate],
+        _ tick: Tick,
+        _ matched: inout Int?
     ) -> [PendingPredicate] {
-        guard let next = pending.first else { return [] }
-        let rest = { draining(Array(pending.dropFirst()), tick) }
-        guard next.reads(tick) else { return [next] + rest() }
-        guard next.matches(tick) else { return pending }
-        return rest()
+        guard let next = remaining.first else { return [] }
+        guard next.reads(tick) else {
+            var carried = matched
+            let rest = draining(Array(remaining.dropFirst()), tick, &carried)
+            matched = carried
+            return [next] + rest
+        }
+        guard let hash = next.matching(tick), hash != matched else { return remaining }
+        matched = hash
+        return draining(Array(remaining.dropFirst()), tick, &matched)
     }
 }
 
@@ -170,6 +213,29 @@ private enum Tick {
         case .announcement: return .announcement
         }
     }
+
+    /// Which reading this is, as one comparable value.
+    ///
+    /// A step keeps the reading its last half drained on and refuses a half that
+    /// would drain on the same one, so this has to say whether two ticks are the
+    /// same reading of the interface. For a snapshot that is the elements it
+    /// projects: the semantic content, not the instant it was captured, because
+    /// two captures of an unchanged screen are one reading however far apart they
+    /// are. The others carry what they said, which is all there is of them.
+    var reading: Int {
+        var hasher = Hasher()
+        switch self {
+        case .snapshot(let interface):
+            hasher.combine(interface.projectedElements)
+        case .screenChange(let facts):
+            hasher.combine(facts.idAfter)
+        case .announcement(let spoken):
+            hasher.combine(spoken)
+        case .noChange:
+            hasher.combine("noChange")
+        }
+        return hasher.finalize()
+    }
 }
 
 /// One thing an expectation is still waiting for.
@@ -188,6 +254,7 @@ struct PendingPredicate: Equatable {
         case graph(ResolvedAccessibilityPredicate)
         case screenChange(ResolvedScreenPredicate)
         case announcement(ResolvedAnnouncementPredicate)
+        case anyChange
         case noChange
     }
 
@@ -210,6 +277,13 @@ struct PendingPredicate: Equatable {
         Self(kind: .announcement(predicate))
     }
 
+    /// Any change at all, with no element named. Answered by any snapshot,
+    /// because a snapshot tick is a change: the producer decided that before it
+    /// ever became a tick.
+    static var anyChange: Self {
+        Self(kind: .anyChange)
+    }
+
     /// The settlement gate. Never authored and never in the list: an
     /// expectation holds exactly one of these, at the end of the pipe.
     fileprivate static var noChange: Self {
@@ -221,6 +295,7 @@ struct PendingPredicate: Equatable {
         case .graph(let predicate): return predicate.description
         case .screenChange(let predicate): return predicate.description
         case .announcement(let predicate): return predicate.description
+        case .anyChange: return "any element to change"
         case .noChange: return "the tree to stop changing"
         }
     }
@@ -236,6 +311,7 @@ struct PendingPredicate: Equatable {
         case .graph: return .snapshot
         case .screenChange: return .screenChange
         case .announcement: return .announcement
+        case .anyChange: return .snapshot
         case .noChange: return .noChange
         }
     }
@@ -253,6 +329,17 @@ struct PendingPredicate: Equatable {
         reads(tick) && matches(tick)
     }
 
+    /// What `tick` matched, hashed, or nil if it did not match.
+    ///
+    /// A step compares this against the hash its previous half left behind, and
+    /// what it hashes is the *reading* the half was satisfied by. Two halves
+    /// offered one tick are looking at one tree, so they read the same hash and
+    /// the second refuses: one moment cannot be both sides of a change.
+    fileprivate func matching(_ tick: Tick) -> Int? {
+        guard matches(tick) else { return nil }
+        return tick.reading
+    }
+
     /// Whether `tick` satisfies this predicate.
     ///
     /// Only ever called when `reads(tick)`, so every case that could disagree
@@ -265,6 +352,8 @@ struct PendingPredicate: Equatable {
             return predicate.matches(facts)
         case (.announcement(let spoken), .announcement(let predicate)):
             return predicate.matches(spoken)
+        case (.snapshot, .anyChange):
+            return true
         case (.noChange, .noChange):
             return true
         default:
@@ -274,21 +363,29 @@ struct PendingPredicate: Equatable {
 }
 
 extension ResolvedAccessibilityPredicate {
-    /// This predicate as the things an expectation waits for.
+    /// This predicate as the steps an expectation waits for.
     ///
-    /// Everything but `changed` is itself, once. A delta composes into the
-    /// presence predicates that make it a change, so an assertion list expands
-    /// to twice its length.
-    var pendingPredicates: [PendingPredicate] {
+    /// Everything but `changed(.elements)` is a step of one. An assertion list
+    /// is one step *per assertion*, because a delta's two halves belong together
+    /// and must drain in order, while two assertions written side by side were
+    /// never a claim about which happens first.
+    var pendingSteps: [PendingStep] {
         switch self {
         case .exists, .missing:
-            return [.graph(self)]
+            return [PendingStep([.graph(self)])]
         case .announcement(let predicate):
-            return [.announcement(predicate)]
+            return [PendingStep([.announcement(predicate)])]
         case .changed(.elements(let assertions)):
-            return assertions.flatMap(\.composed).map(PendingPredicate.graph)
+            // Asserting nothing is the nullary delta — "elements changed, never
+            // mind which". It names no element, so it has nothing to search for
+            // and cannot compose into presence predicates; it is answerable
+            // anyway, because a snapshot tick *is* a change now that the producer
+            // decides change-from-stillness. Without this it would map to no
+            // steps at all and a wait on it would return on the first stillness.
+            guard !assertions.isEmpty else { return [PendingStep([.anyChange])] }
+            return assertions.map { PendingStep($0.composed.map(PendingPredicate.graph)) }
         case .changed(.screen(let predicate)):
-            return [.screenChange(predicate)]
+            return [PendingStep([.screenChange(predicate)])]
         }
     }
 
@@ -304,4 +401,5 @@ extension ResolvedAccessibilityPredicate {
         case .announcement, .changed: return false
         }
     }
+
 }

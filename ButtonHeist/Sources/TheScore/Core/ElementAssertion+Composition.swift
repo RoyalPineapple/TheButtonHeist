@@ -50,9 +50,20 @@ extension ResolvedAccessibilityTarget {
     /// compared, it is more checks on the target. An empty list is the
     /// identity, which is what makes the optional `before` free — no checks to
     /// add means the anchor alone.
+    /// A scoped target carries them on the element it names, not on the scope:
+    /// `within(list, .label("Qty")).and(.value("3"))` asks for the Qty *in* the
+    /// list whose value is 3. Returning `self` for those would drop the checks
+    /// silently and leave `updated` satisfied by any Qty at any value.
     func and(_ checks: [ResolvedElementPredicateCheck]) -> ResolvedAccessibilityTarget {
-        guard !checks.isEmpty, case .predicate(let predicate, let ordinal) = self else { return self }
-        return .predicate(ResolvedElementPredicate(predicate.checks + checks), ordinal: ordinal)
+        guard !checks.isEmpty else { return self }
+        switch self {
+        case .predicate(let predicate, let ordinal):
+            return .predicate(ResolvedElementPredicate(predicate.checks + checks), ordinal: ordinal)
+        case .within(let container, let target):
+            return .within(container: container, target: target.and(checks))
+        case .container:
+            return self
+        }
     }
 }
 
