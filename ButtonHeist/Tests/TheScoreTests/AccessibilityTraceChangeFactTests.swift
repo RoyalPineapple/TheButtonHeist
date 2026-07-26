@@ -246,42 +246,6 @@ final class AccessibilityTraceChangeFactTests: AccessibilityTraceDiffTestCase {
         }
     }
 
-    func testTransitionTransientLivesOnCaptureEdgeAndProjectsToFactMetadata() throws {
-        let transient = makeElement(label: "Loading", traits: [.staticText])
-        let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
-        let after = AccessibilityTrace.Capture(
-            sequence: 2,
-            interface: makeInterface(label: "Checkout"),
-            parentHash: before.hash,
-            transition: AccessibilityTrace.Transition(transient: [transient])
-        )
-
-        let facts = AccessibilityTrace.ChangeFact.between(before, after)
-
-        XCTAssertEqual(after.transition.transient, [transient])
-        XCTAssertEqual(facts.testTransient, [transient])
-        XCTAssertEqual(facts.testCaptureEdge?.before.hash, before.hash)
-        XCTAssertEqual(facts.testCaptureEdge?.after.hash, after.hash)
-    }
-
-    func testTransitionTransientProducesFactWhenSettledSnapshotsAreIdentical() throws {
-        let transient = makeElement(label: "Loading", traits: [.staticText])
-        let interface = makeInterface(label: "Menu")
-        let before = AccessibilityTrace.Capture(sequence: 1, interface: interface)
-        let after = AccessibilityTrace.Capture(
-            sequence: 2,
-            interface: interface,
-            parentHash: before.hash,
-            transition: AccessibilityTrace.Transition(transient: [transient])
-        )
-
-        let facts = AccessibilityTrace.ChangeFact.between(before, after)
-        guard let fact = facts.single, case .elementsChanged(let payload) = fact else {
-            return XCTFail("Expected transient-backed elementsChanged fact")
-        }
-        XCTAssertEqual(payload.metadata.transient, [transient])
-    }
-
     func testCaptureContextOnlyDiffsAsElementsChanged() throws {
         let interface = makeInterface()
         let before = AccessibilityTrace.Capture(

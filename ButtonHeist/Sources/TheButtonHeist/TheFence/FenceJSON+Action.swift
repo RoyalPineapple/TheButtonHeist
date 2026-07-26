@@ -228,11 +228,9 @@ struct PublicDelta: Encodable {
         case captureEdge
         case interactionDigest
         case accessibilityNotifications
-        case transient
         case edits
         case newInterface
         case screen
-        case omitted
     }
 
     func encode(to encoder: Encoder) throws {
@@ -240,13 +238,11 @@ struct PublicDelta: Encodable {
         switch projection {
         case .noChange(let metadata):
             try encodeMetadata(metadata, kind: .noChange, to: &container)
-            try encodeTransientOmissions(metadata.transient, to: &container)
 
         case .elementsChanged(let delta):
             try encodeMetadata(delta.metadata, kind: .elementsChanged, to: &container)
             let edits = PublicElementEdits(projection: delta.edits)
             try container.encodeIfPresent(edits.isEmpty ? nil : edits, forKey: .edits)
-            try encodeTransientOmissions(delta.metadata.transient, to: &container)
 
         case .screenChanged(let delta):
             try encodeMetadata(delta.metadata, kind: .screenChanged, to: &container)
@@ -259,7 +255,6 @@ struct PublicDelta: Encodable {
             case .screenSummary:
                 try container.encode(PublicHeistScreenProjection(projection: delta.screen), forKey: .screen)
             }
-            try encodeTransientOmissions(delta.metadata.transient, to: &container)
         }
     }
 
@@ -275,20 +270,6 @@ struct PublicDelta: Encodable {
         if !metadata.accessibilityNotifications.isEmpty {
             try container.encode(metadata.accessibilityNotifications, forKey: .accessibilityNotifications)
         }
-        try container.encodeIfPresent(Self.elements(metadata.transient.elements), forKey: .transient)
-    }
-
-    private func encodeTransientOmissions(
-        _ transient: ElementProjectionBucket,
-        to container: inout KeyedEncodingContainer<CodingKeys>
-    ) throws {
-        let transientOmissions = PublicHeistDeltaOmissions(projection: transient)
-        try container.encodeIfPresent(transientOmissions.isEmpty ? nil : transientOmissions, forKey: .omitted)
-    }
-
-    private static func elements(_ elements: [HeistElement]) -> [PublicElement]? {
-        guard !elements.isEmpty else { return nil }
-        return elements.map { PublicElement(element: $0, detail: .summary) }
     }
 }
 

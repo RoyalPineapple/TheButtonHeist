@@ -52,20 +52,16 @@ public extension AccessibilityTrace {
         /// Stable before/after facts derived from raw captures, before any
         /// renderer limits or element edit omission.
         public let interactionDigest: InteractionDigest?
-        /// Compact projection of `Capture.transition.transient`.
-        public let transient: [HeistElement]
         /// Scoped UIKit/SwiftUI notification evidence attached to this fact.
         public let accessibilityNotifications: [AccessibilityNotificationEvidence]
 
         public init(
             captureEdge: CaptureEdge? = nil,
             interactionDigest: InteractionDigest? = nil,
-            transient: [HeistElement] = [],
             accessibilityNotifications: [AccessibilityNotificationEvidence] = []
         ) {
             self.captureEdge = captureEdge
             self.interactionDigest = interactionDigest
-            self.transient = transient
             self.accessibilityNotifications = accessibilityNotifications
         }
 
@@ -75,7 +71,6 @@ public extension AccessibilityTrace {
             Self(
                 captureEdge: captureEdge,
                 interactionDigest: interactionDigest,
-                transient: transient,
                 accessibilityNotifications: accessibilityNotifications.filter(isIncluded)
             )
         }
@@ -184,35 +179,6 @@ public extension AccessibilityTrace {
             ChangeFact.between(before, after)
         }
     }
-
-    /// Elements the window saw and then lost — a toast, a spinner, a banner.
-    ///
-    /// Derived from the retained captures rather than from the fact stream,
-    /// because a transient is a statement about a *window*, not about an edge.
-    /// An element that appears at capture 2 and is gone by capture 4 is
-    /// evidence no single edge holds: the fact stream reports the arrival and
-    /// the departure separately, and a baseline replacement in between reports
-    /// neither.
-    ///
-    /// Captures are retained in full, so the honest derivation is direct: an
-    /// element present in some intermediate capture and absent from the last
-    /// one came and went. That answer survives a screen change, where no
-    /// element facts exist to fold.
-    var transientElements: [HeistElement] {
-        guard let first = captures.first, let last = captures.last, captures.count > 2 else {
-            return []
-        }
-        let keys = { (capture: Capture) in
-            Set(capture.interface.projectedElementRecords.map { ElementDiffRecord($0).diffPairingKey })
-        }
-        let endpoints = keys(first).union(keys(last))
-        var seen = Set<ElementDiffPairingKey>()
-        return captures.dropFirst().dropLast()
-            .flatMap(\.interface.projectedElementRecords)
-            .map(ElementDiffRecord.init)
-            .filter { !endpoints.contains($0.diffPairingKey) && seen.insert($0.diffPairingKey).inserted }
-            .map(\.element)
-    }
 }
 
 // MARK: - Element Edits
@@ -271,7 +237,6 @@ extension AccessibilityTrace.ChangeFactMetadata: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case captureEdge
         case interactionDigest
-        case transient
         case accessibilityNotifications
     }
 
@@ -284,7 +249,6 @@ extension AccessibilityTrace.ChangeFactMetadata: Codable {
                 AccessibilityTrace.InteractionDigest.self,
                 forKey: .interactionDigest
             ),
-            transient: try container.decodeIfPresent([HeistElement].self, forKey: .transient) ?? [],
             accessibilityNotifications: try container.decodeIfPresent(
                 [AccessibilityNotificationEvidence].self,
                 forKey: .accessibilityNotifications
@@ -296,9 +260,6 @@ extension AccessibilityTrace.ChangeFactMetadata: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(captureEdge, forKey: .captureEdge)
         try container.encodeIfPresent(interactionDigest, forKey: .interactionDigest)
-        if !transient.isEmpty {
-            try container.encode(transient, forKey: .transient)
-        }
         if !accessibilityNotifications.isEmpty {
             try container.encode(accessibilityNotifications, forKey: .accessibilityNotifications)
         }

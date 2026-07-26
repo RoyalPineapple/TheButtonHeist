@@ -134,26 +134,7 @@ struct DeltaProjectionMetadata: Sendable {
     let elementCount: Int
     let captureEdge: AccessibilityTrace.CaptureEdge?
     let interactionDigest: AccessibilityTrace.InteractionDigest?
-    let transient: ElementProjectionBucket
     let accessibilityNotifications: [AccessibilityNotificationEvidence]
-
-    init(
-        elementCount: Int,
-        captureEdge: AccessibilityTrace.CaptureEdge?,
-        interactionDigest: AccessibilityTrace.InteractionDigest?,
-        transient: [HeistElement],
-        accessibilityNotifications: [AccessibilityNotificationEvidence],
-        profile: ProjectionProfile
-    ) {
-        self.elementCount = elementCount
-        self.captureEdge = captureEdge
-        self.interactionDigest = interactionDigest
-        self.transient = ElementProjectionBucket(
-            elements: transient,
-            limit: profile.limits.deltaElementsPerBucket
-        )
-        self.accessibilityNotifications = accessibilityNotifications
-    }
 }
 
 struct DeltaElementsChangedProjection: Sendable {
@@ -199,9 +180,7 @@ enum DeltaProjection: Sendable {
             elementCount: finalCapture.interface.projectedElements.count,
             captureEdge: folded.captureEdge,
             interactionDigest: folded.interactionDigest,
-            transient: folded.transient,
-            accessibilityNotifications: folded.accessibilityNotifications,
-            profile: profile
+            accessibilityNotifications: folded.accessibilityNotifications
         )
 
         if folded.screenChanged {
@@ -239,7 +218,6 @@ private struct DeltaFactFold {
             if let interactionDigest = fact.metadata.interactionDigest {
                 accumulator.interactionDigests.append(interactionDigest)
             }
-            accumulator.metadataTransient.append(contentsOf: fact.metadata.transient)
             accumulator.accessibilityNotifications.append(contentsOf: fact.metadata.accessibilityNotifications)
 
             switch fact {
@@ -274,8 +252,6 @@ private struct DeltaFoldAccumulator {
     var added: [HeistElement] = []
     var removed: [HeistElement] = []
     var updated: [ElementUpdate] = []
-    var metadataTransient: [HeistElement] = []
-    var lifecycleTransient: [HeistElement] = []
     var captureEdges: [AccessibilityTrace.CaptureEdge] = []
     var interactionDigests: [AccessibilityTrace.InteractionDigest] = []
     var accessibilityNotifications: [AccessibilityNotificationEvidence] = []
@@ -284,7 +260,6 @@ private struct DeltaFoldAccumulator {
     mutating func applyAppearance(_ element: HeistElement) {
         if let index = removed.firstIndex(of: element) {
             removed.remove(at: index)
-            appendTransient(element)
         } else {
             added.append(element)
         }
@@ -293,7 +268,6 @@ private struct DeltaFoldAccumulator {
     mutating func applyDisappearance(_ element: HeistElement) {
         if let index = added.firstIndex(of: element) {
             added.remove(at: index)
-            appendTransient(element)
         } else if let index = updated.firstIndex(where: { $0.after == element }) {
             removed.append(updated.remove(at: index).before)
         } else {
@@ -312,7 +286,6 @@ private struct DeltaFoldAccumulator {
                 updated[index] = composite
             } else {
                 updated.remove(at: index)
-                appendTransient(update.after)
             }
             return
         }
@@ -320,10 +293,8 @@ private struct DeltaFoldAccumulator {
     }
 
     var result: DeltaFoldResult {
-        let transientElements = metadataTransient + lifecycleTransient
-        return DeltaFoldResult(
+        DeltaFoldResult(
             edits: ElementEdits(added: added, removed: removed, updated: updated),
-            transient: transientElements.uniqued(),
             captureEdge: captureEdges.first.map { first in
                 AccessibilityTrace.CaptureEdge(
                     before: first.before,
@@ -348,15 +319,10 @@ private struct DeltaFoldAccumulator {
             screenChanged: screenChanged
         )
     }
-
-    private mutating func appendTransient(_ element: HeistElement) {
-        lifecycleTransient.append(element)
-    }
 }
 
 private struct DeltaFoldResult {
     let edits: ElementEdits
-    let transient: [HeistElement]
     let captureEdge: AccessibilityTrace.CaptureEdge?
     let interactionDigest: AccessibilityTrace.InteractionDigest?
     let accessibilityNotifications: [AccessibilityNotificationEvidence]

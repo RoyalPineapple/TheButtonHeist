@@ -466,13 +466,7 @@ extension FenceResponse {
     private func formatDelta(_ projection: DeltaProjection) -> String {
         switch projection {
         case .noChange(let metadata):
-            guard !metadata.transient.elements.isEmpty else {
-                return "[\(metadata.elementCount) elements, no change]"
-            }
-            let transients = metadata.transient.elements
-                .map { "+- \(Self.compactElementLine($0))" }
-                .joined(separator: "; ")
-            return "[\(metadata.elementCount) elements, no net change: \(transients)]"
+            return "[\(metadata.elementCount) elements, no change]"
         case .elementsChanged(let delta):
             var parts: [String] = ["\(delta.metadata.elementCount) elements"]
             if delta.edits.added.elements.count > 0 {
@@ -490,10 +484,7 @@ extension FenceResponse {
             if !delta.metadata.accessibilityNotifications.isEmpty {
                 parts.append("\(delta.metadata.accessibilityNotifications.count) accessibility notification(s)")
             }
-            let detail = Self.compactElementEditLines(
-                edits: delta.edits,
-                transient: delta.metadata.transient.elements
-            )
+            let detail = Self.compactElementEditLines(edits: delta.edits)
             guard !detail.isEmpty else {
                 return "[" + parts.joined(separator: ", ") + "]"
             }
@@ -506,7 +497,7 @@ extension FenceResponse {
         }
     }
 
-    private static func compactElementEditLines(edits: DeltaEditsProjection?, transient: [HeistElement]) -> [String] {
+    private static func compactElementEditLines(edits: DeltaEditsProjection?) -> [String] {
         var lines: [String] = []
         lines.append(contentsOf: edits?.added.elements.map { "+ \(compactElementLine($0))" } ?? [])
         lines.append(contentsOf: edits?.removed.elements.map { "- \(compactElementLine($0))" } ?? [])
@@ -519,7 +510,6 @@ extension FenceResponse {
                 lines.append("~ \(name): \(change.property.rawValue) \"\(display(change.oldValue))\" -> \"\(display(change.newValue))\"")
             }
         }
-        lines.append(contentsOf: transient.map { "+- \(compactElementLine($0))" })
         return lines
     }
 

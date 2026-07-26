@@ -16,7 +16,6 @@ enum AccessibilityTraceDiff {
         let metadata = AccessibilityTrace.ChangeFactMetadata(
             captureEdge: edge,
             interactionDigest: interactionDigest,
-            transient: after.transition.transient,
             accessibilityNotifications: after.transition.accessibilityNotifications
         )
         let change = AccessibilityObservationChangeReducer.reduce(
@@ -96,7 +95,6 @@ enum AccessibilityTraceDiff {
 
         guard fact.hasLifecycleOrUpdateFacts
             || fact.isNotificationOnly
-            || !metadata.transient.isEmpty
             || metadata.interactionDigest?.firstResponderChanged == true
         else { return [] }
 

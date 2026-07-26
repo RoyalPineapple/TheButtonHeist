@@ -80,8 +80,6 @@ extension TheFenceCompactFormattingContractTests {
         let delta = try publicJSONProbe(response).object("delta")
 
         XCTAssertEqual(try delta.string("kind"), "screenChanged")
-        XCTAssertEqual(try delta.array("transient").count, 1)
-        XCTAssertEqual(try delta.array("transient").first?.string("identifier"), "saved_toast")
         try delta.assertMissing("edits")
     }
 }

@@ -45,31 +45,6 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertTrue(human.contains(#"+ "Barbaresco":"$55.00" staticText id="wine_barbaresco""#), human)
     }
 
-    func testDeltaFoldsFastElementLifecycleWithoutEndpointDiffing() throws {
-        let toast = makeTestHeistElement(label: "Saved", identifier: "saved_toast", traits: [.staticText])
-        let empty = makeTestInterface(elements: [])
-        let visible = makeTestInterface(elements: [toast])
-        let trace = AccessibilityTrace(first: empty)
-            .appending(visible)
-            .appending(empty)
-        let response = FenceResponse.action(
-            command: .activate,
-            result: ActionResult.success(
-                payload: .activate,
-                observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
-            )
-        )
-
-        let delta = try publicJSONProbe(response).object("delta")
-        let compact = response.compactFormatted()
-
-        XCTAssertEqual(try delta.string("kind"), "elementsChanged")
-        XCTAssertEqual(try delta.array("transient").first?.string("identifier"), "saved_toast")
-        try delta.assertMissing("edits")
-        XCTAssertTrue(compact.contains("activate: elements changed"), compact)
-        XCTAssertTrue(compact.contains(#"+- "Saved" staticText id="saved_toast""#), compact)
-    }
-
     func testNotificationOnlyDeltaPreservesDeduplicatedTemporalEvidence() throws {
         let interface = makeTestInterface(elementCount: 1)
         let first = AccessibilityNotificationEvidence(

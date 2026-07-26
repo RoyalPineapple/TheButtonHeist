@@ -16,7 +16,6 @@ private enum AccessibilityTraceCaptureCodingKeys: String, CodingKey, CaseIterabl
 
 private enum AccessibilityTraceTransitionCodingKeys: String, CodingKey, CaseIterable {
     case fallbackReason
-    case transient
     case accessibilityNotifications
     case accessibilityNotificationGap
 }
@@ -149,8 +148,6 @@ public extension AccessibilityTrace {
         /// Typed fallback reason used when scoped notifications did not
         /// identify the screen transition.
         public let fallbackReason: AccessibilityObservationFallbackReason?
-        /// Elements that appeared and disappeared while settling this edge.
-        public let transient: [HeistElement]
         /// AX notification traffic observed while moving into this capture.
         /// Element payloads reference nodes in this capture's interface tree.
         public let accessibilityNotifications: [AccessibilityNotificationEvidence]
@@ -160,19 +157,16 @@ public extension AccessibilityTrace {
 
         public init(
             fallbackReason: AccessibilityObservationFallbackReason? = nil,
-            transient: [HeistElement] = [],
             accessibilityNotifications: [AccessibilityNotificationEvidence] = [],
             accessibilityNotificationGap: AccessibilityNotificationGap? = nil
         ) {
             self.fallbackReason = fallbackReason
-            self.transient = transient
             self.accessibilityNotifications = accessibilityNotifications
             self.accessibilityNotificationGap = accessibilityNotificationGap
         }
 
         public var isEmpty: Bool {
             fallbackReason == nil
-                && transient.isEmpty
                 && accessibilityNotifications.isEmpty
                 && accessibilityNotificationGap == nil
         }
@@ -188,7 +182,6 @@ public extension AccessibilityTrace {
                     AccessibilityObservationFallbackReason.self,
                     forKey: .fallbackReason
                 ),
-                transient: try container.decodeIfPresent([HeistElement].self, forKey: .transient) ?? [],
                 accessibilityNotifications: try container.decodeIfPresent(
                     [AccessibilityNotificationEvidence].self,
                     forKey: .accessibilityNotifications
@@ -203,9 +196,6 @@ public extension AccessibilityTrace {
         public func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: AccessibilityTraceTransitionCodingKeys.self)
             try container.encodeIfPresent(fallbackReason, forKey: .fallbackReason)
-            if !transient.isEmpty {
-                try container.encode(transient, forKey: .transient)
-            }
             if !accessibilityNotifications.isEmpty {
                 try container.encode(accessibilityNotifications, forKey: .accessibilityNotifications)
             }

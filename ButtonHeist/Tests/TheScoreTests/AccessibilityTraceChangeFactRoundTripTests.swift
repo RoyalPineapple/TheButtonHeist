@@ -28,17 +28,6 @@ final class AccessibilityTraceChangeFactRoundTripTests: XCTestCase {
 
     // MARK: - Metadata
 
-    func testTransientMetadataRoundTrip() throws {
-        let spinner = makeElement(label: "Loading")
-        let fact = AccessibilityTrace.ChangeFact.elementsChanged(.init(
-            metadata: .init(transient: [spinner])
-        ))
-
-        let decoded = try roundTrip(fact)
-
-        XCTAssertEqual(decoded.metadata.transient.map(\.label), ["Loading"])
-    }
-
     func testInteractionDigestRoundTripsOnFactMetadata() throws {
         let digest = AccessibilityTrace.InteractionDigest(
             nodeCountBefore: 1,
@@ -117,8 +106,7 @@ final class AccessibilityTraceChangeFactRoundTripTests: XCTestCase {
         let fact = AccessibilityTrace.ChangeFact.elementsChanged(.init(
             appeared: [appeared],
             disappeared: [disappeared],
-            updated: [update],
-            metadata: .init(transient: [makeElement(label: "Loading")])
+            updated: [update]
         ))
         let data = try encoder.encode(fact)
         let json = try JSONProbe(data: data)
@@ -140,7 +128,6 @@ final class AccessibilityTraceChangeFactRoundTripTests: XCTestCase {
         XCTAssertEqual(payload.appeared, [appeared])
         XCTAssertEqual(payload.disappeared, [disappeared])
         XCTAssertEqual(payload.updated, [update])
-        XCTAssertEqual(payload.metadata.transient.map(\.label), ["Loading"])
     }
 
     // MARK: - Screen changed

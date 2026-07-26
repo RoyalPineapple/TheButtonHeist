@@ -87,11 +87,10 @@ private func identityStrings(_ node: AccessibilityTrace.InterfaceChangeNode) -> 
 }
 
 private func metadataEvidenceText(_ metadata: AccessibilityTrace.ChangeFactMetadata) -> [String] {
-    metadata.transient.flatMap(identityStrings)
-        + metadata.accessibilityNotifications.flatMap { notification in
-            notificationEvidenceText(notification.notificationData)
-                + notificationEvidenceText(notification.associatedElement)
-        }
+    metadata.accessibilityNotifications.flatMap { notification in
+        notificationEvidenceText(notification.notificationData)
+            + notificationEvidenceText(notification.associatedElement)
+    }
 }
 
 private func notificationEvidenceText(_ payload: AccessibilityNotificationPayload) -> [String] {

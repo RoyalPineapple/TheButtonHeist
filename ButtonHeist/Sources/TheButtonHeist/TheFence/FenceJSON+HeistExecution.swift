@@ -173,20 +173,6 @@ struct PublicHeistElementEditOmissions: Encodable {
     }
 }
 
-struct PublicHeistDeltaOmissions: Encodable {
-    let transient: Int?
-    let transientKeys: [String]?
-
-    init(projection: ElementProjectionBucket) {
-        self.transient = projection.omittedCount
-        self.transientKeys = projection.omittedKeys
-    }
-
-    var isEmpty: Bool {
-        transient == nil && transientKeys == nil
-    }
-}
-
 struct PublicHeistScreenProjection: Encodable {
     let screenDescription: String
     let screenId: String?

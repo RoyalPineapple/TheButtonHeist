@@ -3,8 +3,7 @@ import XCTest
 @testable import TheScore
 
 /// Wire-shape tests for the current auto-settle fields:
-/// `ActionResult.settled` / `settleTimeMs` and
-/// transient elements on the no-change delta payload.
+/// `ActionResult.settled` / `settleTimeMs`.
 final class AutoSettleFieldsTests: XCTestCase {
 
     // MARK: - ActionResult
@@ -155,30 +154,6 @@ final class AutoSettleFieldsTests: XCTestCase {
         let contradictory = try JSONSerialization.data(withJSONObject: object)
 
         XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: contradictory))
-    }
-
-    // MARK: - Change-fact transient metadata
-
-    func testAccessibilityTraceChangeFactRoundTripsWithTransient() throws {
-        let element = HeistElement(
-            description: "Loading",
-            label: "Processing",
-            value: nil,
-            identifier: nil,
-            traits: [.staticText],
-            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 30,
-            actions: []
-        )
-        let fact = AccessibilityTrace.ChangeFact.elementsChanged(.init(
-            metadata: .init(transient: [element])
-        ))
-        let data = try JSONEncoder().encode(fact)
-        let decoded = try JSONDecoder().decode(AccessibilityTrace.ChangeFact.self, from: data)
-        guard case .elementsChanged(let payload) = decoded else {
-            return XCTFail("Expected elementsChanged, got \(decoded)")
-        }
-        XCTAssertEqual(payload.metadata.transient.count, 1)
-        XCTAssertEqual(payload.metadata.transient.first?.label, "Processing")
     }
 
 }

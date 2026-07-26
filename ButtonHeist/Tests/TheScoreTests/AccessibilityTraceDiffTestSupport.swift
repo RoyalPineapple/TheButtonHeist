@@ -12,10 +12,6 @@ extension Collection where Element == AccessibilityTrace.ChangeFact {
         }.flatMap { $0 })
     }
 
-    var testTransient: [HeistElement] {
-        flatMap(\.metadata.transient)
-    }
-
     var testCaptureEdge: AccessibilityTrace.CaptureEdge? {
         first?.metadata.captureEdge
     }

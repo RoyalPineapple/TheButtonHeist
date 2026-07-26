@@ -14,36 +14,13 @@ extension FenceResponse {
 
     static func compactDeltaRendering(_ projection: DeltaProjection) -> CompactDeltaRendering {
         switch projection {
-        case .noChange(let metadata):
-            // Auto-settle can produce a no-change delta carrying transients
-            // when an element appeared and disappeared during settle but
-            // baseline and final are otherwise identical. Surface those.
-            if metadata.transient.elements.isEmpty {
-                return CompactDeltaRendering(summary: "no change")
-            }
-            var lines: [String] = []
-            for element in metadata.transient.elements {
-                lines.append("  +- \(compactElementLine(element))")
-            }
-            if let omitted = metadata.transient.omittedCount {
-                lines.append("  ... transient omitted \(omitted) observed elements")
-            }
-            lines.append(contentsOf: compactNotificationLines(metadata.accessibilityNotifications))
-            return CompactDeltaRendering(
-                summary: "no net change (\(metadata.elementCount) elements)",
-                detailLines: lines
-            )
+        case .noChange:
+            return CompactDeltaRendering(summary: "no change")
 
         case .elementsChanged(let delta):
             let metadata = delta.metadata
             var lines: [String] = []
             lines.append(contentsOf: compactEditLines(delta.edits))
-            for element in metadata.transient.elements {
-                lines.append("  +- \(compactElementLine(element))")
-            }
-            if let omitted = metadata.transient.omittedCount {
-                lines.append("  ... transient omitted \(omitted) observed elements")
-            }
             lines.append(contentsOf: compactNotificationLines(metadata.accessibilityNotifications))
             return CompactDeltaRendering(
                 summary: "elements changed (\(metadata.elementCount) elements)",

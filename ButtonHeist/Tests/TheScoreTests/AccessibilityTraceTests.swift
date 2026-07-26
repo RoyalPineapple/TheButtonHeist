@@ -74,10 +74,7 @@ final class AccessibilityTraceTests: XCTestCase {
         let withTransition = AccessibilityTrace.Capture(
             sequence: 1,
             interface: interface,
-            transition: AccessibilityTrace.Transition(
-                fallbackReason: .primaryHeaderChanged,
-                transient: [makeElement(label: "Loading", traits: [.staticText])]
-            )
+            transition: AccessibilityTrace.Transition(fallbackReason: .primaryHeaderChanged)
         )
 
         XCTAssertEqual(stable.hash, withTransition.hash)
@@ -137,18 +134,13 @@ final class AccessibilityTraceTests: XCTestCase {
     func testAppendingCarriesTransitionOnCaptureEdge() throws {
         let first = makeInterface(label: "Home")
         let second = makeInterface(label: "Settings")
-        let transient = makeElement(label: "Loading", traits: [.staticText])
 
         let trace = AccessibilityTrace(first: first).appending(
             second,
-            transition: AccessibilityTrace.Transition(
-                fallbackReason: .primaryHeaderChanged,
-                transient: [transient]
-            )
+            transition: AccessibilityTrace.Transition(fallbackReason: .primaryHeaderChanged)
         )
 
         XCTAssertEqual(trace.captures[1].transition.fallbackReason, .primaryHeaderChanged)
-        XCTAssertEqual(trace.captures[1].transition.transient, [transient])
         XCTAssertEqual(trace.captures[1].parentHash, trace.captures[0].hash)
     }
 

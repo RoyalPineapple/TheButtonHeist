@@ -308,9 +308,8 @@ predicate work. It has no public opt-in, continuity token, or result field.
 Responses may include compact public deltas named `noChange`,
 `elementsChanged`, or `screenChanged`. This `delta` is a one-way temporal fold:
 it stacks the ordered facts, squashes them into endpoint-friendly edits, and
-lets a screen marker dominate the final kind. It may retain bounded transient
-evidence, but it cannot preserve the ordered history it folded, so predicates
-never consume it. The full model
+lets a screen marker dominate the final kind. It cannot preserve the ordered
+history it folded, so predicates never consume it. The full model
 is drawn in the [observation pipeline diagram](diagrams/observation-pipeline.md).
 
 ## Interface Rendering Metadata

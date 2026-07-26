@@ -70,7 +70,6 @@ final class DeltaProjectionTests: XCTestCase {
         )
         try edits.assertMissing("added")
         try edits.assertMissing("updated")
-        try json.assertMissing("transient")
         try json.assertMissing("newInterface")
         try json.assertMissing("screen")
         try json.assertMissing("omitted")
@@ -148,7 +147,6 @@ final class DeltaProjectionTests: XCTestCase {
         }
 
         XCTAssertEqual(delta.screen.elements.compactMap(\.identifier), ["checkout", "pay"])
-        XCTAssertEqual(delta.metadata.transient.elements.compactMap(\.identifier), ["saved"])
 
         let json = try publicDeltaJSON(projection)
         XCTAssertEqual(try json.string("kind"), "screenChanged")
