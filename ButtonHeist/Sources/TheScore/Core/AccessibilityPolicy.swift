@@ -18,7 +18,7 @@ public enum AccessibilityMatcherFact: Sendable, Equatable {
 
 /// Single source of truth for trait-related rules-of-the-world.
 ///
-/// Every site that encodes a rule *about traits* — which are transient,
+/// Every site that encodes a rule *about traits* — which are state,
 /// which are interactive, which drive heistId synthesis, which are
 /// purely descriptive — reads from this namespace. Adding or moving a
 /// trait policy is a one-file edit; downstream sites are pure consumers.
@@ -30,13 +30,13 @@ public enum AccessibilityMatcherFact: Sendable, Equatable {
 /// live in TheInsideJob as `AccessibilityPolicy+UIKit`.
 ///
 /// Rules:
-/// - Add a new transient trait → edit `transientTraits` only.
+/// - Add a new state trait → edit `stateTraits` only.
 /// - Add a new interactive trait → edit `interactiveTraits` only.
 /// - Reorder heistId synthesis → edit `synthesisPriority` only and run
 ///   `SynthesisDeterminismTests` (changes here are wire-format breaks).
 public enum AccessibilityPolicy {
 
-    // MARK: - Transient Traits
+    // MARK: - State Traits
 
     /// Traits whose presence is *state*, not *identity*.
     ///
@@ -47,7 +47,7 @@ public enum AccessibilityPolicy {
     /// - `AccessibilityTrace.ChangeFact.between` (functional-move pairing)
     /// - `MinimumPredicateSelector` (matcher suggestion — adds state only
     ///   when semantic predicates remain ambiguous)
-    public static let transientTraits: Set<HeistTrait> = [
+    public static let stateTraits: Set<HeistTrait> = [
         .selected,
         .notEnabled,
         .isEditing,
@@ -160,9 +160,9 @@ public enum AccessibilityPolicy {
         case .value:
             return .state
         case .trait(let trait):
-            return transientTraits.contains(trait) ? .state : .identity
+            return stateTraits.contains(trait) ? .state : .identity
         case .excludedTrait(let trait):
-            return transientTraits.contains(trait) ? .state : nil
+            return stateTraits.contains(trait) ? .state : nil
         }
     }
 
@@ -173,7 +173,7 @@ public enum AccessibilityPolicy {
         case .label:
             return 10
         case .trait(let trait):
-            return (transientTraits.contains(trait) ? 220 : 20) + matcherTraitPriority(trait)
+            return (stateTraits.contains(trait) ? 220 : 20) + matcherTraitPriority(trait)
         case .value:
             return 200
         case .excludedTrait(let trait):
@@ -230,7 +230,7 @@ public enum AccessibilityPolicy {
     }
 
     public static var orderedMatcherStateTraits: [HeistTrait] {
-        orderedMatcherTraits(Array(transientTraits))
+        orderedMatcherTraits(Array(stateTraits))
     }
 
     private static func matcherTraitPriority(_ trait: HeistTrait) -> Int {

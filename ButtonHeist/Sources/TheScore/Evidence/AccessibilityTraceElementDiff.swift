@@ -234,7 +234,7 @@ struct ElementDiffPairingKey: Hashable, Sendable, Comparable {
         let element = record.element
         text = Self.identityText(for: element)
         identityTraits = Set(element.traits.filter {
-            !AccessibilityPolicy.transientTraits.contains($0)
+            !AccessibilityPolicy.stateTraits.contains($0)
         })
     }
 
@@ -294,8 +294,8 @@ extension HeistElement {
     /// transition. Replaces the removed internal element id: the diff has no
     /// notion of element identity beyond what the wire-visible content implies.
     /// Mirrors the old identity synthesis — the first non-empty of
-    /// `identifier`/`label`/`description`, plus non-transient (identity) traits —
-    /// so transient state changes (selected, focused) don't break pairing.
+    /// `identifier`/`label`/`description`, plus identity traits — so state
+    /// trait changes (selected, focused) don't break pairing.
     var diffPairingKey: ElementDiffPairingKey {
         ElementDiffPairingKey(element: self)
     }

@@ -22,15 +22,15 @@ extension AccessibilityPolicy {
         let mask: AccessibilityTraits
     }
 
-    /// Bitmask form of `transientTraits`. Consumed by
+    /// Bitmask form of `stateTraits`. Consumed by
     /// `TheVault.stableTraitNames`.
-    static let transientTraitsBitmask: AccessibilityTraits =
-        AccessibilityTraits.fromNames(transientTraits.map(\.rawValue))
+    static let stateTraitsBitmask: AccessibilityTraits =
+        AccessibilityTraits.fromNames(stateTraits.map(\.rawValue))
 
-    /// Set of trait *names* in `transientTraits`. Consumed by
+    /// Set of trait *names* in `stateTraits`. Consumed by
     /// `TheVault.stableTraitNames` for `Set<String>` subtraction.
-    static let transientTraitNames: Set<String> =
-        Set(transientTraits.map(\.rawValue))
+    static let stateTraitNames: Set<String> =
+        Set(stateTraits.map(\.rawValue))
 
     /// Bitmask form of `interactiveTraits`. Consumed by
     /// `TheVault.Interactivity.hasInteractiveTraits`.

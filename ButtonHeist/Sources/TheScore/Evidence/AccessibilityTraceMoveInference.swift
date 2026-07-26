@@ -133,7 +133,7 @@ private struct ElementIdentitySignature: Hashable {
 private struct ElementStateSignature: Hashable {
     let label: String?
     let value: String?
-    let transientTraits: Set<HeistTrait>
+    let stateTraits: Set<HeistTrait>
     let respondsToUserInteraction: Bool
     let customContent: [HeistCustomContent]?
     let rotors: [HeistRotor]?
@@ -159,7 +159,7 @@ private func identitySignature(for element: HeistElement) -> ElementIdentitySign
         identifier: element.identifier,
         hint: element.hint,
         stableTraits: Set(element.traits.filter {
-            !AccessibilityPolicy.transientTraits.contains($0)
+            !AccessibilityPolicy.stateTraits.contains($0)
         })
     )
 }
@@ -168,7 +168,7 @@ private func stateSignature(for element: HeistElement) -> ElementStateSignature 
     ElementStateSignature(
         label: element.label,
         value: element.value,
-        transientTraits: Set(element.traits.filter(AccessibilityPolicy.transientTraits.contains)),
+        stateTraits: Set(element.traits.filter(AccessibilityPolicy.stateTraits.contains)),
         respondsToUserInteraction: element.respondsToUserInteraction,
         customContent: element.customContent,
         rotors: element.rotors,

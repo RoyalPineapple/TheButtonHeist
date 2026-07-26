@@ -7,7 +7,7 @@ import ThePlans
 /// - The policy sets carry only known `HeistTrait` cases (no `.unknown`).
 /// - `synthesisPriority` is duplicate-free and contains only traits that
 ///   appear in `HeistTrait.allCases`.
-/// - `transientTraits` and `interactiveTraits` are disjoint — a trait
+/// - `stateTraits` and `interactiveTraits` are disjoint — a trait
 ///   cannot simultaneously mark "state, not identity" and "user interacts
 ///   with this".
 final class AccessibilityPolicyTests: XCTestCase {
@@ -15,9 +15,9 @@ final class AccessibilityPolicyTests: XCTestCase {
     // MARK: - Known traits only
 
     func testTransientTraitsContainsNoUnknowns() {
-        for trait in AccessibilityPolicy.transientTraits {
+        for trait in AccessibilityPolicy.stateTraits {
             XCTAssertTrue(HeistTrait.allCases.contains(trait),
-                          "transientTraits contains a trait outside HeistTrait.allCases: \(trait)")
+                          "stateTraits contains a trait outside HeistTrait.allCases: \(trait)")
         }
     }
 
@@ -58,10 +58,10 @@ final class AccessibilityPolicyTests: XCTestCase {
     }
 
     func testTransientAndInteractiveAreDisjoint() {
-        let overlap = AccessibilityPolicy.transientTraits
+        let overlap = AccessibilityPolicy.stateTraits
             .intersection(AccessibilityPolicy.interactiveTraits)
         XCTAssertTrue(overlap.isEmpty,
-                      "transientTraits and interactiveTraits must be disjoint; overlap: \(overlap)")
+                      "stateTraits and interactiveTraits must be disjoint; overlap: \(overlap)")
     }
 
     func testStaticOnlyAndInteractiveAreDisjoint() {
@@ -82,12 +82,12 @@ final class AccessibilityPolicyTests: XCTestCase {
 
     // MARK: - Locked contents (regression guard)
 
-    /// `transientTraits` is wire-format-adjacent: it determines what
+    /// `stateTraits` is wire-format-adjacent: it determines what
     /// fields appear in `ElementIdentitySignature` (functional-move
     /// pairing) and what gets stripped from minimal matchers in heists.
     /// Changes here ripple into generated `.heist` artifacts.
     func testTransientTraitsContentLocked() {
-        XCTAssertEqual(AccessibilityPolicy.transientTraits, [
+        XCTAssertEqual(AccessibilityPolicy.stateTraits, [
             .selected,
             .notEnabled,
             .isEditing,

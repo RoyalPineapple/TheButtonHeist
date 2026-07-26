@@ -117,7 +117,7 @@ extension WireConverterTests {
     }
 
     func testActionsChangeProducesUpdate() throws {
-        // Same identity (label/identifier/non-transient traits unchanged) so the
+        // Same identity (label/identifier/identity traits unchanged) so the
         // elements pair; toggling interactivity flips the `.activate` action,
         // producing an `.actions` update rather than a remove+add.
         let before = [makeScreenElement(heistId: "slider", label: "Row", respondsToUserInteraction: true)]
@@ -264,7 +264,7 @@ extension WireConverterTests {
     }
 
     func testMovedIdenticalElementWithSiblingReorderReportsFrameUpdate() throws {
-        // Same content (label + non-transient `.button`), only the frame and
+        // Same content (label + identity trait `.button`), only the frame and
         // activation point move. Under content-signature pairing these elements
         // pair instead of churning, so the move surfaces as a `.frame` update on
         // a single element — not a remove+add, and not suppressed by move

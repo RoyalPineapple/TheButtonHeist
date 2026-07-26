@@ -302,7 +302,7 @@ enum CandidateContinuitySignal: Sendable, Hashable {
 }
 
 func stableTraits(_ element: HeistElement) -> Set<HeistTrait> {
-    Set(element.traits.filter { !AccessibilityPolicy.transientTraits.contains($0) })
+    Set(element.traits.filter { !AccessibilityPolicy.stateTraits.contains($0) })
 }
 
 func normalizedSet(_ values: [String]) -> Set<String> {

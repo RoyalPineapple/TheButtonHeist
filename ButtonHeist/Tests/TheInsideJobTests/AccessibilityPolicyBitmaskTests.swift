@@ -17,11 +17,11 @@ final class AccessibilityPolicyBitmaskTests: XCTestCase {
     // MARK: - Bitmask round-trip
 
     func testTransientTraitsBitmaskRoundTrips() {
-        let bitmask = AccessibilityPolicy.transientTraitsBitmask
+        let bitmask = AccessibilityPolicy.stateTraitsBitmask
         let recoveredNames = Set(bitmask.heistTraitNames)
-        let expectedNames = Set(AccessibilityPolicy.transientTraits.map(\.rawValue))
+        let expectedNames = Set(AccessibilityPolicy.stateTraits.map(\.rawValue))
         XCTAssertEqual(recoveredNames, expectedNames,
-                       "transientTraitsBitmask must round-trip the trait names")
+                       "stateTraitsBitmask must round-trip the trait names")
     }
 
     func testInteractiveTraitsBitmaskRoundTrips() {
@@ -43,9 +43,9 @@ final class AccessibilityPolicyBitmaskTests: XCTestCase {
     // MARK: - Name set agreement
 
     func testTransientTraitNamesAgreesWithTraitSet() {
-        let derived = Set(AccessibilityPolicy.transientTraits.map(\.rawValue))
-        XCTAssertEqual(AccessibilityPolicy.transientTraitNames, derived,
-                       "transientTraitNames must agree with transientTraits.map(\\.rawValue)")
+        let derived = Set(AccessibilityPolicy.stateTraits.map(\.rawValue))
+        XCTAssertEqual(AccessibilityPolicy.stateTraitNames, derived,
+                       "stateTraitNames must agree with stateTraits.map(\\.rawValue)")
     }
 
     // MARK: - Synthesis priority projections
@@ -71,9 +71,9 @@ final class AccessibilityPolicyBitmaskTests: XCTestCase {
 
     func testAllTransientTraitNamesAreKnownToParser() {
         let known = AccessibilityTraits.knownTraitNames
-        for name in AccessibilityPolicy.transientTraitNames {
+        for name in AccessibilityPolicy.stateTraitNames {
             XCTAssertTrue(known.contains(name),
-                          "transientTrait \(name) is not in the parser's knownTraitNames")
+                          "stateTrait \(name) is not in the parser's knownTraitNames")
         }
     }
 
