@@ -1,13 +1,20 @@
 import Foundation
 import ThePlans
 
-enum Tick {
+/// One observation, as the predicate runtime sees it.
+///
+/// A tick carries the reading it was taken from, so a consumer never asks the
+/// live tree anything: the interface here is the interface as of this tick, and
+/// judging a predicate against the moment it was observed is the point, not a
+/// compromise. Everything a tick holds is a value, which is why folding them
+/// needs no actor.
+enum Tick: Sendable, Equatable {
     case elementsChanged(Interface)
     case screenChanged(ScreenFacts)
     case announcement(String)
     case noChange
 
-    enum Kind: Equatable {
+    enum Kind: Equatable, Sendable {
         case elementsChanged
         case screenChanged
         case announcement
@@ -182,7 +189,15 @@ struct PendingStep: Equatable {
     }
 }
 
-package struct Expectation: Equatable {
+/// The predicates still waiting, and whether the last tick was stillness.
+///
+/// Pure data: predicates in, ticks folded over them, an answer out. There is no
+/// state here that anything else needs to agree with — an expectation is
+/// determined entirely by its authored predicates and the ordered ticks it has
+/// seen, so the same log always folds to the same answer. That is what lets the
+/// tick log be the durable artifact and this be derived from it, rather than a
+/// live thing to be synchronized against.
+package struct Expectation: Equatable, Sendable {
     private var pending: [PendingStep]
 
     private static let gate = PendingPredicate.noChange
@@ -193,10 +208,41 @@ package struct Expectation: Equatable {
         pending = authored.flatMap(\.pendingSteps)
     }
 
+    /// This expectation advanced by every tick in order.
+    ///
+    /// The fold the mutating entry points are written in terms of. Given the
+    /// log, predicate state is recomputed rather than remembered.
+    func folding(_ ticks: some Sequence<Tick>) -> Self {
+        ticks.reduce(into: self) { $0.evaluate($1) }
+    }
+
     package var isMet: Bool { pending.isEmpty && isStill }
 
     package var outstanding: [String] {
         pending.flatMap(\.descriptions) + (isStill ? [] : [Self.gate.description])
+    }
+
+    /// Fold in the ticks of one observation.
+    ///
+    /// Settlement has already made the one comparison, so it says what it saw
+    /// and this names the ticks: a replacement is three ordered ticks, a tree in
+    /// a new state is one, and stillness is one. Nothing is compared here.
+    package mutating func observe(
+        _ interface: Interface,
+        isChange: Bool,
+        isReplacement: Bool,
+        screenHeading: String?
+    ) {
+        guard isReplacement else {
+            return evaluate(isChange ? .elementsChanged(interface) : .noChange)
+        }
+        for tick in TickLog.replacement(
+            emptiedAt: interface.timestamp,
+            screen: ScreenFacts(idAfter: screenHeading),
+            arriving: interface
+        ) {
+            evaluate(tick)
+        }
     }
 
     package mutating func snapshot(_ interface: Interface) {
@@ -219,6 +265,11 @@ package struct Expectation: Equatable {
         evaluate(.noChange)
     }
 
+    /// The one place a tick is applied.
+    ///
+    /// Stillness is assigned, not accumulated: it says whether the tick that
+    /// just arrived was stillness, so a tree that starts moving again withdraws
+    /// it. That makes the whole of this a function of the ticks seen so far.
     private mutating func evaluate(_ tick: Tick) {
         pending = pending.compactMap { $0.evaluate(tick) }
         isStill = Self.gate.admits(tick)

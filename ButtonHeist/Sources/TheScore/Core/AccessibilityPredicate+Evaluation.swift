@@ -1,29 +1,44 @@
 import ThePlans
 import Foundation
 
-package extension ResolvedAccessibilityPredicate {
-    /// Answer this predicate from stored captures.
+extension AccessibilityTrace {
+    /// This trace's captures as the tick log they came from.
     ///
-    /// The captures of a trace are a tick sequence, so a stored trace is
-    /// replayed through the same `Expectation` a live run drains: each capture's
-    /// interface is a snapshot, a replacement edge vacates the old screen and
-    /// names the new one first, and a closing `noChange()` opens the settlement
-    /// gate. One algebra, fed from history instead of the wire.
-    func evaluate(in evidence: AccessibilityTraceEvidence) -> PredicateEvaluationResult {
-        var expectation = Expectation([self])
-        var previous: AccessibilityTrace.Capture?
-        for capture in evidence.trace.captures {
+    /// A reconstruction, and the only one: the live run's log is not persisted
+    /// yet, so a stored trace rebuilds it from the captures. Each capture's
+    /// interface is a tick, a replacement edge is the three ordered ticks a
+    /// replacement is, and a closing stillness tick opens the settlement gate.
+    ///
+    /// When the live log is durable this becomes a read instead of a rebuild,
+    /// and the classification below goes away — settlement already knew.
+    var tickLog: TickLog {
+        var log = TickLog()
+        var previous: Capture?
+        for capture in captures {
             if let previous,
                AccessibilityObservationChangeReducer.reduce(between: previous, and: capture) == .screenChanged {
-                expectation.empty(at: capture.interface.timestamp)
-                expectation.screenChanged(ScreenFacts(
-                    idAfter: InterfaceSummary.screenName(for: capture.interface)
+                log.append(contentsOf: TickLog.replacement(
+                    emptiedAt: capture.interface.timestamp,
+                    screen: ScreenFacts(idAfter: InterfaceSummary.screenName(for: capture.interface)),
+                    arriving: capture.interface
                 ))
+            } else {
+                log.append(.elementsChanged(capture.interface))
             }
-            expectation.snapshot(capture.interface)
             previous = capture
         }
-        expectation.noChange()
+        log.append(.noChange)
+        return log
+    }
+}
+
+package extension ResolvedAccessibilityPredicate {
+    /// Answer this predicate by folding the trace's tick log.
+    ///
+    /// One algebra, fed from history instead of the wire: the same fold a live
+    /// run performs, over the same tick vocabulary.
+    func evaluate(in evidence: AccessibilityTraceEvidence) -> PredicateEvaluationResult {
+        let expectation = Expectation([self]).folding(evidence.trace.tickLog.ticks)
         return PredicateEvaluationResult(
             met: expectation.isMet,
             actual: expectation.isMet ? nil : expectation.outstanding.joined(separator: "; ")

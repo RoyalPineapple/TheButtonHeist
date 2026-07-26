@@ -245,32 +245,24 @@ private extension Settlement.Reducer {
     ) -> [Settlement.Effect] {
         session.observationHistory = admission.history
         session.latestObservation = admission
-        // A screen replacement is three ticks: the old screen empties, the new
-        // one is named, and its graph arrives. Ordered, not simultaneous —
-        // the empty tree drains every `missing` half before the graph that
-        // follows drains the `exists` halves, and neither enumerates anything.
+        // Which ticks this observation is was already decided by the one
+        // comparison the store made — a tree in a new state is a snapshot, one
+        // that came back the same is stillness, and a replacement is the three
+        // ordered ticks a replacement is. Nothing here compares anything again;
+        // it names the ticks and folds them in.
         //
-        // ponytail: all three are emitted from this one admission, so the
-        // pause between them is zero. The real timeline stops ticking at
-        // detection, classifies, ticks the screen info, explores, and only
-        // then delivers the graph — which means the graph here is the visible
+        // ponytail: all three replacement ticks come from this one admission, so
+        // the pause between them is zero. The real timeline stops ticking at
+        // detection, classifies, ticks the screen info, explores, and only then
+        // delivers the graph — which means the graph here is the visible
         // hierarchy, not an explored one. Wire the emission to the exploration
         // stages when the tick stream can be paused.
-        let interface = admission.event.moment.capture.interface
-        let screenHeading = admission.event.snapshot.screenHeading
-        if admission.event.continuity.isReplacement {
-            session.requirement.expectation.empty(at: interface.timestamp)
-            session.requirement.expectation.screenChanged(ScreenFacts(idAfter: screenHeading))
-        }
-        // Every observation is a tick, and which tick it is was already decided
-        // by the one comparison the store made. A tree in a new state is a
-        // snapshot; one that came back the same is stillness. Nothing here
-        // compares anything again.
-        if admission.event.isChange || admission.event.continuity.isReplacement {
-            session.requirement.expectation.snapshot(interface)
-        } else {
-            session.requirement.expectation.noChange()
-        }
+        session.requirement.expectation.observe(
+            admission.event.moment.capture.interface,
+            isChange: admission.event.isChange,
+            isReplacement: admission.event.continuity.isReplacement,
+            screenHeading: admission.event.snapshot.screenHeading
+        )
         if case .established(let readiness) = session.readiness,
            session.command.waitsForObservation
                || session.requirement.predicate?.semantics == .currentState
