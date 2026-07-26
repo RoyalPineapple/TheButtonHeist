@@ -257,13 +257,6 @@ extension Settlement.Readiness {
         }
     }
 
-    /// How readiness was established. Two ways remain: a capture that runs no
-    /// diff at all, and the settle loop's comparison coming back unchanged.
-    internal enum Path: Sendable, Equatable {
-        case currentStateCapture
-        case semanticStability
-    }
-
     internal enum ObservationBoundary: Sendable, Equatable {
         case including(Observation.Moment)
         case after(Observation.Moment)
@@ -280,16 +273,13 @@ extension Settlement.Readiness {
 
     internal struct Establishment: Sendable, Equatable {
         internal let generation: Generation
-        internal let path: Path
         internal let observationBoundary: ObservationBoundary
 
         internal init(
             generation: Generation,
-            path: Path,
             observationBoundary: ObservationBoundary
         ) {
             self.generation = generation
-            self.path = path
             self.observationBoundary = observationBoundary
         }
     }

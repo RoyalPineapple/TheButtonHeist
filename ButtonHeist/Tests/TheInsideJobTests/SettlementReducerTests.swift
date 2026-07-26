@@ -122,7 +122,6 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             settled,
             .readinessEstablished(.init(
                 generation: .initial,
-                path: .semanticStability,
                 observationBoundary: .including(handoff.moment)
             ))
         )
@@ -175,7 +174,6 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             decision,
             .readinessEstablished(.init(
                 generation: .initial,
-                path: .semanticStability,
                 observationBoundary: .including(ready.moment)
             ))
         )
@@ -206,7 +204,6 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             decision,
             .readinessEstablished(.init(
                 generation: .initial,
-                path: .semanticStability,
                 observationBoundary: .after(baseline.moment)
             ))
         )
@@ -215,7 +212,6 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             decision,
             .readinessEstablished(.init(
                 generation: .initial.advanced(),
-                path: .semanticStability,
                 observationBoundary: .after(baseline.moment)
             ))
         )
@@ -259,7 +255,6 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             decision,
             .readinessEstablished(.init(
                 generation: .initial,
-                path: .semanticStability,
                 observationBoundary: .after(baseline.moment)
             ))
         )
@@ -366,7 +361,6 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             decision,
             .readinessEstablished(.init(
                 generation: .initial.advanced(),
-                path: .semanticStability,
                 observationBoundary: .including(nextReady.moment)
             )),
             elapsed: 3_500
@@ -523,7 +517,6 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             decision,
             .readinessEstablished(.init(
                 generation: .initial,
-                path: .semanticStability,
                 observationBoundary: .including(ready.moment)
             )),
             elapsed: readyElapsed

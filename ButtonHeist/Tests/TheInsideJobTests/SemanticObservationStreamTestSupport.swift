@@ -296,7 +296,6 @@ private func scriptedPredicateObservation(
     expectation.noChange()
     let readiness = Settlement.Readiness.Establishment(
         generation: .initial,
-        path: .semanticStability,
         observationBoundary: .including(event.moment)
     )
     let history = Observation.EventsSince.events([.snapshot(event)])

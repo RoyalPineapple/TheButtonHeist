@@ -71,16 +71,14 @@ extension Settlement {
                     elapsed: failed.attempt.timing.elapsed
                 )
             }
-            return ([Strings.Terminal.prefix] + fields).joined(
-                separator: Strings.Terminal.fieldSeparator
-            )
+            return (["settlement terminal"] + fields).joined(separator: " ")
         }
 
         /// One log line. Every field takes the thing it describes, never a
         /// string: a value cannot be written into the wrong field, because no
         /// two fields accept the same type.
         private static func common(
-            command: Strings.TerminalTerm,
+            command: Command,
             predicate: PredicateState = .notRequired,
             observation: Observation.SnapshotEvent? = nil,
             dispatch: DispatchState = .notApplicable,
@@ -90,22 +88,27 @@ extension Settlement {
             elapsed: ElapsedMilliseconds
         ) -> [String] {
             [
-                Strings.TerminalField.command.pair(command.rawValue),
-                Strings.TerminalField.predicate.pair(predicate.rendered),
-                Strings.TerminalField.observation.pair(
-                    observation?.sequence.rawValue.description ?? Strings.TerminalTerm.none.rawValue
-                ),
-                Strings.TerminalField.dispatch.pair(dispatch.rendered),
-                Strings.TerminalField.readiness.pair(readiness.rendered),
-                Strings.TerminalField.handoff.pair(handoff.rendered),
-                Strings.TerminalField.outcome.pair(outcome.rendered),
-                Strings.TerminalField.elapsedMs.pair(elapsed),
+                "command=\(command.rawValue)",
+                "predicate=\(predicate.rendered)",
+                "observation=\(observation?.sequence.rawValue.description ?? "none")",
+                "dispatch=\(dispatch.rendered)",
+                "readiness=\(readiness.rendered)",
+                "handoff=\(handoff.rendered)",
+                "outcome=\(outcome.rendered)",
+                "elapsedMs=\(elapsed)",
             ]
         }
     }
 }
 
 extension Settlement.TerminalLog {
+    /// Which of the three commands this line reports on.
+    internal enum Command: String {
+        case currentState
+        case observation
+        case action
+    }
+
     /// What the caller asked for, as far as the run got.
     internal enum PredicateState {
         case notRequired
@@ -116,10 +119,10 @@ extension Settlement.TerminalLog {
         /// never asked, so naming more would report on questions nobody put.
         var rendered: String {
             switch self {
-            case .notRequired: Strings.TerminalTerm.notRequired.rawValue
-            case .satisfied: Strings.TerminalTerm.satisfied.rawValue
+            case .notRequired: "notRequired"
+            case .satisfied: "satisfied"
             case .outstanding(let outstanding):
-                outstanding.first.map { Strings.TerminalDetail.waiting($0) } ?? Strings.TerminalTerm.satisfied.rawValue
+                outstanding.first.map { "waiting(\($0))" } ?? "satisfied"
             }
         }
     }
@@ -131,17 +134,17 @@ extension Settlement.TerminalLog {
 
         var rendered: String {
             switch self {
-            case .notApplicable: Strings.TerminalTerm.notApplicable.rawValue
+            case .notApplicable: "notApplicable"
             case .completed(let result): Self.render(result)
-            case .evidence(.pending): Strings.TerminalTerm.pending.rawValue
+            case .evidence(.pending): "pending"
             case .evidence(.completed(let result)): Self.render(result)
             }
         }
 
         private static func render(_ result: TheSafecracker.ActionDispatchResult) -> String {
             switch result.outcome {
-            case .success: Strings.TerminalTerm.succeeded.rawValue
-            case .failure(let failure): Strings.TerminalDetail.failed(String(describing: failure))
+            case .success: "succeeded"
+            case .failure(let failure): "failed(\(failure))"
             }
         }
     }
@@ -153,10 +156,10 @@ extension Settlement.TerminalLog {
 
         var rendered: String {
             switch self {
-            case .notApplicable: Strings.TerminalTerm.notApplicable.rawValue
-            case .established(let establishment): Strings.TerminalDetail.established(String(describing: establishment.path))
-            case .evidence(.pending): Strings.TerminalTerm.pending.rawValue
-            case .evidence(.established(let establishment)): Strings.TerminalDetail.established(String(describing: establishment.path))
+            case .notApplicable: "notApplicable"
+            case .established: "established"
+            case .evidence(.pending): "pending"
+            case .evidence(.established): "established"
             }
         }
     }
@@ -168,17 +171,17 @@ extension Settlement.TerminalLog {
 
         var rendered: String {
             switch self {
-            case .notApplicable: Strings.TerminalTerm.notApplicable.rawValue
+            case .notApplicable: "notApplicable"
             case .admitted(let admission): Self.render(admission)
-            case .evidence(.pending): Strings.TerminalTerm.pending.rawValue
-            case .evidence(.captureRequested): Strings.TerminalTerm.captureRequested.rawValue
+            case .evidence(.pending): "pending"
+            case .evidence(.captureRequested): "captureRequested"
             case .evidence(.admitted(let admission)): Self.render(admission)
-            case .evidence(.captureFailed(_, let failure)): Strings.TerminalDetail.captureFailed(String(describing: failure))
+            case .evidence(.captureFailed(_, let failure)): "captureFailed(\(failure))"
             }
         }
 
         private static func render(_ admission: Settlement.Handoff.Admission) -> String {
-            Strings.TerminalDetail.admitted(Strings.TerminalField.observation.pair(admission.event.sequence.rawValue))
+            "admitted(observation=\(admission.event.sequence.rawValue))"
         }
     }
 
@@ -193,29 +196,29 @@ extension Settlement.TerminalLog {
         var rendered: String {
             switch self {
             case .settled:
-                Strings.TerminalTerm.settled.rawValue
+                "settled"
             case .currentStateFailure(.unavailable(let reason)):
-                Strings.TerminalDetail.failed(String(describing: reason))
+                "failed(\(reason))"
             case .currentStateFailure(.cancelled):
-                Strings.TerminalTerm.cancelled.rawValue
+                "cancelled"
             case .observationFailure(.baselineUnavailable):
-                Strings.TerminalTerm.baselineUnavailable.rawValue
+                "baselineUnavailable"
             case .observationFailure(.timedOut(let phase)):
-                Strings.TerminalDetail.timedOut(String(describing: phase))
+                "timedOut(\(phase))"
             case .observationFailure(.cancelled):
-                Strings.TerminalTerm.cancelled.rawValue
+                "cancelled"
             case .observationFailure(.viewportExitFailed(let reason)):
-                Strings.TerminalDetail.viewportExitFailed(String(describing: reason))
+                "viewportExitFailed(\(reason))"
             case .actionFailure(.dispatchFailed):
-                Strings.TerminalTerm.dispatchFailed.rawValue
+                "dispatchFailed"
             case .actionFailure(.baselineUnavailable):
-                Strings.TerminalTerm.baselineUnavailable.rawValue
+                "baselineUnavailable"
             case .actionFailure(.timedOut(let phase)):
-                Strings.TerminalDetail.timedOut(String(describing: phase))
+                "timedOut(\(phase))"
             case .actionFailure(.cancelled):
-                Strings.TerminalTerm.cancelled.rawValue
+                "cancelled"
             case .actionFailure(.viewportExitFailed(let reason)):
-                Strings.TerminalDetail.viewportExitFailed(String(describing: reason))
+                "viewportExitFailed(\(reason))"
             }
         }
     }

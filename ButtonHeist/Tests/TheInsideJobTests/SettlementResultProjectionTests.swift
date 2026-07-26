@@ -331,7 +331,6 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
     ) -> Settlement.Readiness.Establishment {
         Settlement.Readiness.Establishment(
             generation: .initial,
-            path: .semanticStability,
             observationBoundary: .including(event.moment)
         )
     }

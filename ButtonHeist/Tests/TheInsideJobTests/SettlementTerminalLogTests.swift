@@ -164,7 +164,6 @@ final class SettlementTerminalLogTests: SemanticObservationStreamTestCase {
     ) -> Settlement.Readiness.Establishment {
         .init(
             generation: .initial,
-            path: .semanticStability,
             observationBoundary: .including(event.moment)
         )
     }

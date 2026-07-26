@@ -525,5 +525,85 @@ extension ResolvedHeistActionCommand {
     }
 }
 
+// MARK: - Messages
+
+/// What a caller reads when a run did not do what was asked.
+///
+/// Templates rather than a vocabulary: each interpolates something, and the
+/// same sentence is assembled from more than one branch below. They live here
+/// because this is the only file that reads them.
+private enum Strings {
+    /// Why a run ended without doing what was asked.
+    ///
+    /// There is only one failure — the clock ran out — so there is only one
+    /// thing to say. Which predicate it ran out on is the whole content of the
+    /// message; everything behind that one was never asked.
+    internal enum Timeout {
+        static func waitingOn(_ tip: String) -> String {
+            "timed out while waiting on \(tip)"
+        }
+
+        static func stillWaitingOn(_ tip: String) -> String {
+            "still waiting on: \(tip)"
+        }
+
+        static func settlementElapsed(_ milliseconds: some CustomStringConvertible) -> String {
+            "settlement timed out after \(milliseconds)ms"
+        }
+
+        static func settlementElapsed(_ milliseconds: some CustomStringConvertible, waitingOn tip: String) -> String {
+            "\(settlementElapsed(milliseconds)) while waiting on \(tip)"
+        }
+
+        static func dispatchIncomplete(_ milliseconds: some CustomStringConvertible) -> String {
+            "action dispatch did not complete before settlement deadline after \(milliseconds)ms"
+        }
+    }
+
+    /// What the run was looking for, and what it saw instead.
+    internal enum Diagnostic {
+        static var waitingToAppear: String { " waiting for element to appear" }
+        static var waitingToDisappear: String { " waiting for element to disappear" }
+        static var elementNotFound: String { "element not found" }
+        static var elementStillPresent: String { "element still present" }
+        static var none: String { "none" }
+
+        static var nextStep: String {
+            "Next: get_interface() to inspect current elements, "
+                + "then retry wait with an exact predicate."
+        }
+
+        static func expected(_ target: String) -> String {
+            "expected: \(target)"
+        }
+
+        static func interfaceElementCount(_ count: Int) -> String {
+            "interface: \(count) elements"
+        }
+
+        static func lastResult(_ result: String) -> String {
+            "last result: \(result)"
+        }
+
+        static func candidateDidNotMatch(_ candidate: String, _ predicate: String) -> String {
+            "observed accessibility candidate \(candidate) did not match \(predicate)"
+        }
+    }
+
+    /// Things that went wrong before any predicate could be asked.
+    internal enum Failure {
+        static var treeCaptureFailed: String { "Could not capture accessibility tree after action" }
+        static var actionDispatchFailed: String { "action dispatch failed" }
+
+        static func cancelled(_ milliseconds: some CustomStringConvertible) -> String {
+            "cancelled after \(milliseconds)ms"
+        }
+
+        static func settlementCancelled(_ milliseconds: some CustomStringConvertible) -> String {
+            "settlement cancelled after \(milliseconds)ms"
+        }
+    }
+}
+
 #endif // DEBUG
 #endif // canImport(UIKit)

@@ -19,10 +19,7 @@ extension Settlement {
 
 extension Settlement.Readiness {
     internal enum Signal: Sendable, Equatable {
-        case established(
-            path: Path,
-            observationBoundary: ObservationBoundary
-        )
+        case established(observationBoundary: ObservationBoundary)
         case invalidated
     }
 }
@@ -678,12 +675,11 @@ extension Settlement {
                     fact: .announcementHistoryUnavailable(gap),
                     instant: RuntimeElapsed.now
                 )
-            case .readiness(.established(let path, let observationBoundary)):
+            case .readiness(.established(let observationBoundary)):
                 guard let generation = state.session?.readiness.generation else { return nil }
                 return AdmittedSettlementFact(
                     fact: .readinessEstablished(.init(
                         generation: generation,
-                        path: path,
                         observationBoundary: observationBoundary
                     )),
                     instant: RuntimeElapsed.now
@@ -969,12 +965,12 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
         })
     }
 
-    /// One readiness path for every command: run the settle loop and report the
-    /// diff it produced.
+    /// One readiness path for every command: take a reading and report what the
+    /// store made of it.
     ///
     /// Commands that dispatch wait for the refresh boundary recorded when
     /// dispatch completed; commands that only observe start from the current
-    /// boundary. Both then read the same settle result, so the reducer sees the
+    /// boundary. Both then read the same commit outcome, so the reducer sees the
     /// same shape of evidence either way.
     @MainActor
     internal func armReadiness(
@@ -999,7 +995,6 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
             guard case .committed(let event) = settlement.commitOutcome else { return }
             lifecycle.requestNotificationWindowConsumption()
             sink.observeReadiness(.established(
-                path: .semanticStability,
                 observationBoundary: .including(event.moment)
             ))
         }
