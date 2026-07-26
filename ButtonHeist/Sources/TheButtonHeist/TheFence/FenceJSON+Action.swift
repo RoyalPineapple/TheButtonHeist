@@ -60,10 +60,6 @@ enum PublicActionResultContext: Sendable, Equatable {
     case standaloneAction
     case heistReportEvidence
 
-    var includesExpectation: Bool {
-        self == .standaloneAction
-    }
-
     var includesOmissions: Bool {
         self == .heistReportEvidence
     }

@@ -24,7 +24,6 @@ package enum ButtonHeistLog {
         case auth
         case autostart
         case server
-        case wireConversion
     }
 
     package enum Score: String, Sendable {

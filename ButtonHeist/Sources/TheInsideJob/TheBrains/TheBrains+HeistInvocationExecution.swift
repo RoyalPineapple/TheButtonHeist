@@ -31,10 +31,6 @@ extension TheBrains {
             self.start = start
             self.requestedName = requestedName
         }
-
-        internal var argumentSummary: String? {
-            invoke.argument == .none ? nil : invoke.runHeistSummary
-        }
     }
 
     internal struct InvocationExpectationContext {

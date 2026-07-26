@@ -52,13 +52,6 @@ private extension Optional where Wrapped == ResolvedStringMatch {
     }
 }
 
-package extension ResolvedElementPredicate {
-    /// Whether any observed element in the collection satisfies this predicate.
-    func anyMatch(in elements: [HeistElement]) -> Bool {
-        !AccessibilityTargetMatchGraph(elements: elements).resolve(self).isEmpty
-    }
-}
-
 package struct AccessibilityTargetElementMatch<Subject>: Sendable, Equatable
 where Subject: ElementPredicateSubject & Sendable & Equatable {
     package let path: TreePath

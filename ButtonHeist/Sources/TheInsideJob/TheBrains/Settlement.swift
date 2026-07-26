@@ -657,8 +657,6 @@ extension Settlement {
         internal var handoff: Handoff.Evidence
         internal var observationHistory: Observation.EventsSince?
         internal var latestObservation: ObservationAdmission?
-        /// The screen the run is on, so a boundary can say which it left.
-        internal var latestScreenName: String?
         internal var timing: ExecutionTiming
         internal var phase: Phase
 
@@ -683,7 +681,6 @@ extension Settlement {
             self.handoff = .pending(.initial)
             self.observationHistory = nil
             self.latestObservation = nil
-            self.latestScreenName = boundary.moment.snapshot.screenHeading
             self.timing = timing
             self.phase = switch command {
             case .observation(_, let deadline, _): .observation(deadline)

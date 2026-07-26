@@ -2,25 +2,6 @@ import ThePlans
 import TheScore
 
 enum EvidenceMinimumMatcher {
-    static func normalizedTarget(
-        _ target: AccessibilityTarget,
-        actionResult: ActionResult
-    ) -> AccessibilityTarget {
-        minimumTarget(actionResult: actionResult) ?? target
-    }
-
-    static func activationTarget(actionResult: ActionResult) -> AccessibilityTarget? {
-        guard let evidence = actionResult.subjectEvidence,
-              isActivatable(evidence.element)
-        else { return nil }
-        return minimumTarget(actionResult: actionResult)
-    }
-
-    static func isActivatable(_ element: HeistElement) -> Bool {
-        element.actions.contains(.activate)
-            || element.traits.contains { AccessibilityPolicy.interactiveTraits.contains($0) }
-    }
-
     static func minimumTarget(actionResult: ActionResult) -> AccessibilityTarget? {
         guard actionResult.traceEvidence?.isComplete == true,
               let evidence = actionResult.subjectEvidence,

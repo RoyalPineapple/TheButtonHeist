@@ -91,19 +91,3 @@ private extension ResolvedAccessibilityTarget {
         }
     }
 }
-
-extension TheFence {
-
-    nonisolated static func parseTraitNames(_ names: [String]?, field: String) throws -> [HeistTrait]? {
-        try names?.enumerated().map { index, name in
-            guard let trait = HeistTrait(rawValue: name) else {
-                throw SchemaValidationError(
-                    field: "\(field)[\(index)]",
-                    observed: "string \"\(name)\"",
-                    expected: SchemaValidationError.expectedEnum(HeistTrait.self)
-                )
-            }
-            return trait
-        }
-    }
-}

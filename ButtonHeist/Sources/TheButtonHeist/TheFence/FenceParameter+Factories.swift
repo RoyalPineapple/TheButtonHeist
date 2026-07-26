@@ -128,23 +128,6 @@ internal func arrayParam(
     )
 }
 
-internal func stringArrayParam(
-    _ key: FenceParameterKey,
-    required: Bool = false,
-    minItems: Int? = nil,
-    maxItems: Int? = nil
-) -> FenceParameterSpec {
-    FenceParameterSpec(
-        key: key.rawValue,
-        schema: .array(
-            kind: .stringArray,
-            items: .scalar(.string),
-            constraints: FenceParameterArrayConstraints(minItems: minItems, maxItems: maxItems)
-        ),
-        required: required
-    )
-}
-
 internal func unconstrainedParam(
     _ key: FenceParameterKey,
     required: Bool = false,

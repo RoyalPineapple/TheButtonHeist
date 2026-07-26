@@ -8,7 +8,6 @@ extension TheFence {
         internal static let maxRunHeistRequestBytes = PublicJSONInputLimits.maxRequestBytes
         internal static let maxRunHeistNestingDepth = PublicJSONInputLimits.maxNestingDepth
         internal static let maxRunHeistObjectKeys = PublicJSONInputLimits.maxTotalObjectKeys
-        internal static let maxHeistResultRows = maxRunHeistSteps
         internal static let maxInlineScreenshotBase64Bytes = 1_000_000
     }
 }

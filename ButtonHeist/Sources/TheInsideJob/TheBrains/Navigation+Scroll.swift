@@ -62,15 +62,6 @@ extension Navigation {
         }
     }
 
-    static func edgeDirection(for edge: ScrollEdge) -> UIAccessibilityScrollDirection {
-        switch edge {
-        case .top: return .up
-        case .bottom: return .down
-        case .left: return .left
-        case .right: return .right
-        }
-    }
-
     static func uiScrollDirection(for direction: ScrollDirection) -> UIAccessibilityScrollDirection {
         switch direction {
         case .up: return .up

@@ -38,9 +38,11 @@ extension ResolvedElementAssertion {
 
 extension ResolvedAccessibilityTarget {
     /// Whether anything in this graph matches.
+    ///
+    /// A container target matches containers, so the whole match set answers,
+    /// not its element half.
     func found(in interface: Interface) -> Bool {
-        !AccessibilityTargetMatchGraph(interface: interface)
-            .resolve(self).elements.elements.isEmpty
+        !AccessibilityTargetMatchGraph(interface: interface).resolve(self).isEmpty
     }
 
     /// The same target, carrying more checks.

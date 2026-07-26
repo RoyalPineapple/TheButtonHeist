@@ -1182,11 +1182,6 @@ internal final class LiveSettlementLifecycle {
         return resources.dispatchVisibleRefreshBoundary
     }
 
-    internal var boundaryMoment: Observation.Moment? {
-        guard case .active(let resources) = phase else { return nil }
-        return resources.boundary
-    }
-
     internal func replaceDeadline(_ task: Task<Void, Never>) {
         guard case .active(var resources) = phase else {
             task.cancel()

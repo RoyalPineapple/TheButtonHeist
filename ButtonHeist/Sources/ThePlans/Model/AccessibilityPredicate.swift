@@ -124,22 +124,6 @@ package enum ResolvedElementAssertion: Sendable, Equatable {
             return target
         }
     }
-
-    /// True when this is a snapshot predicate — one graph in, a verdict out —
-    /// rather than a delta predicate, which reads two.
-    ///
-    /// Snapshot predicates are total: they answer on any capture, including one
-    /// where nothing changed. Delta predicates ask about an element change, so
-    /// they have nothing to answer when no element change occurred — including
-    /// at a screen boundary, which is a change of a different kind.
-    package var isSnapshotPredicate: Bool {
-        switch self {
-        case .exists, .missing:
-            return true
-        case .appeared, .disappeared, .updated:
-            return false
-        }
-    }
 }
 
 package enum ResolvedAccessibilityPredicate: Sendable, Equatable {

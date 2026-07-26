@@ -141,16 +141,6 @@ extension ElementInflation {
             self.deadline = deadline
             self.resolution = resolution
         }
-
-        internal func replacingLiveTarget(_ liveTarget: TheVault.LiveActionTarget) -> Self {
-            Self(
-                identity: identity,
-                treeElement: liveTarget.treeElement,
-                liveTarget: liveTarget,
-                deadline: deadline,
-                resolution: resolution
-            )
-        }
     }
 
     internal enum ElementInflationResult {
