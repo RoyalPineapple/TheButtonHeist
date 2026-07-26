@@ -34,6 +34,31 @@ extension ResolvedElementAssertion {
             ]
         }
     }
+
+    /// The slice of the tree this assertion's legs compare readings over.
+    ///
+    /// The innermost thing specified: the property when one is named, and the
+    /// element otherwise. A target is always named — there is no assertion about
+    /// "some element" — so this never widens to the screen.
+    ///
+    /// `appeared` and `disappeared` name no property, and need none: their legs
+    /// are opposite presence, so a tree that answers one cannot answer the other.
+    /// `updated` is the case that needs it, because both its legs are `exists` and
+    /// with no before or after they are the *same* search — only the reading can
+    /// say the element moved.
+    var readingScope: ReadingScope {
+        switch self {
+        case .exists(let target), .missing(let target),
+             .appeared(let target), .disappeared(let target):
+            return .element(target)
+        case .updated(let target, let change):
+            let property = change.value.property
+            // Geometry is not in the projection a reading is taken over, so there
+            // is no narrower reading to take: `frame` and `activationPoint` fall
+            // back to the element, which is the next scope out.
+            return property.isGeometry ? .element(target) : .property(property, of: target)
+        }
+    }
 }
 
 extension ResolvedAccessibilityTarget {
@@ -70,6 +95,20 @@ extension ResolvedAccessibilityTarget {
 }
 
 extension ResolvedElementPropertyChangeValue {
+    /// Which property this change is about.
+    var property: ElementProperty {
+        switch self {
+        case .value: return .value
+        case .hint: return .hint
+        case .customContent: return .customContent
+        case .traits: return .traits
+        case .actions: return .actions
+        case .rotors: return .rotors
+        case .frame: return .frame
+        case .activationPoint: return .activationPoint
+        }
+    }
+
     /// The checks this property constrains on the given side.
     ///
     /// Set-valued properties carry both an include and an exclude, and the

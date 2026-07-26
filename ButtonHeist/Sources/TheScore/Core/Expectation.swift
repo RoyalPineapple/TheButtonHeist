@@ -271,34 +271,45 @@ struct PendingPredicate: Equatable {
 
     fileprivate let kind: Kind
 
+    /// The slice of the tree this leg's reading is taken over, when the pair it
+    /// belongs to specified one.
+    ///
+    /// Only a leg composed from an assertion has a scope, because only the
+    /// assertion knows how narrow the question was. Everything else falls back to
+    /// the tick's own reading.
+    fileprivate let scope: ReadingScope?
+
     /// Answer this against the tree as it is.
-    static func graph(_ predicate: ResolvedAccessibilityPredicate) -> Self {
-        Self(kind: .graph(predicate))
+    static func graph(
+        _ predicate: ResolvedAccessibilityPredicate,
+        scope: ReadingScope? = nil
+    ) -> Self {
+        Self(kind: .graph(predicate), scope: scope)
     }
 
     /// Answer this with the facts the screen boundary carried. This asks
     /// nothing of any tree: elements are always element predicates, answered by
     /// the snapshots on either side.
     static func screenChange(_ predicate: ResolvedScreenPredicate) -> Self {
-        Self(kind: .screenChange(predicate))
+        Self(kind: .screenChange(predicate), scope: nil)
     }
 
     /// Answer this with what was spoken.
     static func announcement(_ predicate: ResolvedAnnouncementPredicate) -> Self {
-        Self(kind: .announcement(predicate))
+        Self(kind: .announcement(predicate), scope: nil)
     }
 
     /// Any change at all, with no element named. Answered by any snapshot,
     /// because a snapshot tick is a change: the producer decided that before it
-    /// ever became a tick.
+    /// ever became a tick. Nothing was named, so the screen is the scope.
     static var anyChange: Self {
-        Self(kind: .anyChange)
+        Self(kind: .anyChange, scope: .screen)
     }
 
     /// The settlement gate. Never authored and never in the list: an
     /// expectation holds exactly one of these, at the end of the pipe.
     fileprivate static var noChange: Self {
-        Self(kind: .noChange)
+        Self(kind: .noChange, scope: nil)
     }
 
     var description: String {
@@ -340,15 +351,16 @@ struct PendingPredicate: Equatable {
         reads(tick) && matches(tick)
     }
 
-    /// What `tick` matched, hashed, or nil if it did not match.
+    /// What `tick` matched, read at the scope the assertion specified.
     ///
-    /// A step compares this against the hash its previous half left behind, and
-    /// what it hashes is the *reading* the half was satisfied by. Two halves
-    /// offered one tick are looking at one tree, so they read the same hash and
-    /// the second refuses: one moment cannot be both sides of a change.
+    /// A pair is proved by two legs in order and a reading that differs. The
+    /// scope is the innermost thing specified — a property, an element, or the
+    /// screen — and it rides along on the leg, because only the assertion knows
+    /// it.
     fileprivate func matching(_ tick: Tick) -> Int? {
         guard matches(tick) else { return nil }
-        return tick.reading
+        guard case .snapshot(let interface) = tick, let scope else { return tick.reading }
+        return scope.reading(in: interface)
     }
 
     /// Whether `tick` satisfies this predicate.
@@ -373,6 +385,73 @@ struct PendingPredicate: Equatable {
     }
 }
 
+/// What slice of the interface a leg's reading covers.
+///
+/// A pair is proved by two legs in order and a reading that differs, and this is
+/// the slice those readings are taken over: the innermost thing the assertion
+/// specified. It comes from the assertion, which knows — never inferred from the
+/// checks a leg happens to carry, because a check is the search.
+enum ReadingScope: Equatable {
+    /// One property of the elements a target matches. `updated(Count, 1 → 2)`
+    /// asked about Count's value, so churn elsewhere is not that change.
+    case property(ElementProperty, of: ResolvedAccessibilityTarget)
+
+    /// Every property of the elements a target matches. `updated(Count)` with no
+    /// property named asked whether Count changed at all.
+    case element(ResolvedAccessibilityTarget)
+
+    /// The whole tree. `changed(.elements())` named nothing to narrow to.
+    case screen
+
+    /// This scope's reading of `interface`.
+    ///
+    /// Nothing matching is itself a reading, which is how the two legs of an
+    /// appearance read differently.
+    func reading(in interface: Interface) -> Int {
+        var hasher = Hasher()
+        switch self {
+        case .screen:
+            hasher.combine(interface.projectedElements)
+        case .element(let target):
+            for element in Self.matches(target, in: interface) {
+                hasher.combine(element)
+            }
+        case .property(let property, let target):
+            for element in Self.matches(target, in: interface) {
+                property.combine(element, into: &hasher)
+            }
+        }
+        return hasher.finalize()
+    }
+
+    private static func matches(
+        _ target: ResolvedAccessibilityTarget,
+        in interface: Interface
+    ) -> [HeistElement] {
+        AccessibilityTargetMatchGraph(interface: interface).resolve(target).elements.elements
+    }
+}
+
+extension ElementProperty {
+    /// This property of `element`, folded into a reading.
+    ///
+    /// Geometry never reaches here: it is not in the projection, so an assertion
+    /// naming it reads at element scope instead.
+    func combine(_ element: HeistElement, into hasher: inout Hasher) {
+        switch self {
+        case .label: hasher.combine(element.label)
+        case .identifier: hasher.combine(element.identifier)
+        case .value: hasher.combine(element.value)
+        case .hint: hasher.combine(element.hint)
+        case .traits: hasher.combine(Set(element.traits))
+        case .actions: hasher.combine(Set(element.actions))
+        case .customContent: hasher.combine(element.customContent)
+        case .rotors: hasher.combine(element.rotors?.map(\.name))
+        case .frame, .activationPoint: break
+        }
+    }
+}
+
 extension ResolvedAccessibilityPredicate {
     /// This predicate as the steps an expectation waits for.
     ///
@@ -389,12 +468,15 @@ extension ResolvedAccessibilityPredicate {
         case .changed(.elements(let assertions)):
             // Asserting nothing is the nullary delta — "elements changed, never
             // mind which". It names no element, so it has nothing to search for
-            // and cannot compose into presence predicates; it is answerable
-            // anyway, because a snapshot tick *is* a change now that the producer
-            // decides change-from-stillness. Without this it would map to no
-            // steps at all and a wait on it would return on the first stillness.
-            guard !assertions.isEmpty else { return [PendingStep([.anyChange])] }
-            return assertions.map { PendingStep($0.composed.map(PendingPredicate.graph)) }
+            // and no pair of presence predicates to compose into. It is still a
+            // pair: two legs that any snapshot answers, so the reading is the
+            // only thing that can say the tree moved. One leg would be satisfied
+            // by the first snapshot to arrive, which is a reading, not a change.
+            guard !assertions.isEmpty else { return [PendingStep([.anyChange, .anyChange])] }
+            return assertions.map { assertion in
+                let scope = assertion.readingScope
+                return PendingStep(assertion.composed.map { .graph($0, scope: scope) })
+            }
         case .changed(.screen(let predicate)):
             return [PendingStep([.screenChange(predicate)])]
         }

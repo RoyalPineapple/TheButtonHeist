@@ -15,7 +15,17 @@ extension AccessibilityPredicateTests {
         XCTAssertEqual(decoded, predicate)
     }
 
-    func testNotificationOnlyFactSatisfiesGenericElementsChange() throws {
+    /// A pair is proved by two legs in order and a hash that differs, and the hash
+    /// is taken at the scope the author named: the property on a named element, or
+    /// the element, or — when nothing is named at all — the whole screen.
+    ///
+    /// `changed(.elements())` names nothing, so the screen is the scope. Two legs
+    /// that any tree answers, separated by a screen that read differently.
+    ///
+    /// A notification riding the transition is not part of that. The two legs and
+    /// the hash are the whole of what is checked, so a layout notification over an
+    /// unchanged screen says the projection did not move — which is the answer.
+    func testGenericElementsChangeNeedsTwoReadingsAndNotANotification() throws {
         let interface = makeTestInterface(elements: [element(label: "Status")])
         let notification = AccessibilityNotificationEvidence(
             sequence: 1,
@@ -24,15 +34,27 @@ extension AccessibilityPredicateTests {
             notificationData: .none,
             associatedElement: .none
         )
-        let trace = AccessibilityTrace(first: interface).appending(
+        let unmoved = AccessibilityTrace(first: interface).appending(
             interface,
             transition: AccessibilityTrace.Transition(accessibilityNotifications: [notification])
+        )
+
+        XCTAssertFalse(
+            try AccessibilityPredicate.changed(.elements())
+                .resolve(in: .empty)
+                .validate(against: result(success: true, trace: unmoved, completeness: .incomplete)).met,
+            "the same tree twice is one reading, whatever the notification claims"
+        )
+
+        let moved = AccessibilityTrace(first: interface).appending(
+            makeTestInterface(elements: [element(label: "Status"), element(label: "Detail")])
         )
 
         XCTAssertTrue(
             try AccessibilityPredicate.changed(.elements())
                 .resolve(in: .empty)
-                .validate(against: result(success: true, trace: trace, completeness: .incomplete)).met
+                .validate(against: result(success: true, trace: moved, completeness: .incomplete)).met,
+            "two readings are a change with no element named and no notification needed"
         )
     }
 
