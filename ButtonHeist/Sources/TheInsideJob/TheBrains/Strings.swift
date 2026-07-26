@@ -27,15 +27,15 @@ internal enum Strings {
             "still waiting on: \(tip)"
         }
 
-        static func settlementElapsed(_ milliseconds: Any) -> String {
+        static func settlementElapsed(_ milliseconds: some CustomStringConvertible) -> String {
             "settlement timed out after \(milliseconds)ms"
         }
 
-        static func settlementElapsed(_ milliseconds: Any, waitingOn tip: String) -> String {
+        static func settlementElapsed(_ milliseconds: some CustomStringConvertible, waitingOn tip: String) -> String {
             "\(settlementElapsed(milliseconds)) while waiting on \(tip)"
         }
 
-        static func dispatchIncomplete(_ milliseconds: Any) -> String {
+        static func dispatchIncomplete(_ milliseconds: some CustomStringConvertible) -> String {
             "action dispatch did not complete before settlement deadline after \(milliseconds)ms"
         }
     }
@@ -75,11 +75,11 @@ internal enum Strings {
         static var treeCaptureFailed: String { "Could not capture accessibility tree after action" }
         static var actionDispatchFailed: String { "action dispatch failed" }
 
-        static func cancelled(_ milliseconds: Any) -> String {
+        static func cancelled(_ milliseconds: some CustomStringConvertible) -> String {
             "cancelled after \(milliseconds)ms"
         }
 
-        static func settlementCancelled(_ milliseconds: Any) -> String {
+        static func settlementCancelled(_ milliseconds: some CustomStringConvertible) -> String {
             "settlement cancelled after \(milliseconds)ms"
         }
     }
@@ -105,7 +105,7 @@ internal enum Strings {
         case outcome
         case elapsedMs
 
-        func pair(_ value: Any) -> String {
+        func pair(_ value: some CustomStringConvertible) -> String {
             "\(rawValue)=\(value)"
         }
     }
@@ -139,7 +139,7 @@ internal enum Strings {
         case admitted
         case captureFailed
 
-        func callAsFunction(_ payload: Any) -> String {
+        func callAsFunction(_ payload: some CustomStringConvertible) -> String {
             "\(rawValue)(\(payload))"
         }
     }
