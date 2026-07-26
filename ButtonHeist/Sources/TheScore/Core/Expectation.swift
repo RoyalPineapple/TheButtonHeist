@@ -151,11 +151,21 @@ struct PendingStep: Equatable {
         remaining.map(\.description)
     }
 
-    /// This step with the tick's answers removed, or nil once nothing is left.
+    /// This step with the tick's answer removed, or nil once nothing is left.
     ///
-    /// A predicate outside the tick's lane has no opinion and passes through,
-    /// one that answers is dropped, and the first that refuses ends the walk
-    /// with everything from it onward intact.
+    /// A step is a list of predicates drained in order. The first one matches and
+    /// leaves behind the hash of what it landed on. A later tick arrives, the next
+    /// predicate is evaluated, and if it matches on a hash that differs the step
+    /// moves on — that is the whole of what makes a pair a change.
+    ///
+    /// The walk does not stop at a drain, because a hit never blocks what is
+    /// behind it. It cannot drain twice on one tick either: the predicate after a
+    /// fresh drain sees the same hash and declines, so it waits for a tick that
+    /// reads differently.
+    ///
+    /// A predicate outside the tick's lane has no opinion and passes through, so
+    /// the walk continues past it too. The first predicate that reads the tick and
+    /// refuses ends the walk with everything from it onward intact.
     fileprivate func draining(_ tick: Tick) -> Self? {
         var carried = matched
         let next = Self.draining(remaining, tick, &carried)

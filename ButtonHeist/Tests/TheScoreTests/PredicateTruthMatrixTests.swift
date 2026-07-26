@@ -15,31 +15,36 @@ import XCTest
 ///
 /// # The rules the table encodes
 ///
-/// **Everything is `exists` or `missing`.** A predicate decomposes into one or
-/// two element searches against one tree. `appeared(X)` is `missing(X)` then
-/// `exists(X)`; `disappeared(X)` is the reverse. Nothing else exists, so
-/// nothing else needs a rule.
+/// **Everything is `exists` or `missing`.** A predicate is one element search
+/// against one tree. Nothing else exists, so nothing else needs a rule.
 ///
-/// **A level is not a transition.** `exists(X)` asks about one tree and holds
-/// on the first tree that has X — including the baseline. `appeared(X)`
-/// composes two halves and needs a tree without X *before* a tree with it, so
-/// an element that was always there never appears (rows 1-4). This is the only
-/// reason the halves are ordered: relax it and `appeared` means `disappeared`.
+/// **A delta predicate is a pair of predicates matched in order on mismatched
+/// hashes.** That is the whole definition. `appeared(X)` is `missing(X)` then
+/// `exists(X)`; `disappeared(X)` is the reverse; `updated(X, v1, v2)` is
+/// `exists(X and v1)` then `exists(X and v2)`. All three conditions carry
+/// weight: a pair, so there is no delta type; in order, so relaxing it makes
+/// `appeared` mean `disappeared` (rows 12-13); on mismatched hashes, so one
+/// tree cannot answer both and be a change (rows 2, 4).
 ///
-/// **The baseline is the first tick.** Nothing precedes it, so a delta cannot
-/// measure across it. An element already present at the baseline has no
-/// absent-tree behind it and cannot appear (row 7).
+/// **The hash is the only thing carried.** A step keeps a list of predicates and
+/// one hash — what its last drain landed on. No baseline, no tick counter, no
+/// evidence kinds. Its scope follows the question the author asked: a property,
+/// an element, or the whole tree.
 ///
-/// **Ordered inside a step, independent between steps.** Inside one step, a
-/// half cannot drain until every half before it is gone — that ordering is what
-/// makes a pair mean a change rather than a coincidence. Between steps there is
-/// no ordering at all: two assertions written together are two steps, and
-/// neither blocks the other.
+/// **A level is not a transition.** `exists(X)` holds on the first tree that has
+/// X, including the baseline, because it is one predicate with nothing before it
+/// to order against. An element that was always there never *appears* (rows 1-4).
 ///
-/// **A reading drains at most one half per step.** Every step is offered the
-/// same reading and advances if its tip is answered, so one tree can fulfil many
-/// predicates — but never two halves of the same one. That is what stops a
-/// single tree from being both sides of a change.
+/// **The baseline is the first tick.** Nothing precedes it, so an element already
+/// present there has no absent reading behind it and cannot appear (row 7).
+///
+/// **Independent between steps.** Two assertions written together are two steps,
+/// and neither blocks the other. Ordering exists only inside a step.
+///
+/// **A drain never blocks what is behind it.** The next predicate in the step is
+/// still asked; it refuses on a matching hash. So one tree fulfils many steps but
+/// never two predicates of the same step — not by a rule against it, but because
+/// one tree is one hash.
 ///
 /// **`noChange` drains nothing.** It is the stillness signal, not evidence: it
 /// passes every predicate untouched and only settles the gate. A predicate
@@ -194,6 +199,67 @@ final class PredicateTruthMatrixTests: XCTestCase {
             "only the disappearance is outstanding: \(expectation.outstanding)"
         )
 
+        expectation.snapshot(interface([]))
+        expectation.noChange()
+        XCTAssertTrue(expectation.isMet, "outstanding: \(expectation.outstanding)")
+    }
+
+    /// A pair needs two ticks *and* two hashes, and one tick supplies neither.
+    ///
+    /// The two conditions are why the hash is of the whole tree rather than of
+    /// what matched. Two predicates of a pair can match *different elements* on
+    /// one tree — a tree holding Count at "1" and Count at "2" answers both sides
+    /// of `updated(Count, 1 → 2)` — so a hash of the matched element would differ
+    /// and let one tree be both sides of a change. Hashing the tree makes every
+    /// predicate on one tick see one reading, so the second always refuses.
+    ///
+    /// Asserted by count rather than by `isMet` so a step that drained twice on
+    /// one tick is visible as a step that vanished too early.
+    func testAPairCannotDrainTwiceOnOneTick() throws {
+        var expectation = try Expectation([Shape.disappeared("Ready").resolved()])
+        expectation.snapshot(interface(["Ready"]))
+        XCTAssertTrue(
+            expectation.outstanding.contains { $0.contains("missing") },
+            "one tick drained both predicates: \(expectation.outstanding)"
+        )
+
+        // The same tree again is the same reading, so it cannot be the second
+        // predicate of the pair however many times it arrives.
+        expectation.snapshot(interface(["Ready"]))
+        expectation.snapshot(interface(["Ready"]))
+        XCTAssertTrue(
+            expectation.outstanding.contains { $0.contains("missing") },
+            "a repeated reading is one reading: \(expectation.outstanding)"
+        )
+
+        expectation.snapshot(interface([]))
+        expectation.noChange()
+        XCTAssertTrue(expectation.isMet, "outstanding: \(expectation.outstanding)")
+    }
+
+    /// Draining one predicate of a pair advances the step; it does not finish it.
+    ///
+    /// `disappeared(Ready)` offered a tree with Ready drains its `exists`, and the
+    /// walk carries on to the `missing`, which is asked and refuses — the tree it
+    /// would have to drain on is the one the `exists` just used. So the step is
+    /// still outstanding between ticks, one notch further along.
+    func testDrainingTheFirstHalfAdvancesTheStepWithoutFinishingIt() throws {
+        var expectation = try Expectation([Shape.disappeared("Ready").resolved()])
+        XCTAssertTrue(expectation.outstanding.contains { $0.contains("exists") })
+
+        expectation.snapshot(interface(["Ready"]))
+        XCTAssertFalse(expectation.isMet, "the missing predicate is still owed")
+        XCTAssertFalse(
+            expectation.outstanding.contains { $0.contains("exists") },
+            "the exists drained: \(expectation.outstanding)"
+        )
+        XCTAssertTrue(
+            expectation.outstanding.contains { $0.contains("missing") },
+            "the step survives its first drain: \(expectation.outstanding)"
+        )
+
+        // A second tree, so the missing predicate has a reading that is not the
+        // one the exists drained on.
         expectation.snapshot(interface([]))
         expectation.noChange()
         XCTAssertTrue(expectation.isMet, "outstanding: \(expectation.outstanding)")
