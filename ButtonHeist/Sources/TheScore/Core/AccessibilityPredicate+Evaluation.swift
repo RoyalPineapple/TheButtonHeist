@@ -15,7 +15,7 @@ package extension ResolvedAccessibilityPredicate {
         for capture in evidence.trace.captures {
             if let previous,
                AccessibilityObservationChangeReducer.reduce(between: previous, and: capture) == .screenChanged {
-                expectation.vacated(at: capture.interface.timestamp)
+                expectation.empty(at: capture.interface.timestamp)
                 expectation.screenChange(ScreenFacts(
                     idAfter: InterfaceSummary.screenName(for: capture.interface)
                 ))

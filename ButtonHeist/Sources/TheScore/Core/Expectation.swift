@@ -60,16 +60,17 @@ package struct Expectation: Equatable {
         evaluate(.snapshot(interface))
     }
 
-    /// The old screen stopped answering: an empty tree, nothing more.
+    /// A tree with nothing in it.
     ///
-    /// Not a special kind of tick. It is a snapshot whose tree is empty, and
-    /// the ordinary snapshot math already says the right thing about one —
+    /// A screen change is every element going away, a moment of nothing, then
+    /// elements arriving. This is that moment, and it is an ordinary snapshot —
+    /// the snapshot math already says the right thing about an empty tree:
     /// nothing is found, so every `missing` half drains and every `exists`
     /// refuses. That is the removals, and nobody enumerated them.
     ///
     /// Emitted the moment a screen change is detected, before exploration
     /// starts, because it needs no knowledge of where the run is going.
-    package mutating func vacated(at timestamp: Date) {
+    package mutating func empty(at timestamp: Date) {
         evaluate(.snapshot(Interface(timestamp: timestamp, tree: [])))
     }
 

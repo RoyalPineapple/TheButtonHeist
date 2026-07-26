@@ -131,22 +131,24 @@ final class PredicateTruthMatrixTests: XCTestCase {
     /// a coincidence, and it means what a reading does to a step depends
     /// entirely on how far that step has got.
     ///
-    /// A screen boundary is not special. `vacated()` is an empty tree, so it is
-    /// simply a reading in which nothing is found, and the same tip rule decides
-    /// each case:
+    /// A screen boundary needs no rule of its own. A screen change is every
+    /// element going away, a moment of nothing, then elements arriving — so the
+    /// empty tick is a tree with nothing in it because the screen was empty. The
+    /// elements on the new screen are new elements; nothing persisted across the
+    /// gap, even where labels repeat. The tip rule then decides each shape:
     ///
-    /// - `missing(X)` has its only half at the tip, so the gap drains it — even
-    ///   with X on both screens. That is row 19 reaching the replay path.
-    /// - `appeared(X)` leads with `missing(X)`, so the gap drains that half and
-    ///   the screen after it drains the `exists`. Every replacement makes an
-    ///   appearance satisfiable by the screen that follows it.
-    /// - `disappeared(X)` leads with `exists(X)`, which the gap cannot answer.
-    ///   Its `missing` half cannot drain while the `exists` is still there, so
-    ///   the gap is never offered to it.
+    /// - `missing(X)` has its only half at the tip, so the empty moment drains
+    ///   it, with X on both screens or neither. X was absent; that is the answer.
+    /// - `appeared(X)` leads with `missing(X)`, so the empty moment drains that
+    ///   half and the arriving screen drains the `exists`. Elements arriving on a
+    ///   new screen did appear.
+    /// - `disappeared(X)` leads with `exists(X)`, which the empty moment cannot
+    ///   answer. Its `missing` half cannot drain while the `exists` is still
+    ///   there, so a boundary alone never satisfies it.
     func testAReadingIsOfferedOnlyToTheTipOfEachStep() throws {
         func acrossABoundary(_ predicate: ResolvedAccessibilityPredicate) -> Bool {
             var expectation = Expectation([predicate])
-            expectation.vacated(at: Date())
+            expectation.empty(at: Date())
             expectation.screenChange(ScreenFacts(idAfter: "Second"))
             expectation.snapshot(interface(["Header"]))
             expectation.noChange()

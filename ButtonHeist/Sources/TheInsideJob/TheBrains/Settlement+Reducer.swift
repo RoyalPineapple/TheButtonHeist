@@ -259,7 +259,7 @@ private extension Settlement.Reducer {
         let interface = admission.event.moment.capture.interface
         let screenHeading = admission.event.snapshot.screenHeading
         if admission.event.continuity.isReplacement {
-            session.requirement.expectation.vacated(at: interface.timestamp)
+            session.requirement.expectation.empty(at: interface.timestamp)
             session.requirement.expectation.screenChange(ScreenFacts(idAfter: screenHeading))
         }
         // Every observation is a tick, and which tick it is was already decided
@@ -271,7 +271,6 @@ private extension Settlement.Reducer {
         } else {
             session.requirement.expectation.noChange()
         }
-        session.latestScreenName = screenHeading
         if case .established(let readiness) = session.readiness,
            session.command.waitsForObservation
                || session.requirement.predicate?.semantics == .currentState
