@@ -95,13 +95,14 @@ final class AccessibilityNotificationIdentityTests: XCTestCase {
         }
     }
 
-    /// A replaced baseline keeps only the notifications that speak about it.
+    /// The screen fact of a boundary keeps only the notifications that speak
+    /// about the screen.
     ///
     /// Element, announcement and unknown notifications arriving on the same
-    /// edge are not evidence of a screen change and do not ride along on the
-    /// screen fact. They used to land on the departure and arrival facts the
-    /// boundary projected; there are none now, so they are dropped rather than
-    /// reattributed to an event they did not describe.
+    /// edge are not evidence of a screen change. Element ones ride the
+    /// departure and arrival facts instead; announcement and unknown ones
+    /// belong to neither and are dropped rather than reattributed to an event
+    /// they did not describe.
     func testScreenBoundaryKeepsOnlyScreenNotifications() {
         let screenNotification = evidence(.screenChanged, sequence: 3)
         let notifications = [

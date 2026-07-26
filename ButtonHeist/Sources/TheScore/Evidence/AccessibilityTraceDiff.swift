@@ -25,7 +25,11 @@ enum AccessibilityTraceDiff {
 
         switch change {
         case .screenChanged:
-            return projectScreenBoundaryFacts(metadata: metadata)
+            return projectScreenBoundaryFacts(
+                before: before.interface,
+                after: after.interface,
+                metadata: metadata
+            )
         case .elementChanged:
             return projectSameScreenFacts(
                 before: before.interface,
@@ -35,27 +39,52 @@ enum AccessibilityTraceDiff {
         }
     }
 
-    /// A screen change is a wholesale replacement of the baseline, not a diff,
-    /// so nothing here is diffed.
+    /// A screen boundary is three facts in causal order: the old screen's nodes
+    /// depart, the screen identity moves, the new screen's nodes arrive.
     ///
-    /// The old baseline is discarded and the arrived capture becomes the one
-    /// subsequent deltas measure from. There is no edge to compute edits
-    /// across: the answer to "what changed" is "the baseline did", and the new
-    /// baseline is the settled capture the trace already holds, which
-    /// `metadata.captureEdge` already points at.
+    /// There is no element identity across a replacement, so nothing is diffed
+    /// and nothing is paired. Every node in `before` departed and every node in
+    /// `after` arrived — a similarly shaped control on the new screen is a new
+    /// object, not the old one persisting. The lists are whole graphs by
+    /// definition rather than by omission.
     ///
-    /// Projecting the two graphs into departed/arrived lists would restate a
-    /// snapshot the reader has under names that promise a delta nobody
-    /// computed — and would let `appeared`/`disappeared` match every node on
-    /// either screen, since a replacement trivially contains all of both.
+    /// Order carries the meaning. Two-legged steps do not evaluate their after
+    /// leg until the before leg is satisfied, so `disappeared(X)` reads the
+    /// departure tick and `appeared(X)` reads the arrival tick; fusing the three
+    /// into one fact would offer both legs a single reading and let either match
+    /// on the wrong side of the stitch.
     private static func projectScreenBoundaryFacts(
+        before: Interface,
+        after: Interface,
         metadata: AccessibilityTrace.ChangeFactMetadata
     ) -> [AccessibilityTrace.ChangeFact] {
-        [
-            .screenChanged(AccessibilityTrace.ScreenChangeFact(
-                metadata: metadata.filteringNotifications(isScreenChangeNotification)
-            )),
-        ]
+        let elementMetadata = metadata.filteringNotifications(isElementChangeNotification)
+        let departure = AccessibilityTrace.ElementsChangeFact(
+            disappeared: allNodes(in: before),
+            metadata: elementMetadata
+        )
+        let arrival = AccessibilityTrace.ElementsChangeFact(
+            appeared: allNodes(in: after),
+            metadata: elementMetadata
+        )
+        let screen = AccessibilityTrace.ScreenChangeFact(
+            metadata: metadata.filteringNotifications(isScreenChangeNotification)
+        )
+
+        // An empty graph on either side has nothing to depart or arrive, so that
+        // leg is omitted rather than delivered as a tick carrying no evidence.
+        return [
+            departure.hasLifecycleOrUpdateFacts ? .elementsChanged(departure) : nil,
+            .screenChanged(screen),
+            arrival.hasLifecycleOrUpdateFacts ? .elementsChanged(arrival) : nil,
+        ].compactMap(\.self)
+    }
+
+    /// Every node in the graph, in path order, as lifecycle evidence.
+    private static func allNodes(
+        in interface: Interface
+    ) -> [AccessibilityTrace.InterfaceChangeNode] {
+        interface.graph.nodesInPathOrder.map(AccessibilityTrace.InterfaceChangeNode.init(record:))
     }
 
     private static func projectSameScreenFacts(

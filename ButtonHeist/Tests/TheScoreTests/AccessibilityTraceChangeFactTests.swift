@@ -78,7 +78,7 @@ final class AccessibilityTraceChangeFactTests: AccessibilityTraceDiffTestCase {
         let facts = AccessibilityTrace.ChangeFact.between(before, after)
 
         XCTAssertEqual(after.transition.fallbackReason, .primaryHeaderChanged)
-        XCTAssertEqual(facts.map(\.kind), [.screenChanged])
+        XCTAssertEqual(facts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
         try assertFactsDeriveFromCaptureEdge(facts, trace: trace)
     }
 
@@ -96,7 +96,7 @@ final class AccessibilityTraceChangeFactTests: AccessibilityTraceDiffTestCase {
 
         XCTAssertEqual(
             AccessibilityTrace.ChangeFact.between(before, after).map(\.kind),
-            [.screenChanged]
+            [.elementsChanged, .screenChanged, .elementsChanged]
         )
     }
 
@@ -114,8 +114,8 @@ final class AccessibilityTraceChangeFactTests: AccessibilityTraceDiffTestCase {
 
         let facts = AccessibilityTrace.ChangeFact.between(before, after)
         XCTAssertNil(after.transition.fallbackReason)
-        XCTAssertEqual(facts.map(\.kind), [.screenChanged])
-        guard case .screenChanged(let payload) = facts[0] else {
+        XCTAssertEqual(facts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
+        guard case .screenChanged(let payload) = facts[1] else {
             return XCTFail("Expected screenChanged from the scoped screenChanged notification")
         }
         XCTAssertEqual(payload.metadata.accessibilityNotifications, [notification])
@@ -127,8 +127,7 @@ final class AccessibilityTraceChangeFactTests: AccessibilityTraceDiffTestCase {
 
     /// An `observationGeneration` bump is a boundary signal in its own right —
     /// no fallback reason, no notification, just a new generation. This is the
-    /// only coverage of that signal, which is why the test survives the removal
-    /// of the departure/arrival facts it used to inspect.
+    /// only coverage of that signal.
     func testObservationGenerationBumpClassifiesAsScreenChange() throws {
         let before = AccessibilityTrace.Capture(
             sequence: 1,
@@ -144,11 +143,18 @@ final class AccessibilityTraceChangeFactTests: AccessibilityTraceDiffTestCase {
 
         let facts = AccessibilityTrace.ChangeFact.between(before, after)
 
-        XCTAssertEqual(facts.map(\.kind), [.screenChanged])
-        XCTAssertTrue(
-            facts.allSatisfy { if case .elementsChanged = $0 { false } else { true } },
-            "A replaced baseline is not an element change"
-        )
+        XCTAssertEqual(facts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
+        guard case .elementsChanged(let departure) = facts[0],
+              case .elementsChanged(let arrival) = facts[2]
+        else {
+            return XCTFail("Expected the boundary to be bracketed by departure and arrival")
+        }
+        // No element identity survives a replacement, so the whole old graph
+        // departed and the whole new graph arrived.
+        XCTAssertEqual(departure.disappeared.map(\.path), before.interface.graph.nodesInPathOrder.map(\.path))
+        XCTAssertEqual(departure.appeared, [])
+        XCTAssertEqual(arrival.appeared.map(\.path), after.interface.graph.nodesInPathOrder.map(\.path))
+        XCTAssertEqual(arrival.disappeared, [])
     }
 
     func testLayoutChangedNotificationProducesNotificationOnlyElementFact() throws {

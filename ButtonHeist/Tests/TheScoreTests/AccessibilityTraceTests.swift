@@ -299,7 +299,7 @@ final class AccessibilityTraceTests: XCTestCase {
         let facts = AccessibilityTrace.ChangeFact.between(before, after)
 
         XCTAssertEqual(after.transition.fallbackReason, .primaryHeaderChanged)
-        XCTAssertEqual(facts.map(\.kind), [.screenChanged])
+        XCTAssertEqual(facts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
     }
 
     func testFallbackReasonOverridesStructuralChange() throws {
@@ -314,7 +314,7 @@ final class AccessibilityTraceTests: XCTestCase {
         let facts = AccessibilityTrace.ChangeFact.between(before, after)
 
         XCTAssertEqual(after.transition.fallbackReason, .primaryHeaderChanged)
-        XCTAssertEqual(facts.map(\.kind), [.screenChanged])
+        XCTAssertEqual(facts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
     }
 
     func testSameScreenContextChangeProjectsElementChangedFact() throws {
@@ -434,7 +434,7 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(trace.captures.last?.transition.fallbackReason, .primaryHeaderChanged)
         XCTAssertEqual(
             trace.changeFacts.map(\.kind),
-            [.elementsChanged, .screenChanged]
+            [.elementsChanged, .elementsChanged, .screenChanged, .elementsChanged]
         )
         guard case .elementsChanged(let elementFact) = trace.changeFacts[0] else {
             return XCTFail("Expected the first edge to be an element fact")
@@ -442,7 +442,7 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertTrue(elementFact.updated.flatMap(\.changes).contains(
             try XCTUnwrap(PropertyChange.value(old: "0", new: "50"))
         ))
-        guard case .screenChanged = trace.changeFacts[1] else {
+        guard case .screenChanged = trace.changeFacts[2] else {
             return XCTFail("Expected the screen marker on the second edge")
         }
     }
@@ -461,7 +461,7 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(trace.captures.last?.transition.fallbackReason, .primaryHeaderChanged)
         XCTAssertEqual(
             trace.changeFacts.map(\.kind),
-            [.elementsChanged, .screenChanged]
+            [.elementsChanged, .elementsChanged, .screenChanged, .elementsChanged]
         )
         guard case .elementsChanged(let elementFact) = trace.changeFacts[0] else {
             return XCTFail("Expected outgoing same-screen update to stay on its own edge")
@@ -469,7 +469,7 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertTrue(elementFact.updated.flatMap(\.changes).contains(
             try XCTUnwrap(PropertyChange.value(old: "0", new: "1"))
         ))
-        guard case .screenChanged = trace.changeFacts[1] else {
+        guard case .screenChanged = trace.changeFacts[2] else {
             return XCTFail("Expected the baseline replacement to stay on its own edge")
         }
     }
