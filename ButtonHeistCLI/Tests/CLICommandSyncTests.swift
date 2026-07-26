@@ -76,10 +76,11 @@ final class CLICommandSyncTests: XCTestCase {
         let screen = try WaitCommand.parse(["--change", "screen"]).requestArguments()
         let elements = try WaitCommand.parse(["--change", "elements"]).requestArguments()
 
+        // A screen predicate names the arrived-at screen and carries no
+        // assertions: element assertions are a sibling, not payload.
         XCTAssertEqual(screen.value(for: .predicate), .object([
             "type": .string("changed"),
             "scope": .string("screen"),
-            "assertions": .array([]),
         ]))
         XCTAssertEqual(elements.value(for: .predicate), .object([
             "type": .string("changed"),
