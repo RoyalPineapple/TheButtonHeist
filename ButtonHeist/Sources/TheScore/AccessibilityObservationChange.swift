@@ -40,17 +40,10 @@ enum AccessibilityObservationChangeReducer {
         if after.transition.fallbackReason != nil {
             return .screenChanged
         }
-        let hasUsableSameScreenNotification = after.transition.accessibilityNotifications.contains { notification in
-            switch notification.kind {
-            case .elementChanged, .announcement:
-                true
-            case .screenChanged, .unknown:
-                false
-            }
-        }
-        if hasUsableSameScreenNotification {
-            return .elementChanged
-        }
+        // Everything that is not one of the three screen signals above is an
+        // element change. A boundary also emits layoutChanged notifications, so
+        // asking which same-screen notifications arrived cannot distinguish the
+        // two cases and does not need to: only the screen signals do.
         return .elementChanged
     }
 }
