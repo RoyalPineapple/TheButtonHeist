@@ -141,7 +141,7 @@ extension Settlement.TerminalLog {
         private static func render(_ result: TheSafecracker.ActionDispatchResult) -> String {
             switch result.outcome {
             case .success: Strings.TerminalTerm.succeeded.rawValue
-            case .failure(let failure): Strings.TerminalDetail.failed(failure)
+            case .failure(let failure): Strings.TerminalDetail.failed(String(describing: failure))
             }
         }
     }
@@ -154,9 +154,9 @@ extension Settlement.TerminalLog {
         var rendered: String {
             switch self {
             case .notApplicable: Strings.TerminalTerm.notApplicable.rawValue
-            case .established(let establishment): Strings.TerminalDetail.established(establishment.path)
+            case .established(let establishment): Strings.TerminalDetail.established(String(describing: establishment.path))
             case .evidence(.pending): Strings.TerminalTerm.pending.rawValue
-            case .evidence(.established(let establishment)): Strings.TerminalDetail.established(establishment.path)
+            case .evidence(.established(let establishment)): Strings.TerminalDetail.established(String(describing: establishment.path))
             }
         }
     }
@@ -173,7 +173,7 @@ extension Settlement.TerminalLog {
             case .evidence(.pending): Strings.TerminalTerm.pending.rawValue
             case .evidence(.captureRequested): Strings.TerminalTerm.captureRequested.rawValue
             case .evidence(.admitted(let admission)): Self.render(admission)
-            case .evidence(.captureFailed(_, let failure)): Strings.TerminalDetail.captureFailed(failure)
+            case .evidence(.captureFailed(_, let failure)): Strings.TerminalDetail.captureFailed(String(describing: failure))
             }
         }
 
@@ -195,27 +195,27 @@ extension Settlement.TerminalLog {
             case .settled:
                 Strings.TerminalTerm.settled.rawValue
             case .currentStateFailure(.unavailable(let reason)):
-                Strings.TerminalDetail.failed(reason)
+                Strings.TerminalDetail.failed(String(describing: reason))
             case .currentStateFailure(.cancelled):
                 Strings.TerminalTerm.cancelled.rawValue
             case .observationFailure(.baselineUnavailable):
                 Strings.TerminalTerm.baselineUnavailable.rawValue
             case .observationFailure(.timedOut(let phase)):
-                Strings.TerminalDetail.timedOut(phase)
+                Strings.TerminalDetail.timedOut(String(describing: phase))
             case .observationFailure(.cancelled):
                 Strings.TerminalTerm.cancelled.rawValue
             case .observationFailure(.viewportExitFailed(let reason)):
-                Strings.TerminalDetail.viewportExitFailed(reason)
+                Strings.TerminalDetail.viewportExitFailed(String(describing: reason))
             case .actionFailure(.dispatchFailed):
                 Strings.TerminalTerm.dispatchFailed.rawValue
             case .actionFailure(.baselineUnavailable):
                 Strings.TerminalTerm.baselineUnavailable.rawValue
             case .actionFailure(.timedOut(let phase)):
-                Strings.TerminalDetail.timedOut(phase)
+                Strings.TerminalDetail.timedOut(String(describing: phase))
             case .actionFailure(.cancelled):
                 Strings.TerminalTerm.cancelled.rawValue
             case .actionFailure(.viewportExitFailed(let reason)):
-                Strings.TerminalDetail.viewportExitFailed(reason)
+                Strings.TerminalDetail.viewportExitFailed(String(describing: reason))
             }
         }
     }

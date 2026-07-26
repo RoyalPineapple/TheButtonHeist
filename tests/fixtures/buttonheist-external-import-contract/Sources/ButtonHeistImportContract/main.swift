@@ -16,8 +16,7 @@ struct ButtonHeistImportContract {
             .value("Paid")
         )
         let changedPredicate: AccessibilityPredicate = .changed(.elements([updatedPredicate]))
-        let noChangePredicate: AccessibilityPredicate = .noChange
-        _ = (currentPredicate, containerPredicate, changedPredicate, noChangePredicate)
+        _ = (currentPredicate, containerPredicate, changedPredicate)
 
         return try HeistPlan("external-import-contract") {
             Activate(.label("Pay")).expect(.changed(.screen()))

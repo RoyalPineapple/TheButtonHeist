@@ -139,7 +139,13 @@ internal enum Strings {
         case admitted
         case captureFailed
 
-        func callAsFunction(_ payload: some CustomStringConvertible) -> String {
+        /// The payload arrives already rendered.
+        ///
+        /// Most of these are enum cases with no description of their own, so the
+        /// caller is the only place that knows how to spell one. Taking a String
+        /// keeps that decision at the call site instead of demanding a
+        /// conformance every log token would have to grow.
+        func callAsFunction(_ payload: String) -> String {
             "\(rawValue)(\(payload))"
         }
     }
