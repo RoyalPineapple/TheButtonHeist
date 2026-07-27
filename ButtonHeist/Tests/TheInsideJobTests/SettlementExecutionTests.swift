@@ -696,9 +696,11 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
                 case .invalidateOnce(let current),
                      .invalidateTwice(let current):
                     if generation.rawValue > 0 {
-                        // The handoff's own reading is a change, so the run still
-                        // needs the quiet one after it to settle.
-                        observeQuietReading()
+                        // The recaptured handoff reaches the run as a reading:
+                        // the change first, then the quiet one that proves the
+                        // tree stopped. The run settles on the last tick, so the
+                        // quiet reading has to arrive after the change.
+                        observeReadingPair(changed: current)
                         return .admitted(current)
                     }
                 }
@@ -714,6 +716,13 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
     /// settle. A boundary that stopped at the change would be scripting a tree
     /// that was still moving when the run ended.
     private func observeChangedThenQuiet(into sink: Settlement.ExecutionSink) {
+        sink.observe(.snapshot(changed))
+        observeQuietReading(into: sink)
+    }
+
+    /// Delivers `changed`, then the quiet reading that follows it.
+    private func observeReadingPair(changed: Observation.SnapshotEvent) {
+        guard let sink = lock.withLock({ state.sink }) else { return }
         sink.observe(.snapshot(changed))
         observeQuietReading(into: sink)
     }

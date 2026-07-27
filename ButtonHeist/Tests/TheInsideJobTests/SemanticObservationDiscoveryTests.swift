@@ -89,10 +89,15 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
         XCTAssertEqual(vault.latestObservation.captureID, observation.captureID)
     }
 
-    func testDiscoverySettlementRejectsTripwireChangeBeforeCommit() async {
+    func testDiscoverySettlementRejectsHierarchyChangeBeforeCommit() async {
         let observation = observation(label: "Candidate", heistId: "candidate")
         vault.observeInterface(observation)
-        let currentSignal = tripwireSignal(sequence: 2)
+        let currentSignal = TheTripwire.TripwireSignal(
+            topmostVC: ObjectIdentifier(vault),
+            navigation: .empty,
+            windowStack: .empty,
+            accessibilityNotificationSequence: 1
+        )
         vault.semanticObservationStream.readTripwireSignal = { currentSignal }
         let event = await vault.semanticObservationStream.admitCurrentObservation(
             vault: vault,

@@ -112,17 +112,21 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
 
     func testViewportExitFinalizesOrReplacesTheIntendedOutcome() async {
         let baseline = await commit(label: "Baseline")
-        let handoff = await commit(label: "Handoff")
+        let handoff = await commitSettling(label: "Handoff")
         var settled = armedPredicateFreeActionDecision(baseline: baseline)
         settled = reduce(
             settled,
-            .observationAdmitted(admission(handoff))
+            .observationAdmitted(admission(handoff.changed))
+        )
+        settled = reduce(
+            settled,
+            .observationAdmitted(admission(handoff.settled))
         )
         settled = reduce(
             settled,
             .readinessEstablished(.init(
                 generation: .initial,
-                observationBoundary: .including(handoff.moment)
+                observationBoundary: .including(handoff.settled.moment)
             ))
         )
 

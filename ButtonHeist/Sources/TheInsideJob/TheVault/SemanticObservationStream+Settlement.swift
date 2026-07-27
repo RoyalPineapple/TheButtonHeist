@@ -318,7 +318,16 @@ extension Observation.Stream {
         guard let vault, !Task.isCancelled else {
             return ObservationSettlement(commitOutcome: .unavailable)
         }
+        guard let captured = vault.captureVisibleObservation() else {
+            await recordFailedSettle(
+                "the accessibility tree could not be read",
+                observation: nil,
+                vault: vault
+            )
+            return ObservationSettlement(commitOutcome: .unavailable)
+        }
         guard let committableObservation = await admitCurrentObservation(
+            captured,
             vault: vault,
             tripwireSignal: tripwireSignal
         ) else {
@@ -391,21 +400,23 @@ extension Observation.Stream {
     /// throughout a transition — so they let the reading through. Whether the
     /// tree moved is the store's comparison, answered on commit.
     func admitCurrentObservation(
+        _ observation: InterfaceObservation? = nil,
         vault: TheVault,
         tripwireSignal: TheTripwire.TripwireSignal,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
         lineageEvidence: ScreenLineageEvidence? = nil
     ) async -> CommittableInterfaceObservation? {
+        let reading = observation ?? vault.latestObservation
         guard currentTripwireSignal().hierarchy == tripwireSignal.hierarchy else {
             await recordFailedSettle(
                 "the view hierarchy moved while the reading was taken",
-                observation: vault.latestObservation,
+                observation: reading,
                 vault: vault
             )
             return nil
         }
         return CommittableInterfaceObservation.admitCaptured(
-            vault.latestObservation,
+            reading,
             tripwireSignal: tripwireSignal,
             lineageEvidence: lineageEvidence
         )

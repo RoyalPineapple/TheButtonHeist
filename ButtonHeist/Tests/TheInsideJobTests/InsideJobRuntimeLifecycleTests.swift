@@ -358,7 +358,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
             XCTFail("Expected settle failure diagnostic")
             return ""
         }
-        XCTAssertTrue(diagnostic.contains("tripwire signal changed"), diagnostic)
+        XCTAssertTrue(diagnostic.contains("the view hierarchy moved"), diagnostic)
         return diagnostic
     }
 
