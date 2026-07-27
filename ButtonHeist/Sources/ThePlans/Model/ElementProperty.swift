@@ -89,3 +89,31 @@ public enum AssertableProperty: String, Codable, Sendable, CaseIterable, CodingK
     public init?(intValue: Int) { nil }
     public var intValue: Int? { nil }
 }
+
+/// Something that can be hashed over the part of it that means something.
+///
+/// The tree has two users and each reads a different part of it. `label`,
+/// `value`, `traits`, `hint`, `actions`, `rotors` and `customContent` are what
+/// a VoiceOver user perceives; `identifier` is what a developer names an
+/// element by and what a heist targets. Both are meaning. Geometry is neither:
+/// it is how the element is drawn, not what it is, and an element that moved
+/// still says exactly what it said before.
+///
+/// That boundary is why a reading exists. A reading decides whether a change's
+/// second leg found something new, so hashing geometry in would let a frame
+/// shifting a pixel satisfy an assertion nobody wrote.
+///
+/// Deliberately narrower than `Hashable`, and both live on the same types:
+/// `hash(into:)` identifies the value, this identifies what it means.
+public protocol SemanticallyHashable {
+    func hashSemantic(into hasher: inout Hasher)
+}
+
+extension SemanticallyHashable {
+    /// This value's reading, as a number that only means "same" or "different".
+    public var semanticHash: Int {
+        var hasher = Hasher()
+        hashSemantic(into: &hasher)
+        return hasher.finalize()
+    }
+}

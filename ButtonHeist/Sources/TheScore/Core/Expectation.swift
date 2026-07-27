@@ -291,14 +291,22 @@ enum ReadingScope: Equatable {
 
     case screen
 
+    /// What this scope reads, as a number that only means "same" or "different".
+    ///
+    /// Every arm hashes the same thing: identity, and the properties in
+    /// `AssertableProperty`. Nothing wider, because a reading is what decides
+    /// whether a change's second leg found something new, and a leg satisfied
+    /// by a frame moving a pixel is a change nobody asserted. The vault hashes
+    /// wider — geometry included — and is right to: it is deciding whether to
+    /// emit a tick, not whether an assertion came true.
     func reading(in interface: Interface) -> Int {
         var hasher = Hasher()
         switch self {
         case .screen:
-            hasher.combine(interface.projectedElements)
+            interface.hashSemantic(into: &hasher)
         case .element(let target):
             for element in Self.matches(target, in: interface) {
-                hasher.combine(element)
+                element.hashSemantic(into: &hasher)
             }
         case .property(let property, let target):
             for element in Self.matches(target, in: interface) {
@@ -313,6 +321,34 @@ enum ReadingScope: Equatable {
         in interface: Interface
     ) -> [HeistElement] {
         AccessibilityTargetMatchGraph(interface: interface).resolve(target).elements.elements
+    }
+}
+
+extension Interface: SemanticallyHashable {
+    /// This graph, reduced to what an assertion can say about it.
+    ///
+    /// The whole graph is what a bare `elementsChanged` asks about, so its
+    /// reading is every element's, in projection order.
+    public func hashSemantic(into hasher: inout Hasher) {
+        for element in projectedElements {
+            element.hashSemantic(into: &hasher)
+        }
+    }
+}
+
+extension HeistElement: SemanticallyHashable {
+    /// This element, reduced to the part of it that means something.
+    ///
+    /// What a developer names it by, what a VoiceOver user hears, and every
+    /// property an assertion can constrain. Geometry is absent by
+    /// construction: it is not in `AssertableProperty`, so a reading can never
+    /// be asked to take it.
+    public func hashSemantic(into hasher: inout Hasher) {
+        hasher.combine(identifier)
+        hasher.combine(label)
+        for property in AssertableProperty.allCases {
+            property.combine(self, into: &hasher)
+        }
     }
 }
 
@@ -333,6 +369,7 @@ extension AssertableProperty {
         }
     }
 }
+
 
 extension ResolvedAccessibilityPredicate {
     var pendingSteps: [PendingStep] {

@@ -433,9 +433,11 @@ private extension Settlement.ResultProjector {
             handoff: handoff.event,
             completeness: .incomplete
         )?.trace
+        var readings: [Int] = []
         for capture in trace?.captures ?? [] {
             let interface = capture.interface
             interfaceElementCount = interface.projectedElements.count
+            readings.append(interface.semanticHash)
             guard let target else { continue }
             let observed = AccessibilityTargetMatchGraph(interface: interface)
                 .elementCandidates(in: target)
@@ -462,6 +464,13 @@ private extension Settlement.ResultProjector {
                 ),
                 Strings.Diagnostic.nextStep,
             ]
+        case (.elementsChanged, nil, let count?):
+            // This one names no element, so it is the only predicate with no
+            // candidates to show. What it has instead is the graph itself,
+            // read the way it would have read it.
+            parts.append(Strings.Diagnostic.expected(predicate.authored.description))
+            parts.append(Strings.Diagnostic.interfaceElementCount(count))
+            parts.append(Strings.Diagnostic.ticksRead(readings))
         case (.announcement, _, _), (.noChange, _, _), (.screenChanged, _, _), (.elementsChanged, _, _):
             parts.append(Strings.Diagnostic.expected(predicate.authored.description))
             parts.append(Strings.Timeout.stillWaitingOn(
@@ -601,6 +610,34 @@ private enum Strings {
 
         static func candidateDidNotMatch(_ candidate: String, _ predicate: String) -> String {
             "observed accessibility candidate \(candidate) did not match \(predicate)"
+        }
+
+        /// What the ticks held, as an assertion would have read them.
+        ///
+        /// Settlement and predicates read one stream with different
+        /// sensitivities: the vault emits a tick for every change, geometry
+        /// included, and a predicate seeing the same assertable graph twice is
+        /// simply indifferent to it. So a run can be full of ticks while
+        /// nothing assertable ever differs, and nothing is wrong with the
+        /// pipeline when it is — but it is the thing a reader cannot otherwise
+        /// see, and the difference between an action that did nothing and one
+        /// that only moved the frame.
+        ///
+        /// Which reading was which says nothing a reader can carry between
+        /// runs; which ones were the same says everything. Each distinct
+        /// reading becomes a letter, so `A A A` is three ticks that an
+        /// assertion would have read as the same graph.
+        static func ticksRead(_ readings: [Int]) -> String {
+            var names: [Int: String] = [:]
+            let shape = readings.map { reading -> String in
+                if let name = names[reading] { return name }
+                let name = String(UnicodeScalar(65 + names.count % 26)!)
+                names[reading] = name
+                return name
+            }
+            return "\(readings.count) ticks holding "
+                + "\(names.count) distinct assertable reading\(names.count == 1 ? "" : "s") "
+                + "[\(shape.joined(separator: " "))]"
         }
     }
 
