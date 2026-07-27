@@ -133,14 +133,20 @@ package struct TickStep: Sendable, Equatable {
         after.kind == .screenChanged
     }
 
+    /// The two trees an element question is asked over.
+    package struct ComparedInterfaces: Sendable {
+        package let before: Interface
+        package let after: Interface
+    }
+
     /// The trees this step compares, when it compares trees at all.
     ///
     /// A step touching the screen or announcement lanes has no element question
     /// in it, so there is nothing to diff and this is nil rather than an empty
     /// pair — absence of a comparison, not a comparison that found nothing.
-    package var interfaces: (before: Interface, after: Interface)? {
+    package var interfaces: ComparedInterfaces? {
         guard let before = before.interface, let after = after.interface else { return nil }
-        return (before, after)
+        return ComparedInterfaces(before: before, after: after)
     }
 
     /// What entered, left, and changed across this step.

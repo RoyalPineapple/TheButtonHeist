@@ -565,10 +565,30 @@ extension Navigation {
         /// The target could not be resolved at all.
         case failed(ElementInflation.SemanticTargetResolutionFailure)
         /// No seed applies to where the target sits now, and nothing moved.
-        case noSeed
+        case noSeed(StoredSeedRejection)
         /// The seed was spent and the target is still off screen, so the
         /// viewport is somewhere other than where the caller left it.
         case missed
+    }
+
+    /// Why a stored seed does not apply.
+    ///
+    /// Each of these leaves the viewport where the caller left it, so the caller
+    /// sweeps either way. They are named because a seed silently declining to
+    /// apply reads exactly like one that applied and found nothing.
+    private enum StoredSeedRejection {
+        /// The target the seed was stored for is no longer in the reading.
+        case targetUnresolved
+        /// The target sits outside any scroll container now.
+        case targetHasNoScrollOwner
+        /// The seed remembers a point in a container the target has since left.
+        case seedBelongsToAnotherOwner(TreePath)
+        /// The owner is in the reading and names no live scroll view.
+        case ownerNotLiveScrollable(TheVault.LiveScrollTargetFailure)
+        /// The owner is a scroll view Button Heist will not drive itself.
+        case ownerUnsafeForProgrammaticScrolling
+        /// The seed was spent and the viewport stayed where it was.
+        case viewportDidNotMove
     }
 
     func scanForSemanticTarget(
@@ -586,6 +606,8 @@ extension Navigation {
             case .failed(let failure):
                 return .failed(failure)
             case .noSeed, .missed:
+                // Both leave the sweep below as the answer; they differ in where
+                // the viewport starts it from, which the sweep reads for itself.
                 break
             }
         }
@@ -633,12 +655,25 @@ extension Navigation {
         // names where it sat in the reading that admitted the target, and the
         // seed is spent against whatever the app has reached since; admitting
         // the seed against the current owner is what makes the two one screen.
-        guard case .resolved(.element(let currentElement)) = vault.resolveTarget(request.target.target),
-              let ownerPath = currentElement.scrollContainerPath,
-              let point = observedPoint.admit(ownerPath: ownerPath),
-              case .success(let target) = vault.liveScrollTarget(at: ownerPath),
-              !target.scrollView.bhIsUnsafeForProgrammaticScrolling
-        else { return .noSeed }
+        guard case .resolved(.element(let currentElement)) = vault.resolveTarget(request.target.target) else {
+            return .noSeed(.targetUnresolved)
+        }
+        guard let ownerPath = currentElement.scrollContainerPath else {
+            return .noSeed(.targetHasNoScrollOwner)
+        }
+        guard let point = observedPoint.admit(ownerPath: ownerPath) else {
+            return .noSeed(.seedBelongsToAnotherOwner(ownerPath))
+        }
+        let target: TheVault.LiveScrollTarget
+        switch vault.liveScrollTarget(at: ownerPath) {
+        case .success(let resolved):
+            target = resolved
+        case .failure(let failure):
+            return .noSeed(.ownerNotLiveScrollable(failure))
+        }
+        guard !target.scrollView.bhIsUnsafeForProgrammaticScrolling else {
+            return .noSeed(.ownerUnsafeForProgrammaticScrolling)
+        }
         let transition = await performViewportTransition(
             .revealContentPoint(
                 point,
@@ -648,7 +683,7 @@ extension Navigation {
         )
         guard transition.outcome.didMove,
               let event = transition.event
-        else { return .noSeed }
+        else { return .noSeed(.viewportDidNotMove) }
         let exploration = InterfaceExplorationResult(
             event: event,
             progress: .init(),
