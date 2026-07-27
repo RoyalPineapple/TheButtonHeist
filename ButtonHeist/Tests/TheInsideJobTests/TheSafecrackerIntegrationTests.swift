@@ -165,7 +165,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
     private func activateTextInput(_ textField: UITextField) async {
         XCTAssertTrue(textField.becomeFirstResponder())
         XCTAssertTrue(textField.isFirstResponder)
-        let didActivate = await safecracker.waitForActiveTextInput(pulse: tripwire)
+        let didActivate = await safecracker.waitForActiveTextInput()
         XCTAssertTrue(didActivate)
     }
 

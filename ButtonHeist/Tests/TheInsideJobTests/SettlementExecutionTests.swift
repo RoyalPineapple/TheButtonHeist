@@ -320,14 +320,14 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
 
     func testFailedActionNotificationsAreNotClaimedByTheNextSuccessfulAction() async {
         let tripwire = TheTripwire()
-        var visibleObservation = observation(label: "Before", heistId: "before")
+        let screen = Locked(observation(label: "Before", heistId: "before"))
         let actionVault = TheVault(
             tripwire: tripwire,
-            visibleObservationSource: { _ in visibleObservation }
+            visibleObservationSource: { _ in screen.current }
         )
         defer { actionVault.semanticObservationStream.stop() }
         actionVault.semanticObservationStream.beforeVisibleReading = { [actionVault] in
-            actionVault.observeInterface(visibleObservation)
+            actionVault.observeInterface(screen.current)
         }
 
         func executeAction(
@@ -371,7 +371,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
             ["Action A"]
         )
 
-        visibleObservation = observation(label: "After", heistId: "after")
+        screen.set(observation(label: "After", heistId: "after"))
         let successful = await executeAction(
             announcing: "Action B",
             result: .success(payload: .dismiss)
