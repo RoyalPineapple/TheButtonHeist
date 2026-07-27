@@ -14,8 +14,12 @@ extension Settlement {
             case .settled(let settled):
                 return .completed(
                     result: actionResult(settled),
-                    expectation: settled.command.predicate.map {
-                        ExpectationResult(met: true, predicate: $0.authored, actual: nil)
+                    expectation: settled.command.predicate.map { predicate in
+                        ExpectationResult(
+                            met: true,
+                            predicate: predicate.authored,
+                            actual: matchedAnnouncement(predicate, in: settled.tickLog)
+                        )
                     }
                 )
             case .failed(let failed):
@@ -370,6 +374,20 @@ private extension Settlement.ResultProjector {
             return dispatch.payload
         }
         return .typeText(value)
+    }
+
+    /// The announcement a met announcement predicate matched.
+    ///
+    /// An announcement is a tick, so the log is where one is recorded and this
+    /// reads it there. The trace only carries the announcements that arrived
+    /// while a reading was being folded into a capture, which is a fact about
+    /// when the notification landed rather than about what was announced.
+    static func matchedAnnouncement(
+        _ predicate: Settlement.Predicate,
+        in tickLog: TickLog
+    ) -> String? {
+        guard case .announcement = predicate.resolved else { return nil }
+        return tickLog.announcements.last
     }
 
     static func waitSuccessMessage(

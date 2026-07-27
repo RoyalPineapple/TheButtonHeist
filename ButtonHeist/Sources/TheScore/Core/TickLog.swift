@@ -88,6 +88,19 @@ package struct TickLog: Sendable, Equatable {
         ]
     }
 
+    /// Every announcement this log observed, in the order it observed them.
+    ///
+    /// An announcement is a tick in its own right, so this is where one is
+    /// recorded. Reading it back off the captures instead only finds the ones
+    /// that happened to arrive while a reading was being folded in, which is a
+    /// question about timing rather than about what was announced.
+    package var announcements: [String] {
+        ticks.compactMap { tick in
+            guard case .announcement(let text) = tick else { return nil }
+            return text
+        }
+    }
+
     /// The captures this log read, in order, as a trace.
     ///
     /// The trace is a projection of the log rather than a second record kept
