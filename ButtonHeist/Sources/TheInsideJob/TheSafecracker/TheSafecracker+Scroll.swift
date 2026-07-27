@@ -306,6 +306,12 @@ extension TheSafecracker {
         animated: Bool
     ) {
         scrollView.setContentOffset(contentOffset, animated: animated)
+        if !animated {
+            // An unanimated offset is set by the time that call returns, and
+            // the subviews it moves are laid out at the next layout pass. The
+            // scroll has landed once they have moved, so this is where it lands.
+            scrollView.layoutIfNeeded()
+        }
     }
 
     private func contentOffsetsEqual(_ lhs: CGPoint, _ rhs: CGPoint) -> Bool {
