@@ -505,7 +505,7 @@ extension Navigation {
         }
 
         private func currentProgrammaticScrollTarget(for path: TreePath) -> ScrollableTarget? {
-            guard let target = navigation.vault.liveScrollTarget(at: path),
+            guard case .success(let target) = navigation.vault.liveScrollTarget(at: path),
                   !target.scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
             return Self.scrollableTarget(target)
         }
@@ -558,6 +558,19 @@ extension Navigation {
         case failed(ElementInflation.SemanticTargetResolutionFailure)
     }
 
+    /// What one stored seed did for a reveal request.
+    private enum StoredSeedOutcome {
+        /// The seed put the target on screen.
+        case revealed(InterfaceTree.Element, InterfaceExplorationResult)
+        /// The target could not be resolved at all.
+        case failed(ElementInflation.SemanticTargetResolutionFailure)
+        /// No seed applies to where the target sits now, and nothing moved.
+        case noSeed
+        /// The seed was spent and the target is still off screen, so the
+        /// viewport is somewhere other than where the caller left it.
+        case missed
+    }
+
     func scanForSemanticTarget(
         _ request: ElementInflation.SemanticTargetRevealRequest
     ) async -> ElementInflation.SemanticTargetScanResult {
@@ -567,8 +580,13 @@ extension Navigation {
             ? .backwardFirst
             : .forwardFirst
         if let observedPoint = request.observedScrollContentActivationPoint {
-            if let seededResult = await moveToFallbackSeed(observedPoint, request: request) {
-                return seededResult
+            switch await moveToStoredSeed(observedPoint, request: request) {
+            case .revealed(let current, let exploration):
+                return .revealed(current, exploration)
+            case .failed(let failure):
+                return .failed(failure)
+            case .noSeed, .missed:
+                break
             }
         }
         let explorer = ViewportExplorer(
@@ -599,15 +617,28 @@ extension Navigation {
         return .revealed(visibleTarget, explored)
     }
 
-    private func moveToFallbackSeed(
+    /// Scrolls straight to where the target was last seen.
+    ///
+    /// A seed is one remembered content point in one scroll container, so it is
+    /// spent in a single move and either puts the target on screen or does not.
+    /// Sweeping every viewport is the slower answer the caller falls back on.
+    private func moveToStoredSeed(
         _ observedPoint: InterfaceTree.ObservedScrollContentActivationPoint,
         request: ElementInflation.SemanticTargetRevealRequest
-    ) async -> ElementInflation.SemanticTargetScanResult? {
-        guard let ownerPath = request.target.scrollContainerPath,
+    ) async -> StoredSeedOutcome {
+        // Spending the seed is a live-geometry question, so the live capture is
+        // taken here rather than inherited from whenever one last happened.
+        vault.refreshLiveCapture()
+        // The owner is looked up where the target sits now. `scrollContainerPath`
+        // names where it sat in the reading that admitted the target, and the
+        // seed is spent against whatever the app has reached since; admitting
+        // the seed against the current owner is what makes the two one screen.
+        guard case .resolved(.element(let currentElement)) = vault.resolveTarget(request.target.target),
+              let ownerPath = currentElement.scrollContainerPath,
               let point = observedPoint.admit(ownerPath: ownerPath),
-              let target = vault.liveScrollTarget(at: ownerPath),
+              case .success(let target) = vault.liveScrollTarget(at: ownerPath),
               !target.scrollView.bhIsUnsafeForProgrammaticScrolling
-        else { return nil }
+        else { return .noSeed }
         let transition = await performViewportTransition(
             .revealContentPoint(
                 point,
@@ -617,7 +648,7 @@ extension Navigation {
         )
         guard transition.outcome.didMove,
               let event = transition.event
-        else { return nil }
+        else { return .noSeed }
         let exploration = InterfaceExplorationResult(
             event: event,
             progress: .init(),
@@ -630,7 +661,7 @@ extension Navigation {
         case .failed(let failure):
             return .failed(failure)
         case .offscreen:
-            return nil
+            return .missed
         }
     }
 

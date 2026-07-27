@@ -151,22 +151,39 @@ extension TheVault {
         dispatchObject(for: treeElement)
     }
 
-    func liveScrollTarget(at path: TreePath) -> LiveScrollTarget? {
-        guard let semanticContainer = latestObservation.tree.containers[path],
-              case .resolved(let liveContainer) = resolveLiveContainerTarget(for: semanticContainer),
-              let scrollView = liveScrollableContainerView(forPath: path)
-        else { return nil }
-        return LiveScrollTarget(container: liveContainer, scrollView: scrollView)
+    /// Why a path names no live scroll target.
+    enum LiveScrollTargetFailure: Error, Equatable {
+        /// The current reading describes nothing at that path.
+        case noSemanticContainer
+        /// The reading has a container there and no live object answers to it.
+        case liveContainerUnresolved
+        /// The live object there is not a scroll view.
+        case notScrollable
+    }
+
+    func liveScrollTarget(
+        at path: TreePath
+    ) -> Result<LiveScrollTarget, LiveScrollTargetFailure> {
+        guard let semanticContainer = latestObservation.tree.containers[path] else {
+            return .failure(.noSemanticContainer)
+        }
+        guard case .resolved(let liveContainer) = resolveLiveContainerTarget(for: semanticContainer) else {
+            return .failure(.liveContainerUnresolved)
+        }
+        guard let scrollView = liveScrollableContainerView(forPath: path) else {
+            return .failure(.notScrollable)
+        }
+        return .success(LiveScrollTarget(container: liveContainer, scrollView: scrollView))
     }
 
     func nearestLiveScrollTarget(for path: TreePath) -> LiveScrollTarget? {
         guard let containerPath = nearestLiveScrollContainerPath(for: path) else { return nil }
-        return liveScrollTarget(at: containerPath)
+        return try? liveScrollTarget(at: containerPath).get()
     }
 
     func liveScrollTarget(matching scrollViewID: ObjectIdentifier) -> LiveScrollTarget? {
         for entry in currentLiveCapture.scrollEntries(matching: scrollViewID) {
-            if let target = liveScrollTarget(at: entry.path) { return target }
+            if case .success(let target) = liveScrollTarget(at: entry.path) { return target }
         }
         return nil
     }
@@ -177,7 +194,7 @@ extension TheVault {
         var admittedScrollViewIDs = Set<ObjectIdentifier>()
         let targets = currentLiveCapture.scrollEntries().compactMap { entry -> LiveScrollTarget? in
             guard !admittedScrollViewIDs.contains(entry.scrollViewID),
-                  let target = liveScrollTarget(at: entry.path),
+                  case .success(let target) = liveScrollTarget(at: entry.path),
                   !target.scrollView.bhIsUnsafeForProgrammaticScrolling
             else { return nil }
             admittedScrollViewIDs.insert(entry.scrollViewID)
