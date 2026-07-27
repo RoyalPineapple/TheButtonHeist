@@ -6,19 +6,18 @@ import ButtonHeistTesting
 
 /// One tap, every element fact, in order.
 ///
-/// Deltas measure from a fixed baseline — the graph as it was when the tap
-/// fired — and that baseline moves only on a screen change or a new action. So
-/// every assertion here is about what the tap graph did or did not contain:
+/// Each delta is a pair of presence predicates drained in order, so every
+/// assertion here reads the tick the one before it left off at:
 ///
-///   disappeared "Ready"                 Ready was in the baseline, and left
-///   appeared    "Loading"               no Loading in the baseline
-///   appeared    "Loading" at 100%       nor a Loading at 100%
+///   disappeared "Ready"                 Ready present, then gone
+///   appeared    "Loading"               Loading missing, then present
+///   appeared    "Loading" at 100%       and again at 100%
 ///   disappeared "Loading"               ...
 ///   appeared    "Ready"                 ...
 ///
-/// The 100% state is an `appeared` rather than an `updated` for that reason:
-/// `updated` needs its anchor to hold in the baseline, and at tap time this
-/// button read "Ready". Nothing named "Loading" was there to be updated.
+/// The 100% state is an `appeared` rather than an `updated` because `updated`
+/// needs its anchor to hold across both legs, and the leg before this one had
+/// already drained on a Loading with no value yet.
 ///
 /// The final `appeared("Ready")` is why this test exists. "Ready" was on screen
 /// before the tap, so any model that asks "was this ever true" passes it for the

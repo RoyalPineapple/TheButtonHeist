@@ -7,11 +7,8 @@ import XCTest
 
 /// Predicate state is a fold over the ordered ticks.
 ///
-/// That is the whole claim these tests hold down: an expectation is determined
-/// by its authored predicates and the ticks it has seen, so the same log always
-/// folds to the same answer. Nothing has to remember where a drain got to, which
-/// is what lets the tick log be the durable artifact and everything else be
-/// derived from it.
+/// An expectation is determined by its authored predicates and the ticks it has
+/// seen, so the same log always folds to the same answer.
 final class TickLogFoldTests: XCTestCase {
 
     /// Folding a log is feeding its ticks one at a time. If these ever diverge,
@@ -35,7 +32,6 @@ final class TickLogFoldTests: XCTestCase {
     func testAReplacementIsThreeOrderedTicks() {
         let arriving = interface(["Checkout"])
         let ticks = TickLog.replacement(
-            emptiedAt: Date(timeIntervalSince1970: 0),
             screen: ScreenFacts(idAfter: "Checkout"),
             arriving: arriving
         )
@@ -45,7 +41,7 @@ final class TickLogFoldTests: XCTestCase {
         guard case .elementsChanged(let emptied) = ticks[0] else {
             return XCTFail("Expected the departure tick to carry a tree")
         }
-        XCTAssertTrue(emptied.projectedElements.isEmpty, "The old screen empties first")
+        XCTAssertTrue(emptied.interface.projectedElements.isEmpty, "The old screen empties first")
     }
 
     /// Order carries the meaning. A two-legged step does not read its after leg
@@ -53,7 +49,6 @@ final class TickLogFoldTests: XCTestCase {
     /// the arriving graph answers `exists`.
     func testAppearedDrainsAcrossAReplacementBecauseItsLegsReadDifferentTicks() throws {
         let ticks = TickLog.replacement(
-            emptiedAt: Date(timeIntervalSince1970: 0),
             screen: ScreenFacts(idAfter: "Checkout"),
             arriving: interface(["Checkout"])
         )
@@ -78,16 +73,14 @@ final class TickLogFoldTests: XCTestCase {
     // MARK: - Steps
 
     /// A step's element diff is the same diff the capture-pair path produced.
-    /// This is what makes deriving reports off the log a rewiring rather than a
-    /// behaviour change.
     func testAStepsElementDiffMatchesTheCapturePairDiff() {
         let before = interface(["Total", "Pay"])
         let after = interface(["Total", "Spinner"])
 
         let viaStep = TickStep(.elementsChanged(before), .elementsChanged(after)).elementEdits
         let viaPair = AccessibilityTraceElementDiff.projectElementEdits(
-            beforeRecords: before.projectedElementRecords.map(ElementDiffRecord.init),
-            afterRecords: after.projectedElementRecords.map(ElementDiffRecord.init)
+            beforeRecords: before.interface.projectedElementRecords.map(ElementDiffRecord.init),
+            afterRecords: after.interface.projectedElementRecords.map(ElementDiffRecord.init)
         )
 
         XCTAssertEqual(viaStep, viaPair)
@@ -117,6 +110,25 @@ final class TickLogFoldTests: XCTestCase {
         XCTAssertEqual(log.steps.count, 1)
     }
 
+    func testRunsOfStillnessCoalesceIntoOneTick() {
+        var log = TickLog()
+        log.append(.elementsChanged(interface(["Cart"])))
+        log.append(.noChange)
+        log.append(.noChange)
+        log.append(contentsOf: [.noChange, .noChange])
+
+        XCTAssertEqual(
+            log.ticks,
+            [.elementsChanged(interface(["Cart"])), .noChange],
+            "A still tree restated is the same fact, so only the first is logged"
+        )
+
+        // Stillness withdrawn and regained is two facts, not one.
+        log.append(.elementsChanged(interface(["Cart", "Pay"])))
+        log.append(.noChange)
+        XCTAssertEqual(log.ticks.count, 4)
+    }
+
     // MARK: - Helpers
 
     private func exists(_ label: String) throws -> ResolvedAccessibilityPredicate {
@@ -129,8 +141,8 @@ final class TickLogFoldTests: XCTestCase {
         try AccessibilityPredicate.elementsChanged(assertions).resolve(in: .empty)
     }
 
-    private func interface(_ labels: [String]) -> Interface {
-        makeTestInterface(
+    private func interface(_ labels: [String]) -> AccessibilityTrace.Capture {
+        makeTestCapture(
             elements: labels.map { makeTestHeistElement(description: $0, label: $0) }
         )
     }

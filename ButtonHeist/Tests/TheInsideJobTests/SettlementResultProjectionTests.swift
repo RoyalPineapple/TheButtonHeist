@@ -12,43 +12,47 @@ import XCTest
 final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
     func testWaitProjectionPreservesMatchedAndFailedEvidenceSummaries() async throws {
         let baseline = await commit(label: "Loading")
-        let observed = await commit(label: "Ready")
-        let predicate = try predicate(.exists(.label("Ready")))
+        let observed = await commitSettling(label: "Ready")
+        let present = try predicate(.exists(.label("Ready")))
+        let absent = try predicate(.exists(.label("Missing")))
         let matched = Settlement.ResultProjector.projectWait(
-            await settledWait(
-                predicate: predicate,
+            wait(
+                predicate: present,
                 baseline: baseline,
                 observed: observed,
                 elapsed: 1_500
             )
         )
         let failed = Settlement.ResultProjector.projectWait(
-            await failedWait(
-                reason: .timedOut(.observation),
-                predicate: predicate,
+            wait(
+                predicate: absent,
                 baseline: baseline,
-                observed: observed,
-                predicateMet: false
+                observed: observed
             )
         )
 
+        // A matched wait has nothing outstanding: the drain is the evidence, so
+        // there is no summary of what was still missing to report.
         XCTAssertEqual(matched.outcome, .matched)
         XCTAssertEqual(matched.actionResult.outcome, .success)
         XCTAssertEqual(matched.actionResult.message, "matched after 1.5s")
-        XCTAssertEqual(matched.expectation.actual, "matched")
+        XCTAssertNil(matched.expectation.actual)
         XCTAssertEqual(matched.baselineSummary, baseline.moment.capture.summary)
-        XCTAssertEqual(matched.finalSummary, "matched")
+        XCTAssertNil(matched.finalSummary)
 
+        // A failed wait reports what it was still waiting on, and the same text
+        // reaches both the expectation and the summary.
         XCTAssertEqual(failed.outcome, .failed)
         XCTAssertEqual(failed.actionResult.outcome, .failure(.timeout))
-        XCTAssertEqual(failed.expectation.actual, "missing")
         XCTAssertEqual(failed.baselineSummary, baseline.moment.capture.summary)
-        XCTAssertEqual(failed.finalSummary, "missing")
+        XCTAssertEqual(failed.finalSummary, failed.expectation.actual)
+        let outstanding = try XCTUnwrap(failed.expectation.actual)
+        XCTAssertTrue(outstanding.contains("Missing"), outstanding)
     }
 
     func testSuccessfulActionProjectsCompleteTraceSettlementPathAndTiming() async throws {
         let baseline = await commit(label: "Baseline")
-        let observed = await commit(label: "Observed")
+        let observed = await commitSettling(label: "Observed")
         let handler = try ScreenActionHandlerName(validating: "root escape")
         let dispatch = TheSafecracker.ActionDispatchResult.success(
             payload: .dismiss,
@@ -56,16 +60,11 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
             screenActionHandler: handler
         )
         let projection = Settlement.ResultProjector.projectAction(
-            await settledAction(
-                command: .dismiss,
+            action(
+                .dismiss,
                 dispatch: dispatch,
                 baseline: baseline,
-                observed: observed,
-                timing: timing(
-                    elapsed: 25,
-                    beforeObservation: 3,
-                    finalSemanticEvidence: 5
-                )
+                observed: observed
             )
         )
         let result = try XCTUnwrap(projection.result)
@@ -75,18 +74,25 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
         XCTAssertEqual(result.message, "dismissed")
         XCTAssertEqual(result.screenActionHandler, handler)
         XCTAssertEqual(trace.completeness, .complete)
-        XCTAssertEqual(trace.trace, observed.trace)
-        XCTAssertEqual(trace.trace.captures.first, baseline.moment.capture)
-        XCTAssertEqual(trace.trace.captures.last, observed.moment.capture)
+        // The trace is the readings that found something new, in order. The
+        // quiet reading that let the run settle is a stillness tick carrying no
+        // capture, so it proves the run ended without adding a duplicate of the
+        // tree it already recorded.
+        XCTAssertEqual(
+            trace.trace.captures.map(\.interface),
+            [baseline, observed.changed].map(\.moment.capture.interface)
+        )
         XCTAssertEqual(result.evidence.settlement, .settled(duration: 25))
-        XCTAssertEqual(result.timing?.beforeObservationMs, 3)
-        XCTAssertEqual(result.timing?.finalSemanticEvidenceMs, 5)
+        // Execution timing is measured by the executor against a real clock, so a
+        // run driven by the reducer alone reports none rather than a stand-in.
+        XCTAssertNil(result.timing?.beforeObservationMs)
+        XCTAssertNil(result.timing?.finalSemanticEvidenceMs)
     }
 
     func testTypeTextPayloadRefreshesFromExactHandoffElement() async throws {
         let selectedId: HeistId = "selected_message"
         let baseline = await commit(label: "Baseline")
-        let observed = await commit(.makeForTests(elements: [
+        let observed = await commitSettling(.makeForTests(elements: [
             (
                 AccessibilityElement.make(
                     label: "Message",
@@ -114,8 +120,8 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
         )
 
         let projection = Settlement.ResultProjector.projectAction(
-            await settledAction(
-                command: command,
+            action(
+                command,
                 dispatch: dispatch,
                 baseline: baseline,
                 observed: observed
@@ -132,19 +138,13 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
             message: "target disappeared",
             failureKind: .targetUnavailable
         )
-        let result = Settlement.Result.action(.failed(.init(
-            reason: .dispatchFailed,
-            attempt: .init(
-                command: actionCommand(.dismiss),
-                boundary: .established(.init(moment: baseline.moment)),
-                dispatch: .completed(dispatch),
-                outstanding: [],
-                readiness: .pending(.initial),
-                handoff: .pending(.initial),
-                history: .events([]),
-                timing: timing(elapsed: 4)
-            )
-        )))
+        let result = action(
+            .dismiss,
+            dispatch: dispatch,
+            baseline: baseline,
+            observed: nil,
+            elapsed: 4
+        )
 
         let projection = Settlement.ResultProjector.projectAction(result)
 
@@ -155,18 +155,16 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
 
     func testBaselineUnavailableProjectsTypedTreeFailure() throws {
         let predicate = try predicate(.exists(.label("Ready")))
-        let wait = Settlement.Result.observation(.failed(.init(
-            reason: .baselineUnavailable,
-            attempt: .init(
+        let wait = scriptedSettlement(
+            .observation(
                 predicate: predicate,
-                boundary: .unavailable(.unavailable),
-                outstanding: Expectation([predicate.resolved]).outstanding,
-                readiness: .pending(.initial),
-                handoff: .pending(.initial),
-                history: nil,
-                timing: timing(elapsed: 0)
-            )
-        )))
+                deadline: .init(phase: .observation, instant: .now),
+                baseline: .unavailable(.unavailable)
+            ),
+            observation: nil,
+            dispatch: .success(payload: .dismiss),
+            elapsed: 0
+        )
 
         let waitProjection = Settlement.ResultProjector.projectWait(wait)
 
@@ -184,16 +182,14 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
             customRotors: [.init(name: "Errors")],
             respondsToUserInteraction: false
         )
-        let observed = await commit(.makeForTests(elements: [
+        let observed = await commitSettling(.makeForTests(elements: [
             (candidate, HeistId(rawValue: "dismiss_banner")),
         ]))
         let predicate = try predicate(.exists(.label("Ticket saved.")))
-        let settlement = await failedWait(
-            reason: .timedOut(.observation),
+        let settlement = wait(
             predicate: predicate,
             baseline: baseline,
-            observed: observed,
-            predicateMet: false
+            observed: observed
         )
 
         let message = try XCTUnwrap(
@@ -212,19 +208,13 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
 
     func testCancellationProjectsIncompleteTraceAndSettlementTiming() async throws {
         let baseline = await commit(label: "Save")
-        let result = Settlement.Result.action(.failed(.init(
-            reason: .cancelled,
-            attempt: .init(
-                command: actionCommand(.dismiss),
-                boundary: .established(.init(moment: baseline.moment)),
-                dispatch: .completed(.success(payload: .dismiss)),
-                outstanding: [],
-                readiness: .pending(.initial),
-                handoff: .pending(.initial),
-                history: .events([]),
-                timing: timing(elapsed: 125, beforeObservation: 7)
-            )
-        )))
+        let result = scriptedSettlement(
+            .action(actionCommand(.dismiss, baseline: baseline)),
+            observation: nil,
+            dispatch: .success(payload: .dismiss),
+            cancelled: true,
+            elapsed: 125
+        )
 
         let action = try XCTUnwrap(
             Settlement.ResultProjector.projectAction(result).result
@@ -234,7 +224,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
         XCTAssertEqual(action.outcome, .failure(.actionFailed))
         XCTAssertEqual(action.message, "cancelled after 125ms")
         XCTAssertEqual(action.evidence.settlement, .timedOut(duration: 125))
-        XCTAssertEqual(action.timing?.beforeObservationMs, 7)
+        XCTAssertNil(action.timing?.beforeObservationMs)
         XCTAssertEqual(trace.completeness, .incomplete)
         XCTAssertEqual(trace.trace.captures, [baseline.moment.capture])
     }
@@ -245,70 +235,68 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
         )
     }
 
-    func settledWait(
+    /// A wait run to its terminal result by the real reducer.
+    ///
+    /// Whether it settled or timed out is not a parameter: the predicate either
+    /// drains on `observed` or it does not, and settlement decides. Driving the
+    /// reducer means the trace, handoff and tick log are whatever it produced,
+    /// not a second version assembled here.
+    func wait(
         predicate: Settlement.Predicate,
         baseline: Observation.SnapshotEvent,
-        observed: Observation.SnapshotEvent,
-        elapsed: ElapsedMilliseconds
-    ) async -> Settlement.Result {
-        return .observation(.settled(.init(
-            predicate: predicate,
-            boundary: .init(moment: baseline.moment),
-            readiness: readiness(at: observed),
-            handoff: await handoffAdmission(observed, baseline: baseline),
-            history: await history(after: baseline),
-            timing: timing(elapsed: elapsed)
-        )))
-    }
-
-    func failedWait(
-        reason: Settlement.Result.ObservationFailureReason,
-        predicate: Settlement.Predicate,
-        baseline: Observation.SnapshotEvent,
-        observed: Observation.SnapshotEvent,
-        predicateMet: Bool
-    ) async -> Settlement.Result {
-        .observation(.failed(.init(
-            reason: reason,
-            attempt: .init(
+        observed: Reading?,
+        elapsed: ElapsedMilliseconds = RuntimeElapsed.admit(milliseconds: 25)
+    ) -> Settlement.Result {
+        scriptedSettlement(
+            .observation(
                 predicate: predicate,
-                boundary: .established(.init(moment: baseline.moment)),
-                outstanding: predicateMet ? [] : Expectation([predicate.resolved]).outstanding,
-                readiness: .established(readiness(at: observed)),
-                handoff: .admitted(await handoffAdmission(observed, baseline: baseline)),
-                history: await history(after: baseline),
-                timing: timing(elapsed: 25)
-            )
-        )))
+                deadline: .init(phase: .observation, instant: .now),
+                baseline: .supplied(.init(moment: baseline.moment))
+            ),
+            observation: observed?.changed,
+            settling: observed?.settled,
+            dispatch: .success(payload: .dismiss),
+            elapsed: elapsed
+        )
     }
 
-    func settledAction(
-        command: ResolvedHeistActionCommand,
+    /// An action run to its terminal result by the real reducer.
+    func action(
+        _ command: ResolvedHeistActionCommand,
         dispatch: TheSafecracker.ActionDispatchResult,
         baseline: Observation.SnapshotEvent,
-        observed: Observation.SnapshotEvent,
-        timing: Settlement.Result.Timing? = nil
-    ) async -> Settlement.Result {
-        .action(.settled(.init(
-            command: actionCommand(command),
-            boundary: .init(moment: baseline.moment),
+        observed: Reading?,
+        elapsed: ElapsedMilliseconds = RuntimeElapsed.admit(milliseconds: 25)
+    ) -> Settlement.Result {
+        scriptedSettlement(
+            .action(actionCommand(command, baseline: baseline)),
+            observation: observed?.changed,
+            settling: observed?.settled,
             dispatch: dispatch,
+            elapsed: elapsed
+        )
+    }
 
-            readiness: readiness(at: observed),
-            handoff: await handoffAdmission(observed, baseline: baseline),
-            history: await history(after: baseline),
-            timing: timing ?? self.timing(elapsed: 25)
-        )))
+    func waitCommand(
+        _ predicate: Settlement.Predicate,
+        baseline: Observation.SnapshotEvent
+    ) -> Settlement.Command {
+        .observation(
+            predicate: predicate,
+            deadline: .init(phase: .observation, instant: .now),
+            baseline: .supplied(.init(moment: baseline.moment))
+        )
     }
 
     func actionCommand(
-        _ command: ResolvedHeistActionCommand
+        _ command: ResolvedHeistActionCommand,
+        baseline: Observation.SnapshotEvent
     ) -> Settlement.Command.Action {
         Settlement.Command.Action(
             command: command,
             predicate: nil,
             allowances: .init(readiness: .seconds(5), expectation: nil),
-            baseline: .capture
+            baseline: .supplied(.init(moment: baseline.moment))
         )
     }
 
@@ -333,31 +321,6 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
             generation: .initial,
             observationBoundary: .including(event.moment)
         )
-    }
-
-    func handoffAdmission(
-        _ event: Observation.SnapshotEvent,
-        baseline: Observation.SnapshotEvent
-    ) async -> Settlement.Handoff.Admission {
-        let admission = Settlement.ObservationAdmission(
-            event: event,
-            history: await history(after: baseline)
-        )
-        guard let handoff = Settlement.Handoff.Admission.admit(
-            admission,
-            for: readiness(at: event)
-        ) else {
-            preconditionFailure("Test handoff must be eligible")
-        }
-        return handoff
-    }
-
-    func history(
-        after baseline: Observation.SnapshotEvent
-    ) async -> Observation.EventsSince {
-        await vault.semanticObservationStream.storeOwner.readLog {
-            $0.events(since: baseline.moment)
-        }
     }
 
     func commit(label: String) async -> Observation.SnapshotEvent {

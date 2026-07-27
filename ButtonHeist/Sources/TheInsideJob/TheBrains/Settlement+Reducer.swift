@@ -195,11 +195,11 @@ private extension Settlement.Reducer {
             effects += admit(admission, to: &session)
         case .announcementObserved(let announcement):
             effects += observe(announcement, in: &session)
-        case .observationHistoryUnavailable(let history):
+        case .observationHistoryUnavailable:
             // Missing history is not its own failure: a predicate that never
             // saw the evidence it needed simply never drained, and the timeout
-            // says so. The history is kept only because reporting quotes it.
-            session.observationHistory = history
+            // says so.
+            break
         case .announcementHistoryUnavailable:
             break
         case .readinessEstablished(let establishment):
@@ -243,26 +243,19 @@ private extension Settlement.Reducer {
         _ admission: Settlement.ObservationAdmission,
         to session: inout Settlement.Session
     ) -> [Settlement.Effect] {
-        session.observationHistory = admission.history
         session.latestObservation = admission
-        // Which ticks this observation is was already decided by the one
-        // comparison the store made — a tree in a new state is a snapshot, one
-        // that came back the same is stillness, and a replacement is the three
-        // ordered ticks a replacement is. Nothing here compares anything again;
-        // it names the ticks and folds them in.
-        //
         // ponytail: all three replacement ticks come from this one admission, so
         // the pause between them is zero. The real timeline stops ticking at
         // detection, classifies, ticks the screen info, explores, and only then
         // delivers the graph — which means the graph here is the visible
         // hierarchy, not an explored one. Wire the emission to the exploration
         // stages when the tick stream can be paused.
-        session.requirement.expectation.observe(
-            admission.event.moment.capture.interface,
+        session.tickLog.append(contentsOf: session.requirement.expectation.observe(
+            admission.event.moment.capture,
             isChange: admission.event.isChange,
             isReplacement: admission.event.continuity.isReplacement,
             screenHeading: admission.event.snapshot.screenHeading
-        )
+        ))
         if case .established(let readiness) = session.readiness,
            session.command.waitsForObservation
                || session.requirement.predicate?.semantics == .currentState
@@ -279,7 +272,9 @@ private extension Settlement.Reducer {
     ) -> [Settlement.Effect] {
         guard event.announcement.sequence > session.boundary.announcementCursor.sequence,
               !session.triggerEvidence.dispatchFailed else { return [] }
-        session.requirement.expectation.announcement(event.announcement.text)
+        session.tickLog.append(
+            session.requirement.expectation.announcement(event.announcement.text)
+        )
         return []
     }
 }
@@ -337,9 +332,7 @@ private extension Settlement.Reducer {
     ///
     /// A session completes when readiness is established, the handoff belongs
     /// to that readiness, and the expectation is met — every authored predicate
-    /// drained, in order, and the tree still. Nothing else participates:
-    /// settlement is a statement about the accessibility tree, decided by
-    /// walking one list of predicates against the ticks that arrived.
+    /// drained, in order, and the tree still. Nothing else participates.
     static func completedOutcome(_ session: Settlement.Session) -> Settlement.TerminalIntent? {
         guard case .established(let readiness) = session.readiness,
               let handoff = session.handoff.admission,
@@ -472,7 +465,10 @@ private extension Settlement.Reducer {
                     outstanding: Expectation([predicate.resolved]).outstanding,
                     readiness: .pending(.initial),
                     handoff: .pending(.initial),
-                    history: nil,
+                    // Nothing was observed: a run that died before its baseline
+                    // has an empty log, not a missing one.
+                    tickLog: TickLog(),
+                    latestObservation: nil,
                     timing: resultTiming
                 )
             )))
@@ -486,7 +482,10 @@ private extension Settlement.Reducer {
                     outstanding: Expectation(command.predicate.map { [$0.resolved] } ?? []).outstanding,
                     readiness: .pending(.initial),
                     handoff: .pending(.initial),
-                    history: nil,
+                    // Nothing was observed: a run that died before its baseline
+                    // has an empty log, not a missing one.
+                    tickLog: TickLog(),
+                    latestObservation: nil,
                     timing: resultTiming
                 )
             )))
@@ -556,7 +555,7 @@ private extension Settlement.Reducer {
                 boundary: session.boundary,
                 readiness: readiness,
                 handoff: handoff,
-                history: session.observationHistory,
+                tickLog: session.tickLog,
                 timing: timing
             )))
 
@@ -581,7 +580,7 @@ private extension Settlement.Reducer {
                 dispatch: dispatch,
                 readiness: readiness,
                 handoff: handoff,
-                history: session.observationHistory,
+                tickLog: session.tickLog,
                 timing: timing
             )))
 
@@ -601,7 +600,8 @@ private extension Settlement.Reducer {
             outstanding: session.requirement.expectation.outstanding,
             readiness: session.readiness,
             handoff: session.handoff,
-            history: session.observationHistory,
+            tickLog: session.tickLog,
+            latestObservation: session.latestObservation?.event,
             timing: timing
         )
     }
@@ -626,7 +626,8 @@ private extension Settlement.Reducer {
             outstanding: session.requirement.expectation.outstanding,
             readiness: session.readiness,
             handoff: session.handoff,
-            history: session.observationHistory,
+            tickLog: session.tickLog,
+            latestObservation: session.latestObservation?.event,
             timing: timing
         )
     }

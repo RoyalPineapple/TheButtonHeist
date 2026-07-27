@@ -228,10 +228,8 @@ final class TheVaultIdentityContextTests: XCTestCase {
         XCTAssertEqual(CoarseFrameComparison.tolerance(for: .pad), 13)
     }
 
-    /// The reason the comparison is a tolerance and not a grid: a frame parked on
-    /// what would be a bucket edge — `y = 100` with an 8pt bucket — would flip
-    /// buckets under noise no user could see, so grid comparison would call the
-    /// stillest elements the ones that moved. Distance has no edges to sit on.
+    /// `y = 100` is exactly where an 8pt grid would put a bucket edge, and a
+    /// grid would call these frames moved. Distance has no edges to sit on.
     func testFramesWithinToleranceAreInTheSamePlaceEvenAcrossABucketEdge() {
         let onEdge = CGRect(x: 0, y: 100, width: 200, height: 44)
         XCTAssertTrue(onEdge.isInSamePlace(as: onEdge.offsetBy(dx: 0, dy: 0.3), tolerance: 8))

@@ -17,12 +17,12 @@ final class ReadingScopeTests: XCTestCase {
         try predicate.resolve(in: .empty)
     }
 
-    private func tree(_ labels: [String]) -> Interface {
-        makeTestInterface(elements: labels.map { makeTestHeistElement(description: $0, label: $0) })
+    private func tree(_ labels: [String]) -> AccessibilityTrace.Capture {
+        makeTestCapture(elements: labels.map { makeTestHeistElement(description: $0, label: $0) })
     }
 
-    private func counter(_ value: String?) -> Interface {
-        makeTestInterface(elements: [
+    private func counter(_ value: String?) -> AccessibilityTrace.Capture {
+        makeTestCapture(elements: [
             makeTestHeistElement(description: "Count", label: "Count", value: value),
         ])
     }
@@ -117,7 +117,7 @@ final class ReadingScopeTests: XCTestCase {
         ])
         var expectation = try Expectation([resolved(predicate)])
         expectation.snapshot(counter("1"))
-        expectation.snapshot(makeTestInterface(elements: [
+        expectation.snapshot(makeTestCapture(elements: [
             makeTestHeistElement(description: "Count", label: "Count", value: "1"),
             makeTestHeistElement(description: "Total", label: "Total"),
         ]))

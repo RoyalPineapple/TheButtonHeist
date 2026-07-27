@@ -35,6 +35,14 @@ public extension AccessibilityTrace {
         /// the captured hierarchy state.
         public let transition: Transition
 
+        /// A reading of nothing, which is what a departing screen leaves behind.
+        ///
+        /// Sequencing is assigned when captures are chained into a trace, so the
+        /// placeholder value here is never the one that ships.
+        package static func empty(at timestamp: Date) -> Capture {
+            Capture(sequence: 1, interface: Interface(timestamp: timestamp, tree: []))
+        }
+
         public init(
             sequence: Int,
             interface: Interface,

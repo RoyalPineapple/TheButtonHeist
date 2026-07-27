@@ -245,16 +245,12 @@ internal final class Stream {
 
     /// One pulse, one reading, committed either way.
     ///
-    /// This used to return early whenever the admitted observation still held —
-    /// nothing to settle, so nothing was read. But "nothing changed" is the
-    /// answer stillness is waiting for, and skipping the read is what made it
-    /// unobtainable: the next reading only arrived when the tree moved, so a
-    /// tree that reached the asked-for state and then stayed there never said
-    /// so, and every expectation with a drained predicate timed out waiting for
-    /// the tree to stop changing.
-    ///
-    /// So the reading always happens and always commits. Whether it moved is
-    /// the store's comparison, not a precondition for taking it.
+    /// Returning early when the admitted observation still holds looks free and
+    /// is not: "nothing changed" is the answer stillness waits for, and skipping
+    /// the read makes it unobtainable. The next reading only arrives when the
+    /// tree moves, so a tree that reached the asked-for state and stayed there
+    /// would never say so, and every expectation with a drained predicate would
+    /// time out waiting for the tree to stop changing.
     private func observeVisibleSemanticState() async -> Bool {
         _ = await tripwire.waitForNextTick(
             timeout: .milliseconds(Int(TheTripwire.singleTickSettleTimeout * 1_000)),

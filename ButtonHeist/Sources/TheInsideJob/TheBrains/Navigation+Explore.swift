@@ -15,8 +15,9 @@ extension Navigation {
     /// found along the way. Each page commits into the store as it is read, so
     /// the result is the accumulation, not a tree assembled at the end.
     ///
-    /// Always starts fresh, because that is what building a graph means: the
-    /// first page replaces whatever we knew and every page after it merges in.
+    /// Always starts fresh: the first page replaces whatever we knew and every
+    /// page after it merges in.
+    ///
     /// Searching is the other job — `exploreScreen(target:)` stops the moment
     /// it finds one element, keeps interface memory, and deliberately does not
     /// produce a full graph.
@@ -83,11 +84,6 @@ extension Navigation {
         )
         let transitionDeadline = SemanticObservationDeadline(start: RuntimeElapsed.now, timeoutMs: timeoutMs)
         repeat {
-            // A page is read on the tick, not after a loop agrees the tree
-            // stopped: the comparison that used to gate this now happens in the
-            // store, and the reading either moved the graph or produced the
-            // stillness tick that says it did not.
-            //
             // The tick only says time passed. The page still has to be re-read
             // afterwards, or every iteration inspects the same observation the
             // last one did and a scroll that is still settling looks like a
@@ -98,13 +94,10 @@ extension Navigation {
             )
             vault.refreshLiveCapture()
             guard afterViewportMovement || !Task.isCancelled else { return nil }
-            // Nothing re-reads the page against the pre-scroll one here. The
-            // caller dispatched the scroll once and this loop only waits for it
-            // to land, so a page that still looks unmoved is a page mid-flight,
-            // not a scroll that failed — spinning until it differs would burn
-            // the caller's whole reveal budget on one attempt and never let the
-            // next one run. Whether the reading counts as a change is the
-            // store's question, and it already answers it on commit.
+            // This loop only waits for the caller's one dispatched scroll to
+            // land, so a page that still looks unmoved is mid-flight, not a
+            // failed scroll. Whether the reading counts as a change is the
+            // store's question, answered on commit.
             if let event = await vault.semanticObservationStream.commitSettledDiscoveryObservation(
                 discoveryCommitPolicy: discoveryCommitPolicy,
                 afterViewportMovement: afterViewportMovement,

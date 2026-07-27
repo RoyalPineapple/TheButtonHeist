@@ -61,11 +61,10 @@ extension Observation {
 
         /// Whether this observation found the tree in a new state.
         ///
-        /// The one comparison. Every observation is either a change or it is
-        /// not, and that answer is what makes it a `snapshot` tick or a
-        /// `noChange` tick — nothing downstream asks again. The first
-        /// observation has nothing to differ from, so it counts as a change:
-        /// there was no earlier state for it to have been still relative to.
+        /// The one comparison: this answer makes the observation a `snapshot`
+        /// tick or a `noChange` tick, and nothing downstream asks again. The
+        /// first observation has nothing to differ from, so it counts as a
+        /// change.
         ///
         /// Two readings, because "the tree moved" has two ways to be true.
         /// Semantics change when a label or value does. Placements change while

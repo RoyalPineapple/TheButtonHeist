@@ -9,15 +9,10 @@ import SwiftUI
 /// "Analog clock" plus the action button. The hands have no AX
 /// representation — they're purely visual.
 ///
-/// This screen is deliberately indistinguishable, on paper, from a screen
-/// that never settles: an animation that never ends over an AX tree that
-/// never changes. It settles anyway, because settlement is a statement about
-/// the accessibility tree and nothing else. Motion with no accessibility
-/// representation is not something the agent can act on or wait for, so the
-/// runtime does not look at it.
-///
-/// A change that makes this screen time out is a regression in the rule,
-/// not a fix to this fixture.
+/// On paper this is indistinguishable from a screen that never settles: an
+/// animation that never ends over an AX tree that never changes. It settles
+/// anyway, because settlement is a statement about the accessibility tree and
+/// nothing else.
 struct AnalogClockDemo: View {
 
     @State private var actionsTapped = 0

@@ -18,12 +18,11 @@ extension AccessibilityTrace {
             if let previous,
                AccessibilityObservationChangeReducer.reduce(between: previous, and: capture) == .screenChanged {
                 log.append(contentsOf: TickLog.replacement(
-                    emptiedAt: capture.interface.timestamp,
                     screen: ScreenFacts(idAfter: InterfaceSummary.screenName(for: capture.interface)),
-                    arriving: capture.interface
+                    arriving: capture
                 ))
             } else {
-                log.append(.elementsChanged(capture.interface))
+                log.append(.elementsChanged(capture))
             }
             previous = capture
         }
@@ -41,7 +40,7 @@ package extension ResolvedAccessibilityPredicate {
         let expectation = Expectation([self]).folding(evidence.trace.tickLog.ticks)
         return PredicateEvaluationResult(
             met: expectation.isMet,
-            actual: expectation.isMet ? nil : expectation.outstanding.joined(separator: "; ")
+            actual: expectation.isMet ? nil : expectation.outstanding.map(\.description).joined(separator: "; ")
         )
     }
 

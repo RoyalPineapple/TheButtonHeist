@@ -45,9 +45,8 @@ extension ScreenPredicate: CustomStringConvertible {
 
 /// The facts a screen boundary carries.
 ///
-/// Identity only: no tree, which is what keeps an element question out of this
-/// lane. Which screen was left is not here because nothing asks — a predicate
-/// about the crossing is a predicate about where it landed.
+/// Identity only, no tree. Which screen was left is not here because nothing
+/// asks — a predicate about the crossing is a predicate about where it landed.
 public struct ScreenFacts: Sendable, Equatable {
     public let idAfter: String?
 

@@ -307,13 +307,10 @@ extension Observation.Stream {
 
     /// Reads the tree once and commits what it read.
     ///
-    /// There is no settle loop here any more. A reading is not held back until
-    /// some separate machinery agrees the tree stopped moving: it is committed,
-    /// and whether it moved is the store's own answer, carried on the event —
-    /// the semantic hash for labels and values, a tolerance comparison of the
-    /// viewport frames for elements still travelling. Stillness is the
-    /// `.noChange` tick that answer produces, drained like any other predicate,
-    /// so nothing needs to decide it here.
+    /// A reading is never held back until something agrees the tree stopped
+    /// moving. Whether it moved is the store's own answer, carried on the event;
+    /// stillness is the `.noChange` tick that answer produces, drained like any
+    /// other predicate.
     private func produceVisibleSettlement(
         tripwireSignal: TheTripwire.TripwireSignal
     ) async -> ObservationSettlement {

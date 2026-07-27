@@ -12,10 +12,8 @@ import ThePlans
 /// - `staticOnlyTraits` and `interactiveTraits` are disjoint — "static only"
 ///   means "not interactive", so membership in both is a contradiction.
 ///
-/// Interaction is a third axis, orthogonal to the identity/state partition: a
-/// trait may be interactive and identity (`.button`) or interactive and state
-/// (`.notEnabled`). Nothing reads the two classifications together, so the
-/// axes are free to overlap.
+/// Interaction is a third axis, orthogonal to the identity/state partition. See
+/// `AccessibilityPolicy` for how the axes cut across each other.
 final class AccessibilityPolicyTests: XCTestCase {
 
     // MARK: - Known traits only

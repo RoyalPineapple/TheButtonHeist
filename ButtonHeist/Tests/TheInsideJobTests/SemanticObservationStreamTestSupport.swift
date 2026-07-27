@@ -119,6 +119,33 @@ class SemanticObservationStreamTestCase: XCTestCase {
         return { count }
     }
 
+    /// A tree that moved and then stopped, as the two events that say so.
+    typealias Reading = (
+        changed: Observation.SnapshotEvent,
+        settled: Observation.SnapshotEvent
+    )
+
+    /// A reading of a tree holding one header, that moved and then went quiet.
+    func commitSettling(label: String) async -> Reading {
+        await commitSettling(
+            observation(label: label, heistId: HeistId(rawValue: label.lowercased()))
+        )
+    }
+
+    /// A reading of `observation`, then the quiet reading that follows it.
+    ///
+    /// Two commits of the same tree: the second finds nothing changed, which is
+    /// the only proof of stillness there is. A run needs it to settle, so the
+    /// pair is what "the tree moved and then stopped" looks like as events.
+    func commitSettling(_ observation: InterfaceObservation) async -> Reading {
+        let changed = await vault.semanticObservationStream
+            .commitVisibleObservationForTesting(observation)
+        let settled = await vault.semanticObservationStream
+            .commitVisibleObservationForTesting(observation)
+        precondition(changed.isChange && !settled.isChange, "Second reading must be quiet")
+        return (changed, settled)
+    }
+
     func admittedVisibleObservation() async throws -> Observation.Store.AdmittedObservation {
         let evidence = await vault.semanticObservationStream.admittedVisibleObservation(timeout: 1)
         return try XCTUnwrap(evidence)
@@ -146,219 +173,153 @@ class SemanticObservationStreamTestCase: XCTestCase {
     }
 }
 
+/// Run a settlement to its terminal result through the real reducer.
+///
+/// Nothing here decides anything. `Settlement.Reducer` is
+/// `(State, Event) -> Decision` over values — no clock, no actor, no I/O — so a
+/// test drives it with the facts the executor would deliver and reads the same
+/// `Result` production projects. A stand-in that assembled its own `Result`
+/// could only ever be a second implementation of the thing under test, free to
+/// drift from it.
+///
+/// `observation` and `dispatch` are the boundary's outputs, which the reducer
+/// only ever consumes as values: a test names them the same way the executor
+/// would deliver them. An observation is the one a test cannot fabricate — a
+/// `Moment` carries the log's identity, so events come from the vault.
+///
+/// `settling` is the reading that found the tree unchanged, and a run needs one
+/// to settle: stillness is proved by a quiet reading and nothing else, so a
+/// script that stops at the first change describes a run that was still moving
+/// when it ended. It is a real event from the vault too — `isChange` is derived
+/// from the snapshot before it, so quiet is committed, never asserted.
 @MainActor
 func scriptedSettlement(
     _ command: Settlement.Command,
-    observation event: Observation.SnapshotEvent?
+    observation event: Observation.SnapshotEvent?,
+    settling: Observation.SnapshotEvent? = nil,
+    dispatch: TheSafecracker.ActionDispatchResult? = nil,
+    cancelled: Bool = false,
+    elapsed: ElapsedMilliseconds = RuntimeElapsed.admit(milliseconds: 1)
 ) -> Settlement.Result {
-    switch command {
-    case .action(let action):
-        guard let actionPredicate = action.predicate else {
-            preconditionFailure("Scripted action settlement requires a predicate")
-        }
-        return scriptedActionSettlement(action, predicate: actionPredicate, event: event)
-    case .observation(let predicate, _, let baseline):
-        return scriptedObservationSettlement(predicate, baseline: baseline, event: event)
-    case .currentState:
-        return scriptedCurrentStateSettlement(command, event: event)
+    var run = ScriptedRun(command, elapsed: elapsed)
+
+    if case .currentState = command {
+        guard let event else { return run.finish(.baselineUnavailable(.unavailable)) }
+        return run.finish(.baselineAdmitted(event))
     }
+    if case .capture = command.baseline {
+        guard let event else { return run.finish(.baselineUnavailable(.unavailable)) }
+        run.send(.baselineAdmitted(event))
+    }
+
+    run.send(.channelsArmed)
+    if case .action(let action) = command {
+        // A caller that does not name a dispatch is describing a run whose
+        // action plainly succeeded, which is the command's own payload.
+        run.send(.dispatchCompleted(
+            dispatch ?? .success(payload: action.command.actionResultPayload)
+        ))
+    }
+
+    // Readiness before the observation: an admission with no established
+    // readiness has no handoff to be admitted into.
+    if let event {
+        run.send(.readinessEstablished(.init(
+            generation: .initial,
+            observationBoundary: .including(event.moment)
+        )))
+        run.send(.observationAdmitted(.init(event: event)))
+    }
+    if let settling {
+        run.send(.observationAdmitted(.init(event: settling)))
+    }
+
+    if cancelled {
+        return run.finish(.cancelled)
+    }
+    // A run whose expectation was met is already terminal. Anything still
+    // active ends the only other way a run can: its deadline.
+    return run.timeOut()
 }
 
-@MainActor
-private func scriptedActionSettlement(
-    _ action: Settlement.Command.Action,
-    predicate: Settlement.Predicate,
-    event: Observation.SnapshotEvent?
-) -> Settlement.Result {
-    let timeoutPhase: Settlement.DeadlinePhase = event == nil
-        ? .actionReadiness
-        : .actionExpectation
-    let boundary = scriptedBoundary(action.baseline, fallback: event?.moment)
-    guard let event else {
-        return .action(.failed(.init(
-            reason: .timedOut(timeoutPhase),
-            attempt: .init(
-                command: action,
-                boundary: boundary,
-                dispatch: .completed(.success(payload: action.command.actionResultPayload)),
-                outstanding: Expectation([predicate.resolved]).outstanding,
-                readiness: .pending(.initial),
-                handoff: .pending(.initial),
-                history: nil,
-                timing: scriptedTiming
-            )
-        )))
-    }
-    let observation = scriptedPredicateObservation(predicate, event: event)
-    let dispatch = TheSafecracker.ActionDispatchResult.success(
-        payload: action.command.actionResultPayload
-    )
-    guard observation.met else {
-        return .action(.failed(.init(
-            reason: .timedOut(timeoutPhase),
-            attempt: .init(
-                command: action,
-                boundary: boundary,
-                dispatch: .completed(dispatch),
-                outstanding: observation.outstanding,
-                readiness: .established(observation.readiness),
-                handoff: .admitted(observation.handoff),
-                history: observation.history,
-                timing: scriptedTiming
-            )
-        )))
-    }
-    guard case .established(let establishedBoundary) = boundary else {
-        preconditionFailure("Settled scripted action requires an established boundary")
-    }
-    return .action(.settled(.init(
-        command: action,
-        boundary: establishedBoundary,
-        dispatch: dispatch,
-        readiness: observation.readiness,
-        handoff: observation.handoff,
-        history: observation.history,
-        timing: scriptedTiming
-    )))
-}
-
-@MainActor
-private func scriptedObservationSettlement(
-    _ predicate: Settlement.Predicate,
-    baseline: Settlement.Baseline,
-    event: Observation.SnapshotEvent?
-) -> Settlement.Result {
-    let boundary = scriptedBoundary(baseline, fallback: event?.moment)
-    guard let event else {
-        return .observation(.failed(.init(
-            reason: .timedOut(.observation),
-            attempt: .init(
-                predicate: predicate,
-                boundary: boundary,
-                outstanding: Expectation([predicate.resolved]).outstanding,
-                readiness: .pending(.initial),
-                handoff: .pending(.initial),
-                history: nil,
-                timing: scriptedTiming
-            )
-        )))
-    }
-    let observation = scriptedPredicateObservation(predicate, event: event)
-    guard observation.met else {
-        return .observation(.failed(.init(
-            reason: .timedOut(.observation),
-            attempt: .init(
-                predicate: predicate,
-                boundary: boundary,
-                outstanding: observation.outstanding,
-                readiness: .established(observation.readiness),
-                handoff: .admitted(observation.handoff),
-                history: observation.history,
-                timing: scriptedTiming
-            )
-        )))
-    }
-    guard case .established(let establishedBoundary) = boundary else {
-        preconditionFailure("Settled scripted observation requires an established boundary")
-    }
-    return .observation(.settled(.init(
-        predicate: predicate,
-        boundary: establishedBoundary,
-        readiness: observation.readiness,
-        handoff: observation.handoff,
-        history: observation.history,
-        timing: scriptedTiming
-    )))
-}
-
-private struct ScriptedPredicateObservation {
-    let met: Bool
-    let outstanding: [String]
-    let readiness: Settlement.Readiness.Establishment
-    let handoff: Settlement.Handoff.Admission
-    let history: Observation.EventsSince
-}
-
-/// The scripted stand-in for a run that reached one observation.
+/// A settlement being driven one fact at a time.
 ///
-/// It drives the same expectation the reducer drives: the event goes in as a
-/// snapshot tick, then a no-change tick says the tree stopped. What comes out
-/// is what settlement itself would decide.
+/// Holds only the reducer's own state, so what a scripted run believes is what
+/// the reducer believes — there is no second model to reconcile.
 @MainActor
-private func scriptedPredicateObservation(
-    _ predicate: Settlement.Predicate,
-    event: Observation.SnapshotEvent
-) -> ScriptedPredicateObservation {
-    var expectation = Expectation([predicate.resolved])
-    if let interface = event.trace.captures.last?.interface {
-        expectation.snapshot(interface)
-    }
-    expectation.noChange()
-    let readiness = Settlement.Readiness.Establishment(
-        generation: .initial,
-        observationBoundary: .including(event.moment)
-    )
-    let history = Observation.EventsSince.events([.snapshot(event)])
-    let admission = Settlement.ObservationAdmission(event: event, history: history)
-    guard let handoff = Settlement.Handoff.Admission.admit(admission, for: readiness) else {
-        preconditionFailure("Scripted settlement handoff was not admitted")
-    }
-    return ScriptedPredicateObservation(
-        met: expectation.isMet,
-        outstanding: expectation.outstanding,
-        readiness: readiness,
-        handoff: handoff,
-        history: history
-    )
-}
+private struct ScriptedRun {
+    private var state: Settlement.State
+    /// What every event in this run reports as time elapsed.
+    ///
+    /// Production reads a rising clock, but only the event that finalizes a run
+    /// puts its elapsed on the result — every earlier one is discarded. So one
+    /// value per run is exactly what is observable, and naming it here keeps it
+    /// on the events rather than in a second copy beside them.
+    private let elapsed: ElapsedMilliseconds
+    /// The deadline the reducer last asked to have armed.
+    ///
+    /// Tracked from the effect rather than read off the session, because that is
+    /// the contract: the reducer only honours a `deadlineReached` for the
+    /// deadline it is currently waiting on, and `armDeadline` is how it says
+    /// which one that is.
+    private var armedDeadline: Settlement.PhaseDeadline?
 
-private var scriptedTiming: Settlement.Result.Timing {
-    .init(
-        execution: .init(),
-        elapsed: RuntimeElapsed.admit(milliseconds: 1)
-    )
-}
-
-private func scriptedCurrentStateSettlement(
-    _ command: Settlement.Command,
-    event: Observation.SnapshotEvent?
-) -> Settlement.Result {
-    guard case .currentState = command else {
-        preconditionFailure("Current-state settlement requires a current-state command")
+    init(_ command: Settlement.Command, elapsed: ElapsedMilliseconds) {
+        self.elapsed = elapsed
+        state = Settlement.Reducer.begin(command).state
     }
-    guard let event else {
-        return .currentState(.failed(.init(
-            reason: .unavailable(.unavailable),
-            timing: .init(
-                execution: .init(),
-                elapsed: RuntimeElapsed.admit(milliseconds: 0)
+
+    /// Deliver one fact, unless the run already ended.
+    mutating func send(_ fact: Settlement.Event.Fact) {
+        guard state.result == nil else { return }
+        let decision = Settlement.Reducer.reduce(
+            state,
+            event: Settlement.Event(
+                fact: fact,
+                elapsed: elapsed,
+                instant: scriptedInstant
             )
-        )))
-    }
-    return .currentState(.captured(.init(
-        event: event,
-        timing: .init(
-            execution: .init(),
-            elapsed: RuntimeElapsed.admit(milliseconds: 0)
         )
-    )))
+        state = decision.state
+        for effect in decision.effects {
+            if case .armDeadline(let deadline) = effect {
+                armedDeadline = deadline
+            }
+        }
+    }
+
+    /// Deliver a last fact and take the result.
+    mutating func finish(_ fact: Settlement.Event.Fact) -> Settlement.Result {
+        send(fact)
+        return result()
+    }
+
+    /// End an unsettled run at its deadline.
+    ///
+    /// Uses the deadline the reducer armed, so the fact names the one the run
+    /// is actually waiting on.
+    mutating func timeOut() -> Settlement.Result {
+        if let armedDeadline {
+            send(.deadlineReached(armedDeadline))
+        }
+        return result()
+    }
+
+    /// The terminal result, finalizing first if the run still owes it.
+    private mutating func result() -> Settlement.Result {
+        if state.result == nil {
+            send(.finalized(.retained))
+        }
+        guard let result = state.result else {
+            preconditionFailure("Scripted settlement did not reach a terminal result")
+        }
+        return result
+    }
 }
 
-private func scriptedBoundary(
-    _ baseline: Settlement.Baseline,
-    fallback: Observation.Moment?
-) -> Settlement.BoundaryEvidence {
-    switch baseline {
-    case .capture:
-        fallback.map {
-            .established(Settlement.EvidenceBoundary(moment: $0))
-        } ?? .pending
-    case .supplied(let boundary):
-        .established(boundary)
-    case .unavailable(let failure):
-        .unavailable(failure)
-    }
-}
+/// One instant for every scripted event, so a run is a function of its facts
+/// alone rather than of when it was run.
+private let scriptedInstant = ContinuousClock.Instant.now
 
 #endif // DEBUG
 #endif // canImport(UIKit)

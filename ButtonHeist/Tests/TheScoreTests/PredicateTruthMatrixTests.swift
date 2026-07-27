@@ -9,17 +9,15 @@ import XCTest
 ///
 /// `ExpectationTests` asks *when* a predicate drains — which tick answers it,
 /// what order survives. This asks the flatter question: given a run of ticks,
-/// is the predicate satisfied or not. Every row is a closed statement about
-/// the algebra, and the table is the point — a shape with no row is a hole you
-/// can see.
+/// is the predicate satisfied or not.
 ///
 /// # The rules the table encodes
 ///
 /// **Everything is `exists` or `missing`.** A predicate is one element search
-/// against one tree. Nothing else exists, so nothing else needs a rule.
+/// against one tree.
 ///
 /// **A delta predicate is a pair of predicates matched in order on mismatched
-/// hashes.** That is the whole definition. `appeared(X)` is `missing(X)` then
+/// hashes.** `appeared(X)` is `missing(X)` then
 /// `exists(X)`; `disappeared(X)` is the reverse; `updated(X, v1, v2)` is
 /// `exists(X and v1)` then `exists(X and v2)`. All three conditions carry
 /// weight: a pair, so there is no delta type; in order, so relaxing it makes
@@ -43,8 +41,7 @@ import XCTest
 ///
 /// **A drain never blocks what is behind it.** The next predicate in the step is
 /// still asked; it refuses on a matching hash. So one tree fulfils many steps but
-/// never two predicates of the same step — not by a rule against it, but because
-/// one tree is one hash.
+/// never two predicates of the same step, because one tree is one hash.
 ///
 /// **`noChange` drains nothing.** It is the stillness signal, not evidence: it
 /// passes every predicate untouched and only settles the gate. A predicate
@@ -53,9 +50,6 @@ final class PredicateTruthMatrixTests: XCTestCase {
 
     // MARK: - The table
 
-    /// Rows 1-7 are the invariants rescued from the deleted evidence-kind
-    /// truth matrix, re-expressed as tick sequences. The rest close the shapes
-    /// that matrix never stated.
     func testTheTruthTable() throws {
         let ready = ["Ready"]
         let empty: [String] = []
@@ -136,9 +130,6 @@ final class PredicateTruthMatrixTests: XCTestCase {
     /// This asks the earlier question: what legs is it made of. One leg asks
     /// about a moment, two ask about a change — and the lane is the leg's own
     /// property, so a step never mixes them.
-    ///
-    /// Every authored form has a row. A form with no row is a decomposition
-    /// nobody agreed to.
     func testEveryPredicateDecomposition() throws {
         let pay = AccessibilityTarget.label("Pay")
 
@@ -175,7 +166,7 @@ final class PredicateTruthMatrixTests: XCTestCase {
                           legs: [elementChange, elementChange]),
 
             // A change with an element named: the pair the assertion composes
-            // into, in order. The order is the meaning.
+            // into, in order.
             Decomposition("appeared", .elementsChanged([.appeared(pay)]),
                           legs: [missing, exists]),
             Decomposition("disappeared", .elementsChanged([.disappeared(pay)]),
@@ -194,8 +185,7 @@ final class PredicateTruthMatrixTests: XCTestCase {
     ///
     /// The gate is the second half and it is not optional — a run whose legs are
     /// all satisfied is still not met until a `noChange` tick says the tree
-    /// stopped moving. Nothing else can supply it: more snapshots are more
-    /// change, which is the opposite of stillness.
+    /// stopped moving.
     func testMetRequiresEveryLegAndStillnessAsTheFinalTick() throws {
         var expectation = try Expectation([
             Shape.appeared("Ready").resolved(),
@@ -267,13 +257,13 @@ final class PredicateTruthMatrixTests: XCTestCase {
         ]).resolve(in: .empty).pendingSteps
 
         XCTAssertEqual(steps.count, 2)
-        XCTAssertEqual(steps.map(\.descriptions.count), [2, 2])
+        XCTAssertEqual(steps.map(\.pending.count), [2, 2])
     }
 
     /// What the expectation is still waiting on, without the settlement gate —
     /// which is outstanding until stillness arrives and is not a leg.
     private func legs(of expectation: Expectation) -> [String] {
-        expectation.outstanding.filter { $0 != "the tree to stop changing" }
+        expectation.outstanding.filter { $0.tick != .noChange }.map(\.description)
     }
 
     private struct Decomposition {
@@ -310,7 +300,7 @@ final class PredicateTruthMatrixTests: XCTestCase {
                 "\(row.says): one assertion is one step", file: file, line: line
             )
             XCTAssertEqual(
-                steps.first?.descriptions, row.legs,
+                steps.first?.pending.map(\.description), row.legs,
                 "\(row.says)", file: file, line: line
             )
             guard row.legs.count == 2 else { continue }
@@ -323,8 +313,6 @@ final class PredicateTruthMatrixTests: XCTestCase {
     /// scope. The second leg then drains only when a *later* tick both satisfies
     /// it and reads differently — two conditions, and either one alone leaves it
     /// outstanding.
-    ///
-    /// Every two-leg row is checked the same way, whatever its lane.
     private func assertOneTickReachesOnlyTheFirstLeg(
         _ predicate: ResolvedAccessibilityPredicate,
         _ row: Decomposition,
@@ -353,10 +341,8 @@ final class PredicateTruthMatrixTests: XCTestCase {
     /// Two ordered sequences meet: the halves of a step, and the readings.
     ///
     /// A reading is offered to the tip of each step — the first half not yet
-    /// drained — and a half cannot drain until every half before it is gone.
-    /// That single ordering rule is what makes a pair mean a change rather than
-    /// a coincidence, and it means what a reading does to a step depends
-    /// entirely on how far that step has got.
+    /// drained — and a half cannot drain until every half before it is gone. So
+    /// what a reading does to a step depends on how far that step has got.
     ///
     /// A screen boundary needs no rule of its own. A screen change is every
     /// element going away, a moment of nothing, then elements arriving — so the
@@ -438,20 +424,22 @@ final class PredicateTruthMatrixTests: XCTestCase {
     /// Asserted by count rather than by `isMet` so a step that drained twice on
     /// one tick is visible as a step that vanished too early.
     func testAPairCannotDrainTwiceOnOneTick() throws {
+        let missingReady = try Shape.missing("Ready").resolved()
+
         var expectation = try Expectation([Shape.disappeared("Ready").resolved()])
         expectation.snapshot(interface(["Ready"]))
-        XCTAssertTrue(
-            expectation.outstanding.contains { $0.contains("missing") },
-            "one tick drained both predicates: \(expectation.outstanding)"
+        XCTAssertEqual(
+            owed(expectation), [missingReady],
+            "one tick drained both predicates"
         )
 
         // The same tree again is the same reading, so it cannot be the second
         // predicate of the pair however many times it arrives.
         expectation.snapshot(interface(["Ready"]))
         expectation.snapshot(interface(["Ready"]))
-        XCTAssertTrue(
-            expectation.outstanding.contains { $0.contains("missing") },
-            "a repeated reading is one reading: \(expectation.outstanding)"
+        XCTAssertEqual(
+            owed(expectation), [missingReady],
+            "a repeated reading is one reading"
         )
 
         expectation.snapshot(interface([]))
@@ -467,17 +455,17 @@ final class PredicateTruthMatrixTests: XCTestCase {
     /// still outstanding between ticks, one notch further along.
     func testDrainingTheFirstHalfAdvancesTheStepWithoutFinishingIt() throws {
         var expectation = try Expectation([Shape.disappeared("Ready").resolved()])
-        XCTAssertTrue(expectation.outstanding.contains { $0.contains("exists") })
+        XCTAssertEqual(
+            owed(expectation),
+            [try Shape.exists("Ready").resolved(), try Shape.missing("Ready").resolved()],
+            "both legs are owed before any tick"
+        )
 
         expectation.snapshot(interface(["Ready"]))
         XCTAssertFalse(expectation.isMet, "the missing predicate is still owed")
-        XCTAssertFalse(
-            expectation.outstanding.contains { $0.contains("exists") },
-            "the exists drained: \(expectation.outstanding)"
-        )
-        XCTAssertTrue(
-            expectation.outstanding.contains { $0.contains("missing") },
-            "the step survives its first drain: \(expectation.outstanding)"
+        XCTAssertEqual(
+            owed(expectation), [try Shape.missing("Ready").resolved()],
+            "the exists drained and the step survives it"
         )
 
         // A second tree, so the missing predicate has a reading that is not the
@@ -514,7 +502,7 @@ final class PredicateTruthMatrixTests: XCTestCase {
             ]).resolve(in: .empty)
         ])
         // Two elements match the target, at the two values the assertion names.
-        let tree = makeTestInterface(elements: [
+        let tree = makeTestCapture(elements: [
             makeTestHeistElement(description: "Count", label: "Count", value: "1"),
             makeTestHeistElement(description: "Count", label: "Count", value: "2"),
         ])
@@ -597,12 +585,20 @@ final class PredicateTruthMatrixTests: XCTestCase {
 
     // MARK: - Helpers
 
+    /// The resolved questions still owed, ignoring the stillness gate.
+    ///
+    /// Compared as values against what `Shape` resolves to, so a row states
+    /// *which* search is outstanding rather than testing a rendered word.
+    private func owed(_ expectation: Expectation) -> [ResolvedAccessibilityPredicate] {
+        expectation.outstanding.filter { $0.tick != .noChange }.compactMap(\.query)
+    }
+
     private func nameless() throws -> ResolvedAccessibilityPredicate {
         try AccessibilityPredicate.elementsChanged([]).resolve(in: .empty)
     }
 
-    private func interface(_ labels: [String]) -> Interface {
-        makeTestInterface(
+    private func interface(_ labels: [String]) -> AccessibilityTrace.Capture {
+        makeTestCapture(
             elements: labels.map { makeTestHeistElement(description: $0, label: $0) }
         )
     }

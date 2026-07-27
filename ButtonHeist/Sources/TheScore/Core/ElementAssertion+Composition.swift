@@ -10,12 +10,10 @@ import ThePlans
 ///     disappeared(X)         exists(X)         then  missing(X)
 ///     updated(X, v1?, v2)    exists(X and v1?) then  exists(X and v2)
 ///
-/// So `disappeared("Ready")` followed by `appeared("Ready")` says what it looks
-/// like it says — the same two predicates, ordered — and `updated` is not a
-/// third kind of thing: the property is composed onto the target, which is what
-/// `and(_:)` already does for the authored form. The before value is optional;
-/// without one the first search is the bare anchor, which is exactly what "it
-/// was there, in any state" means.
+/// `updated` is not a third kind of thing: the property is composed onto the
+/// target, which is what `and(_:)` already does for the authored form. The
+/// before value is optional; without one the first search is the bare anchor,
+/// meaning "it was there, in any state".
 extension ResolvedElementAssertion {
     var composed: [ResolvedAccessibilityPredicate] {
         switch self {
@@ -46,10 +44,6 @@ extension ResolvedElementAssertion {
     /// `updated` is the case that needs it, because both its legs are `exists` and
     /// with no before or after they are the *same* search — only the reading can
     /// say the element moved.
-    ///
-    /// Every property an `updated` can name is one a reading can be taken over,
-    /// because `AssertableProperty` holds no geometry — so there is no widening
-    /// case here.
     var readingScope: ReadingScope {
         switch self {
         case .exists(let target), .missing(let target),
@@ -72,11 +66,10 @@ extension ResolvedAccessibilityTarget {
 
     /// The same target, carrying more checks.
     ///
-    /// The resolved twin of the authored `and(_:)`. This is the whole of what
-    /// makes `updated` ordinary: a property is not a change record to be
-    /// compared, it is more checks on the target. An empty list is the
-    /// identity, which is what makes the optional `before` free — no checks to
-    /// add means the anchor alone.
+    /// The resolved twin of the authored `and(_:)`: a property is not a change
+    /// record to be compared, it is more checks on the target. An empty list is
+    /// the identity, which is what makes the optional `before` free.
+    ///
     /// A scoped target carries them on the element it names, not on the scope:
     /// `within(list, .label("Qty")).and(.value("3"))` asks for the Qty *in* the
     /// list whose value is 3. Returning `self` for those would drop the checks
@@ -113,8 +106,7 @@ extension ResolvedElementPropertyChangeValue {
     /// predicate vocabulary already has both — `.exclude` wraps any check — so
     /// each side can turn into two. Empty sets are dropped rather than emitted:
     /// an empty include is vacuously true, so an *excluded* empty set would be
-    /// unsatisfiable, and dropping it is what makes "only say what changed"
-    /// work.
+    /// unsatisfiable.
     func checks(_ side: PropertyChangeSide) -> [ResolvedElementPredicateCheck] {
         switch self {
         case .value(let change):

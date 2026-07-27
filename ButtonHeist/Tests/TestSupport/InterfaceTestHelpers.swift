@@ -62,6 +62,30 @@ package func makeTestInterface(
     makeTestInterface(nodes: elements.map(TestInterfaceNode.element), timestamp: timestamp)
 }
 
+/// A reading of these elements, as a tick carries it.
+///
+/// A tick holds the whole capture, so tests that only care about the tree say
+/// so here rather than restating the sequencing at every call.
+package func makeTestCapture(
+    elements: [HeistElement],
+    timestamp: Date = Date(timeIntervalSince1970: 0)
+) -> AccessibilityTrace.Capture {
+    AccessibilityTrace.Capture(
+        sequence: 1,
+        interface: makeTestInterface(elements: elements, timestamp: timestamp)
+    )
+}
+
+package func makeTestCapture(
+    nodes: [TestInterfaceNode],
+    timestamp: Date = Date(timeIntervalSince1970: 0)
+) -> AccessibilityTrace.Capture {
+    AccessibilityTrace.Capture(
+        sequence: 1,
+        interface: makeTestInterface(nodes: nodes, timestamp: timestamp)
+    )
+}
+
 package func makeTestInterface(
     nodes: [TestInterfaceNode],
     timestamp: Date = Date(timeIntervalSince1970: 0)

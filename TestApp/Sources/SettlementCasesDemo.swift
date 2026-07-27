@@ -7,15 +7,10 @@ import UIKit
 /// Every control here animates except the first, and every one settles at the
 /// same speed, whichever animation API it reached for and whether or not the
 /// animation ever ends. Motion the accessibility tree cannot describe is not
-/// the agent's business. The runtime used to count running animations and
-/// withhold settlement on the count, which made a keyboard sliding into place
-/// over an already-quiet tree indistinguishable from a spinner that never
-/// stops, and turned successful actions into timeouts.
+/// the agent's business.
 ///
 /// `TwoStateWorkButton` is the case settlement does owe an answer to: work the
-/// tree *does* describe, which must be waited out. A change that makes the
-/// animating controls slow to settle, or the two-state control settle early,
-/// is a regression in the rule rather than in these fixtures.
+/// tree *does* describe, which must be waited out.
 struct SettlementCasesDemo: View {
 
     var body: some View {
@@ -108,10 +103,8 @@ private struct IndefiniteAnimationWithChangeButton: UIViewRepresentable {
 /// mid-work is not settled, and a stream of changes must publish the
 /// intermediate state rather than skipping to the end.
 ///
-/// The loading phase is held far longer than the settle cycle count needs
-/// (3 × 100ms), so the intermediate state is guaranteed observable across
-/// several ticks rather than merely probable. That determinism is the whole
-/// reason this control exists.
+/// `loadingHold` is long enough that the intermediate state is observable across
+/// several ticks rather than merely probable.
 private struct TwoStateWorkButton: View {
 
     private static let loadingHold = Duration.milliseconds(800)
@@ -132,7 +125,7 @@ private struct TwoStateWorkButton: View {
             Text(isWorking ? "Loading" : "Ready")
         }
         .accessibilityLabel(isWorking ? "Loading" : "Ready")
-        .accessibilityHint("Holds a loading state across several settle cycles, then returns to ready")
+        .accessibilityHint("Loads for a moment, then returns to ready")
         .onDisappear {
             workTask?.cancel()
             workTask = nil
@@ -146,8 +139,7 @@ private struct TwoStateWorkButton: View {
 /// `CABasicAnimation` on a layer, no accessibility change.
 ///
 /// Settlement never asks which API the app reached for, so this and
-/// "Endlessly Animating Control" must settle identically. A divergence between
-/// them means something has started reading the animation APIs again.
+/// "Endlessly Animating Control" must settle identically.
 private struct BoundedLayerAnimationButton: UIViewRepresentable {
 
     func makeUIView(context: Context) -> UIView {

@@ -4,24 +4,28 @@ import ThePlans
 /// One observation, as the predicate runtime sees it.
 ///
 /// A tick carries the reading it was taken from, so a consumer never asks the
-/// live tree anything: the interface here is the interface as of this tick, and
-/// judging a predicate against the moment it was observed is the point, not a
-/// compromise. Everything a tick holds is a value, which is why folding them
-/// needs no actor.
-enum Tick: Sendable, Equatable {
-    case elementsChanged(Interface)
+/// live tree anything: a predicate is judged against the moment it was observed.
+/// Everything a tick holds is a value, which is why folding them needs no actor.
+package enum Tick: Sendable, Equatable {
+    /// A reading of the element tree.
+    ///
+    /// Carries the whole capture, not just its interface: the capture's context
+    /// and transition are the run's evidence of focus, keyboard, window stack
+    /// and notifications, which a report quotes and no predicate reads. A tick
+    /// is what was observed, not the subset predicates ask about.
+    case elementsChanged(AccessibilityTrace.Capture)
     case screenChanged(ScreenFacts)
     case announcement(String)
     case noChange
 
-    enum Kind: Equatable, Sendable {
+    package enum Kind: Equatable, Sendable {
         case elementsChanged
         case screenChanged
         case announcement
         case noChange
     }
 
-    var kind: Kind {
+    package var kind: Kind {
         switch self {
         case .elementsChanged: return .elementsChanged
         case .screenChanged: return .screenChanged
@@ -30,11 +34,17 @@ enum Tick: Sendable, Equatable {
         }
     }
 
+    /// The tree this tick read, when it read one.
+    package var interface: Interface? {
+        guard case .elementsChanged(let capture) = self else { return nil }
+        return capture.interface
+    }
+
     var reading: Int {
         var hasher = Hasher()
         switch self {
-        case .elementsChanged(let interface):
-            hasher.combine(interface.projectedElements)
+        case .elementsChanged(let capture):
+            hasher.combine(capture.interface.projectedElements)
         case .screenChanged(let facts):
             hasher.combine(facts.idAfter)
         case .announcement(let spoken):
@@ -46,8 +56,8 @@ enum Tick: Sendable, Equatable {
     }
 }
 
-struct PendingPredicate: Equatable {
-    enum Kind: Equatable {
+package struct PendingPredicate: Equatable, Sendable {
+    enum Kind: Equatable, Sendable {
         case elementsChanged(ResolvedAccessibilityPredicate?)
         case screenChanged(ResolvedScreenPredicate?)
         case announcement(ResolvedAnnouncementPredicate?)
@@ -56,6 +66,23 @@ struct PendingPredicate: Equatable {
 
     let kind: Kind
     let scope: ReadingScope?
+
+    /// The lane this predicate reads, so a consumer can ask which kind of tick
+    /// the run is blocked on without parsing its description.
+    package var tick: Tick.Kind { lane }
+
+    /// The resolved question this predicate is waiting to have answered.
+    ///
+    /// `nil` for a bare lane predicate ("any element change") and for the
+    /// stillness gate, neither of which names anything.
+    package var query: ResolvedAccessibilityPredicate? {
+        switch kind {
+        case .elementsChanged(let query): return query
+        case .screenChanged(let query): return query.map(ResolvedAccessibilityPredicate.screenChanged)
+        case .announcement(let query): return query.map(ResolvedAccessibilityPredicate.announcement)
+        case .noChange: return .noChange
+        }
+    }
 
     static func elementsChanged(
         _ query: ResolvedAccessibilityPredicate? = nil,
@@ -74,7 +101,7 @@ struct PendingPredicate: Equatable {
 
     static let noChange = Self(kind: .noChange, scope: nil)
 
-    var description: String {
+    package var description: String {
         switch kind {
         case .elementsChanged(let query?): return query.description
         case .elementsChanged(nil): return "the elements to change"
@@ -105,14 +132,14 @@ struct PendingPredicate: Equatable {
 
     func matching(_ tick: Tick) -> Int? {
         guard matches(tick) else { return nil }
-        guard case .elementsChanged(let interface) = tick, let scope else { return tick.reading }
+        guard let interface = tick.interface, let scope else { return tick.reading }
         return scope.reading(in: interface)
     }
 
     func matches(_ tick: Tick) -> Bool {
         switch (tick, kind) {
-        case (.elementsChanged(let interface), .elementsChanged(let query?)):
-            return query.matches(interface)
+        case (.elementsChanged(let capture), .elementsChanged(let query?)):
+            return query.matches(capture.interface)
         case (.elementsChanged, .elementsChanged(nil)):
             return true
         case (.screenChanged(let facts), .screenChanged(let query?)):
@@ -155,19 +182,26 @@ struct PendingStep: Equatable {
         Self(.awaitingBefore(before, after: after))
     }
 
+    /// A predicate that named no element: two legs any element tick answers, so
+    /// only the reading separates them.
+    ///
+    /// A change is a comparison, and one tick is one reading — it shows a state,
+    /// not a change. So this waits for two, exactly as `updated` does when no
+    /// property narrows it.
     static let nothingNamed = Self.change(
         before: .elementsChanged(),
         after: .elementsChanged()
     )
 
-    var descriptions: [String] {
+    /// The predicates this step is still waiting on, in order.
+    var pending: [PendingPredicate] {
         switch state {
         case .presence(let predicate):
-            return [predicate.description]
+            return [predicate]
         case .awaitingBefore(let before, let after):
-            return [before.description, after.description]
+            return [before, after]
         case .awaitingAfter(let after, _):
-            return [after.description]
+            return [after]
         }
     }
 
@@ -191,12 +225,10 @@ struct PendingStep: Equatable {
 
 /// The predicates still waiting, and whether the last tick was stillness.
 ///
-/// Pure data: predicates in, ticks folded over them, an answer out. There is no
-/// state here that anything else needs to agree with — an expectation is
-/// determined entirely by its authored predicates and the ordered ticks it has
-/// seen, so the same log always folds to the same answer. That is what lets the
-/// tick log be the durable artifact and this be derived from it, rather than a
-/// live thing to be synchronized against.
+/// Pure data: predicates in, ticks folded over them, an answer out. An
+/// expectation is determined entirely by its authored predicates and the ordered
+/// ticks it has seen, so it is derived from the tick log rather than a live thing
+/// to be synchronized against.
 package struct Expectation: Equatable, Sendable {
     private var pending: [PendingStep]
 
@@ -218,57 +250,68 @@ package struct Expectation: Equatable, Sendable {
 
     package var isMet: Bool { pending.isEmpty && isStill }
 
-    package var outstanding: [String] {
-        pending.flatMap(\.descriptions) + (isStill ? [] : [Self.gate.description])
+    /// What the run is still waiting on, head first.
+    ///
+    /// The gate is last because stillness is the final thing a run waits for:
+    /// every authored predicate drains first, then the tree stops moving.
+    package var outstanding: [PendingPredicate] {
+        pending.flatMap(\.pending) + (isStill ? [] : [Self.gate])
     }
 
     /// Fold in the ticks of one observation.
     ///
     /// The store has already made the one comparison — semantics and placements
-    /// against the reading before — so this names the ticks and compares
-    /// nothing: a replacement is its ordered ticks, a tree in a new state is
-    /// one, and a tree that came back the same is stillness.
+    /// against the reading before — so this only names the ticks.
     ///
     /// A reading that found no change *is* the proof of stillness, and it is the
     /// only proof there is. Nothing polls a quiet tree to confirm it a second
     /// time: the next reading arrives when the tree moves, so an expectation
     /// whose predicate had already drained would wait forever for a stillness
     /// tick that no one was going to send.
+    /// - Returns: the ticks this observation was, in order.
+    @discardableResult
     package mutating func observe(
-        _ interface: Interface,
+        _ capture: AccessibilityTrace.Capture,
         isChange: Bool,
         isReplacement: Bool,
         screenHeading: String?
-    ) {
-        guard isReplacement else {
-            return evaluate(isChange ? .elementsChanged(interface) : .noChange)
+    ) -> [Tick] {
+        let ticks = if isReplacement {
+            TickLog.replacement(
+                screen: ScreenFacts(idAfter: screenHeading),
+                arriving: capture
+            )
+        } else {
+            [isChange ? Tick.elementsChanged(capture) : .noChange]
         }
-        for tick in TickLog.replacement(
-            emptiedAt: interface.timestamp,
-            screen: ScreenFacts(idAfter: screenHeading),
-            arriving: interface
-        ) {
+        for tick in ticks {
             evaluate(tick)
         }
+        return ticks
     }
 
-    package mutating func snapshot(_ interface: Interface) {
-        evaluate(.elementsChanged(interface))
+    @discardableResult
+    package mutating func snapshot(_ capture: AccessibilityTrace.Capture) -> Tick {
+        evaluate(.elementsChanged(capture))
     }
 
-    package mutating func empty(at timestamp: Date) {
-        evaluate(.elementsChanged(Interface(timestamp: timestamp, tree: [])))
+    @discardableResult
+    package mutating func empty(at timestamp: Date) -> Tick {
+        evaluate(.elementsChanged(.empty(at: timestamp)))
     }
 
-    package mutating func screenChanged(_ facts: ScreenFacts) {
+    @discardableResult
+    package mutating func screenChanged(_ facts: ScreenFacts) -> Tick {
         evaluate(.screenChanged(facts))
     }
 
-    package mutating func announcement(_ text: String) {
+    @discardableResult
+    package mutating func announcement(_ text: String) -> Tick {
         evaluate(.announcement(text))
     }
 
-    package mutating func noChange() {
+    @discardableResult
+    package mutating func noChange() -> Tick {
         evaluate(.noChange)
     }
 
@@ -277,9 +320,13 @@ package struct Expectation: Equatable, Sendable {
     /// Stillness is assigned, not accumulated: it says whether the tick that
     /// just arrived was stillness, so a tree that starts moving again withdraws
     /// it. That makes the whole of this a function of the ticks seen so far.
-    private mutating func evaluate(_ tick: Tick) {
+    ///
+    /// - Returns: the tick it just applied.
+    @discardableResult
+    private mutating func evaluate(_ tick: Tick) -> Tick {
         pending = pending.compactMap { $0.evaluate(tick) }
         isStill = Self.gate.admits(tick)
+        return tick
     }
 }
 

@@ -27,9 +27,8 @@ public enum ElementProperty: String, Codable, Sendable, CaseIterable, CodingKey 
 
     /// The predicate-language twin, when this property has one.
     ///
-    /// `nil` for the two identity matchers, because pairing an element across
-    /// captures is what they do, and for geometry, because a predicate cannot
-    /// reason about it.
+    /// `nil` for the identity matchers and for geometry. See
+    /// `AssertableProperty` for why neither is askable.
     public var assertable: AssertableProperty? {
         switch self {
         case .value: return .value
@@ -57,12 +56,10 @@ public enum ElementProperty: String, Codable, Sendable, CaseIterable, CodingKey 
 ///   element rather than a changed one.
 /// - Geometry, `frame` and `activationPoint`. A reading is taken over the
 ///   projection, which carries no coordinates, so a geometry assertion could
-///   only ever say "this element was here, and is still here". A series of frame
-///   changes is correct to emit and inert to a predicate: it reads identically
-///   to the tick before it, lands on the same answer, and falls off on its own.
+///   only ever say "this element was here, and is still here".
 ///
-/// Being a separate type is the point. Geometry is not filtered out of the
-/// predicate language downstream, it is unrepresentable in it.
+/// Geometry is not filtered out of the predicate language downstream, it is
+/// unrepresentable in it.
 public enum AssertableProperty: String, Codable, Sendable, CaseIterable, CodingKey {
     case value
     case traits

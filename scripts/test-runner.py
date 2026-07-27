@@ -570,6 +570,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("suites", nargs="*", choices=tuple(SUITES))
     parser.add_argument("--focus", action="append", choices=tuple(FOCUSES), default=[])
+    # Passed through to -only-testing verbatim, so any depth xcodebuild accepts
+    # works: Target, Target/Suite, or Target/Suite/testMethod.
+    parser.add_argument("--test", action="append", default=[], metavar="IDENTIFIER")
     parser.add_argument("--simulator-name")
     parser.add_argument("--simulator-runtime")
     parser.add_argument("--retain-simulator", action="store_true")
@@ -588,6 +591,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         return args
     if bool(args.suites) == bool(args.focus):
         raise ValueError("select suites or focuses, but not both")
+    if args.test:
+        # A test identifier already names its target, so spreading one across
+        # several suites would ask each for tests that live in only one.
+        if args.focus:
+            raise ValueError("--test and --focus both select tests; use one")
+        if len(args.suites) != 1:
+            raise ValueError("--test requires exactly one suite")
     simulator_modes = ("run", "build-for-testing", "test-without-building")
     if args.retain_simulator and args.mode not in simulator_modes:
         raise ValueError(
@@ -625,7 +635,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.install_dependencies:
         subprocess.run(["tuist", "install"], check=True)
     runs = focus_runs(args.focus) if args.focus else {
-        name: () for name in args.suites
+        name: tuple(args.test) for name in args.suites
     }
     selected_simulators: list[dict[str, str]] = []
     status = 0

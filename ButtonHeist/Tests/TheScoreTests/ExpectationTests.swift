@@ -19,7 +19,7 @@ final class ExpectationTests: XCTestCase {
     /// Every element question is `exists` or `missing` against one tree, so a
     /// snapshot answers as many of them as it can at once. An unsatisfied
     /// predicate is not a barrier: the one behind it was answered by the same
-    /// graph, and which index it sat at is an artifact of using an array.
+    /// graph.
     func testAnUnsatisfiedPredicateDoesNotBlockOneTheSameTreeAnswers() throws {
         var expectation = try Expectation([exists("Absent"), exists("Present")])
 
@@ -57,8 +57,8 @@ final class ExpectationTests: XCTestCase {
         )
     }
 
-    /// The real dogfood fixture: tapping Submit swaps the button for a spinner
-    /// in one frame, so both assertions are answered by the same two trees.
+    /// Tapping Submit swaps the button for a spinner in one frame, so both
+    /// assertions are answered by the same two trees.
     func testTwoAssertionsDescribingOneFrameAreBothSatisfied() throws {
         var expectation = try Expectation([changed(
             .appeared(.label("Processing")),
@@ -166,8 +166,7 @@ final class ExpectationTests: XCTestCase {
     }
 
     /// A quiet tree is not an ending. Stillness satisfies nothing in the list —
-    /// no predicate reads it — so an outstanding predicate stays outstanding and
-    /// the expectation is not met, however still things get.
+    /// no predicate reads it — so an outstanding predicate stays outstanding.
     func testNoChangeArrivingEarlySatisfiesNothing() throws {
         var expectation = try Expectation([exists("Late")])
 
@@ -230,8 +229,8 @@ final class ExpectationTests: XCTestCase {
         try AccessibilityPredicate.elementsChanged(assertions).resolve(in: .empty)
     }
 
-    private func interface(_ labels: [String]) -> Interface {
-        makeTestInterface(
+    private func interface(_ labels: [String]) -> AccessibilityTrace.Capture {
+        makeTestCapture(
             elements: labels.map { makeTestHeistElement(description: $0, label: $0) }
         )
     }

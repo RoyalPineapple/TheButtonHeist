@@ -79,7 +79,7 @@ private extension Settlement.ResultProjector {
             outcome: .success,
             message: settled.dispatch.message,
             boundary: .established(settled.boundary),
-            history: settled.history,
+            tickLog: settled.tickLog,
             handoff: .admitted(settled.handoff),
             readiness: .established(settled.readiness),
             timing: settled.timing
@@ -112,7 +112,7 @@ private extension Settlement.ResultProjector {
                         boundary: attempt.boundary,
                         readiness: attempt.readiness,
                         handoff: attempt.handoff,
-                        history: attempt.history,
+                        tickLog: attempt.tickLog,
                         elapsed: attempt.timing.elapsed
                     )
                 )
@@ -136,7 +136,7 @@ private extension Settlement.ResultProjector {
                 message: failure.message,
                 observation: projectedObservation(
                     boundary: attempt.boundary,
-                    history: attempt.history,
+                    tickLog: attempt.tickLog,
                     handoff: attempt.handoff,
                     readiness: attempt.readiness,
                     duration: attempt.timing.elapsed
@@ -166,7 +166,7 @@ private extension Settlement.ResultProjector {
                 outcome: outcome,
                 message: message,
                 boundary: attempt.boundary,
-                history: attempt.history,
+                tickLog: attempt.tickLog,
                 handoff: attempt.handoff,
                 readiness: attempt.readiness,
                 timing: attempt.timing
@@ -179,7 +179,7 @@ private extension Settlement.ResultProjector {
         outcome: ActionResultOutcome,
         message: String?,
         boundary: Settlement.BoundaryEvidence,
-        history: Observation.EventsSince?,
+        tickLog: TickLog,
         handoff: Settlement.Handoff.Evidence,
         readiness: Settlement.Readiness.Evidence,
         timing: Settlement.Result.Timing
@@ -191,7 +191,7 @@ private extension Settlement.ResultProjector {
             message: message,
             observation: projectedObservation(
                 boundary: boundary,
-                history: history,
+                tickLog: tickLog,
                 handoff: handoff,
                 readiness: readiness,
                 duration: timing.elapsed
@@ -229,7 +229,7 @@ private extension Settlement.ResultProjector {
             ),
             observation: projectedObservation(
                 boundary: .established(settled.boundary),
-                history: settled.history,
+                tickLog: settled.tickLog,
                 handoff: .admitted(settled.handoff),
                 readiness: .established(settled.readiness),
                 duration: settled.timing.elapsed
@@ -252,7 +252,7 @@ private extension Settlement.ResultProjector {
                     boundary: attempt.boundary,
                     readiness: attempt.readiness,
                     handoff: attempt.handoff,
-                    history: attempt.history,
+                    tickLog: attempt.tickLog,
                     elapsed: attempt.timing.elapsed
                 )
             )
@@ -269,7 +269,7 @@ private extension Settlement.ResultProjector {
             message: failure.message,
             observation: projectedObservation(
                 boundary: attempt.boundary,
-                history: attempt.history,
+                tickLog: attempt.tickLog,
                 handoff: attempt.handoff,
                 readiness: attempt.readiness,
                 duration: attempt.timing.elapsed
@@ -280,28 +280,28 @@ private extension Settlement.ResultProjector {
 
     /// A failed run has exactly one thing to say: it ran out of time while
     /// waiting on the head of the list. Everything behind the head was never
-    /// asked, so naming it would be reporting on questions nobody put.
+    /// asked.
     static func expectation(
         predicate: Settlement.Predicate,
-        outstanding: [String]
+        outstanding: [PendingPredicate]
     ) -> ExpectationResult {
         ExpectationResult(
             met: false,
             predicate: predicate.authored,
-            actual: outstanding.first.map(Strings.Timeout.waitingOn)
+            actual: outstanding.first.map { Strings.Timeout.waitingOn($0.description) }
         )
     }
 
     static func projectedObservation(
         boundary: Settlement.BoundaryEvidence,
-        history: Observation.EventsSince?,
+        tickLog: TickLog,
         handoff: Settlement.Handoff.Evidence,
         readiness: Settlement.Readiness.Evidence,
         duration: ElapsedMilliseconds
     ) -> ActionResultObservationEvidence {
         let trace = traceEvidence(
             boundary: boundary.established,
-            history: history,
+            tickLog: tickLog,
             handoff: handoff.event,
             completeness: handoff.admission == nil ? .incomplete : .complete
         )
@@ -319,19 +319,17 @@ private extension Settlement.ResultProjector {
         return .settledTrace(trace, settlement)
     }
 
+    /// The run's trace, projected from the ticks it observed.
+    ///
+    /// The boundary capture is already the log's first tick, so only the handoff
+    /// is added here: it is admitted outside the tick stream.
     static func traceEvidence(
         boundary: Settlement.EvidenceBoundary?,
-        history: Observation.EventsSince?,
+        tickLog: TickLog,
         handoff: Observation.SnapshotEvent?,
         completeness: AccessibilityTraceEvidence.Completeness
     ) -> AccessibilityTraceEvidence? {
-        var traces = boundary.map { [AccessibilityTrace(capture: $0.moment.capture)] } ?? []
-        if case .events(let events)? = history {
-            traces += events.compactMap { event in
-                guard case .snapshot(let snapshot) = event else { return nil }
-                return AccessibilityTrace(capture: snapshot.moment.capture)
-            }
-        }
+        var traces = tickLog.trace.map { [$0] } ?? []
         if let handoff {
             traces.append(AccessibilityTrace(capture: handoff.moment.capture))
         }
@@ -394,14 +392,14 @@ private extension Settlement.ResultProjector {
 
     static func renderTimeoutMessage(
         predicate: Settlement.Predicate,
-        outstanding: [String],
+        outstanding: [PendingPredicate],
         boundary: Settlement.BoundaryEvidence,
         readiness: Settlement.Readiness.Evidence,
         handoff: Settlement.Handoff.Evidence,
-        history: Observation.EventsSince?,
+        tickLog: TickLog,
         elapsed: ElapsedMilliseconds
     ) -> String {
-        let headline = if let tip = outstanding.first {
+        let headline = if let tip = outstanding.first?.description {
             Strings.Timeout.settlementElapsed(elapsed, waitingOn: tip)
         } else {
             Strings.Timeout.settlementElapsed(elapsed)
@@ -413,7 +411,7 @@ private extension Settlement.ResultProjector {
         var interfaceElementCount: Int?
         let trace = traceEvidence(
             boundary: boundary.established,
-            history: history,
+            tickLog: tickLog,
             handoff: handoff.event,
             completeness: .incomplete
         )?.trace
@@ -449,7 +447,7 @@ private extension Settlement.ResultProjector {
         case (.announcement, _, _), (.noChange, _, _), (.screenChanged, _, _), (.elementsChanged, _, _):
             parts.append(Strings.Diagnostic.expected(predicate.authored.description))
             parts.append(Strings.Timeout.stillWaitingOn(
-                outstanding.first ?? Strings.Diagnostic.none
+                outstanding.first?.description ?? Strings.Diagnostic.none
             ))
         case (.exists, _, _), (.missing, _, _):
             break
@@ -530,14 +528,12 @@ extension ResolvedHeistActionCommand {
 /// What a caller reads when a run did not do what was asked.
 ///
 /// Templates rather than a vocabulary: each interpolates something, and the
-/// same sentence is assembled from more than one branch below. They live here
-/// because this is the only file that reads them.
+/// same sentence is assembled from more than one branch below.
 private enum Strings {
     /// Why a run ended without doing what was asked.
     ///
-    /// There is only one failure — the clock ran out — so there is only one
-    /// thing to say. Which predicate it ran out on is the whole content of the
-    /// message; everything behind that one was never asked.
+    /// There is only one failure — the clock ran out — so the only content is
+    /// which predicate it ran out on.
     internal enum Timeout {
         static func waitingOn(_ tip: String) -> String {
             "timed out while waiting on \(tip)"

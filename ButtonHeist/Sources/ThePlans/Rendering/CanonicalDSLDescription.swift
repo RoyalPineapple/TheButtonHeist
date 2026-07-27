@@ -12,9 +12,8 @@ enum CanonicalDSLDescription {
     /// renders under `.preservingReferences` — the policy that prints a
     /// reference as written — and the rejection cannot arise.
     ///
-    /// The `catch` is therefore unreachable rather than merely unlikely, and it
-    /// still has to say something: it names the type, which is the one fact a
-    /// description always has and the one a reader needs to find the value.
+    /// The `catch` is therefore unreachable rather than merely unlikely. It
+    /// names the type, which is the one fact a description always has.
     static func render<Value>(
         _ value: Value,
         _ body: (HeistCanonicalSwiftDSLRenderer, RenderEnvironment) throws -> String

@@ -31,55 +31,42 @@ final class SettlementTerminalLogTests: SemanticObservationStreamTestCase {
             contains: [
                 "command=currentState",
                 "observation=none",
-                "outcome=baselineUnavailable(admissionRejected)",
+                // A currentState capture never arms, so it has no baseline to be
+                // missing: what failed is the capture. Only observation and
+                // action can report `baselineUnavailable`.
+                "outcome=failed(admissionRejected)",
             ]
         )
     }
 
     func testObservationResultsRenderEvaluationAndHandoffTruth() async throws {
         let baseline = await commit(label: "Baseline")
-        let observed = await commit(label: "Observed")
-        let predicate = observationPredicate
-        let readiness = readiness(for: observed)
-        let history = Observation.EventsSince.events([.snapshot(observed)])
-        let handoff = try XCTUnwrap(Settlement.Handoff.Admission.admit(
-            .init(event: observed, history: history),
-            for: readiness
-        ))
+        let observed = await commitSettling(label: "Observed")
+
+        // A predicate the observation answers settles; one it does not runs out
+        // of time. Which happens is the reducer's call, not the fixture's.
+        // Both name the newest reading the run admitted, which is the quiet one
+        // that let it settle.
         assertLog(
-            .observation(.settled(.init(
-                predicate: predicate,
-                boundary: .init(moment: baseline.moment),
-                readiness: readiness,
-                handoff: handoff,
-                history: history,
-                timing: timing
-            ))),
+            wait(.elementsChanged, baseline: baseline, observed: observed),
             contains: [
                 "command=observation",
                 "predicate=satisfied",
-                "observation=\(observed.sequence.rawValue)",
-                "handoff=admitted(observation:\(observed.sequence.rawValue))",
+                "observation=\(observed.settled.sequence.rawValue)",
+                "handoff=admitted(observation=\(observed.settled.sequence.rawValue))",
                 "outcome=settled",
             ]
         )
+
+        let unmet = try predicate(.exists(.label("Never")))
         assertLog(
-            .observation(.failed(.init(
-                reason: .timedOut(.observation),
-                attempt: .init(
-                    predicate: predicate,
-                    boundary: .established(.init(moment: baseline.moment)),
-                    outstanding: Expectation([predicate.resolved]).outstanding,
-                    readiness: .pending(.initial),
-                    handoff: .pending(.initial),
-                    history: history,
-                    timing: timing
-                )
-            ))),
+            wait(unmet.authored, baseline: baseline, observed: observed),
             contains: [
                 "command=observation",
-                "predicate=pending",
-                "observation=\(observed.sequence.rawValue)",
+                // Names the outstanding predicate, not just that one exists: the
+                // tip of the list is what the run was blocked on.
+                "predicate=waiting(\(try XCTUnwrap(Expectation([unmet.resolved]).outstanding.first).description))",
+                "observation=\(observed.settled.sequence.rawValue)",
                 "outcome=timedOut(observation)",
             ]
         )
@@ -87,57 +74,31 @@ final class SettlementTerminalLogTests: SemanticObservationStreamTestCase {
 
     func testActionResultsRenderDispatchTruth() async throws {
         let baseline = await commit(label: "Baseline")
-        let observed = await commit(label: "Observed")
-        let readiness = readiness(for: observed)
-        let history = Observation.EventsSince.events([.snapshot(observed)])
-        let handoff = try XCTUnwrap(Settlement.Handoff.Admission.admit(
-            .init(event: observed, history: history),
-            for: readiness
-        ))
-        let command = Settlement.Command.Action(
-            command: .dismiss,
-            predicate: nil,
-            allowances: .init(readiness: .seconds(5), expectation: nil),
-            baseline: .capture
-        )
+        let observed = await commitSettling(label: "Observed")
 
+        // An action with no predicate settles on its handoff, which is taken at
+        // readiness — so the row names the reading that established it rather
+        // than the quiet one a waiting run would have needed.
         assertLog(
-            .action(.settled(.init(
-                command: command,
-                boundary: .init(moment: baseline.moment),
-                dispatch: .success(payload: .dismiss),
-
-                readiness: readiness,
-                handoff: handoff,
-                history: history,
-                timing: timing
-            ))),
+            action(dispatch: .success(payload: .dismiss), baseline: baseline, observed: observed),
             contains: [
                 "command=action",
                 "predicate=notRequired",
                 "dispatch=succeeded",
-                "observation=\(observed.sequence.rawValue)",
+                "observation=\(observed.changed.sequence.rawValue)",
+                "handoff=admitted(observation=\(observed.changed.sequence.rawValue))",
                 "outcome=settled",
             ]
         )
+
+        // A dispatch that failed ends the run before any observation arrives,
+        // so the row has no observation to name.
         assertLog(
-            .action(.failed(.init(
-                reason: .dispatchFailed,
-                attempt: .init(
-                    command: command,
-                    boundary: .established(.init(moment: baseline.moment)),
-                    dispatch: .completed(.failure(
-                        .dismiss,
-                        message: "Dismiss failed",
-                        failureKind: .actionFailed
-                    )),
-                    outstanding: [],
-                    readiness: .pending(.initial),
-                    handoff: .pending(.initial),
-                    history: nil,
-                    timing: timing
-                )
-            ))),
+            action(
+                dispatch: .failure(.dismiss, message: "Dismiss failed", failureKind: .actionFailed),
+                baseline: baseline,
+                observed: nil
+            ),
             contains: [
                 "command=action",
                 "predicate=notRequired",
@@ -146,6 +107,60 @@ final class SettlementTerminalLogTests: SemanticObservationStreamTestCase {
                 "outcome=dispatchFailed",
             ]
         )
+    }
+
+    /// A wait run to its terminal result by the real reducer.
+    private func wait(
+        _ authored: AccessibilityPredicate,
+        baseline: Observation.SnapshotEvent,
+        observed: Reading?
+    ) -> Settlement.Result {
+        scriptedSettlement(
+            .observation(
+                predicate: .init(authored: authored, resolved: resolved(authored)),
+                deadline: .init(phase: .observation, instant: .now),
+                baseline: .supplied(.init(moment: baseline.moment))
+            ),
+            observation: observed?.changed,
+            settling: observed?.settled,
+            dispatch: .success(payload: .dismiss),
+            elapsed: 25
+        )
+    }
+
+    /// An action run to its terminal result by the real reducer.
+    private func action(
+        dispatch: TheSafecracker.ActionDispatchResult,
+        baseline: Observation.SnapshotEvent,
+        observed: Reading?
+    ) -> Settlement.Result {
+        scriptedSettlement(
+            .action(.init(
+                command: .dismiss,
+                predicate: nil,
+                allowances: .init(readiness: .seconds(5), expectation: nil),
+                baseline: .supplied(.init(moment: baseline.moment))
+            )),
+            observation: observed?.changed,
+            settling: observed?.settled,
+            dispatch: dispatch,
+            elapsed: 25
+        )
+    }
+
+    private func predicate(
+        _ authored: AccessibilityPredicate
+    ) throws -> Settlement.Predicate {
+        .init(authored: authored, resolved: try authored.resolve(in: .empty))
+    }
+
+    private func resolved(
+        _ authored: AccessibilityPredicate
+    ) -> ResolvedAccessibilityPredicate {
+        guard let resolved = try? authored.resolve(in: .empty) else {
+            preconditionFailure("Test predicate must resolve")
+        }
+        return resolved
     }
 
     private var timing: Settlement.Result.Timing {

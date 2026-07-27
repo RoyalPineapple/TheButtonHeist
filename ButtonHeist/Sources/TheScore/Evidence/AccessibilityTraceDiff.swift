@@ -45,8 +45,7 @@ enum AccessibilityTraceDiff {
     /// There is no element identity across a replacement, so nothing is diffed
     /// and nothing is paired. Every node in `before` departed and every node in
     /// `after` arrived — a similarly shaped control on the new screen is a new
-    /// object, not the old one persisting. The lists are whole graphs by
-    /// definition rather than by omission.
+    /// object, not the old one persisting.
     ///
     /// Order carries the meaning. Two-legged steps do not evaluate their after
     /// leg until the before leg is satisfied, so `disappeared(X)` reads the

@@ -8,24 +8,19 @@ import XCTest
 /// A rig for asking one question: hand an `Expectation` a run of ticks, and see
 /// what it did with them.
 ///
-/// Everything the drain can be asked is here — any predicates, in any order,
-/// against any of the five ticks, holding any elements. Nothing about a
-/// particular assertion is baked in, so a new claim about the algebra is a
-/// literal rather than a new test method.
+/// Nothing about a particular assertion is baked in, so a new claim about the
+/// algebra is a literal rather than a new test method.
 ///
-/// Two things are read back, and both matter. `isMet` is the verdict. `owed` is
-/// what the run would tell a user it is still waiting for, which is the only way
-/// to see *how far* a half-satisfied pair got — a verdict of "no" cannot tell a
-/// pair that never started from one that is one leg in.
+/// `isMet` is the verdict; `owed` is how far a half-satisfied pair got, which a
+/// verdict alone cannot distinguish from a pair that never started.
 enum Drain {
 
     /// One thing that can arrive, mirroring the five ways to move an
     /// `Expectation` forward.
     ///
-    /// `empty` is not a separate mechanism — a screen change is every element
-    /// going away, a moment of nothing, then elements arriving, and this is that
-    /// moment. It is here as its own case only because writing `.tree([])` at
-    /// every boundary hides what the boundary is.
+    /// `empty` is not a separate mechanism — it is the moment of nothing between
+    /// every element going away and the new ones arriving. It has its own case
+    /// because writing `.tree([])` at every boundary hides what the boundary is.
     enum Tick {
         case tree([TestInterfaceNode])
         case empty
@@ -43,8 +38,7 @@ enum Drain {
     ///
     /// The trailing `still` that ends every real run is *not* added here.
     /// Settlement is half of `isMet`, so appending one silently would make every
-    /// claim about stillness unstateable — a run that never went quiet is a real
-    /// run, and rows say so by leaving `.still` off.
+    /// claim about stillness unstateable. Rows say so by leaving `.still` off.
     static func run(
         _ predicates: [AccessibilityPredicate],
         through ticks: [Tick]
@@ -53,7 +47,7 @@ enum Drain {
         for tick in ticks {
             switch tick {
             case .tree(let nodes):
-                expectation.snapshot(makeTestInterface(nodes: nodes))
+                expectation.snapshot(makeTestCapture(nodes: nodes))
             case .empty:
                 expectation.empty(at: Date(timeIntervalSince1970: 0))
             case .screen(let id):
@@ -64,7 +58,10 @@ enum Drain {
                 expectation.noChange()
             }
         }
-        return Outcome(isMet: expectation.isMet, outstanding: expectation.outstanding)
+        return Outcome(
+            isMet: expectation.isMet,
+            outstanding: expectation.outstanding.map(\.description)
+        )
     }
 
     /// What a run came to.
@@ -76,8 +73,7 @@ enum Drain {
         ///
         /// The gate is in `outstanding` on every tick that was not stillness, so
         /// leaving it in makes every count off by one depending on how the run
-        /// ended. Claims about the gate read `isMet`; claims about predicates
-        /// read this.
+        /// ended.
         var owed: [String] {
             outstanding.filter { $0 != "the tree to stop changing" }
         }
@@ -118,9 +114,6 @@ struct DrainClaim {
 extension XCTestCase {
 
     /// Check every claim, reporting each failure against the claim that made it.
-    ///
-    /// One loop rather than one test per claim: a table where a shape with no row
-    /// is a visible hole only works if adding a row costs a line.
     func check(
         _ claims: [DrainClaim],
         file: StaticString = #filePath,

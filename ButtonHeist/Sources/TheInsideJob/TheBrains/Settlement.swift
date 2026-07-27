@@ -78,11 +78,10 @@ extension Settlement {
     /// Where the run's readings start.
     ///
     /// This names one moment in the observation stream, not a tree to measure
-    /// against. Everything the run may read — observations, announcement
-    /// history — is what arrives at or after this moment; anything earlier
-    /// belongs to some other run. A caller that already holds a settled moment
-    /// supplies it so a nested run reads from the same place its parent
-    /// stopped; otherwise the run captures one first.
+    /// against: anything arriving earlier belongs to some other run. A caller
+    /// that already holds a settled moment supplies it so a nested run reads
+    /// from the same place its parent stopped; otherwise the run captures one
+    /// first.
     internal enum Baseline: Sendable, Equatable {
         case capture
         case supplied(EvidenceBoundary)
@@ -206,9 +205,8 @@ extension Settlement.Predicate {
 
         /// What the caller is still waiting for, in authored order.
         ///
-        /// This is the whole decision. An expectation with no authored
-        /// predicate still waits for stillness, which is what settling always
-        /// meant, so there is no second path for the unasked case.
+        /// An expectation with no authored predicate still waits for stillness,
+        /// so there is no second path for the unasked case.
         internal var expectation: Expectation
 
         internal init(predicate: Settlement.Predicate?) {
@@ -390,24 +388,15 @@ extension Settlement {
 
     internal struct ObservationAdmission: Sendable, Equatable {
         internal let event: Observation.SnapshotEvent
-        internal let history: Observation.EventsSince
         internal let source: ObservationAdmissionSource
         internal let instant: ContinuousClock.Instant
 
         internal init(
             event: Observation.SnapshotEvent,
-            history: Observation.EventsSince,
             source: ObservationAdmissionSource = .observation,
             instant: ContinuousClock.Instant = RuntimeElapsed.now
         ) {
-            if case .events(let events) = history {
-                precondition(
-                    events.contains(.snapshot(event)),
-                    "Settlement admission history must contain its observation event"
-                )
-            }
             self.event = event
-            self.history = history
             self.source = source
             self.instant = instant
         }
@@ -523,7 +512,8 @@ extension Settlement.Result {
         internal let boundary: Settlement.EvidenceBoundary
         internal let readiness: Settlement.Readiness.Establishment
         internal let handoff: Settlement.Handoff.Admission
-        internal let history: Observation.EventsSince?
+        /// The ticks the run observed, which the trace projects from.
+        internal let tickLog: TickLog
         internal var timing: Timing
     }
 
@@ -531,10 +521,13 @@ extension Settlement.Result {
         internal let predicate: Settlement.Predicate
         internal let boundary: Settlement.BoundaryEvidence
         /// What the run was still waiting on, head first.
-        internal let outstanding: [String]
+        internal let outstanding: [PendingPredicate]
         internal let readiness: Settlement.Readiness.Evidence
         internal let handoff: Settlement.Handoff.Evidence
-        internal let history: Observation.EventsSince?
+        /// The ticks the run observed, which the trace projects from.
+        internal let tickLog: TickLog
+        /// The newest observation the run admitted, if any arrived.
+        internal let latestObservation: Observation.SnapshotEvent?
         internal var timing: Timing
     }
 
@@ -566,7 +559,8 @@ extension Settlement.Result {
         internal let dispatch: TheSafecracker.ActionDispatchResult
         internal let readiness: Settlement.Readiness.Establishment
         internal let handoff: Settlement.Handoff.Admission
-        internal let history: Observation.EventsSince?
+        /// The ticks the run observed, which the trace projects from.
+        internal let tickLog: TickLog
         internal var timing: Timing
     }
 
@@ -575,10 +569,13 @@ extension Settlement.Result {
         internal let boundary: Settlement.BoundaryEvidence
         internal let dispatch: ActionDispatch
         /// What the run was still waiting on, head first.
-        internal let outstanding: [String]
+        internal let outstanding: [PendingPredicate]
         internal let readiness: Settlement.Readiness.Evidence
         internal let handoff: Settlement.Handoff.Evidence
-        internal let history: Observation.EventsSince?
+        /// The ticks the run observed, which the trace projects from.
+        internal let tickLog: TickLog
+        /// The newest observation the run admitted, if any arrived.
+        internal let latestObservation: Observation.SnapshotEvent?
         internal var timing: Timing
     }
 
@@ -653,7 +650,12 @@ extension Settlement {
         internal var requirement: Predicate.Requirement
         internal var readiness: Readiness.Evidence
         internal var handoff: Handoff.Evidence
-        internal var observationHistory: Observation.EventsSince?
+        /// The ticks this run has seen, in order.
+        ///
+        /// The run's whole record of what it observed. Reporting projects the
+        /// trace off this rather than keeping a second list of events beside
+        /// it, so there is nothing to reconcile.
+        internal var tickLog = TickLog()
         internal var latestObservation: ObservationAdmission?
         internal var timing: ExecutionTiming
         internal var phase: Phase
@@ -674,10 +676,11 @@ extension Settlement {
             // the first tick. A delta's opening half — `missing(X)` for an
             // appearance, `exists(X)` for a disappearance — is a claim about
             // this tree, and nothing later in the timeline can answer it.
-            self.requirement.expectation.snapshot(boundary.moment.capture.interface)
+            self.tickLog.append(
+                self.requirement.expectation.snapshot(boundary.moment.capture)
+            )
             self.readiness = .pending(.initial)
             self.handoff = .pending(.initial)
-            self.observationHistory = nil
             self.latestObservation = nil
             self.timing = timing
             self.phase = switch command {

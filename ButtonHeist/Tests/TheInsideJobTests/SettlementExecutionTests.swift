@@ -63,10 +63,12 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
     }
     func testObservationProducerGracefullyStopsAfterSettlementMatch() async {
         let baseline = await commit(label: "Baseline")
-        let changed = await commit(label: "Changed")
+        let reading = await commitSettling(label: "Changed")
+        let changed = reading.changed
         let boundary = ScriptedSettlementBoundary(
             baseline: baseline,
             changed: changed,
+            settling: reading.settled,
             history: .events([.snapshot(changed)]),
             observationOnlyEvidence: true,
             longRunningObservationEffects: true
@@ -184,12 +186,14 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
 
     func testExecutorWaitsForBoundaryFinalizationBeforeReturningOrLogging() async {
         let baseline = await commit(label: "Baseline")
-        let changed = await commit(label: "Changed")
+        let reading = await commitSettling(label: "Changed")
+        let changed = reading.changed
         let gate = FinalizationGate()
         let probe = SettlementCompletionProbe()
         let boundary = ScriptedSettlementBoundary(
             baseline: baseline,
             changed: changed,
+            settling: reading.settled,
             history: .events([.snapshot(changed)]),
             observationOnlyEvidence: true,
             finalizationGate: gate
@@ -221,11 +225,13 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
 
     func testFailedViewportRestorationReplacesSettledObservationTruth() async {
         let baseline = await commit(label: "Baseline")
-        let changed = await commit(label: "Changed")
+        let reading = await commitSettling(label: "Changed")
+        let changed = reading.changed
         let probe = SettlementCompletionProbe()
         let boundary = ScriptedSettlementBoundary(
             baseline: baseline,
             changed: changed,
+            settling: reading.settled,
             history: .events([.snapshot(changed)]),
             observationOnlyEvidence: true,
             viewportExit: .failed(.originUnavailable)
@@ -240,7 +246,9 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
             return XCTFail("Expected failed restoration to replace settled observation")
         }
         XCTAssertEqual(failed.reason, .viewportExitFailed(.originUnavailable))
-        XCTAssertEqual(result.currentObservation?.moment, changed.moment)
+        // The current observation is the newest reading the run took, which is
+        // the quiet one that followed the change.
+        XCTAssertEqual(result.currentObservation?.moment, reading.settled.moment)
         XCTAssertEqual(probe.logs.count, 1)
         XCTAssertTrue(probe.logs[0].contains("viewportExitFailed(originUnavailable)"))
     }
@@ -248,10 +256,12 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
     func testStaleCaptureGenerationIsRejectedBeforeAdmission() async {
         let baseline = await commit(label: "Baseline")
         let stale = await commit(label: "Stale")
-        let current = await commit(label: "Current")
+        let currentReading = await commitSettling(label: "Current")
+        let current = currentReading.changed
         let boundary = ScriptedSettlementBoundary(
             baseline: baseline,
             changed: stale,
+            settling: currentReading.settled,
             history: .events([.snapshot(stale), .snapshot(current)]),
             captureScenario: .invalidateOnce(current: current)
         )
@@ -268,10 +278,12 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
     func testRecaptureKeepsOnlyLatestGenerationWhileCaptureIsInFlight() async {
         let baseline = await commit(label: "Baseline")
         let stale = await commit(label: "Stale")
-        let current = await commit(label: "Current")
+        let currentReading = await commitSettling(label: "Current")
+        let current = currentReading.changed
         let boundary = ScriptedSettlementBoundary(
             baseline: baseline,
             changed: stale,
+            settling: currentReading.settled,
             history: .events([.snapshot(stale), .snapshot(current)]),
             captureScenario: .invalidateTwice(current: current)
         )
@@ -572,6 +584,7 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
     private var state = State()
     private let baseline: Observation.SnapshotEvent
     private let changed: Observation.SnapshotEvent
+    private let settling: Observation.SnapshotEvent?
     private let announcement: Observation.AnnouncementEvent?
     private let history: Observation.EventsSince
     private let observationOnlyEvidence: Bool
@@ -585,6 +598,7 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
     init(
         baseline: Observation.SnapshotEvent,
         changed: Observation.SnapshotEvent,
+        settling: Observation.SnapshotEvent? = nil,
         announcement: Observation.AnnouncementEvent? = nil,
         history: Observation.EventsSince,
         observationOnlyEvidence: Bool = false,
@@ -597,6 +611,7 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
     ) {
         self.baseline = baseline
         self.changed = changed
+        self.settling = settling
         self.announcement = announcement
         self.history = history
         self.observationOnlyEvidence = observationOnlyEvidence
@@ -681,12 +696,33 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
                 case .invalidateOnce(let current),
                      .invalidateTwice(let current):
                     if generation.rawValue > 0 {
+                        // The handoff's own reading is a change, so the run still
+                        // needs the quiet one after it to settle.
+                        observeQuietReading()
                         return .admitted(current)
                     }
                 }
             }
             return .admitted(changed)
         }
+    }
+
+    /// Delivers the changed reading, then the quiet one that follows it.
+    ///
+    /// A live tree keeps being read after it moves, and the reading that finds
+    /// nothing new is the only proof of stillness there is — so a run needs it to
+    /// settle. A boundary that stopped at the change would be scripting a tree
+    /// that was still moving when the run ended.
+    private func observeChangedThenQuiet(into sink: Settlement.ExecutionSink) {
+        sink.observe(.snapshot(changed))
+        observeQuietReading(into: sink)
+    }
+
+    /// Delivers the quiet reading, if this boundary was given one.
+    private func observeQuietReading(into sink: Settlement.ExecutionSink? = nil) {
+        guard let settling,
+              let sink = sink ?? lock.withLock({ state.sink }) else { return }
+        sink.observe(.snapshot(settling))
     }
 
     func events(since moment: Observation.Moment) async -> Observation.EventsSince {
@@ -739,12 +775,12 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
             return
         }
         if operations.contains(.dispatch) {
-            sink.observe(.snapshot(changed))
+            observeChangedThenQuiet(into: sink)
             if let announcement {
                 sink.observeAnnouncement(announcement)
             }
         } else if observationOnlyEvidence {
-            sink.observe(.snapshot(changed))
+            observeChangedThenQuiet(into: sink)
         } else if case .none = captureScenario {
             return
         }

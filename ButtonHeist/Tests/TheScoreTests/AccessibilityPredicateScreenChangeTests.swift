@@ -15,9 +15,8 @@ extension AccessibilityPredicateTests {
         XCTAssertEqual(decoded, predicate)
     }
 
-    /// The name is the whole point of a named screen predicate, so it has to
-    /// survive the wire. A nameless one round-trips without exercising the
-    /// `match` key at all, which is how a decoder that rejected it stayed green.
+    /// A nameless predicate round-trips without exercising the `match` key at
+    /// all, which is how a decoder that dropped the name stayed green.
     func testANamedScreenPredicateKeepsItsNameAcrossTheWire() throws {
         for match in [StringMatch.exact("Settings"), .contains("Sett"), .prefix("Set")] {
             let predicate = AccessibilityPredicate.screenChanged(match)

@@ -36,10 +36,8 @@ extension Settlement {
                 fields = common(
                     command: .observation,
                     predicate: .outstanding(failed.attempt.outstanding),
-                    observation: latestObservation(
-                        history: failed.attempt.history,
-                        handoff: failed.attempt.handoff.event
-                    ),
+                    observation: failed.attempt.handoff.event
+                        ?? failed.attempt.latestObservation,
                     readiness: .evidence(failed.attempt.readiness),
                     handoff: .evidence(failed.attempt.handoff),
                     outcome: .observationFailure(failed.reason),
@@ -59,11 +57,12 @@ extension Settlement {
             case .action(.failed(let failed)):
                 fields = common(
                     command: .action,
-                    predicate: .outstanding(failed.attempt.outstanding),
-                    observation: latestObservation(
-                        history: failed.attempt.history,
-                        handoff: failed.attempt.handoff.event
+                    predicate: .asked(
+                        failed.attempt.command.predicate,
+                        outstanding: failed.attempt.outstanding
                     ),
+                    observation: failed.attempt.handoff.event
+                        ?? failed.attempt.latestObservation,
                     dispatch: .evidence(failed.attempt.dispatch),
                     readiness: .evidence(failed.attempt.readiness),
                     handoff: .evidence(failed.attempt.handoff),
@@ -113,17 +112,27 @@ extension Settlement.TerminalLog {
     internal enum PredicateState {
         case notRequired
         case satisfied
-        case outstanding([String])
+        case outstanding([PendingPredicate])
 
         /// The tip of the list is the whole story: everything behind it was
         /// never asked, so naming more would report on questions nobody put.
+        ///
+        /// An empty list is `satisfied` and not `notRequired`: only a caller
+        /// holding the command knows whether a predicate was asked at all, so
+        /// that distinction is made where the state is built.
         var rendered: String {
             switch self {
             case .notRequired: "notRequired"
             case .satisfied: "satisfied"
             case .outstanding(let outstanding):
-                outstanding.first.map { "waiting(\($0))" } ?? "satisfied"
+                outstanding.first.map { "waiting(\($0.description))" } ?? "satisfied"
             }
+        }
+
+        /// The state for a run that owed `outstanding`, where a caller that
+        /// named no predicate is reported as having been asked nothing.
+        static func asked(_ predicate: Settlement.Predicate?, outstanding: [PendingPredicate]) -> Self {
+            predicate == nil ? .notRequired : .outstanding(outstanding)
         }
     }
 
@@ -221,20 +230,6 @@ extension Settlement.TerminalLog {
                 "viewportExitFailed(\(reason))"
             }
         }
-    }
-}
-
-private extension Settlement.TerminalLog {
-    static func latestObservation(
-        history: Observation.EventsSince?,
-        handoff: Observation.SnapshotEvent?
-    ) -> Observation.SnapshotEvent? {
-        if let handoff { return handoff }
-        guard case .events(let events) = history else { return nil }
-        return events.reversed().lazy.compactMap {
-            guard case .snapshot(let snapshot) = $0 else { return nil }
-            return snapshot
-        }.first
     }
 }
 

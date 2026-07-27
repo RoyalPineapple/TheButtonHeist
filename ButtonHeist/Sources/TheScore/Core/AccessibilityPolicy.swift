@@ -46,9 +46,6 @@ public enum AccessibilityMatcherFact: Sendable, Equatable {
 /// withdraws interactivity is expressed by excluding it at the call site
 /// (`.exclude(.traits([.notEnabled]))`), not by joining the set.
 ///
-/// Nothing consults identity/state and interactivity together, so overlap
-/// between the axes costs nothing.
-///
 /// Rules:
 /// - Add a new state trait → edit `stateTraits` only.
 /// - Add a new interactive trait → edit `interactiveTraits` only.

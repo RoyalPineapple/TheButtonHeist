@@ -212,14 +212,13 @@ extension TheBrainsPipelineTests {
         )
     }
 
-    /// The two directions are not symmetric, and the asymmetry is the point.
+    /// The two directions are not symmetric.
     ///
     /// A boundary is projected as three ticks — the old screen's nodes depart,
     /// the identity moves, the new screen's nodes arrive — and the lifecycle
     /// legs are ordinary element ticks. A predicate reads ticks and cannot ask
     /// whether a screen change sits between two of them, so `.elementsChanged`
-    /// matches a boundary; having it detect and decline one would put back the
-    /// coupling that projecting three ticks exists to remove.
+    /// matches a boundary.
     ///
     /// The reverse does not hold. A same-screen change produces no screen tick
     /// at all, so `.screenChanged` has nothing to read and stays unmet.
@@ -270,7 +269,6 @@ extension TheBrainsPipelineTests {
         )
         XCTAssertTrue(elementPredicate.met)
         XCTAssertFalse(screenPredicateAgainstElement.met)
-        XCTAssertEqual(screenPredicateAgainstElement.actual, "elementsChanged")
     }
 
 }

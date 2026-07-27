@@ -3,8 +3,7 @@ import Foundation
 /// What a caller can assert about one element.
 ///
 /// `exists` and `missing` ask about a moment and are one leg. The other three ask
-/// about a change and are two, in order — which is why they sit beside the legs
-/// they decompose into rather than in a type of their own.
+/// about a change and are two, in order.
 public enum ElementAssertion: Codable, Sendable, Equatable {
     case exists(AccessibilityTarget)
     case missing(AccessibilityTarget)
@@ -35,10 +34,9 @@ public struct AccessibilityPredicate: Codable, Sendable, Equatable {
 
     /// What a caller can ask of a run.
     ///
-    /// Each case is a question about one kind of evidence — which is why they
-    /// are siblings rather than one `changed` case with a scope inside it.
-    /// Stillness is not here: it is the settlement gate, which every run holds
-    /// and nobody authors.
+    /// Each case is a question about one kind of evidence. Stillness is not
+    /// here: it is the settlement gate, which every run holds and nobody
+    /// authors.
     ///
     /// `presence` is the odd one and is not a kind of evidence: it is a search
     /// against whatever tree is current, and it is also the leg the element
@@ -127,8 +125,7 @@ package enum ResolvedElementAssertion: Sendable, Equatable {
 
 package enum ResolvedAccessibilityPredicate: Sendable, Equatable {
     /// A search against the tree as it is. Also the leg every element assertion
-    /// decomposes into, which is why these two sit here beside the questions a
-    /// caller writes.
+    /// decomposes into.
     case exists(ResolvedAccessibilityTarget)
     case missing(ResolvedAccessibilityTarget)
 
@@ -446,9 +443,8 @@ private enum AccessibilityPredicateWireCodec {
 extension AccessibilityPredicate: CustomStringConvertible {
     /// The predicate as you would have written it.
     ///
-    /// A predicate is a thing the DSL can express, so it describes itself in the
-    /// DSL rather than in a second vocabulary invented for reports: a failure
-    /// message names something you can paste back into a heist.
+    /// Rendered in the DSL rather than a second vocabulary invented for reports,
+    /// so a failure message names something you can paste back into a heist.
     public var description: String {
         CanonicalDSLDescription.render(self) { try $0.render(predicate: self, environment: $1) }
     }

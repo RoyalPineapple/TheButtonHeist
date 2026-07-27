@@ -36,6 +36,7 @@ extension Settlement {
     internal final class ObservationEffectControl: @unchecked Sendable {
         private let lock = NSLock()
         private var state = ObservationEffectState.active
+        private var stopWaiters: [CheckedContinuation<Void, Never>] = []
 
         internal var stopRequested: Bool {
             lock.withLock {
@@ -54,11 +55,38 @@ extension Settlement {
             lock.withLock { state }
         }
 
-        internal func requestStop() {
-            lock.withLock {
-                guard case .active = state else { return }
-                state = .stopRequested
+        /// Suspends until a stop is requested.
+        ///
+        /// Long-running observation work must await this rather than poll
+        /// `stopRequested`. A poll loop driven by `Task.yield()` never suspends,
+        /// so it re-enqueues itself on the cooperative pool and starves the
+        /// executor that would have requested the stop.
+        internal func waitForStop() async {
+            let alreadyStopped = lock.withLock {
+                switch state {
+                case .active: false
+                case .stopRequested, .completed: true
+                }
             }
+            guard !alreadyStopped else { return }
+            await withCheckedContinuation { continuation in
+                let resumeNow = lock.withLock { () -> Bool in
+                    guard case .active = state else { return true }
+                    stopWaiters.append(continuation)
+                    return false
+                }
+                if resumeNow { continuation.resume() }
+            }
+        }
+
+        internal func requestStop() {
+            let waiters = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
+                guard case .active = state else { return [] }
+                state = .stopRequested
+                defer { stopWaiters.removeAll() }
+                return stopWaiters
+            }
+            waiters.forEach { $0.resume() }
         }
 
         internal func complete() {
@@ -660,11 +688,7 @@ extension Settlement {
                       !admittedMoments.contains(event.moment) else { return nil }
                 admittedMoments.append(event.moment)
                 return AdmittedSettlementFact(
-                    fact: .observationAdmitted(.init(
-                        event: event,
-                        history: await boundary.events(since: baseline),
-                        instant: instant
-                    )),
+                    fact: .observationAdmitted(.init(event: event, instant: instant)),
                     instant: instant
                 )
             case .observationHistoryUnavailable(let history):
@@ -717,13 +741,12 @@ extension Settlement {
             case .captureCompleted(.handoff(let request), let completion, let instant):
                 switch completion.outcome {
                 case .admitted(let event):
-                    guard let baseline = state.session?.boundary.moment,
+                    guard state.session != nil,
                           !admittedMoments.contains(event.moment) else { return nil }
                     admittedMoments.append(event.moment)
                     return AdmittedSettlementFact(
                         fact: .observationAdmitted(.init(
                             event: event,
-                            history: await boundary.events(since: baseline),
                             source: .handoffCapture(request.readinessGeneration),
                             instant: instant
                         )),

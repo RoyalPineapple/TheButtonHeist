@@ -67,8 +67,7 @@ extension Observation {
         ///
         /// Paired with `semanticHash` to ask whether the tree moved at all:
         /// semantics catch a label or a value changing, placements catch an
-        /// element still sliding into position. A reading that matches on both
-        /// is the still one.
+        /// element still sliding into position.
         ///
         /// Held as frames rather than a digest because the comparison is a
         /// tolerance, not an equality: "within 8pt of" has nothing to hash.
@@ -176,8 +175,8 @@ extension Observation {
         /// Where the read tree's visible elements sat. Only the viewport has
         /// live geometry, so only the viewport is asked.
         internal let viewportFrames: [HeistId: CGRect]
-        /// The device's touch-target size, read here because the comparison
-        /// that uses it runs off the main actor.
+        /// The device's touch-target size, captured eagerly because the
+        /// comparison that uses it runs off the main actor.
         internal let placementTolerance: CGFloat
     }
 

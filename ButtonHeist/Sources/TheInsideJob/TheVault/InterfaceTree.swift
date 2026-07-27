@@ -63,8 +63,9 @@ struct InterfaceTree: Sendable, Equatable {
     /// question that the semantic hash cannot answer.
     ///
     /// Only viewport elements carry live geometry, so only they are asked.
-    /// Placements round to the touch-target grid, which is what keeps sub-pixel
-    /// layout noise from holding settlement open forever.
+    /// Frames are exact here; the comparison that reads them applies a
+    /// touch-target tolerance, which is what keeps sub-pixel layout noise from
+    /// holding settlement open forever. See `CoarseFrameComparison`.
     var viewportFrames: [HeistId: CGRect] {
         var frames: [HeistId: CGRect] = [:]
         for heistId in viewportElementIDs {
