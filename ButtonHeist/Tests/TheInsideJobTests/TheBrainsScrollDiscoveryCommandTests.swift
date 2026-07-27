@@ -118,7 +118,7 @@ extension TheBrainsScrollTests {
         XCTAssertNil(discovered?.event.snapshot.observation.tree.findElement(heistId: "stale_controls_button"))
     }
 
-    func testInterfaceDiscoveryDoesNotGraftStaleRowsFromReusedScrollContainerName() async throws {
+    func testFreshDiscoveryDropsRowsRememberedFromAnEarlierTree() async throws {
         let rootView = UIView()
         rootView.backgroundColor = .white
         let scrollView = AccessibilityRevealingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 600))
@@ -196,7 +196,7 @@ extension TheBrainsScrollTests {
         XCTAssertTrue(labels.contains("zymurgy"), "Expected scrolled word in discovered interface: \(labels)")
         XCTAssertFalse(
             labels.contains("Auto-Settle Fixtures"),
-            "Stale root rows must not be grafted into the current scroll container: \(labels)"
+            "A fresh discovery reports the screen as it is now: \(labels)"
         )
     }
 

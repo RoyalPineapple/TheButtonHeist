@@ -418,6 +418,7 @@ extension Observation.Stream {
         return CommittableInterfaceObservation.admitCaptured(
             reading,
             tripwireSignal: tripwireSignal,
+            discoveryCommitPolicy: discoveryCommitPolicy,
             lineageEvidence: lineageEvidence
         )
     }

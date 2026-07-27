@@ -266,11 +266,13 @@ internal struct CommittableInterfaceObservation {
     internal static func admitCaptured(
         _ observation: InterfaceObservation,
         tripwireSignal: TheTripwire.TripwireSignal,
+        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
         lineageEvidence: ScreenLineageEvidence? = nil
     ) -> Self {
         Self(
             observation: observation,
             tripwireSignal: tripwireSignal,
+            discoveryCommitPolicy: discoveryCommitPolicy,
             lineageEvidence: lineageEvidence
         )
     }
