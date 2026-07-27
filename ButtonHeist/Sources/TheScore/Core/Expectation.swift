@@ -44,7 +44,7 @@ package enum Tick: Sendable, Equatable {
         var hasher = Hasher()
         switch self {
         case .elementsChanged(let capture):
-            hasher.combine(capture.interface.projectedElements)
+            capture.interface.hashSemantic(into: &hasher)
         case .screenChanged(let facts):
             hasher.combine(facts.idAfter)
         case .announcement(let spoken):
@@ -158,6 +158,18 @@ package struct PendingPredicate: Equatable, Sendable {
     }
 }
 
+/// One authored assertion, and how much of it is left to fulfil.
+///
+/// Three states, which are the three things a step can be. A `presence` asks
+/// about a moment. An `awaitingBefore` asks about a change, which is two
+/// predicates fulfilled in order on readings that differ. An `awaitingAfter` is
+/// that change with its first predicate fulfilled: it holds the reading that
+/// fulfilled it, so the one still owed can be asked to differ from it.
+///
+/// The pairing is a state rather than an array because it is the meaning. When
+/// only the first predicate is fulfilled, the second has to keep its own place,
+/// or a leftover `exists(X)` is indistinguishable from an unrelated predicate
+/// that happened to land at that index.
 struct PendingStep: Equatable {
     private enum State: Equatable {
         case presence(PendingPredicate)
@@ -196,29 +208,55 @@ struct PendingStep: Equatable {
     /// The predicates this step is still waiting on, in order.
     var pending: [PendingPredicate] {
         switch state {
-        case .presence(let predicate):
-            return [predicate]
-        case .awaitingBefore(let before, let after):
-            return [before, after]
-        case .awaitingAfter(let after, _):
-            return [after]
+        case .presence(let predicate): return [predicate]
+        case .awaitingBefore(let before, let after): return [before, after]
+        case .awaitingAfter(let after, _): return [after]
         }
     }
 
-    func evaluate(_ tick: Tick) -> Self? {
+    /// What a step says about a tick it was offered.
+    ///
+    /// Three answers, and only one of them stops the tick. Yes and don't-care
+    /// both pass it to the step behind; a no keeps it, because everything behind
+    /// this step comes after it.
+    enum Answer: Equatable {
+        /// Not this step's lane. It has no opinion and the tick carries on.
+        case indifferent
+        /// The offered predicate is fulfilled and a predicate is still owed.
+        /// This is the step waiting on it.
+        case awaiting(PendingStep)
+        /// Every predicate of the step is fulfilled, so it drains.
+        case drained
+        /// The offered predicate is not fulfilled. The tick goes no further.
+        case unfulfilled
+    }
+
+    /// Offer this step a tick.
+    ///
+    /// Exactly one predicate is offered — the head, because the ones behind it
+    /// in a step are unreachable until it is fulfilled. So a change's second leg
+    /// is never offered the tick that fulfilled its first.
+    ///
+    /// What fulfils the first leg is hashed at the scope its assertion named: a
+    /// property, an element, or the whole tree. The second leg has to match
+    /// something that hashes differently at that same scope, which is the whole
+    /// of what makes the pair a change.
+    func offered(_ tick: Tick) -> Answer {
         switch state {
         case .presence(let predicate):
-            guard predicate.reads(tick), predicate.matches(tick) else { return self }
-            return nil
+            guard predicate.reads(tick) else { return .indifferent }
+            guard predicate.matches(tick) else { return .unfulfilled }
+            return .drained
         case .awaitingBefore(let before, let after):
-            guard before.reads(tick), let reading = before.matching(tick) else { return self }
-            return Self(.awaitingAfter(after, fulfilledAt: reading))
+            guard before.reads(tick) else { return .indifferent }
+            guard let reading = before.matching(tick) else { return .unfulfilled }
+            return .awaiting(Self(.awaitingAfter(after, fulfilledAt: reading)))
         case .awaitingAfter(let after, let fulfilledAt):
-            guard after.reads(tick),
-                  let arrived = after.matching(tick),
-                  arrived != fulfilledAt
-            else { return self }
-            return nil
+            guard after.reads(tick) else { return .indifferent }
+            guard let arrived = after.matching(tick), arrived != fulfilledAt else {
+                return .unfulfilled
+            }
+            return .drained
         }
     }
 }
@@ -247,7 +285,32 @@ package struct Expectation: Equatable, Sendable {
     /// same answer.
     package func folding(_ ticks: some Sequence<Tick>) -> Self {
         ticks.reduce(into: self) { expectation, tick in
-            expectation.pending = expectation.pending.compactMap { $0.evaluate(tick) }
+            expectation.pending = Self.draining(expectation.pending, tick)
+        }
+    }
+
+    /// The list after one tick has flowed through it.
+    ///
+    /// An authored list is a narrative — this happened, then this happened, then
+    /// this happened — so a tick is offered to the steps in order. A step that
+    /// is indifferent or fulfilled passes it to the next; one that is not
+    /// fulfilled keeps it, and the tick goes no further, because everything
+    /// behind that step comes after it. A step with every predicate fulfilled
+    /// drains; one with a predicate left waits where it is.
+    ///
+    /// One tick can therefore fulfil a predicate in several consecutive steps,
+    /// which is what keeps the verdict independent of how finely the tripwire
+    /// sampled, and is what lets two things swapped in one frame both be read:
+    /// the tree still holding the old one fulfils the arrival's `missing` and
+    /// then the departure's `exists` behind it.
+    private static func draining(_ pending: [PendingStep], _ tick: Tick) -> [PendingStep] {
+        guard let next = pending.first else { return [] }
+        let behind = { draining(Array(pending.dropFirst()), tick) }
+        switch next.offered(tick) {
+        case .indifferent: return [next] + behind()
+        case .awaiting(let step): return [step] + behind()
+        case .drained: return behind()
+        case .unfulfilled: return pending
         }
     }
 
@@ -369,7 +432,6 @@ extension AssertableProperty {
         }
     }
 }
-
 
 extension ResolvedAccessibilityPredicate {
     var pendingSteps: [PendingStep] {

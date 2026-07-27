@@ -8,51 +8,68 @@ import XCTest
 /// the list is empty; until the timeout fires, an outstanding list is not a
 /// failure but a list of things still being waited on.
 ///
-/// These tests are about the reduction — which predicates leave, and when. One
-/// tree answers every question it can at once; the only order that survives is
-/// inside the pair a delta composes into. What a delta composes into is
-/// `ElementAssertionCompositionTests`.
+/// These tests are about the reduction — which predicates leave, and when. An
+/// authored list is a narrative: this happened, then this happened, then this
+/// happened. A tick walks it from the front and stops at the first predicate
+/// that refuses, so a beat holds every beat behind it. What a delta composes
+/// into is `ElementAssertionCompositionTests`.
 final class ExpectationTests: XCTestCase {
 
-    // MARK: - One tree answers everything it can
+    // MARK: - The list is read in the order it was written
 
-    /// Every element question is `exists` or `missing` against one tree, so a
-    /// snapshot answers as many of them as it can at once. An unsatisfied
-    /// predicate is not a barrier: the one behind it was answered by the same
-    /// graph.
-    func testAnUnsatisfiedPredicateDoesNotBlockOneTheSameTreeAnswers() throws {
+    /// A predicate the tree does not answer is a barrier. The one behind it is a
+    /// later beat in the narrative, and a later beat cannot be evidenced by a
+    /// tree that has not yet supplied the earlier one.
+    func testAnUnsatisfiedPredicateBlocksTheOneBehindIt() throws {
         var expectation = try Expectation([exists("Absent"), exists("Present")])
 
         expectation = expectation.folding([.elementsChanged(interface(["Present"]))])
 
         XCTAssertEqual(
-            expectation.outstanding.count, 1,
-            "Present drained; only Absent is left"
+            expectation.outstanding.count, 2,
+            "Absent never arrived, so Present is still waiting its turn"
         )
     }
 
+    /// The head drains on the tick that answers it, and only then is the next
+    /// beat asked anything.
     func testAPredicateDrainsOnTheTickThatAnswersIt() throws {
-        var expectation = try Expectation([exists("Late"), exists("Early")])
+        var expectation = try Expectation([exists("Early"), exists("Late")])
 
         expectation = expectation.folding([.elementsChanged(interface(["Early"]))])
         XCTAssertEqual(expectation.outstanding.count, 1)
 
-        expectation = expectation.folding([.elementsChanged(interface(["Late", "Early"]))])
+        expectation = expectation.folding([.elementsChanged(interface(["Early", "Late"]))])
         XCTAssertTrue(expectation.isMet)
     }
 
-    /// One settled tree evidences every arrival it holds, so the verdict does
-    /// not depend on how finely the tripwire sampled.
-    func testOneSnapshotSatisfiesEveryPredicateItAnswers() throws {
+    /// One settled tree evidences every consecutive beat it holds, so the
+    /// verdict does not depend on how finely the tripwire sampled.
+    func testOneSnapshotSatisfiesEveryConsecutivePredicateItAnswers() throws {
         var expectation = try Expectation([
-            exists("A"), exists("B"), exists("Never"), exists("C"),
+            exists("A"), exists("B"), exists("C"), exists("Never"),
         ])
 
         expectation = expectation.folding([.elementsChanged(interface(["A", "B", "C"]))])
 
         XCTAssertEqual(
             expectation.outstanding.count, 1,
-            "A, B and C all drained; only Never is left"
+            "A, B and C all drained from the one tree; only Never is left"
+        )
+    }
+
+    /// The walk stops at the refusal rather than skipping it, so a beat the tree
+    /// answers stays outstanding while an earlier one is unmet.
+    func testAPredicateBehindARefusalWaitsEvenWhenTheTreeAnswersIt() throws {
+        var expectation = try Expectation([
+            exists("A"), exists("Never"), exists("C"),
+        ])
+
+        expectation = expectation.folding([.elementsChanged(interface(["A", "C"]))])
+
+        XCTAssertEqual(
+            expectation.outstanding.count, 2,
+            "A drained; Never blocks, so C is held behind it"
         )
     }
 
