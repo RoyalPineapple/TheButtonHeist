@@ -137,7 +137,7 @@ final class SemanticObservationStoreTests: XCTestCase {
             captureID: observation.captureID,
             tripwireSignal: .empty,
             discoveryCommitPolicy: .mergeIntoInterface,
-            lineageEvidence: nil,
+            lineage: .resting,
             scope: scope,
             notificationAdmission: .action(.init(
                 evidence: [],

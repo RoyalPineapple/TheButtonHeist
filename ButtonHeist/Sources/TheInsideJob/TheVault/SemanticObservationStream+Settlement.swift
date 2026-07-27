@@ -103,7 +103,7 @@ extension Observation.Stream {
             vault: vault,
             tripwireSignal: currentTripwireSignal(),
             discoveryCommitPolicy: discoveryCommitPolicy,
-            lineageEvidence: afterViewportMovement ? .viewportMovement : nil
+            lineage: afterViewportMovement ? .viewportMovement : .resting
         ) else { return nil }
         return await commitSettledDiscoveryObservation(
             committableObservation,
@@ -147,7 +147,7 @@ extension Observation.Stream {
             captureID: sourceObservation.captureID,
             tripwireSignal: committableObservation.tripwireSignal,
             discoveryCommitPolicy: committableObservation.discoveryCommitPolicy,
-            lineageEvidence: committableObservation.lineageEvidence,
+            lineage: committableObservation.lineage,
             scope: scope,
             notificationAdmission: notificationAdmission,
             keyboardVisible: vault.keyboardVisible,
@@ -329,7 +329,8 @@ extension Observation.Stream {
         guard let committableObservation = await admitCurrentObservation(
             captured,
             vault: vault,
-            tripwireSignal: tripwireSignal
+            tripwireSignal: tripwireSignal,
+            lineage: isMovingViewport ? .viewportMovement : .resting
         ) else {
             return ObservationSettlement(commitOutcome: .unavailable)
         }
@@ -404,7 +405,7 @@ extension Observation.Stream {
         vault: TheVault,
         tripwireSignal: TheTripwire.TripwireSignal,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
-        lineageEvidence: ScreenLineageEvidence? = nil
+        lineage: ScreenLineage
     ) async -> CommittableInterfaceObservation? {
         let reading = observation ?? vault.latestObservation
         guard currentTripwireSignal().hierarchy == tripwireSignal.hierarchy else {
@@ -419,7 +420,7 @@ extension Observation.Stream {
             reading,
             tripwireSignal: tripwireSignal,
             discoveryCommitPolicy: discoveryCommitPolicy,
-            lineageEvidence: lineageEvidence
+            lineage: lineage
         )
     }
 

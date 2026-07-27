@@ -181,19 +181,31 @@ extension Observation {
                 scopedScreenChangedCursor: scopedScreenChangedSequence
             )
             let previousTree = interfaceTree
-            let candidateTree = switch admission.scope {
+            // A viewport census covers the whole viewport, so an element missing
+            // from it has gone away. That is what the screen is compared over.
+            // What Button Heist keeps is a wider question: once it is the one
+            // scrolling, leaving the viewport is what the scroll does, and an
+            // element the census no longer sees is still known to be there.
+            let comparedTree: InterfaceTree
+            let candidateTree: InterfaceTree
+            switch admission.scope {
             case .visible:
-                previousTree.updatingViewport(with: admission.tree)
+                comparedTree = previousTree.updatingViewport(with: admission.tree)
+                candidateTree = switch admission.lineage {
+                case .resting: comparedTree
+                case .viewportMovement: previousTree.merging(admission.tree)
+                }
             case .discovery:
-                admission.discoveryCommitPolicy == .replaceInterface
+                comparedTree = admission.discoveryCommitPolicy == .replaceInterface
                     ? admission.tree
                     : previousTree.merging(admission.tree)
+                candidateTree = comparedTree
             }
             let classifiedContinuity = ScreenClassifier.classify(
                 from: previousTree == .empty ? nil : previousTree,
-                to: candidateTree,
+                to: comparedTree,
                 notifications: notifications.kinds,
-                lineageEvidence: admission.lineageEvidence
+                lineage: admission.lineage
             )
             let continuity = replacementRequired
                 ? ScreenContinuity.replacement(.screenChangedNotification)

@@ -742,6 +742,7 @@ private final class ScriptedHeistObservationSource {
     private var remainingUnavailableObservations: Int
     private var previousCapture: AccessibilityTrace.Capture?
     private var nextObservationSequence: SettledObservationSequence = 0
+    private var generation: ScreenGeneration = .initial
     private var log = Observation.Log(retentionLimit: Observation.Store.defaultRetentionLimit)
     private let observedScopes: (@MainActor (SemanticObservationScope) -> Void)?
     private let observedTimeouts: (@MainActor (Double?) -> Void)?
@@ -787,19 +788,38 @@ private final class ScriptedHeistObservationSource {
             return nil
         }
         let sourceEvent = remainingObservations.removeFirst()
-        return (changed: reading(sourceEvent, scope: scope), settled: reading(sourceEvent, scope: scope))
+        return (
+            changed: reading(sourceEvent, scope: scope, continuity: Self.continuity(of: sourceEvent)),
+            settled: reading(sourceEvent, scope: scope, continuity: .sameGeneration)
+        )
+    }
+
+    /// The scripted tree's own account of whether it replaced the screen.
+    ///
+    /// A fixture says so by carrying a `screenChanged` notification, which is
+    /// what the store reads to classify a live reading.
+    private static func continuity(
+        of sourceEvent: Observation.SnapshotEvent
+    ) -> ScreenContinuity {
+        let changedScreen = sourceEvent.moment.capture.transition.accessibilityNotifications.contains {
+            if case .screenChanged = $0.kind { return true }
+            return false
+        }
+        return changedScreen ? .replacement(.screenChangedNotification) : .sameGeneration
     }
 
     /// One reading of `sourceEvent`, recorded after everything read so far.
     private func reading(
         _ sourceEvent: Observation.SnapshotEvent,
-        scope: SemanticObservationScope
+        scope: SemanticObservationScope,
+        continuity: ScreenContinuity
     ) -> Observation.SnapshotEvent {
         nextObservationSequence += 1
         let event = event(
             from: sourceEvent,
             scope: scope,
-            sequence: nextObservationSequence
+            sequence: nextObservationSequence,
+            continuity: continuity
         )
         previousCapture = event.trace.captures.last
         return event
@@ -808,7 +828,8 @@ private final class ScriptedHeistObservationSource {
     private func event(
         from sourceEvent: Observation.SnapshotEvent,
         scope: SemanticObservationScope,
-        sequence: SettledObservationSequence
+        sequence: SettledObservationSequence,
+        continuity: ScreenContinuity
     ) -> Observation.SnapshotEvent {
         let capture = sourceEvent.moment.capture
         let trace = if let previousCapture {
@@ -820,9 +841,12 @@ private final class ScriptedHeistObservationSource {
         } else {
             AccessibilityTrace(capture: capture)
         }
+        if continuity.isReplacement {
+            generation = generation.advanced()
+        }
         let snapshot = Observation.Snapshot(
             sequence: sequence,
-            generation: .initial,
+            generation: generation,
             sourceScope: scope,
             observation: sourceEvent.snapshot.observation,
             semanticSignal: .empty,
@@ -832,7 +856,7 @@ private final class ScriptedHeistObservationSource {
             placementTolerance: sourceEvent.snapshot.placementTolerance
         )
         do {
-            return try log.record(snapshot: snapshot, continuity: .sameGeneration)
+            return try log.record(snapshot: snapshot, continuity: continuity)
         } catch {
             preconditionFailure("Scripted heist produced an invalid observation transition: \(error)")
         }

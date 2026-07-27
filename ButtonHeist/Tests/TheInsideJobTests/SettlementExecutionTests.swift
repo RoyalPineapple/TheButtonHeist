@@ -271,7 +271,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
         guard case .observation(.settled(let settled)) = result else {
             return XCTFail("Expected current capture generation to settle")
         }
-        XCTAssertEqual(settled.handoff.event.moment, current.moment)
+        XCTAssertEqual(settled.handoff.event.moment, currentReading.settled.moment)
         XCTAssertEqual(boundary.admittedHandoffGenerations, [.init(rawValue: 1)])
     }
 

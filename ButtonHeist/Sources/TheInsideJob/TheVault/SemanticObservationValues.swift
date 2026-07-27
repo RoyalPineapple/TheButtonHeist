@@ -167,7 +167,7 @@ extension Observation {
         internal let captureID: InterfaceCaptureID
         internal let tripwireSignal: TheTripwire.TripwireSignal
         internal let discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy
-        internal let lineageEvidence: ScreenLineageEvidence?
+        internal let lineage: ScreenLineage
         internal let scope: SemanticObservationScope
         internal let notificationAdmission: NotificationAdmission
         internal let keyboardVisible: Bool?
@@ -237,29 +237,29 @@ internal struct CommittableInterfaceObservation {
     internal let observation: InterfaceObservation
     internal let tripwireSignal: TheTripwire.TripwireSignal
     internal let discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy
-    internal let lineageEvidence: ScreenLineageEvidence?
+    internal let lineage: ScreenLineage
 
     private init(
         observation: InterfaceObservation,
         tripwireSignal: TheTripwire.TripwireSignal,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
-        lineageEvidence: ScreenLineageEvidence? = nil
+        lineage: ScreenLineage
     ) {
         self.observation = observation
         self.tripwireSignal = tripwireSignal
         self.discoveryCommitPolicy = discoveryCommitPolicy
-        self.lineageEvidence = lineageEvidence
+        self.lineage = lineage
     }
 
     internal static func admittedForTesting(
         _ observation: InterfaceObservation,
         tripwireSignal: TheTripwire.TripwireSignal,
-        lineageEvidence: ScreenLineageEvidence? = nil
+        lineage: ScreenLineage
     ) -> Self {
         admitCaptured(
             observation,
             tripwireSignal: tripwireSignal,
-            lineageEvidence: lineageEvidence
+            lineage: lineage
         )
     }
 
@@ -267,13 +267,13 @@ internal struct CommittableInterfaceObservation {
         _ observation: InterfaceObservation,
         tripwireSignal: TheTripwire.TripwireSignal,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
-        lineageEvidence: ScreenLineageEvidence? = nil
+        lineage: ScreenLineage
     ) -> Self {
         Self(
             observation: observation,
             tripwireSignal: tripwireSignal,
             discoveryCommitPolicy: discoveryCommitPolicy,
-            lineageEvidence: lineageEvidence
+            lineage: lineage
         )
     }
 

@@ -56,6 +56,22 @@ extension Navigation {
         deadline: SemanticObservationDeadline? = nil,
         discoveryCommitPolicy: DiscoveryCommitPolicy = .mergeIntoInterface
     ) async -> ViewportTransition {
+        await vault.semanticObservationStream.movingViewport {
+            await performViewportTransitionMovingViewport(
+                intent,
+                deadline: deadline,
+                discoveryCommitPolicy: discoveryCommitPolicy
+            )
+        }
+    }
+
+    /// Every viewport move Button Heist makes runs here, so a reading taken
+    /// while one is in flight can say the viewport moved and be believed.
+    private func performViewportTransitionMovingViewport(
+        _ intent: ViewportMovementIntent,
+        deadline: SemanticObservationDeadline?,
+        discoveryCommitPolicy: DiscoveryCommitPolicy
+    ) async -> ViewportTransition {
         if Task.isCancelled {
             guard case .restoreVisualOrigin = intent else { return .unavailable() }
         }

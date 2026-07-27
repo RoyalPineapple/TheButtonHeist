@@ -225,6 +225,8 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
             }
             didProduceFreshDiscovery = true
             self.vault.observeInterface(freshDiscovery)
+            await self.vault.semanticObservationStream
+                .commitDiscoveryObservationForTesting(freshDiscovery)
             let event = await self.vault.semanticObservationStream
                 .commitDiscoveryObservationForTesting(freshDiscovery)
             return Navigation.InterfaceExplorationResult(

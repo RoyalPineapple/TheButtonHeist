@@ -60,7 +60,7 @@ final class SemanticObservationLifecycleTests: SemanticObservationStreamTestCase
             captureID: screen.captureID,
             tripwireSignal: .empty,
             discoveryCommitPolicy: .mergeIntoInterface,
-            lineageEvidence: nil,
+            lineage: .resting,
             scope: .visible,
             notificationAdmission: .action(.init(
                 evidence: vault.resolveAccessibilityNotificationEvidence(

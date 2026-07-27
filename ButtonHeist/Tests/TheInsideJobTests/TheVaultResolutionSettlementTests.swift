@@ -227,7 +227,8 @@ extension TheVaultResolutionTests {
 
         let admitted = await bagman.semanticObservationStream.admitCurrentObservation(
             vault: bagman,
-            tripwireSignal: signal
+            tripwireSignal: signal,
+            lineage: .resting
         )
         let committableObservation = try XCTUnwrap(admitted)
 
@@ -241,7 +242,7 @@ extension TheVaultResolutionTests {
         XCTAssertNotEqual(committableObservation.observation.captureID, replacement.captureID)
     }
 
-    func testViewportMovementLineageIsCarriedOnlyWhenAskedFor() async throws {
+    func testAdmissionCarriesTheLineageItWasGiven() async throws {
         let observation = InterfaceObservation.makeForTests(elements: [(element(label: "Stable"), "stable")])
         bagman.observeInterface(observation)
         let stream = bagman.semanticObservationStream
@@ -249,18 +250,19 @@ extension TheVaultResolutionTests {
 
         let admitted = await stream.admitCurrentObservation(
             vault: bagman,
-            tripwireSignal: signal
+            tripwireSignal: signal,
+            lineage: .resting
         )
         let admittedAfterMovement = await stream.admitCurrentObservation(
             vault: bagman,
             tripwireSignal: signal,
-            lineageEvidence: .viewportMovement
+            lineage: .viewportMovement
         )
-        let ordinary = try XCTUnwrap(admitted)
+        let atRest = try XCTUnwrap(admitted)
         let afterMovement = try XCTUnwrap(admittedAfterMovement)
 
-        XCTAssertNil(ordinary.lineageEvidence)
-        XCTAssertEqual(afterMovement.lineageEvidence, .viewportMovement)
+        XCTAssertEqual(atRest.lineage, .resting)
+        XCTAssertEqual(afterMovement.lineage, .viewportMovement)
     }
 
     func testRecaptureOnlyValueChangedNotificationProducesNotificationFact() async throws {

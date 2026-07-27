@@ -544,9 +544,11 @@ private final class SettlementResultScript {
         events = states
     }
 
-    func event(scope: SemanticObservationScope) -> Observation.SnapshotEvent? {
-        guard !events.isEmpty else { return nil }
-        let sourceEvent = events.removeFirst()
+    /// One reading of `sourceEvent`, recorded after everything read so far.
+    private func reading(
+        of sourceEvent: Observation.SnapshotEvent,
+        scope: SemanticObservationScope
+    ) -> Observation.SnapshotEvent {
         let capture = sourceEvent.moment.capture
         nextSequence += 1
         let trace = previousCapture.map {
@@ -577,11 +579,19 @@ private final class SettlementResultScript {
         return event
     }
 
+    /// The next scripted state, as the reading that found it and the quiet one
+    /// after.
+    ///
+    /// A scripted state is one that arrived and then stayed, so it is read
+    /// twice: the log derives `isChange` from the capture before it, which makes
+    /// the second reading quiet without anything here saying so.
     func result(for command: Settlement.Command) -> Settlement.Result {
-        guard let changed = event(scope: command.observationScope),
-              let settled = event(scope: command.observationScope)
-        else { return scriptedSettlement(command, observed: nil) }
-        return scriptedSettlement(command, observed: (changed: changed, settled: settled))
+        guard !events.isEmpty else { return scriptedSettlement(command, observed: nil) }
+        let sourceEvent = events.removeFirst()
+        return scriptedSettlement(command, observed: (
+            changed: reading(of: sourceEvent, scope: command.observationScope),
+            settled: reading(of: sourceEvent, scope: command.observationScope)
+        ))
     }
 }
 

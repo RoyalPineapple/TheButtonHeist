@@ -184,7 +184,7 @@ final class ScreenClassifierTests: XCTestCase {
             classify(
                 before: viewport(header: "Starters", row: "Greek Salad"),
                 after: viewport(header: "Desserts", row: "Crème Brûlée"),
-                lineageEvidence: .viewportMovement
+                lineage: .viewportMovement
             ),
             .sameGeneration
         )
@@ -586,13 +586,13 @@ final class ScreenClassifierTests: XCTestCase {
         before: InterfaceObservation,
         after: InterfaceObservation,
         notifications: [AccessibilityNotificationKind] = [],
-        lineageEvidence: ScreenLineageEvidence? = nil
+        lineage: ScreenLineage = .resting
     ) -> ScreenContinuity {
         ScreenClassifier.classify(
             before: ScreenClassifier.snapshot(of: before.tree),
             after: ScreenClassifier.snapshot(of: after.tree),
             notifications: notifications,
-            lineageEvidence: lineageEvidence
+            lineage: lineage
         )
     }
 

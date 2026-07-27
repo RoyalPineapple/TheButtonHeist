@@ -9,7 +9,7 @@ extension Observation.Stream {
         notificationIdentityObservation: InterfaceObservation? = nil
     ) async -> Observation.SnapshotEvent {
         let outcome = await commitSettledVisibleObservation(
-            .admittedForTesting(observation, tripwireSignal: currentTripwireSignal()),
+            .admittedForTesting(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
             notificationBatch: notificationBatch,
             notificationIdentityObservation: notificationIdentityObservation
         )
@@ -24,7 +24,7 @@ extension Observation.Stream {
         notificationBatch: AccessibilityNotificationBatch? = nil
     ) async -> Observation.PublicationOutcome {
         await commitSettledVisibleObservation(
-            .admittedForTesting(observation, tripwireSignal: currentTripwireSignal()),
+            .admittedForTesting(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
             notificationBatch: notificationBatch
         )
     }
@@ -39,7 +39,7 @@ extension Observation.Stream {
             .admittedForTesting(
                 observation,
                 tripwireSignal: currentTripwireSignal(),
-                lineageEvidence: .viewportMovement
+                lineage: .viewportMovement
             ),
             notificationBatch: notificationBatch,
             notificationIdentityObservation: notificationIdentityObservation
@@ -56,7 +56,7 @@ extension Observation.Stream {
         notificationBatch: AccessibilityNotificationBatch? = nil
     ) async -> Observation.SnapshotEvent {
         let outcome = await commitSettledDiscoveryObservation(
-            .admittedForTesting(observation, tripwireSignal: currentTripwireSignal()),
+            .admittedForTesting(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
             notificationBatch: notificationBatch
         )
         guard case .delivered(let event) = outcome else {
@@ -74,7 +74,7 @@ extension Observation.Stream {
             .admittedForTesting(
                 observation,
                 tripwireSignal: currentTripwireSignal(),
-                lineageEvidence: .viewportMovement
+                lineage: .viewportMovement
             ),
             notificationBatch: notificationBatch
         )

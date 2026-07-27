@@ -155,7 +155,8 @@ final class RuntimeResourceObservationTests: XCTestCase {
         let stream = job.brains.vault.semanticObservationStream
         _ = await stream.admitCurrentObservation(
             vault: job.brains.vault,
-            tripwireSignal: .empty
+            tripwireSignal: .empty,
+            lineage: .resting
         )
         guard let diagnostic = await stream.latestSettleFailureDiagnostic() else {
             XCTFail("Expected settle failure diagnostic")

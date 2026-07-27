@@ -103,7 +103,7 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
             vault: vault,
             tripwireSignal: tripwireSignal(sequence: 1),
             discoveryCommitPolicy: .mergeIntoInterface,
-            lineageEvidence: .viewportMovement
+            lineage: .viewportMovement
         )
 
         XCTAssertNil(event)

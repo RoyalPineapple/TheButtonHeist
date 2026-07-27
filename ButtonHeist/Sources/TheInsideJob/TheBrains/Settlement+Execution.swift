@@ -908,7 +908,8 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
             vault.observeInterface(observation)
             let admitted = CommittableInterfaceObservation.admitCaptured(
                 observation,
-                tripwireSignal: vault.semanticObservationStream.currentTripwireSignal()
+                tripwireSignal: vault.semanticObservationStream.currentTripwireSignal(),
+                lineage: .resting
             )
             let notificationBatch: AccessibilityNotificationBatch? = switch request {
             case .baseline: nil

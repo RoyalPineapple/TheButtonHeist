@@ -20,6 +20,13 @@ internal final class Stream {
     // MARK: - Observation Bookkeeping
 
     var scopePressure = SemanticObservationScopePressure()
+    /// Whether Button Heist is the one moving the viewport right now.
+    ///
+    /// Screen identity is compared over the viewport, so a reading taken part
+    /// way through a scroll can share no elements with the reading before it.
+    /// A viewport transition holds this for as long as it drives the scroll,
+    /// which is what lets an ambient reading state `.viewportMovement`.
+    private(set) var isMovingViewport = false
     let storeOwner = StoreOwner()
     var observationWaiters = WaiterStore<UInt64, SemanticObservationWaiter>()
     private var subscribers: [UInt64: Subscriber] = [:]
@@ -176,6 +183,16 @@ internal final class Stream {
         with outcome: PublicationOutcome
     ) {
         publicationWaiters.removeValue(forKey: token)?.resume(returning: outcome)
+    }
+
+    /// Runs `movement` with every reading taken during it attributed to the
+    /// viewport movement it drives. A movement reached from inside another one
+    /// is already covered, and the claim ends where the outermost one does.
+    internal func movingViewport<Value>(_ movement: () async -> Value) async -> Value {
+        let wasMovingViewport = isMovingViewport
+        isMovingViewport = true
+        defer { isMovingViewport = wasMovingViewport }
+        return await movement()
     }
 
     internal func beginActiveObservationDemand() -> SemanticObservationDemand {

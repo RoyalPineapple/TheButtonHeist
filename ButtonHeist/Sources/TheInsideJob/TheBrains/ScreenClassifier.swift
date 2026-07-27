@@ -27,11 +27,18 @@ internal enum ScreenContinuity: Sendable, Equatable {
     }
 }
 
-/// Positive evidence that two captures belong to one screen generation.
+/// Why a reading differs from the one before it.
 ///
-/// This is produced only by the canonical viewport-movement pipeline after
-/// UIKit accepts a movement and the resulting viewport settles.
-internal enum ScreenLineageEvidence: Sendable, Equatable {
+/// Screen identity is compared over the viewport alone, so a screen read at a
+/// different scroll offset can share nothing with the last reading of itself.
+/// This is what separates that from an actual navigation, and every reading
+/// states one: "nothing moved" and "the viewport moved" are different facts,
+/// and a reading that says neither leaves the classifier to guess.
+internal enum ScreenLineage: Sendable, Equatable {
+    /// Nothing moved the tree between the two readings.
+    case resting
+    /// The viewport moved and settled, so the content on screen is expected to
+    /// differ while the screen stays the same.
     case viewportMovement
 }
 
@@ -149,13 +156,13 @@ enum ScreenClassifier {
         from previousTree: InterfaceTree?,
         to tree: InterfaceTree,
         notifications: [AccessibilityNotificationKind],
-        lineageEvidence: ScreenLineageEvidence? = nil
+        lineage: ScreenLineage
     ) -> ScreenContinuity {
         classify(
             before: previousTree.map(snapshot(of:)),
             after: snapshot(of: tree),
             notifications: notifications,
-            lineageEvidence: lineageEvidence
+            lineage: lineage
         )
     }
 
@@ -163,7 +170,7 @@ enum ScreenClassifier {
         before: Snapshot?,
         after: Snapshot,
         notifications: [AccessibilityNotificationKind],
-        lineageEvidence: ScreenLineageEvidence? = nil
+        lineage: ScreenLineage
     ) -> ScreenContinuity {
         if notifications.contains(where: {
             if case .screenChanged = $0 { return true }
@@ -178,7 +185,7 @@ enum ScreenClassifier {
         let directLineageIsProven = hasDirectLineageEvidence(
             before: before,
             after: after,
-            lineageEvidence: lineageEvidence
+            lineage: lineage
         )
         let sharedScrollContainer = sharesSemanticScrollContainer(before: before, after: after)
         let sameGenerationIsProven = directLineageIsProven || sharedScrollContainer
@@ -257,9 +264,9 @@ enum ScreenClassifier {
     private static func hasDirectLineageEvidence(
         before: Snapshot,
         after: Snapshot,
-        lineageEvidence: ScreenLineageEvidence?
+        lineage: ScreenLineage
     ) -> Bool {
-        if lineageEvidence == .viewportMovement {
+        if lineage == .viewportMovement {
             return true
         }
         if let beforeResponder = before.firstResponderHeistId,
