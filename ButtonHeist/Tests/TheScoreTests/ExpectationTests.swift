@@ -235,4 +235,71 @@ final class ExpectationTests: XCTestCase {
             elements: labels.map { makeTestHeistElement(description: $0, label: $0) }
         )
     }
+
+    /// The same elements, drawn somewhere else.
+    private func interface(
+        _ labels: [String],
+        movedBy offset: Double
+    ) -> AccessibilityTrace.Capture {
+        makeTestCapture(
+            elements: labels.map {
+                makeTestHeistElement(description: $0, label: $0, frameY: offset)
+            }
+        )
+    }
+}
+
+/// What a predicate that names nothing is asking.
+///
+/// `elementsChanged` with no assertions is the weakest thing a heist can say:
+/// something, anywhere, must differ. It still decomposes into two legs, because
+/// one reading shows a state and a change needs two — so what separates the legs
+/// is the reading, and which readings count as different is the whole question.
+final class BarePredicateTests: XCTestCase {
+
+    /// A frame moving is not something anybody asserted.
+    ///
+    /// The vault emits a tick for it, and it should: the tree is still moving
+    /// and settlement needs to know. But nothing a predicate can name differs,
+    /// so the change this predicate is waiting for has not happened yet.
+    func testAGraphThatOnlyMovedIsNotAChange() throws {
+        var expectation = try Expectation([bareChange()])
+
+        expectation = expectation.folding([
+            .elementsChanged(interface(["Add to Cart"])),
+            .elementsChanged(interface(["Add to Cart"], movedBy: 40)),
+        ])
+
+        XCTAssertFalse(
+            expectation.isMet,
+            "Both readings say the same thing, so nothing an assertion could name changed"
+        )
+    }
+
+    /// The same two ticks, with something a predicate could have named.
+    func testAGraphWhoseElementsDifferIsAChange() throws {
+        var expectation = try Expectation([bareChange()])
+
+        expectation = expectation.folding([
+            .elementsChanged(interface(["Add to Cart"])),
+            .elementsChanged(interface(["Remove from Cart"])),
+        ])
+
+        XCTAssertTrue(expectation.isMet)
+    }
+
+    private func bareChange() throws -> ResolvedAccessibilityPredicate {
+        try AccessibilityPredicate.elementsChanged([]).resolve(in: .empty)
+    }
+
+    private func interface(
+        _ labels: [String],
+        movedBy offset: Double = 0
+    ) -> AccessibilityTrace.Capture {
+        makeTestCapture(
+            elements: labels.map {
+                makeTestHeistElement(description: $0, label: $0, frameY: offset)
+            }
+        )
+    }
 }

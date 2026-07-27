@@ -194,13 +194,14 @@ struct PendingStep: Equatable {
         Self(.awaitingBefore(before, after: after))
     }
 
-    /// A predicate that named no element: two legs any element tick answers, so
-    /// only the reading separates them.
+    /// Any change at all: two legs every element tick answers, separated only by
+    /// the reading.
     ///
     /// A change is a comparison, and one tick is one reading — it shows a state,
     /// not a change. So this waits for two, exactly as `updated` does when no
-    /// property narrows it.
-    static let nothingNamed = Self.change(
+    /// property narrows it. The reading is the whole graph, so what counts as
+    /// different is anything an assertion could have named, anywhere.
+    static let anyChange = Self.change(
         before: .elementsChanged(),
         after: .elementsChanged()
     )
@@ -443,7 +444,7 @@ extension ResolvedAccessibilityPredicate {
         case .screenChanged(let query):
             return [.presence(.screenChanged(query))]
         case .elementsChanged(let assertions):
-            guard !assertions.isEmpty else { return [.nothingNamed] }
+            guard !assertions.isEmpty else { return [.anyChange] }
             return assertions.map { assertion in
                 let scope = assertion.readingScope
                 let legs = assertion.composed.map {

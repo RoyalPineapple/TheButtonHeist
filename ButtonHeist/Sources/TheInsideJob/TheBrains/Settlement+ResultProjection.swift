@@ -471,6 +471,7 @@ private extension Settlement.ResultProjector {
             parts.append(Strings.Diagnostic.expected(predicate.authored.description))
             parts.append(Strings.Diagnostic.interfaceElementCount(count))
             parts.append(Strings.Diagnostic.ticksRead(readings))
+            parts.append(Strings.Diagnostic.tickLane(tickLog))
         case (.announcement, _, _), (.noChange, _, _), (.screenChanged, _, _), (.elementsChanged, _, _):
             parts.append(Strings.Diagnostic.expected(predicate.authored.description))
             parts.append(Strings.Timeout.stillWaitingOn(
@@ -638,6 +639,24 @@ private enum Strings {
             return "\(readings.count) ticks holding "
                 + "\(names.count) distinct assertable reading\(names.count == 1 ? "" : "s") "
                 + "[\(shape.joined(separator: " "))]"
+        }
+
+        /// Every tick the run saw, in order, by lane.
+        ///
+        /// A verdict is a fold over this list and nothing else, so the list is
+        /// what makes a failure reproducible: the same ticks folded into the
+        /// same predicate reach the same verdict, on a desk, with no app. Only
+        /// failures carry it — a run that passed has nothing to reproduce.
+        static func tickLane(_ log: TickLog) -> String {
+            let lanes = log.ticks.map { tick in
+                switch tick {
+                case .elementsChanged: "elements"
+                case .screenChanged: "screen"
+                case .announcement: "spoken"
+                case .noChange: "still"
+                }
+            }
+            return "ticks [\(lanes.joined(separator: ", "))]"
         }
     }
 
