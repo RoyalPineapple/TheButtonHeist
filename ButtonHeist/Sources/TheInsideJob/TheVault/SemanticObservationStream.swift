@@ -59,6 +59,15 @@ internal final class Stream {
         await storeOwner.latestSettleFailureDiagnostic()
     }
 
+    /// The scoped screen change the settled commit already accounts for.
+    ///
+    /// A commit takes this up to the scoped changes it was told about, so the
+    /// bus running ahead of it is what a screen change since the commit looks
+    /// like, and is the comparison the serve path makes.
+    internal func committedScopedScreenChangedSequence() async -> UInt64 {
+        await storeOwner.scopedScreenChangedSequence()
+    }
+
     internal func latestCommittedSnapshot() async -> Snapshot? {
         await storeOwner.latestCommittedSnapshot()
     }

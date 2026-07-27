@@ -36,16 +36,25 @@ import XCTest
 /// **The baseline is the first tick.** Nothing precedes it, so an element already
 /// present there has no absent reading behind it and cannot appear (row 7).
 ///
-/// **Independent between steps.** Two assertions written together are two steps,
-/// and neither blocks the other. Ordering exists only inside a step.
+/// **The list is a narrative.** This happened, then this happened, then this
+/// happened. A tick walks the steps from the front and stops at the first one
+/// that refuses, so a step holds every step behind it until it drains. Ordering
+/// runs the whole way down: between steps, and between the halves inside one.
 ///
-/// **A drain never blocks what is behind it.** The next predicate in the step is
-/// still asked; it refuses on a matching hash. So one tree fulfils many steps but
-/// never two predicates of the same step, because one tree is one hash.
+/// **A drain never blocks what is behind it on the same tick.** Once a step is
+/// gone the walk carries on, so one tree drains as many *consecutive* steps as it
+/// answers. What it can never do is drain two halves of the same step, because
+/// one tree is one hash.
 ///
 /// **`noChange` drains nothing.** It is the stillness signal, not evidence: it
 /// passes every predicate untouched and only settles the gate. A predicate
 /// still outstanding when stillness arrives is still outstanding.
+/// One reading a shape needs, and what it needs to read.
+private enum Leg: Equatable {
+    case present(String)
+    case absent(String)
+}
+
 final class PredicateTruthMatrixTests: XCTestCase {
 
     // MARK: - The table
@@ -96,16 +105,29 @@ final class PredicateTruthMatrixTests: XCTestCase {
             Row(13, "an arrival is not satisfied by a departure",
                 predicate: .appeared("Ready"), ticks: [ready, empty], holds: false),
 
-            // # 14-16: steps are independent of each other.
+            // # 14-16: consecutive steps drain off one run of trees, and a step
+            // that refuses holds the ones behind it.
             Row(14, "two assertions about one frame are both satisfied",
                 predicate: .pair(appeared: "Processing", disappeared: "Submit"),
                 ticks: [["Submit"], ["Processing"]], holds: true),
-            Row(15, "an unsatisfiable sibling does not block the other",
-                predicate: .pair(appeared: "Processing", disappeared: "Ghost"),
+            Row(15, "an unsatisfiable step blocks the one behind it",
+                predicate: .pair(appeared: "Ghost", disappeared: "Submit"),
                 ticks: [["Submit"], ["Processing"]], holds: false),
-            Row(16, "order between assertions does not matter",
-                predicate: .pair(appeared: "Submit", disappeared: "Processing"),
-                ticks: [["Processing"], ["Submit"]], holds: true),
+            Row(16, "the beats are read in the order they were written",
+                predicates: [.exists("Submit"), .exists("Processing")],
+                ticks: [["Submit"], ["Submit", "Processing"]], holds: true),
+
+            // # 20-22: the list is a narrative, so a beat cannot be told before
+            // the one in front of it.
+            Row(20, "a later beat is not satisfied by an earlier tree",
+                predicates: [.exists("Second"), .exists("First")],
+                ticks: [["First"], ["Second"]], holds: false),
+            Row(21, "one tree drains every consecutive beat it answers",
+                predicates: [.exists("A"), .exists("B"), .exists("C")],
+                ticks: [["A", "B", "C"]], holds: true),
+            Row(22, "a beat the tree answers still waits behind an unmet one",
+                predicates: [.exists("A"), .exists("Never"), .exists("C")],
+                ticks: [["A", "C"]], holds: false),
 
             // # 17-18: nothing asked still waits for stillness; a level with
             // no tree to read is not satisfied by stillness alone.
@@ -120,6 +142,153 @@ final class PredicateTruthMatrixTests: XCTestCase {
             Row(19, "a level is answered by any tree, not by the last one",
                 predicate: .missing("Header"), ticks: [empty, ["Header"]], holds: true),
         ])
+    }
+
+    // MARK: - The table, generated
+
+    /// Every narrative of three beats, told to the graphs it asks for.
+    ///
+    /// The rows above hand a narrative trees someone typed next to it. This
+    /// derives them: a narrative is a run of `exists`/`missing` legs, so walking
+    /// the legs *is* the sequence of graphs that tells it. Nothing states an
+    /// expected verdict — the graphs were built from the narrative, so it holds
+    /// by construction, and a run of them that leaves anything outstanding is
+    /// the reducer disagreeing with the decomposition it was handed.
+    ///
+    /// Every ordering of three beats over two elements, which is where the
+    /// interesting ones live: two beats about the same element must interleave
+    /// with a third about another, and a graph carries both at once.
+    func testEveryNarrativeIsSatisfiedByTheGraphsItAsksFor() throws {
+        let beats: [Shape] = [
+            .appeared("Ready"), .disappeared("Ready"),
+            .appeared("Spinner"), .disappeared("Spinner"),
+            .exists("Ready"), .missing("Spinner"),
+        ]
+
+        for narrative in orderedTriples(of: beats) {
+            let told = try Expectation(narrative.map { try $0.resolved() })
+                .folding(graphs(telling: narrative).map { .elementsChanged(interface($0)) })
+
+            XCTAssertTrue(
+                told.isMet,
+                "\(name(of: narrative)) against \(graphs(telling: narrative))"
+                    + " — outstanding: \(told.outstanding)"
+            )
+        }
+    }
+
+    /// The same narratives, each told with one graph taken out of the middle.
+    ///
+    /// The run above is satisfiable by construction, which proves nothing on its
+    /// own — a reducer that drained everything offered would also pass it. So
+    /// each narrative is told again with one of its graphs withheld, every
+    /// position tried in turn, and the story has to come up short.
+    ///
+    /// No narrative is told by nothing, or by graphs that never move.
+    ///
+    /// The run above is satisfiable by construction, which proves nothing on its
+    /// own — a reducer that drained everything offered would also pass it. This
+    /// is the floor that rules that out: a change needs two readings, so a run
+    /// that supplies one reading, or none, can never tell a story that contains
+    /// one.
+    ///
+    /// Narratives of pure levels are excluded, since one graph can genuinely
+    /// answer every level in them, which rows 21 and 22 already state.
+    func testNoNarrativeContainingAChangeIsToldByOneReading() throws {
+        let beats: [Shape] = [
+            .appeared("Ready"), .disappeared("Ready"),
+            .appeared("Spinner"), .disappeared("Spinner"),
+            .exists("Ready"), .missing("Spinner"),
+        ]
+
+        for narrative in orderedTriples(of: beats) {
+            guard let whole = graphs(telling: narrative).last else { continue }
+            guard narrative.contains(where: { $0.legs.count > 1 }) else { continue }
+
+            for run in [[], [whole], [whole, whole]] {
+                let told = try Expectation(narrative.map { try $0.resolved() })
+                    .folding(run.map { .elementsChanged(interface($0)) })
+
+                XCTAssertFalse(
+                    told.isMet,
+                    "\(name(of: narrative)) was told by \(run), which never moves"
+                )
+            }
+        }
+    }
+
+    /// The graphs a narrative asks for, in the order it asks for them.
+    ///
+    /// One leg is one reading, so a leg asks for the graph before it with that
+    /// leg's element added or taken away. Everything the leg does not name
+    /// carries over untouched.
+    ///
+    /// Consecutive duplicates collapse. A leg that asks for the graph it was
+    /// already given is answered by that graph — `appeared(X)` followed by
+    /// `disappeared(X)` wants X present twice over, and one graph holding X
+    /// serves both. Emitting it twice would produce a graph nothing depends on,
+    /// which is what makes every graph here load-bearing.
+    private func graphs(telling narrative: [Shape]) -> [[String]] {
+        var showing: Set<String> = []
+        var asked: [[String]] = []
+        for leg in narrative.flatMap(\.legs) {
+            switch leg {
+            case .present(let label): showing.insert(label)
+            case .absent(let label): showing.remove(label)
+            }
+            guard asked.last != showing.sorted() else { continue }
+            asked.append(showing.sorted())
+        }
+        return asked
+    }
+
+    /// Every ordered choice of three from a list, no beat used twice.
+    private func orderedTriples(of beats: [Shape]) -> [[Shape]] {
+        beats.indices.flatMap { first in
+            beats.indices.filter { $0 != first }.flatMap { second in
+                beats.indices.filter { $0 != first && $0 != second }.map { third in
+                    [beats[first], beats[second], beats[third]]
+                }
+            }
+        }
+    }
+
+    private func name(of narrative: [Shape]) -> String {
+        narrative.map(\.name).joined(separator: " then ")
+    }
+
+    /// Every ordering of the three lanes against one run that carries all three.
+    ///
+    /// Lanes are independent narratives sharing one log, so a tick only ever
+    /// meets the head of its own lane. Whatever order the three are authored in,
+    /// a run holding all three answers them all.
+    func testLanesDrainWhateverOrderTheyWereAuthoredIn() throws {
+        let element = try Shape.exists("Ready").resolved()
+        let screen = try AccessibilityPredicate.screenChanged("Settings").resolve(in: .empty)
+        let spoken = try AccessibilityPredicate
+            .announcement(AnnouncementPredicate(match: .exact("Saved")))
+            .resolve(in: .empty)
+
+        for authoring in permutations(of: [element, screen, spoken]) {
+            let told = Expectation(authoring).folding([
+                .elementsChanged(interface(["Ready"])),
+                .screenChanged(ScreenFacts(idAfter: "Settings")),
+                .announcement("Saved"),
+                .noChange,
+            ])
+
+            XCTAssertTrue(told.isMet, "outstanding: \(told.outstanding)")
+        }
+    }
+
+    /// Every ordering of a list.
+    private func permutations<Element>(of elements: [Element]) -> [[Element]] {
+        guard elements.count > 1 else { return [elements] }
+        return elements.indices.flatMap { index -> [[Element]] in
+            var rest = elements
+            let held = rest.remove(at: index)
+            return permutations(of: rest).map { [held] + $0 }
+        }
     }
 
     // MARK: - The decomposition
@@ -377,34 +546,39 @@ final class PredicateTruthMatrixTests: XCTestCase {
         )
     }
 
-    /// One reading fulfils as many steps as it can, but each one atomically:
-    /// every step is offered the same reading, and each advances by at most one
-    /// half.
+    /// One reading drains as many consecutive steps as it can, but each one
+    /// atomically: a step advances by at most one half per tick, and the half it
+    /// advances holds the steps behind it until it is spent.
     ///
-    /// Three steps at different depths meet one tree holding "Ready". The
-    /// `exists` drains outright. `appeared` had already drained its `missing`, so
-    /// this tree drains its second half and completes it. `disappeared` is at its
-    /// `exists` tip, so this tree drains that half and leaves the `missing`
-    /// outstanding — one tree cannot carry it further, which is the atomicity.
+    /// The narrative is Ready is here, then it goes, then it returns. The tree
+    /// holding "Ready" drains the leading `exists` and then the `exists` half of
+    /// the `disappeared` behind it — two consecutive halves off one reading. It
+    /// cannot also drain that step's `missing`, because a change needs two
+    /// readings, and it never reaches the trailing `appeared` at all.
     func testOneReadingDrainsEveryStepButOnlyOneHalfOfEach() throws {
         var expectation = try Expectation([
             Shape.exists("Ready").resolved(),
-            Shape.appeared("Ready").resolved(),
             Shape.disappeared("Ready").resolved(),
+            Shape.appeared("Ready").resolved(),
         ])
         expectation = expectation.folding([
-            .elementsChanged(interface([])),
             .elementsChanged(interface(["Ready"])),
             .noChange,
         ])
 
-        XCTAssertFalse(expectation.isMet, "the disappearance still needs a tree without Ready")
+        XCTAssertFalse(expectation.isMet, "the departure still needs a tree without Ready")
         XCTAssertEqual(
-            expectation.outstanding.count, 1,
-            "only the disappearance is outstanding: \(expectation.outstanding)"
+            expectation.outstanding.count, 3,
+            "the missing half, then the return's two halves: \(expectation.outstanding)"
         )
 
         expectation = expectation.folding([.elementsChanged(interface([])), .noChange])
+        XCTAssertEqual(
+            expectation.outstanding.count, 1,
+            "that tree spent the departure and the return's missing: \(expectation.outstanding)"
+        )
+
+        expectation = expectation.folding([.elementsChanged(interface(["Ready"])), .noChange])
         XCTAssertTrue(expectation.isMet, "outstanding: \(expectation.outstanding)")
     }
 
@@ -517,7 +691,7 @@ final class PredicateTruthMatrixTests: XCTestCase {
     /// predicate list into a met expectation.
     private func assert(rows: [Row], file: StaticString = #filePath, line: UInt = #line) throws {
         for row in rows {
-            var expectation = try Expectation([row.predicate.resolved()])
+            var expectation = try Expectation(row.predicates.map { try $0.resolved() })
             for labels in row.ticks {
                 expectation = expectation.folding([.elementsChanged(interface(labels))])
             }
@@ -530,17 +704,23 @@ final class PredicateTruthMatrixTests: XCTestCase {
         }
     }
 
+    /// One row: the predicates as authored, the trees they meet in order, and
+    /// whether the whole narrative was told.
     private struct Row {
         let number: Int
         let name: String
-        let predicate: Shape
+        let predicates: [Shape]
         let ticks: [[String]]
         let holds: Bool
 
         init(_ number: Int, _ name: String, predicate: Shape, ticks: [[String]], holds: Bool) {
+            self.init(number, name, predicates: [predicate], ticks: ticks, holds: holds)
+        }
+
+        init(_ number: Int, _ name: String, predicates: [Shape], ticks: [[String]], holds: Bool) {
             self.number = number
             self.name = name
-            self.predicate = predicate
+            self.predicates = predicates
             self.ticks = ticks
             self.holds = holds
         }
@@ -555,6 +735,10 @@ final class PredicateTruthMatrixTests: XCTestCase {
         case disappeared(String)
         case pair(appeared: String, disappeared: String)
 
+        /// One `elementsChanged` carrying an authored assertion list, which is
+        /// how a row states several beats inside one predicate.
+        case assertions([Shape])
+
         func resolved() throws -> ResolvedAccessibilityPredicate {
             try authored().resolve(in: .empty)
         }
@@ -565,15 +749,56 @@ final class PredicateTruthMatrixTests: XCTestCase {
                 return .exists(.label(label))
             case .missing(let label):
                 return .missing(.label(label))
-            case .appeared(let label):
-                return .elementsChanged([.appeared(.label(label))])
-            case .disappeared(let label):
-                return .elementsChanged([.disappeared(.label(label))])
+            case .appeared, .disappeared, .pair, .assertions:
+                return .elementsChanged(assertions)
+            }
+        }
+
+        /// The readings this shape decomposes into, in order.
+        ///
+        /// The same decomposition the runtime makes, stated in terms of what a
+        /// graph would have to hold rather than of resolved predicates, so a
+        /// narrative can be turned back into the graphs that tell it.
+        var legs: [Leg] {
+            switch self {
+            case .exists(let label): return [.present(label)]
+            case .missing(let label): return [.absent(label)]
+            case .appeared(let label): return [.absent(label), .present(label)]
+            case .disappeared(let label): return [.present(label), .absent(label)]
             case .pair(let appeared, let disappeared):
-                return .elementsChanged([
-                    .appeared(.label(appeared)),
-                    .disappeared(.label(disappeared)),
-                ])
+                return Shape.appeared(appeared).legs + Shape.disappeared(disappeared).legs
+            case .assertions(let shapes): return shapes.flatMap(\.legs)
+            }
+        }
+
+        var name: String {
+            switch self {
+            case .exists(let label): return "exists(\(label))"
+            case .missing(let label): return "missing(\(label))"
+            case .appeared(let label): return "appeared(\(label))"
+            case .disappeared(let label): return "disappeared(\(label))"
+            case .pair(let appeared, let disappeared):
+                return "appeared(\(appeared)) + disappeared(\(disappeared))"
+            case .assertions(let shapes):
+                return shapes.map(\.name).joined(separator: " + ")
+            }
+        }
+
+        /// This shape as the assertions it contributes to an enclosing list.
+        private var assertions: [ElementAssertion] {
+            switch self {
+            case .exists(let label):
+                return [.exists(.label(label))]
+            case .missing(let label):
+                return [.missing(.label(label))]
+            case .appeared(let label):
+                return [.appeared(.label(label))]
+            case .disappeared(let label):
+                return [.disappeared(.label(label))]
+            case .pair(let appeared, let disappeared):
+                return [.appeared(.label(appeared)), .disappeared(.label(disappeared))]
+            case .assertions(let shapes):
+                return shapes.flatMap(\.assertions)
             }
         }
     }

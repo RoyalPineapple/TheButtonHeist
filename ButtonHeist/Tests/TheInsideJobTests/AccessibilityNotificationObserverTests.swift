@@ -637,111 +637,6 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(bus.announcements().count, 0)
     }
 
-    // MARK: - Settled Observation Invalidation
-
-    func testScreenChangedAfterCommitInvalidatesStaleServedObservation() async {
-        let visibleObservationSource = VisibleObservationSourceFixture()
-        let brains = TheBrains(
-            tripwire: TheTripwire(),
-            visibleObservationSource: visibleObservationSource.capture
-        )
-        brains.tripwire.startPulse()
-        await brains.startSemanticObservation()
-        defer {
-            brains.stopSemanticObservation()
-            brains.tripwire.stopPulse()
-        }
-
-        let staleScreen = InterfaceObservation.makeForTests([
-            InterfaceObservation.TestEntry(
-                AccessibilityElement.make(label: "Overview", traits: .header),
-                heistId: "overview_header"
-            )
-        ])
-        let staleEvent = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(staleScreen)
-
-        // The completion notification lands after the commit, inside an
-        // action's attribution window: the settled overview has already been
-        // replaced and must not be served to the next read.
-        let actionWindow = brains.vault.accessibilityNotifications.beginActionWindow()
-        defer { actionWindow.cancel() }
-        brains.vault.accessibilityNotifications.recordForTesting(
-            code: 1000,
-            notificationData: .none,
-            associatedElement: .none
-        )
-        let freshScreen = InterfaceObservation.makeForTests([
-            InterfaceObservation.TestEntry(
-                AccessibilityElement.make(label: "Destination", traits: .header),
-                heistId: "destination_header"
-            )
-        ])
-        visibleObservationSource.observation = freshScreen
-
-        let served = await brains.vault.semanticObservationStream.settledEvent(
-            scope: .visible,
-            after: staleEvent.sequence > 0 ? staleEvent.sequence - 1 : nil,
-            timeout: 3.0
-        )
-
-        XCTAssertNotNil(served)
-        XCTAssertGreaterThan(
-            served?.sequence ?? 0,
-            staleEvent.sequence,
-            "A screenChanged recorded after the settled commit must invalidate it, not serve it from cache"
-        )
-    }
-
-    func testAmbientScreenChangedAfterCommitDoesNotInvalidateLaterScopedRead() async {
-        let visibleObservationSource = VisibleObservationSourceFixture()
-        let brains = TheBrains(
-            tripwire: TheTripwire(),
-            visibleObservationSource: visibleObservationSource.capture
-        )
-        let tripwireSignal = brains.tripwire.tripwireSignal()
-        brains.vault.semanticObservationStream.readTripwireSignal = { tripwireSignal }
-        brains.tripwire.startPulse()
-        await brains.startSemanticObservation()
-        defer {
-            brains.stopSemanticObservation()
-            brains.tripwire.stopPulse()
-        }
-
-        let staleScreen = InterfaceObservation.makeForTests([
-            InterfaceObservation.TestEntry(
-                AccessibilityElement.make(label: "Overview", traits: .header),
-                heistId: "overview_header"
-            )
-        ])
-        let staleEvent = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(staleScreen)
-
-        brains.vault.accessibilityNotifications.recordForTesting(
-            code: 1000,
-            notificationData: .none,
-            associatedElement: .none
-        )
-        let actionWindow = brains.vault.accessibilityNotifications.beginActionWindow()
-        defer { actionWindow.cancel() }
-        visibleObservationSource.observation = InterfaceObservation.makeForTests([
-            InterfaceObservation.TestEntry(
-                AccessibilityElement.make(label: "Destination", traits: .header),
-                heistId: "destination_header"
-            )
-        ])
-
-        let served = await brains.vault.semanticObservationStream.settledEvent(
-            scope: .visible,
-            after: staleEvent.sequence > 0 ? staleEvent.sequence - 1 : nil,
-            timeout: 0.25
-        )
-
-        XCTAssertEqual(
-            served?.sequence,
-            staleEvent.sequence,
-            "A screenChanged recorded outside command scope must not poison the next scoped settled read."
-        )
-    }
-
     func testHeistScopeKeepsActionClaimsInBoundedTaggedStreamAfterScopeEnds() async {
         let bus = AccessibilityNotificationBus()
         bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
@@ -828,6 +723,89 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             subscriberAddedDuringUninstall = nil
             observer?.subscribe(subscriber)
         }
+    }
+}
+
+/// Which screen changes reach past a settled commit.
+///
+/// A settled observation describes the screen it was taken on, so a screen
+/// change after it means the observation describes a screen we are no longer
+/// looking at. Scope is what decides whether a given change says that: one
+/// recorded inside an action's attribution window belongs to the command and
+/// counts, one recorded outside it is the host app talking to itself and does
+/// not.
+///
+/// What the reader consults is the bus's scoped-screenChanged sequence against
+/// the cursor the commit absorbed, so that pair is what these assert. A commit
+/// takes the cursor up to the scoped changes it already knows about, which makes
+/// "the bus is ahead" precisely "a scoped screen change arrived since". Neither
+/// side moves on a clock, and neither is touched by the other invalidation
+/// sources sharing the store's flag.
+@MainActor
+final class SettledObservationInvalidationTests: ButtonHeistObservationTestCase {
+
+    private var visibleObservationSource = VisibleObservationSourceFixture()
+
+    override func makeBrains(tripwire: TheTripwire) throws -> TheBrains {
+        TheBrains(
+            tripwire: tripwire,
+            visibleObservationSource: visibleObservationSource.capture
+        )
+    }
+
+    func testScreenChangedInsideCommandScopeOutrunsTheCommittedCursor() async {
+        await commitOverview()
+
+        let actionWindow = brains.vault.accessibilityNotifications.beginActionWindow()
+        defer { actionWindow.cancel() }
+        recordScreenChanged()
+
+        let committed = await committedScopedScreenChangedCursor()
+        XCTAssertGreaterThan(
+            brains.vault.accessibilityNotifications.latestScopedScreenChangedSequence,
+            committed,
+            "A screenChanged inside command scope must outrun the commit, so the next read invalidates it"
+        )
+    }
+
+    func testScreenChangedOutsideCommandScopeLeavesTheCommittedCursorAhead() async {
+        await commitOverview()
+
+        recordScreenChanged()
+        let actionWindow = brains.vault.accessibilityNotifications.beginActionWindow()
+        defer { actionWindow.cancel() }
+
+        let committed = await committedScopedScreenChangedCursor()
+        XCTAssertLessThanOrEqual(
+            brains.vault.accessibilityNotifications.latestScopedScreenChangedSequence,
+            committed,
+            "A screenChanged outside command scope must not outrun the commit, so the next read serves it"
+        )
+    }
+
+    /// The settled observation both cases start from.
+    @discardableResult
+    private func commitOverview() async -> Observation.SnapshotEvent {
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests([
+                InterfaceObservation.TestEntry(
+                    AccessibilityElement.make(label: "Overview", traits: .header),
+                    heistId: "overview_header"
+                )
+            ])
+        )
+    }
+
+    private func recordScreenChanged() {
+        brains.vault.accessibilityNotifications.recordForTesting(
+            code: 1000,
+            notificationData: .none,
+            associatedElement: .none
+        )
+    }
+
+    private func committedScopedScreenChangedCursor() async -> UInt64 {
+        await brains.vault.semanticObservationStream.committedScopedScreenChangedSequence()
     }
 }
 

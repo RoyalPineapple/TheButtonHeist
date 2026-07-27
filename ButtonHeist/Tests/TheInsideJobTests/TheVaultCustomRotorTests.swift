@@ -29,20 +29,16 @@ private final class RotorCustomActionHandler: NSObject {
 }
 
 @MainActor
-final class TheVaultCustomRotorTests: XCTestCase {
+final class TheVaultCustomRotorTests: ButtonHeistTestCase {
 
     private var vault: TheVault!
-    private var hostedWindows: [UIWindow] = []
 
-    override func setUp() async throws {
-        try await super.setUp()
+    override func beforeEach() async throws {
         vault = TheVault(tripwire: TheTripwire())
     }
 
-    override func tearDown() async throws {
-        cleanupHostedWindows()
+    override func afterEach() async throws {
         vault = nil
-        try await super.tearDown()
     }
 
     private func liveTarget(
@@ -55,7 +51,6 @@ final class TheVaultCustomRotorTests: XCTestCase {
     }
 
     func testRotorNextReturnsParsedLiveResultElement() async throws {
-        let windowScene = try requireForegroundWindowScene()
         let rootView = UIView(frame: UIScreen.main.bounds)
         rootView.backgroundColor = .white
 
@@ -79,11 +74,7 @@ final class TheVaultCustomRotorTests: XCTestCase {
         rootView.addSubview(rotorHost)
         rootView.addSubview(resultLabel)
 
-        _ = hostWindow(
-            in: windowScene,
-            level: .alert + 30,
-            rootView: rootView
-        )
+        present(rotorHost: rootView)
 
         guard let observation = vault.refreshLiveCapture() else {
             XCTFail("Expected live capture")
@@ -117,7 +108,6 @@ final class TheVaultCustomRotorTests: XCTestCase {
     }
 
     func testSystemRotorCanBeInvokedByDisplayedName() async throws {
-        let windowScene = try requireForegroundWindowScene()
         let rootView = UIView(frame: UIScreen.main.bounds)
         rootView.backgroundColor = .white
 
@@ -141,11 +131,7 @@ final class TheVaultCustomRotorTests: XCTestCase {
         rootView.addSubview(rotorHost)
         rootView.addSubview(resultLabel)
 
-        _ = hostWindow(
-            in: windowScene,
-            level: .alert + 31,
-            rootView: rootView
-        )
+        present(rotorHost: rootView)
 
         guard let observation = vault.refreshLiveCapture() else {
             XCTFail("Expected live capture")
@@ -179,69 +165,7 @@ final class TheVaultCustomRotorTests: XCTestCase {
         XCTAssertEqual(hit.treeElement?.element.identifier, "open_docs")
     }
 
-    func testOutOfTreeRotorResultFailsInsteadOfCreatingHiddenContinuationState() async throws {
-        let windowScene = try requireForegroundWindowScene()
-        let rootView = UIView(frame: UIScreen.main.bounds)
-        rootView.backgroundColor = .white
-
-        let rotorHost = UIView(frame: CGRect(x: 20, y: 40, width: 280, height: 44))
-        rotorHost.isAccessibilityElement = true
-        rotorHost.accessibilityLabel = "Virtual Activation Results"
-        rotorHost.accessibilityIdentifier = "virtual_activation_rotor_host"
-
-        let virtualResult = RotorActivationAccessibilityElement(container: rootView)
-        virtualResult.accessibilityLabel = "Open virtual result"
-        virtualResult.accessibilityTraits = .button
-        virtualResult.accessibilityFrameInContainerSpace = CGRect(x: 20, y: 120, width: 280, height: 44)
-        let customActionHandler = RotorCustomActionHandler()
-        virtualResult.accessibilityCustomActions = [
-            UIAccessibilityCustomAction(
-                name: "Archive",
-                target: customActionHandler,
-                selector: #selector(RotorCustomActionHandler.archive(_:))
-            )
-        ]
-
-        rotorHost.accessibilityCustomRotors = [
-            UIAccessibilityCustomRotor(name: "Primary Action") { _ in
-                UIAccessibilityCustomRotorItemResult(targetElement: virtualResult, targetRange: nil)
-            }
-        ]
-
-        rootView.addSubview(rotorHost)
-
-        _ = hostWindow(
-            in: windowScene,
-            level: .alert + 33,
-            rootView: rootView
-        )
-
-        let brains = TheBrains(tripwire: TheTripwire())
-        brains.tripwire.startPulse()
-        await brains.startSemanticObservation()
-        defer {
-            brains.stopSemanticObservation()
-            brains.tripwire.stopPulse()
-        }
-        let searchResult = await brains.executeRuntimeAction(.rotor(
-            selection: .named("Primary Action"),
-            target: literalTarget(ResolvedElementPredicate.identifier("virtual_activation_rotor_host")),
-            direction: .next
-        ))
-
-        XCTAssertFalse(searchResult.outcome.isSuccess)
-        XCTAssertEqual(searchResult.method, .rotor)
-        XCTAssertTrue(
-            searchResult.message?.contains("returned a target outside the parsed hierarchy") == true,
-            searchResult.message ?? "<nil>"
-        )
-        XCTAssertEqual(searchResult.payload, .rotor(nil))
-        XCTAssertEqual(virtualResult.activationCount, 0)
-        XCTAssertEqual(customActionHandler.actionCount, 0)
-    }
-
     func testRotorResultDoesNotResolveCachedSemanticElementOutsideParsedHierarchy() async throws {
-        let windowScene = try requireForegroundWindowScene()
         let rootView = UIView(frame: UIScreen.main.bounds)
         rootView.backgroundColor = .white
 
@@ -263,11 +187,7 @@ final class TheVaultCustomRotorTests: XCTestCase {
 
         rootView.addSubview(rotorHost)
 
-        _ = hostWindow(
-            in: windowScene,
-            level: .alert + 36,
-            rootView: rootView
-        )
+        present(rotorHost: rootView)
 
         let brains = TheBrains(tripwire: TheTripwire())
         brains.tripwire.startPulse()
@@ -354,38 +274,86 @@ final class TheVaultCustomRotorTests: XCTestCase {
         XCTAssertEqual(available, ["Warnings"])
     }
 
-    private func hostWindow(
-        in scene: UIWindowScene,
-        level: UIWindow.Level,
-        rootView: UIView
-    ) -> UIWindow {
-        let window = UIWindow(windowScene: scene)
-        window.windowLevel = level
-        window.frame = UIScreen.main.bounds
-        rootView.frame = window.bounds
+}
+
+extension ButtonHeistTestCase {
+    /// Puts a rotor host on screen, over the app.
+    ///
+    /// A rotor is read off the live tree, so the host has to be somewhere the
+    /// traversal reaches. Above, because what the app underneath holds is not
+    /// this test's subject.
+    fileprivate func present(
+        rotorHost rootView: UIView,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let viewController = UIViewController()
         rootView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        window.addSubview(rootView)
-        window.isHidden = false
-        hostedWindows.append(window)
-        drainUIKitPresentationWork()
-        return window
+        viewController.view.addSubview(rootView)
+        present(viewController, above: true, file: file, line: line)
+        rootView.frame = viewController.view.bounds
+    }
+}
+
+/// What a rotor result outside the parsed tree does to a dispatched action.
+///
+/// This one goes through the runtime rather than the vault, because the claim
+/// is about what an action reports. The host is on screen before observation
+/// starts, so the baseline the action reads is the tree holding it.
+@MainActor
+final class RotorActionOutOfTreeResultTests: ButtonHeistRuntimeTestCase {
+
+    private let customActionHandler = RotorCustomActionHandler()
+    private var virtualResult: RotorActivationAccessibilityElement!
+
+    override func beforeEach() async throws {
+        let rootView = UIView(frame: UIScreen.main.bounds)
+        rootView.backgroundColor = .white
+
+        let rotorHost = UIView(frame: CGRect(x: 20, y: 40, width: 280, height: 44))
+        rotorHost.isAccessibilityElement = true
+        rotorHost.accessibilityLabel = "Virtual Activation Results"
+        rotorHost.accessibilityIdentifier = "virtual_activation_rotor_host"
+
+        let virtualResult = RotorActivationAccessibilityElement(container: rootView)
+        virtualResult.accessibilityLabel = "Open virtual result"
+        virtualResult.accessibilityTraits = .button
+        virtualResult.accessibilityFrameInContainerSpace = CGRect(x: 20, y: 120, width: 280, height: 44)
+        virtualResult.accessibilityCustomActions = [
+            UIAccessibilityCustomAction(
+                name: "Archive",
+                target: customActionHandler,
+                selector: #selector(RotorCustomActionHandler.archive(_:))
+            )
+        ]
+        self.virtualResult = virtualResult
+
+        rotorHost.accessibilityCustomRotors = [
+            UIAccessibilityCustomRotor(name: "Primary Action") { _ in
+                UIAccessibilityCustomRotorItemResult(targetElement: virtualResult, targetRange: nil)
+            }
+        ]
+
+        rootView.addSubview(rotorHost)
+        present(rotorHost: rootView)
     }
 
-    private func cleanupHostedWindows() {
-        for window in hostedWindows.reversed() {
-            window.layer.removeAllAnimations()
-            window.subviews.forEach { $0.removeFromSuperview() }
-            window.isHidden = true
-        }
-        hostedWindows.removeAll()
-        drainUIKitPresentationWork()
-    }
+    func testOutOfTreeRotorResultFailsInsteadOfCreatingHiddenContinuationState() async throws {
+        let searchResult = await brains.executeRuntimeAction(.rotor(
+            selection: .named("Primary Action"),
+            target: literalTarget(ResolvedElementPredicate.identifier("virtual_activation_rotor_host")),
+            direction: .next
+        ))
 
-    private func drainUIKitPresentationWork() {
-        for _ in 0..<3 {
-            CATransaction.flush()
-            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
-        }
+        XCTAssertFalse(searchResult.outcome.isSuccess)
+        XCTAssertEqual(searchResult.method, .rotor)
+        XCTAssertTrue(
+            searchResult.message?.contains("returned a target outside the parsed hierarchy") == true,
+            searchResult.message ?? "<nil>"
+        )
+        XCTAssertEqual(searchResult.payload, .rotor(nil))
+        XCTAssertEqual(virtualResult.activationCount, 0)
+        XCTAssertEqual(customActionHandler.actionCount, 0)
     }
 }
 
