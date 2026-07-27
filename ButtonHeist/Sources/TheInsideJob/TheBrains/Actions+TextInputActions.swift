@@ -303,21 +303,49 @@ extension Actions {
             ))
         }
 
+        if let focused = await focusedFirstResponder(
+            candidate: refreshedTarget,
+            waitForInput: true
+        ) {
+            return .focused(focused)
+        }
+
+        // Both routes above go through UIKit's gesture and activation
+        // machinery, which can decline for a field that is willing: it answers
+        // `canBecomeFirstResponder` yes and focuses when asked plainly. Asking
+        // is the last thing left before calling the field unreachable.
+        switch vault.dispatchOnFreshLiveActionTarget(
+            refreshedTarget.liveTarget,
+            operation: { safecracker.focusFirstResponder($0.object) }
+        ) {
+        case .success(true):
+            break
+        case .success(false):
+            return .failed(textEntryUnreachable(at: point))
+        case .failure(let staleness):
+            return .failed(staleLiveTargetFailure(staleness, payload: .typeText(nil)))
+        }
+
         guard let focused = await focusedFirstResponder(
             candidate: refreshedTarget,
             waitForInput: true
         ) else {
-            return .failed(.failure(
-                .typeText(nil),
-                message: ActionCapabilityDiagnostic.textEntryFailed(
-                    operation: "post-activation keyboard readiness",
-                    vault: vault,
-                    safecracker: safecracker,
-                    suggestion: "target an editable text field"
-                )
-            ))
+            return .failed(textEntryUnreachable(at: point))
         }
         return .focused(focused)
+    }
+
+    private func textEntryUnreachable(at point: CGPoint) -> TheSafecracker.ActionDispatchResult {
+        .failure(
+            .typeText(nil),
+            message: ActionCapabilityDiagnostic.textEntryFailed(
+                operation: "post-activation keyboard readiness",
+                vault: vault,
+                safecracker: safecracker,
+                suggestion: "target an editable text field",
+                tap: (point, safecracker.tapReceiverDiagnostic(at: point))
+            )
+        )
     }
 
     private func focusedFirstResponder(

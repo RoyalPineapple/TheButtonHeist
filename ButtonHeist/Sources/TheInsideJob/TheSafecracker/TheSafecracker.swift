@@ -82,6 +82,10 @@ final class TheSafecracker {
         editActions.resignFirstResponder()
     }
 
+    func focusFirstResponder(_ object: NSObject) -> Bool {
+        editActions.becomeFirstResponder(object)
+    }
+
     func dismissKeyboard(_ object: NSObject) -> Bool {
         editActions.resignFirstResponder(object)
     }
