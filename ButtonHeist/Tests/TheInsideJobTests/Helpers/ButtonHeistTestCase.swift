@@ -75,6 +75,10 @@ class ButtonHeistTestCase: XCTestCase {
     /// app — a modal, an overlay, anything whose point is that it obscures. Each
     /// one sits above the one presented before it. The window it lands in closes
     /// when the test ends.
+    ///
+    /// Key belongs to the app. `isKeyWindow` feeds `WindowStackSignal` and so
+    /// reaches the tripwire, which makes handing key to a fixture a change in
+    /// the signal a test presenting that fixture is usually there to measure.
     func present(
         _ viewController: UIViewController,
         above: Bool = false,
@@ -83,12 +87,14 @@ class ButtonHeistTestCase: XCTestCase {
     ) {
         let window = UIWindow(windowScene: scene)
         window.frame = UIScreen.main.bounds
+        window.rootViewController = viewController
         if above {
             window.windowLevel = UIWindow.Level(nextOverlayLevel)
             nextOverlayLevel += 10
+            window.isHidden = false
+        } else {
+            window.makeKeyAndVisible()
         }
-        window.rootViewController = viewController
-        window.makeKeyAndVisible()
         window.layoutIfNeeded()
         presentedWindows.append(window)
         assertAppIsTraversable("presenting \(type(of: viewController))", file: file, line: line)

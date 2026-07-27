@@ -15,11 +15,12 @@ private enum MenuScreen {
             .expect(.screenChanged, timeout: 8)
         WaitFor(.exists(.label("Checkout")), timeout: 8)
 
+        // The demo holds payment between 2.5 and 10 seconds, so anything that
+        // waits on what follows it has to outlast the longest of those.
         Activate(.label(DemoOrder.confirmPaymentLabel))
-            .expect(.screenChanged, timeout: 8)
-        WaitFor(.exists(.label("Processing payment")), timeout: 8)
+            .expect(.exists(.label("Processing payment")), timeout: 12)
 
-        WaitFor(.exists(.label("Payment Successful")), timeout: 12)
+        WaitFor(.exists(.label("Payment Successful")), timeout: 15)
     }
 }
 
