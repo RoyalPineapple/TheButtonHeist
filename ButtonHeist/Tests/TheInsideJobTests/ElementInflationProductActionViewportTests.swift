@@ -48,7 +48,6 @@ extension ElementInflationProductTests {
             identifier: "explicit_scroll_revealed",
             label: "Explicit Scroll Revealed"
         )
-        defer { fixture.cleanup() }
 
         let result = await brains.executeRuntimeAction(
             try HeistActionCommand.scroll(ScrollTarget(
@@ -70,20 +69,11 @@ extension ElementInflationProductTests {
         label: String,
         heist: Bool
     ) async throws -> (result: ActionResult, activationCount: Int) {
-        let localBrains = TheBrains(tripwire: TheTripwire())
-        localBrains.tripwire.startPulse()
-        await localBrains.startSemanticObservation()
-        defer {
-            localBrains.stopSemanticObservation()
-            localBrains.tripwire.stopPulse()
-            assertRuntimeStopped(localBrains)
-        }
         let fixture = try installOffscreenActivationFixture(
             identifier: identifier,
             label: label
         )
-        defer { fixture.cleanup() }
-        try await seedOffViewportTarget(fixture, in: localBrains)
+        try await seedOffViewportTarget(fixture)
 
         if heist {
             let plan = try HeistPlan(body: [
@@ -91,11 +81,11 @@ extension ElementInflationProductTests {
                     .element(.identifier(identifier), traits: [.button])
                 ))),
             ])
-            let result = await localBrains.executeHeistPlan(plan)
+            let result = await brains.executeHeistPlan(plan)
             return (result, fixture.target.activationCount)
         }
 
-        let result = await localBrains.executeRuntimeAction(
+        let result = await brains.executeRuntimeAction(
             try HeistActionCommand.activate(
                 .element(.identifier(identifier), traits: [.button])
             ).resolve(in: .empty)

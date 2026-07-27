@@ -184,7 +184,6 @@ extension ElementInflationProductTests {
             identifier: "live_decoy_unrevealable_submit",
             label: "Live Decoy"
         )
-        defer { fixture.cleanup() }
         try await seedOffViewportTarget(
             fixture,
             semanticIdentifier: "unrevealable_submit",
