@@ -130,7 +130,7 @@ extension Actions {
         activationTrace: ActivationTrace
     ) async -> TheSafecracker.ActionDispatchResult? {
         guard treeElement.element.traits.contains(.textEntry) else { return nil }
-        guard await safecracker.waitForActiveTextInput(pulse: tripwire) else {
+        guard await safecracker.waitForActiveTextInput() else {
             return .failure(
                 .activate,
                 message: ActionCapabilityDiagnostic.textEntryFailed(

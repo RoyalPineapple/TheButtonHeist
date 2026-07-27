@@ -78,11 +78,11 @@ extension Navigation {
         guard afterViewportMovement
                 || (!Task.isCancelled && hasTimeRemaining(before: deadline))
         else { return nil }
-        let timeoutMs = min(
-            SemanticObservationTiming.viewportTransitionTimeoutMs,
-            deadline.map { max(1, Int(($0.remainingSeconds() * 1_000).rounded(.up))) } ?? .max
+        let timeout = min(
+            SemanticObservationTiming.defaultTimeout,
+            deadline?.remainingDuration() ?? .seconds(Int.max)
         )
-        let transitionDeadline = SemanticObservationDeadline(start: RuntimeElapsed.now, timeoutMs: timeoutMs)
+        let transitionDeadline = SemanticObservationDeadline(start: RuntimeElapsed.now, timeout: timeout)
         repeat {
             // The tick only says time passed. The page still has to be re-read
             // afterwards, or every iteration inspects the same observation the

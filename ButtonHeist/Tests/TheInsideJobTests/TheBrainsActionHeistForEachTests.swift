@@ -392,7 +392,7 @@ extension TheBrainsActionTests {
         let stillPresentState = await observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
         ])
-        let waitObservedState = await observedState(labels: ["Done"])
+        let waitObservedState = await settling(observedState(labels: ["Done"]))
         var currentStates = observationEvents(for: [initialState, stillPresentState])
         let runtime = heistRuntime(
             observations: [],
@@ -408,14 +408,14 @@ extension TheBrainsActionTests {
             },
             settle: { command in
                 if case .currentState = command {
-                    return scriptedSettlement(command, observation: currentStates.removeFirst())
+                    return scriptedSettlement(command, observed: currentStates.removeFirst())
                 }
                 guard case .action(let action) = command,
                       let predicate = action.predicate else {
                     preconditionFailure("Attached expectation requires an action settlement")
                 }
                 waitedPredicates.append(predicate)
-                return scriptedSettlement(command, observation: waitObservedState)
+                return scriptedSettlement(command, observed: waitObservedState)
             }
         )
         let plan = try HeistPlan(body: [

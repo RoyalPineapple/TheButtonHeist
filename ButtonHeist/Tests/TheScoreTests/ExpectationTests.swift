@@ -23,22 +23,21 @@ final class ExpectationTests: XCTestCase {
     func testAnUnsatisfiedPredicateDoesNotBlockOneTheSameTreeAnswers() throws {
         var expectation = try Expectation([exists("Absent"), exists("Present")])
 
-        expectation.snapshot(interface(["Present"]))
+        expectation = expectation.folding([.elementsChanged(interface(["Present"]))])
 
         XCTAssertEqual(
-            expectation.outstanding.count, 2,
-            "Present drained; only Absent and settlement are left"
+            expectation.outstanding.count, 1,
+            "Present drained; only Absent is left"
         )
     }
 
     func testAPredicateDrainsOnTheTickThatAnswersIt() throws {
         var expectation = try Expectation([exists("Late"), exists("Early")])
 
-        expectation.snapshot(interface(["Early"]))
-        XCTAssertEqual(expectation.outstanding.count, 2)
+        expectation = expectation.folding([.elementsChanged(interface(["Early"]))])
+        XCTAssertEqual(expectation.outstanding.count, 1)
 
-        expectation.snapshot(interface(["Late", "Early"]))
-        expectation.noChange()
+        expectation = expectation.folding([.elementsChanged(interface(["Late", "Early"]))])
         XCTAssertTrue(expectation.isMet)
     }
 
@@ -49,11 +48,11 @@ final class ExpectationTests: XCTestCase {
             exists("A"), exists("B"), exists("Never"), exists("C"),
         ])
 
-        expectation.snapshot(interface(["A", "B", "C"]))
+        expectation = expectation.folding([.elementsChanged(interface(["A", "B", "C"]))])
 
         XCTAssertEqual(
-            expectation.outstanding.count, 2,
-            "A, B and C all drained; only Never and settlement are left"
+            expectation.outstanding.count, 1,
+            "A, B and C all drained; only Never is left"
         )
     }
 
@@ -65,9 +64,9 @@ final class ExpectationTests: XCTestCase {
             .disappeared(.label("Submit"))
         )])
 
-        expectation.snapshot(interface(["Submit"]))
-        expectation.snapshot(interface(["Processing"]))
-        expectation.noChange()
+        expectation = expectation.folding([.elementsChanged(interface(["Submit"]))])
+        expectation = expectation.folding([.elementsChanged(interface(["Processing"]))])
+        expectation = expectation.folding([.noChange])
 
         XCTAssertTrue(expectation.isMet, "outstanding: \(expectation.outstanding)")
     }
@@ -79,8 +78,8 @@ final class ExpectationTests: XCTestCase {
     func testADeltaHalfCannotDrainAheadOfTheOneBeforeIt() throws {
         var expectation = try Expectation([changed(.disappeared(.label("Ghost")))])
 
-        expectation.snapshot(interface(["Unrelated"]))
-        expectation.noChange()
+        expectation = expectation.folding([.elementsChanged(interface(["Unrelated"]))])
+        expectation = expectation.folding([.noChange])
 
         XCTAssertFalse(
             expectation.isMet,
@@ -93,10 +92,10 @@ final class ExpectationTests: XCTestCase {
     func testAnUnsatisfiedAnnouncementDoesNotBlockAGraphPredicate() throws {
         var expectation = try Expectation([announcement("never spoken"), exists("Present")])
 
-        expectation.snapshot(interface(["Present"]))
+        expectation = expectation.folding([.elementsChanged(interface(["Present"]))])
 
         XCTAssertEqual(
-            expectation.outstanding.count, 2,
+            expectation.outstanding.count, 1,
             "the graph predicate drained past the announcement"
         )
     }
@@ -104,18 +103,18 @@ final class ExpectationTests: XCTestCase {
     func testAnUnsatisfiedGraphPredicateDoesNotBlockAnAnnouncement() throws {
         var expectation = try Expectation([exists("Absent"), announcement("Saved")])
 
-        expectation.announcement("Saved.")
+        expectation = expectation.folding([.announcement("Saved.")])
 
-        XCTAssertEqual(expectation.outstanding.count, 2)
+        XCTAssertEqual(expectation.outstanding.count, 1)
     }
 
     func testAScreenTickDoesNotAnswerAGraphPredicate() throws {
         var expectation = try Expectation([exists("Detail")])
 
-        expectation.screenChanged(ScreenFacts(idAfter: "Detail"))
+        expectation = expectation.folding([.screenChanged(ScreenFacts(idAfter: "Detail"))])
 
         XCTAssertEqual(
-            expectation.outstanding.count, 2,
+            expectation.outstanding.count, 1,
             "a graph predicate is not in the screen lane"
         )
     }
@@ -127,13 +126,13 @@ final class ExpectationTests: XCTestCase {
     func testAnAppearanceDrainsAcrossTwoSnapshots() throws {
         var expectation = try Expectation([changed(.appeared(.label("Toast")))])
 
-        XCTAssertEqual(expectation.outstanding.count, 3, "two searches plus settlement")
+        XCTAssertEqual(expectation.outstanding.count, 2, "one search per leg")
 
-        expectation.snapshot(interface([]))
-        XCTAssertEqual(expectation.outstanding.count, 2)
-
-        expectation.snapshot(interface(["Toast"]))
+        expectation = expectation.folding([.elementsChanged(interface([]))])
         XCTAssertEqual(expectation.outstanding.count, 1)
+
+        expectation = expectation.folding([.elementsChanged(interface(["Toast"]))])
+        XCTAssertTrue(expectation.isMet)
     }
 
     /// The same element leaving and coming back — the case the ordered drain
@@ -144,63 +143,48 @@ final class ExpectationTests: XCTestCase {
             .appeared(.label("Ready"))
         )])
 
-        expectation.snapshot(interface(["Ready"]))
-        expectation.snapshot(interface([]))
-        expectation.snapshot(interface(["Ready"]))
-        expectation.noChange()
+        expectation = expectation.folding([.elementsChanged(interface(["Ready"]))])
+        expectation = expectation.folding([.elementsChanged(interface([]))])
+        expectation = expectation.folding([.elementsChanged(interface(["Ready"]))])
+        expectation = expectation.folding([.noChange])
 
         XCTAssertTrue(expectation.isMet)
     }
 
-    // MARK: - The settlement predicate
+    // MARK: - Met is the drain
 
-    func testAnExpectationWithNothingAskedOfItStillWaitsForNoChange() {
+    /// An expectation answers one question: has everything the caller asked for
+    /// happened. An expectation asked for nothing is met from the start, and
+    /// stays met however the tree moves.
+    func testNothingAskedOfItIsMetImmediately() {
         var expectation = Expectation()
 
-        XCTAssertFalse(expectation.isMet)
-        expectation.snapshot(interface(["Anything"]))
-        XCTAssertFalse(expectation.isMet, "movement is not stillness")
-
-        expectation.noChange()
-        XCTAssertTrue(expectation.isMet)
+        XCTAssertTrue(expectation.isMet, "no predicate is owed, so nothing is outstanding")
+        expectation = expectation.folding([.elementsChanged(interface(["Anything"]))])
+        XCTAssertTrue(expectation.isMet, "movement owes nothing either")
     }
 
-    /// A quiet tree is not an ending. Stillness satisfies nothing in the list —
-    /// no predicate reads it — so an outstanding predicate stays outstanding.
+    /// A stillness tick answers no element question, so a predicate waiting on
+    /// one stays outstanding through it.
     func testNoChangeArrivingEarlySatisfiesNothing() throws {
         var expectation = try Expectation([exists("Late")])
 
-        expectation.noChange()
+        expectation = expectation.folding([.noChange])
 
         XCTAssertFalse(expectation.isMet)
         XCTAssertEqual(expectation.outstanding.count, 1, "the tree is still, but Late never arrived")
     }
 
-    /// Settlement is last and never leaves, so every tick flips it: a tree that
-    /// went quiet and then carried on is not settled, and the run waits for
-    /// stillness to come back.
-    func testMovementAfterStillnessUnsettlesTheRun() throws {
+    /// Draining is monotonic: a predicate the tree answered stays answered, and
+    /// later movement leaves that answer standing.
+    func testAnAnsweredPredicateStaysAnsweredWhenTheTreeMovesAgain() throws {
         var expectation = try Expectation([exists("Ready")])
 
-        expectation.snapshot(interface(["Ready"]))
-        expectation.noChange()
+        expectation = expectation.folding([.elementsChanged(interface(["Ready"]))])
         XCTAssertTrue(expectation.isMet)
 
-        expectation.snapshot(interface(["Ready", "Spinner"]))
-        XCTAssertFalse(expectation.isMet, "the tree moved again")
-
-        expectation.noChange()
-        XCTAssertTrue(expectation.isMet)
-    }
-
-    func testTheRunEndsOnTheNoChangeAfterTheLastPredicateDrains() throws {
-        var expectation = try Expectation([exists("Ready")])
-
-        expectation.snapshot(interface(["Ready"]))
-        XCTAssertFalse(expectation.isMet, "still waiting for the tree to stop")
-
-        expectation.noChange()
-        XCTAssertTrue(expectation.isMet)
+        expectation = expectation.folding([.elementsChanged(interface(["Ready", "Spinner"]))])
+        XCTAssertTrue(expectation.isMet, "the tree moved, but Ready still arrived")
     }
 
     // MARK: - Evidence that answers nothing
@@ -208,9 +192,9 @@ final class ExpectationTests: XCTestCase {
     func testASnapshotThatSatisfiesNothingLeavesTheListAlone() throws {
         var expectation = try Expectation([exists("Absent"), announcement("never spoken")])
 
-        expectation.snapshot(interface(["Other"]))
+        expectation = expectation.folding([.elementsChanged(interface(["Other"]))])
 
-        XCTAssertEqual(expectation.outstanding.count, 3)
+        XCTAssertEqual(expectation.outstanding.count, 2)
     }
 
     // MARK: - Helpers

@@ -223,18 +223,18 @@ struct PendingStep: Equatable {
     }
 }
 
-/// The predicates still waiting, and whether the last tick was stillness.
+/// The authored predicates still waiting.
 ///
 /// Pure data: predicates in, ticks folded over them, an answer out. An
 /// expectation is determined entirely by its authored predicates and the ordered
 /// ticks it has seen, so it is derived from the tick log rather than a live thing
 /// to be synchronized against.
+///
+/// Scope: what the caller asked for. Whether the tree has stopped moving is a
+/// property of the observation stream and `TickLog.isStill` answers it, so a run
+/// waiting for both a predicate and a settled tree asks each of them.
 package struct Expectation: Equatable, Sendable {
     private var pending: [PendingStep]
-
-    private static let gate = PendingPredicate.noChange
-
-    private var isStill = false
 
     package init(_ authored: [ResolvedAccessibilityPredicate] = []) {
         pending = authored.flatMap(\.pendingSteps)
@@ -242,91 +242,45 @@ package struct Expectation: Equatable, Sendable {
 
     /// This expectation advanced by every tick in order.
     ///
-    /// The fold the mutating entry points are written in terms of. Given the
-    /// log, predicate state is recomputed rather than remembered.
-    func folding(_ ticks: some Sequence<Tick>) -> Self {
-        ticks.reduce(into: self) { $0.evaluate($1) }
+    /// The only way an expectation moves. Given the log, predicate state is
+    /// recomputed rather than remembered, so the same ticks always fold to the
+    /// same answer.
+    package func folding(_ ticks: some Sequence<Tick>) -> Self {
+        ticks.reduce(into: self) { expectation, tick in
+            expectation.pending = expectation.pending.compactMap { $0.evaluate(tick) }
+        }
     }
 
-    package var isMet: Bool { pending.isEmpty && isStill }
+    /// Whether every authored predicate has drained.
+    package var isMet: Bool { pending.isEmpty }
 
-    /// What the run is still waiting on, head first.
-    ///
-    /// The gate is last because stillness is the final thing a run waits for:
-    /// every authored predicate drains first, then the tree stops moving.
+    /// What the caller is still waiting on, head first, in authored order.
     package var outstanding: [PendingPredicate] {
-        pending.flatMap(\.pending) + (isStill ? [] : [Self.gate])
+        pending.flatMap(\.pending)
     }
 
-    /// Fold in the ticks of one observation.
+}
+
+extension Tick {
+    /// The ticks one observation is, in order.
     ///
-    /// The store has already made the one comparison — semantics and placements
-    /// against the reading before — so this only names the ticks.
-    ///
-    /// A reading that found no change *is* the proof of stillness, and it is the
-    /// only proof there is. Nothing polls a quiet tree to confirm it a second
-    /// time: the next reading arrives when the tree moves, so an expectation
-    /// whose predicate had already drained would wait forever for a stillness
-    /// tick that no one was going to send.
-    /// - Returns: the ticks this observation was, in order.
-    @discardableResult
-    package mutating func observe(
+    /// A reading is ticks before it is anything else, and which ticks it is
+    /// follows from the reading alone: the store has already made the one
+    /// comparison — semantics and placements against the reading before — so
+    /// this only names them.
+    package static func observation(
         _ capture: AccessibilityTrace.Capture,
         isChange: Bool,
         isReplacement: Bool,
         screenHeading: String?
     ) -> [Tick] {
-        let ticks = if isReplacement {
-            TickLog.replacement(
-                screen: ScreenFacts(idAfter: screenHeading),
-                arriving: capture
-            )
-        } else {
-            [isChange ? Tick.elementsChanged(capture) : .noChange]
+        guard isReplacement else {
+            return [isChange ? .elementsChanged(capture) : .noChange]
         }
-        for tick in ticks {
-            evaluate(tick)
-        }
-        return ticks
-    }
-
-    @discardableResult
-    package mutating func snapshot(_ capture: AccessibilityTrace.Capture) -> Tick {
-        evaluate(.elementsChanged(capture))
-    }
-
-    @discardableResult
-    package mutating func empty(at timestamp: Date) -> Tick {
-        evaluate(.elementsChanged(.empty(at: timestamp)))
-    }
-
-    @discardableResult
-    package mutating func screenChanged(_ facts: ScreenFacts) -> Tick {
-        evaluate(.screenChanged(facts))
-    }
-
-    @discardableResult
-    package mutating func announcement(_ text: String) -> Tick {
-        evaluate(.announcement(text))
-    }
-
-    @discardableResult
-    package mutating func noChange() -> Tick {
-        evaluate(.noChange)
-    }
-
-    /// The one place a tick is applied.
-    ///
-    /// Stillness is assigned, not accumulated: it says whether the tick that
-    /// just arrived was stillness, so a tree that starts moving again withdraws
-    /// it. That makes the whole of this a function of the ticks seen so far.
-    ///
-    /// - Returns: the tick it just applied.
-    @discardableResult
-    private mutating func evaluate(_ tick: Tick) -> Tick {
-        pending = pending.compactMap { $0.evaluate(tick) }
-        isStill = Self.gate.admits(tick)
-        return tick
+        return TickLog.replacement(
+            screen: ScreenFacts(idAfter: screenHeading),
+            arriving: capture
+        )
     }
 }
 

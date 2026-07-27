@@ -174,20 +174,18 @@ extension Navigation {
         stopWhen: @escaping @MainActor () -> Bool
     ) async -> ViewportExit.Outcome {
         guard deadline.hasTimeRemaining(at: RuntimeElapsed.now) else { return .restored }
+        // Knowing where the element is makes it a seed, not a different search.
+        // Inflation goes straight there and reports whether it landed; the
+        // exhaustive pass below is what answers the question when it did not.
         if let target,
            target.isElementTarget,
-           case .resolved(.element) = vault.resolveTarget(target) {
-            let inflation = await elementInflation.inflate(
-                for: target,
-                method: .scrollToVisible,
-                operationDeadline: deadline
-            )
-            switch inflation {
-            case .inflated:
-                return .retained
-            case .failed:
-                return .restored
-            }
+           case .resolved(.element) = vault.resolveTarget(target),
+           case .inflated = await elementInflation.inflate(
+               for: target,
+               method: .scrollToVisible,
+               operationDeadline: deadline
+           ) {
+            return .retained
         }
 
         guard let exploration = await exploreScreen(

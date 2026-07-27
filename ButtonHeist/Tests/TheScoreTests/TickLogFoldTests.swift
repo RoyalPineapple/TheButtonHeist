@@ -61,13 +61,18 @@ final class TickLogFoldTests: XCTestCase {
         )
     }
 
-    /// Stillness says whether the tick that just arrived was stillness, so a tree
-    /// that starts moving again withdraws it. That keeps the fold total.
-    func testStillnessIsTheLastTickNotALatch() {
-        let still = Expectation().folding([.noChange])
+    /// Stillness is whether the newest tick found the tree unchanged, so a tree
+    /// that moves again reads as moving.
+    func testStillnessIsTheNewestTick() {
+        var log = TickLog()
+        log.append(.elementsChanged(interface(["Cart"])))
+        XCTAssertFalse(log.isStill)
 
-        XCTAssertTrue(still.isMet)
-        XCTAssertFalse(still.folding([.elementsChanged(interface(["Cart"]))]).isMet)
+        log.append(.noChange)
+        XCTAssertTrue(log.isStill)
+
+        log.append(.elementsChanged(interface(["Cart", "Pay"])))
+        XCTAssertFalse(log.isStill, "the tree moved again")
     }
 
     // MARK: - Steps

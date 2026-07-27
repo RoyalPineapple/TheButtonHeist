@@ -6,7 +6,8 @@ import TheScore
 
 @MainActor
 final class InteractionCoordinator {
-    private static let defaultVisibleStateTimeout = Double(SemanticObservationTiming.defaultTimeoutMs) / 1_000
+    private static let defaultTimeoutSeconds =
+        SemanticObservationTiming.defaultTimeout / .seconds(1)
 
     private let vault: TheVault
 
@@ -15,13 +16,13 @@ final class InteractionCoordinator {
     }
 
     func refreshedVisibleObservation(
-        timeout: Double? = InteractionCoordinator.defaultVisibleStateTimeout
+        timeout: Double? = InteractionCoordinator.defaultTimeoutSeconds
     ) async -> Observation.Store.AdmittedObservation? {
         await vault.semanticObservationStream.refreshedVisibleObservation(timeout: timeout)
     }
 
     func admittedVisibleObservation(
-        timeout: Double? = InteractionCoordinator.defaultVisibleStateTimeout
+        timeout: Double? = InteractionCoordinator.defaultTimeoutSeconds
     ) async -> Observation.Store.AdmittedObservation? {
         await vault.semanticObservationStream.admittedVisibleObservation(timeout: timeout)
     }
@@ -40,7 +41,7 @@ final class InteractionCoordinator {
         return await vault.semanticObservationStream.settledEvent(
             scope: scope,
             after: sequence,
-            timeout: timeout ?? SemanticObservationTiming.defaultTimeout
+            timeout: timeout ?? Self.defaultTimeoutSeconds
         )
     }
 }

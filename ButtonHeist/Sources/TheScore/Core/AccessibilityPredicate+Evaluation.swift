@@ -6,8 +6,11 @@ extension AccessibilityTrace {
     ///
     /// A reconstruction, and the only one: the live run's log is not persisted
     /// yet, so a stored trace rebuilds it from the captures. Each capture's
-    /// interface is a tick, a replacement edge is the three ordered ticks a
-    /// replacement is, and a closing stillness tick opens the settlement gate.
+    /// interface is a tick, and a replacement edge is the three ordered ticks a
+    /// replacement is.
+    ///
+    /// The rebuild carries the readings the run took. A stored trace is asked
+    /// only whether its predicates hold, which is what those readings answer.
     ///
     /// When the live log is durable this becomes a read instead of a rebuild,
     /// and the classification below goes away — settlement already knew.
@@ -26,7 +29,6 @@ extension AccessibilityTrace {
             }
             previous = capture
         }
-        log.append(.noChange)
         return log
     }
 }

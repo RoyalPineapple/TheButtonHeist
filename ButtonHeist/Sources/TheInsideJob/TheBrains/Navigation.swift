@@ -21,7 +21,7 @@ final class Navigation {
             settleForDiscovery: { [weak self] in
                 guard let self else { return }
                 _ = await self.tripwire.waitForNextTick(
-                    timeout: .milliseconds(Int(SemanticObservationTiming.defaultTimeout * 1_000)),
+                    timeout: SemanticObservationTiming.defaultTimeout,
                     demand: .ambient
                 )
             },

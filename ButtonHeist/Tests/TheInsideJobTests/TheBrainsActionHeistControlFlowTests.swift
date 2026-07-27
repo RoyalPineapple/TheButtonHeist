@@ -281,15 +281,15 @@ extension TheBrainsActionTests {
                 let event = events[nextObservationIndex]
                 nextObservationIndex += 1
                 if case .currentState = command {
-                    return scriptedSettlement(command, observation: event)
+                    return scriptedSettlement(command, observed: event)
                 }
                 guard let baseline = command.baseline,
                       case .supplied(let boundary) = baseline else {
                     XCTFail("repeat_until should supply its exact observation boundary")
-                    return scriptedSettlement(command, observation: nil)
+                    return scriptedSettlement(command, observed: nil)
                 }
                 postBodyBaselines.append(boundary.moment)
-                return scriptedSettlement(command, observation: event)
+                return scriptedSettlement(command, observed: event)
             }
         )
         let plan = try HeistPlan(body: [
@@ -313,9 +313,14 @@ extension TheBrainsActionTests {
         XCTAssertEqual(incrementCount, 2)
         XCTAssertEqual(settlementCommands.count, 3)
         XCTAssertEqual(settlementCommands[0], .currentState(scope: .visible))
-        XCTAssertEqual(postBodyBaselines.count, 2)
-        XCTAssertEqual(postBodyBaselines[0], events[0].moment)
-        XCTAssertEqual(postBodyBaselines[1], events[1].moment)
+        // Each wait chains from the last reading the run before it admitted. The
+        // opening `currentState` only admits its baseline, so the first wait
+        // follows that one reading; the wait after it settled, which takes the
+        // quiet reading too.
+        XCTAssertEqual(
+            postBodyBaselines,
+            [events[0].changed.moment, events[1].settled.moment]
+        )
         XCTAssertEqual(step.repeatUntilEvidence?.iterationCount, 2)
         XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, true)
         XCTAssertEqual(

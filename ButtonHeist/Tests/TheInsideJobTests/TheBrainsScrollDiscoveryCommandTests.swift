@@ -387,7 +387,7 @@ extension TheBrainsScrollTests {
             .restoreVisualOrigin(.zero, in: .original(fixture.scrollView)),
             deadline: SemanticObservationDeadline(
                 start: RuntimeElapsed.now,
-                timeoutMs: SemanticObservationTiming.viewportTransitionTimeoutMs
+                timeout: SemanticObservationTiming.defaultTimeout
             ),
             discoveryCommitPolicy: .replaceInterface
         )

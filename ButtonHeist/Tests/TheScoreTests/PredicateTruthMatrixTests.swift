@@ -179,27 +179,21 @@ final class PredicateTruthMatrixTests: XCTestCase {
         ])
     }
 
-    // MARK: - The latch
+    // MARK: - Met is every leg
 
-    /// Met is a conjunction: every predicate drained, *and* stillness arrived.
-    ///
-    /// The gate is the second half and it is not optional — a run whose legs are
-    /// all satisfied is still not met until a `noChange` tick says the tree
-    /// stopped moving.
-    func testMetRequiresEveryLegAndStillnessAsTheFinalTick() throws {
+    /// Met is every authored leg drained. A pair drains in order, so both halves
+    /// of both pairs have to land before the whole is answered.
+    func testMetRequiresEveryLeg() throws {
         var expectation = try Expectation([
             Shape.appeared("Ready").resolved(),
             Shape.disappeared("Spinner").resolved(),
         ])
 
-        expectation.snapshot(interface(["Spinner"]))
+        expectation = expectation.folding([.elementsChanged(interface(["Spinner"]))])
         XCTAssertFalse(expectation.isMet, "neither pair has finished")
 
-        expectation.snapshot(interface(["Ready"]))
+        expectation = expectation.folding([.elementsChanged(interface(["Ready"]))])
         XCTAssertEqual(legs(of: expectation), [], "both pairs drained")
-        XCTAssertFalse(expectation.isMet, "drained legs are not a settled tree")
-
-        expectation.noChange()
         XCTAssertTrue(expectation.isMet, "outstanding: \(expectation.outstanding)")
     }
 
@@ -208,9 +202,7 @@ final class PredicateTruthMatrixTests: XCTestCase {
     /// met however many times it arrives.
     func testStillnessDoesNotSatisfyAnOutstandingLeg() throws {
         var expectation = try Expectation([Shape.appeared("Ready").resolved()])
-        expectation.snapshot(interface([]))
-        expectation.noChange()
-        expectation.noChange()
+        expectation = expectation.folding([.elementsChanged(interface([])), .noChange, .noChange])
 
         XCTAssertFalse(expectation.isMet)
         XCTAssertEqual(legs(of: expectation), ["exists(target(predicate(label=\"Ready\")))"])
@@ -222,8 +214,7 @@ final class PredicateTruthMatrixTests: XCTestCase {
             Shape.exists("Ready").resolved(),
             Shape.appeared("Ghost").resolved(),
         ])
-        expectation.snapshot(interface(["Ready"]))
-        expectation.noChange()
+        expectation = expectation.folding([.elementsChanged(interface(["Ready"])), .noChange])
 
         XCTAssertFalse(expectation.isMet, "Ghost never appeared")
         XCTAssertEqual(legs(of: expectation).count, 1)
@@ -240,9 +231,11 @@ final class PredicateTruthMatrixTests: XCTestCase {
             AccessibilityPredicate.elementsChanged([.appeared(.label("Pay"))])
                 .resolve(in: .empty),
         ])
-        expectation.snapshot(interface([]))
-        expectation.snapshot(interface(["Cancel"]))
-        expectation.noChange()
+        expectation = expectation.folding([
+            .elementsChanged(interface([])),
+            .elementsChanged(interface(["Cancel"])),
+            .noChange,
+        ])
 
         XCTAssertFalse(expectation.isMet, "Pay never arrived")
         XCTAssertEqual(expectation.outstanding.count, 1)
@@ -320,7 +313,7 @@ final class PredicateTruthMatrixTests: XCTestCase {
         line: UInt
     ) {
         var expectation = Expectation([predicate])
-        expectation.snapshot(interface(row.drainsFirstLegOn))
+        expectation = expectation.folding([.elementsChanged(interface(row.drainsFirstLegOn))])
         XCTAssertEqual(
             legs(of: expectation), [row.legs[1]],
             "\(row.says): a tick enters a step once, so the second leg is left",
@@ -330,7 +323,7 @@ final class PredicateTruthMatrixTests: XCTestCase {
         // The same tree again. Where the second leg is the same search as the
         // first it *is* satisfied here, so only the matching reading can refuse
         // it — which is the whole job of the saved hash.
-        expectation.snapshot(interface(row.drainsFirstLegOn))
+        expectation = expectation.folding([.elementsChanged(interface(row.drainsFirstLegOn))])
         XCTAssertFalse(
             expectation.isMet,
             "\(row.says): satisfied is not enough, the reading must also differ",
@@ -361,10 +354,12 @@ final class PredicateTruthMatrixTests: XCTestCase {
     func testAReadingIsOfferedOnlyToTheTipOfEachStep() throws {
         func acrossABoundary(_ predicate: ResolvedAccessibilityPredicate) -> Bool {
             var expectation = Expectation([predicate])
-            expectation.empty(at: Date())
-            expectation.screenChanged(ScreenFacts(idAfter: "Second"))
-            expectation.snapshot(interface(["Header"]))
-            expectation.noChange()
+            expectation = expectation.folding([
+                .elementsChanged(.empty(at: Date())),
+                .screenChanged(ScreenFacts(idAfter: "Second")),
+                .elementsChanged(interface(["Header"])),
+                .noChange,
+            ])
             return expectation.isMet
         }
 
@@ -397,9 +392,11 @@ final class PredicateTruthMatrixTests: XCTestCase {
             Shape.appeared("Ready").resolved(),
             Shape.disappeared("Ready").resolved(),
         ])
-        expectation.snapshot(interface([]))
-        expectation.snapshot(interface(["Ready"]))
-        expectation.noChange()
+        expectation = expectation.folding([
+            .elementsChanged(interface([])),
+            .elementsChanged(interface(["Ready"])),
+            .noChange,
+        ])
 
         XCTAssertFalse(expectation.isMet, "the disappearance still needs a tree without Ready")
         XCTAssertEqual(
@@ -407,8 +404,7 @@ final class PredicateTruthMatrixTests: XCTestCase {
             "only the disappearance is outstanding: \(expectation.outstanding)"
         )
 
-        expectation.snapshot(interface([]))
-        expectation.noChange()
+        expectation = expectation.folding([.elementsChanged(interface([])), .noChange])
         XCTAssertTrue(expectation.isMet, "outstanding: \(expectation.outstanding)")
     }
 
@@ -427,7 +423,7 @@ final class PredicateTruthMatrixTests: XCTestCase {
         let missingReady = try Shape.missing("Ready").resolved()
 
         var expectation = try Expectation([Shape.disappeared("Ready").resolved()])
-        expectation.snapshot(interface(["Ready"]))
+        expectation = expectation.folding([.elementsChanged(interface(["Ready"]))])
         XCTAssertEqual(
             owed(expectation), [missingReady],
             "one tick drained both predicates"
@@ -435,15 +431,16 @@ final class PredicateTruthMatrixTests: XCTestCase {
 
         // The same tree again is the same reading, so it cannot be the second
         // predicate of the pair however many times it arrives.
-        expectation.snapshot(interface(["Ready"]))
-        expectation.snapshot(interface(["Ready"]))
+        expectation = expectation.folding([
+            .elementsChanged(interface(["Ready"])),
+            .elementsChanged(interface(["Ready"])),
+        ])
         XCTAssertEqual(
             owed(expectation), [missingReady],
             "a repeated reading is one reading"
         )
 
-        expectation.snapshot(interface([]))
-        expectation.noChange()
+        expectation = expectation.folding([.elementsChanged(interface([])), .noChange])
         XCTAssertTrue(expectation.isMet, "outstanding: \(expectation.outstanding)")
     }
 
@@ -461,7 +458,7 @@ final class PredicateTruthMatrixTests: XCTestCase {
             "both legs are owed before any tick"
         )
 
-        expectation.snapshot(interface(["Ready"]))
+        expectation = expectation.folding([.elementsChanged(interface(["Ready"]))])
         XCTAssertFalse(expectation.isMet, "the missing predicate is still owed")
         XCTAssertEqual(
             owed(expectation), [try Shape.missing("Ready").resolved()],
@@ -470,8 +467,7 @@ final class PredicateTruthMatrixTests: XCTestCase {
 
         // A second tree, so the missing predicate has a reading that is not the
         // one the exists drained on.
-        expectation.snapshot(interface([]))
-        expectation.noChange()
+        expectation = expectation.folding([.elementsChanged(interface([])), .noChange])
         XCTAssertTrue(expectation.isMet, "outstanding: \(expectation.outstanding)")
     }
 
@@ -483,13 +479,13 @@ final class PredicateTruthMatrixTests: XCTestCase {
     /// it. A quiet tree must not, or a wait on it returns immediately.
     func testANamelessChangeNeedsMovementAndNotMerelyStillness() throws {
         var quiet = try Expectation([nameless()])
-        quiet.noChange()
+        quiet = quiet.folding([.noChange])
         XCTAssertFalse(quiet.isMet, "stillness alone is not a change")
 
         var moved = try Expectation([nameless()])
-        moved.snapshot(interface(["Ready"]))
-        moved.snapshot(interface([]))
-        moved.noChange()
+        moved = moved.folding([.elementsChanged(interface(["Ready"]))])
+        moved = moved.folding([.elementsChanged(interface([]))])
+        moved = moved.folding([.noChange])
         XCTAssertTrue(moved.isMet, "outstanding: \(moved.outstanding)")
     }
 
@@ -506,8 +502,7 @@ final class PredicateTruthMatrixTests: XCTestCase {
             makeTestHeistElement(description: "Count", label: "Count", value: "1"),
             makeTestHeistElement(description: "Count", label: "Count", value: "2"),
         ])
-        expectation.snapshot(tree)
-        expectation.noChange()
+        expectation = expectation.folding([.elementsChanged(tree), .noChange])
         XCTAssertFalse(
             expectation.isMet,
             "one tree answered both halves, so nothing changed"
@@ -524,9 +519,9 @@ final class PredicateTruthMatrixTests: XCTestCase {
         for row in rows {
             var expectation = try Expectation([row.predicate.resolved()])
             for labels in row.ticks {
-                expectation.snapshot(interface(labels))
+                expectation = expectation.folding([.elementsChanged(interface(labels))])
             }
-            expectation.noChange()
+            expectation = expectation.folding([.noChange])
             XCTAssertEqual(
                 expectation.isMet, row.holds,
                 "row \(row.number): \(row.name) — outstanding: \(expectation.outstanding)",

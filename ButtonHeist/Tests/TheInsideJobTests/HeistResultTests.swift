@@ -578,7 +578,10 @@ private final class SettlementResultScript {
     }
 
     func result(for command: Settlement.Command) -> Settlement.Result {
-        scriptedSettlement(command, observation: event(scope: command.observationScope))
+        guard let changed = event(scope: command.observationScope),
+              let settled = event(scope: command.observationScope)
+        else { return scriptedSettlement(command, observed: nil) }
+        return scriptedSettlement(command, observed: (changed: changed, settled: settled))
     }
 }
 

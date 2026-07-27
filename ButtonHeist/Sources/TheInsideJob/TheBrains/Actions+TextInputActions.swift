@@ -326,7 +326,7 @@ extension Actions {
     ) async -> FocusedTextInput? {
         if !safecracker.hasActiveTextInput {
             guard waitForInput,
-                  await safecracker.waitForActiveTextInput(pulse: tripwire) else { return nil }
+                  await safecracker.waitForActiveTextInput() else { return nil }
         }
         let liveFocus = vault.dispatchOnFreshLiveActionTarget(
             candidate.liveTarget,

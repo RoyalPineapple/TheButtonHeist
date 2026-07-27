@@ -82,7 +82,7 @@ extension TheBrainsActionTests {
                 settlementCommands.append(command)
                 let event = events[nextObservationIndex]
                 nextObservationIndex += 1
-                return scriptedSettlement(command, observation: event)
+                return scriptedSettlement(command, observed: event)
             }
         )
         let plan = try HeistPlan(
@@ -127,7 +127,7 @@ extension TheBrainsActionTests {
             settlementCommands[0],
             .currentState(scope: settlementCommands[1].observationScope)
         )
-        XCTAssertEqual(settlementCommands[1].baseline, .supplied(.init(moment: events[0].moment)))
+        XCTAssertEqual(settlementCommands[1].baseline, .supplied(.init(moment: events[0].changed.moment)))
         XCTAssertEqual(report.summary.expectationsChecked, 1)
         XCTAssertEqual(report.summary.expectationsMet, 1)
         XCTAssertEqual(step.kind, .invoke)

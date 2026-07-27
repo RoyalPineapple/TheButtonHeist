@@ -39,6 +39,19 @@ package struct TickLog: Sendable, Equatable {
         }
     }
 
+    /// Whether the newest reading found the tree unchanged.
+    ///
+    /// Stillness is a property of the stream, so the log answers it: a reading
+    /// that found no change is the proof, and the newest tick is the answer. A
+    /// tree that starts moving again is moving again.
+    ///
+    /// A run reads this whenever it asks whether it has finished, which is on
+    /// every event — the tree can go quiet before the run is otherwise ready to
+    /// end, and the log still says so afterwards.
+    package var isStill: Bool {
+        ticks.last == .noChange
+    }
+
     /// Each adjacent pair of ticks, in order.
     ///
     /// Comparing consecutive ticks is the whole of deriving what changed, so it

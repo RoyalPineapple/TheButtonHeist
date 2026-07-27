@@ -124,8 +124,12 @@ extension Navigation {
                 outcome = .interrupted
             }
 
+            // Only a found element earns its scroll position, because the caller
+            // is about to act on it. A pass that ended any other way leaves the
+            // screen as it found it: a discovery walked the containers to read
+            // them, and a search that came back empty moved them for nothing.
             let viewportExit = await finalize(
-                exitPosition: exitPosition,
+                exitPosition: outcome == .goalSatisfied ? exitPosition : .origin,
                 notifyObservation: outcome != .goalSatisfied,
                 onObservation: onObservation
             )
@@ -407,7 +411,7 @@ extension Navigation {
 
             let restorationDeadline = SemanticObservationDeadline(
                 start: RuntimeElapsed.now,
-                timeoutMs: SemanticObservationTiming.viewportTransitionTimeoutMs
+                timeout: SemanticObservationTiming.defaultTimeout
             )
             for viewportOrigin in state.origins.reversed() {
                 switch await restoreOrigin(

@@ -182,21 +182,21 @@ class SemanticObservationStreamTestCase: XCTestCase {
 /// could only ever be a second implementation of the thing under test, free to
 /// drift from it.
 ///
-/// `observation` and `dispatch` are the boundary's outputs, which the reducer
-/// only ever consumes as values: a test names them the same way the executor
-/// would deliver them. An observation is the one a test cannot fabricate — a
-/// `Moment` carries the log's identity, so events come from the vault.
+/// `observed` and `dispatch` are the boundary's outputs, which the reducer only
+/// ever consumes as values: a test names them the same way the executor would
+/// deliver them. An observation is the one a test cannot fabricate — a `Moment`
+/// carries the log's identity, so events come from the vault.
 ///
-/// `settling` is the reading that found the tree unchanged, and a run needs one
-/// to settle: stillness is proved by a quiet reading and nothing else, so a
-/// script that stops at the first change describes a run that was still moving
-/// when it ended. It is a real event from the vault too — `isChange` is derived
-/// from the snapshot before it, so quiet is committed, never asserted.
+/// A reading is the pair "the tree moved, then it went quiet", because that is
+/// what a run needs to settle: stillness is proved by a quiet reading and
+/// nothing else, so a script holding only the change describes a run that was
+/// still moving when it ended. Quiet is committed rather than asserted —
+/// `isChange` is derived from the snapshot before it, so the quiet half is a
+/// real event from the vault like its change.
 @MainActor
 func scriptedSettlement(
     _ command: Settlement.Command,
-    observation event: Observation.SnapshotEvent?,
-    settling: Observation.SnapshotEvent? = nil,
+    observed: SemanticObservationStreamTestCase.Reading?,
     dispatch: TheSafecracker.ActionDispatchResult? = nil,
     cancelled: Bool = false,
     elapsed: ElapsedMilliseconds = RuntimeElapsed.admit(milliseconds: 1)
@@ -204,12 +204,12 @@ func scriptedSettlement(
     var run = ScriptedRun(command, elapsed: elapsed)
 
     if case .currentState = command {
-        guard let event else { return run.finish(.baselineUnavailable(.unavailable)) }
-        return run.finish(.baselineAdmitted(event))
+        guard let observed else { return run.finish(.baselineUnavailable(.unavailable)) }
+        return run.finish(.baselineAdmitted(observed.changed))
     }
     if case .capture = command.baseline {
-        guard let event else { return run.finish(.baselineUnavailable(.unavailable)) }
-        run.send(.baselineAdmitted(event))
+        guard let observed else { return run.finish(.baselineUnavailable(.unavailable)) }
+        run.send(.baselineAdmitted(observed.changed))
     }
 
     run.send(.channelsArmed)
@@ -221,17 +221,15 @@ func scriptedSettlement(
         ))
     }
 
-    // Readiness before the observation: an admission with no established
+    // Readiness before the observations: an admission with no established
     // readiness has no handoff to be admitted into.
-    if let event {
+    if let observed {
         run.send(.readinessEstablished(.init(
             generation: .initial,
-            observationBoundary: .including(event.moment)
+            observationBoundary: .including(observed.changed.moment)
         )))
-        run.send(.observationAdmitted(.init(event: event)))
-    }
-    if let settling {
-        run.send(.observationAdmitted(.init(event: settling)))
+        run.send(.observationAdmitted(.init(event: observed.changed)))
+        run.send(.observationAdmitted(.init(event: observed.settled)))
     }
 
     if cancelled {

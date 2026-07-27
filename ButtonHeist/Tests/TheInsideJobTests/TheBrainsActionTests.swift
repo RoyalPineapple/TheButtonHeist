@@ -424,6 +424,19 @@ final class TheBrainsActionTests: XCTestCase {
         }, screenId: screenId, screenChanged: screenChanged)
     }
 
+    /// `event` and the quiet reading that follows it.
+    ///
+    /// Reading a tree that has not moved is what proves it stopped, and a run
+    /// needs that proof to settle. The store derives `isChange` from the reading
+    /// before, so committing the same tree again is how quiet gets committed.
+    func settling(
+        _ event: Observation.SnapshotEvent
+    ) async -> SemanticObservationStreamTestCase.Reading {
+        let settled = await brains.vault.semanticObservationStream
+            .commitVisibleObservationForTesting(event.snapshot.observation)
+        return (changed: event, settled: settled)
+    }
+
     func waitForSettledSemanticWaiter(
         on vault: TheVault,
         file: StaticString = #filePath,
@@ -492,14 +505,22 @@ final class TheBrainsActionTests: XCTestCase {
         }
     }
 
+    /// Each tree as the reading that found it and the quiet reading after.
+    ///
+    /// A scripted tree is one that arrived and then stayed, so it is read twice
+    /// and the log derives `isChange` from the capture before it: the second
+    /// reading is quiet because the tree did not move, not because anything here
+    /// says so. A run needs that quiet reading to settle, so a fixture holding
+    /// only the change scripts a run that was still moving at its deadline.
     func observationEvents(
         for events: [Observation.SnapshotEvent]
-    ) -> [Observation.SnapshotEvent] {
+    ) -> [SemanticObservationStreamTestCase.Reading] {
         var log = Observation.Log(retentionLimit: Observation.Store.defaultRetentionLimit)
         var previousCapture: AccessibilityTrace.Capture?
-        var recordedEvents: [Observation.SnapshotEvent] = []
+        var sequence: UInt64 = 0
 
-        for (index, event) in events.enumerated() {
+        func record(_ event: Observation.SnapshotEvent) -> Observation.SnapshotEvent {
+            sequence += 1
             let capture = event.moment.capture
             let trace = previousCapture.map {
                 AccessibilityTrace(capture: $0).appending(
@@ -509,25 +530,25 @@ final class TheBrainsActionTests: XCTestCase {
                 )
             } ?? AccessibilityTrace(capture: capture)
             let snapshot = Observation.Snapshot(
-                sequence: SettledObservationSequence(UInt64(index + 1)),
+                sequence: SettledObservationSequence(sequence),
                 generation: .initial,
                 sourceScope: .visible,
                 observation: event.snapshot.observation,
                 semanticSignal: .empty,
-                notificationSequence: UInt64(index + 1),
+                notificationSequence: sequence,
                 trace: trace,
                 viewportFrames: event.snapshot.viewportFrames,
                 placementTolerance: event.snapshot.placementTolerance
             )
+            defer { previousCapture = trace.captures.last }
             do {
-                let event = try log.record(snapshot: snapshot, continuity: .sameGeneration)
-                recordedEvents.append(event)
+                return try log.record(snapshot: snapshot, continuity: .sameGeneration)
             } catch {
                 preconditionFailure("Test moment fixture produced an invalid observation transition: \(error)")
             }
-            previousCapture = trace.captures.last
         }
-        return recordedEvents
+
+        return events.map { (changed: record($0), settled: record($0)) }
     }
 
     func heistRuntime(
@@ -562,7 +583,8 @@ final class TheBrainsActionTests: XCTestCase {
                 let settlementCommand = Settlement.Command.action(.init(
                     command: command,
                     predicate: expectation.predicate,
-                    allowances: .init(readiness: .milliseconds(Int64(SemanticObservationTiming.defaultTimeoutMs)),
+                    allowances: .init(
+                        readiness: SemanticObservationTiming.defaultTimeout,
                         expectation: expectation.allowance
                     ),
                     baseline: .capture
@@ -616,7 +638,7 @@ final class TheBrainsActionTests: XCTestCase {
         }
         if let baseline = command.baseline,
            case .unavailable = baseline {
-            return TheInsideJobTests.scriptedSettlement(command, observation: nil)
+            return TheInsideJobTests.scriptedSettlement(command, observed: nil)
         }
         let timeout: Double?
         switch command {
@@ -631,7 +653,7 @@ final class TheBrainsActionTests: XCTestCase {
             scope: command.observationScope,
             timeout: timeout
         )
-        return TheInsideJobTests.scriptedSettlement(command, observation: observation)
+        return TheInsideJobTests.scriptedSettlement(command, observed: observation)
     }
 
     func metExpectation(
@@ -742,10 +764,18 @@ private final class ScriptedHeistObservationSource {
         self.line = line
     }
 
+    /// The next scripted tree, as the reading that found it and the quiet one
+    /// after.
+    ///
+    /// A scripted tree is a tree that arrived and then stayed, so it is read
+    /// twice: the log derives `isChange` from the capture before it, which makes
+    /// the second reading quiet without anything here saying so. A run needs
+    /// that quiet reading to settle, so producing only the change would script a
+    /// run that was still moving when its deadline came.
     func next(
         scope: SemanticObservationScope,
         timeout: Double?
-    ) -> Observation.SnapshotEvent? {
+    ) -> SemanticObservationStreamTestCase.Reading? {
         observedScopes?(scope)
         observedTimeouts?(timeout)
         if remainingUnavailableObservations > 0 {
@@ -757,6 +787,14 @@ private final class ScriptedHeistObservationSource {
             return nil
         }
         let sourceEvent = remainingObservations.removeFirst()
+        return (changed: reading(sourceEvent, scope: scope), settled: reading(sourceEvent, scope: scope))
+    }
+
+    /// One reading of `sourceEvent`, recorded after everything read so far.
+    private func reading(
+        _ sourceEvent: Observation.SnapshotEvent,
+        scope: SemanticObservationScope
+    ) -> Observation.SnapshotEvent {
         nextObservationSequence += 1
         let event = event(
             from: sourceEvent,

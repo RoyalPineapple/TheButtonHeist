@@ -676,9 +676,9 @@ extension Settlement {
             // the first tick. A delta's opening half — `missing(X)` for an
             // appearance, `exists(X)` for a disappearance — is a claim about
             // this tree, and nothing later in the timeline can answer it.
-            self.tickLog.append(
-                self.requirement.expectation.snapshot(boundary.moment.capture)
-            )
+            let opening = Tick.elementsChanged(boundary.moment.capture)
+            self.tickLog.append(opening)
+            self.requirement.expectation = self.requirement.expectation.folding([opening])
             self.readiness = .pending(.initial)
             self.handoff = .pending(.initial)
             self.latestObservation = nil

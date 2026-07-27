@@ -336,7 +336,7 @@ internal final class ElementInflation {
         let tickCount = Self.handoffTickCount(for: treeElement, in: vault.interfaceTree)
         return SemanticObservationDeadline(
             start: geometryEnvironment.now(),
-            timeoutSeconds: Double(tickCount) * SemanticObservationTiming.defaultTimeout
+            timeout: SemanticObservationTiming.defaultTimeout * tickCount
         )
     }
 

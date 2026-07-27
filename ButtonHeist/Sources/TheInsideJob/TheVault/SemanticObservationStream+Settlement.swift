@@ -384,20 +384,21 @@ extension Observation.Stream {
 
     /// Admits the tree as it stands right now.
     ///
-    /// The only question left is identity: a reading belongs to the signal it
-    /// was taken under, so a tripwire signal that moved underneath it means the
-    /// reading describes a screen we are no longer looking at. Whether the tree
-    /// moved is not asked here — that is the store's comparison, not a
-    /// precondition for committing.
+    /// The only question left is identity: a reading belongs to the screen it
+    /// was taken on, so structural UIKit state moving underneath it means the
+    /// reading describes a screen we are no longer looking at. Accessibility
+    /// notifications are movement on the same screen — UIKit posts them
+    /// throughout a transition — so they let the reading through. Whether the
+    /// tree moved is the store's comparison, answered on commit.
     func admitCurrentObservation(
         vault: TheVault,
         tripwireSignal: TheTripwire.TripwireSignal,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
         lineageEvidence: ScreenLineageEvidence? = nil
     ) async -> CommittableInterfaceObservation? {
-        guard tripwireSignal == currentTripwireSignal() else {
+        guard currentTripwireSignal().hierarchy == tripwireSignal.hierarchy else {
             await recordFailedSettle(
-                "the tripwire signal changed while the reading was taken",
+                "the view hierarchy moved while the reading was taken",
                 observation: vault.latestObservation,
                 vault: vault
             )

@@ -32,6 +32,17 @@ enum Drain {
         static func labels(_ labels: [String]) -> Self {
             .tree(labels.map { testElement(label: $0) })
         }
+
+        /// The tick this arrival is.
+        var tick: TheScore.Tick {
+            switch self {
+            case .tree(let nodes): .elementsChanged(makeTestCapture(nodes: nodes))
+            case .empty: .elementsChanged(.empty(at: Date(timeIntervalSince1970: 0)))
+            case .screen(let id): .screenChanged(ScreenFacts(idAfter: id))
+            case .spoken(let text): .announcement(text)
+            case .still: .noChange
+            }
+        }
     }
 
     /// Feed `ticks` to `predicates` and report what happened.
@@ -43,21 +54,8 @@ enum Drain {
         _ predicates: [AccessibilityPredicate],
         through ticks: [Tick]
     ) throws -> Outcome {
-        var expectation = Expectation(try predicates.map { try $0.resolve(in: .empty) })
-        for tick in ticks {
-            switch tick {
-            case .tree(let nodes):
-                expectation.snapshot(makeTestCapture(nodes: nodes))
-            case .empty:
-                expectation.empty(at: Date(timeIntervalSince1970: 0))
-            case .screen(let id):
-                expectation.screenChanged(ScreenFacts(idAfter: id))
-            case .spoken(let text):
-                expectation.announcement(text)
-            case .still:
-                expectation.noChange()
-            }
-        }
+        let expectation = Expectation(try predicates.map { try $0.resolve(in: .empty) })
+            .folding(ticks.map(\.tick))
         return Outcome(
             isMet: expectation.isMet,
             outstanding: expectation.outstanding.map(\.description)

@@ -258,8 +258,10 @@ extension TheBrainsActionTests {
     func testHeistKeepsActiveObservationDemandThroughStateDependentStep() async throws {
         var demandDuringAction = false
         var demandDuringSettledEvidence = false
-        let event = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
-            .makeForTests(elements: [(makeElement(label: "Ready"), HeistId(rawValue: "ready"))])
+        let event = await settling(
+            brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+                .makeForTests(elements: [(makeElement(label: "Ready"), HeistId(rawValue: "ready"))])
+            )
         )
         let runtime = TheBrains.HeistExecutionRuntime(
             execute: { command, _ in
@@ -270,7 +272,7 @@ extension TheBrainsActionTests {
             settle: { command in
                 XCTAssertEqual(command.observationScope, .visible)
                 demandDuringSettledEvidence = self.brains.vault.semanticObservationStream.hasActiveObservationDemand
-                return scriptedSettlement(command, observation: event)
+                return scriptedSettlement(command, observed: event)
             }
         )
         let plan = try HeistPlan(body: [
@@ -320,7 +322,7 @@ extension TheBrainsActionTests {
             (makeElement(label: "Loading"), HeistId(rawValue: "loading")),
             (makeElement(label: "Toast"), HeistId(rawValue: "toast")),
         ]))
-        let observations = [current, future]
+        let observations = [await settling(current), await settling(future)]
         var observationCount = 0
         let runtime = TheBrains.HeistExecutionRuntime(
             execute: { _, _ in
@@ -330,7 +332,7 @@ extension TheBrainsActionTests {
                 defer { observationCount += 1 }
                 return scriptedSettlement(
                     command,
-                    observation: observations[observationCount]
+                    observed: observations[observationCount]
                 )
             }
         )

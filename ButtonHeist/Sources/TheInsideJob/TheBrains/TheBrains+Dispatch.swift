@@ -100,10 +100,11 @@ extension TheBrains {
             command: command,
             predicate: expectation?.predicate,
             allowances: .init(
-                // Phase 1, dispatch → stability: the action default. An
-                // expectation adds its own window after stability (phase 2), so
-                // the total action budget is action default + expectation.
-                readiness: .seconds(Int64(defaultActionExpectationTimeout.seconds)),
+                // Phase 1, dispatch → stability: how long the tree has to stop
+                // moving after the action. An expectation adds its own window
+                // after stability (phase 2), so the total action budget is this
+                // plus the expectation's.
+                readiness: SemanticObservationTiming.defaultTimeout,
                 expectation: expectation?.allowance
             ),
             baseline: .capture

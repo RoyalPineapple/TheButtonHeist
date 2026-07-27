@@ -161,7 +161,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
                 deadline: .init(phase: .observation, instant: .now),
                 baseline: .unavailable(.unavailable)
             ),
-            observation: nil,
+            observed: nil,
             dispatch: .success(payload: .dismiss),
             elapsed: 0
         )
@@ -210,7 +210,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
         let baseline = await commit(label: "Save")
         let result = scriptedSettlement(
             .action(actionCommand(.dismiss, baseline: baseline)),
-            observation: nil,
+            observed: nil,
             dispatch: .success(payload: .dismiss),
             cancelled: true,
             elapsed: 125
@@ -253,8 +253,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
                 deadline: .init(phase: .observation, instant: .now),
                 baseline: .supplied(.init(moment: baseline.moment))
             ),
-            observation: observed?.changed,
-            settling: observed?.settled,
+            observed: observed,
             dispatch: .success(payload: .dismiss),
             elapsed: elapsed
         )
@@ -270,8 +269,7 @@ final class SettlementResultProjectionTests: SemanticObservationStreamTestCase {
     ) -> Settlement.Result {
         scriptedSettlement(
             .action(actionCommand(command, baseline: baseline)),
-            observation: observed?.changed,
-            settling: observed?.settled,
+            observed: observed,
             dispatch: dispatch,
             elapsed: elapsed
         )

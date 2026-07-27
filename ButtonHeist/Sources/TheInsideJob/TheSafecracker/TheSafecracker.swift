@@ -4,6 +4,15 @@ import UIKit
 import TheScore
 import ThePlans
 
+/// Drives UIKit and reads UIKit's own state back.
+///
+/// The tripwire is the only source of time, and this type holds the only waiver:
+/// wall-clock waits are correct here and nowhere else. Input has to be
+/// synthesized at real timestamps, because UIKit derives gesture velocity and
+/// key repeat from them, and display-linking would make input speed depend on
+/// the refresh rate. State like the keyboard's is UIKit's own answer rather than
+/// part of the interface we observe, so no tick ever means "the keyboard
+/// arrived" and asking again after a wait is the only way to hear it change.
 @MainActor
 final class TheSafecracker {
 
@@ -42,18 +51,11 @@ final class TheSafecracker {
         keyboardInput.hasActiveTextInput
     }
 
-    func waitForActiveTextInput(pulse tripwire: TheTripwire) async -> Bool {
+    func waitForActiveTextInput() async -> Bool {
         if hasActiveTextInput { return true }
         for _ in 0..<Self.keyboardPollMaxAttempts {
-            switch await tripwire.waitForNextTick(
-                timeout: .milliseconds(Int(TheTripwire.singleTickSettleTimeout * 1_000)),
-                demand: .ambient
-            ) {
-            case .observed:
-                if hasActiveTextInput { return true }
-            case .timedOut, .cancelled, .unavailable:
-                return false
-            }
+            guard await Task.cancellableSleep(for: Self.keyboardPollInterval) else { return false }
+            if hasActiveTextInput { return true }
         }
         return false
     }
@@ -134,6 +136,8 @@ nonisolated extension TheSafecracker {
     static let gestureYieldDelay: Duration = .milliseconds(50)
 
     static let touchGestureStepDelay: TimeInterval = 0.01
+
+    static let keyboardPollInterval: Duration = .milliseconds(100)
 
     static let keyboardPollMaxAttempts: Int = 20
 }

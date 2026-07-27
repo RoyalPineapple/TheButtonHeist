@@ -250,12 +250,14 @@ private extension Settlement.Reducer {
         // delivers the graph — which means the graph here is the visible
         // hierarchy, not an explored one. Wire the emission to the exploration
         // stages when the tick stream can be paused.
-        session.tickLog.append(contentsOf: session.requirement.expectation.observe(
+        let ticks = Tick.observation(
             admission.event.moment.capture,
             isChange: admission.event.isChange,
             isReplacement: admission.event.continuity.isReplacement,
             screenHeading: admission.event.snapshot.screenHeading
-        ))
+        )
+        session.tickLog.append(contentsOf: ticks)
+        session.requirement.expectation = session.requirement.expectation.folding(ticks)
         if case .established(let readiness) = session.readiness,
            session.command.waitsForObservation
                || session.requirement.predicate?.semantics == .currentState
@@ -272,9 +274,9 @@ private extension Settlement.Reducer {
     ) -> [Settlement.Effect] {
         guard event.announcement.sequence > session.boundary.announcementCursor.sequence,
               !session.triggerEvidence.dispatchFailed else { return [] }
-        session.tickLog.append(
-            session.requirement.expectation.announcement(event.announcement.text)
-        )
+        let tick = Tick.announcement(event.announcement.text)
+        session.tickLog.append(tick)
+        session.requirement.expectation = session.requirement.expectation.folding([tick])
         return []
     }
 }
@@ -330,19 +332,32 @@ private extension Settlement.Reducer {
 private extension Settlement.Reducer {
     /// The settle rule, in full.
     ///
-    /// A session completes when readiness is established, the handoff belongs
-    /// to that readiness, and the expectation is met — every authored predicate
-    /// drained, in order, and the tree still. Nothing else participates.
+    /// A session completes when readiness is established, the handoff belongs to
+    /// that readiness, every authored predicate has drained, and the tree is
+    /// still.
+    ///
+    /// The drain comes first and the stream question comes after it: stillness
+    /// means the tree has stopped moving, which answers whether the run is over
+    /// only once what the caller asked for has already happened.
+    ///
+    /// Every event asks this, because any of them can supply the last missing
+    /// piece — a reading drains a predicate or quietens the tree, and readiness
+    /// arriving can complete a run whose tree went quiet before it.
     static func completedOutcome(_ session: Settlement.Session) -> Settlement.TerminalIntent? {
         guard case .established(let readiness) = session.readiness,
               let handoff = session.handoff.admission,
               handoff.belongs(to: readiness) else { return nil }
         if session.triggerEvidence.dispatchFailed { return .dispatchFailed }
         guard session.triggerEvidence.permitsCompletion,
-              session.requirement.expectation.isMet else { return nil }
+              session.requirement.expectation.isMet,
+              session.tickLog.isStill else { return nil }
         return .settled
     }
 
+    /// Moves an action into its expectation phase, arming that phase's deadline.
+    ///
+    /// Reached once the settle check has declined, so the run is still going and
+    /// the deadline bounds how long it waits.
     static func admitExpectationPhaseIfNeeded(
         in session: inout Settlement.Session
     ) -> [Settlement.Effect] {
@@ -350,8 +365,8 @@ private extension Settlement.Reducer {
               case .action(let action) = session.command,
               let allowance = action.allowances.expectation,
               session.triggerEvidence.permitsCompletion,
-              let handoff = session.handoff.admission,
-              !session.requirement.expectation.isMet else { return [] }
+              let handoff = session.handoff.admission
+        else { return [] }
         let deadline = Settlement.PhaseDeadline(
             phase: .actionExpectation,
             instant: handoff.instant.advanced(by: allowance)

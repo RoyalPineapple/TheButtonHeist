@@ -121,8 +121,7 @@ final class SettlementTerminalLogTests: SemanticObservationStreamTestCase {
                 deadline: .init(phase: .observation, instant: .now),
                 baseline: .supplied(.init(moment: baseline.moment))
             ),
-            observation: observed?.changed,
-            settling: observed?.settled,
+            observed: observed,
             dispatch: .success(payload: .dismiss),
             elapsed: 25
         )
@@ -141,8 +140,7 @@ final class SettlementTerminalLogTests: SemanticObservationStreamTestCase {
                 allowances: .init(readiness: .seconds(5), expectation: nil),
                 baseline: .supplied(.init(moment: baseline.moment))
             )),
-            observation: observed?.changed,
-            settling: observed?.settled,
+            observed: observed,
             dispatch: dispatch,
             elapsed: 25
         )

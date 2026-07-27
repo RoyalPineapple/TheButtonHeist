@@ -31,16 +31,17 @@ final class ReadingScopeTests: XCTestCase {
 
     func testOneSnapshotAloneDoesNotProveANamelessChange() throws {
         var expectation = try Expectation([resolved(.elementsChanged([]))])
-        expectation.snapshot(tree(["Ready"]))
-        expectation.noChange()
+        expectation = expectation.folding([.elementsChanged(tree(["Ready"])), .noChange])
         XCTAssertFalse(expectation.isMet, "one tick is one reading: nothing was shown to change")
     }
 
     func testTheSameTreeTwiceDoesNotProveANamelessChange() throws {
         var expectation = try Expectation([resolved(.elementsChanged([]))])
-        expectation.snapshot(tree(["Ready"]))
-        expectation.snapshot(tree(["Ready"]))
-        expectation.noChange()
+        expectation = expectation.folding([
+            .elementsChanged(tree(["Ready"])),
+            .elementsChanged(tree(["Ready"])),
+            .noChange,
+        ])
         XCTAssertFalse(expectation.isMet, "the same tree twice is one reading")
     }
 
@@ -51,16 +52,20 @@ final class ReadingScopeTests: XCTestCase {
     /// were taken on.
     func testABoundaryWithNothingNamedIsProvedByTheBoundaryTick() throws {
         var expectation = try Expectation([resolved(.screenChanged)])
-        expectation.screenChanged(ScreenFacts(idAfter: "Settings"))
-        expectation.noChange()
+        expectation = expectation.folding([
+            .screenChanged(ScreenFacts(idAfter: "Settings")),
+            .noChange,
+        ])
         XCTAssertTrue(expectation.isMet, "outstanding: \(expectation.outstanding)")
     }
 
     func testSnapshotsAloneNeverProveABoundary() throws {
         var expectation = try Expectation([resolved(.screenChanged)])
-        expectation.snapshot(tree(["Home"]))
-        expectation.snapshot(tree(["Settings"]))
-        expectation.noChange()
+        expectation = expectation.folding([
+            .elementsChanged(tree(["Home"])),
+            .elementsChanged(tree(["Settings"])),
+            .noChange,
+        ])
         XCTAssertFalse(
             expectation.isMet,
             "two trees differing is the elements changing, not a screen boundary"
@@ -71,14 +76,14 @@ final class ReadingScopeTests: XCTestCase {
     /// one fact a tree does not carry.
     func testANamedDestinationReadsTheBoundaryTickAndNotSnapshots() throws {
         var snapshots = try Expectation([resolved(.screenChanged("Settings"))])
-        snapshots.snapshot(tree(["Home"]))
-        snapshots.snapshot(tree(["Settings"]))
-        snapshots.noChange()
+        snapshots = snapshots.folding([.elementsChanged(tree(["Home"]))])
+        snapshots = snapshots.folding([.elementsChanged(tree(["Settings"]))])
+        snapshots = snapshots.folding([.noChange])
         XCTAssertFalse(snapshots.isMet, "snapshots cannot name the screen they arrived at")
 
         var named = try Expectation([resolved(.screenChanged("Settings"))])
-        named.screenChanged(ScreenFacts(idAfter: "Settings"))
-        named.noChange()
+        named = named.folding([.screenChanged(ScreenFacts(idAfter: "Settings"))])
+        named = named.folding([.noChange])
         XCTAssertTrue(named.isMet, "outstanding: \(named.outstanding)")
     }
 
@@ -89,9 +94,11 @@ final class ReadingScopeTests: XCTestCase {
             .updated(.label("Count"), .value(after: nil)),
         ])
         var expectation = try Expectation([resolved(predicate)])
-        expectation.snapshot(counter("1"))
-        expectation.snapshot(counter("1"))
-        expectation.noChange()
+        expectation = expectation.folding([
+            .elementsChanged(counter("1")),
+            .elementsChanged(counter("1")),
+            .noChange,
+        ])
         XCTAssertFalse(
             expectation.isMet,
             "both legs are exists(Count), so only the reading can say it updated"
@@ -103,9 +110,11 @@ final class ReadingScopeTests: XCTestCase {
             .updated(.label("Count"), .value(after: nil)),
         ])
         var expectation = try Expectation([resolved(predicate)])
-        expectation.snapshot(counter("1"))
-        expectation.snapshot(counter("2"))
-        expectation.noChange()
+        expectation = expectation.folding([
+            .elementsChanged(counter("1")),
+            .elementsChanged(counter("2")),
+            .noChange,
+        ])
         XCTAssertTrue(expectation.isMet, "outstanding: \(expectation.outstanding)")
     }
 
@@ -116,12 +125,12 @@ final class ReadingScopeTests: XCTestCase {
             .updated(.label("Count"), .value(after: nil)),
         ])
         var expectation = try Expectation([resolved(predicate)])
-        expectation.snapshot(counter("1"))
-        expectation.snapshot(makeTestCapture(elements: [
+        expectation = expectation.folding([.elementsChanged(counter("1"))])
+        expectation = expectation.folding([.elementsChanged(makeTestCapture(elements: [
             makeTestHeistElement(description: "Count", label: "Count", value: "1"),
             makeTestHeistElement(description: "Total", label: "Total"),
-        ]))
-        expectation.noChange()
+        ]))])
+        expectation = expectation.folding([.noChange])
         XCTAssertFalse(
             expectation.isMet,
             "a new element elsewhere did not change Count's value"
