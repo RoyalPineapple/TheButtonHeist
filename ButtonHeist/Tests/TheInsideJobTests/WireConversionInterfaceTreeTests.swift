@@ -48,7 +48,7 @@ extension WireConverterTests {
         let record = try XCTUnwrap(interface.projectedElementRecords.single)
 
         XCTAssertEqual(record.element.label, "Checkout")
-        XCTAssertEqual(record.traceIdentity, HeistId(rawValue: "checkout_button").traceElementIdentity)
+        XCTAssertEqual(record.observationIdentity, HeistId(rawValue: "checkout_button").observationElementIdentity)
     }
 
     func testSemanticInterfacePreservesContainersWhenKnownElementsShareParserPath() async throws {
@@ -82,7 +82,7 @@ extension WireConverterTests {
                         container: container,
                         path: containerPath,
                         containerName: "container_order_entry",
-                        contentFrame: nil
+                        viewFrame: nil
                     ),
                 ]
             ),
@@ -100,12 +100,13 @@ extension WireConverterTests {
         let interface = WireConversion.toSemanticInterface(from: screen.tree)
         let expression = AccessibilityPredicate.exists(.container(.identifier(containerIdentifier)))
         let predicate = try expression.resolve(in: .empty)
-        let evidence = try XCTUnwrap(AccessibilityTraceEvidence(
-            trace: AccessibilityTrace(captures: [
-                AccessibilityTrace.Capture(sequence: 1, interface: interface),
-            ]),
-            completeness: .incomplete
-        ))
+        let snapshot = Observation.Snapshot(interface: interface, context: .empty)
+        let evidence = Observation.Evidence(
+            baseline: snapshot,
+            current: snapshot,
+            events: [],
+            completeness: .complete
+        )
         let result = predicate.evaluate(in: evidence)
 
         XCTAssertEqual(result, PredicateEvaluationResult(met: true))
@@ -152,25 +153,25 @@ extension WireConverterTests {
                         container: root,
                         path: rootPath,
                         containerName: "root",
-                        contentFrame: nil
+                        viewFrame: nil
                     ),
                     splitPath: InterfaceTree.Container(
                         container: split,
                         path: splitPath,
                         containerName: "split",
-                        contentFrame: nil
+                        viewFrame: nil
                     ),
                     orderPath: InterfaceTree.Container(
                         container: order,
                         path: orderPath,
                         containerName: "order_entry",
-                        contentFrame: nil
+                        viewFrame: nil
                     ),
                     libraryPath: InterfaceTree.Container(
                         container: library,
                         path: libraryPath,
                         containerName: "library",
-                        contentFrame: nil
+                        viewFrame: nil
                     ),
                 ]
             ),
@@ -185,12 +186,13 @@ extension WireConverterTests {
         let interface = WireConversion.toSemanticInterface(from: screen.tree)
         let expression = AccessibilityPredicate.exists(.container(.identifier(orderIdentifier)))
         let predicate = try expression.resolve(in: .empty)
-        let evidence = try XCTUnwrap(AccessibilityTraceEvidence(
-            trace: AccessibilityTrace(captures: [
-                AccessibilityTrace.Capture(sequence: 1, interface: interface),
-            ]),
-            completeness: .incomplete
-        ))
+        let snapshot = Observation.Snapshot(interface: interface, context: .empty)
+        let evidence = Observation.Evidence(
+            baseline: snapshot,
+            current: snapshot,
+            events: [],
+            completeness: .complete
+        )
         let result = predicate.evaluate(in: evidence)
 
         XCTAssertEqual(result, PredicateEvaluationResult(met: true))
@@ -199,7 +201,7 @@ extension WireConverterTests {
         XCTAssertEqual(interface.graph.nodesInPathOrder.count, 5)
     }
 
-    func testInterfaceSelectionPreservesTraceIdentityAnnotations() async throws {
+    func testInterfaceSelectionPreservesObservationIdentityAnnotations() async throws {
         let first = makeScreenElement(heistId: "first_button", label: "First", traits: [.button])
         let second = makeScreenElement(heistId: "second_button", label: "Second", traits: [.button])
         let screen = InterfaceObservation.makeForTests(
@@ -225,10 +227,10 @@ extension WireConverterTests {
         let record = try XCTUnwrap(selected.projectedElementRecords.single)
 
         XCTAssertEqual(record.element.label, "Second")
-        XCTAssertEqual(record.traceIdentity, HeistId(rawValue: "second_button").traceElementIdentity)
+        XCTAssertEqual(record.observationIdentity, HeistId(rawValue: "second_button").observationElementIdentity)
     }
 
-    func testContainerSubtreeSelectionPreservesAnnotationsAndTraceIdentity() async throws {
+    func testContainerSubtreeSelectionPreservesAnnotationsAndObservationIdentity() async throws {
         let first = makeScreenElement(heistId: "first_button", label: "First", traits: [.button])
         let second = makeScreenElement(heistId: "second_button", label: "Second", traits: [.button])
         let container = AccessibilityContainer(
@@ -263,9 +265,9 @@ extension WireConverterTests {
         XCTAssertEqual(selected.projectedElements.map(\.label), ["First", "Second"])
         XCTAssertEqual(selected.annotations.containerByPath[TreePath([0])]?.containerName, "actions")
         XCTAssertEqual(selected.annotations.elementByPath[TreePath([0, 0])]?.actions, [.activate])
-        XCTAssertEqual(records.map(\.traceIdentity), [
-            HeistId(rawValue: "first_button").traceElementIdentity,
-            HeistId(rawValue: "second_button").traceElementIdentity,
+        XCTAssertEqual(records.map(\.observationIdentity), [
+            HeistId(rawValue: "first_button").observationElementIdentity,
+            HeistId(rawValue: "second_button").observationElementIdentity,
         ])
     }
 
@@ -403,7 +405,7 @@ extension WireConverterTests {
             container: inner,
             path: TreePath([0, 0]),
             containerName: "inner_words",
-            contentFrame: nil,
+            viewFrame: nil,
             scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 0)
         )
         let screen = InterfaceObservation.makeForTests(
@@ -462,7 +464,7 @@ extension WireConverterTests {
                         container: rootContainer,
                         path: TreePath([0]),
                         containerName: "transactions_list",
-                        contentFrame: nil
+                        viewFrame: nil
                     ),
                 ]
             ),
@@ -527,7 +529,7 @@ extension WireConverterTests {
                         container: rootContainer,
                         path: TreePath([0]),
                         containerName: "transactions_list",
-                        contentFrame: nil
+                        viewFrame: nil
                     ),
                 ]
             ),
@@ -567,20 +569,20 @@ extension WireConverterTests {
                         container: rootContainer,
                         path: TreePath([0]),
                         containerName: "transactions_list",
-                        contentFrame: nil
+                        viewFrame: nil
                     ),
                     TreePath([0, 0]): InterfaceTree.Container(
                         container: recycledContainer,
                         path: TreePath([0, 0]),
                         containerName: "saved_carts_group",
-                        contentFrame: nil,
+                        viewFrame: nil,
                         scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 0)
                     ),
                     TreePath([0, 1]): InterfaceTree.Container(
                         container: recycledContainer,
                         path: TreePath([0, 1]),
                         containerName: "saved_carts_group",
-                        contentFrame: nil,
+                        viewFrame: nil,
                         scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 1)
                     ),
                 ]

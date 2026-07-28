@@ -38,58 +38,10 @@ final class WireConverterTests: XCTestCase {
 
     typealias WireConversion = TheVault.WireConversion
 
-    // Test-only conveniences over the canonical fact stream.
-    struct ComputedChangeFacts {
-        let trace: AccessibilityTrace
-        let changeFacts: [AccessibilityTrace.ChangeFact]
-
-        var current: Interface? { trace.captures.last?.interface }
-
-        var testEdits: ElementEdits {
-            changeFacts.reduce(into: ElementEdits()) { edits, fact in
-                guard case .elementsChanged(let elements) = fact else { return }
-                edits = ElementEdits(
-                    added: edits.added + projectedElements(
-                        elements.appeared,
-                        capture: elements.metadata.captureEdge?.after
-                    ),
-                    removed: edits.removed + projectedElements(
-                        elements.disappeared,
-                        capture: elements.metadata.captureEdge?.before
-                    ),
-                    updated: edits.updated + elements.updated
-                )
-            }
-        }
-
-        private func projectedElements(
-            _ nodes: [AccessibilityTrace.InterfaceChangeNode],
-            capture reference: AccessibilityTrace.CaptureRef?
-        ) -> [HeistElement] {
-            guard let reference, let capture = trace.capture(ref: reference) else { return [] }
-            return nodes.compactMap { node in
-                capture.interface.graph.elementsInTraversalOrder
-                    .first { $0.path == node.path }?
-                    .projectedElement
-            }
-        }
-    }
-
-    func XCTAssertNotScreenChanged(
-        _ trace: ComputedChangeFacts,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) {
-        XCTAssertFalse(trace.changeFacts.contains { $0.kind == .screenChanged }, file: file, line: line)
-    }
-
-    func XCTAssertDeltaElementCount(
-        _ trace: ComputedChangeFacts,
-        _ expected: Int,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) {
-        XCTAssertEqual(trace.current?.projectedElements.count, expected, file: file, line: line)
+    struct InterfaceComparison {
+        let before: Interface
+        let after: Interface
+        let edits: ElementEdits
     }
 
     // MARK: - Helpers
@@ -195,13 +147,12 @@ final class WireConverterTests: XCTestCase {
         makeTestInterface(nodes: nodes, timestamp: timestamp)
     }
 
-    func computeDelta(
+    func compareInterfaces(
         before: [InterfaceTree.Element],
         after: [InterfaceTree.Element],
         beforeTree: [TestInterfaceNode]? = nil,
-        afterTree: [TestInterfaceNode]? = nil,
-        isScreenChange: Bool
-    ) -> ComputedChangeFacts {
+        afterTree: [TestInterfaceNode]? = nil
+    ) -> InterfaceComparison {
         let resolvedAfterTree: [TestInterfaceNode]
         if let afterTree, !afterTree.isEmpty {
             resolvedAfterTree = afterTree
@@ -210,19 +161,10 @@ final class WireConverterTests: XCTestCase {
         }
         let beforeInterface = makeInterface(nodes: beforeTree ?? before.map(wireLeaf), timestamp: Date(timeIntervalSince1970: 0))
         let afterInterface = makeInterface(nodes: resolvedAfterTree, timestamp: Date(timeIntervalSince1970: 1))
-        let beforeCapture = AccessibilityTrace.Capture(sequence: 1, interface: beforeInterface)
-        let afterCapture = AccessibilityTrace.Capture(
-            sequence: 2,
-            interface: afterInterface,
-            parentHash: beforeCapture.hash,
-            transition: isScreenChange
-                ? AccessibilityTrace.Transition(fallbackReason: .primaryHeaderChanged)
-                : .empty
-        )
-        let trace = AccessibilityTrace(captures: [beforeCapture, afterCapture])
-        return ComputedChangeFacts(
-            trace: trace,
-            changeFacts: trace.changeFacts
+        return InterfaceComparison(
+            before: beforeInterface,
+            after: afterInterface,
+            edits: ElementEdits.between(beforeInterface, afterInterface)
         )
     }
 

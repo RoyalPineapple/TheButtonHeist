@@ -101,12 +101,12 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
             in: heist.result
         )
         let result = try XCTUnwrap(evidence.result)
-        let trace = try XCTUnwrap(result.accessibilityTrace)
+        let observation = try XCTUnwrap(result.observationEvidence)
         let settlement = try XCTUnwrap(result.evidence.settlement)
 
         XCTAssertEqual(evidence.expectation?.met, true)
-        XCTAssertTrue(trace.hostedAppearedLabels.contains("Processing"))
-        XCTAssertTrue(trace.hostedDisappearedLabels.contains("Submit"))
+        XCTAssertTrue(observation.hostedElementEdits.added.contains { $0.label == "Processing" })
+        XCTAssertTrue(observation.hostedElementEdits.removed.contains { $0.label == "Submit" })
         XCTAssertTrue(settlement.readinessEstablished)
         XCTAssertTrue(settlement.observationHandoffCompleted)
     }
@@ -147,26 +147,18 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
     }
 }
 
-private extension AccessibilityTrace {
-    var hostedAppearedLabels: [String] {
-        changeFacts.flatMap { fact -> [String] in
-            guard case .elementsChanged(let elements) = fact else { return [] }
-            return elements.appeared.compactMap(\.hostedElementLabel)
-        }
-    }
-
-    var hostedDisappearedLabels: [String] {
-        changeFacts.flatMap { fact -> [String] in
-            guard case .elementsChanged(let elements) = fact else { return [] }
-            return elements.disappeared.compactMap(\.hostedElementLabel)
-        }
-    }
-}
-
-private extension AccessibilityTrace.InterfaceChangeNode {
-    var hostedElementLabel: String? {
-        guard case .element(let element, _) = node else { return nil }
-        return element.label
+private extension Observation.Evidence {
+    var hostedElementEdits: ElementEdits {
+        let snapshots = (baseline.map { [$0] } ?? []) + events.compactMap(\.snapshot)
+        return zip(snapshots, snapshots.dropFirst())
+            .reduce(into: ElementEdits()) { combined, pair in
+                let edits = ElementEdits.between(pair.0.interface, pair.1.interface)
+                combined = ElementEdits(
+                    added: combined.added + edits.added,
+                    removed: combined.removed + edits.removed,
+                    updated: combined.updated + edits.updated
+                )
+            }
     }
 }
 

@@ -100,12 +100,11 @@ extension WireConverterTests {
             customRotors: [.init(name: "Errors")]
         )]
 
-        let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: before, after: after, afterTree: []
         )
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertFalse(delta.changeFacts.isEmpty)
-        let change = delta.testEdits.updatedOptional?.first?.changes.first
+        XCTAssertFalse(delta.edits.isEmpty)
+        let change = delta.edits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .rotors)
         XCTAssertNil(change?.oldDisplayText)
         XCTAssertEqual(change?.newDisplayText, "Errors")
@@ -125,12 +124,11 @@ extension WireConverterTests {
             customContent: [.init(label: "Size", value: "3.1 MB", isImportant: false)]
         )]
 
-        let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: before, after: after, afterTree: []
         )
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertFalse(delta.changeFacts.isEmpty)
-        let change = delta.testEdits.updatedOptional?.first?.changes.first
+        XCTAssertFalse(delta.edits.isEmpty)
+        let change = delta.edits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .customContent)
         XCTAssertEqual(change?.oldDisplayText, "Size: 2.4 MB")
         XCTAssertEqual(change?.newDisplayText, "Size: 3.1 MB")
@@ -144,12 +142,11 @@ extension WireConverterTests {
             customContent: [.init(label: "Price", value: "$9.99", isImportant: true)]
         )]
 
-        let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: before, after: after, afterTree: []
         )
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertFalse(delta.changeFacts.isEmpty)
-        let change = delta.testEdits.updatedOptional?.first?.changes.first
+        XCTAssertFalse(delta.edits.isEmpty)
+        let change = delta.edits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .customContent)
         XCTAssertNil(change?.oldDisplayText)
         XCTAssertEqual(change?.newDisplayText, "Price: $9.99")
@@ -163,12 +160,11 @@ extension WireConverterTests {
         )]
         let after = [makeScreenElement(heistId: "card", label: "Item")]
 
-        let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: before, after: after, afterTree: []
         )
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertFalse(delta.changeFacts.isEmpty)
-        let change = delta.testEdits.updatedOptional?.first?.changes.first
+        XCTAssertFalse(delta.edits.isEmpty)
+        let change = delta.edits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .customContent)
         XCTAssertEqual(change?.oldDisplayText, "Price: $9.99")
         XCTAssertNil(change?.newDisplayText)
@@ -185,10 +181,10 @@ extension WireConverterTests {
             ]
         )]
 
-        let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: before, after: after, afterTree: []
         )
-        let change = delta.testEdits.updatedOptional?.first?.changes.first
+        let change = delta.edits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.newDisplayText, "Temperature: 58°F; Humidity: 82%")
     }
 
@@ -282,11 +278,10 @@ extension WireConverterTests {
             customContent: content
         )]
 
-        let delta = computeDelta(
-            before: elements, after: elements, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: elements, after: elements, afterTree: []
         )
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertTrue(delta.changeFacts.isEmpty)
+        XCTAssertTrue(delta.edits.isEmpty)
     }
 
     // MARK: - Delta: Importance Change
@@ -303,12 +298,11 @@ extension WireConverterTests {
             customContent: [.init(label: "Size", value: "2.4 MB", isImportant: true)]
         )]
 
-        let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: before, after: after, afterTree: []
         )
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertFalse(delta.changeFacts.isEmpty)
-        let change = delta.testEdits.updatedOptional?.first?.changes.first
+        XCTAssertFalse(delta.edits.isEmpty)
+        let change = delta.edits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .customContent)
     }
 
@@ -328,12 +322,11 @@ extension WireConverterTests {
             customContent: [.init(label: "Stock", value: "Low Stock", isImportant: true)]
         )]
 
-        let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: before, after: after, afterTree: []
         )
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertFalse(delta.changeFacts.isEmpty)
-        let properties = delta.testEdits.updatedOptional?.first?.changes.map(\.property)
+        XCTAssertFalse(delta.edits.isEmpty)
+        let properties = delta.edits.updatedOptional?.first?.changes.map(\.property)
         XCTAssertTrue(properties?.contains(.value) == true)
         XCTAssertTrue(properties?.contains(.customContent) == true)
     }
@@ -348,10 +341,10 @@ extension WireConverterTests {
             customContent: [.init(label: "Featured", value: "", isImportant: true)]
         )]
 
-        let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: before, after: after, afterTree: []
         )
-        let change = delta.testEdits.updatedOptional?.first?.changes.first
+        let change = delta.edits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .customContent)
         XCTAssertEqual(change?.newDisplayText, "Featured")
     }
@@ -364,10 +357,10 @@ extension WireConverterTests {
             customContent: [.init(label: "", value: "Available", isImportant: false)]
         )]
 
-        let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: before, after: after, afterTree: []
         )
-        let change = delta.testEdits.updatedOptional?.first?.changes.first
+        let change = delta.edits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .customContent)
         XCTAssertEqual(change?.newDisplayText, "Available")
     }

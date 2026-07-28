@@ -121,16 +121,8 @@ class SemanticObservationStreamTestCase: XCTestCase {
 
     /// A tree that moved and then stopped, as the two recorded events that say so.
     struct Reading {
-        let changedEvent: Observation.Event
-        let settledEvent: Observation.Event
-
-        var changed: Observation.SnapshotEvent {
-            changedEvent.committedSnapshot
-        }
-
-        var settled: Observation.SnapshotEvent {
-            settledEvent.committedSnapshot
-        }
+        let changed: TheVault.State.ReadObservation
+        let settled: TheVault.State.ReadObservation
     }
 
     /// A reading of a tree holding one header, that moved and then went quiet.
@@ -147,17 +139,17 @@ class SemanticObservationStreamTestCase: XCTestCase {
     /// pair is what "the tree moved and then stopped" looks like as events.
     func commitSettling(_ observation: InterfaceObservation) async -> Reading {
         let changed = await vault.semanticObservationStream
-            .commitVisibleEventForTesting(observation)
+            .commitVisibleObservationForTesting(observation)
         let settled = await vault.semanticObservationStream
-            .commitVisibleEventForTesting(observation)
+            .commitVisibleObservationForTesting(observation)
         precondition(
-            changed.committedSnapshot.isChange && !settled.committedSnapshot.isChange,
+            changed.current.isChange && !settled.current.isChange,
             "Second reading must be quiet"
         )
-        return Reading(changedEvent: changed, settledEvent: settled)
+        return Reading(changed: changed, settled: settled)
     }
 
-    func admittedVisibleObservation() async throws -> Observation.Store.AdmittedObservation {
+    func admittedVisibleObservation() async throws -> TheVault.State.AdmittedObservation {
         let evidence = await vault.semanticObservationStream.admittedVisibleObservation(timeout: 1)
         return try XCTUnwrap(evidence)
     }
@@ -181,164 +173,6 @@ class SemanticObservationStreamTestCase: XCTestCase {
             await Task.yield()
         }
         XCTFail("Timed out waiting for \(expectedCount) observation waiters")
-    }
-}
-
-/// Run a settlement to its terminal result through the real reducer.
-///
-/// Nothing here decides anything. `Settlement.Reducer` is
-/// `(State, Event) -> Decision` over values — no clock, no actor, no I/O — so a
-/// test drives it with the facts the executor would deliver and reads the same
-/// `Result` production projects. A stand-in that assembled its own `Result`
-/// could only ever be a second implementation of the thing under test, free to
-/// drift from it.
-///
-/// `observed` and `dispatch` are the boundary's outputs, which the reducer only
-/// ever consumes as values: a test names them the same way the executor would
-/// deliver them. An observation is the one a test cannot fabricate — a `Moment`
-/// carries the log's identity, so events come from the vault.
-///
-/// A reading is the pair "the tree moved, then it went quiet", because that is
-/// what a run needs to settle: stillness is proved by a quiet reading and
-/// nothing else, so a script holding only the change describes a run that was
-/// still moving when it ended. Quiet is committed rather than asserted —
-/// `isChange` is derived from the snapshot before it, so the quiet half is a
-/// real event from the vault like its change.
-@MainActor
-func scriptedSettlement(
-    _ command: Settlement.Command,
-    observed: SemanticObservationStreamTestCase.Reading?,
-    dispatch: TheSafecracker.ActionDispatchResult? = nil,
-    cancelled: Bool = false,
-    elapsed: ElapsedMilliseconds = RuntimeElapsed.admit(milliseconds: 1)
-) -> Settlement.Result {
-    var run = ScriptedRun(command, elapsed: elapsed)
-
-    if case .currentState = command {
-        guard let observed else { return run.finish(.baselineUnavailable(.unavailable)) }
-        return run.finish(.baselineAdmitted(observed.changed))
-    }
-    if case .capture = command.baseline {
-        guard let observed else { return run.finish(.baselineUnavailable(.unavailable)) }
-        run.send(.baselineAdmitted(observed.changed))
-    }
-
-    run.send(.channelsArmed)
-    if case .action(let action) = command {
-        // A caller that does not name a dispatch is describing a run whose
-        // action plainly succeeded, which is the command's own payload.
-        run.send(.dispatchCompleted(
-            dispatch ?? .success(payload: action.command.actionResultPayload)
-        ))
-    }
-
-    // Readiness before the observations: an admission with no established
-    // readiness has no handoff to be admitted into.
-    if let observed {
-        run.send(.readinessEstablished(.init(
-            generation: .initial,
-            observationBoundary: .including(observed.changed.moment)
-        )))
-        for event in [observed.changedEvent, observed.settledEvent] {
-            run.send(.observationAdmitted(.init(
-                observed: event
-            )))
-        }
-    }
-
-    if cancelled {
-        return run.finish(.cancelled)
-    }
-    // A run whose expectation was met is already terminal. Anything still
-    // active ends the only other way a run can: its deadline.
-    return run.timeOut()
-}
-
-/// A settlement being driven one fact at a time.
-///
-/// Holds only the reducer's own state, so what a scripted run believes is what
-/// the reducer believes — there is no second model to reconcile.
-@MainActor
-private struct ScriptedRun {
-    private var state: Settlement.State
-    /// What every event in this run reports as time elapsed.
-    ///
-    /// Production reads a rising clock, but only the event that finalizes a run
-    /// puts its elapsed on the result — every earlier one is discarded. So one
-    /// value per run is exactly what is observable, and naming it here keeps it
-    /// on the events rather than in a second copy beside them.
-    private let elapsed: ElapsedMilliseconds
-    /// The deadline the reducer last asked to have armed.
-    ///
-    /// Tracked from the effect rather than read off the session, because that is
-    /// the contract: the reducer only honours a `deadlineReached` for the
-    /// deadline it is currently waiting on, and `armDeadline` is how it says
-    /// which one that is.
-    private var armedDeadline: Settlement.PhaseDeadline?
-
-    init(_ command: Settlement.Command, elapsed: ElapsedMilliseconds) {
-        self.elapsed = elapsed
-        state = Settlement.Reducer.begin(command).state
-    }
-
-    /// Deliver one fact, unless the run already ended.
-    mutating func send(_ fact: Settlement.Event.Fact) {
-        guard state.result == nil else { return }
-        let decision = Settlement.Reducer.reduce(
-            state,
-            event: Settlement.Event(
-                fact: fact,
-                elapsed: elapsed,
-                instant: scriptedInstant
-            )
-        )
-        state = decision.state
-        for effect in decision.effects {
-            if case .armDeadline(let deadline) = effect {
-                armedDeadline = deadline
-            }
-        }
-    }
-
-    /// Deliver a last fact and take the result.
-    mutating func finish(_ fact: Settlement.Event.Fact) -> Settlement.Result {
-        send(fact)
-        return result()
-    }
-
-    /// End an unsettled run at its deadline.
-    ///
-    /// Uses the deadline the reducer armed, so the fact names the one the run
-    /// is actually waiting on.
-    mutating func timeOut() -> Settlement.Result {
-        if let armedDeadline {
-            send(.deadlineReached(armedDeadline))
-        }
-        return result()
-    }
-
-    /// The terminal result, finalizing first if the run still owes it.
-    private mutating func result() -> Settlement.Result {
-        if state.result == nil {
-            send(.finalized(.retained))
-        }
-        guard let result = state.result else {
-            preconditionFailure("Scripted settlement did not reach a terminal result")
-        }
-        return result
-    }
-}
-
-/// One instant for every scripted event, so a run is a function of its facts
-/// alone rather than of when it was run.
-private let scriptedInstant = ContinuousClock.Instant.now
-
-extension Observation.Event {
-    var committedSnapshot: Observation.SnapshotEvent {
-        guard commitsObservation, let observation else {
-            preconditionFailure("Expected an event that commits an observation")
-        }
-        return observation
     }
 }
 
