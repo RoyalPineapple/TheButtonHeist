@@ -1,29 +1,7 @@
 import Foundation
 import ThePlans
 
-/// One observation, as the predicate runtime sees it.
-///
-/// A tick carries the reading it was taken from, so a consumer never asks the
-/// live tree anything: a predicate is judged against the moment it was observed.
-/// Everything a tick holds is a value, which is why folding them needs no actor.
-package enum Tick: Sendable, Equatable {
-    /// A reading of the element tree.
-    ///
-    /// Carries the whole capture, not just its interface: the capture's context
-    /// and transition are the run's evidence of focus, keyboard, window stack
-    /// and notifications, which a report quotes and no predicate reads. A tick
-    /// is what was observed, not the subset predicates ask about.
-    case elementsChanged(AccessibilityTrace.Capture)
-    case screenChanged(ScreenFacts)
-    case announcement(String)
-    case noChange
-
-    /// The tree this tick read, when it read one.
-    package var interface: Interface? {
-        guard case .elementsChanged(let capture) = self else { return nil }
-        return capture.interface
-    }
-
+private extension Observation.Fact {
     var reading: Int {
         var hasher = Hasher()
         switch self {
@@ -31,8 +9,8 @@ package enum Tick: Sendable, Equatable {
             capture.interface.hashSemantic(into: &hasher)
         case .screenChanged(let facts):
             hasher.combine(facts.idAfter)
-        case .announcement(let spoken):
-            hasher.combine(spoken)
+        case .announcement(let announcement):
+            hasher.combine(announcement)
         case .noChange:
             hasher.combine("noChange")
         }
@@ -113,24 +91,24 @@ package struct PendingPredicate: Equatable, Sendable {
     /// nothing to say about most of them. Pattern-matching the tick against the
     /// question is the whole of it: a combination that does not line up is
     /// indifference, not an error.
-    func evaluate(_ tick: Tick) -> Evaluation {
-        switch (tick, kind) {
+    func evaluate(_ fact: Observation.Fact) -> Evaluation {
+        switch (fact, kind) {
         case (.elementsChanged(let capture), .elementsChanged(let query?)):
             return query.matches(capture.interface)
-                ? .matched(reading: reading(of: capture.interface, or: tick))
+                ? .matched(reading: reading(of: capture.interface, or: fact))
                 : .unmatched
         case (.elementsChanged(let capture), .elementsChanged(nil)):
-            return .matched(reading: reading(of: capture.interface, or: tick))
+            return .matched(reading: reading(of: capture.interface, or: fact))
         case (.screenChanged(let facts), .screenChanged(let query?)):
-            return query.matches(facts) ? .matched(reading: tick.reading) : .unmatched
+            return query.matches(facts) ? .matched(reading: fact.reading) : .unmatched
         case (.screenChanged, .screenChanged(nil)):
-            return .matched(reading: tick.reading)
-        case (.announcement(let spoken), .announcement(let query?)):
-            return query.matches(spoken) ? .matched(reading: tick.reading) : .unmatched
+            return .matched(reading: fact.reading)
+        case (.announcement(let announcement), .announcement(let query?)):
+            return query.matches(announcement.text) ? .matched(reading: fact.reading) : .unmatched
         case (.announcement, .announcement(nil)):
-            return .matched(reading: tick.reading)
+            return .matched(reading: fact.reading)
         case (.noChange, .noChange):
-            return .matched(reading: tick.reading)
+            return .matched(reading: fact.reading)
         case (.elementsChanged, _), (.screenChanged, _), (.announcement, _), (.noChange, _):
             return .indifferent
         }
@@ -138,8 +116,8 @@ package struct PendingPredicate: Equatable, Sendable {
 
     /// The reading this predicate compares at, which is the scope its assertion
     /// named or the whole tree when it named none.
-    private func reading(of interface: Interface, or tick: Tick) -> Int {
-        scope.map { $0.reading(in: interface) } ?? tick.reading
+    private func reading(of interface: Interface, or fact: Observation.Fact) -> Int {
+        scope.map { $0.reading(in: interface) } ?? fact.reading
     }
 }
 
@@ -196,22 +174,22 @@ enum PendingStep: Equatable {
     /// Only the owed predicate sees the tick — the one behind it in a pair is
     /// unreachable until this one matches, so a change's second predicate never
     /// sees the tick that matched its first.
-    func evaluate(_ tick: Tick) -> Evaluation {
+    func evaluate(_ fact: Observation.Fact) -> Evaluation {
         switch self {
         case .single(let predicate):
-            switch predicate.evaluate(tick) {
+            switch predicate.evaluate(fact) {
             case .indifferent: return .indifferent
             case .matched: return .matched(nil)
             case .unmatched: return .unmatched
             }
         case .pair(let first, let second):
-            switch first.evaluate(tick) {
+            switch first.evaluate(fact) {
             case .indifferent: return .indifferent
             case .matched(let reading): return .matched(.owed(after: reading, second))
             case .unmatched: return .unmatched
             }
         case .owed(let previous, let predicate):
-            switch predicate.evaluate(tick) {
+            switch predicate.evaluate(fact) {
             case .indifferent: return .indifferent
             case .matched(let reading) where reading != previous: return .matched(nil)
             case .matched, .unmatched: return .unmatched
@@ -242,9 +220,9 @@ package struct Expectation: Equatable, Sendable {
     /// The only way an expectation moves. Given the log, predicate state is
     /// recomputed rather than remembered, so the same ticks always fold to the
     /// same answer.
-    package func folding(_ ticks: some Sequence<Tick>) -> Self {
-        ticks.reduce(into: self) { expectation, tick in
-            expectation.pending = Self.remaining(of: expectation.pending, after: tick)
+    package func folding(_ facts: some Sequence<Observation.Fact>) -> Self {
+        facts.reduce(into: self) { expectation, fact in
+            expectation.pending = Self.remaining(of: expectation.pending, after: fact)
         }
     }
 
@@ -263,16 +241,16 @@ package struct Expectation: Equatable, Sendable {
     /// then the departure's `exists` behind it.
     private static func remaining(
         of pending: [PendingStep],
-        after tick: Tick
+        after fact: Observation.Fact
     ) -> [PendingStep] {
         guard let head = pending.first else { return [] }
-        switch head.evaluate(tick) {
+        switch head.evaluate(fact) {
         case .unmatched:
             return pending
         case .indifferent:
-            return [head] + remaining(of: Array(pending.dropFirst()), after: tick)
+            return [head] + remaining(of: Array(pending.dropFirst()), after: fact)
         case .matched(let rest):
-            return (rest.map { [$0] } ?? []) + remaining(of: Array(pending.dropFirst()), after: tick)
+            return (rest.map { [$0] } ?? []) + remaining(of: Array(pending.dropFirst()), after: fact)
         }
     }
 

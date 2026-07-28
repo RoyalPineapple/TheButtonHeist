@@ -548,7 +548,7 @@ private final class SettlementResultScript {
     private func reading(
         of sourceEvent: Observation.SnapshotEvent,
         scope: SemanticObservationScope
-    ) -> Observation.SnapshotEvent {
+    ) -> Observation.Event {
         let capture = sourceEvent.moment.capture
         nextSequence += 1
         let trace = previousCapture.map {
@@ -569,9 +569,14 @@ private final class SettlementResultScript {
             viewportFrames: sourceEvent.snapshot.viewportFrames,
             placementTolerance: sourceEvent.snapshot.placementTolerance
         )
-        let event: Observation.SnapshotEvent
+        let event: Observation.Event
         do {
-            event = try log.record(snapshot: snapshot, continuity: .sameGeneration)
+            let recorded = try log.record(snapshot: snapshot, continuity: .sameGeneration)
+            guard let committed = recorded.events.last,
+                  committed.snapshotEvent == recorded.snapshot else {
+                preconditionFailure("Wait result fixture did not record a committed observation event")
+            }
+            event = committed
         } catch {
             preconditionFailure("Wait result fixture produced an invalid observation transition: \(error)")
         }
@@ -588,10 +593,13 @@ private final class SettlementResultScript {
     func result(for command: Settlement.Command) -> Settlement.Result {
         guard !events.isEmpty else { return scriptedSettlement(command, observed: nil) }
         let sourceEvent = events.removeFirst()
-        return scriptedSettlement(command, observed: (
-            changed: reading(of: sourceEvent, scope: command.observationScope),
-            settled: reading(of: sourceEvent, scope: command.observationScope)
-        ))
+        return scriptedSettlement(
+            command,
+            observed: SemanticObservationStreamTestCase.Reading(
+                changedEvent: reading(of: sourceEvent, scope: command.observationScope),
+                settledEvent: reading(of: sourceEvent, scope: command.observationScope)
+            )
+        )
     }
 }
 

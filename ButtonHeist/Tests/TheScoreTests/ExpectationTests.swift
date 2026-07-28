@@ -1,5 +1,6 @@
 import AccessibilitySnapshotModel
 import ButtonHeistTestSupport
+import Foundation
 import ThePlans
 import XCTest
 @testable import TheScore
@@ -10,7 +11,7 @@ import XCTest
 ///
 /// These tests are about the reduction — which predicates leave, and when. An
 /// authored list is a narrative: this happened, then this happened, then this
-/// happened. A tick walks it from the front and stops at the first predicate
+/// happened. A fact walks it from the front and stops at the first predicate
 /// that refuses, so a beat holds every beat behind it. What a delta composes
 /// into is `ElementAssertionCompositionTests`.
 final class ExpectationTests: XCTestCase {
@@ -31,9 +32,9 @@ final class ExpectationTests: XCTestCase {
         )
     }
 
-    /// The head drains on the tick that answers it, and only then is the next
+    /// The head drains on the fact that answers it, and only then is the next
     /// beat asked anything.
-    func testAPredicateDrainsOnTheTickThatAnswersIt() throws {
+    func testAPredicateDrainsOnTheFactThatAnswersIt() throws {
         var expectation = try Expectation([exists("Early"), exists("Late")])
 
         expectation = expectation.folding([.elementsChanged(interface(["Early"]))])
@@ -120,12 +121,17 @@ final class ExpectationTests: XCTestCase {
     func testAnUnsatisfiedGraphPredicateDoesNotBlockAnAnnouncement() throws {
         var expectation = try Expectation([exists("Absent"), announcement("Saved")])
 
-        expectation = expectation.folding([.announcement("Saved.")])
+        expectation = expectation.folding([.announcement(CapturedAnnouncement(
+            sequence: 1,
+            text: "Saved.",
+            timestamp: Date(timeIntervalSince1970: 1),
+            kind: .announcement
+        ))])
 
         XCTAssertEqual(expectation.outstanding.count, 1)
     }
 
-    func testAScreenTickDoesNotAnswerAGraphPredicate() throws {
+    func testAScreenFactDoesNotAnswerAGraphPredicate() throws {
         var expectation = try Expectation([exists("Detail")])
 
         expectation = expectation.folding([.screenChanged(ScreenFacts(idAfter: "Detail"))])
@@ -181,7 +187,7 @@ final class ExpectationTests: XCTestCase {
         XCTAssertTrue(expectation.isMet, "movement owes nothing either")
     }
 
-    /// A stillness tick answers no element question, so a predicate waiting on
+    /// A stillness fact answers no element question, so a predicate waiting on
     /// one stays outstanding through it.
     func testNoChangeArrivingEarlySatisfiesNothing() throws {
         var expectation = try Expectation([exists("Late")])
@@ -259,7 +265,7 @@ final class BarePredicateTests: XCTestCase {
 
     /// A frame moving is not something anybody asserted.
     ///
-    /// The vault emits a tick for it, and it should: the tree is still moving
+    /// The vault emits a fact for it, and it should: the tree is still moving
     /// and settlement needs to know. But nothing a predicate can name differs,
     /// so the change this predicate is waiting for has not happened yet.
     func testAGraphThatOnlyMovedIsNotAChange() throws {
@@ -276,7 +282,7 @@ final class BarePredicateTests: XCTestCase {
         )
     }
 
-    /// The same two ticks, with something a predicate could have named.
+    /// The same two facts, with something a predicate could have named.
     func testAGraphWhoseElementsDifferIsAChange() throws {
         var expectation = try Expectation([bareChange()])
 

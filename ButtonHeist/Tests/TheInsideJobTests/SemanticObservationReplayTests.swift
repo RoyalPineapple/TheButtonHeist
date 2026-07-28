@@ -11,12 +11,12 @@ import ButtonHeistTestSupport
 
 @MainActor
 final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
-    func testReplayRelayDeliversEveryRetainedSnapshotInOrder() async {
+    func testReplayRelayDeliversEveryRetainedEventInOrder() async {
         let stream = vault.semanticObservationStream
-        let first = await stream.commitVisibleObservationForTesting(
+        let first = await stream.commitVisibleEventForTesting(
             observation(label: "First", heistId: "first")
         )
-        let second = await stream.commitVisibleObservationForTesting(
+        let second = await stream.commitVisibleEventForTesting(
             observation(label: "Second", heistId: "second")
         )
         var received: [Observation.Event] = []
@@ -25,17 +25,17 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
             receiveUnavailable: { _ in XCTFail("Expected retained history") }
         )
 
-        relay.replay(.events([.replayed(first), .replayed(second)]))
+        relay.replay(.events([first, second]))
 
-        XCTAssertEqual(received, [.replayed(first), .replayed(second)])
+        XCTAssertEqual(received, [first, second])
     }
 
     func testReplayRelayDeduplicatesSubscriptionHandoff() async {
         let stream = vault.semanticObservationStream
-        let retained = await stream.commitVisibleObservationForTesting(
+        let retained = await stream.commitVisibleEventForTesting(
             observation(label: "Retained", heistId: "retained")
         )
-        let raced = await stream.commitVisibleObservationForTesting(
+        let raced = await stream.commitVisibleEventForTesting(
             observation(label: "Raced", heistId: "raced")
         )
         var received: [Observation.Event] = []
@@ -44,28 +44,31 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
             receiveUnavailable: { _ in XCTFail("Expected retained history") }
         )
 
-        relay.receive(.replayed(raced))
-        relay.replay(.events([.replayed(retained), .replayed(raced)]))
+        relay.receive(raced)
+        relay.replay(.events([retained, raced]))
 
-        XCTAssertEqual(received, [.replayed(retained), .replayed(raced)])
+        XCTAssertEqual(received, [retained, raced])
     }
 
     func testReplayRelayReportsExpiredHistoryBeforeBufferedDelivery() async {
         let stream = vault.semanticObservationStream
         await stream.storeOwner.reset(retentionLimit: 2)
-        let baseline = await stream.commitVisibleObservationForTesting(
+        let baseline = await stream.commitVisibleEventForTesting(
             observation(label: "Baseline", heistId: "baseline")
         )
-        _ = await stream.commitVisibleObservationForTesting(
+        _ = await stream.commitVisibleEventForTesting(
             observation(label: "First", heistId: "first")
         )
-        _ = await stream.commitVisibleObservationForTesting(
+        _ = await stream.commitVisibleEventForTesting(
             observation(label: "Second", heistId: "second")
         )
-        let latest = await stream.commitVisibleObservationForTesting(
+        let latest = await stream.commitVisibleEventForTesting(
             observation(label: "Latest", heistId: "latest")
         )
-        let history = await stream.events(since: baseline.moment, scope: .visible)
+        let history = await stream.events(
+            since: baseline.committedSnapshot.moment,
+            scope: .visible
+        )
         guard case .expired = history else {
             return XCTFail("Expected baseline history to expire")
         }
@@ -79,11 +82,11 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
             receiveUnavailable: { unavailable.append($0) }
         )
 
-        relay.receive(.replayed(latest))
+        relay.receive(latest)
         relay.replay(history)
 
         XCTAssertEqual(unavailable, [history])
-        XCTAssertEqual(received, [.replayed(latest)])
+        XCTAssertEqual(received, [latest])
     }
 
     func testIndependentStreamReplaysDoNotShareProgress() async throws {

@@ -13,8 +13,6 @@ internal struct ScreenGeneration: RawRepresentable, Sendable, Equatable, Hashabl
     }
 }
 
-internal enum Observation {}
-
 extension Observation {
     internal struct Gap: Sendable, Equatable {
         internal let reason: Reason
@@ -186,12 +184,12 @@ extension Observation {
     }
 
     internal enum PublicationOutcome: Sendable {
-        case delivered(SnapshotEvent)
+        case delivered(Store.ReadObservation)
         case superseded
 
         internal var event: SnapshotEvent? {
-            guard case .delivered(let event) = self else { return nil }
-            return event
+            guard case .delivered(let read) = self else { return nil }
+            return read.event
         }
     }
 

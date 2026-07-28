@@ -1,647 +1,566 @@
-# Migrating off the git model onto ticks
+# Canonical observation migration
 
-Branch: `alex/nightly-watchdog-correctness` (PR #1402)
+## Status
 
-## The two models
-
-**Git model (old).** Captures are immutable commits carrying `parentHash` +
-`sequence`, validated for canonical lineage on construction and decode. What
-happened is a *diff* computed between adjacent commits. The durable artifact is
-an `AccessibilityTrace` — a commit chain you walk and diff. A reading is a
-transaction: prepared, validated, atomically published, guarded by a delivery
-token, and markable dirty by "invalidation."
-
-**Tick model (new).** The vault mints a tick per moment, and the tick carries
-the full snapshot. What happened was decided once, in the vault, when it chose
-which tick to mint. Nothing downstream diffs anything, and nothing asks a
-recording for a live fact.
-
-## Invariants the new world holds to
-
-1. The vault owns all determinations about state. Everyone else reacts to the
-   ticks it emits. Nobody else reasons about this.
-2. The vault is the only emitter of ticks.
-3. Ticks are atomic *at the machine*: one tick, one pass, one settle check. The
-   original bug was folding three ticks into a single `admit` — not the array
-   itself. Carrying ticks around in an array is fine; ticks are sequential. The
-   only rule is that they enter the pipe one at a time in the correct order.
-   There is no timing component — *when* a tick arrives is not part of the
-   contract, only its position in the sequence.
-4. `.noChange` is the carrier that proves the stream is alive. Interesting ticks
-   ride *between* carrier ticks, never on them.
-5. The TickLog is a recording of the past and a source of no live truth. Nothing
-   is inferred from it; it is appended to and never read until the run is over.
-6. There is one lane. Predicates that do not care about a tick are indifferent
-   to it, which is not routing.
-7. Nothing latches. Predicates match and disappear; an empty list is the only
-   record that they did.
-8. There is no such thing as invalidation. Data that is stale is *gone* — the
-   next reading mints the next tick. Nothing is marked dirty, because there is
-   no working copy to mark.
-9. A screen change is one event in the world and six steps in here, and the
-   ticks go out *as those steps happen*, not derived afterwards from the
-   collapsed result.
-10. **The tick machine has no concept of time, only order.** Every snapshot or
-    announcement in the vault is *now* until the next one arrives, so "the
-    newest entry" is the present by definition. There is no freshness to
-    consult and no such thing as a reading that exists but is stale.
-11. **The only legitimate consumers of wall-clock time are the timeout and the
-    Safecracker.** Anything else reading a clock is reasoning about time it has
-    no business knowing.
-
-    The Tripwire is the *boundary* where real time enters and becomes order —
-    which is what makes its display link a half concept. `CADisplayLink` is
-    genuinely wall clock: hardware refresh, 60/120Hz, and `updateDisplayLinkRate`
-    tunes it. It has to be real, because only the hardware knows when a frame is
-    ready to sample. But `onTick` does `tickCount += 1`, reads, and resolves
-    waiters with `.observed` — a position, never a duration. Nothing downstream
-    learns when it fired, how long since the last one, or at what rate.
-
-    A clock on the inside, a counter on the outside. That is why it is the basis
-    of the tick-based timing rather than an exception to it: everything after it
-    inherits a sequence, and the sequence has a real cause. The display link is
-    not a third consumer — it is the boundary.
-
-    **Verified against the tree.** Every wall-clock use in the settlement runtime
-    is arming a deadline: `SemanticObservationTiming:64`, `Settlement:33`,
-    `Settlement+Reducer:187` (readiness allowance), `:357` (handoff allowance),
-    plus `TheBrains:330` (cleanup on teardown). One mechanism, several phases.
-    Nothing measures elapsed time to decide behaviour and nothing compares
-    durations to conclude the UI settled.
-
-12. **There is one of each of them.** One brains, one tripwire, one safecracker,
-    one vault. Each could be a singleton if it were worth the ceremony. So any
-    machinery whose job is to decide *which of the many* gets something, or to
-    reconcile two of them racing, is modelling a plurality that does not exist.
-    A dictionary keyed by subscriber, an ordering queue over competing readers,
-    a token proving which reader won — each is the git model's
-    many-working-copies assumption wearing a different hat.
-
-    The exception to watch for is something plural *within* the one instance.
-    Scope pressure is genuinely a max over several held scopes, because one run
-    nests scopes inside itself. That is plural scopes, not plural consumers.
-
-    **What this collapsed, in `Observation.Stream`:**
-
-    | Was | Modelled | Is |
-    |---|---|---|
-    | `subscribers: [UInt64: Subscriber]` + broadcast filter | many listeners, route by scope | `receive:` — one closure |
-    | `DeliveryState` (~50 lines: `nextOrder`, `pending`, contiguity drain) | many readers racing for order | gone; the vault emits in order |
-    | `publicationWaiters: [DeliveryToken: …]` | many awaiting publication | gone |
-    | `DeliveryToken` / `DeliveryGeneration` / `CommittedDelivery` | proving which reader won | gone |
-    | `latestDelivered*` | a delivered copy distinct from the store | `latestRead*` — a main-actor mirror of the store |
-    | 4 × `invalidate*` entry points | marking a working copy dirty | `discardCurrentObservation` + `discardIfScreenChangedSinceRead` |
-    | `SemanticObservationScopePressure` | — | **kept.** Plural scopes, not plural consumers. |
-
-    The comment that gave it away, on the old `beforeVisibleReading` seam:
-    *"whether a second consumer starts its own or joins this one."* There is no
-    second consumer.
-
-    The ~9 `instant: ContinuousClock.Instant` fields on `Settlement` types are
-    not a second time concept: the reducer is pure and cannot read a clock, so
-    the instant rides in on the fact for a deadline to be armed from. That is the
-    timeout's plumbing.
-
-## The screen boundary, in full
-
-Per `screen-change-timeline.md`:
-
-1. Detect
-2. **empty `elementsChanged` tick** — the departure. Identity does not survive a
-   boundary, so a `missing` half needs a reading holding none of what left.
-3. Throw away the tree, parse visible, classify
-4. **`screenChanged` tick** — the identity moves. Lands *before* the arriving
-   graph: naming a screen needs only what is on it.
-5. Stitch edges (`fullGraph()`) — **NOT CALLED TODAY. Real hole.**
-6. **graph `elementsChanged` tick** — the arrival
-
-The order is what a boundary *means*. Deriving all three from one finished
-commit gets the order right and the layering wrong: by commit time the moments
-have already collapsed, step 2's "empty tree" is a device minted after the
-arrival was already parsed, and step 5 has nowhere to live.
-
-## Inventory: which systems are in which shape
-
-| System | Shape |
+| Item | State |
 |---|---|
-| The one comparison (`SnapshotEvent.isChange`) | new — single decision point, vault-owned |
-| Screen classification (`ScreenClassifier` → `ScreenContinuity.isReplacement`) | new — vault-owned |
-| Tick vocabulary (`Tick`: 4 cases, full payloads) | new |
-| Predicate evaluation (`Expectation`, `PendingStep`, `PendingPredicate`) | new (this PR) |
-| `TickStep` + `TickLog.steps` | **git residue, DEAD — zero production consumers** |
-| Vault publish path (commit transaction + delivery token) | **git** |
-| `Capture.parentHash` + `hasCanonicalLineage` | **git** |
-| `availability` + invalidation | **git — there is no invalidation** |
-| `AccessibilityTrace` | git, but load-bearing as the report/wire artifact |
-| `Evidence/` diff layer (~3400 lines) | git, wire-locked by JSON fixtures |
-| `AccessibilityObservationChangeReducer` | transitional; dies when the live log is durable |
+| Parent branch | `alex/nightly-watchdog-correctness` |
+| Fork point | `d3d5a03f3` |
+| Completion branch | `alex/tick-migration-completion` |
+| Phase A | Complete: transaction-shaped delivery removed |
+| Phase B | Complete: one authored-order consumer; project builds |
+| Parent responsibility | Finish the near-green A/B test stabilization and land |
+| Completion-branch responsibility | Implement Phase C onward |
+| Integration rule | Rebase onto the landed parent before final CI |
 
-## Plan
+This document is the execution plan. It replaces the earlier implementation
+diary and its duplicate phase lists.
 
-Ordered so that each phase leaves the tree in a judgeable state, cheap deletions
-come before decisions, and nothing blocks on an unanswered question.
+## Goal
 
-**Checkpoint discipline:** the tree must *build* at the end of Phase B, even if
-tests fail. Everything after that is judged on tests. A long red stretch with no
-build is how the last one went wrong.
+One vault operation captures accessibility truth, admits it, records one ordered
+event per fact, and publishes those exact events. Settlement evaluates those
+events in authored order. Results retain a bounded window from the same log.
+Evidence and presentation project that window without reconstructing changes.
 
-### Phase 0 — where the tree stands
-- `Observation.Event.ticks` and `SnapshotEvent.ticks` are **deleted** (they were
-  the collapse, one layer up from the first one).
-- **The tree does not build. Expected. Do not "fix" it by restoring a ticks
-  property at the vault boundary — that is the rejected layering.**
-- Outstanding build breaks: `publishImmediately(.tick(...))` in
-  `SemanticObservationStream+Settlement.swift` names a case that does not exist
-  yet (see Phase 4 — the log holds ticks); the orphaned delivery plumbing from
-  Phase 2; ~10 call sites still on the old `latestCommittedEvent()` name;
-  9 errors from a `throws` added to `SettlementReducerTests.admission`.
+The migration succeeds by deleting parallel currencies and owners. It is not an
+invitation to add a new observation framework beside the current one.
 
-### Phase 1 — the store emits ticks — **DONE**
-- `Store.commitObservation` → `readObservation(_:emit:)`, emitting at its own
-  steps: departure tick *before* the old tree is let go, `screenChanged` *after*
-  the log records, arrival tick after the new tree is installed. Non-boundary
-  readings emit the one tick `isChange` produces.
-- `CommittedObservation` → `ReadObservation`.
-- **Still to do:** the missing `fullGraph()` call at step 5, between ticks 4 and
-  6. It lives on `Navigation` (`TheBrains`), is `async`, and commits readings of
-  its own — so it cannot be called from inside the store's synchronous mutation.
-  It is work the *stream* schedules between emitting tick 4 and tick 6.
-- Keep a separate query API for the tree-and-sequence consumers
-  (`ElementInflation`, `Navigation`, `InteractionCoordinator` — ~12 sites on
-  `latestReadEvent()` / `settledEvent(after:)`). They ask a different question
-  and must not be forced through ticks.
+## Current checkpoint
 
-### Phase 2 — delete the transaction — **MOSTLY DONE**
-- Deleted: `StoreOwner.commitAdmission`, `resolveDelivery`, `DeliveryToken`,
-  `DeliveryGeneration`, `CommittedDelivery`, `DeliveryAdmission`,
-  `DeliveryResolution`, and the readmit/supersede loop in
-  `publishCommittedObservation` — replaced by: read, then push each tick into
-  the pipe in order.
-- **Still orphaned, delete next:** `deliveryState`, `PendingDelivery`,
-  `waitForPublication`, `completePublication`, `synchronizeDeliveryGeneration`,
-  `latestDeliveredSnapshotEvent`, `beforeCommittedDelivery`,
-  `beforeResolvedDeliveryEnqueue`, `enqueueValidatedDelivery`.
-- `CommittableInterfaceObservation` still exists; it is the pre-transaction
-  "not yet committed" value and should go with the rest.
+**Done**
 
-### Phase 3 — delete invalidation — **DONE**
-- `Availability` (3 states) deleted. `.invalidated(.some)` was serving a reading
-  it called invalid — incoherent once every reading is *now* until the next.
-- `latestCommittedEvent`/`Snapshot`/`Moment` → `latestReadEvent`/`Snapshot`/
-  `Moment`, reading straight off the log.
-- Four discard entry points (`invalidateCurrentObservation`,
-  `invalidateIfSignalChanged`, `requireReplacement`, `clearCurrentInterface`)
-  collapsed to `discardCurrentObservation` + `discardIfSignalChanged`.
-- Old names for reference: `availability`, `.invalidated`,
-  `invalidateCurrentObservation`, `invalidateIfSignalChanged`,
-  `latestSettledObservationInvalidated`,
-  `invalidateLatestSettledObservation`, `invalidateDeliveryIfSignalChanged`
-- Confined to `SemanticObservationStream*.swift` + `Store`/`StoreOwner`. The
-  other 30-odd `invalidate` hits in the tree are unrelated (CADisplayLink,
-  transport, readiness) — leave them.
+- The vault emits ordered ticks from one read.
+- The stream has one settlement receiver.
+- Settlement consumes one tick at a time in authored predicate order.
+- Reconciliation and subscriber transaction machinery are gone.
+- `TickStep` and the old diff API are gone.
+- The project builds at the A/B checkpoint.
 
-### Phase 4 — the log holds ticks, and derivable state comes off the event
+**Next**
 
-`Observation.Event` and `Tick` are the two sides of the one comparison, not two
-views of one thing. `SnapshotEvent` is the **input** to the decision (how the
-reading was obtained); `Tick` is the **output** (what happened, in the vocabulary
-predicates evaluate). Once the tick is minted the event's job is done — which is
-exactly what "the vault owns all determinations" means.
+- Make the vault log store and replay the exact emitted fact.
+- Replace hash-based predicate readings with typed semantic readings.
+- Make one command deadline cover baseline acquisition through terminal result.
+- Replace the settlement-owned `TickLog` with a bounded window from the vault log.
 
-The bug this phase fixes: `SnapshotEvent` caches four answers the log can already
-give, and caching them is what invited re-deriving the boundary at four separate
-layers.
+**Merge boundary**
 
-**Derivable from the log — cut from the event:**
+- The parent branch may land as soon as its tests pass.
+- This branch does not modify the parent's stabilization tests.
+- This branch rebases onto the parent's landed squash before final verification.
 
-| Field | The log answers it by |
-|---|---|
-| `previous: Snapshot?` | stepping back one snapshot entry. `Log.record` *already* computes this as `latestSnapshotEvent`, then stores a copy on the event. Pure duplication. **This is the field that invited the four re-derivations.** |
-| `transition` | `(previous, moment, generation)` — all in the log. Two consumers, both in `AccessibilityObservationChange`, the stored-trace rebuild already slated to die. |
-| `generation` | **counting `.screenChanged` entries.** A `.screenChanged` tick *is* the generation boundary, so `ScreenGeneration` — a bare `rawValue + 1` counter — carries nothing the log lacks. Structural, not a walk over values. |
-| `sequence` | position. But see the ordering note below. |
+## Canonical flow
 
-**Not derivable — genuinely belongs on the event:**
-- `continuity` — the *decision*, not a record of one. `ScreenClassifier.classify`
-  consumes trees, notifications and lineage, none of which survive on the entry.
-  9 live consumers in `Navigation`/`ElementInflation`. It is the input that picks
-  which tick gets minted.
-- `logIndex` — the position itself. Cannot derive position from position.
-- `sourceScope`, `captureID`, `notificationSequence`, `semanticSignal` — facts
-  about *how* the reading was taken. Recorded, not recomputable.
-- `viewportFrames` / `placementTolerance` — inputs to `isChange`'s stillness
-  half; the tolerance is a runtime value (`CoarseFrameComparison.currentTolerance`).
-
-**Dependencies, checked against the code — not what I first assumed:**
-- `SnapshotEvent.transition` has **zero consumers**. It is computed in
-  `Log.record` and never read. Free deletion, no coupling.
-- `AccessibilityObservationChangeReducer` reads `Capture.transition` — the *wire*
-  type, a different field with the same name. So this phase and Phase F are
-  **independent**; I earlier thought they were entangled.
-- `generation` escapes to the wire as `Capture.context.observationGeneration`,
-  read by the stored-trace rebuild. Cutting it is **not vault-local** and touches
-  the encoding.
-
-This phase is broken into A–D below because "the log holds ticks" was one line
-carrying four separate decisions.
-
----
-
-## The reordered sequence
-
-Phases 1–3 and 7 are done (above). What remains, in dependency order:
-
-### A — pure deletion, nothing to decide
-No design questions, no behaviour change, largest remaining chunk of straight
-removal. Do this first because it shrinks everything after it.
-- The orphaned delivery plumbing: `deliveryState`, `PendingDelivery`,
-  `waitForPublication`, `completePublication`, `synchronizeDeliveryGeneration`,
-  `latestDeliveredSnapshotEvent`, `beforeCommittedDelivery`,
-  `beforeResolvedDeliveryEnqueue`, `enqueueValidatedDelivery`,
-  `CommittableInterfaceObservation`.
-- `SnapshotEvent.transition` — zero consumers.
-- `SnapshotEvent.previous` — the retained comparison operand. `Log.record`
-  already computes it as `latestSnapshotEvent`; only `isChange` reads it, and
-  only during the comparison. **This is the field that invited four
-  re-derivations of the boundary**, so removing it removes the temptation
-  structurally.
-- `PulseReading.timestamp` — wall clock past the boundary, zero readers.
-- `TickLogFoldTests` leftovers if any remain.
-
-### B — make the tree build  ← **CHECKPOINT**
-
-**The `.noChange` routing question was fake — RESOLVED.** There is only one
-consumer of the stream. Every `subscribe(scope:)` call site:
-- `SemanticObservationStream+Settlement.swift:13`, `:40` — `receive: { _ in }`,
-  the no-op default. These register **scope pressure**, not delivery.
-- `SemanticObservationStream+Waiters.swift:98`, `:119` — one-shot "tell me when
-  the next reading lands", not an ongoing consumer.
-- `Settlement+Execution.swift:985` — **the run. The only tick consumer.**
-
-So `canFulfill` is not dividing a stream between competing listeners; the run
-subscribes at its own scope and filters its own input. A bare `.noChange` needs
-no scope, because there is no other subscriber it could wrongly reach.
-
-*How this went wrong:* the code says `subscribers` (plural), has a subscription
-type and a broadcast filter, and I took that machinery as evidence of the
-situation it was designed for instead of checking who actually listens.
-
-**`subscribe` is two jobs under one name.** `SemanticObservationScopePressure`
-does no delivery at all — `subscribedObservationScope()` is
-`subscriptions.values.max()`, i.e. "what is the widest scope anyone wants", which
-is how the vault decides how hard to look; `activeObservationDemands` is a count
-driving cadence. Split them: pressure keeps `addSubscription`/`removeSubscription`,
-delivery becomes a single receiver rather than a dictionary.
-
-Then: fix the ~10 `latestCommittedEvent()` call sites, and the `throws` on
-`SettlementReducerTests.admission`.
-
-**Tree builds at the end of B.** Tests may fail.
-
-**DONE.** What B turned out to include beyond what was written above:
-
-- **`Observation.Event` was redesigned**, which was not in B's scope and is what
-  generated most of its churn. `.snapshot(SnapshotEvent)` became
-  `.read(SnapshotEvent, Tick)` + `.replayed(SnapshotEvent)`. A live reading
-  carries the tick the vault minted; a log reading carries none. Two cases rather
-  than a `Tick?`, so a consumer must say which it handles.
-- **`SemanticObservationPublicationTests.swift` deleted whole** (~680 lines). It
-  tested the delivery model itself — tokens, ordering, supersession, readmission
-  — so there was nothing to port it to. See F2 for what its intent becomes.
-- **`derivedTick`** on `SnapshotEvent`, one named site for the two stopgap paths
-  rather than four inline copies. Deleted in F.
-- **`generate-project.sh` must be re-run after deleting a test file**, or the
-  build fails on a missing input that is no longer referenced by any source.
-- Renames: `latestCommitted*` → `latestRead*`, `requireScreenReplacement`/
-  `clearCurrentInterface`/`invalidateLatestSettledObservation` → one
-  `discardCurrentObservation`, `commitObservation` → `readObservation(_:emit:)`.
-- Assertions on `latestSettledObservationInvalidated` were **removed rather than
-  renamed** — there is no staleness flag to assert on, and one of them
-  (`TheVaultResolutionTests:422`) asserted a settle failure marks the reading
-  invalid, which now contradicts the assertion two lines above it that the tree
-  survived.
-
-### C — `fullGraph()` at step 5
-Currently never called, so edges are never stitched after a boundary. A real
-hole, independent of everything above.
-
-**The design hole, stated honestly:** `fullGraph()` lives on `Navigation`
-(`TheBrains`), is `async`, and commits readings of its own. It cannot be called
-from inside the store's synchronous mutation, and it must not recurse. "The
-stream schedules it between tick 4 and tick 6" is a direction, not a design —
-where it actually lives needs deciding before this can be executed.
-
-### D — `generation` off the event
-Derived from `.screenChanged` boundaries in the log rather than a `rawValue + 1`
-counter.
-
-**Not vault-local:** `generation` escapes to the wire as
-`Capture.context.observationGeneration` and is read by
-`AccessibilityObservationChangeReducer`. Also `TheVault+Rotor` uses it as a
-traversal cursor, which becomes "has a boundary landed since I started."
-Deferred until after the wire boundary is understood (Phase F).
-
-### E — extract `TheTimeout`
-Contained, does not block the vault work, but mixing it into the migration diff
-makes both harder to judge. Detail below.
-
-### F — the `Evidence/` layer reads ticks
-`AccessibilityObservationChangeReducer` dies here. Wire-locked, largest piece.
-`sequence` → `logIndex` (87 sites) lands after this, once the log holds ticks and
-the two counters are genuinely one.
-
-**Also here: the log must hold the ticks it minted.** B left two stopgaps that
-violate invariant 1, both in `Settlement+Execution.swift`'s `fact(for:)`.
-
-1. **`.replayed`.** The run subscribes `replayingAfter: arming.boundary.moment`
-   so a reading landing between the boundary capture and the subscription still
-   reaches it. Those arrive off the log — and the log records *readings*, not the
-   ticks the vault minted for them.
-2. **`.captureCompleted(.handoff(…))`.** `boundary.admit` (line ~969) wraps a
-   `SnapshotEvent` it was handed and returns `.admitted(event)`. The capture went
-   through the vault upstream, but only the reading survives the trip.
-
-Both rebuild a tick from `event.isChange`:
-
-```swift
-tick: event.isChange ? .elementsChanged(event.moment.capture) : .noChange
+```mermaid
+flowchart LR
+    UIKit["UIKit accessibility state"] --> Capture["capture visible snapshot"]
+    Capture --> Admit["Vault.Store admit"]
+    Admit --> Mint["mint Observation.Event"]
+    Mint --> Log["Observation.Log record"]
+    Log --> Stream["Observation.Stream publish"]
+    Stream --> Fold["Expectation consume one event"]
+    Fold --> Decision{"terminal?"}
+    Decision -->|no| Capture
+    Decision -->|yes| Window["Observation.Window"]
+    Window --> Result["Settlement.Result"]
+    Result --> Report["canonical report projection"]
+    Report --> Render["JSON / compact / human / JUnit"]
 ```
 
-`isChange` is the vault's own answer, read rather than recomputed, so the
-non-boundary case is right. **A screen boundary is not:** the vault minted three
-ticks for it and this yields one. The reconstruction also happens outside the
-vault, which invariant 1 forbids regardless of whether the answer comes out
-right.
+Exploration is a caller-requested effect around this flow:
 
-Fix: the log entry carries its tick, replay and `admit` hand it back, and both
-cases stop deriving anything. Then `Event.read`/`.replayed` differ only in
-provenance, not in what they carry.
+```mermaid
+flowchart LR
+    Need["unmet target or interface request"] --> Explore["Navigation.fullGraph / exploreScreen"]
+    Explore --> Move["move one viewport"]
+    Move --> Settle["minimum viewport settle"]
+    Settle --> Capture["capture and admit"]
+    Capture --> Event["record and publish events"]
+    Event --> Goal{"caller goal met?"}
+    Goal -->|yes| Exit["restore or retain viewport"]
+    Goal -->|no| Move
+```
 
-### F2 — test coverage of the whole system
+Exploration does not sit between the facts of a screen boundary. Every page it
+captures enters through the same vault operation as every other observation.
 
-The old suite tested the git model's mechanics. Deleting that machinery deleted
-its tests with it, so coverage has to be rebuilt — **preserving the invariants
-and the intent of the old suite, but validating the new system rather than the
-old one.** A ported test is a test of the thing that is gone.
+## Canonical vocabulary
 
-**Deleted in A/B, with what each was really protecting:**
+The migration name `Tick` becomes the canonical `Observation.Fact`. A tick is a
+fact, not a second architectural shape.
 
-| Deleted test | Tested | The intent, restated for ticks |
-|---|---|---|
-| `testCommitDeliveryPublishesContiguousStoreOrder` | the ordering queue drains contiguously | **ticks reach the run in the order the vault minted them** — invariant 3 |
-| `testLifecycleResetDropsSuspendedDeliveryFromPriorGeneration` | generation-stamped delivery is dropped after reset | a reading taken before a discard does not reach the run |
-| `testResetAfterActorResolutionSupersedesStaleMainActorEnqueue` | enqueue supersession across the actor hop | same, at the hop |
-| `testOlderDeliveryDoesNotOverwriteNewerLiveCapture` | two readers racing over the live capture | **the mirror holds what the store holds** — no separate delivered copy to go stale |
-| `testInvalidatedDeliveryReadmitsCurrentSourceOnce` | the readmit loop readmits exactly once | there is no readmission: a discard means the next reading opens a new screen — invariant 8 |
-| `testRepeatedInvalidationSupersedesBoundedReadmission` | readmission is bounded | same |
-| `testInvalidationPreservesLogButBlocksAdmittedRead` | a reading in the log refused as stale | replaced by `testDiscardKeepsTheLogAndTakesTheTree`: the log keeps what was read, the tree goes — invariants 5 and 10 |
-| `testDeadlineOnAMetAndQuietRunSettlesRatherThanTimesOut` (SettlementReducerTests) | one folded admission ends the run | each tick is reduced on its own and asked whether it ended the run |
+```swift
+enum Observation {
+    enum Fact: Codable, Sendable, Equatable {
+        case elementsChanged(AccessibilityTrace.ElementsChangeFact)
+        case screenChanged(ScreenFacts)
+        case announcement(CapturedAnnouncement)
+        case noChange
+    }
 
-**What the new suite has to cover, none of which the old one could:**
+    struct Event: Sendable, Equatable {
+        let cursor: Cursor
+        let fact: Fact
+        let snapshot: SnapshotEvent?
+    }
 
-1. **One tick, one pass.** A screen boundary is three ticks; each is a separate
-   reduction, each asked whether it settled the run. The original bug was
-   folding them — a test has to fail if they refold.
-2. **Boundary order.** Departure (empty `elementsChanged`), then `screenChanged`,
-   then arrival (graph `elementsChanged`). The departure must be emitted while
-   the old tree is still what the vault holds.
-3. **`.noChange` as a real gate.** Stillness is a tick that drains a predicate,
-   not a latched Bool and not an empty array.
-4. **Nothing latches.** Predicates match and disappear; an empty list is the
-   only record — invariant 7.
-5. **The vault is the only emitter.** Nothing downstream mints or derives a
-   tick. The two `derivedTick` stopgaps are the current exception and their
-   removal is Phase F; a test should pin that once they are gone.
-6. **Order without timing.** No test may assert *when* a tick arrived, only its
-   position — invariants 3 and 10.
-7. **One consumer.** The stream has one receiver; scope pressure is a max over
-   held scopes and is a separate question from delivery — invariant 12.
+    struct Window: Codable, Sendable, Equatable {
+        let baseline: AccessibilityTrace.Capture?
+        let current: AccessibilityTrace.Capture?
+        let facts: [Fact]
+        let completeness: Completeness
+    }
+}
+```
 
-**Sequencing:** this lands after F, because F removes the `derivedTick` stopgaps
-and moves the ticks into the log. Writing the tests before that pins the stopgap
-as if it were the design.
+The exact access levels follow use:
 
-### G — lineage, rename, docs, green
-`parentHash`/`hasCanonicalLineage`; the `Settlement` → heist-step rename; the doc
-rewrite; then the three CI failures.
+- `Observation.Fact` and `Observation.Window` live in `TheScore` because
+  predicates, durable results, replay, and evidence share them.
+- Live `Store`, `Log`, and `SnapshotEvent` remain inside `TheInsideJob`.
+- `Observation.Event` is the live ordered envelope. The durable window stores
+  facts and admitted captures, not live UIKit state.
+- `CapturedAnnouncement` remains intact. Do not reduce it to `String` and create
+  a metadata side channel.
 
-#### G-docs — the README and `docs/` describe the git model as current
+No compatibility alias for `Tick` remains after the migration. Client and server
+are version-locked.
 
-Not a refresh. The docs state the deleted machinery as the design, so they are
-wrong rather than stale, and a reader following them today would build against a
-model that no longer exists.
+## Invariants
 
-| File | Lines | Stale-model hits | Shape of the work |
-|---|---|---|---|
-| `docs/ARCHITECTURE.md` | 903 | **71** | the concentration; the observation section is a spec of the old pipeline |
-| `docs/API.md` | 620 | 12 | surface names that moved (`latestCommitted*`, delivery outcomes) |
-| `docs/ACCESSIBILITY-CONTRACT.md` | 182 | 8 | commit/invalidation as the contract's vocabulary |
-| `docs/HEIST-LANGUAGE-SPEC.md` | 447 | 6 | mostly incidental, needs reading |
-| `docs/DESIGN-RATIONALE.md` | 141 | 5 | argues *for* the git model in places |
-| `README.md` | 501 | 2 | light. **Protected by AGENTS.md — do not edit without an explicit ask.** |
+1. `Observation.Log` is the only retained runtime observation history.
+2. The vault store is the only component that constructs observed facts.
+3. An event is recorded before it is delivered.
+4. Replay delivers the exact recorded event; it never derives a new fact.
+5. One event causes one expectation reduction and at most one terminal decision.
+6. Arrays may cross an actor boundary as transport. Their events are still
+   recorded, published, and reduced individually in order. Atomic batch folding
+   is forbidden.
+7. Authored predicate order is law:
+   - `indifferent`: continue with the next authored predicate for this event.
+   - `matched`: consume it and continue with the remaining predicates.
+   - `unmatched`: stop evaluating this event; later predicates cannot overtake it.
+8. `.noChange` is an observed stability fact. It is not a claim that cached UI
+   state can never become outdated.
+9. After a tripwire or screen signal, the system never serves a known-outdated
+   current tree. Historical log entries remain immutable.
+10. A screen replacement emits, in order:
+    - departure element transition,
+    - screen appearance,
+    - arrival element transition.
+11. Element updates are constructible only from captures in the same screen
+    generation. Screen boundaries can express disappearance and appearance, not
+    cross-screen property updates.
+12. Full discovery is one bounded traversal effect. It is not an observation
+    fact and it is not hidden inside screen-boundary emission.
+13. One command deadline covers admission, baseline capture, dispatch,
+    observation, restoration, and terminal projection.
+14. `Date` timestamps may be captured as evidence. Behavioral timeout decisions
+    use the monotonic runtime clock and the one command deadline.
+15. Results, evidence, JSON, compact output, human output, and JUnit derive from
+    the same admitted result/window currency.
 
-**Already done on this branch:** the DSL surface rename reached the docs —
-`.changed(.elements([…]))` → `.elementsChanged([…])` across 13 files, so the
-authored *examples* already speak ticks. What G-docs owes is the **prose**: the
-paragraphs that describe how observation works are still the git model.
+## Screen-boundary semantics
 
-**The passages that are actively wrong**, all in `ARCHITECTURE.md` and all
-describing what A and B deleted:
+One admitted replacement reading produces three consecutive events:
 
-- `:102` "asks the Store to commit it" — the store reads; nothing commits.
-- `:105` "publishes that same committed event only after the Store exposes it" —
-  the store emits ticks as it reads; there is no publish-after-expose step.
-- `:110-114` "a changed signal invalidates the admitted read […] reuse the
-  committed event until the next trip, explicit invalidation, or screen
-  replacement" — invariant 8: nothing is invalidated, the tree is discarded.
-- `:112` **"Concurrent consumers join that cycle"** — invariant 12. This is the
-  plurality written down as architecture, and it is the sentence that most needs
-  to go.
-- `:166` "Every capture follows capture → admit → commit" — the pipeline is
-  capture → read → tick.
-- `:73` "The committed `TheVault.interfaceTree` is the sole current semantic
-  truth" — right in substance, wrong in name: it is the main-actor mirror of what
-  the store holds.
+1. `elementsChanged(departure)` removes every element from the departing tree.
+2. `screenChanged(screenFacts)` records the new screen appearance.
+3. `elementsChanged(arrival)` introduces every element in the arriving capture.
 
-**Sequenced last, after F2.** Docs written before the code settles describe an
-intermediate state. The earlier doc purge in A cut comments and two `.notes`
-files wholesale on the same reasoning — this is the rewrite that purge deferred.
+The events share one screen-boundary identity and preserve their own cursors.
+The arrival event establishes the new current snapshot. Departure and screen
+events do not pretend to carry the completed new tree.
 
----
+`Navigation.fullGraph()` is deliberately absent from this sequence. If a wait
+or interface request needs discovery after arrival, its command schedules one
+bounded exploration. Each exploration page emits later events through the same
+vault store. This prevents screen identity, scroll effects, and graph inflation
+from becoming one reentrant operation.
 
-## Phase detail
+## Cursor and generation
 
-### Phase 5 — extract `TheTimeout`
+These values are related but not interchangeable:
 
-The timeout is one of only two consumers of wall-clock logic, and it is currently
-spread across four types with overlapping jobs:
+- `Observation.Cursor` locates an event in one ordered log.
+- `ScreenGeneration` identifies the epoch across which element property updates
+  are valid.
+- `SettledObservationSequence` is durable capture ordering used by the wire.
 
-| Today | Holds | Where |
-|---|---|---|
-| `SemanticObservationTiming` | the default budget (1s) + `viewportTransitionMinimumBudgetMs` | `SemanticObservationTiming.swift` |
-| `SemanticObservationDeadline` | `start` + `timeout`, `hasTimeRemaining`, `remainingSeconds`/`remainingDuration`, `elapsedMilliseconds`, `reserving` | same file |
-| `Settlement.PhaseDeadline` | `phase` + target `instant`, `remainingDuration` | `Settlement.swift:91` |
-| `Settlement.ActionAllowances` | readiness / expectation sub-budgets | `Settlement.swift:103` |
-| `RuntimeElapsed` | the clock read (`now`) + elapsed measurement | `RuntimeElapsed.swift` |
+The log owns the current screen generation and advances it when it records a
+screen boundary. It must not recover the generation by counting retained screen
+events because the log evicts old entries. Cursor ordering must also survive
+retention without renumbering.
 
-Two deadline types with near-identical methods, the budget constant in a third
-place, the clock in a fourth.
+Delete duplicate generation/sequence fields only when their semantic use is
+proven identical. A mechanical rename is not admission.
 
-**`TheTimeout`** — named to match `TheVault` / `TheBrains` / `TheTripwire` /
-`TheSafecracker` / `TheFence` — owns all of it:
-- the budget and its defaults
-- the clock read (`RuntimeElapsed` folds in; it is used for nothing but deadlines
-  and elapsed reporting)
-- deadline arming, including phase and allowance carve-ups
-- `hasTimeRemaining` / `remaining` / `elapsed`
-- `reserving` — budget subdivision
+## Predicate readings
 
-**Why it is worth a type and not just a rename:** it makes invariant 11
-structural. `TheTimeout` becomes *the only thing in the system that reads a
-clock* (the Safecracker aside, and the Tripwire's display link is the boundary,
-not a consumer). Today that rule lives only in this file; as a type it is
-greppable — any `ContinuousClock` / `CFAbsoluteTimeGetCurrent` / `Date()` outside
-`TheTimeout` and `TheSafecracker` is a violation.
+`Expectation.ReadingScope` currently projects semantic truth through Swift
+`Hasher` and only reads matched elements. That is not an admitted comparison
+currency and it excludes container targets.
 
-**Open shape question:** `SemanticObservationDeadline` carries `start` (so it can
-report elapsed and subdivide via `reserving`); `PhaseDeadline` carries only the
-target `instant` plus a phase tag. Either
-- **one type with a phase**, simpler if phases do not nest, or
-- **`TheTimeout` owns the budget and hands out phase deadlines** — closer to what
-  the code does now (one budget carved into readiness / expectation / observation).
+Replace it with typed, equatable readings:
 
-Sequencing: after the tree builds. It is a contained extraction and does not
-block the vault work, but doing it mid-migration mixes two large diffs.
+```swift
+enum PredicateReading: Sendable, Equatable {
+    case screen(ScreenReading)
+    case target(TargetMatchReading)
+    case property(ElementPropertyReading)
+    case announcement(CapturedAnnouncement)
+    case still
+}
+```
 
-### Phase 6 — delete lineage
-- `Capture.parentHash`, `AccessibilityTrace.hasCanonicalLineage` and the decode
-  guard. A tick carries the full snapshot; lineage validation protects a commit
-  chain that no longer exists. 14 sites.
-- Wire contract: `parentHash` is encoded. Check the encoding-stability tests
-  before removing it from the payload.
+`TargetMatchReading` contains canonical semantic values for both matched
+elements and matched containers in deterministic order. It does not contain
+UIKit object identity and is never reduced to `Int` for correctness.
 
-### Phase 7 — delete the dead diff API — **DONE**
-- `TickStep`, `TickLog.steps`, `.interfaces`, `.elementEdits`,
-  `.elementSetChanged`, `.crossesScreenBoundary` — deleted (150 → 62 lines).
-- `TickLogFoldTests` coverage of them deleted, plus `testStillnessIsTheNewestTick`
-  which asked the recording for a live fact.
-- `TickStep` is **not** `PendingStep`. `PendingStep` is the predicate holder (the
-  1D 3-case enum) and is untouched.
+Property-update declarations accept an element target. Container update
+predicates remain unconstructible until containers have a real modeled property
+transition. Existence, appearance, and disappearance continue to accept the
+shared accessibility target language.
 
-### Phase 8 — `Evidence/` reads ticks instead of re-diffing
-- Change facts stop being computed by diffing two captures and start being read
-  off the ticks the vault already minted.
-- **Wire-locked**: `elementSetChanged` and friends appear in JSON fixtures and
-  encoding-stability tests. The encoding stays; only the producer changes.
-- Largest piece. Last.
-- `AccessibilityObservationChangeReducer` dies here — this is the "becomes a
-  read instead of a rebuild" its own doc promises.
+## Deadline ownership
 
-### Phase 9 — the rename
-`Settlement` is misnamed: it is the whole runtime, not settlement. `Run` is
-taken (that is the whole heist). Rename to heist-step vocabulary.
-- Rename: the `Settlement` namespace, `SettlementExecutionBoundary`,
-  `AdmittedSettlementFact`, `LiveSettlementExecutionBoundary`,
-  `LiveSettlementLifecycle`, `executeSettlementCommand`, `beginSettlement`,
-  `finalizeSettlement`, `SettlementResultScript`, `SettlementCompletionProbe`,
-  `ScriptedSettlementBoundary`, `scriptedSettlement`, 4 test classes.
-- **Leave**: `ObservationSettlement`, `produceVisibleSettlement`,
-  `activeSettlementBoundaries` (vault-side, genuinely settling) and
-  `HeistSettlementEvidence` / `ActionSettlementEvidence` (wire types under an
-  encoding-stability contract — `testExistingSettlementEncodingsRemainStable`).
-- ~713 occurrences, 66 files, 5 files named `Settlement*`.
+The executor arms one monotonic command deadline when it admits the command.
+That same value flows through baseline acquisition, action dispatch, active
+settlement, viewport restoration, and result projection.
 
-### Phase 10 — docs, rewritten from the tick model
-Comments and notes describing the old model were **cut wholesale** (see below);
-the repo docs were deliberately left for a rewrite because they describe the
-commit model as *the architecture*, not in passing:
-- `docs/ARCHITECTURE.md` — 903 lines, ~25 commit-model references. "Every capture
-  follows capture → admit → commit", "installs the graph, log, lineage and
-  admitted-read state atomically", "consecutive unchanged observation diffs".
-- `docs/ACCESSIBILITY-CONTRACT.md` — the capture/admit/commit/publish pipeline.
-- `docs/DESIGN-RATIONALE.md` — "Ordered facts preserve what endpoint diffs
-  erase" (this one is arguably already tick-shaped).
-- The six-step screen boundary needs re-documenting somewhere; it lived in the
-  now-deleted `screen-change-timeline.md` and survives only in this file.
+`deadlineReached` is terminal in every settlement phase, including
+`awaitingBaseline` and `armed`. There is no second timer and no separate
+`TheTimeout` namespace in this workstream. Existing deadline types may collapse
+when doing so deletes code, but the deadline remains a value owned by the
+command/executor, not a global subsystem.
 
-### Phase 11 — green
-Three known CI failures, all in territory the migration rewrites — which is why
-they are fixed *after*, once, in the new world:
-1. `MenuOrderDogfoodHeistTests` — settlement timeout. The atomic-tick +
-   drained-gate work addresses this.
-2. `TheBrainsActionTests.testExecuteCommandFailedActivateCarriesPostActionTraceLikeSuccessfulAction`
-   — `XCTUnwrap` nil `Capture` at `TheBrainsActionDirectActionTests.swift:344`.
-3. `TheTripwireHostedBehaviorTests.testAnnouncementExpectationLatchesUntilReadyHandoff`
-   and `DogfoodFeatureFlowTests.testActionExpectationUsesTransientLifecycleEvidenceOnlyFromItsOwnAction`
-   — both wait on the "Transient Flow" header then hit `no traversable app
-   windows`.
+## Durable result boundary
 
-## Already done on this branch (settlement side)
+Active settlement owns:
 
-- `Tick.Kind` / `tick.kind` deleted; `Tick` is the enum
-- lanes gone: `lane`, `reads()`, `admits()`, `matches()`, `matching()`, the
-  cross-lane `preconditionFailure`
-- predicate queue is a 1D array of a 3-case enum: `.single(p)`, `.pair(p, p)`,
-  `.owed(after: Int, p)` — all data on the cases
-- one verb, `evaluate`, returning `.indifferent` / `.matched` / `.unmatched`
-- `draining` → `remaining(of:after:)`
-- `TickLog.isStill` deleted; `TickLog.replacement` deleted
-- `completedOutcome` no longer reads the TickLog
-- `.noChange` is a real predicate, appended last as the gate
-- `admit()` folds exactly one tick
-- `consume` reduces per tick, so each gets its own settle check
-- `Tick.observation(_:isChange:isReplacement:screenHeading:)` deleted
-- `crossesScreenBoundary` pattern-matches instead of comparing kinds
+- the current expectation accumulator,
+- a starting log cursor,
+- the protected retention boundary,
+- command state needed for terminal classification.
 
-## Doc and comment purge — done
+It does not own a second mutable observation log.
 
-Cut wholesale, no replacements (docs get redone in Phase 9):
-- `TickStep` and every doc on it — "a change needs two", "the only place a tree
-  is compared to another tree"
-- `TickLog` struct doc — the paragraph arguing against the old model
-- `AccessibilityTrace` — "Captures are the durable source of truth"
-- `AccessibilityTrace+Diff` — "Captures remain trace truth"
-- `Capture.parentHash` / `sequence` / `transition` field docs
-- `CommittableInterfaceObservation` — "admitted for commit"
-- Vault: `latestSettledObservationInvalidated`,
-  `committedScopedScreenChangedSequence`,
-  `invalidateSettledObservationIfScreenChangedSinceCommit`,
-  `admitCurrentObservation`, `produceVisibleSettlement` doc blocks
-- `Settlement+Execution.armReadiness` — "read the same commit outcome"
-- `Navigation+Explore` — "answered on commit"
-- `.notes/settlement-flow.md` — deleted (rejected "lane" language)
-- `.notes/screen-change-timeline.md` — deleted (stale tick names, code pointers
-  to deleted APIs). Its six-step boundary spec is preserved in this file.
+At terminal, settlement asks `Observation.Log` for one admitted
+`Observation.Window`. The window is complete only when its protected start and
+terminal cursor are both present. A retention gap cannot produce `noChange` or a
+successful temporal result.
 
-Left alone deliberately: `discoveryCommitPolicy` (46 uses) and
-`CommittedElementTarget` (13) are name collisions, not the commit concept.
-`CATransaction.flush()`'s "commits before we sample" is a real CoreAnimation
-commit.
+The result stores this window. Replay evaluates its facts in order. Evidence
+projects the facts directly. No result path reconstructs change by diffing
+endpoint captures.
 
-## Wall-clock audit
+## Execution phases
 
-**`PulseReading.timestamp: CFAbsoluteTime` — delete it.** Wall clock captured at
-the display-link boundary and carried past it, with **zero readers** in sources
-or tests. `tick: UInt64` is the position and is the only thing anything reads.
-Deleting it makes the boundary honest: time enters, order leaves, nothing else
-survives.
+### A. Delete delivery transactions - complete
 
-`Date()` survives in `SemanticObservationStream+Settlement.swift:154` (the
-admission timestamp) and `WireConversion`/`TheVault+InterfaceState` defaults.
-These flow into `Capture.interface.timestamp` — report metadata that nothing
-branches on. Not part of the machine's reasoning, but worth a look during
-Phase 7 when the report boundary is rewritten.
+Owners:
 
-## Rules that keep biting
+- `SemanticObservationStream`
+- `Settlement`
 
-- Never restore a `ticks: [Tick]` property anywhere. Arrays of ticks are the
-  bug. The vault emits them one at a time.
-- Never derive the boundary sequence from a finished commit. Emit as the steps
-  happen.
-- Comments state what the code does — never what it isn't, used to be, or what
-  was rejected.
-- Never drive Swift edits via python string-replace. Use Edit; let the compiler
-  enumerate call sites.
-- `xcodebuild` via `scripts/test-runner.py`, never `swift build`. Never two
-  runner invocations at once — it kills the simulator.
-- Never `sleep` to wait for background work; use the completion notification.
+Acceptance already met:
+
+- One settlement receiver.
+- No subscriber transaction or reader reconciliation path.
+- No alternate delivery spelling.
+
+### B. Consume authored order - complete
+
+Owners:
+
+- `TheScore/Core/Expectation.swift`
+- `TheInsideJob/Settlement/Settlement+Reducer.swift`
+
+Acceptance already met:
+
+- One fact enters one reducer call.
+- `indifferent`, `matched`, and `unmatched` preserve authored order.
+- The project builds at `d3d5a03f3`.
+
+Parent branch exit:
+
+- Finish its current test stabilization.
+- Land without taking Phase C+ changes.
+
+### C. Make event and log canonical
+
+Primary files:
+
+- `TheScore/Core/Expectation.swift`
+- `TheInsideJob/TheVault/SemanticObservationHistory.swift`
+- `TheInsideJob/TheVault/SemanticObservationStore.swift`
+- `TheInsideJob/TheVault/SemanticObservationStoreOwner.swift`
+- `TheInsideJob/TheVault/SemanticObservationStream+Settlement.swift`
+
+Work:
+
+1. Move the `Observation` namespace and canonical `Fact` shape into `TheScore`.
+2. Replace `Tick` with `Observation.Fact` without an alias.
+3. Make `Observation.Log.record` accept and retain exact events.
+4. Make the store mint cursor, generation, fact, and snapshot provenance.
+5. Return ordered `[Observation.Event]` across the actor boundary.
+6. Publish each event individually.
+7. Replay the exact retained event.
+8. Delete `SnapshotEvent.derivedTick`, `.read/.replayed`, and every downstream
+   fact constructor.
+9. Keep full discovery outside the boundary sequence.
+
+Acceptance:
+
+- A replacement capture records exactly departure, screen, arrival.
+- Recorded order equals delivered order.
+- Live delivery and replay compare equal.
+- Announcements retain their full captured value.
+- No production fact constructor exists outside the vault admission path.
+- Build passes.
+
+Tests added in this phase:
+
+- same-screen changed and no-change emission,
+- exact three-event screen boundary,
+- announcement ordering,
+- record-before-deliver,
+- replay identity,
+- one event per reducer pass,
+- transport batches cannot be folded atomically.
+
+Deletion gate:
+
+- Delete the old `Tick` type.
+- Delete `derivedTick`.
+- Delete replay reconstruction.
+- Delete obsolete event cases and delivery adapters.
+
+### D. Admit typed predicate readings
+
+Primary files:
+
+- `TheScore/Core/Expectation.swift`
+- `TheScore/Core/ElementPredicate+HeistElement.swift`
+- predicate admission files in `ThePlans`
+
+Work:
+
+1. Replace `ReadingScope` hashes with `PredicateReading`.
+2. Project matched elements and containers through one deterministic operation.
+3. Restrict property updates to element targets in the type system.
+4. Remove hash/collision-based temporal decisions.
+5. Make `remaining` linear without copying `dropFirst()` arrays while preserving
+   authored order.
+
+Acceptance:
+
+- Element and container exists/missing/appeared/disappeared use one evaluator.
+- Container temporal predicates can complete.
+- Property updates cannot be constructed for containers.
+- Reordering equivalent matches does not invent a change.
+- No Swift `Hasher` value participates in a correctness decision.
+- Build and focused predicate tests pass.
+
+Deletion gate:
+
+- Delete `ReadingScope` and its integer hashes.
+- Delete duplicated element-only reading projections.
+- Delete tests that encode hash implementation details.
+
+### E. Enforce one end-to-end deadline
+
+Primary files:
+
+- settlement command/executor and reducer files,
+- `SemanticObservationStream+Settlement.swift`,
+- viewport restoration call sites.
+
+Work:
+
+1. Arm the deadline at command admission.
+2. Carry it through every phase.
+3. Make expiry terminal before, during, and after baseline acquisition.
+4. Remove phase-local timers that duplicate the command deadline.
+
+Acceptance:
+
+- A stalled baseline cannot exceed the authored timeout.
+- One timer source produces the terminal timeout event.
+- Deadline classification does not depend on main-thread wall-clock progress.
+- Restoration receives the remaining command budget.
+- Zero additional timeout owners are introduced.
+
+Tests:
+
+- expiry while awaiting baseline,
+- expiry while armed,
+- expiry while active,
+- success before expiry cancels further work,
+- timeout result retains complete observed evidence or reports a gap.
+
+### F. Replace TickLog with Observation.Window
+
+Primary files:
+
+- `TheScore/Core/TickLog.swift`
+- settlement state/result files,
+- `SemanticObservationHistory.swift`
+
+Work:
+
+1. Add cursor-bounded log reads and `Observation.Window` admission.
+2. Protect an active settlement boundary from eviction.
+3. Store only expectation state and cursors during execution.
+4. Read one terminal window.
+5. Delete mutable `TickLog`.
+
+Acceptance:
+
+- There is one retained runtime history.
+- A terminal result contains the exact ordered facts it evaluated.
+- Eviction cannot silently turn an incomplete window into success/no-change.
+- Consecutive no-change compaction, if retained, is a log storage policy that
+  preserves predicate semantics and cursor completeness.
+
+Tests:
+
+- protected boundary retention,
+- admitted complete window,
+- explicit incomplete window after an unavoidable gap,
+- terminal result and live evaluation use the same facts,
+- no second mutable log.
+
+### G. Move evidence and wire to facts
+
+Primary files:
+
+- `TheScore/Evidence/AccessibilityTraceDiff.swift`
+- `TheScore/Evidence/AccessibilityTrace+ChangeFacts.swift`
+- result Codable and public JSON projection files.
+
+Work:
+
+1. Persist the admitted observation window in the result contract.
+2. Project element, screen, announcement, and no-change evidence from facts.
+3. Evaluate stored/replayed results from the same fact sequence.
+4. Remove endpoint-diff reconstruction and obsolete lineage only after the new
+   wire has exact ordering and completeness admission.
+5. Use one canonical Codable spelling. No adapters or old keys.
+
+Acceptance:
+
+- Live, stored, and replayed evaluation produce identical outcomes.
+- Evidence performs no capture diff to recover already-observed facts.
+- Unknown/contradictory JSON is rejected at decode.
+- Parent lineage remains only if it carries contract information not present in
+  the window.
+- Wire fixtures cover every fact and completeness case.
+
+Deletion gate:
+
+- Delete `AccessibilityObservationChangeReducer`.
+- Delete stored-trace tick reconstruction.
+- Delete redundant `parentHash`/transition fields proven subsumed by the window.
+- Delete old JSON keys and compatibility paths.
+
+### H. Compress result and coordination projections
+
+Primary files:
+
+- settlement result projector,
+- terminal logging,
+- public result/JSON/compact renderers,
+- interaction coordinator wrappers.
+
+Work:
+
+1. Derive one `Settlement.Report` from `Settlement.Result`.
+2. Render public result, JSON, compact text, human text, and JUnit from that
+   report.
+3. Remove result/diagnosis currencies that contain no unique facts.
+4. Remove forwarding coordinators that own no state or policy.
+5. Keep exploration as a caller-visible command effect with restore/retain exit
+   policy.
+
+Acceptance:
+
+- Outcome classification has one switch owner.
+- Renderers do not reinterpret settlement.
+- A type that only forwards or renames another value is deleted.
+- Source delta for this phase is negative.
+
+### I. Documentation, architecture rules, and green
+
+Work:
+
+1. Update architecture and wire diagrams to the final owner graph.
+2. Update factual README API examples only where the shipped contract changed.
+3. Add Bumper rules for source-shaped invariants that are mechanically stable:
+   - no `Tick` declaration,
+   - no production fact construction outside the vault,
+   - no mutable settlement observation log,
+   - no `Hasher` in predicate truth,
+   - no downstream diff reconstruction.
+4. Remove obsolete tests and documents only after replacement behavior coverage
+   is present.
+5. Rebase onto the landed parent branch.
+6. Run canonical suites and CI on the exact rebased SHA.
+
+Acceptance:
+
+- `scripts/test-runner.py` canonical suites pass.
+- SwiftLint, strict concurrency, Bumper, release contract, and CI pass.
+- Architecture docs describe the code that shipped.
+- No generated projects or simulator artifacts are committed.
+- Dedicated simulators are cleaned up.
+- Final production source delta across C-I is negative.
+
+## Test ownership
+
+Tests are added with the owner they protect, not in a final catch-all phase.
+
+Keep:
+
+- public/wire contract tests,
+- pure expectation/reducer tests,
+- adversarial ordering and retention tests,
+- hosted integration tests proving UIKit capture and exploration behavior.
+
+Delete:
+
+- tests for removed transaction/reconciliation mechanics,
+- tests for hash values or obsolete internal representations,
+- duplicate fixtures that prove the same projection at multiple layers,
+- compile-negative nonsense already made unconstructible by Swift.
+
+Coverage may move down to a purer owner, but behavioral coverage may not
+disappear.
+
+## Commit and verification discipline
+
+Each phase is one coherent commit or a small pair of owner/deletion commits.
+Every phase ends with:
+
+1. `git diff --check`
+2. project build through the canonical generated workspace
+3. focused owner tests
+4. deletion verification with `rg`
+
+Do not run the full hosted matrix after every line. Run it after coherent phases,
+then once on the final rebased branch.
+
+## Definition of done
+
+The workstream is done when:
+
+- accessibility truth has one producer, one ordered log, and one delivery path;
+- settlement consumes exact recorded facts in authored order;
+- temporal correctness uses typed readings, including containers;
+- one deadline bounds the entire command;
+- results retain an admitted observation window;
+- evidence and every renderer project that result without re-diffing;
+- exploration remains one bounded effect on the same capture pipeline;
+- predecessor types and tests are deleted in the phase that replaces them;
+- the branch is rebased onto landed A/B and exact-head CI is green.

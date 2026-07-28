@@ -259,7 +259,7 @@ extension TheBrainsActionTests {
         var demandDuringAction = false
         var demandDuringSettledEvidence = false
         let event = await settling(
-            brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            brains.vault.semanticObservationStream.commitVisibleEventForTesting(
                 .makeForTests(elements: [(makeElement(label: "Ready"), HeistId(rawValue: "ready"))])
             )
         )
@@ -315,10 +315,10 @@ extension TheBrainsActionTests {
 
     func testIfStatePredicateDoesNotWaitForFutureObservation() async throws {
         let stream = brains.vault.semanticObservationStream
-        let current = await stream.commitVisibleObservationForTesting(.makeForTests(elements: [
+        let current = await stream.commitVisibleEventForTesting(.makeForTests(elements: [
             (makeElement(label: "Loading"), HeistId(rawValue: "loading")),
         ]))
-        let future = await stream.commitVisibleObservationForTesting(.makeForTests(elements: [
+        let future = await stream.commitVisibleEventForTesting(.makeForTests(elements: [
             (makeElement(label: "Loading"), HeistId(rawValue: "loading")),
             (makeElement(label: "Toast"), HeistId(rawValue: "toast")),
         ]))

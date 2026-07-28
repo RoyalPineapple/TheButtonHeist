@@ -424,17 +424,20 @@ final class TheBrainsActionTests: XCTestCase {
         }, screenId: screenId, screenChanged: screenChanged)
     }
 
-    /// `event` and the quiet reading that follows it.
+    /// `event` and the quiet observation event that follows it.
     ///
     /// Reading a tree that has not moved is what proves it stopped, and a run
     /// needs that proof to settle. The store derives `isChange` from the reading
     /// before, so committing the same tree again is how quiet gets committed.
     func settling(
-        _ event: Observation.SnapshotEvent
+        _ event: Observation.Event
     ) async -> SemanticObservationStreamTestCase.Reading {
         let settled = await brains.vault.semanticObservationStream
-            .commitVisibleObservationForTesting(event.snapshot.observation)
-        return (changed: event, settled: settled)
+            .commitVisibleEventForTesting(event.committedSnapshot.snapshot.observation)
+        return SemanticObservationStreamTestCase.Reading(
+            changedEvent: event,
+            settledEvent: settled
+        )
     }
 
     func waitForSettledSemanticWaiter(
@@ -499,7 +502,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
         var log = Observation.Log(retentionLimit: 1)
         do {
-            return try log.record(snapshot: snapshot, continuity: .sameGeneration)
+            return try log.record(snapshot: snapshot, continuity: .sameGeneration).snapshot
         } catch {
             preconditionFailure("Test observation fixture produced an invalid transition: \(error)")
         }
@@ -519,7 +522,7 @@ final class TheBrainsActionTests: XCTestCase {
         var previousCapture: AccessibilityTrace.Capture?
         var sequence: UInt64 = 0
 
-        func record(_ event: Observation.SnapshotEvent) -> Observation.SnapshotEvent {
+        func record(_ event: Observation.SnapshotEvent) -> Observation.Event {
             sequence += 1
             let capture = event.moment.capture
             let trace = previousCapture.map {
@@ -542,13 +545,23 @@ final class TheBrainsActionTests: XCTestCase {
             )
             defer { previousCapture = trace.captures.last }
             do {
-                return try log.record(snapshot: snapshot, continuity: .sameGeneration)
+                let recorded = try log.record(snapshot: snapshot, continuity: .sameGeneration)
+                guard let event = recorded.events.last,
+                      event.snapshotEvent == recorded.snapshot else {
+                    preconditionFailure("Test moment fixture did not record a committed event")
+                }
+                return event
             } catch {
                 preconditionFailure("Test moment fixture produced an invalid observation transition: \(error)")
             }
         }
 
-        return events.map { (changed: record($0), settled: record($0)) }
+        return events.map {
+            SemanticObservationStreamTestCase.Reading(
+                changedEvent: record($0),
+                settledEvent: record($0)
+            )
+        }
     }
 
     func heistRuntime(
@@ -788,9 +801,13 @@ private final class ScriptedHeistObservationSource {
             return nil
         }
         let sourceEvent = remainingObservations.removeFirst()
-        return (
-            changed: reading(sourceEvent, scope: scope, continuity: Self.continuity(of: sourceEvent)),
-            settled: reading(sourceEvent, scope: scope, continuity: .sameGeneration)
+        return SemanticObservationStreamTestCase.Reading(
+            changedEvent: reading(
+                sourceEvent,
+                scope: scope,
+                continuity: Self.continuity(of: sourceEvent)
+            ),
+            settledEvent: reading(sourceEvent, scope: scope, continuity: .sameGeneration)
         )
     }
 
@@ -813,7 +830,7 @@ private final class ScriptedHeistObservationSource {
         _ sourceEvent: Observation.SnapshotEvent,
         scope: SemanticObservationScope,
         continuity: ScreenContinuity
-    ) -> Observation.SnapshotEvent {
+    ) -> Observation.Event {
         nextObservationSequence += 1
         let event = event(
             from: sourceEvent,
@@ -821,7 +838,7 @@ private final class ScriptedHeistObservationSource {
             sequence: nextObservationSequence,
             continuity: continuity
         )
-        previousCapture = event.trace.captures.last
+        previousCapture = event.committedSnapshot.trace.captures.last
         return event
     }
 
@@ -830,7 +847,7 @@ private final class ScriptedHeistObservationSource {
         scope: SemanticObservationScope,
         sequence: SettledObservationSequence,
         continuity: ScreenContinuity
-    ) -> Observation.SnapshotEvent {
+    ) -> Observation.Event {
         let capture = sourceEvent.moment.capture
         let trace = if let previousCapture {
             AccessibilityTrace(capture: previousCapture).appending(
@@ -856,7 +873,12 @@ private final class ScriptedHeistObservationSource {
             placementTolerance: sourceEvent.snapshot.placementTolerance
         )
         do {
-            return try log.record(snapshot: snapshot, continuity: continuity)
+            let recorded = try log.record(snapshot: snapshot, continuity: continuity)
+            guard let event = recorded.events.last,
+                  event.snapshotEvent == recorded.snapshot else {
+                preconditionFailure("Scripted heist did not record a committed observation event")
+            }
+            return event
         } catch {
             preconditionFailure("Scripted heist produced an invalid observation transition: \(error)")
         }

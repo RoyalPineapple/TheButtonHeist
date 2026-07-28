@@ -45,6 +45,10 @@ extension Observation {
             store.discardCurrentObservation()
         }
 
+        internal func invalidateCurrentAdmission() {
+            store.invalidateCurrentAdmission()
+        }
+
         internal func discardIfSignalChanged(to signal: TheTripwire.TripwireSignal) {
             store.discardIfSignalChanged(to: signal)
         }
@@ -97,17 +101,15 @@ extension Observation {
             read(store.log)
         }
 
-        /// Reads the admission and returns the ticks it minted, in order.
+        /// Reads the admission and returns its already-recorded events.
         ///
         /// The order is the whole contract: a boundary's departure, identity and
         /// arrival are three moments, and the caller puts them into the pipe one
         /// at a time as they stand here. When they get there is not part of it.
         internal func readAdmission(
             _ admission: Admission
-        ) throws -> (read: Store.ReadObservation, ticks: [Tick]) {
-            var ticks: [Tick] = []
-            let read = try store.readObservation(admission) { ticks.append($0) }
-            return (read, ticks)
+        ) throws -> Store.ReadObservation {
+            try store.readObservation(admission)
         }
 
         internal func settlementDidArm(at moment: Moment) {
@@ -116,6 +118,12 @@ extension Observation {
 
         internal func settlementDidFinish(at moment: Moment) {
             store.settlementDidFinish(at: moment)
+        }
+
+        internal func recordAnnouncement(
+            _ announcement: CapturedAnnouncement
+        ) -> Event {
+            store.recordAnnouncement(announcement)
         }
 
         internal func recordSettleFailure(_ diagnostic: String?) {

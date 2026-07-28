@@ -87,6 +87,17 @@ extension Observation {
             settleFailureDiagnostic = nil
         }
 
+        /// Invalidates freshness without replacing committed semantic truth.
+        ///
+        /// A failed settle says the live boundary could not produce a new
+        /// admitted reading. It does not say the last committed interface
+        /// stopped being true, so queries may still read that graph while
+        /// admission waits for the next successful observation.
+        internal mutating func invalidateCurrentAdmission() {
+            admittedTripwireSignal = nil
+            replacementRequired = true
+        }
+
         /// Throws the tree away when the signal it was read under is gone.
         ///
         /// A reading describes the window state it was taken under, so a signal
@@ -165,8 +176,7 @@ extension Observation {
             log.prune(protectedBy: earliestActiveSettlementBoundary)
         }
 
-        /// Reads the admission into the vault, emitting a tick at each moment it
-        /// passes through.
+        /// Reads one admission into the vault and records every fact it produces.
         ///
         /// One reading is one moment when the screen held, and three when it was
         /// replaced: the old screen's nodes depart, the identity moves, the new
@@ -174,8 +184,7 @@ extension Observation {
         /// the departure is emitted while the old tree is still what the vault
         /// holds and the arrival only after the new one is installed.
         internal mutating func readObservation(
-            _ admission: Admission,
-            emit: (Tick) -> Void
+            _ admission: Admission
         ) throws -> ReadObservation {
             let notificationLane: StoreNotificationLane
             let notificationSnapshot: NotificationSnapshot
@@ -221,12 +230,6 @@ extension Observation {
             let continuity = replacementRequired
                 ? ScreenContinuity.replacement(.screenChangedNotification)
                 : classifiedContinuity
-            if continuity.isReplacement {
-                // The departure, emitted before the old tree is let go. Identity
-                // does not survive a boundary, so a `missing` half needs a
-                // reading holding none of what left.
-                emit(.elementsChanged(.empty(at: admission.timestamp)))
-            }
             let nextTree = continuity.isReplacement ? admission.tree : candidateTree
             let generation = continuity.isReplacement
                 ? (log.latestSnapshotEvent?.generation ?? .initial).advanced()
@@ -258,11 +261,12 @@ extension Observation {
             )
 
             var next = self
-            let event = try next.log.record(
+            let recorded = try next.log.record(
                 snapshot: snapshot,
                 continuity: continuity,
                 protectedBy: next.earliestActiveSettlementBoundary
             )
+            let event = recorded.snapshot
             next.interfaceTree = nextTree
             next.sequence = event.sequence
             next.notificationIndices[notificationLane] = notifications.through
@@ -271,24 +275,25 @@ extension Observation {
             next.replacementRequired = false
             next.admittedTripwireSignal = admission.tripwireSignal
             self = next
-            if continuity.isReplacement {
-                // The identity moves, ahead of the arriving graph: naming a
-                // screen needs only what is on it, so a caller waiting on the
-                // name does not also wait for the tree.
-                emit(.screenChanged(ScreenFacts(idAfter: event.snapshot.screenHeading)))
-                emit(.elementsChanged(event.moment.capture))
-            } else {
-                emit(event.isChange ? .elementsChanged(event.moment.capture) : .noChange)
-            }
             return ReadObservation(
                 tree: nextTree,
                 captureID: admission.captureID,
-                event: event
+                event: event,
+                events: recorded.events
             )
         }
 
         internal mutating func recordSettleFailure(_ diagnostic: String?) {
             settleFailureDiagnostic = diagnostic
+        }
+
+        internal mutating func recordAnnouncement(
+            _ announcement: CapturedAnnouncement
+        ) -> Observation.Event {
+            log.record(
+                announcement: announcement,
+                protectedBy: earliestActiveSettlementBoundary
+            )
         }
 
         private var earliestActiveSettlementBoundary: Moment? {
@@ -349,6 +354,7 @@ extension Observation.Store {
         internal let tree: InterfaceTree
         internal let captureID: InterfaceCaptureID
         internal let event: Observation.SnapshotEvent
+        internal let events: [Observation.Event]
     }
 
 }

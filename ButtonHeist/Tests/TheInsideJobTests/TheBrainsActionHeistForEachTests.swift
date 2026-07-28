@@ -392,7 +392,13 @@ extension TheBrainsActionTests {
         let stillPresentState = await observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
         ])
-        let waitObservedState = await settling(observedState(labels: ["Done"]))
+        let waitObservedState = await settling(
+            brains.vault.semanticObservationStream.commitVisibleEventForTesting(
+                .makeForTests(elements: [
+                    (makeElement(label: "Done"), HeistId(rawValue: "element_0")),
+                ])
+            )
+        )
         var currentStates = observationEvents(for: [initialState, stillPresentState])
         let runtime = heistRuntime(
             observations: [],

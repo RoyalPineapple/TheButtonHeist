@@ -106,7 +106,6 @@ extension Settlement {
     fileprivate enum ExecutionInput: Sendable {
         case observation(Observation.Event, ContinuousClock.Instant)
         case observationHistoryUnavailable(Observation.EventsSince)
-        case announcement(Observation.AnnouncementEvent)
         case announcementHistoryUnavailable(AccessibilityNotificationGap)
         case readiness(Readiness.Signal)
         case deadlineReached(PhaseDeadline)
@@ -182,10 +181,6 @@ extension Settlement {
             at instant: ContinuousClock.Instant = RuntimeElapsed.now
         ) {
             record(.observation(event, instant))
-        }
-
-        internal func observeAnnouncement(_ event: Observation.AnnouncementEvent) {
-            record(.announcement(event))
         }
 
         internal func observeAnnouncementHistoryUnavailable(
@@ -333,7 +328,6 @@ private extension Settlement.ExecutionInput {
             .readinessInvalidated
         case .observation,
              .observationHistoryUnavailable,
-             .announcement,
              .announcementHistoryUnavailable,
              .deadlineReached,
              .cancelled,
@@ -402,7 +396,7 @@ extension Settlement {
             let initial = Reducer.begin(command)
             var state = initial.state
             var effects = initial.effects
-            var admittedMoments: [Observation.Moment] = []
+            var admittedEvents: [Observation.Event] = []
             var activeCapture: Capture.Request?, pendingCapture: Capture.Request?
             var drainsArmingInputs = false
             var finalSemanticEvidence = FinalSemanticEvidenceMeasurement.idle
@@ -414,7 +408,7 @@ extension Settlement {
                     if drainsArmingInputs {
                         if let input = sink.nextIfAvailable() {
                             let decision = await consume(input, state: state, sink: sink,
-                                admittedMoments: &admittedMoments,
+                                admittedEvents: &admittedEvents,
                                 finalSemanticEvidence: &finalSemanticEvidence)
                             state = decision.state
                             effects += decision.effects
@@ -498,7 +492,7 @@ extension Settlement {
                         preconditionFailure("Settlement event delivery ended before a terminal result")
                     }
                     let decision = await consume(input, state: state, sink: sink,
-                        admittedMoments: &admittedMoments,
+                        admittedEvents: &admittedEvents,
                         finalSemanticEvidence: &finalSemanticEvidence)
                     state = decision.state
                     effects = decision.effects
@@ -552,14 +546,14 @@ extension Settlement {
             _ input: ExecutionInput,
             state: State,
             sink: ExecutionSink,
-            admittedMoments: inout [Observation.Moment],
+            admittedEvents: inout [Observation.Event],
             finalSemanticEvidence: inout FinalSemanticEvidenceMeasurement
         ) async -> Decision {
             let admitted = await fact(
                 for: input,
                 state: state,
                 sink: sink,
-                admittedMoments: &admittedMoments
+                admittedEvents: &admittedEvents
             )
             // One input can be several moments — a screen boundary is three —
             // and each is reduced on its own so each is asked whether it ended
@@ -684,37 +678,24 @@ extension Settlement {
             for input: ExecutionInput,
             state: State,
             sink: ExecutionSink,
-            admittedMoments: inout [Observation.Moment]
+            admittedEvents: inout [Observation.Event]
         ) async -> [AdmittedSettlementFact] {
             switch input {
-            case .observation(.read(let event, let tick), let instant):
-                // The only readings turned away are one from before the
-                // boundary and one the handoff path already admitted. What the
-                // reading was is the store's own answer, carried on the tick.
+            case .observation(let observed, let instant):
                 guard let baseline = state.session?.boundary.moment,
-                      event.moment.isSameOrAfter(baseline) else { return [] }
-                return [AdmittedSettlementFact(
-                    fact: .observationAdmitted(.init(
-                        tick: tick,
-                        event: event,
+                      observed.isSameOrAfter(baseline),
+                      !admittedEvents.contains(observed) else { return [] }
+                admittedEvents.append(observed)
+                if case .announcement = observed.fact {
+                    return [AdmittedSettlementFact(
+                        fact: .announcementObserved(observed),
                         instant: instant
-                    )),
-                    instant: instant
-                )]
-            case .observation(.replayed(let event), let instant):
-                // A reading that landed between the boundary capture and this
-                // run subscribing. It reaches the run through replay off the
-                // log, which records readings and not the ticks the vault minted
-                // for them, so the tick is rebuilt from the reading's own
-                // answer about whether the tree moved.
-                guard let baseline = state.session?.boundary.moment,
-                      event.moment.isSameOrAfter(baseline),
-                      !admittedMoments.contains(event.moment) else { return [] }
-                admittedMoments.append(event.moment)
+                    )]
+                }
+                guard observed.observation != nil else { return [] }
                 return [AdmittedSettlementFact(
                     fact: .observationAdmitted(.init(
-                        tick: event.derivedTick,
-                        event: event,
+                        observed: observed,
                         instant: instant
                     )),
                     instant: instant
@@ -722,11 +703,6 @@ extension Settlement {
             case .observationHistoryUnavailable(let history):
                 return [AdmittedSettlementFact(
                     fact: .observationHistoryUnavailable(history),
-                    instant: RuntimeElapsed.now
-                )]
-            case .observation(.announcement(let event), _), .announcement(let event):
-                return [AdmittedSettlementFact(
-                    fact: .announcementObserved(event),
                     instant: RuntimeElapsed.now
                 )]
             case .announcementHistoryUnavailable(let gap):
@@ -768,22 +744,12 @@ extension Settlement {
                 preconditionFailure("Baseline capture completion cannot enter armed delivery")
             case .captureCompleted(.handoff(let request), let completion, let instant):
                 switch completion.outcome {
-                case .admitted(let event):
-                    guard state.session != nil,
-                          !admittedMoments.contains(event.moment) else { return [] }
-                    admittedMoments.append(event.moment)
-                    // The handoff holds the reading its capture produced, not
-                    // the tick the vault minted for it, so the tick comes from
-                    // the reading's own answer about whether the tree moved.
-                    return [AdmittedSettlementFact(
-                        fact: .observationAdmitted(.init(
-                            tick: event.derivedTick,
-                            event: event,
-                            source: .handoffCapture(request.readinessGeneration),
-                            instant: instant
-                        )),
-                        instant: instant
-                    )]
+                case .admitted:
+                    // Capture commits through the vault, and that exact event
+                    // reaches the run through the observation stream. The
+                    // completion only closes capture ownership; admitting it
+                    // again would create a second delivery path.
+                    return []
                 case .failed(let failure):
                     return [AdmittedSettlementFact(
                         fact: .handoffCaptureFailed(request.readinessGeneration, failure),
@@ -1019,7 +985,7 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
                 matching: announcement
             ) {
             case .matched(let announcement):
-                sink.observeAnnouncement(.init(announcement: announcement))
+                await vault.semanticObservationStream.publishAnnouncement(announcement)
             case .historyUnavailable(let gap):
                 sink.observeAnnouncementHistoryUnavailable(gap)
             case .cancelled:

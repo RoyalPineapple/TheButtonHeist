@@ -244,8 +244,8 @@ private extension Settlement.Reducer {
         to session: inout Settlement.Session
     ) -> [Settlement.Effect] {
         session.latestObservation = admission
-        session.tickLog.append(admission.tick)
-        session.requirement.expectation = session.requirement.expectation.folding([admission.tick])
+        session.tickLog.append(admission.fact)
+        session.requirement.expectation = session.requirement.expectation.folding([admission.fact])
         if case .established(let readiness) = session.readiness,
            session.command.waitsForObservation
                || session.requirement.predicate?.semantics == .currentState
@@ -257,14 +257,14 @@ private extension Settlement.Reducer {
     }
 
     static func observe(
-        _ event: Observation.AnnouncementEvent,
+        _ event: Observation.Event,
         in session: inout Settlement.Session
     ) -> [Settlement.Effect] {
-        guard event.announcement.sequence > session.boundary.announcementCursor.sequence,
+        guard case .announcement(let announcement) = event.fact,
+              announcement.sequence > session.boundary.announcementCursor.sequence,
               !session.triggerEvidence.dispatchFailed else { return [] }
-        let tick = Tick.announcement(event.announcement.text)
-        session.tickLog.append(tick)
-        session.requirement.expectation = session.requirement.expectation.folding([tick])
+        session.tickLog.append(event.fact)
+        session.requirement.expectation = session.requirement.expectation.folding([event.fact])
         return []
     }
 }

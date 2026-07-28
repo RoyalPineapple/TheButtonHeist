@@ -7,9 +7,9 @@ import ThePlans
 /// over. A log holds only values, so folding one needs no actor and no main
 /// thread.
 package struct TickLog: Sendable, Equatable {
-    package private(set) var ticks: [Tick]
+    package private(set) var ticks: [Observation.Fact]
 
-    package init(_ ticks: [Tick] = []) {
+    package init(_ ticks: [Observation.Fact] = []) {
         self.ticks = ticks
     }
 
@@ -18,12 +18,12 @@ package struct TickLog: Sendable, Equatable {
     /// A second `.noChange` in a row is the same fact restated: the tree was
     /// already still, and nothing about the timeline changes by saying so
     /// again. Every other tick carries a reading, so none of them coalesce.
-    package mutating func append(_ tick: Tick) {
+    package mutating func append(_ tick: Observation.Fact) {
         guard !(tick == .noChange && ticks.last == .noChange) else { return }
         ticks.append(tick)
     }
 
-    package mutating func append(contentsOf newTicks: some Sequence<Tick>) {
+    package mutating func append(contentsOf newTicks: some Sequence<Observation.Fact>) {
         for tick in newTicks {
             append(tick)
         }
@@ -37,8 +37,8 @@ package struct TickLog: Sendable, Equatable {
     /// question about timing rather than about what was announced.
     package var announcements: [String] {
         ticks.compactMap { tick in
-            guard case .announcement(let text) = tick else { return nil }
-            return text
+            guard case .announcement(let announcement) = tick else { return nil }
+            return announcement.text
         }
     }
 

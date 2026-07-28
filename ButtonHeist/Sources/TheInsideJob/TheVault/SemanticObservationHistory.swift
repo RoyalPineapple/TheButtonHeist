@@ -29,10 +29,16 @@ extension Observation {
 
     internal struct Moment: Sendable, Equatable {
         internal let snapshot: Snapshot
+        internal let currentFact: Observation.Fact
         fileprivate let logIndex: Log.Index
 
-        fileprivate init(snapshot: Snapshot, logIndex: Log.Index) {
+        fileprivate init(
+            snapshot: Snapshot,
+            currentFact: Observation.Fact,
+            logIndex: Log.Index
+        ) {
             self.snapshot = snapshot
+            self.currentFact = currentFact
             self.logIndex = logIndex
         }
 
@@ -57,6 +63,7 @@ extension Observation {
         internal let continuity: ScreenContinuity
         internal let previous: Snapshot?
         internal let transition: Transition
+        internal var currentFact: Observation.Fact { moment.currentFact }
 
         internal var snapshot: Snapshot { moment.snapshot }
 
@@ -74,6 +81,13 @@ extension Observation {
         /// mistaken for semantic change. Stillness has to see both, or a
         /// reading taken mid-motion would claim the tree had stopped.
         internal var isChange: Bool {
+            Self.changed(from: previous, to: snapshot)
+        }
+
+        fileprivate static func changed(
+            from previous: Snapshot?,
+            to snapshot: Snapshot
+        ) -> Bool {
             guard let previous else { return true }
             guard previous.semanticHash == snapshot.semanticHash else { return true }
             return !Self.everyElementHeldStill(
@@ -81,17 +95,6 @@ extension Observation {
                 to: snapshot.viewportFrames,
                 tolerance: snapshot.placementTolerance
             )
-        }
-
-        /// The tick for this reading, for a caller holding the reading alone.
-        ///
-        /// Two paths hold a reading without the tick the vault minted for it:
-        /// replay off the log, and a handoff capture. Both carry the vault's own
-        /// `isChange` answer, which this reads rather than recomputes. One
-        /// reading yields one tick here, so a screen boundary — three ticks at
-        /// the vault — arrives through these paths as its arrival alone.
-        internal var derivedTick: Tick {
-            isChange ? .elementsChanged(moment.capture) : .noChange
         }
 
         /// Whether every element the viewport still shows is where it was.
@@ -127,39 +130,38 @@ extension Observation {
         }
     }
 
-    internal struct AnnouncementEvent: Sendable, Equatable {
-        internal let announcement: CapturedAnnouncement
-    }
+    /// One fact in the order the vault admitted it.
+    internal struct Event: Sendable, Equatable {
+        internal let cursor: Log.Index
+        internal let fact: Observation.Fact
+        internal let observation: SnapshotEvent?
+        internal let commitsObservation: Bool
 
-    /// One moment, as it leaves the vault.
-    ///
-    /// A live reading carries the tick the vault minted for it: the tick is what
-    /// the vault decided, the event is the reading it decided about. A screen
-    /// boundary is three moments and so three `.read` events, each with its own
-    /// tick.
-    ///
-    /// `.replayed` is a reading off the log, which carries no tick — a tick is a
-    /// decision made once, at the moment it was made, and the log records what
-    /// was read rather than what was decided. The two are separate cases so that
-    /// a consumer must say which it is handling.
-    internal enum Event: Sendable, Equatable {
-        case read(SnapshotEvent, Tick)
-        case replayed(SnapshotEvent)
-        case announcement(AnnouncementEvent)
+        fileprivate init(
+            cursor: Log.Index,
+            fact: Observation.Fact,
+            observation: SnapshotEvent?,
+            commitsObservation: Bool
+        ) {
+            self.cursor = cursor
+            self.fact = fact
+            self.observation = observation
+            self.commitsObservation = commitsObservation
+        }
 
         internal var snapshotEvent: SnapshotEvent? {
-            switch self {
-            case .read(let event, _), .replayed(let event):
-                event
-            case .announcement:
-                nil
-            }
+            commitsObservation ? observation : nil
+        }
+
+        internal func isSameOrAfter(_ moment: Moment) -> Bool {
+            cursor.belongs(toSameLogAs: moment.logIndex) && cursor >= moment.logIndex
         }
     }
 
     internal struct Log: Sendable, Equatable, RandomAccessCollection {
         internal let retentionLimit: Int
         private var retainedEntries: [ObservationLogEntry] = []
+        private var currentSnapshotEvent: SnapshotEvent?
         private var evictedThrough: Index?
         private var nextPosition: UInt64 = 1
         private let id = UUID()
@@ -170,17 +172,32 @@ extension Observation {
         }
 
         internal var latestSnapshotEvent: SnapshotEvent? {
-            retainedEntries.reversed().lazy.compactMap(\.event.snapshot).first
+            currentSnapshotEvent
         }
 
         internal mutating func record(
             snapshot: Snapshot,
             continuity: ScreenContinuity,
             protectedBy activeBoundary: Moment? = nil
-        ) throws(TransitionValidationError) -> SnapshotEvent {
+        ) throws(TransitionValidationError) -> (snapshot: SnapshotEvent, events: [Event]) {
             let previous = latestSnapshotEvent
-            let index = reserveIndex()
-            let moment = Moment(snapshot: snapshot, logIndex: endIndex)
+            let eventCount = continuity.isReplacement ? 3 : 1
+            let indices = (0..<eventCount).map { _ in reserveIndex() }
+            guard let capture = snapshot.trace.captures.last else {
+                preconditionFailure("Committed observation snapshot has no trace capture")
+            }
+            let currentFact: Observation.Fact = if continuity.isReplacement {
+                .elementsChanged(capture)
+            } else if SnapshotEvent.changed(from: previous?.snapshot, to: snapshot) {
+                .elementsChanged(capture)
+            } else {
+                .noChange
+            }
+            let moment = Moment(
+                snapshot: snapshot,
+                currentFact: currentFact,
+                logIndex: endIndex
+            )
             let transition = try Observation.transition(
                 from: previous,
                 to: moment,
@@ -192,16 +209,44 @@ extension Observation {
                 previous: previous?.snapshot,
                 transition: transition
             )
-            append(.replayed(event), at: index, protectedBy: activeBoundary)
-            return event
+            let facts: [Observation.Fact]
+            if continuity.isReplacement {
+                facts = [
+                    .elementsChanged(.empty(at: capture.interface.timestamp)),
+                    .screenChanged(ScreenFacts(idAfter: event.snapshot.screenHeading)),
+                    .elementsChanged(capture),
+                ]
+            } else {
+                facts = [currentFact]
+            }
+            let lastOffset = facts.index(before: facts.endIndex)
+            let events = zip(indices, facts).enumerated().map { offset, pair in
+                Event(
+                    cursor: pair.0,
+                    fact: pair.1,
+                    observation: event,
+                    commitsObservation: offset == lastOffset
+                )
+            }
+            events.forEach {
+                append($0, at: $0.cursor, protectedBy: activeBoundary)
+            }
+            currentSnapshotEvent = event
+            return (event, events)
         }
 
         internal mutating func record(
-            announcement: CapturedAnnouncement
-        ) -> AnnouncementEvent {
+            announcement: CapturedAnnouncement,
+            protectedBy activeBoundary: Moment? = nil
+        ) -> Event {
             let index = reserveIndex()
-            let event = AnnouncementEvent(announcement: announcement)
-            append(.announcement(event), at: index, protectedBy: nil)
+            let event = Event(
+                cursor: index,
+                fact: .announcement(announcement),
+                observation: nil,
+                commitsObservation: false
+            )
+            append(event, at: index, protectedBy: activeBoundary)
             return event
         }
 
@@ -261,7 +306,7 @@ extension Observation {
             fulfilling scope: SemanticObservationScope
         ) -> SnapshotRead {
             guard let moment else {
-                return snapshotEvents(fulfilling: scope).first
+                return latestSnapshot(fulfilling: scope)
                     .map(SnapshotRead.event) ?? .pending
             }
             guard moment.logIndex.belongs(to: id) else {
@@ -288,11 +333,20 @@ extension Observation {
         internal func latestSnapshot(
             fulfilling scope: SemanticObservationScope
         ) -> SnapshotEvent? {
-            snapshotEvents(fulfilling: scope).last
+            if let currentSnapshotEvent,
+               currentSnapshotEvent.scope.canFulfill(scope) {
+                return currentSnapshotEvent
+            }
+            return retainedEntries.reversed().lazy
+                .compactMap(\.event.snapshot)
+                .first { $0.scope.canFulfill(scope) }
         }
 
         internal func snapshotEvent(at moment: Moment) -> SnapshotEvent? {
-            retainedEntries.lazy.compactMap(\.event.snapshot).first(where: {
+            if currentSnapshotEvent?.moment == moment {
+                return currentSnapshotEvent
+            }
+            return retainedEntries.lazy.compactMap(\.event.snapshot).first(where: {
                 $0.moment == moment
             })
         }
@@ -301,7 +355,12 @@ extension Observation {
             fulfilling scope: SemanticObservationScope,
             sequence: SettledObservationSequence
         ) -> SnapshotEvent? {
-            snapshotEvents(fulfilling: scope).first {
+            if let currentSnapshotEvent,
+               currentSnapshotEvent.scope.canFulfill(scope),
+               currentSnapshotEvent.sequence == sequence {
+                return currentSnapshotEvent
+            }
+            return snapshotEvents(fulfilling: scope).first {
                 $0.sequence == sequence
             }
         }
@@ -412,12 +471,7 @@ extension Observation.Log {
 
 extension Observation.Event {
     internal func canFulfill(_ scope: SemanticObservationScope) -> Bool {
-        switch self {
-        case .read(let event, _), .replayed(let event):
-            event.scope.canFulfill(scope)
-        case .announcement:
-            true
-        }
+        observation?.scope.canFulfill(scope) ?? true
     }
 }
 
@@ -435,11 +489,6 @@ extension Observation.EventsSince {
 private extension Observation.Event {
     var snapshot: Observation.SnapshotEvent? {
         snapshotEvent
-    }
-
-    var announcement: Observation.AnnouncementEvent? {
-        guard case .announcement(let event) = self else { return nil }
-        return event
     }
 }
 

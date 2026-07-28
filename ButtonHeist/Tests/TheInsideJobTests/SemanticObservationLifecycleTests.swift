@@ -75,11 +75,26 @@ final class SemanticObservationLifecycleTests: SemanticObservationStreamTestCase
             timestamp: timestamp,
             viewportFrames: screen.tree.viewportFrames,
             placementTolerance: CoarseFrameComparison.currentTolerance
-        )) { _ in }
+        ))
 
         XCTAssertEqual(read.event.sequence, 1)
         XCTAssertEqual(read.event.generation, ScreenGeneration.initial.advanced())
         XCTAssertEqual(read.event.trace.captures.last?.interface, interface)
+        XCTAssertEqual(read.events.count, 3)
+        XCTAssertLessThan(read.events[0].cursor, read.events[1].cursor)
+        XCTAssertLessThan(read.events[1].cursor, read.events[2].cursor)
+        guard case .elementsChanged(let departure) = read.events[0].fact else {
+            return XCTFail("Expected departure before the screen change")
+        }
+        guard case .screenChanged = read.events[1].fact else {
+            return XCTFail("Expected a screen change between departure and arrival")
+        }
+        guard case .elementsChanged(let arrival) = read.events[2].fact else {
+            return XCTFail("Expected arrival after the screen change")
+        }
+        XCTAssertTrue(departure.interface.projectedElements.isEmpty)
+        XCTAssertEqual(arrival, read.event.moment.capture)
+        XCTAssertEqual(read.events[2].snapshotEvent, read.event)
         XCTAssertEqual(store.interfaceTree, read.tree)
         XCTAssertEqual(store.sequence, 1)
         XCTAssertEqual(store.notificationIndex, notificationBatch.through)
@@ -110,7 +125,26 @@ final class SemanticObservationLifecycleTests: SemanticObservationStreamTestCase
         let history = await vault.semanticObservationStream.storeOwner.readLog {
             $0.events(since: baseline)
         }
-        XCTAssertEqual(history, .events([.replayed(secondEvent)]))
+        guard case .events(let events) = history else {
+            return XCTFail("Expected retained lifecycle replacement events")
+        }
+        XCTAssertEqual(events.count, 3)
+        XCTAssertLessThan(events[0].cursor, events[1].cursor)
+        XCTAssertLessThan(events[1].cursor, events[2].cursor)
+        XCTAssertNil(events[0].snapshotEvent)
+        XCTAssertNil(events[1].snapshotEvent)
+        XCTAssertEqual(events[2].snapshotEvent, secondEvent)
+        guard case .elementsChanged(let departure) = events[0].fact else {
+            return XCTFail("Expected the previous screen to depart")
+        }
+        guard case .screenChanged = events[1].fact else {
+            return XCTFail("Expected a screen boundary")
+        }
+        guard case .elementsChanged(let arrival) = events[2].fact else {
+            return XCTFail("Expected the replacement screen to arrive")
+        }
+        XCTAssertTrue(departure.interface.projectedElements.isEmpty)
+        XCTAssertEqual(arrival, secondEvent.moment.capture)
         XCTAssertEqual(secondEvent.generation, firstEvent.generation.advanced())
         XCTAssertEqual(secondEvent.previousMoment, firstEvent.moment)
         guard case .screenBoundary(let previous) = secondEvent.transition else {

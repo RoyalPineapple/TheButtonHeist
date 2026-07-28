@@ -119,11 +119,19 @@ class SemanticObservationStreamTestCase: XCTestCase {
         return { count }
     }
 
-    /// A tree that moved and then stopped, as the two events that say so.
-    typealias Reading = (
-        changed: Observation.SnapshotEvent,
-        settled: Observation.SnapshotEvent
-    )
+    /// A tree that moved and then stopped, as the two recorded events that say so.
+    struct Reading {
+        let changedEvent: Observation.Event
+        let settledEvent: Observation.Event
+
+        var changed: Observation.SnapshotEvent {
+            changedEvent.committedSnapshot
+        }
+
+        var settled: Observation.SnapshotEvent {
+            settledEvent.committedSnapshot
+        }
+    }
 
     /// A reading of a tree holding one header, that moved and then went quiet.
     func commitSettling(label: String) async -> Reading {
@@ -139,11 +147,14 @@ class SemanticObservationStreamTestCase: XCTestCase {
     /// pair is what "the tree moved and then stopped" looks like as events.
     func commitSettling(_ observation: InterfaceObservation) async -> Reading {
         let changed = await vault.semanticObservationStream
-            .commitVisibleObservationForTesting(observation)
+            .commitVisibleEventForTesting(observation)
         let settled = await vault.semanticObservationStream
-            .commitVisibleObservationForTesting(observation)
-        precondition(changed.isChange && !settled.isChange, "Second reading must be quiet")
-        return (changed, settled)
+            .commitVisibleEventForTesting(observation)
+        precondition(
+            changed.committedSnapshot.isChange && !settled.committedSnapshot.isChange,
+            "Second reading must be quiet"
+        )
+        return Reading(changedEvent: changed, settledEvent: settled)
     }
 
     func admittedVisibleObservation() async throws -> Observation.Store.AdmittedObservation {
@@ -228,10 +239,9 @@ func scriptedSettlement(
             generation: .initial,
             observationBoundary: .including(observed.changed.moment)
         )))
-        for event in [observed.changed, observed.settled] {
+        for event in [observed.changedEvent, observed.settledEvent] {
             run.send(.observationAdmitted(.init(
-                tick: event.derivedTick,
-                event: event
+                observed: event
             )))
         }
     }
@@ -322,6 +332,15 @@ private struct ScriptedRun {
 /// One instant for every scripted event, so a run is a function of its facts
 /// alone rather than of when it was run.
 private let scriptedInstant = ContinuousClock.Instant.now
+
+extension Observation.Event {
+    var committedSnapshot: Observation.SnapshotEvent {
+        guard commitsObservation, let observation else {
+            preconditionFailure("Expected an event that commits an observation")
+        }
+        return observation
+    }
+}
 
 #endif // DEBUG
 #endif // canImport(UIKit)

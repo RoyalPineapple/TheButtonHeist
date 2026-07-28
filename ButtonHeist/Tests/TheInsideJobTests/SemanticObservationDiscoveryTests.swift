@@ -57,7 +57,20 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
         }
         let visibleMoment = await vault.semanticObservationStream.latestReadObservationMoment(scope: .visible)
         let discoveryMoment = await vault.semanticObservationStream.latestReadObservationMoment(scope: .discovery)
-        XCTAssertEqual(history, .events([.replayed(visible)]))
+        guard case .events(let events) = history else {
+            return XCTFail("Expected retained observation events")
+        }
+        XCTAssertEqual(events.count, 3)
+        guard case .elementsChanged(let departure) = events[0].fact,
+              case .screenChanged = events[1].fact,
+              case .elementsChanged(let arrival) = events[2].fact else {
+            return XCTFail("Expected departure, screen boundary, and arrival")
+        }
+        XCTAssertTrue(departure.interface.projectedElements.isEmpty)
+        XCTAssertEqual(arrival, visible.moment.capture)
+        XCTAssertNil(events[0].snapshotEvent)
+        XCTAssertNil(events[1].snapshotEvent)
+        XCTAssertEqual(events[2].snapshotEvent, visible)
         XCTAssertEqual(visibleMoment, visible.moment)
         XCTAssertEqual(discoveryMoment, discovery.moment)
     }
@@ -133,7 +146,29 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
         let history = await vault.semanticObservationStream.storeOwner.readLog {
             $0.events(since: initialDiscovery.moment)
         }
-        XCTAssertEqual(history, .events([.replayed(replacementVisible), .replayed(replacementDiscovery)]))
+        guard case .events(let events) = history else {
+            return XCTFail("Expected the retained replacement history")
+        }
+        XCTAssertEqual(events.count, 4)
+        XCTAssertLessThan(events[0].cursor, events[1].cursor)
+        XCTAssertLessThan(events[1].cursor, events[2].cursor)
+        XCTAssertLessThan(events[2].cursor, events[3].cursor)
+        XCTAssertNil(events[0].snapshotEvent)
+        XCTAssertNil(events[1].snapshotEvent)
+        XCTAssertEqual(events[2].snapshotEvent, replacementVisible)
+        XCTAssertEqual(events[3].snapshotEvent, replacementDiscovery)
+        guard case .elementsChanged(let departure) = events[0].fact else {
+            return XCTFail("Expected departure before the screen boundary")
+        }
+        guard case .screenChanged = events[1].fact else {
+            return XCTFail("Expected the screen boundary between departure and arrival")
+        }
+        guard case .elementsChanged(let arrival) = events[2].fact else {
+            return XCTFail("Expected arrival after the screen boundary")
+        }
+        XCTAssertTrue(departure.interface.projectedElements.isEmpty)
+        XCTAssertEqual(arrival, replacementVisible.moment.capture)
+        XCTAssertEqual(events[3].fact, replacementDiscovery.currentFact)
         guard case .sameGeneration(let previous) = replacementDiscovery.transition else {
             return XCTFail("Expected the skipped discovery scope to cross the retained screen boundary")
         }

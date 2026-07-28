@@ -13,9 +13,9 @@ final class SemanticObservationStoreTests: XCTestCase {
         let baseline = try read(scope: .visible, in: &store)
         let current = try read(scope: .visible, in: &store)
 
-        XCTAssertEqual(baseline.moment.snapshot, baseline.snapshot)
-        XCTAssertEqual(store.log.events(since: baseline.moment), .events([.replayed(current)]))
-        XCTAssertEqual(store.snapshotEvent(at: baseline.moment), baseline)
+        XCTAssertEqual(baseline.event.moment.snapshot, baseline.event.snapshot)
+        XCTAssertEqual(store.log.events(since: baseline.event.moment), .events(current.events))
+        XCTAssertEqual(store.snapshotEvent(at: baseline.event.moment), baseline.event)
     }
 
     func testReadsFromOneMomentDoNotShareProgress() throws {
@@ -24,9 +24,9 @@ final class SemanticObservationStoreTests: XCTestCase {
         let first = try read(scope: .visible, in: &store)
         let second = try read(scope: .visible, in: &store)
 
-        let expected: Observation.EventsSince = .events([.replayed(first), .replayed(second)])
-        XCTAssertEqual(store.log.events(since: baseline.moment), expected)
-        XCTAssertEqual(store.log.events(since: baseline.moment), expected)
+        let expected: Observation.EventsSince = .events(first.events + second.events)
+        XCTAssertEqual(store.log.events(since: baseline.event.moment), expected)
+        XCTAssertEqual(store.log.events(since: baseline.event.moment), expected)
     }
 
     func testEvictionReportsTypedExpiredHistory() throws {
@@ -37,14 +37,14 @@ final class SemanticObservationStoreTests: XCTestCase {
         let current = try read(scope: .visible, in: &store)
 
         XCTAssertEqual(
-            store.log.events(since: baseline.moment),
+            store.log.events(since: baseline.event.moment),
             .expired(Observation.Gap(
                 reason: .historyEvicted,
-                baseline: baseline.moment,
-                current: current.moment
+                baseline: baseline.event.moment,
+                current: current.event.moment
             ))
         )
-        XCTAssertEqual(store.latestReadEvent, current)
+        XCTAssertEqual(store.latestReadEvent, current.event)
     }
 
     func testSourceScopeProjectsOneLogAcrossFulfilledScopes() throws {
@@ -52,9 +52,9 @@ final class SemanticObservationStoreTests: XCTestCase {
         let discovery = try read(scope: .discovery, in: &store)
         let visible = try read(scope: .visible, in: &store)
 
-        XCTAssertEqual(store.log.events(since: discovery.moment), .events([.replayed(visible)]))
-        XCTAssertEqual(store.latestMoment(scope: .visible), visible.moment)
-        XCTAssertEqual(store.latestMoment(scope: .discovery), discovery.moment)
+        XCTAssertEqual(store.log.events(since: discovery.event.moment), .events(visible.events))
+        XCTAssertEqual(store.latestMoment(scope: .visible), visible.event.moment)
+        XCTAssertEqual(store.latestMoment(scope: .discovery), discovery.event.moment)
     }
 
     func testHistoryProjectionKeepsOnlyEventsThatFulfillTheRequestedScope() throws {
@@ -64,21 +64,21 @@ final class SemanticObservationStoreTests: XCTestCase {
         let discovery = try read(scope: .discovery, in: &store)
 
         XCTAssertEqual(
-            store.log.events(since: baseline.moment).projected(for: .discovery),
-            .events([.replayed(discovery)])
+            store.log.events(since: baseline.event.moment).projected(for: .discovery),
+            .events(discovery.events)
         )
     }
 
     func testSettlementBoundaryDerivesAnnouncementCursorFromItsMoment() throws {
         var log = Observation.Log(retentionLimit: 1)
-        let event = try log.record(
+        let recorded = try log.record(
             snapshot: snapshot(sequence: 4),
             continuity: .sameGeneration
         )
 
         XCTAssertEqual(
-            Settlement.EvidenceBoundary(moment: event.moment).announcementCursor.sequence,
-            event.notificationSequence
+            Settlement.EvidenceBoundary(moment: recorded.snapshot.moment).announcementCursor.sequence,
+            recorded.snapshot.notificationSequence
         )
     }
 
@@ -86,11 +86,87 @@ final class SemanticObservationStoreTests: XCTestCase {
         var log = Observation.Log(retentionLimit: 3)
         let first = try log.record(snapshot: snapshot(sequence: 1), continuity: .sameGeneration)
         let second = try log.record(snapshot: snapshot(sequence: 2), continuity: .sameGeneration)
+        let events = first.events + second.events
 
-        XCTAssertEqual(Array(log), [.replayed(first), .replayed(second)])
+        XCTAssertEqual(Array(log), events)
         XCTAssertEqual(log.distance(from: log.startIndex, to: log.endIndex), 2)
         XCTAssertEqual(log.distance(from: log.endIndex, to: log.startIndex), -2)
-        XCTAssertEqual(log[log.index(log.startIndex, offsetBy: 1)], .replayed(second))
+        XCTAssertEqual(log[log.index(log.startIndex, offsetBy: 1)], second.events[0])
+        XCTAssertLessThan(events[0].cursor, events[1].cursor)
+    }
+
+    func testScreenReplacementRecordsDepartureScreenAndArrivalInOrder() throws {
+        var log = Observation.Log(retentionLimit: 4)
+        let initial = try log.record(
+            snapshot: snapshot(sequence: 1),
+            continuity: .sameGeneration
+        )
+        let replacement = try log.record(
+            snapshot: snapshot(sequence: 2, generation: .initial.advanced()),
+            continuity: .replacement(.screenChangedNotification)
+        )
+
+        XCTAssertEqual(log.events(since: initial.snapshot.moment), .events(replacement.events))
+        XCTAssertEqual(replacement.events.count, 3)
+        XCTAssertLessThan(replacement.events[0].cursor, replacement.events[1].cursor)
+        XCTAssertLessThan(replacement.events[1].cursor, replacement.events[2].cursor)
+        XCTAssertNil(replacement.events[0].snapshotEvent)
+        XCTAssertNil(replacement.events[1].snapshotEvent)
+        XCTAssertEqual(replacement.events[2].snapshotEvent, replacement.snapshot)
+
+        guard case .elementsChanged(let departure) = replacement.events[0].fact else {
+            return XCTFail("Expected the old screen to depart first")
+        }
+        guard case .screenChanged = replacement.events[1].fact else {
+            return XCTFail("Expected the screen identity change second")
+        }
+        guard case .elementsChanged(let arrival) = replacement.events[2].fact else {
+            return XCTFail("Expected the new screen to arrive last")
+        }
+        XCTAssertTrue(departure.interface.projectedElements.isEmpty)
+        XCTAssertEqual(arrival, replacement.snapshot.moment.capture)
+        XCTAssertEqual(replacement.snapshot.currentFact, replacement.events[2].fact)
+    }
+
+    func testAnnouncementIsRetainedAsItsAuthoredFact() {
+        var log = Observation.Log(retentionLimit: 1)
+        let announcement = CapturedAnnouncement(
+            sequence: 7,
+            text: "Saved",
+            timestamp: Date(timeIntervalSince1970: 8),
+            kind: .announcement
+        )
+
+        let event = log.record(announcement: announcement)
+
+        XCTAssertEqual(Array(log), [event])
+        XCTAssertEqual(event.fact, .announcement(announcement))
+        XCTAssertNil(event.snapshotEvent)
+    }
+
+    func testBoundedAnnouncementHistoryDoesNotEraseCurrentSnapshotTruth() throws {
+        var log = Observation.Log(retentionLimit: 1)
+        let current = try log.record(
+            snapshot: snapshot(sequence: 1),
+            continuity: .sameGeneration
+        ).snapshot
+
+        _ = log.record(announcement: CapturedAnnouncement(
+            sequence: 1,
+            text: "First",
+            timestamp: Date(timeIntervalSince1970: 1),
+            kind: .announcement
+        ))
+        _ = log.record(announcement: CapturedAnnouncement(
+            sequence: 2,
+            text: "Second",
+            timestamp: Date(timeIntervalSince1970: 2),
+            kind: .announcement
+        ))
+
+        XCTAssertEqual(log.latestSnapshotEvent, current)
+        XCTAssertEqual(log.latestSnapshot(fulfilling: .visible), current)
+        XCTAssertEqual(log.readSnapshot(after: nil, fulfilling: .visible), .event(current))
     }
 
     /// A discard leaves the log alone and takes the tree.
@@ -104,35 +180,30 @@ final class SemanticObservationStoreTests: XCTestCase {
 
         store.discardCurrentObservation()
 
-        XCTAssertEqual(store.latestReadEvent, initial)
+        XCTAssertEqual(store.latestReadEvent, initial.event)
         XCTAssertNil(store.admittedObservation(scope: .visible, after: nil))
         XCTAssertEqual(store.interfaceTree, .empty)
     }
 
-    func testStoreOwnerReadsValueAdmissionFromStructuredChild() async throws {
+    func testStoreOwnerReturnsTheEventsAuthoredByAnAdmission() async throws {
         let owner = Observation.StoreOwner()
         let admission = admission(scope: .visible)
 
-        let read = try await withThrowingTaskGroup(
-            of: (read: Observation.Store.ReadObservation, ticks: [Tick]).self
-        ) { group in
-            group.addTask {
-                try await owner.readAdmission(admission)
-            }
-            return try await group.next()!
-        }
+        let read = try await owner.readAdmission(admission)
 
         let latest = await owner.latestReadEvent()
-        XCTAssertEqual(read.read.event.sequence, 1)
-        XCTAssertEqual(latest, read.read.event)
-        XCTAssertEqual(read.ticks.count, 1)
+        XCTAssertEqual(read.event.sequence, 1)
+        XCTAssertEqual(latest, read.event)
+        XCTAssertEqual(read.events.count, 1)
+        XCTAssertEqual(read.events[0].snapshotEvent, read.event)
+        XCTAssertEqual(read.events[0].fact, read.event.currentFact)
     }
 
     private func read(
         scope: SemanticObservationScope,
         in store: inout Observation.Store
-    ) throws -> Observation.SnapshotEvent {
-        try store.readObservation(admission(scope: scope)) { _ in }.event
+    ) throws -> Observation.Store.ReadObservation {
+        try store.readObservation(admission(scope: scope))
     }
 
     private func admission(scope: SemanticObservationScope) -> Observation.Admission {
@@ -157,7 +228,10 @@ final class SemanticObservationStoreTests: XCTestCase {
         )
     }
 
-    private func snapshot(sequence: UInt64) -> Observation.Snapshot {
+    private func snapshot(
+        sequence: UInt64,
+        generation: ScreenGeneration = .initial
+    ) -> Observation.Snapshot {
         let observation = InterfaceObservation.makeForTests()
         let capture = AccessibilityTrace.Capture(
             sequence: Int(sequence),
@@ -166,7 +240,7 @@ final class SemanticObservationStoreTests: XCTestCase {
         )
         return Observation.Snapshot(
             sequence: SettledObservationSequence(sequence),
-            generation: .initial,
+            generation: generation,
             sourceScope: .visible,
             observation: observation,
             semanticSignal: .empty,

@@ -49,7 +49,12 @@ extension TheBrainsPipelineTests {
         let history = await brains.vault.semanticObservationStream.storeOwner.readLog {
             $0.events(since: newBaseline)
         }
-        XCTAssertEqual(history, .events([.replayed(nextEvent)]))
+        guard case .events(let events) = history else {
+            return XCTFail("Expected retained events after the screen boundary")
+        }
+        XCTAssertEqual(events.count, 1)
+        XCTAssertEqual(events.first?.fact, .noChange)
+        XCTAssertEqual(events.first?.snapshotEvent, nextEvent)
     }
 
     func testPassiveCommitConsumesScopedScreenChangedSinceLastCommit() async {

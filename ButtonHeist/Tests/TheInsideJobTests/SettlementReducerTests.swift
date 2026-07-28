@@ -52,6 +52,31 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         ])
     }
 
+    func testAnnouncementReducerAdmitsTheExactRecordedFact() async throws {
+        let baseline = await commit(label: "Baseline")
+        var decision = armedObservationDecision(
+            baseline: baseline,
+            predicate: try announcementPredicate()
+        )
+        let announcement = CapturedAnnouncement(
+            sequence: 7,
+            text: "Saved",
+            timestamp: Date(timeIntervalSince1970: 8),
+            kind: .announcement,
+            associatedElement: .string("Save button")
+        )
+        let observed = await vault.semanticObservationStream.storeOwner
+            .recordAnnouncement(announcement)
+
+        decision = reduce(decision, .announcementObserved(observed))
+
+        let session = try activeSession(in: decision)
+        XCTAssertEqual(session.tickLog.ticks.last, .announcement(announcement))
+        XCTAssertEqual(session.tickLog.announcements, ["Saved"])
+        XCTAssertEqual(session.requirement.expectation.outstanding.count, 1)
+        XCTAssertEqual(session.requirement.expectation.outstanding.first?.query, .noChange)
+    }
+
     func testSuppliedBaselineArmsWithoutCapturingAnotherBaseline() async {
         let baseline = await commit(label: "Baseline")
         let boundary = Settlement.EvidenceBoundary(moment: baseline.moment)
@@ -110,17 +135,17 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         }
     }
 
-    func testViewportExitFinalizesOrReplacesTheIntendedOutcome() async {
+    func testViewportExitFinalizesOrReplacesTheIntendedOutcome() async throws {
         let baseline = await commit(label: "Baseline")
         let handoff = await commitSettling(label: "Handoff")
         var settled = armedPredicateFreeActionDecision(baseline: baseline)
         settled = reduce(
             settled,
-            .observationAdmitted(admission(handoff.changed))
+            .observationAdmitted(try await admission(handoff.changed))
         )
         settled = reduce(
             settled,
-            .observationAdmitted(admission(handoff.settled))
+            .observationAdmitted(try await admission(handoff.settled))
         )
         settled = reduce(
             settled,
@@ -169,12 +194,12 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
             XCTAssertTrue(decision.effects.isEmpty, name)
         }
     }
-    func testTerminalStateEmitsNoFurtherEffects() async {
+    func testTerminalStateEmitsNoFurtherEffects() async throws {
         let baseline = await commit(label: "Baseline")
         var decision = armedPredicateFreeActionDecision(baseline: baseline)
         let ready = await commitSettling(label: "Ready")
-        decision = reduce(decision, .observationAdmitted(admission(ready.changed)))
-        decision = reduce(decision, .observationAdmitted(admission(ready.settled)))
+        decision = reduce(decision, .observationAdmitted(try await admission(ready.changed)))
+        decision = reduce(decision, .observationAdmitted(try await admission(ready.settled)))
         decision = reduce(
             decision,
             .readinessEstablished(.init(
@@ -225,7 +250,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         let stale = await commit(label: "Stale")
         decision = reduce(
             decision,
-            .observationAdmitted(admission(
+            .observationAdmitted(try await admission(
                 stale,
                 source: .handoffCapture(.initial)
             ))
@@ -236,14 +261,17 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         let current = await commitSettling(label: "Current")
         decision = reduce(
             decision,
-            .observationAdmitted(admission(
+            .observationAdmitted(try await admission(
                 current.changed,
                 source: .handoffCapture(.initial.advanced())
             ))
         )
         // The quiet reading that follows lets the run settle without displacing
         // the handoff, which belongs to the generation that captured it.
-        decision = reduce(decision, .observationAdmitted(admission(current.settled)))
+        decision = reduce(
+            decision,
+            .observationAdmitted(try await admission(current.settled))
+        )
 
         guard let finalized = completeFinalization(decision) else { return }
         decision = finalized
@@ -376,7 +404,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         )
         decision = reduce(
             decision,
-            .observationAdmitted(admission(
+            .observationAdmitted(try await admission(
                 nextReady,
                 source: .handoffCapture(.initial.advanced()),
                 instant: dispatchAt.advanced(by: .milliseconds(3_500))
@@ -425,16 +453,6 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         Settlement.Predicate(
             authored: .elementsChanged,
             resolved: .elementsChanged([])
-        )
-    }
-
-    private func currentStatePredicate() throws -> Settlement.Predicate {
-        let authored = AccessibilityPredicate.exists(
-            .predicate(ElementPredicate(label: "Save"))
-        )
-        return Settlement.Predicate(
-            authored: authored,
-            resolved: try authored.resolve(in: HeistExecutionEnvironment())
         )
     }
 
@@ -531,7 +549,7 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         )
         decision = reduce(
             decision,
-            .observationAdmitted(admission(
+            .observationAdmitted(try await admission(
                 ready,
                 source: .handoffCapture(.initial),
                 instant: readyAt
@@ -542,34 +560,21 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         return decision
     }
 
-    /// An admission of `event`'s last moment.
-    ///
-    /// The event is the whole evidence: nothing is read back out of the store to
-    /// corroborate it, so there is no second version of what the run saw. The
-    /// vault says which moments the reading was, and a single admission carries
-    /// one of them, so this is the moment the reading ends on.
     private func admission(
-        _ event: Observation.SnapshotEvent,
+        _ snapshot: Observation.SnapshotEvent,
         source: Settlement.ObservationAdmissionSource = .observation,
         instant: ContinuousClock.Instant = RuntimeElapsed.now
-    ) -> Settlement.ObservationAdmission {
-        Settlement.ObservationAdmission(
-            tick: event.isChange
-                ? .elementsChanged(event.moment.capture)
-                : .noChange,
-            event: event,
+    ) async throws -> Settlement.ObservationAdmission {
+        let observed = await vault.semanticObservationStream.storeOwner.readLog { log in
+            log.first {
+                $0.snapshotEvent == snapshot
+            }
+        }
+        return Settlement.ObservationAdmission(
+            observed: try XCTUnwrap(observed),
             source: source,
             instant: instant
         )
-    }
-
-    private func announcement(sequence: UInt64, text: String) -> Observation.AnnouncementEvent {
-        Observation.AnnouncementEvent(announcement: CapturedAnnouncement(
-            sequence: sequence,
-            text: text,
-            timestamp: Date(timeIntervalSince1970: TimeInterval(sequence)),
-            kind: .announcement
-        ))
     }
 
     private func activeSession(in decision: Settlement.Decision) throws -> Settlement.Session {
@@ -643,15 +648,6 @@ private enum ActiveSessionError: Error {
     case unavailable
 }
 
-private struct ProductRow: CustomStringConvertible {
-    let command: Settlement.Command
-    let dispatchCount: Int
-
-    var description: String {
-        String(describing: command)
-    }
-}
-
 private extension Settlement.Effect {
     var armsChannels: Bool {
         guard case .arm = self else { return false }
@@ -660,16 +656,6 @@ private extension Settlement.Effect {
 
     var capturesBaseline: Bool {
         guard case .capture(.baseline) = self else { return false }
-        return true
-    }
-
-    var isDispatch: Bool {
-        guard case .dispatchAction = self else { return false }
-        return true
-    }
-
-    var isHandoffCapture: Bool {
-        guard case .capture(.handoff) = self else { return false }
         return true
     }
 
@@ -689,13 +675,6 @@ private extension Array where Element == Settlement.Effect {
                 nil
             }
         }.first
-    }
-}
-
-private extension Observation.EventsSince {
-    var events: [Observation.Event] {
-        guard case .events(let events) = self else { return [] }
-        return events
     }
 }
 

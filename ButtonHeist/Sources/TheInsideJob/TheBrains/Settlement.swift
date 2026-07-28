@@ -390,27 +390,27 @@ extension Settlement {
         case handoffCapture(Readiness.Generation)
     }
 
-    /// One tick, admitted to a run.
-    ///
-    /// A tick is a moment, so this is one of them rather than the reading it came
-    /// from: a boundary is three moments and arrives as three admissions, each
-    /// folded and each asked whether it ended the run. The reading rides along
-    /// because focus, notifications and moment identity are read off it, and no
-    /// tick carries those.
+    /// One recorded observation event admitted to a run.
     internal struct ObservationAdmission: Sendable, Equatable {
-        internal let tick: Tick
-        internal let event: Observation.SnapshotEvent
+        internal let observed: Observation.Event
         internal let source: ObservationAdmissionSource
         internal let instant: ContinuousClock.Instant
 
+        internal var fact: Observation.Fact { observed.fact }
+
+        internal var event: Observation.SnapshotEvent {
+            guard let event = observed.observation else {
+                preconditionFailure("An element or screen fact must carry observation provenance")
+            }
+            return event
+        }
+
         internal init(
-            tick: Tick,
-            event: Observation.SnapshotEvent,
+            observed: Observation.Event,
             source: ObservationAdmissionSource = .observation,
             instant: ContinuousClock.Instant = RuntimeElapsed.now
         ) {
-            self.tick = tick
-            self.event = event
+            self.observed = observed
             self.source = source
             self.instant = instant
         }
@@ -690,7 +690,7 @@ extension Settlement {
             // the first tick. A delta's opening half — `missing(X)` for an
             // appearance, `exists(X)` for a disappearance — is a claim about
             // this tree, and nothing later in the timeline can answer it.
-            let opening = Tick.elementsChanged(boundary.moment.capture)
+            let opening = boundary.moment.currentFact
             self.tickLog.append(opening)
             self.requirement.expectation = self.requirement.expectation.folding([opening])
             self.readiness = .pending(.initial)
@@ -781,7 +781,7 @@ extension Settlement.Event {
         case channelsArmed
         case dispatchCompleted(TheSafecracker.ActionDispatchResult)
         case observationAdmitted(Settlement.ObservationAdmission)
-        case announcementObserved(Observation.AnnouncementEvent)
+        case announcementObserved(Observation.Event)
         case observationHistoryUnavailable(Observation.EventsSince)
         case announcementHistoryUnavailable(AccessibilityNotificationGap)
         case readinessEstablished(Settlement.Readiness.Establishment)

@@ -39,7 +39,7 @@ extension TheVault {
 
     func recordFailedSettleDiagnosticEvidence(_ observation: InterfaceObservation?) async {
         latestFailedSettleDiagnosticEvidence = observation
-        await semanticObservationStream.discardCurrentObservation()
+        await semanticObservationStream.invalidateCurrentAdmission()
     }
 
     func observeInterface(_ observation: InterfaceObservation) {

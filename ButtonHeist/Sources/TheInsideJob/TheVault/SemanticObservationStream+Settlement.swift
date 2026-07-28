@@ -155,9 +155,8 @@ extension Observation.Stream {
             placementTolerance: CoarseFrameComparison.currentTolerance
         )
         let read: Observation.Store.ReadObservation
-        let ticks: [Tick]
         do {
-            (read, ticks) = try await storeOwner.readAdmission(admission)
+            read = try await storeOwner.readAdmission(admission)
         } catch {
             preconditionFailure("Interface observation failed validation: \(error)")
         }
@@ -174,11 +173,11 @@ extension Observation.Stream {
         // One at a time, in the order the vault minted them: a boundary's
         // departure, identity and arrival are three moments, and each one is a
         // pass through the machine of its own.
-        for tick in ticks {
-            publishImmediately(.read(read.event, tick))
+        for event in read.events {
+            publishImmediately(event)
         }
         await completeObservationWaiters()
-        return .delivered(read.event)
+        return .delivered(read)
     }
 
     internal func refreshVisibleObservation(
@@ -278,8 +277,8 @@ extension Observation.Stream {
             notificationIdentityObservation: committableObservation.observation
         )
         switch outcome {
-        case .delivered(let event):
-            return ObservationSettlement(commitOutcome: .committed(event))
+        case .delivered(let read):
+            return ObservationSettlement(commitOutcome: .committed(read.event))
         case .superseded:
             return ObservationSettlement(commitOutcome: .unavailable)
         }

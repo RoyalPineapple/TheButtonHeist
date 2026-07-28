@@ -13,8 +13,28 @@ extension Observation.Stream {
             notificationBatch: notificationBatch,
             notificationIdentityObservation: notificationIdentityObservation
         )
-        guard case .delivered(let event) = outcome else {
+        guard case .delivered(let read) = outcome else {
             preconditionFailure("Test observation was superseded before publication")
+        }
+        return read.event
+    }
+
+    @discardableResult
+    func commitVisibleEventForTesting(
+        _ observation: InterfaceObservation,
+        notificationBatch: AccessibilityNotificationBatch? = nil,
+        notificationIdentityObservation: InterfaceObservation? = nil
+    ) async -> Observation.Event {
+        let outcome = await commitSettledVisibleObservation(
+            .admittedForTesting(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
+            notificationBatch: notificationBatch,
+            notificationIdentityObservation: notificationIdentityObservation
+        )
+        guard case .delivered(let read) = outcome,
+              let event = read.events.last,
+              event.snapshotEvent == read.event
+        else {
+            preconditionFailure("Test observation did not publish its committed event")
         }
         return event
     }
@@ -44,10 +64,10 @@ extension Observation.Stream {
             notificationBatch: notificationBatch,
             notificationIdentityObservation: notificationIdentityObservation
         )
-        guard case .delivered(let event) = outcome else {
+        guard case .delivered(let read) = outcome else {
             preconditionFailure("Test observation was superseded before publication")
         }
-        return event
+        return read.event
     }
 
     @discardableResult
@@ -59,10 +79,10 @@ extension Observation.Stream {
             .admittedForTesting(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
             notificationBatch: notificationBatch
         )
-        guard case .delivered(let event) = outcome else {
+        guard case .delivered(let read) = outcome else {
             preconditionFailure("Test observation was superseded before publication")
         }
-        return event
+        return read.event
     }
 
     @discardableResult
@@ -78,10 +98,10 @@ extension Observation.Stream {
             ),
             notificationBatch: notificationBatch
         )
-        guard case .delivered(let event) = outcome else {
+        guard case .delivered(let read) = outcome else {
             preconditionFailure("Test observation was superseded before publication")
         }
-        return event
+        return read.event
     }
 }
 

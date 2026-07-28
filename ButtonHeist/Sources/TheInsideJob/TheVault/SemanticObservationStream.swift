@@ -151,6 +151,10 @@ internal final class Stream {
         receive(event)
     }
 
+    func publishAnnouncement(_ announcement: CapturedAnnouncement) async {
+        publishImmediately(await storeOwner.recordAnnouncement(announcement))
+    }
+
     /// Forgets what the vault held.
     ///
     /// Paired with the store throwing its tree away: the mirror describes what
@@ -158,6 +162,12 @@ internal final class Stream {
     func forgetReadState() {
         latestReadSnapshotEvent = nil
         latestReadInterfaceTree = .empty
+    }
+
+    /// Keeps committed semantic truth readable while requiring a fresh
+    /// observation before it can be admitted to a waiter.
+    func invalidateCurrentAdmission() async {
+        await storeOwner.invalidateCurrentAdmission()
     }
 
     /// Runs `movement` with every reading taken during it attributed to the

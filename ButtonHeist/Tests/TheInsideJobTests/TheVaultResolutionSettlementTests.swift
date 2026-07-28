@@ -356,6 +356,39 @@ extension TheVaultResolutionTests {
         XCTAssertTrue(event.trace.changeFacts.isEmpty)
     }
 
+    func testAnnouncementEventPreservesMetadataAndAuthoredOrderInObservationLog() async throws {
+        let observation = InterfaceObservation.makeForTests(elements: [
+            (element(label: "Stable"), "stable"),
+        ])
+        let baseline = await vault.semanticObservationStream.commitVisibleObservationForTesting(observation)
+        let announcement = CapturedAnnouncement(
+            sequence: 41,
+            text: "Saved",
+            timestamp: Date(timeIntervalSince1970: 42),
+            kind: .announcement,
+            associatedElement: .string("Save button")
+        )
+
+        await vault.semanticObservationStream.publishAnnouncement(announcement)
+        let settled = await vault.semanticObservationStream.commitVisibleObservationForTesting(observation)
+
+        let history = await vault.semanticObservationStream.storeOwner.readLog {
+            $0.events(since: baseline.moment)
+        }
+        guard case .events(let events) = history else {
+            return XCTFail("Expected retained observation events")
+        }
+        XCTAssertEqual(events.count, 2)
+        guard case .announcement(let recordedAnnouncement) = events[0].fact else {
+            return XCTFail("Expected announcement before the following observation")
+        }
+        XCTAssertEqual(recordedAnnouncement, announcement)
+        XCTAssertNil(events[0].observation)
+        XCTAssertEqual(events[1].fact, .noChange)
+        XCTAssertEqual(events[1].snapshotEvent, settled)
+        XCTAssertLessThan(events[0].cursor, events[1].cursor)
+    }
+
     func testScreenChangedNotificationStartsGenerationAndPreservesBoundaryFacts() async throws {
         let first = InterfaceObservation.makeForTests(elements: [(element(label: "Menu", traits: .header), "menu")])
         let firstEvent = await vault.semanticObservationStream.commitVisibleObservationForTesting(first)
@@ -383,7 +416,21 @@ extension TheVaultResolutionTests {
         let events = await vault.semanticObservationStream.storeOwner.readLog {
             $0.events(since: baseline)
         }
-        XCTAssertEqual(events, .events([.replayed(secondEvent)]))
+        guard case .events(let boundary) = events else {
+            return XCTFail("Expected retained screen-boundary events")
+        }
+        XCTAssertEqual(boundary.count, 3)
+        guard case .elementsChanged(let departure) = boundary[0].fact,
+              case .screenChanged(let screen) = boundary[1].fact,
+              case .elementsChanged(let arrival) = boundary[2].fact else {
+            return XCTFail("Expected departure, screen replacement, and arrival")
+        }
+        XCTAssertTrue(departure.interface.projectedElements.isEmpty)
+        XCTAssertEqual(screen.idAfter, secondEvent.snapshot.screenHeading)
+        XCTAssertEqual(arrival, secondEvent.moment.capture)
+        XCTAssertNil(boundary[0].snapshotEvent)
+        XCTAssertNil(boundary[1].snapshotEvent)
+        XCTAssertEqual(boundary[2].snapshotEvent, secondEvent)
         XCTAssertEqual(
             AccessibilityTrace(captures: [baseline.capture, secondEvent.moment.capture])
                 .changeFacts.map(\.kind),

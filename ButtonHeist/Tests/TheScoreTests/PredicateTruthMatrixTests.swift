@@ -1,5 +1,6 @@
 import AccessibilitySnapshotModel
 import ButtonHeistTestSupport
+import Foundation
 import ThePlans
 import XCTest
 @testable import TheScore
@@ -273,7 +274,12 @@ final class PredicateTruthMatrixTests: XCTestCase {
             let told = Expectation(authoring).folding([
                 .elementsChanged(interface(["Ready"])),
                 .screenChanged(ScreenFacts(idAfter: "Settings")),
-                .announcement("Saved"),
+                .announcement(CapturedAnnouncement(
+                    sequence: 1,
+                    text: "Saved",
+                    timestamp: Date(timeIntervalSince1970: 1),
+                    kind: .announcement
+                )),
                 .noChange,
             ])
 
@@ -425,7 +431,7 @@ final class PredicateTruthMatrixTests: XCTestCase {
     /// What the expectation is still waiting on, without the settlement gate —
     /// which is outstanding until stillness arrives and is not a leg.
     private func legs(of expectation: Expectation) -> [String] {
-        expectation.outstanding.filter { $0.tick != .noChange }.map(\.description)
+        expectation.outstanding.filter { $0 != .noChange }.map(\.description)
     }
 
     private struct Decomposition {
@@ -810,7 +816,7 @@ final class PredicateTruthMatrixTests: XCTestCase {
     /// Compared as values against what `Shape` resolves to, so a row states
     /// *which* search is outstanding rather than testing a rendered word.
     private func owed(_ expectation: Expectation) -> [ResolvedAccessibilityPredicate] {
-        expectation.outstanding.filter { $0.tick != .noChange }.compactMap(\.query)
+        expectation.outstanding.filter { $0 != .noChange }.compactMap(\.query)
     }
 
     private func nameless() throws -> ResolvedAccessibilityPredicate {
