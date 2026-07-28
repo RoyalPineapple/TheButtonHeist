@@ -403,18 +403,10 @@ public extension AccessibilityNotificationEvidence {
     }
 }
 
-public extension AccessibilityTrace {
-    var capturedAnnouncements: [CapturedAnnouncement] {
-        captures.flatMap { capture in
-            capture.transition.accessibilityNotifications.compactMap(\.capturedAnnouncement)
-        }
-    }
-}
-
 public struct AccessibilityNotificationObjectPayload: Codable, Sendable, Equatable, Hashable {
     public let className: String
     /// Product evidence for an unresolved payload. May include app content from
-    /// Objective-C descriptions; keep it in trace artifacts, not logs.
+    /// Objective-C descriptions; keep it in observation evidence, not logs.
     public let summary: String?
 
     public init(className: String, summary: String?) {
@@ -424,9 +416,9 @@ public struct AccessibilityNotificationObjectPayload: Codable, Sendable, Equatab
 }
 
 public struct AccessibilityNotificationElementReference: Codable, Sendable, Equatable, Hashable {
-    /// Capture-local path into the trace capture's `Interface.tree`.
+    /// Capture-local path into the observation snapshot's `Interface.tree`.
     public let path: TreePath
-    /// Traversal index in the trace capture's projected element order.
+    /// Traversal index in the observation snapshot's projected element order.
     public let traversalIndex: Int
     /// How the notification payload was correlated with this capture node.
     public let resolution: AccessibilityNotificationElementResolution

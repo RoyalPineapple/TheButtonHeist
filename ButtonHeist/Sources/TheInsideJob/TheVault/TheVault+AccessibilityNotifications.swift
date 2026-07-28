@@ -6,6 +6,25 @@ import AccessibilitySnapshotParser
 import TheScore
 
 extension TheVault {
+    func admitNotifications(
+        _ pendingEvents: [PendingAccessibilityNotificationEvent]
+    ) -> [Observation.AdmittedNotification] {
+        pendingEvents.sorted { $0.sequence < $1.sequence }.compactMap { event in
+            guard event.kind.isAdmittedObservationKind else { return nil }
+            return Observation.AdmittedNotification(
+                sequence: event.sequence,
+                kind: event.kind,
+                text: event.notificationData.text ?? event.associatedElement.text,
+                element: (
+                    event.associatedElement.object
+                        ?? event.notificationData.object
+                )
+                .flatMap(captureObject)
+                .map(WireConversion.semantics)
+            )
+        }
+    }
+
     func resolveAccessibilityNotificationEvidence(
         _ pendingEvents: [PendingAccessibilityNotificationEvent],
         in observation: InterfaceObservation
@@ -58,11 +77,11 @@ extension TheVault {
                 return unresolvedObjectPayload(ref)
             }
             if let heistId = identityObservation.liveCapture.heistId(matching: object),
-               let elementReference = traceElementReference(for: heistId, in: referenceObservation, resolution: .identity) {
+               let elementReference = notificationElementReference(for: heistId, in: referenceObservation, resolution: .identity) {
                 return .element(elementReference)
             }
             if let parsedElement = captureObject(object),
-               let elementReference = uniqueTraceElementReference(
+               let elementReference = uniqueNotificationElementReference(
                 matching: parsedElement,
                 in: referenceObservation,
                 resolution: .singleElement
@@ -82,14 +101,14 @@ extension TheVault {
         ))
     }
 
-    private func traceElementReference(
+    private func notificationElementReference(
         for heistId: HeistId,
         in observation: InterfaceObservation,
         resolution: AccessibilityNotificationElementResolution
     ) -> AccessibilityNotificationElementReference? {
         let interface = WireConversion.toSemanticInterface(from: observation.tree)
         guard let record = interface.graph.elementsInTraversalOrder.first(where: {
-            $0.traceIdentity == heistId.traceElementIdentity
+            $0.observationIdentity == heistId.observationElementIdentity
         }) else { return nil }
         return AccessibilityNotificationElementReference(
             path: record.path,
@@ -98,14 +117,37 @@ extension TheVault {
         )
     }
 
-    private func uniqueTraceElementReference(
+    private func uniqueNotificationElementReference(
         matching parsedElement: AccessibilityElement,
         in observation: InterfaceObservation,
         resolution: AccessibilityNotificationElementResolution
     ) -> AccessibilityNotificationElementReference? {
         let matches = observation.tree.elements.values.filter { $0.element == parsedElement }
         guard matches.count == 1, let match = matches.first else { return nil }
-        return traceElementReference(for: match.heistId, in: observation, resolution: resolution)
+        return notificationElementReference(for: match.heistId, in: observation, resolution: resolution)
+    }
+}
+
+private extension AccessibilityNotificationKind {
+    var isAdmittedObservationKind: Bool {
+        switch self {
+        case .announcement, .screenChanged, .elementChanged:
+            true
+        case .unknown:
+            false
+        }
+    }
+}
+
+private extension PendingAccessibilityNotificationPayload {
+    var text: String? {
+        guard case .string(let text) = self else { return nil }
+        return text
+    }
+
+    var object: NSObject? {
+        guard case .object(let identity) = self else { return nil }
+        return identity.object as? NSObject
     }
 }
 

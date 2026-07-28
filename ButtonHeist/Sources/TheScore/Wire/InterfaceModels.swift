@@ -107,7 +107,7 @@ public struct ScreenRect: Codable, Equatable, Hashable, Sendable {
     }
 }
 
-public struct ContentRect: Codable, Equatable, Hashable, Sendable {
+public struct ViewRect: Codable, Equatable, Hashable, Sendable {
     public let x: FiniteCoordinate
     public let y: FiniteCoordinate
     public let width: FiniteDimension
@@ -139,7 +139,7 @@ public struct ContentRect: Codable, Equatable, Hashable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "content rect")
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "view rect")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             x: try container.decode(FiniteCoordinate.self, forKey: .x),
@@ -162,7 +162,7 @@ public struct ContentRect: Codable, Equatable, Hashable, Sendable {
     }
 }
 
-public struct ScrollContentPoint: Codable, Equatable, Hashable, Sendable {
+public struct ViewPoint: Codable, Equatable, Hashable, Sendable {
     public let x: FiniteCoordinate
     public let y: FiniteCoordinate
 
@@ -183,7 +183,7 @@ public struct ScrollContentPoint: Codable, Equatable, Hashable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "scroll content point")
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "view point")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             x: try container.decode(FiniteCoordinate.self, forKey: .x),
@@ -256,6 +256,47 @@ public enum ScreenFrameEvidence: Equatable, Hashable, Sendable {
         }
     }
 
+}
+
+extension ScreenFrameEvidence: Codable {
+    private enum Source: String, Codable {
+        case available
+        case unavailable
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case source
+        case rect
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "screen frame evidence")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        switch try container.decode(Source.self, forKey: .source) {
+        case .available:
+            self = .available(try container.decode(ScreenRect.self, forKey: .rect))
+        case .unavailable:
+            guard !container.contains(.rect) else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .rect,
+                    in: container,
+                    debugDescription: "Unavailable screen frame evidence must not include a rect"
+                )
+            }
+            self = .unavailable
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .available(let rect):
+            try container.encode(Source.available, forKey: .source)
+            try container.encode(rect, forKey: .rect)
+        case .unavailable:
+            try container.encode(Source.unavailable, forKey: .source)
+        }
+    }
 }
 
 package struct InterfaceGeometryAdmissionError: Error, Equatable, CustomStringConvertible {
@@ -661,32 +702,24 @@ extension TreePath: Comparable {
 
 public struct ScrollInventory: Codable, Equatable, Hashable, Sendable {
     public let totalElementCount: Int?
-    public let visibleIndices: [Int]
 
-    public init?(totalElementCount: Int?, visibleIndices: [Int]) {
-        guard totalElementCount.map({ $0 >= 0 }) ?? true,
-              visibleIndices.allSatisfy({ $0 >= 0 }),
-              Set(visibleIndices).count == visibleIndices.count,
-              totalElementCount.map({ total in visibleIndices.allSatisfy { $0 < total } }) ?? true
-        else { return nil }
+    public init?(totalElementCount: Int?) {
+        guard totalElementCount.map({ $0 >= 0 }) ?? true else { return nil }
         self.totalElementCount = totalElementCount
-        self.visibleIndices = visibleIndices
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case totalElementCount
-        case visibleIndices
     }
 
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "scroll inventory")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let totalElementCount = try container.decodeIfPresent(Int.self, forKey: .totalElementCount)
-        let visibleIndices = try container.decode([Int].self, forKey: .visibleIndices)
-        guard let admitted = Self(totalElementCount: totalElementCount, visibleIndices: visibleIndices) else {
+        guard let admitted = Self(totalElementCount: totalElementCount) else {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: decoder.codingPath,
-                debugDescription: "scroll inventory indices must be unique and inside the total element count"
+                debugDescription: "scroll inventory total element count must be non-negative"
             ))
         }
         self = admitted
@@ -695,26 +728,28 @@ public struct ScrollInventory: Codable, Equatable, Hashable, Sendable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(totalElementCount, forKey: .totalElementCount)
-        try container.encode(visibleIndices, forKey: .visibleIndices)
     }
 }
 
 /// Button Heist metadata attached to one parser element.
 ///
-/// `AccessibilityElement` is the accessibility fact. These annotations are
-/// BH affordances derived from a parse: targeting metadata plus supported action
-/// names. They are keyed by capture-local tree path so the accessibility tree
-/// itself stays full-fidelity and unmodified.
+/// `AccessibilityElement` is the accessibility fact. This annotation carries
+/// Button Heist metadata derived from a parse: canonical geometry
+/// and supported actions. It is keyed by capture-local tree path so the
+/// accessibility tree itself stays full-fidelity and unmodified.
 public struct InterfaceElementAnnotation: Codable, Equatable, Hashable, Sendable {
     public let path: TreePath
     public let actions: [ElementAction]
+    public let geometry: HeistElement.Geometry
 
     public init(
         path: TreePath,
-        actions: [ElementAction]
+        actions: [ElementAction],
+        geometry: HeistElement.Geometry
     ) {
         self.path = path
         self.actions = actions.canonicalElementActionArray
+        self.geometry = geometry
     }
 }
 
@@ -722,6 +757,7 @@ extension InterfaceElementAnnotation {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case path
         case actions
+        case geometry
     }
 
     public init(from decoder: Decoder) throws {
@@ -729,7 +765,8 @@ extension InterfaceElementAnnotation {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             path: try container.decode(TreePath.self, forKey: .path),
-            actions: try container.decode(ElementActionSet.self, forKey: .actions).orderedActions
+            actions: try container.decode(ElementActionSet.self, forKey: .actions).orderedActions,
+            geometry: try container.decode(HeistElement.Geometry.self, forKey: .geometry)
         )
     }
 
@@ -737,44 +774,43 @@ extension InterfaceElementAnnotation {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(path, forKey: .path)
         try container.encode(ElementActionSet(actions), forKey: .actions)
+        try container.encode(geometry, forKey: .geometry)
     }
 }
 
-/// Opaque element identity used only by trace-backed diffing.
-///
-/// Public element projections stay content-shaped. When a capture has stronger
-/// semantic identity metadata, diffing can pair by this value and keep
-/// label/identifier churn from masquerading as remove/add churn.
-package struct TraceElementIdentity: Codable, Equatable, Hashable, Sendable, Comparable, CustomStringConvertible {
-    package let rawValue: String
+package extension Observation {
+    /// Opaque semantic identity for one observed accessibility element.
+    struct ElementIdentity: Codable, Equatable, Hashable, Sendable, Comparable, CustomStringConvertible {
+        package let rawValue: String
 
-    package init(_ rawValue: String) {
-        precondition(!rawValue.isEmpty, "TraceElementIdentity cannot be empty")
-        self.rawValue = rawValue
-    }
-
-    package init(from decoder: Decoder) throws {
-        let rawValue = try decoder.singleValueContainer().decode(String.self)
-        guard !rawValue.isEmpty else {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: decoder.codingPath,
-                debugDescription: "TraceElementIdentity cannot be empty"
-            ))
+        package init(_ rawValue: String) {
+            precondition(!rawValue.isEmpty, "Observation.ElementIdentity cannot be empty")
+            self.rawValue = rawValue
         }
-        self.rawValue = rawValue
-    }
 
-    package func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(rawValue)
-    }
+        package init(from decoder: Decoder) throws {
+            let rawValue = try decoder.singleValueContainer().decode(String.self)
+            guard !rawValue.isEmpty else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: decoder.codingPath,
+                    debugDescription: "Observation.ElementIdentity cannot be empty"
+                ))
+            }
+            self.rawValue = rawValue
+        }
 
-    package var description: String {
-        rawValue
-    }
+        package func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            try container.encode(rawValue)
+        }
 
-    package static func < (lhs: TraceElementIdentity, rhs: TraceElementIdentity) -> Bool {
-        lhs.rawValue < rhs.rawValue
+        package var description: String {
+            rawValue
+        }
+
+        package static func < (lhs: ElementIdentity, rhs: ElementIdentity) -> Bool {
+            lhs.rawValue < rhs.rawValue
+        }
     }
 }
 
@@ -823,16 +859,16 @@ public struct InterfaceAnnotations: Codable, Equatable, Hashable, Sendable {
     }
 }
 
-package struct InterfaceTraceIdentities: Equatable, Sendable {
-    package static let empty = InterfaceTraceIdentities()
+package struct InterfaceElementIdentities: Equatable, Sendable {
+    package static let empty = InterfaceElementIdentities()
 
-    package let byPath: [TreePath: TraceElementIdentity]
+    package let byPath: [TreePath: Observation.ElementIdentity]
 
-    package init(_ byPath: [TreePath: TraceElementIdentity] = [:]) {
+    package init(_ byPath: [TreePath: Observation.ElementIdentity] = [:]) {
         self.byPath = byPath
     }
 
-    package subscript(path: TreePath) -> TraceElementIdentity? {
+    package subscript(path: TreePath) -> Observation.ElementIdentity? {
         byPath[path]
     }
 }
@@ -841,18 +877,18 @@ package struct InterfaceElementRecord: Equatable, Sendable {
     package let path: TreePath
     package let traversalIndex: Int
     package let element: HeistElement
-    package let traceIdentity: TraceElementIdentity?
+    package let observationIdentity: Observation.ElementIdentity?
 
     package init(
         path: TreePath,
         traversalIndex: Int,
         element: HeistElement,
-        traceIdentity: TraceElementIdentity? = nil
+        observationIdentity: Observation.ElementIdentity? = nil
     ) {
         self.path = path
         self.traversalIndex = traversalIndex
         self.element = element
-        self.traceIdentity = traceIdentity
+        self.observationIdentity = observationIdentity
     }
 }
 
@@ -1053,17 +1089,17 @@ public struct Interface: Codable, Equatable, Sendable {
     public let annotations: InterfaceAnnotations
     public let diagnostics: InterfaceDiagnostics?
     public let screenActions: [ScreenAction]
-    package let traceIdentities: InterfaceTraceIdentities
+    package let observationIdentities: InterfaceElementIdentities
 
     /// Button Heist element projection in VoiceOver traversal order.
     public var projectedElements: [HeistElement] {
         projectedElementRecords.map(\.element)
     }
 
-    /// Trace-aware element projection in VoiceOver traversal order.
+    /// Identity-aware element projection in VoiceOver traversal order.
     ///
     /// `projectedElements` intentionally stays a public, content-only view.
-    /// Diffing uses records so optional trace identity can participate in
+    /// Diffing uses records so optional observation identity can participate in
     /// pairing without leaking into `HeistElement`.
     package var projectedElementRecords: [InterfaceElementRecord] {
         graph.elementsInTraversalOrder.map(\.interfaceRecord)
@@ -1096,7 +1132,7 @@ public struct Interface: Codable, Equatable, Sendable {
             annotations: .empty,
             diagnostics: diagnostics,
             screenActions: [],
-            traceIdentities: .empty
+            observationIdentities: .empty
         )
     }
 
@@ -1112,7 +1148,7 @@ public struct Interface: Codable, Equatable, Sendable {
             annotations: annotations,
             diagnostics: diagnostics,
             screenActions: [],
-            traceIdentities: .empty
+            observationIdentities: .empty
         )
     }
 
@@ -1120,14 +1156,14 @@ public struct Interface: Codable, Equatable, Sendable {
         timestamp: Date,
         tree: [AccessibilityHierarchy],
         diagnostics: InterfaceDiagnostics? = nil,
-        traceIdentities: InterfaceTraceIdentities
+        observationIdentities: InterfaceElementIdentities
     ) throws {
         try self.init(
             timestamp: timestamp,
             tree: tree,
             annotations: .empty,
             diagnostics: diagnostics,
-            traceIdentities: traceIdentities
+            observationIdentities: observationIdentities
         )
     }
 
@@ -1137,13 +1173,13 @@ public struct Interface: Codable, Equatable, Sendable {
         annotations: InterfaceAnnotations,
         diagnostics: InterfaceDiagnostics? = nil,
         screenActions: [ScreenAction] = [],
-        traceIdentities: InterfaceTraceIdentities
+        observationIdentities: InterfaceElementIdentities
     ) throws {
         try InterfaceGeometryAdmission.validate(tree)
         try InterfaceGraph.validate(
             tree: tree,
             annotations: annotations,
-            traceIdentities: traceIdentities
+            observationIdentities: observationIdentities
         )
 
         self.init(
@@ -1152,7 +1188,7 @@ public struct Interface: Codable, Equatable, Sendable {
             annotations: annotations,
             diagnostics: diagnostics,
             screenActions: screenActions,
-            traceIdentities: traceIdentities
+            observationIdentities: observationIdentities
         )
     }
 
@@ -1182,7 +1218,7 @@ public struct Interface: Codable, Equatable, Sendable {
             annotations: projection.annotations,
             diagnostics: diagnostics,
             screenActions: screenActions,
-            traceIdentities: projection.traceIdentities
+            observationIdentities: projection.observationIdentities
         )
     }
 
@@ -1192,14 +1228,14 @@ public struct Interface: Codable, Equatable, Sendable {
         annotations: InterfaceAnnotations,
         diagnostics: InterfaceDiagnostics?,
         screenActions: [ScreenAction],
-        traceIdentities: InterfaceTraceIdentities
+        observationIdentities: InterfaceElementIdentities
     ) {
         self.timestamp = timestamp
         self.tree = tree
         self.annotations = annotations
         self.diagnostics = diagnostics
         self.screenActions = screenActions.sorted()
-        self.traceIdentities = traceIdentities
+        self.observationIdentities = observationIdentities
     }
 
     public static func == (lhs: Interface, rhs: Interface) -> Bool {
@@ -1217,7 +1253,7 @@ public struct Interface: Codable, Equatable, Sendable {
             annotations: annotations,
             diagnostics: diagnostics,
             screenActions: screenActions,
-            traceIdentities: traceIdentities
+            observationIdentities: observationIdentities
         )
     }
 
@@ -1228,7 +1264,7 @@ public struct Interface: Codable, Equatable, Sendable {
             annotations: annotations,
             diagnostics: diagnostics,
             screenActions: screenActions,
-            traceIdentities: traceIdentities
+            observationIdentities: observationIdentities
         )
     }
 
@@ -1251,7 +1287,7 @@ public struct Interface: Codable, Equatable, Sendable {
             annotations: graph.annotationsForSubtree(originalPath: originalPath, rootPath: rootPath),
             diagnostics: diagnostics,
             screenActions: [],
-            traceIdentities: graph.traceIdentitiesForSubtree(originalPath: originalPath, rootPath: rootPath)
+            observationIdentities: graph.observationIdentitiesForSubtree(originalPath: originalPath, rootPath: rootPath)
         )
     }
 

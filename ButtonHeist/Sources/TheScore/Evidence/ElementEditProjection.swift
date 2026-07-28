@@ -2,7 +2,7 @@ import ThePlans
 import Foundation
 import AccessibilitySnapshotModel
 
-enum AccessibilityTraceElementDiff {
+enum ElementEditProjection {
 
     static func projectElementEdits(
         beforeElements: [HeistElement],
@@ -22,7 +22,7 @@ enum AccessibilityTraceElementDiff {
             beforeRecords: beforeRecords,
             afterRecords: afterRecords
         )
-        return AccessibilityTraceMoveInference.suppressElementChurnFromFunctionalMoves(
+        return ElementMoveInference.suppressElementChurnFromFunctionalMoves(
             edits: edits,
             beforeRecords: beforeRecords,
             afterRecords: afterRecords
@@ -92,11 +92,11 @@ enum AccessibilityTraceElementDiff {
 
 struct ElementDiffRecord: Equatable, Sendable {
     let element: HeistElement
-    let traceIdentity: TraceElementIdentity?
+    let observationIdentity: Observation.ElementIdentity?
 
-    init(element: HeistElement, traceIdentity: TraceElementIdentity? = nil) {
+    init(element: HeistElement, observationIdentity: Observation.ElementIdentity? = nil) {
         self.element = element
-        self.traceIdentity = traceIdentity
+        self.observationIdentity = observationIdentity
     }
 
     init(_ element: HeistElement) {
@@ -104,7 +104,7 @@ struct ElementDiffRecord: Equatable, Sendable {
     }
 
     init(_ record: InterfaceElementRecord) {
-        self.init(element: record.element, traceIdentity: record.traceIdentity)
+        self.init(element: record.element, observationIdentity: record.observationIdentity)
     }
 }
 
@@ -127,19 +127,26 @@ private func appendSemanticChanges(
     new: HeistElement,
     to changes: inout [PropertyChange]
 ) {
-    appendChangeIfNeeded(old.label, new.label, change: PropertyChange.label, to: &changes)
-    appendChangeIfNeeded(old.identifier, new.identifier, change: PropertyChange.identifier, to: &changes)
-    appendChangeIfNeeded(old.value, new.value, change: PropertyChange.value, to: &changes)
+    let oldProperties = old.semantics.assertable
+    let newProperties = new.semantics.assertable
+    appendChangeIfNeeded(oldProperties.label, newProperties.label, change: PropertyChange.label, to: &changes)
     appendChangeIfNeeded(
-        old.traits,
-        new.traits,
+        oldProperties.identifier,
+        newProperties.identifier,
+        change: PropertyChange.identifier,
+        to: &changes
+    )
+    appendChangeIfNeeded(oldProperties.value, newProperties.value, change: PropertyChange.value, to: &changes)
+    appendChangeIfNeeded(
+        oldProperties.orderedTraits,
+        newProperties.orderedTraits,
         change: PropertyChange.traits,
         to: &changes
     )
-    appendChangeIfNeeded(old.hint, new.hint, change: PropertyChange.hint, to: &changes)
+    appendChangeIfNeeded(oldProperties.hint, newProperties.hint, change: PropertyChange.hint, to: &changes)
     appendChangeIfNeeded(
-        ElementActionSet(old.actions),
-        ElementActionSet(new.actions),
+        ElementActionSet(oldProperties.actions),
+        ElementActionSet(newProperties.actions),
         change: PropertyChange.actions,
         to: &changes
     )
@@ -162,15 +169,31 @@ private func appendGeometryChanges(
     new: HeistElement,
     to changes: inout [PropertyChange]
 ) {
+    let project = { (screen: HeistElement.Geometry.ScreenSpace) in
+        switch screen {
+        case .onscreen(let frame, let activationPoint):
+            return (
+                frame: frame.rect.flatMap(ElementPropertyFrame.init),
+                activationPoint: activationPoint.point.flatMap(ElementPropertyPoint.init)
+            )
+        case .offscreen:
+            return (
+                frame: Optional<ElementPropertyFrame>.none,
+                activationPoint: Optional<ElementPropertyPoint>.none
+            )
+        }
+    }
+    let oldScreen = project(old.geometry.screen)
+    let newScreen = project(new.geometry.screen)
     appendChangeIfNeeded(
-        old.screenFrame.flatMap(ElementPropertyFrame.init),
-        new.screenFrame.flatMap(ElementPropertyFrame.init),
+        oldScreen.frame,
+        newScreen.frame,
         change: PropertyChange.frame,
         to: &changes
     )
     appendChangeIfNeeded(
-        old.activationPointEvidence.point.flatMap(ElementPropertyPoint.init),
-        new.activationPointEvidence.point.flatMap(ElementPropertyPoint.init),
+        oldScreen.activationPoint,
+        newScreen.activationPoint,
         change: PropertyChange.activationPoint,
         to: &changes
     )
@@ -187,12 +210,13 @@ private func appendChangeIfNeeded<Value>(
 }
 
 private func semanticCustomContent(_ element: HeistElement) -> [HeistCustomContent]? {
-    let content = element.customContent?.filter { !$0.label.isEmpty || !$0.value.isEmpty } ?? []
+    let content = element.semantics.assertable.orderedCustomContent
+        .filter { !$0.label.isEmpty || !$0.value.isEmpty }
     return content.isEmpty ? nil : content
 }
 
 private func semanticRotors(_ element: HeistElement) -> [HeistRotor]? {
-    let rotors = element.rotors?.filter { !$0.name.isEmpty } ?? []
+    let rotors = element.semantics.assertable.orderedRotors.filter { !$0.name.isEmpty }
     return rotors.isEmpty ? nil : rotors
 }
 
@@ -221,7 +245,7 @@ private extension ElementPropertyPoint {
 // MARK: - Diff Pairing Key
 
 struct ElementDiffPairingKey: Hashable, Sendable, Comparable {
-    let traceIdentity: TraceElementIdentity?
+    let observationIdentity: Observation.ElementIdentity?
     let text: String
     let identityTraits: Set<HeistTrait>
 
@@ -230,16 +254,16 @@ struct ElementDiffPairingKey: Hashable, Sendable, Comparable {
     }
 
     init(record: ElementDiffRecord) {
-        traceIdentity = record.traceIdentity
+        observationIdentity = record.observationIdentity
         let element = record.element
         text = Self.identityText(for: element)
-        identityTraits = Set(element.traits.filter {
+        identityTraits = Set(element.semantics.assertable.traits.filter {
             !AccessibilityPolicy.stateTraits.contains($0)
         })
     }
 
     static func == (lhs: ElementDiffPairingKey, rhs: ElementDiffPairingKey) -> Bool {
-        switch (lhs.traceIdentity, rhs.traceIdentity) {
+        switch (lhs.observationIdentity, rhs.observationIdentity) {
         case let (left?, right?):
             return left == right
         case (nil, nil):
@@ -250,9 +274,9 @@ struct ElementDiffPairingKey: Hashable, Sendable, Comparable {
     }
 
     func hash(into hasher: inout Hasher) {
-        if let traceIdentity {
+        if let observationIdentity {
             hasher.combine(0)
-            hasher.combine(traceIdentity)
+            hasher.combine(observationIdentity)
         } else {
             hasher.combine(1)
             hasher.combine(text)
@@ -261,7 +285,7 @@ struct ElementDiffPairingKey: Hashable, Sendable, Comparable {
     }
 
     static func < (lhs: ElementDiffPairingKey, rhs: ElementDiffPairingKey) -> Bool {
-        switch (lhs.traceIdentity, rhs.traceIdentity) {
+        switch (lhs.observationIdentity, rhs.observationIdentity) {
         case let (left?, right?):
             return left < right
         case (.some, nil):
@@ -281,11 +305,12 @@ struct ElementDiffPairingKey: Hashable, Sendable, Comparable {
     }
 
     private static func identityText(for element: HeistElement) -> String {
-        [element.identifier, element.label]
+        let assertable = element.semantics.assertable
+        return [assertable.identifier, assertable.label]
             .compactMap { value in
                 (value?.isEmpty == false) ? value : nil
             }
-            .first ?? element.description
+            .first ?? element.semantics.spokenDescription
     }
 }
 

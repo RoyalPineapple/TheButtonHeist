@@ -180,20 +180,17 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public let evidence: ActionResultEvidence
     public var warning: HeistActionWarning? { evidence.warning }
     public var announcement: String? { evidence.announcement }
-    public var capturedAnnouncement: CapturedAnnouncement? {
-        evidence.accessibilityTrace?.capturedAnnouncements.first
+    /// Canonical observations supporting this action result.
+    public var observationEvidence: Observation.Evidence? {
+        evidence.observationEvidence
     }
-    /// Source-of-truth accessibility capture evidence for this action.
-    public var accessibilityTrace: AccessibilityTrace? { evidence.accessibilityTrace }
-    /// Source-of-truth trace and observation-completeness evidence for this action.
-    public var traceEvidence: AccessibilityTraceEvidence? { evidence.traceEvidence }
     /// True when the runtime saw the tree come to rest: a reading arrived whose
     /// comparison against the one before it found nothing new, so the action's
     /// effects had finished landing before the response was built.
     ///
     /// False means the timeout elapsed first, which is the only way this is
     /// false. It does not say the action failed, and it does not say the
-    /// reported state is wrong — the trace is a real reading, just one taken
+    /// reported state is wrong — the observation is a real reading, just one taken
     /// while the tree may still have been moving, so an element's position or a
     /// value mid-animation may not be where it ended up.
     public var settled: Bool? { evidence.settlement?.settled }
@@ -519,18 +516,19 @@ public struct ActionResult: Codable, Sendable, Equatable {
         activationTrace: ActivationTrace?
     ) -> HeistActionWarning? {
         guard let element = subjectEvidence?.element else { return nil }
+        let assertable = element.semantics.assertable
         let evidence = ElementDiagnosticSummary(
-            label: element.label,
-            identifier: element.identifier,
-            traits: AccessibilityPolicy.orderedMatcherTraits(element.traits),
-            actions: element.actions.sorted { $0.description < $1.description }
+            label: assertable.label,
+            identifier: assertable.identifier,
+            traits: AccessibilityPolicy.orderedMatcherTraits(Array(assertable.traits)),
+            actions: assertable.orderedActions
         ).rendered(using: .activationAffordanceEvidence)
 
         switch method {
-        case .activate where !element.actions.contains(.activate)
+        case .activate where !assertable.actions.contains(.activate)
             && activationTrace?.implementsAccessibilityActivation == false:
             return .activationWeakAffordance(evidence: evidence)
-        case .typeText where !AccessibilityPolicy.supportsTextEntry(element.traits):
+        case .typeText where !AccessibilityPolicy.supportsTextEntry(assertable.traits):
             return .textEntryWeakAffordance(evidence: evidence)
         default:
             return nil

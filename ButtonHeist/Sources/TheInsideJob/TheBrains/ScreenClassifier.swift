@@ -9,8 +9,17 @@ import AccessibilitySnapshotParser
 
 internal enum ScreenContinuity: Sendable, Equatable {
     internal enum ReplacementEvidence: Sendable, Equatable {
+        internal enum InferenceReason: String, Sendable, Equatable {
+            case modalBoundaryChanged
+            case selectedTabChanged
+            case navigationMarkerChanged
+            case primaryHeaderChanged
+            case semanticIdentityDisjoint
+            case rootShapeChanged
+        }
+
         case screenChangedNotification
-        case inferred(AccessibilityObservationFallbackReason)
+        case inferred(InferenceReason)
     }
 
     case sameGeneration
@@ -21,10 +30,6 @@ internal enum ScreenContinuity: Sendable, Equatable {
         return false
     }
 
-    internal var fallbackReason: AccessibilityObservationFallbackReason? {
-        guard case .replacement(.inferred(let reason)) = self else { return nil }
-        return reason
-    }
 }
 
 /// Why a reading differs from the one before it.

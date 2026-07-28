@@ -45,11 +45,11 @@ struct HeistId: RawRepresentable, Hashable, Sendable, Codable, Comparable, Custo
         PredicateSelectionElementId(rawValue: rawValue)
     }
 
-    var traceElementIdentity: TraceElementIdentity {
+    var observationElementIdentity: Observation.ElementIdentity {
         let digest = SHA256.hash(data: Data(rawValue.utf8))
             .map { String(format: "%02x", $0) }
             .joined()
-        return TraceElementIdentity("heist-id:sha256:\(digest)")
+        return Observation.ElementIdentity("heist-id:sha256:\(digest)")
     }
 }
 

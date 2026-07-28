@@ -2,7 +2,7 @@ import ThePlans
 import Foundation
 import AccessibilitySnapshotModel
 
-enum AccessibilityTraceMoveInference {
+enum ElementMoveInference {
 
     static func suppressElementChurnFromFunctionalMoves(
         edits: ElementEdits,
@@ -64,11 +64,11 @@ enum AccessibilityTraceMoveInference {
         addedByKey: [ElementDiffPairingKey: ElementDiffRecord]
     ) -> [FunctionalElementPair<ElementDiffPairingKey>] {
         let removed = removedByKey.compactMap { key, element -> ElementPairingCandidate<ElementDiffPairingKey>? in
-            guard key.traceIdentity == nil else { return nil }
+            guard key.observationIdentity == nil else { return nil }
             return ElementPairingCandidate(key: key, signature: pairingSignature(for: element.element))
         }
         let added = addedByKey.compactMap { key, element -> ElementPairingCandidate<ElementDiffPairingKey>? in
-            guard key.traceIdentity == nil else { return nil }
+            guard key.observationIdentity == nil else { return nil }
             return ElementPairingCandidate(key: key, signature: pairingSignature(for: element.element))
         }
         return inferFunctionalPairs(removed: removed, added: added)
@@ -130,49 +130,32 @@ private struct ElementIdentitySignature: Hashable {
     let stableTraits: Set<HeistTrait>
 }
 
-private struct ElementStateSignature: Hashable {
-    let label: String?
-    let value: String?
-    let stateTraits: Set<HeistTrait>
-    let respondsToUserInteraction: Bool
-    let customContent: [HeistCustomContent]?
-    let rotors: [HeistRotor]?
-    let actions: [ElementAction]?
-}
-
 private struct ElementPairingSignature: Hashable {
     let identity: ElementIdentitySignature
-    let state: ElementStateSignature
+    let semantics: HeistElement.Semantics
 }
 
 private func pairingSignature(for element: HeistElement) -> ElementPairingSignature {
     ElementPairingSignature(
         identity: identitySignature(for: element),
-        state: stateSignature(for: element)
+        semantics: element.semantics
     )
 }
 
 private func identitySignature(for element: HeistElement) -> ElementIdentitySignature {
-    let text = firstNonEmpty(element.identifier, element.label, element.description)
+    let assertable = element.semantics.assertable
+    let text = firstNonEmpty(
+        assertable.identifier,
+        assertable.label,
+        element.semantics.spokenDescription
+    )
     return ElementIdentitySignature(
         text: text,
-        identifier: element.identifier,
-        hint: element.hint,
-        stableTraits: Set(element.traits.filter {
+        identifier: assertable.identifier,
+        hint: assertable.hint,
+        stableTraits: Set(assertable.traits.filter {
             !AccessibilityPolicy.stateTraits.contains($0)
         })
-    )
-}
-
-private func stateSignature(for element: HeistElement) -> ElementStateSignature {
-    ElementStateSignature(
-        label: element.label,
-        value: element.value,
-        stateTraits: Set(element.traits.filter(AccessibilityPolicy.stateTraits.contains)),
-        respondsToUserInteraction: element.respondsToUserInteraction,
-        customContent: element.customContent,
-        rotors: element.rotors,
-        actions: element.actions
     )
 }
 
