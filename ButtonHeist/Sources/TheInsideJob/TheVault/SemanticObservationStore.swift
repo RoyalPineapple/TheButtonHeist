@@ -49,6 +49,12 @@ extension Observation {
         internal private(set) var scopedScreenChangedSequence: UInt64 = 0
         internal private(set) var settleFailureDiagnostic: String?
         private var activeSettlementBoundaries: [Moment] = []
+        /// Whether the tree the next reading follows was thrown away.
+        ///
+        /// Set by the discard and read once, by the reading after it. Nothing
+        /// before the first reading was a screen, so the first discard of a run
+        /// has nothing to have discarded.
+        private var discardedScreen = false
 
         /// The newest reading in the log.
         ///
@@ -77,10 +83,11 @@ extension Observation {
 
         /// Throws away what the vault holds.
         ///
-        /// The empty tree is the whole record: the next reading has nothing
-        /// before it, so the classifier compares against nothing and says what
-        /// the reading is. Nothing is marked, because there is nothing a mark
-        /// could add to a tree that is already gone.
+        /// A screen that went is why the tree goes, and the going is an event,
+        /// not a shape — a tree can read empty because the screen under it is
+        /// empty. So the discard says it happened, and the next reading reads
+        /// that. The classifier is asked nothing, because what it would compare
+        /// against is exactly what is gone.
         ///
         /// The settle diagnostic stays. It records why a past settle failed,
         /// which is a fact about something that already happened; the tree is
@@ -89,6 +96,7 @@ extension Observation {
         internal mutating func discardCurrentObservation() {
             interfaceTree = .empty
             admittedTripwireSignal = nil
+            discardedScreen = log.latestSnapshotEvent != nil
         }
 
         /// The newest reading past `sequence`, when it answers this scope.
@@ -202,16 +210,16 @@ extension Observation {
                     : previousTree.merging(admission.tree)
                 candidateTree = comparedTree
             }
-            // A tree thrown away is a screen that went. The classifier compares
-            // two trees and cannot see that, because what it would compare
-            // against is exactly what is gone — so the store, which knows a
-            // reading came before this one, says so. With nothing read yet there
-            // is no screen to have left, and the reading is a first sighting.
-            let continuity = if previousTree == .empty, log.latestSnapshotEvent != nil {
+            // A tree thrown away is a screen that went, and the discard is the
+            // only thing that knows it: an empty tree on its own is a screen
+            // with nothing on it, which the classifier can read perfectly well.
+            // What it cannot read is a tree that was never there, so the log —
+            // which says whether anything has been read — answers that.
+            let continuity = if discardedScreen {
                 ScreenContinuity.replacement(.screenChangedNotification)
             } else {
                 ScreenClassifier.classify(
-                    from: previousTree == .empty ? nil : previousTree,
+                    from: log.latestSnapshotEvent == nil ? nil : previousTree,
                     to: comparedTree,
                     notifications: notifications.kinds,
                     lineage: admission.lineage
@@ -265,6 +273,7 @@ extension Observation {
             next.scopedScreenChangedSequence = notifications.scopedScreenChangedThrough
             next.settleFailureDiagnostic = nil
             next.admittedTripwireSignal = admission.tripwireSignal
+            next.discardedScreen = false
             self = next
             if continuity.isReplacement {
                 // The identity moves, ahead of the arriving graph: naming a
