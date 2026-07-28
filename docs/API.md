@@ -577,11 +577,12 @@ Expectations use the concrete `AccessibilityPredicate` root with the
 `assertions` array:
 
 ```json
-{"type":"changed","scope":"screen","assertions":[{"type":"exists","target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Receipt"}}]}}]}
+{"type":"changed","scope":"elements","assertions":[{"type":"exists","target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Receipt"}}]}}]}
 ```
 
-Screen assertions permit only current-tree `exists` and `missing`. Elements
-assertions additionally permit `appeared`, `disappeared`, and `updated`.
+Naming an element is an element question, so assertions belong to
+`elementsChanged` and `screenChanged` takes none. Assertions permit current-tree
+`exists` and `missing` alongside `appeared`, `disappeared`, and `updated`.
 Current-tree predicates use the same `AccessibilityTarget` object as actions and
 subtree queries. Both `WaitFor` and action `.expect` therefore accept element,
 container, or descendant-scoped presence targets. Container presence uses a

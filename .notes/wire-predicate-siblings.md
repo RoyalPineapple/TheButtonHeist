@@ -41,18 +41,20 @@ This part is small and was verified to compile:
    `rejectUnknownKeys` works off explicit allow-lists, so leaving a stale key in
    the enum lets `scope` be silently accepted on some other predicate.
 
-## What that breaks — 40 documents
+## What that breaks — 42 documents
 
 Every wire document carrying the old shape has to move. `grep -rn '"changed"'`
-finds them.
+finds them; re-run it rather than trusting this table, which was accurate at
+`2c81389a5`.
 
 | File | Sites |
 |---|---|
 | `Tests/ButtonHeistTests/TheFenceHandlerWaitExpectationTests.swift` | 12 |
 | `Tests/ThePlansTests/CanonicalAccessibilityPredicateTests.swift` | 9 |
 | `Tests/TheScoreTests/AccessibilityPredicateFinalStateTests.swift` | 5 |
-| `docs/WIRE-PROTOCOL.md` | 3 |
+| `docs/WIRE-PROTOCOL.md` | 4 |
 | `Tests/ButtonHeistTests/TheFenceHandlerCommandAdmissionTests.swift` | 2 |
+| `docs/HEIST-FORMAT.md` | 2 |
 | `Tests/ButtonHeistTests/ElementActionRequestContractTests.swift` | 1 |
 | `Tests/ButtonHeistTests/TheFenceHandlerFailureMappingTests.swift` | 1 |
 | `Tests/ButtonHeistTests/TheFenceHandlerInterfaceSessionTests.swift` | 1 |
@@ -61,7 +63,6 @@ finds them.
 | `Tests/TheScoreTests/WireTypeRoundTripIdentityAndSimplePayloadTests.swift` | 1 |
 | `Tests/TheScoreTests/WireTypeRoundTripPlanTraceAndMessageTests.swift` | 1 |
 | `docs/API.md` | 1 |
-| `docs/HEIST-FORMAT.md` | 1 |
 
 ### Three things that are not find-and-replace
 
@@ -76,7 +77,9 @@ clearest examples.
 rather than substituted. In `CanonicalAccessibilityPredicateTests.swift`:
 
 - `:25` a screen predicate carrying `assertions` — still rejectable, as
-  `{"type":"screenChanged","assertions":[…]}`.
+  `{"type":"screenChanged","assertions":[…]}`. This is the claim the six
+  `MacFrameworkTests` failures were about, so keep it: it is the one case here
+  with a demonstrated history of regressing.
 - `:32` an elements predicate carrying `match` — same, as
   `{"type":"elementsChanged","assertions":[],"match":…}`.
 - `:158` `{"type":"changed","scope":"screen","unexpected":true}` — the unknown-key
@@ -115,17 +118,24 @@ the JSON.
   predicates.
 - `grep -rn '"changed"' ButtonHeist docs` should come back empty.
 
-## The two tests that surfaced it
+## What surfaced it, and what that turned out to be
 
-Both in `Tests/ButtonHeistTests/TheFenceHandlerWaitExpectationTests.swift`, both
-failing on `MacFrameworkTests` today:
+Six `MacFrameworkTests` failures led here, and they were **a different bug** —
+already fixed on `alex/nightly-watchdog-correctness`, not waiting for this work.
 
-- `testWaitPredicateShapesPassValidation`
-- `testWaitSendsDefaultMaximumTimeout`
+They were documents sending `{"type":"changed","scope":"screen","assertions":…}`.
+A screen predicate takes a `match` and no assertion list, so `rejectUnknownKeys`
+refused them — correctly. Six documents, two of them the docs' own examples, still
+said a screen predicate carried assertions. The tell was
+`testParseExpectationRejectsGenericChangedPredicate` passing while
+`testParseExpectationScreenChangedObject` failed.
 
-They fail against the current adapter, so they are evidence something is already
-inconsistent rather than a preview of this change. **Diagnose them before
-starting.** `xcodebuild` swallows the assertion text for this target — read the
-`.xcresult` bundle under `~/Library/Developer/Xcode/DerivedData/ButtonHeist-*/Logs/Test/`
-with `xcrun xcresulttool get test-results tests`. If the collapse fixes them, say
-so; if it does not, they are a second bug and this file is not their home.
+So there is no failing test pointing at the collapse today. This is a design
+correction, not a fix, and the suite is green without it. Expect to move 40
+documents that currently pass.
+
+Worth knowing while working here: `xcodebuild` swallows assertion text for this
+target, and so does the CI log — both print only pass/fail. Read the `.xcresult`
+bundle under `~/Library/Developer/Xcode/DerivedData/ButtonHeist-*/Logs/Test/` with
+`xcrun xcresulttool get test-results tests`, or infer from which neighbouring
+tests pass.

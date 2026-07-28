@@ -31,7 +31,6 @@ extension TheFenceHandlerTests {
             ["predicate": .object([
                 "type": .string("changed"),
                 "scope": .string("screen"),
-                "assertions": .array([]),
             ])],
             [
                 "predicate": .object([
@@ -41,9 +40,11 @@ extension TheFenceHandlerTests {
                 ]),
                 "timeout": .double(5),
             ],
+            // Naming elements is the elements question, whichever side of a
+            // screen boundary the caller expects them to land on.
             ["predicate": .object([
                 "type": .string("changed"),
-                "scope": .string("screen"),
+                "scope": .string("elements"),
                 "assertions": .array([
                     .object(["type": .string("exists"), "target": elementPredicateValue(label: "Done")]),
                     .object(["type": .string("missing"), "target": elementPredicateValue(label: "Loading")]),
@@ -51,7 +52,7 @@ extension TheFenceHandlerTests {
             ])],
             ["predicate": .object([
                 "type": .string("changed"),
-                "scope": .string("screen"),
+                "scope": .string("elements"),
                 "assertions": .array([.object([
                     "type": .string("exists"),
                     "target": elementPredicateValue(label: "Home"),
@@ -71,7 +72,6 @@ extension TheFenceHandlerTests {
             "predicate": .object([
                 "type": .string("changed"),
                 "scope": .string("screen"),
-                "assertions": .array([]),
             ]),
             "timeout": .double(60.0),
         ])
@@ -154,7 +154,6 @@ extension TheFenceHandlerTests {
         let result = try parseTypedExpectation(.object([
             "type": .string("changed"),
             "scope": .string("screen"),
-            "assertions": .array([]),
         ]))
         XCTAssertEqual(result, .screenChanged)
     }

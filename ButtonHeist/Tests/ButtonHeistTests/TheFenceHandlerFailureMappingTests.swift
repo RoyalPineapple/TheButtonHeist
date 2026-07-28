@@ -370,7 +370,6 @@ extension TheFenceHandlerTests {
                 "expect": .object([
                     "type": .string("changed"),
                     "scope": .string("screen"),
-                    "assertions": .array([]),
                 ]),
             ],
             equals: "command \"scroll\" direct dispatch does not support expect"

@@ -181,10 +181,14 @@ It is Swift-shaped, but it is the source language accepted by MCP and
 
 The generated plan uses one `AccessibilityTarget` shape for action targets and
 predicate targets. Expectations use one context-typed predicate tree:
-`exists`, `missing`, `changed`, and `announcement` at the root;
-`changed.screen` accepts current-tree `exists`/`missing`; `changed.elements`
-also accepts `appeared`, `disappeared`, and `updated`. The generated wire form
-is strict: `{"type":"changed","scope":"screen|elements","assertions":[]}`.
+`exists`, `missing`, `changed`, and `announcement` at the root. `changed.screen`
+asks about the screen and carries an optional `match` naming the screen it
+arrived at; naming elements there is a different question, so it takes no
+assertions. `changed.elements` carries the assertion list, which accepts
+`exists`, `missing`, `appeared`, `disappeared`, and `updated`. The generated
+wire form is strict, and each scope admits only its own keys:
+`{"type":"changed","scope":"screen"}` and
+`{"type":"changed","scope":"elements","assertions":[]}`.
 Artifacts do not carry aliases or compatibility spellings.
 
 ```swift

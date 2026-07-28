@@ -414,7 +414,7 @@ media only through explicit, size-bounded opt-ins.
 ### Wait
 
 ```json
-{"buttonHeistVersion":"<semver>","type":"heistPlan","payload":{"plan":{"version":2,"parameter":{"type":"none"},"body":[{"type":"wait","wait":{"predicate":{"type":"changed","scope":"screen","assertions":[]},"timeout":30}}]},"argument":{"type":"none"}}}
+{"buttonHeistVersion":"<semver>","type":"heistPlan","payload":{"plan":{"version":2,"parameter":{"type":"none"},"body":[{"type":"wait","wait":{"predicate":{"type":"changed","scope":"screen"},"timeout":30}}]},"argument":{"type":"none"}}}
 ```
 
 The host lowers a standalone wait to an observation-triggered
@@ -443,13 +443,18 @@ resolution is limited to descendants of the matching container.
 The strict predicate wire grammar is:
 
 ```json
-{"type":"changed","scope":"screen","assertions":[]}
+{"type":"changed","scope":"screen"}
+{"type":"changed","scope":"screen","match":{"mode":"exact","value":"Settings"}}
 {"type":"changed","scope":"elements","assertions":[{"type":"appeared","target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Toast"}}]}}]}
 ```
 
-`screen` assertions accept `exists` and `missing`; `elements` assertions also
-accept `appeared`, `disappeared`, and `updated`. `change`, `scopes`,
-`screenChanged`, and flat target wrappers are invalid.
+Each scope admits only its own keys. `screen` asks about the screen and takes an
+optional `match` naming the one it arrived at; it takes no `assertions`, because
+naming elements is the other question. `elements` takes the assertion list and no
+`match`, and its assertions accept `exists`, `missing`, `appeared`,
+`disappeared`, and `updated`. A document carrying both is rejected rather than
+read for the half that fits. `change`, `scopes`, `screenChanged`, and flat target
+wrappers are invalid.
 
 Raw heist result steps contain only `path`, `durationMs`, and one semantic
 `node`. The node's `type` selects its authored fields and legal completion:

@@ -88,7 +88,6 @@ extension TheFenceHandlerTests {
             arguments: ["expect": .object([
                 "type": .string("changed"),
                 "scope": .string("screen"),
-                "assertions": .array([]),
             ])],
             contains: "valid get_pasteboard parameter"
         )
