@@ -1,0 +1,1944 @@
+#if canImport(UIKit)
+#if DEBUG
+import Foundation
+import ThePlans
+@_spi(ButtonHeistInternals) import TheScore
+
+extension HeistExecution.Machine {
+    mutating func advanceTopContinuation() -> HeistExecution.State {
+        guard let continuation = continuations.popLast() else {
+            return finish(children: rootChildren)
+        }
+        switch continuation {
+        case .sequence(let sequence):
+            return advance(sequence)
+        case .inline, .conditional, .invocation, .waitElse:
+            preconditionFailure("A wrapper continuation requires completed children")
+        case .forEachElement(let loop):
+            return advance(loop)
+        case .forEachString(let loop):
+            return advance(loop)
+        case .repeatUntil(let loop):
+            return advance(loop)
+        }
+    }
+
+    mutating func advanceControlFlow(
+        _ input: HeistExecution.Input
+    ) -> HeistExecution.State {
+        guard case .currentSnapshot(let id, let snapshot) = input,
+              let continuation = continuations.last,
+              continuation.awaitingSnapshotRequestID == id else {
+            return .pending(.wait)
+        }
+        continuations.removeLast()
+        switch continuation {
+        case .conditional(let conditional):
+            return advance(conditional, snapshot: snapshot)
+        case .forEachElement(let loop):
+            return advance(loop, snapshot: snapshot)
+        case .sequence, .inline, .forEachString, .repeatUntil, .invocation, .waitElse:
+            preconditionFailure("Only snapshot-awaiting continuations accept currentSnapshot")
+        }
+    }
+
+    mutating func finishAfterHeistTimeout() -> HeistExecution.State {
+        if let activeLeaf {
+            let result: HeistExecutionStepResult
+            switch activeLeaf {
+            case .action(let leaf):
+                result = HeistExecution.ResultProjector.heistTimeout(action: leaf)
+            case .wait(let leaf):
+                result = HeistExecution.ResultProjector.heistTimeout(wait: leaf)
+            }
+            return resume(afterCompletedLeaf: result)
+        }
+
+        guard let continuation = continuations.popLast() else {
+            return state
+        }
+
+        let result: HeistExecutionStepResult
+        switch continuation {
+        case .conditional(let conditional):
+            result = .conditional(
+                path: conditional.context.path,
+                completion: .failed(
+                    evidence: .unavailable,
+                    failure: heistTimeoutFailure(
+                        contract: "conditional selection completes within the whole-heist deadline"
+                    )
+                )
+            )
+        case .forEachElement(let loop):
+            result = .forEachElement(
+                path: loop.context.path,
+                declaration: .init(loop.step),
+                completion: .failed(
+                    evidence: .unavailable,
+                    failure: heistTimeoutFailure(
+                        contract: "for_each_element selection completes within the whole-heist deadline"
+                    ),
+                    children: passingChildren(loop.iterations)
+                )
+            )
+        case .sequence, .inline, .forEachString, .repeatUntil, .invocation, .waitElse:
+            continuations.append(continuation)
+            return state
+        }
+        return resume(afterCompletedLeaf: result)
+    }
+
+    private mutating func requestSnapshot(
+        for step: ConditionalStep,
+        context: HeistExecution.StepContext,
+        scope: SemanticObservationScope
+    ) -> HeistExecution.State {
+        let id = nextID()
+        continuations.append(.conditional(.init(
+            step: step,
+            context: context,
+            progress: .awaitingSnapshot(id)
+        )))
+        return .pending(.perform([.currentSnapshot(id, scope: scope)]))
+    }
+
+    private mutating func requestInitialSnapshot(
+        for step: ForEachElementStep,
+        context: HeistExecution.StepContext,
+        matching: ResolvedElementPredicate
+    ) -> HeistExecution.State {
+        let id = nextID()
+        continuations.append(.forEachElement(.init(
+            step: step,
+            context: context,
+            resolvedMatching: matching,
+            matchedCount: 0,
+            iterationIndex: 0,
+            progress: .awaitingSnapshot(id, previousMatchHash: nil),
+            iterations: .empty
+        )))
+        return .pending(.perform([.currentSnapshot(id, scope: .discovery)]))
+    }
+
+    private mutating func requestSnapshot(
+        for continuation: HeistExecution.ForEachElementContinuation
+    ) -> HeistExecution.State {
+        guard case .executing(_, let previousMatchHash) = continuation.progress else {
+            preconditionFailure("A completed for-each iteration must retain its match hash")
+        }
+        let id = nextID()
+        continuations.append(.forEachElement(.init(
+            step: continuation.step,
+            context: continuation.context,
+            resolvedMatching: continuation.resolvedMatching,
+            matchedCount: continuation.matchedCount,
+            iterationIndex: continuation.iterationIndex,
+            progress: .awaitingSnapshot(
+                id,
+                previousMatchHash: previousMatchHash
+            ),
+            iterations: continuation.iterations
+        )))
+        return .pending(.perform([.currentSnapshot(id, scope: .discovery)]))
+    }
+}
+
+private extension HeistExecution.Continuation {
+    var awaitingSnapshotRequestID: HeistExecution.RequestID? {
+        switch self {
+        case .conditional(let conditional):
+            guard case .awaitingSnapshot(let id) = conditional.progress else {
+                return nil
+            }
+            return id
+        case .forEachElement(let loop):
+            guard case .awaitingSnapshot(let id, _) = loop.progress else {
+                return nil
+            }
+            return id
+        case .sequence, .inline, .forEachString, .repeatUntil, .invocation, .waitElse:
+            return nil
+        }
+    }
+}
+
+private func heistTimeoutFailure(contract: String) -> HeistFailureDetail {
+    HeistFailureDetail(
+        category: .timeout,
+        contract: contract,
+        observed: "whole-heist deadline expired",
+        expected: "heist completes before its declared timeout"
+    )
+}
+
+private extension HeistExecution.ForEachElementContinuation {
+    var previousMatchHash: SemanticHash? {
+        switch progress {
+        case .awaitingSnapshot(_, let previousMatchHash):
+            previousMatchHash
+        case .executing(_, let matchHash):
+            matchHash
+        }
+    }
+}
+
+private extension HeistExecution.Machine {
+    mutating func advance(
+        _ sequence: HeistExecution.SequenceContinuation
+    ) -> HeistExecution.State {
+        var sequence = sequence
+        if sequence.children.abortedAtPath != nil {
+            while sequence.nextIndex < sequence.steps.count {
+                let index = sequence.nextIndex
+                sequence.children.append(.skipped(
+                    path: sequence.context.path.step(at: index),
+                    step: sequence.steps[index]
+                ))
+                sequence.nextIndex += 1
+            }
+        }
+        guard sequence.nextIndex < sequence.steps.count else {
+            return resume(afterCompletedSequence: sequence.children)
+        }
+
+        let index = sequence.nextIndex
+        let step = sequence.steps[index]
+        sequence.nextIndex += 1
+        continuations.append(.sequence(sequence))
+        return begin(
+            step,
+            context: .init(
+                path: sequence.context.path.step(at: index),
+                environment: sequence.context.environment,
+                scope: sequence.context.scope
+            )
+        )
+    }
+
+    mutating func begin(
+        _ step: HeistStep,
+        context: HeistExecution.StepContext
+    ) -> HeistExecution.State {
+        switch step {
+        case .action(let action):
+            switch begin(action: action, context: context) {
+            case .pending(let state):
+                return state
+            case .complete(let result):
+                return resume(afterCompletedLeaf: result)
+            }
+        case .wait(let wait):
+            switch begin(wait: wait, context: context) {
+            case .pending(let state):
+                return state
+            case .complete(let result):
+                return resume(afterCompletedLeaf: result)
+            }
+        case .conditional(let conditional):
+            return begin(conditional: conditional, context: context)
+        case .forEachElement(let loop):
+            return begin(forEachElement: loop, context: context)
+        case .forEachString(let loop):
+            continuations.append(.forEachString(.init(
+                step: loop,
+                context: context,
+                iterationIndex: 0,
+                iterations: .empty
+            )))
+            return advanceExecution()
+        case .repeatUntil(let loop):
+            do {
+                _ = try loop.resolve(in: context.environment)
+            } catch {
+                return resume(afterCompletedLeaf: repeatUntilResolutionFailure(
+                    loop,
+                    context: context,
+                    error: error
+                ))
+            }
+            continuations.append(.repeatUntil(.init(
+                step: loop,
+                context: context,
+                iterationIndex: 0,
+                iterations: .empty
+            )))
+            return advanceExecution()
+        case .warn(let warning):
+            return resume(afterCompletedLeaf: warningResult(
+                warning,
+                context: context
+            ))
+        case .fail(let failure):
+            return resume(afterCompletedLeaf: failureResult(
+                failure,
+                context: context
+            ))
+        case .heist(let plan):
+            continuations.append(.inline(.init(plan: plan, context: context)))
+            continuations.append(.sequence(.init(
+                steps: plan.body,
+                context: .init(
+                    path: context.path.heistBody(),
+                    environment: context.environment,
+                    scope: .init(
+                        plan: plan,
+                        rootPlan: plan,
+                        definitionPath: context.scope.definitionPath,
+                        invocationStack: context.scope.invocationStack
+                    )
+                ),
+                nextIndex: 0,
+                children: .empty
+            )))
+            return advanceExecution()
+        case .invoke(let invocation):
+            return begin(invocation: invocation, context: context)
+        }
+    }
+
+    mutating func resume(
+        afterCompletedSequence children: HeistExecutedChildren
+    ) -> HeistExecution.State {
+        guard let continuation = continuations.popLast() else {
+            rootChildren = children
+            return advanceExecution()
+        }
+        switch continuation {
+        case .inline(let inline):
+            return resume(afterCompletedLeaf: inlineResult(
+                inline,
+                children: children
+            ))
+        case .conditional(let conditional):
+            return resume(afterCompletedLeaf: conditionalResult(
+                conditional,
+                children: children
+            ))
+        case .forEachElement(let loop):
+            return resume(loop, children: children)
+        case .forEachString(let loop):
+            return resume(loop, children: children)
+        case .repeatUntil(let loop):
+            return resume(loop, children: children)
+        case .invocation(let invocation):
+            return resume(invocation, children: children)
+        case .waitElse(let waitElse):
+            return resume(afterCompletedLeaf: waitElseResult(
+                waitElse,
+                children: children
+            ))
+        case .sequence:
+            preconditionFailure("Nested sequences require a typed wrapper")
+        }
+    }
+
+}
+
+private extension HeistExecution.Machine {
+    mutating func begin(
+        conditional step: ConditionalStep,
+        context: HeistExecution.StepContext
+    ) -> HeistExecution.State {
+        let resolved: [ResolvedPresenceCondition]
+        do {
+            resolved = try step.cases.map {
+                try $0.predicate.resolve(in: context.environment)
+            }
+        } catch {
+            return resume(afterCompletedLeaf: conditionalResolutionFailure(
+                context: context,
+                error: error
+            ))
+        }
+
+        return requestSnapshot(
+            for: step,
+            context: context,
+            scope: resolved.observationScope
+        )
+    }
+
+    mutating func advance(
+        _ continuation: HeistExecution.ConditionalContinuation,
+        snapshot: Observation.Snapshot?
+    ) -> HeistExecution.State {
+        let selection: HeistCaseSelectionResult
+        do {
+            selection = try conditionalSelection(
+                continuation.step,
+                environment: continuation.context.environment,
+                snapshot: snapshot
+            )
+        } catch {
+            return resume(afterCompletedLeaf: conditionalResolutionFailure(
+                context: continuation.context,
+                error: error
+            ))
+        }
+
+        let body: [HeistStep]
+        let path: HeistExecutionPath
+        let selected: HeistCaseSelectionResult
+        switch selection.outcome {
+        case .matchedCase(let ordinal):
+            let selectedIndex = Int(ordinal)
+            body = continuation.step.cases[selectedIndex].body
+            path = continuation.context.path.conditionalCaseBody(at: selectedIndex)
+            selected = selection
+        case .elseBranch, .timedOut, .noMatch:
+            guard let elseBody = continuation.step.elseBody else {
+                return resume(afterCompletedLeaf: conditionalResult(
+                    context: continuation.context,
+                    selection: selection,
+                    children: .empty
+                ))
+            }
+            body = elseBody
+            path = continuation.context.path.conditionalElseBody()
+            selected = selection.selectingElseBranch()
+        }
+
+        continuations.append(.conditional(.init(
+            step: continuation.step,
+            context: continuation.context,
+            progress: .selected(selected)
+        )))
+        continuations.append(.sequence(.init(
+            steps: body,
+            context: .init(
+                path: path,
+                environment: continuation.context.environment,
+                scope: continuation.context.scope
+            ),
+            nextIndex: 0,
+            children: .empty
+        )))
+        return advanceExecution()
+    }
+
+    func conditionalResult(
+        _ continuation: HeistExecution.ConditionalContinuation,
+        children: HeistExecutedChildren
+    ) -> HeistExecutionStepResult {
+        guard case .selected(let selection) = continuation.progress else {
+            preconditionFailure("A completed conditional requires a selected branch")
+        }
+        return conditionalResult(
+            context: continuation.context,
+            selection: selection,
+            children: children
+        )
+    }
+}
+
+private extension HeistExecution.Machine {
+    func conditionalSelection(
+        _ step: ConditionalStep,
+        environment: HeistExecutionEnvironment,
+        snapshot: Observation.Snapshot?
+    ) throws -> HeistCaseSelectionResult {
+        let resolved = try step.cases.map {
+            try $0.predicate.resolve(in: environment)
+        }
+        let matches = zip(step.cases, resolved).map { predicateCase, condition in
+            let result = evaluate(
+                condition.rootPredicate,
+                expression: predicateCase.predicate.rootPredicate,
+                snapshot: snapshot
+            )
+            return HeistCaseMatchResult(
+                predicate: predicateCase.predicate.rootPredicate,
+                met: result.met,
+                actual: result.actual
+            )
+        }
+        return .selectingFirstMatch(
+            cases: matches,
+            ifNone: .noMatch,
+            elapsedMs: 0,
+            lastObservedSummary: snapshotSummary(snapshot)
+        )
+    }
+
+    func conditionalResult(
+        context: HeistExecution.StepContext,
+        selection: HeistCaseSelectionResult,
+        children: HeistExecutedChildren
+    ) -> HeistExecutionStepResult {
+        let evidence = HeistCaseSelectionEvidence(
+            selection: selection.outcome == .noMatch
+                && !children.values.isEmpty
+                ? selection.selectingElseBranch()
+                : selection
+        )
+        switch children {
+        case .passed(let children):
+            return .conditional(
+                path: context.path,
+                completion: .passed(evidence: evidence, children: children)
+            )
+        case .aborted(let children):
+            return .conditional(
+                path: context.path,
+                completion: .childAborted(
+                    evidence: evidence,
+                    failure: childFailure(
+                        category: .invocation,
+                        path: children.abortedAtPath
+                    ),
+                    children: children
+                )
+            )
+        }
+    }
+
+    func conditionalResolutionFailure(
+        context: HeistExecution.StepContext,
+        error: Error
+    ) -> HeistExecutionStepResult {
+        .conditional(
+            path: context.path,
+            completion: .failed(evidence: .unavailable, failure: .init(
+                category: .validation,
+                contract: "case predicates resolve before evaluation",
+                observed: "could not resolve heist case predicate: \(error)"
+            ))
+        )
+    }
+}
+
+private extension Array where Element == ResolvedPresenceCondition {
+    var observationScope: SemanticObservationScope {
+        map(\.observationScope).max() ?? .visible
+    }
+}
+
+private extension HeistExecution.Machine {
+    mutating func begin(
+        forEachElement step: ForEachElementStep,
+        context: HeistExecution.StepContext
+    ) -> HeistExecution.State {
+        let resolved: ResolvedElementPredicate
+        do {
+            resolved = try step.matching.resolve(in: context.environment)
+        } catch {
+            return resume(afterCompletedLeaf: forEachElementResolutionFailure(
+                step,
+                context: context,
+                error: error
+            ))
+        }
+        return requestInitialSnapshot(
+            for: step,
+            context: context,
+            matching: resolved
+        )
+    }
+
+    mutating func advance(
+        _ loop: HeistExecution.ForEachElementContinuation
+    ) -> HeistExecution.State {
+        requestSnapshot(for: loop)
+    }
+
+    mutating func advance(
+        _ loop: HeistExecution.ForEachElementContinuation,
+        snapshot: Observation.Snapshot?
+    ) -> HeistExecution.State {
+        guard case .awaitingSnapshot(_, let previousMatchHash) = loop.progress else {
+            return .pending(.wait)
+        }
+        guard let snapshot else {
+            return resume(afterCompletedLeaf: forEachElementUnavailable(
+                loop,
+                failedIterationIndex: max(0, loop.iterationIndex - 1)
+            ))
+        }
+
+        let signature = ForEachMatchSignature(
+            matching: loop.resolvedMatching,
+            elements: snapshot.interface.projectedElements
+        )
+        let initialSelection = previousMatchHash == nil
+            && loop.iterationIndex == 0
+            && loop.iterations.values.isEmpty
+        let matchedCount = initialSelection ? signature.count : loop.matchedCount
+        guard matchedCount <= loop.step.limit else {
+            return resume(afterCompletedLeaf: forEachElementLimitFailure(
+                loop.step,
+                context: loop.context,
+                matchedCount: matchedCount
+            ))
+        }
+        guard matchedCount > 0 else {
+            return resume(afterCompletedLeaf: forEachElementSummary(
+                step: loop.step,
+                context: loop.context,
+                matchedCount: 0,
+                iterations: .empty,
+                failureReason: nil
+            ))
+        }
+
+        let previousOrdinal = loop.iterations.values.last?
+            .forEachElementEvidence?.targetOrdinal ?? -1
+        let ordinal = initialSelection || signature.hash != previousMatchHash
+            ? 0
+            : previousOrdinal + 1
+        let target = ResolvedAccessibilityTarget.predicate(
+            loop.resolvedMatching,
+            ordinal: ordinal
+        )
+        let iterationPath = loop.context.path.forEachElementIteration(
+            at: loop.iterationIndex
+        )
+        continuations.append(.forEachElement(.init(
+            step: loop.step,
+            context: loop.context,
+            resolvedMatching: loop.resolvedMatching,
+            matchedCount: matchedCount,
+            iterationIndex: loop.iterationIndex,
+            progress: .executing(
+                targetOrdinal: ordinal,
+                matchHash: signature.hash
+            ),
+            iterations: loop.iterations
+        )))
+        continuations.append(.sequence(.init(
+            steps: loop.step.body,
+            context: .init(
+                path: iterationPath.iterationBody(),
+                environment: loop.context.environment.binding(
+                    target: target,
+                    to: loop.step.parameter
+                ),
+                scope: loop.context.scope
+            ),
+            nextIndex: 0,
+            children: .empty
+        )))
+        return advanceExecution()
+    }
+
+    mutating func resume(
+        _ loop: HeistExecution.ForEachElementContinuation,
+        children: HeistExecutedChildren
+    ) -> HeistExecution.State {
+        guard case .executing = loop.progress else {
+            preconditionFailure("Only an executing for-each iteration can complete")
+        }
+        let iteration = forEachElementIteration(
+            loop,
+            children: children
+        )
+        var iterations = loop.iterations
+        iterations.append(iteration)
+        if let childPath = iterations.abortedAtPath {
+            return resume(afterCompletedLeaf: forEachElementSummary(
+                step: loop.step,
+                context: loop.context,
+                matchedCount: loop.matchedCount,
+                iterations: iterations,
+                failureReason: "iteration \(loop.iterationIndex) failed at \(childPath)"
+            ))
+        }
+
+        let nextIndex = loop.iterationIndex + 1
+        guard nextIndex < loop.matchedCount else {
+            return resume(afterCompletedLeaf: forEachElementSummary(
+                step: loop.step,
+                context: loop.context,
+                matchedCount: loop.matchedCount,
+                iterations: iterations,
+                failureReason: nil
+            ))
+        }
+        return requestSnapshot(for: .init(
+            step: loop.step,
+            context: loop.context,
+            resolvedMatching: loop.resolvedMatching,
+            matchedCount: loop.matchedCount,
+            iterationIndex: nextIndex,
+            progress: loop.progress,
+            iterations: iterations
+        ))
+    }
+
+    mutating func advance(
+        _ loop: HeistExecution.ForEachStringContinuation
+    ) -> HeistExecution.State {
+        guard loop.iterationIndex < loop.step.values.count else {
+            return resume(afterCompletedLeaf: forEachStringSummary(
+                loop,
+                failureReason: nil
+            ))
+        }
+        let value = loop.step.values[loop.iterationIndex]
+        let path = loop.context.path.forEachStringIteration(
+            at: loop.iterationIndex
+        )
+        continuations.append(.forEachString(loop))
+        continuations.append(.sequence(.init(
+            steps: loop.step.body,
+            context: .init(
+                path: path.iterationBody(),
+                environment: loop.context.environment.binding(
+                    string: value,
+                    to: loop.step.parameter
+                ),
+                scope: loop.context.scope
+            ),
+            nextIndex: 0,
+            children: .empty
+        )))
+        return advanceExecution()
+    }
+
+    mutating func resume(
+        _ loop: HeistExecution.ForEachStringContinuation,
+        children: HeistExecutedChildren
+    ) -> HeistExecution.State {
+        let iteration = forEachStringIteration(loop, children: children)
+        var iterations = loop.iterations
+        iterations.append(iteration)
+        if let childPath = iterations.abortedAtPath {
+            let value = loop.step.values[loop.iterationIndex]
+            return resume(afterCompletedLeaf: forEachStringSummary(
+                .init(
+                    step: loop.step,
+                    context: loop.context,
+                    iterationIndex: loop.iterationIndex + 1,
+                    iterations: iterations
+                ),
+                failureReason: "iteration \(loop.iterationIndex) failed for value \"\(value)\" at \(childPath)"
+            ))
+        }
+
+        continuations.append(.forEachString(.init(
+            step: loop.step,
+            context: loop.context,
+            iterationIndex: loop.iterationIndex + 1,
+            iterations: iterations
+        )))
+        return advanceExecution()
+    }
+}
+
+private extension HeistExecution.Machine {
+    func forEachElementIteration(
+        _ loop: HeistExecution.ForEachElementContinuation,
+        children: HeistExecutedChildren
+    ) -> HeistExecutionStepResult {
+        guard case .executing(let targetOrdinal, _) = loop.progress else {
+            preconditionFailure("For-each iteration evidence requires a selected target")
+        }
+        let failureReason = children.abortedAtPath.map { "child failed at \($0)" }
+        let evidence = HeistForEachElementEvidence.executedIteration(
+            matchedCount: loop.matchedCount,
+            iterationCount: loop.iterationIndex + 1,
+            iterationOrdinal: loop.iterationIndex,
+            targetOrdinal: targetOrdinal,
+            targetSummary: ResolvedAccessibilityTarget.predicate(
+                loop.resolvedMatching,
+                ordinal: targetOrdinal
+            ).description,
+            failureReason: failureReason
+        )
+        let completion: HeistForEachElementCompletion
+        switch children {
+        case .passed(let children):
+            completion = .passed(
+                evidence: .init(admitted: evidence),
+                children: children
+            )
+        case .aborted(let children):
+            completion = .childAborted(
+                evidence: .init(admitted: evidence),
+                failure: childFailure(category: .loop, path: children.abortedAtPath),
+                children: children
+            )
+        }
+        return .forEachElementIteration(
+            path: loop.context.path.forEachElementIteration(at: loop.iterationIndex),
+            declaration: .init(loop.step),
+            completion: completion
+        )
+    }
+
+    func forEachElementSummary(
+        step: ForEachElementStep,
+        context: HeistExecution.StepContext,
+        matchedCount: Int,
+        iterations: HeistExecutedChildren,
+        failureReason: String?
+    ) -> HeistExecutionStepResult {
+        let evidence = HeistForEachElementEvidence.executedSummary(
+            matchedCount: matchedCount,
+            iterationCount: iterations.values.count,
+            failureReason: failureReason
+        )
+        let completion: HeistForEachElementCompletion
+        switch iterations {
+        case .passed(let children):
+            completion = .passed(
+                evidence: .init(admitted: evidence),
+                children: children
+            )
+        case .aborted(let children):
+            completion = .childAborted(
+                evidence: .init(admitted: evidence),
+                failure: .init(
+                    category: .loop,
+                    contract: "for_each_element completes all matched iterations",
+                    observed: failureReason ?? "child failed at \(children.abortedAtPath)",
+                    expected: "\(matchedCount) iteration(s)"
+                ),
+                children: children
+            )
+        }
+        return .forEachElement(
+            path: context.path,
+            declaration: .init(step),
+            completion: completion
+        )
+    }
+
+    func forEachStringIteration(
+        _ loop: HeistExecution.ForEachStringContinuation,
+        children: HeistExecutedChildren
+    ) -> HeistExecutionStepResult {
+        let value = loop.step.values[loop.iterationIndex]
+        let failureReason = children.abortedAtPath.map { "child failed at \($0)" }
+        let evidence = HeistForEachStringEvidence.executedIteration(
+            iterationCount: loop.iterationIndex + 1,
+            iterationOrdinal: loop.iterationIndex,
+            value: value,
+            failureReason: failureReason
+        )
+        let completion: HeistForEachStringCompletion
+        switch children {
+        case .passed(let children):
+            completion = .passed(
+                evidence: .init(admitted: evidence),
+                children: children
+            )
+        case .aborted(let children):
+            completion = .childAborted(
+                evidence: .init(admitted: evidence),
+                failure: childFailure(category: .loop, path: children.abortedAtPath),
+                children: children
+            )
+        }
+        return .forEachStringIteration(
+            path: loop.context.path.forEachStringIteration(at: loop.iterationIndex),
+            declaration: .init(loop.step),
+            completion: completion
+        )
+    }
+
+    func forEachStringSummary(
+        _ loop: HeistExecution.ForEachStringContinuation,
+        failureReason: String?
+    ) -> HeistExecutionStepResult {
+        let evidence = HeistForEachStringEvidence.executedSummary(
+            iterationCount: loop.iterations.values.count,
+            failureReason: failureReason
+        )
+        let completion: HeistForEachStringCompletion
+        switch loop.iterations {
+        case .passed(let children):
+            completion = .passed(
+                evidence: .init(admitted: evidence),
+                children: children
+            )
+        case .aborted(let children):
+            completion = .childAborted(
+                evidence: .init(admitted: evidence),
+                failure: .init(
+                    category: .loop,
+                    contract: "for_each_string completes all values",
+                    observed: failureReason ?? "child failed at \(children.abortedAtPath)",
+                    expected: "\(loop.step.values.count) value(s)"
+                ),
+                children: children
+            )
+        }
+        return .forEachString(
+            path: loop.context.path,
+            declaration: .init(loop.step),
+            completion: completion
+        )
+    }
+
+    func forEachElementUnavailable(
+        _ loop: HeistExecution.ForEachElementContinuation,
+        failedIterationIndex: Int
+    ) -> HeistExecutionStepResult {
+        let observed = loop.previousMatchHash == nil
+            ? "could not observe settled semantic hierarchy before evaluating for_each_element"
+            : "iteration \(failedIterationIndex) post-observation unavailable"
+        let evidence = HeistFailedForEachElementEvidence(admitted: .executedSummary(
+            matchedCount: loop.matchedCount,
+            iterationCount: loop.iterations.values.count,
+            failureReason: observed
+        ))
+        return .forEachElement(
+            path: loop.context.path,
+            declaration: .init(loop.step),
+            completion: .failed(
+                evidence: .observed(evidence),
+                failure: .init(
+                    category: .runtimeUnavailable,
+                    contract: "settled semantic hierarchy is observable before for_each_element matching",
+                    observed: observed
+                ),
+                children: passingChildren(loop.iterations)
+            )
+        )
+    }
+
+    func forEachElementResolutionFailure(
+        _ step: ForEachElementStep,
+        context: HeistExecution.StepContext,
+        error: Error
+    ) -> HeistExecutionStepResult {
+        let observed = "could not resolve for_each_element matcher: \(error)"
+        let evidence = HeistFailedForEachElementEvidence(admitted: .executedSummary(
+            matchedCount: 0,
+            iterationCount: 0,
+            failureReason: observed
+        ))
+        return .forEachElement(
+            path: context.path,
+            declaration: .init(step),
+            completion: .failed(evidence: .observed(evidence), failure: .init(
+                category: .targetResolution,
+                contract: "for_each_element matcher resolves before evaluation",
+                observed: observed,
+                expected: step.matching.description
+            ))
+        )
+    }
+
+    func forEachElementLimitFailure(
+        _ step: ForEachElementStep,
+        context: HeistExecution.StepContext,
+        matchedCount: Int
+    ) -> HeistExecutionStepResult {
+        let observed = "matched \(matchedCount) element(s), exceeding for_each_element limit \(step.limit)"
+        let evidence = HeistFailedForEachElementEvidence(admitted: .executedSummary(
+            matchedCount: matchedCount,
+            iterationCount: 0,
+            failureReason: observed
+        ))
+        return .forEachElement(
+            path: context.path,
+            declaration: .init(step),
+            completion: .failed(evidence: .observed(evidence), failure: .init(
+                category: .loop,
+                contract: "for_each_element matched count does not exceed limit",
+                observed: observed,
+                expected: "at most \(step.limit) element(s)"
+            ))
+        )
+    }
+}
+
+private struct ForEachMatchSignature {
+    let count: Int
+    let hash: SemanticHash
+
+    init(matching: ResolvedElementPredicate, elements: [HeistElement]) {
+        let identities = AccessibilityTargetMatchGraph(elements: elements)
+            .resolve(matching)
+            .elements
+            .map(AccessibilityPolicy.matcherIdentityFacts(for:))
+        count = identities.count
+        var hasher = Hasher()
+        for identity in identities {
+            for fact in identity {
+                hasher.combine(accessibilityFact: fact)
+            }
+        }
+        hash = hasher.finalize()
+    }
+}
+
+private extension Hasher {
+    mutating func combine(accessibilityFact fact: AccessibilityMatcherFact) {
+        switch fact {
+        case .identifier(let value):
+            combine(0)
+            combine(value)
+        case .label(let value):
+            combine(1)
+            combine(value)
+        case .value(let value):
+            combine(2)
+            combine(value)
+        case .trait(let value):
+            combine(3)
+            combine(value)
+        case .excludedTrait(let value):
+            combine(4)
+            combine(value)
+        }
+    }
+}
+
+private extension HeistExecution.Machine {
+    mutating func begin(
+        invocation step: HeistInvocationStep,
+        context: HeistExecution.StepContext
+    ) -> HeistExecution.State {
+        let resolution = resolveInvocation(step, scope: context.scope)
+        guard !context.scope.invocationStack.contains(resolution.resolvedPath) else {
+            return resume(afterCompletedLeaf: recursiveInvocation(
+                step,
+                context: context,
+                resolvedPath: resolution.resolvedPath
+            ))
+        }
+        guard let definition = resolution.definition else {
+            return resume(afterCompletedLeaf: unknownInvocation(
+                step,
+                context: context
+            ))
+        }
+
+        let environment: HeistExecutionEnvironment
+        do {
+            environment = try context.environment.binding(
+                argument: step.argument,
+                to: definition.parameter
+            )
+            if let expectation = step.expectation {
+                _ = try expectation.resolve(in: context.environment)
+            }
+        } catch {
+            return resume(afterCompletedLeaf: invocationPreparationFailure(
+                step,
+                context: context,
+                error: error
+            ))
+        }
+
+        let steps = definition.body + (step.expectation.map {
+            [HeistStep.wait($0)]
+        } ?? [])
+        continuations.append(.invocation(.init(
+            step: step,
+            context: context,
+            resolvedPath: resolution.resolvedPath
+        )))
+        continuations.append(.sequence(.init(
+            steps: steps,
+            context: .init(
+                path: context.path.invocationBody(),
+                environment: environment,
+                scope: .init(
+                    plan: definition,
+                    rootPlan: context.scope.rootPlan,
+                    definitionPath: resolution.resolvedPath.components,
+                    invocationStack: context.scope.invocationStack.union([
+                        resolution.resolvedPath,
+                    ])
+                )
+            ),
+            nextIndex: 0,
+            children: .empty
+        )))
+        return advanceExecution()
+    }
+
+    mutating func resume(
+        _ invocation: HeistExecution.InvocationContinuation,
+        children executed: HeistExecutedChildren
+    ) -> HeistExecution.State {
+        let split = invocationChildren(
+            executed,
+            hasExpectation: invocation.step.expectation != nil
+        )
+        let result = invocationResult(
+            invocation,
+            children: split.children,
+            expectationResult: split.expectationResult
+        )
+        return resume(afterCompletedLeaf: result)
+    }
+}
+
+private extension HeistExecution.Machine {
+    struct InvocationResolution {
+        let requestedPath: HeistInvocationPath
+        let resolvedPath: HeistInvocationPath
+        let definition: HeistPlan?
+    }
+
+    struct InvocationChildren {
+        let children: HeistExecutedChildren
+        let expectationResult: HeistExecutionStepResult?
+    }
+
+    func resolveInvocation(
+        _ step: HeistInvocationStep,
+        scope: HeistExecution.Scope
+    ) -> InvocationResolution {
+        guard let first = step.path.components.first else {
+            preconditionFailure("validated heist invocation path must not be empty")
+        }
+        let definitionPath = HeistDefinitionPath(
+            first: first,
+            remaining: Array(step.path.components.dropFirst())
+        )
+        let local = scope.plan.heistDefinition(at: definitionPath)
+        let root = step.path.components.count > 1
+            ? scope.rootPlan.heistDefinition(at: definitionPath)
+            : nil
+        let components = local == nil && root != nil
+            ? step.path.components
+            : scope.definitionPath + step.path.components
+        guard let resolvedFirst = components.first else {
+            preconditionFailure("validated heist invocation path must not be empty")
+        }
+        return InvocationResolution(
+            requestedPath: step.path,
+            resolvedPath: .init(
+                first: resolvedFirst,
+                remaining: Array(components.dropFirst())
+            ),
+            definition: local ?? root
+        )
+    }
+
+    func invocationChildren(
+        _ executed: HeistExecutedChildren,
+        hasExpectation: Bool
+    ) -> InvocationChildren {
+        guard hasExpectation, let expectation = executed.values.last else {
+            return InvocationChildren(
+                children: executed,
+                expectationResult: nil
+            )
+        }
+        let values = Array(executed.values.dropLast())
+        let children: HeistExecutedChildren
+        if let passing = HeistPassingChildren(values) {
+            children = .passed(passing)
+        } else if let aborted = HeistAbortedChildren(values) {
+            children = .aborted(aborted)
+        } else {
+            preconditionFailure("Invocation body results must be admitted")
+        }
+        return InvocationChildren(
+            children: children,
+            expectationResult: expectation.status == .skipped
+                ? nil
+                : expectation
+        )
+    }
+
+    func invocationResult(
+        _ invocation: HeistExecution.InvocationContinuation,
+        children: HeistExecutedChildren,
+        expectationResult: HeistExecutionStepResult?
+    ) -> HeistExecutionStepResult {
+        switch children {
+        case .aborted(let children):
+            let evidence = HeistInvocationEvidence.childFailed(
+                path: children.abortedAtPath
+            )
+            return .invocation(
+                path: invocation.context.path,
+                invocationPath: invocation.step.path,
+                argument: invocation.step.argument,
+                completion: .childAborted(
+                    evidence: .observed(.init(admitted: evidence)),
+                    failure: childFailure(
+                        category: .invocation,
+                        path: children.abortedAtPath
+                    ),
+                    children: children
+                )
+            )
+        case .passed(let children):
+            return passedInvocation(
+                invocation,
+                children: children,
+                expectationResult: expectationResult
+            )
+        }
+    }
+
+    func passedInvocation(
+        _ invocation: HeistExecution.InvocationContinuation,
+        children: HeistPassingChildren,
+        expectationResult: HeistExecutionStepResult?
+    ) -> HeistExecutionStepResult {
+        guard invocation.step.expectation != nil else {
+            guard expectationResult == nil else {
+                preconditionFailure("An invocation without an expectation cannot produce expectation evidence")
+            }
+            return .invocation(
+                path: invocation.context.path,
+                invocationPath: invocation.step.path,
+                argument: invocation.step.argument,
+                completion: .passed(
+                    evidence: .init(admitted: .completed(expectation: nil)),
+                    children: children
+                )
+            )
+        }
+        guard let expectationResult,
+              let expectation = expectationResult.waitEvidence else {
+            preconditionFailure("An invocation expectation must complete as a wait result")
+        }
+        let evidence = HeistInvocationEvidence.completed(
+            expectation: .wait(expectation)
+        )
+        guard !expectation.actionResult.outcome.isSuccess
+                || !expectation.expectation.met else {
+            return .invocation(
+                path: invocation.context.path,
+                invocationPath: invocation.step.path,
+                argument: invocation.step.argument,
+                completion: .passed(
+                    evidence: .init(admitted: evidence),
+                    children: children
+                )
+            )
+        }
+        return .invocation(
+            path: invocation.context.path,
+            invocationPath: invocation.step.path,
+            argument: invocation.step.argument,
+            completion: .failed(
+                evidence: .observed(.init(admitted: evidence)),
+                failure: .init(
+                    category: .expectation,
+                    contract: "heist invocation expectation is met",
+                    observed: invocationExpectationObserved(expectation),
+                    expected: invocation.step.expectation?.predicate.description
+                ),
+                children: children
+            )
+        )
+    }
+
+    func recursiveInvocation(
+        _ step: HeistInvocationStep,
+        context: HeistExecution.StepContext,
+        resolvedPath: HeistInvocationPath
+    ) -> HeistExecutionStepResult {
+        .invocation(
+            path: context.path,
+            invocationPath: step.path,
+            argument: step.argument,
+            completion: .failed(evidence: .unavailable, failure: .init(
+                category: .invocation,
+                contract: "heist invocation must not recurse",
+                observed: "recursive heist run \(resolvedPath)"
+            ))
+        )
+    }
+
+    func unknownInvocation(
+        _ step: HeistInvocationStep,
+        context: HeistExecution.StepContext
+    ) -> HeistExecutionStepResult {
+        .invocation(
+            path: context.path,
+            invocationPath: step.path,
+            argument: step.argument,
+            completion: .failed(evidence: .unavailable, failure: .init(
+                category: .invocation,
+                contract: "heist invocation path resolves to a definition",
+                observed: "unknown heist run \(step.path)",
+                expected: step.path.description
+            ))
+        )
+    }
+
+    func invocationPreparationFailure(
+        _ step: HeistInvocationStep,
+        context: HeistExecution.StepContext,
+        error: Error
+    ) -> HeistExecutionStepResult {
+        let observed = "could not prepare heist run: \(error)"
+        let evidence: HeistInvocationFailureEvidence
+        if let expectation = step.expectation {
+            let actionResult = ActionResult.failure(
+                payload: .wait,
+                failureKind: .actionFailed,
+                message: observed
+            )
+            let expectationResult = ExpectationResult(
+                met: false,
+                predicate: nil,
+                actual: observed
+            )
+            let invocationEvidence = HeistInvocationEvidence.completed(
+                expectation: .result(
+                    actionResult: actionResult,
+                    expectation: expectationResult
+                )
+            )
+            evidence = .observed(.init(admitted: invocationEvidence))
+            return .invocation(
+                path: context.path,
+                invocationPath: step.path,
+                argument: step.argument,
+                completion: .failed(evidence: evidence, failure: .init(
+                    category: .expectation,
+                    contract: "heist invocation expectation predicate resolves before evaluation",
+                    observed: observed,
+                    expected: expectation.predicate.description
+                ))
+            )
+        }
+        evidence = .unavailable
+        return .invocation(
+            path: context.path,
+            invocationPath: step.path,
+            argument: step.argument,
+            completion: .failed(evidence: evidence, failure: .init(
+                category: .validation,
+                contract: "heist invocation argument binds to the target parameter",
+                observed: observed
+            ))
+        )
+    }
+
+    func invocationExpectationObserved(
+        _ evidence: HeistSettlementEvidence
+    ) -> String {
+        [
+            evidence.expectation.actual,
+            evidence.actionResult.message,
+            evidence.actionResult.outcome.failureKind.map {
+                "failureKind=\($0.rawValue)"
+            },
+            evidence.actionResult.settled.map { "settled=\($0)" },
+        ].compactMap { $0 }.joined(separator: "; ")
+    }
+}
+
+private extension HeistExecution.Machine {
+    mutating func advance(
+        _ loop: HeistExecution.RepeatUntilContinuation
+    ) -> HeistExecution.State {
+        let path = loop.context.path.repeatUntilIteration(
+            at: loop.iterationIndex
+        )
+        continuations.append(.repeatUntil(loop))
+        continuations.append(.sequence(.init(
+            steps: loop.step.body,
+            context: .init(
+                path: path.iterationBody(),
+                environment: loop.context.environment,
+                scope: loop.context.scope
+            ),
+            nextIndex: 0,
+            children: .empty
+        )))
+        return advanceExecution()
+    }
+
+    mutating func resume(
+        _ loop: HeistExecution.RepeatUntilContinuation,
+        children: HeistExecutedChildren
+    ) -> HeistExecution.State {
+        if let check = repeatCheck(in: children, loop: loop) {
+            return resumeRepeatCheck(
+                loop,
+                bodyChildren: check.bodyChildren,
+                result: check.result
+            )
+        }
+        let resolved: ResolvedRepeatUntilStep
+        do {
+            resolved = try loop.step.resolve(in: loop.context.environment)
+        } catch {
+            return resume(afterCompletedLeaf: repeatUntilResolutionFailure(
+                loop.step,
+                context: loop.context,
+                error: error
+            ))
+        }
+
+        let snapshot = latestSnapshot(in: children.values)
+        if case .passed(let passing) = children, snapshot == nil {
+            return beginRepeatCheck(loop, bodyChildren: passing)
+        }
+        let evaluation = evaluate(
+            resolved.predicate,
+            expression: resolved.predicateExpression,
+            snapshot: snapshot
+        )
+        if case .aborted(let aborted) = children {
+            return resumeAbortedRepeat(
+                loop,
+                resolved: resolved,
+                children: aborted,
+                evaluation: evaluation,
+                snapshot: snapshot
+            )
+        }
+        guard case .passed(let passing) = children else {
+            preconditionFailure("Exhaustive repeat_until child result")
+        }
+        return resumePassingRepeat(
+            loop,
+            resolved: resolved,
+            children: passing,
+            evaluation: evaluation,
+            snapshot: snapshot
+        )
+    }
+}
+
+private extension HeistExecution.Machine {
+    struct RepeatCheck {
+        let bodyChildren: HeistPassingChildren
+        let result: HeistExecutionStepResult
+    }
+
+    mutating func beginRepeatCheck(
+        _ loop: HeistExecution.RepeatUntilContinuation,
+        bodyChildren: HeistPassingChildren
+    ) -> HeistExecution.State {
+        let wait = WaitStep(
+            predicate: loop.step.predicate,
+            timeout: loop.step.timeout
+        )
+        continuations.append(.repeatUntil(loop))
+        continuations.append(.sequence(.init(
+            steps: loop.step.body + [.wait(wait)],
+            context: .init(
+                path: loop.context.path
+                    .repeatUntilIteration(at: loop.iterationIndex)
+                    .iterationBody(),
+                environment: loop.context.environment,
+                scope: loop.context.scope
+            ),
+            nextIndex: loop.step.body.count,
+            children: .passed(bodyChildren)
+        )))
+        return advanceExecution()
+    }
+
+    func repeatCheck(
+        in children: HeistExecutedChildren,
+        loop: HeistExecution.RepeatUntilContinuation
+    ) -> RepeatCheck? {
+        guard let result = children.values.last,
+              result.path == loop.context.path
+                .repeatUntilIteration(at: loop.iterationIndex)
+                .iterationBody()
+                .step(at: loop.step.body.count),
+              result.kind == .wait,
+              let bodyChildren = HeistPassingChildren(
+                Array(children.values.dropLast())
+              ) else {
+            return nil
+        }
+        return RepeatCheck(
+            bodyChildren: bodyChildren,
+            result: result
+        )
+    }
+
+    mutating func resumeRepeatCheck(
+        _ loop: HeistExecution.RepeatUntilContinuation,
+        bodyChildren: HeistPassingChildren,
+        result: HeistExecutionStepResult
+    ) -> HeistExecution.State {
+        guard let evidence = result.waitEvidence else {
+            preconditionFailure("repeat_until check requires wait evidence")
+        }
+        let snapshot = evidence.actionResult.observationEvidence?.current
+        switch evidence.expectation {
+        case .met:
+            return resumePassingRepeat(
+                loop,
+                resolved: resolvedRepeat(loop),
+                children: bodyChildren,
+                evaluation: evidence.expectation,
+                snapshot: snapshot
+            )
+        case .unmet(let expectation):
+            return resumeTimedOutRepeat(
+                loop,
+                resolved: resolvedRepeat(loop),
+                bodyChildren: bodyChildren,
+                expectation: expectation,
+                snapshot: snapshot
+            )
+        }
+    }
+
+    func resolvedRepeat(
+        _ loop: HeistExecution.RepeatUntilContinuation
+    ) -> ResolvedRepeatUntilStep {
+        do {
+            return try loop.step.resolve(in: loop.context.environment)
+        } catch {
+            preconditionFailure("A started repeat_until must remain resolved: \(error)")
+        }
+    }
+
+    mutating func resumeTimedOutRepeat(
+        _ loop: HeistExecution.RepeatUntilContinuation,
+        resolved: ResolvedRepeatUntilStep,
+        bodyChildren: HeistPassingChildren,
+        expectation: ExpectationResult.Unmet,
+        snapshot: Observation.Snapshot?
+    ) -> HeistExecution.State {
+        let count = loop.iterationIndex + 1
+        let iterationEvidence = HeistRepeatUntilEvidence.executedContinued(
+            iterationCount: count,
+            iterationOrdinal: loop.iterationIndex,
+            expectation: expectation,
+            lastObservedSummary: snapshotSummary(snapshot)
+        )
+        let iteration = repeatUntilIteration(
+            loop,
+            children: bodyChildren,
+            evidence: iterationEvidence
+        )
+        var executed = loop.iterations
+        executed.append(iteration)
+        let iterations = passingChildren(executed)
+        let reason = "repeat_until deadline elapsed"
+        let evidence = HeistRepeatUntilEvidence.executedFailed(
+            iterationCount: count,
+            expectation: expectation,
+            lastObservedSummary: snapshotSummary(snapshot),
+            failureReason: reason
+        )
+        return resume(afterCompletedLeaf: .repeatUntil(
+            path: loop.context.path,
+            declaration: .init(loop.step),
+            completion: .failed(
+                evidence: .observed(.init(admitted: evidence)),
+                failure: .init(
+                    category: .loop,
+                    contract: "repeat_until predicate is met before timeout",
+                    observed: reason,
+                    expected: resolved.predicate.description
+                ),
+                children: iterations
+            )
+        ))
+    }
+
+    mutating func resumePassingRepeat(
+        _ loop: HeistExecution.RepeatUntilContinuation,
+        resolved: ResolvedRepeatUntilStep,
+        children: HeistPassingChildren,
+        evaluation: ExpectationResult,
+        snapshot: Observation.Snapshot?
+    ) -> HeistExecution.State {
+        let count = loop.iterationIndex + 1
+        let iteration: HeistExecutionStepResult
+        switch evaluation {
+        case .met(let expectation):
+            let evidence = HeistRepeatUntilEvidence.executedMatched(
+                iterationCount: count,
+                iterationOrdinal: loop.iterationIndex,
+                expectation: expectation,
+                actionResult: latestActionResult(in: children.values),
+                lastObservedSummary: snapshotSummary(snapshot)
+            )
+            iteration = repeatUntilIteration(
+                loop,
+                children: children,
+                evidence: evidence
+            )
+        case .unmet(let expectation):
+            let evidence = HeistRepeatUntilEvidence.executedContinued(
+                iterationCount: count,
+                iterationOrdinal: loop.iterationIndex,
+                expectation: expectation,
+                actionResult: latestActionResult(in: children.values),
+                lastObservedSummary: snapshotSummary(snapshot)
+            )
+            iteration = repeatUntilIteration(
+                loop,
+                children: children,
+                evidence: evidence
+            )
+        }
+
+        var iterations = loop.iterations
+        iterations.append(iteration)
+        if evaluation.met {
+            return resume(afterCompletedLeaf: repeatUntilMatched(
+                loop,
+                resolved: resolved,
+                iterations: passingChildren(iterations),
+                evaluation: evaluation,
+                snapshot: snapshot
+            ))
+        }
+        continuations.append(.repeatUntil(.init(
+            step: loop.step,
+            context: loop.context,
+            iterationIndex: loop.iterationIndex + 1,
+            iterations: iterations
+        )))
+        return advanceExecution()
+    }
+
+    mutating func resumeAbortedRepeat(
+        _ loop: HeistExecution.RepeatUntilContinuation,
+        resolved: ResolvedRepeatUntilStep,
+        children: HeistAbortedChildren,
+        evaluation: ExpectationResult,
+        snapshot: Observation.Snapshot?
+    ) -> HeistExecution.State {
+        if case .met = evaluation,
+           let retained = recoverableRepeatChildren(children) {
+            return resumePassingRepeat(
+                loop,
+                resolved: resolved,
+                children: retained,
+                evaluation: evaluation,
+                snapshot: snapshot
+            )
+        }
+
+        let expectation = ExpectationResult.Unmet(
+            predicate: resolved.predicateExpression,
+            actual: "iteration body failed before predicate evaluation"
+        )
+        let childPath = children.abortedAtPath
+        let count = loop.iterationIndex + 1
+        let reason = "child failed at \(childPath)"
+        let evidence = HeistRepeatUntilEvidence.executedFailed(
+            iterationCount: count,
+            iterationOrdinal: loop.iterationIndex,
+            expectation: expectation,
+            lastObservedSummary: snapshotSummary(snapshot),
+            failureReason: reason
+        )
+        let iteration = HeistExecutionStepResult.repeatUntilIteration(
+            path: loop.context.path.repeatUntilIteration(at: loop.iterationIndex),
+            declaration: .init(loop.step),
+            completion: .childAborted(
+                evidence: .init(admitted: evidence),
+                failure: childFailure(category: .loop, path: childPath),
+                children: children
+            )
+        )
+        var iterations = loop.iterations
+        iterations.append(iteration)
+        guard case .aborted(let abortedIterations) = iterations else {
+            preconditionFailure("A failed repeat_until iteration must abort")
+        }
+        return resume(afterCompletedLeaf: repeatUntilFailed(
+            loop,
+            resolved: resolved,
+            iterations: abortedIterations,
+            expectation: expectation,
+            snapshot: snapshot
+        ))
+    }
+
+    func repeatUntilIteration(
+        _ loop: HeistExecution.RepeatUntilContinuation,
+        children: HeistPassingChildren,
+        evidence: HeistRepeatUntilEvidence
+    ) -> HeistExecutionStepResult {
+        .repeatUntilIteration(
+            path: loop.context.path.repeatUntilIteration(at: loop.iterationIndex),
+            declaration: .init(loop.step),
+            completion: .passed(
+                evidence: .init(admitted: evidence),
+                children: children
+            )
+        )
+    }
+
+    func repeatUntilMatched(
+        _ loop: HeistExecution.RepeatUntilContinuation,
+        resolved _: ResolvedRepeatUntilStep,
+        iterations: HeistPassingChildren,
+        evaluation: ExpectationResult,
+        snapshot: Observation.Snapshot?
+    ) -> HeistExecutionStepResult {
+        guard case .met(let expectation) = evaluation else {
+            preconditionFailure("Matched repeat_until requires a met predicate")
+        }
+        let evidence = HeistRepeatUntilEvidence.executedMatched(
+            iterationCount: loop.iterationIndex + 1,
+            expectation: expectation,
+            actionResult: latestActionResult(in: iterations.values),
+            lastObservedSummary: snapshotSummary(snapshot)
+        )
+        return .repeatUntil(
+            path: loop.context.path,
+            declaration: .init(loop.step),
+            completion: .passed(
+                evidence: .init(admitted: evidence),
+                children: iterations
+            )
+        )
+    }
+
+    func repeatUntilFailed(
+        _ loop: HeistExecution.RepeatUntilContinuation,
+        resolved: ResolvedRepeatUntilStep,
+        iterations: HeistAbortedChildren,
+        expectation: ExpectationResult.Unmet,
+        snapshot: Observation.Snapshot?
+    ) -> HeistExecutionStepResult {
+        let reason = "iteration \(loop.iterationIndex) failed at \(iterations.abortedAtPath)"
+        let evidence = HeistRepeatUntilEvidence.executedFailed(
+            iterationCount: loop.iterationIndex + 1,
+            expectation: expectation,
+            lastObservedSummary: snapshotSummary(snapshot),
+            failureReason: reason
+        )
+        return .repeatUntil(
+            path: loop.context.path,
+            declaration: .init(loop.step),
+            completion: .childAborted(
+                evidence: .init(admitted: evidence),
+                failure: .init(
+                    category: .loop,
+                    contract: "repeat_until predicate is met before timeout",
+                    observed: reason,
+                    expected: resolved.predicate.description
+                ),
+                children: iterations
+            )
+        )
+    }
+
+    func repeatUntilResolutionFailure(
+        _ step: RepeatUntilStep,
+        context: HeistExecution.StepContext,
+        error: Error
+    ) -> HeistExecutionStepResult {
+        .repeatUntil(
+            path: context.path,
+            declaration: .init(step),
+            completion: .failed(evidence: .unavailable, failure: .init(
+                category: .validation,
+                contract: "repeat_until predicate resolves before evaluation",
+                observed: "could not resolve heist repeat_until predicate: \(error)",
+                expected: step.predicate.description
+            ))
+        )
+    }
+
+    func recoverableRepeatChildren(
+        _ children: HeistAbortedChildren
+    ) -> HeistPassingChildren? {
+        guard let failed = children.values.first(where: {
+            $0.path == children.abortedAtPath
+        }),
+        failed.kind == .action,
+        failed.failure?.category == .action,
+        failed.actionEvidence?.result?.outcome.isSuccess == false
+        else { return nil }
+
+        switch failed.actionEvidence?.result?.outcome.failureKind {
+        case nil, .some(.actionFailed):
+            return HeistPassingChildren(
+                children.values.filter { $0.path != children.abortedAtPath }
+            )
+        case .some(.accessibilityTreeUnavailable),
+             .some(.elementNotFound),
+             .some(.timeout),
+             .some(.validationError):
+            return nil
+        }
+    }
+}
+
+private extension ExpectationResult {
+    var met: Bool {
+        if case .met = self { return true }
+        return false
+    }
+}
+
+private extension HeistExecution.Machine {
+    func warningResult(
+        _ step: WarnStep,
+        context: HeistExecution.StepContext
+    ) -> HeistExecutionStepResult {
+        .warning(
+            path: context.path,
+            message: step.message,
+            completion: .passed()
+        )
+    }
+
+    func failureResult(
+        _ step: FailStep,
+        context: HeistExecution.StepContext
+    ) -> HeistExecutionStepResult {
+        .failure(
+            path: context.path,
+            message: step.message,
+            completion: .failed(failure: .init(
+                category: .explicitFailure,
+                contract: "explicit heist failure",
+                observed: step.message.rawValue
+            ))
+        )
+    }
+
+    func inlineResult(
+        _ inline: HeistExecution.InlineContinuation,
+        children: HeistExecutedChildren
+    ) -> HeistExecutionStepResult {
+        switch children {
+        case .passed(let children):
+            return .heist(
+                path: inline.context.path,
+                name: inline.plan.name,
+                completion: .passed(children: children)
+            )
+        case .aborted(let children):
+            return .heist(
+                path: inline.context.path,
+                name: inline.plan.name,
+                completion: .childAborted(
+                    failure: childFailure(
+                        category: .invocation,
+                        path: children.abortedAtPath
+                    ),
+                    children: children
+                )
+            )
+        }
+    }
+
+    func waitElseResult(
+        _ waitElse: HeistExecution.WaitElseContinuation,
+        children: HeistExecutedChildren
+    ) -> HeistExecutionStepResult {
+        let evidence = HeistSettlementEvidence.handledElse(
+            .init(
+                executed: waitElse.evidence.actionResult,
+                expectation: waitElse.evidence.expectation
+            ),
+            baselineSummary: waitElse.evidence.baselineSummary,
+            finalSummary: waitElse.evidence.finalSummary
+        )
+        let completion: HeistWaitCompletion
+        switch children {
+        case .passed(let children):
+            completion = .passed(
+                evidence: .init(admitted: evidence),
+                children: children
+            )
+        case .aborted(let children):
+            completion = .childAborted(
+                evidence: .init(admitted: evidence),
+                failure: childFailure(
+                    category: .wait,
+                    path: children.abortedAtPath
+                ),
+                children: children
+            )
+        }
+        return .wait(
+            path: waitElse.context.path,
+            predicate: waitElse.step.predicate,
+            timeout: waitElse.step.timeout,
+            completion: completion
+        )
+    }
+
+    func childFailure(
+        category: HeistFailureCategory,
+        path: HeistExecutionPath
+    ) -> HeistFailureDetail {
+        .init(
+            category: category,
+            contract: "child execution completes without failure",
+            observed: "child failed at \(path)",
+            expected: "all executed child steps pass"
+        )
+    }
+
+    func evaluate(
+        _ predicate: ObservationPredicate,
+        expression: AccessibilityPredicate,
+        snapshot: Observation.Snapshot?
+    ) -> ExpectationResult {
+        guard let snapshot else {
+            return ExpectationResult(
+                met: false,
+                predicate: expression,
+                actual: "current accessibility snapshot unavailable"
+            )
+        }
+        let expectation = Expectation([predicate], baseline: snapshot)
+        return ExpectationResult(
+            met: expectation.result == .satisfied,
+            predicate: expression,
+            actual: expectation.result.outstandingDescription
+        )
+    }
+
+    func snapshotSummary(
+        _ snapshot: Observation.Snapshot?
+    ) -> String? {
+        guard let snapshot else { return nil }
+        let interface = "interface: \(snapshot.interface.projectedElements.count) elements"
+        guard let screenID = snapshot.context.screenId else { return interface }
+        return "screen: \(screenID); \(interface)"
+    }
+
+    func latestSnapshot(
+        in results: [HeistExecutionStepResult]
+    ) -> Observation.Snapshot? {
+        for result in results.reversed() {
+            if let current = result.actionEvidence?.result?
+                .observationEvidence?.current {
+                return current
+            }
+            if let current = result.waitEvidence?.actionResult
+                .observationEvidence?.current {
+                return current
+            }
+            if let current = latestSnapshot(in: result.children) {
+                return current
+            }
+        }
+        return nil
+    }
+
+    func latestActionResult(
+        in results: [HeistExecutionStepResult]
+    ) -> ActionResult? {
+        for result in results.reversed() {
+            if let action = result.actionEvidence?.result {
+                return action
+            }
+            if let action = latestActionResult(in: result.children) {
+                return action
+            }
+        }
+        return nil
+    }
+
+    func passingChildren(
+        _ children: HeistExecutedChildren
+    ) -> HeistPassingChildren {
+        guard case .passed(let children) = children else {
+            preconditionFailure("Passing children required")
+        }
+        return children
+    }
+}
+
+#endif // DEBUG
+#endif // canImport(UIKit)
