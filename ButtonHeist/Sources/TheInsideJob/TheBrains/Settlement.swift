@@ -203,15 +203,19 @@ extension Settlement.Predicate {
     internal struct Requirement: Sendable, Equatable {
         internal let predicate: Settlement.Predicate?
 
-        /// What the caller is still waiting for, in authored order.
+        /// What the caller is still waiting for, in authored order, and stillness
+        /// last.
         ///
-        /// An expectation with no authored predicate still waits for stillness,
-        /// so there is no second path for the unasked case.
+        /// Stillness is the gate every run ends on, and it is the final predicate
+        /// rather than a test beside them because the drain is already ordered: a
+        /// tick reaches a step only once everything ahead of it has drained, so
+        /// nothing asks about stillness until what the caller asked for has
+        /// happened. A run that asked for nothing waits on the gate alone.
         internal var expectation: Expectation
 
         internal init(predicate: Settlement.Predicate?) {
             self.predicate = predicate
-            self.expectation = Expectation(predicate.map { [$0.resolved] } ?? [])
+            self.expectation = Expectation((predicate.map { [$0.resolved] } ?? []) + [.noChange])
         }
 
     }
@@ -386,16 +390,26 @@ extension Settlement {
         case handoffCapture(Readiness.Generation)
     }
 
+    /// One tick, admitted to a run.
+    ///
+    /// A tick is a moment, so this is one of them rather than the reading it came
+    /// from: a boundary is three moments and arrives as three admissions, each
+    /// folded and each asked whether it ended the run. The reading rides along
+    /// because focus, notifications and moment identity are read off it, and no
+    /// tick carries those.
     internal struct ObservationAdmission: Sendable, Equatable {
+        internal let tick: Tick
         internal let event: Observation.SnapshotEvent
         internal let source: ObservationAdmissionSource
         internal let instant: ContinuousClock.Instant
 
         internal init(
+            tick: Tick,
             event: Observation.SnapshotEvent,
             source: ObservationAdmissionSource = .observation,
             instant: ContinuousClock.Instant = RuntimeElapsed.now
         ) {
+            self.tick = tick
             self.event = event
             self.source = source
             self.instant = instant

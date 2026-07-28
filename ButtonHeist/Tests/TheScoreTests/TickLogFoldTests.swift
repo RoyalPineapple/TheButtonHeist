@@ -61,60 +61,6 @@ final class TickLogFoldTests: XCTestCase {
         )
     }
 
-    /// Stillness is whether the newest tick found the tree unchanged, so a tree
-    /// that moves again reads as moving.
-    func testStillnessIsTheNewestTick() {
-        var log = TickLog()
-        log.append(.elementsChanged(interface(["Cart"])))
-        XCTAssertFalse(log.isStill)
-
-        log.append(.noChange)
-        XCTAssertTrue(log.isStill)
-
-        log.append(.elementsChanged(interface(["Cart", "Pay"])))
-        XCTAssertFalse(log.isStill, "the tree moved again")
-    }
-
-    // MARK: - Steps
-
-    /// A step's element diff is the same diff the capture-pair path produced.
-    func testAStepsElementDiffMatchesTheCapturePairDiff() {
-        let before = interface(["Total", "Pay"])
-        let after = interface(["Total", "Spinner"])
-
-        let viaStep = TickStep(.elementsChanged(before), .elementsChanged(after)).elementEdits
-        let viaPair = AccessibilityTraceElementDiff.projectElementEdits(
-            beforeRecords: before.interface.projectedElementRecords.map(ElementDiffRecord.init),
-            afterRecords: after.interface.projectedElementRecords.map(ElementDiffRecord.init)
-        )
-
-        XCTAssertEqual(viaStep, viaPair)
-        XCTAssertEqual(viaStep.added.compactMap(\.label), ["Spinner"])
-        XCTAssertEqual(viaStep.removed.compactMap(\.label), ["Pay"])
-    }
-
-    /// The boundary is read off the tick kind, not recomputed. Settlement already
-    /// decided a replacement happened and said so by emitting the marker.
-    func testAStepReadsTheBoundaryOffTheTickKindAndHasNoElementQuestion() {
-        let step = TickStep(
-            .elementsChanged(interface(["Cart"])),
-            .screenChanged(ScreenFacts(idAfter: "Checkout"))
-        )
-
-        XCTAssertTrue(step.crossesScreenBoundary)
-        XCTAssertNil(step.interfaces, "A screen-lane step compares no trees")
-        XCTAssertTrue(step.elementEdits.isEmpty)
-    }
-
-    func testALogOfOneTickHasNoStepsBecauseNothingChanged() {
-        var log = TickLog()
-        log.append(.elementsChanged(interface(["Cart"])))
-
-        XCTAssertTrue(log.steps.isEmpty)
-        log.append(.noChange)
-        XCTAssertEqual(log.steps.count, 1)
-    }
-
     func testRunsOfStillnessCoalesceIntoOneTick() {
         var log = TickLog()
         log.append(.elementsChanged(interface(["Cart"])))

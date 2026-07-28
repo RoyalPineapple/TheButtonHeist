@@ -106,7 +106,7 @@ inside the test process before executing heists, or use the sync XCTest facade:
 ```swift
 runHeistSync("Checkout.pay", recordResult: .always, to: resultsURL) {
     Activate(.label("Pay"))
-        .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
+        .expect(.elementsChanged([.appeared(.label("Payment Complete"))]))
 }
 ```
 

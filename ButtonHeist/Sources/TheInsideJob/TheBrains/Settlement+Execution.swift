@@ -555,32 +555,42 @@ extension Settlement {
             admittedMoments: inout [Observation.Moment],
             finalSemanticEvidence: inout FinalSemanticEvidenceMeasurement
         ) async -> Decision {
-            guard let admitted = await fact(
+            let admitted = await fact(
                 for: input,
                 state: state,
                 sink: sink,
                 admittedMoments: &admittedMoments
-            ) else {
-                return Decision(state: state, effects: [])
-            }
-            let fact = admitted.fact
-            if case .readinessEstablished = fact,
-               state.session?.readiness.isEstablished == false {
-                finalSemanticEvidence.begin()
-            }
-            var decision = await reduce(
-                state,
-                fact: fact,
-                instant: admitted.instant
             )
-            if decision.state.concludesFinalSemanticEvidence
-                || fact.endsFinalSemanticEvidenceAttempt {
-                if let timing = finalSemanticEvidence.complete() {
-                    decision = Settlement.Decision(
-                        state: decision.state.recording(timing),
-                        effects: decision.effects
-                    )
+            // One input can be several moments — a screen boundary is three —
+            // and each is reduced on its own so each is asked whether it ended
+            // the run. Folding them together would let a later moment hide the
+            // one that settled.
+            var decision = Decision(state: state, effects: [])
+            for admission in admitted {
+                let fact = admission.fact
+                if case .readinessEstablished = fact,
+                   decision.state.session?.readiness.isEstablished == false {
+                    finalSemanticEvidence.begin()
                 }
+                var next = await reduce(
+                    decision.state,
+                    fact: fact,
+                    instant: admission.instant
+                )
+                if next.state.concludesFinalSemanticEvidence
+                    || fact.endsFinalSemanticEvidenceAttempt {
+                    if let timing = finalSemanticEvidence.complete() {
+                        next = Settlement.Decision(
+                            state: next.state.recording(timing),
+                            effects: next.effects
+                        )
+                    }
+                }
+                decision = Decision(
+                    state: next.state,
+                    effects: decision.effects + next.effects
+                )
+                guard next.state.result == nil else { break }
             }
             return decision
         }
@@ -675,88 +685,110 @@ extension Settlement {
             state: State,
             sink: ExecutionSink,
             admittedMoments: inout [Observation.Moment]
-        ) async -> AdmittedSettlementFact? {
+        ) async -> [AdmittedSettlementFact] {
             switch input {
-            case .observation(.snapshot(let event), let instant):
-                // Every observation in this session's window is a tick, so the
-                // only thing turned away here is one from before the boundary,
-                // or one already admitted by the handoff path. Whether the tree
-                // moved is not asked: that is the observation's own answer, and
-                // `admit` reads it to pick the tick.
+            case .observation(.read(let event, let tick), let instant):
+                // The only readings turned away are one from before the
+                // boundary and one the handoff path already admitted. What the
+                // reading was is the store's own answer, carried on the tick.
+                guard let baseline = state.session?.boundary.moment,
+                      event.moment.isSameOrAfter(baseline) else { return [] }
+                return [AdmittedSettlementFact(
+                    fact: .observationAdmitted(.init(
+                        tick: tick,
+                        event: event,
+                        instant: instant
+                    )),
+                    instant: instant
+                )]
+            case .observation(.replayed(let event), let instant):
+                // A reading that landed between the boundary capture and this
+                // run subscribing. It reaches the run through replay off the
+                // log, which records readings and not the ticks the vault minted
+                // for them, so the tick is rebuilt from the reading's own
+                // answer about whether the tree moved.
                 guard let baseline = state.session?.boundary.moment,
                       event.moment.isSameOrAfter(baseline),
-                      !admittedMoments.contains(event.moment) else { return nil }
+                      !admittedMoments.contains(event.moment) else { return [] }
                 admittedMoments.append(event.moment)
-                return AdmittedSettlementFact(
-                    fact: .observationAdmitted(.init(event: event, instant: instant)),
+                return [AdmittedSettlementFact(
+                    fact: .observationAdmitted(.init(
+                        tick: event.derivedTick,
+                        event: event,
+                        instant: instant
+                    )),
                     instant: instant
-                )
+                )]
             case .observationHistoryUnavailable(let history):
-                return AdmittedSettlementFact(
+                return [AdmittedSettlementFact(
                     fact: .observationHistoryUnavailable(history),
                     instant: RuntimeElapsed.now
-                )
+                )]
             case .observation(.announcement(let event), _), .announcement(let event):
-                return AdmittedSettlementFact(
+                return [AdmittedSettlementFact(
                     fact: .announcementObserved(event),
                     instant: RuntimeElapsed.now
-                )
+                )]
             case .announcementHistoryUnavailable(let gap):
-                return AdmittedSettlementFact(
+                return [AdmittedSettlementFact(
                     fact: .announcementHistoryUnavailable(gap),
                     instant: RuntimeElapsed.now
-                )
+                )]
             case .readiness(.established(let observationBoundary)):
-                guard let generation = state.session?.readiness.generation else { return nil }
-                return AdmittedSettlementFact(
+                guard let generation = state.session?.readiness.generation else { return [] }
+                return [AdmittedSettlementFact(
                     fact: .readinessEstablished(.init(
                         generation: generation,
                         observationBoundary: observationBoundary
                     )),
                     instant: RuntimeElapsed.now
-                )
+                )]
             case .readiness(.invalidated):
                 guard let session = state.session,
-                      case .established(let readiness) = session.readiness else { return nil }
+                      case .established(let readiness) = session.readiness else { return [] }
                 let generation = readiness.generation.advanced()
                 sink.advanceCaptureGeneration(to: generation)
-                return AdmittedSettlementFact(
+                return [AdmittedSettlementFact(
                     fact: .readinessInvalidated(generation),
                     instant: RuntimeElapsed.now
-                )
+                )]
             case .deadlineReached(let deadline):
-                return AdmittedSettlementFact(
+                return [AdmittedSettlementFact(
                     fact: .deadlineReached(deadline),
                     instant: deadline.instant
-                )
+                )]
             case .cancelled:
-                return AdmittedSettlementFact(fact: .cancelled, instant: RuntimeElapsed.now)
+                return [AdmittedSettlementFact(fact: .cancelled, instant: RuntimeElapsed.now)]
             case .dispatchCompleted(let result, let instant):
-                return AdmittedSettlementFact(
+                return [AdmittedSettlementFact(
                     fact: .dispatchCompleted(result),
                     instant: instant
-                )
+                )]
             case .captureCompleted(.baseline, _, _):
                 preconditionFailure("Baseline capture completion cannot enter armed delivery")
             case .captureCompleted(.handoff(let request), let completion, let instant):
                 switch completion.outcome {
                 case .admitted(let event):
                     guard state.session != nil,
-                          !admittedMoments.contains(event.moment) else { return nil }
+                          !admittedMoments.contains(event.moment) else { return [] }
                     admittedMoments.append(event.moment)
-                    return AdmittedSettlementFact(
+                    // The handoff holds the reading its capture produced, not
+                    // the tick the vault minted for it, so the tick comes from
+                    // the reading's own answer about whether the tree moved.
+                    return [AdmittedSettlementFact(
                         fact: .observationAdmitted(.init(
+                            tick: event.derivedTick,
                             event: event,
                             source: .handoffCapture(request.readinessGeneration),
                             instant: instant
                         )),
                         instant: instant
-                    )
+                    )]
                 case .failed(let failure):
-                    return AdmittedSettlementFact(
+                    return [AdmittedSettlementFact(
                         fact: .handoffCaptureFailed(request.readinessGeneration, failure),
                         instant: instant
-                    )
+                    )]
                 }
             }
         }
@@ -927,7 +959,7 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
         case .discovery:
             return await vault.semanticObservationStream.settledEvent(
                 scope: .discovery,
-                after: await vault.semanticObservationStream.latestCommittedEvent()?.sequence,
+                after: await vault.semanticObservationStream.latestReadEvent()?.sequence,
                 timeout: 0
             )
         }
@@ -997,12 +1029,11 @@ internal struct LiveSettlementExecutionBoundary: SettlementExecutionBoundary {
     }
 
     /// One readiness path for every command: take a reading and report what the
-    /// store made of it.
+    /// vault made of it.
     ///
     /// Commands that dispatch wait for the refresh boundary recorded when
     /// dispatch completed; commands that only observe start from the current
-    /// boundary. Both then read the same commit outcome, so the reducer sees the
-    /// same shape of evidence either way.
+    /// boundary.
     @MainActor
     internal func armReadiness(
         _ deadline: Settlement.PhaseDeadline,

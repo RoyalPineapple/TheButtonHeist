@@ -137,7 +137,7 @@ Examples:
 
 ```bash
 buttonheist validate_heist \
-  --plan 'HeistPlan { Activate(.label("Pay")).expect(.changed(.screen())) }'
+  --plan 'HeistPlan { Activate(.label("Pay")).expect(.screenChanged()) }'
 
 buttonheist validate_heist \
   --path Checkout.heist \
@@ -218,7 +218,7 @@ Inline source:
 
 ```json
 {
-  "plan": "HeistPlan { Activate(.label(\"Pay\")).expect(.changed(.screen())) }",
+  "plan": "HeistPlan { Activate(.label(\"Pay\")).expect(.screenChanged()) }",
   "lint": "strict_test"
 }
 ```
@@ -505,7 +505,7 @@ dispatch.
     "findings": []
   },
   "buildDiagnostics": [],
-  "canonicalPlan": "HeistPlan(\"checkout\") {\n    Activate(.label(\"Pay\"))\n        .expect(.changed(.screen()))\n}"
+  "canonicalPlan": "HeistPlan(\"checkout\") {\n    Activate(.label(\"Pay\"))\n        .expect(.screenChanged())\n}"
 }
 ```
 

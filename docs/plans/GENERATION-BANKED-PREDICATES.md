@@ -76,10 +76,10 @@ third case is what lets a tick be classified rather than inspected.
 Today a multi-assertion predicate must hold *all at once*:
 
 ```swift
-.changed(.elements([
+.elementsChanged([
     .appeared(.label("Processing")),
     .disappeared(.label("Submit")),
-]))
+])
 ```
 
 If "Processing" appears at one tick and "Submit" is confirmed gone at a later

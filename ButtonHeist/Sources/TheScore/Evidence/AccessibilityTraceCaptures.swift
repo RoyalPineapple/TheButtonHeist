@@ -22,23 +22,14 @@ private enum AccessibilityTraceTransitionCodingKeys: String, CodingKey, CaseIter
 
 public extension AccessibilityTrace {
     struct Capture: Codable, Sendable, Equatable {
-        /// 1-based position in the source observation stream's capture chain.
         public let sequence: Int
         public let hash: String
-        /// Hash of the previous capture in the same linear trace, or nil for
-        /// the first capture.
         public let parentHash: String?
         public let interface: Interface
         public let context: Context
-        /// Metadata about the edge from `parentHash` to this capture. This is
-        /// not included in `hash`: it describes the observed transition, not
-        /// the captured hierarchy state.
         public let transition: Transition
 
         /// A reading of nothing, which is what a departing screen leaves behind.
-        ///
-        /// Sequencing is assigned when captures are chained into a trace, so the
-        /// placeholder value here is never the one that ships.
         package static func empty(at timestamp: Date) -> Capture {
             Capture(sequence: 1, interface: Interface(timestamp: timestamp, tree: []))
         }

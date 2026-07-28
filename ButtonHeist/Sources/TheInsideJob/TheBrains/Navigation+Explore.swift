@@ -97,7 +97,7 @@ extension Navigation {
             // This loop only waits for the caller's one dispatched scroll to
             // land, so a page that still looks unmoved is mid-flight, not a
             // failed scroll. Whether the reading counts as a change is the
-            // store's question, answered on commit.
+            // vault's question.
             if let event = await vault.semanticObservationStream.commitSettledDiscoveryObservation(
                 discoveryCommitPolicy: discoveryCommitPolicy,
                 afterViewportMovement: afterViewportMovement,

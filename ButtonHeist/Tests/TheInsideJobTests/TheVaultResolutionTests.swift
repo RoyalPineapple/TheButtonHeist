@@ -8,15 +8,15 @@ import ThePlans
 @MainActor
 final class TheVaultResolutionTests: XCTestCase {
 
-    var bagman: TheVault!
+    var vault: TheVault!
 
     override func setUp() async throws {
-        bagman = TheVault(tripwire: TheTripwire())
+        vault = TheVault(tripwire: TheTripwire())
     }
 
     override func tearDown() async throws {
-        bagman.semanticObservationStream.stop()
-        bagman = nil
+        vault.semanticObservationStream.stop()
+        vault = nil
     }
 
     // MARK: - Helpers
@@ -83,7 +83,7 @@ final class TheVaultResolutionTests: XCTestCase {
             )
             elements[entry.heistId] = treeElement
         }
-        await bagman.installObservationForTesting(InterfaceObservation.makeForTests(
+        await vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: elements,
             hierarchy: hierarchyNodes,
             heistIdsByPath: heistIdsByPath,
@@ -123,7 +123,7 @@ final class TheVaultResolutionTests: XCTestCase {
                 HeistId(rawValue: "done_button")
             ),
         ])
-        await bagman.installObservationForTesting(observation)
+        await vault.installObservationForTesting(observation)
     }
 
     func resolvedTarget(_ authored: AccessibilityTarget) throws -> ResolvedAccessibilityTarget {
@@ -175,47 +175,47 @@ extension TheVault.TargetNotFoundFacts {
 extension TheVaultResolutionTests {
 
     func testSemanticObservationSubscriptionsCoalesceToWidestScope() async {
-        XCTAssertEqual(bagman.semanticObservationStream.subscribedObservationScope(), .visible)
+        XCTAssertEqual(vault.semanticObservationStream.subscribedObservationScope(), .visible)
 
-        let visible = bagman.semanticObservationStream.subscribe(scope: .visible)
-        XCTAssertEqual(bagman.semanticObservationStream.subscribedObservationScope(), .visible)
+        let visible = vault.semanticObservationStream.subscribe(scope: .visible)
+        XCTAssertEqual(vault.semanticObservationStream.subscribedObservationScope(), .visible)
 
         do {
-            let discovery = bagman.semanticObservationStream.subscribe(scope: .discovery)
-            XCTAssertEqual(bagman.semanticObservationStream.subscribedObservationScope(), .discovery)
+            let discovery = vault.semanticObservationStream.subscribe(scope: .discovery)
+            XCTAssertEqual(vault.semanticObservationStream.subscribedObservationScope(), .discovery)
             _ = discovery
         }
 
-        XCTAssertEqual(bagman.semanticObservationStream.subscribedObservationScope(), .visible)
+        XCTAssertEqual(vault.semanticObservationStream.subscribedObservationScope(), .visible)
         _ = visible
     }
 
     func testActiveObservationDemandChangesCadenceWithoutWideningScope() async {
-        XCTAssertFalse(bagman.semanticObservationStream.hasActiveObservationDemand)
-        XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandCount, 0)
-        XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandState, .idle)
-        XCTAssertEqual(bagman.semanticObservationStream.subscribedObservationScope(), .visible)
+        XCTAssertFalse(vault.semanticObservationStream.hasActiveObservationDemand)
+        XCTAssertEqual(vault.semanticObservationStream.activeObservationDemandCount, 0)
+        XCTAssertEqual(vault.semanticObservationStream.activeObservationDemandState, .idle)
+        XCTAssertEqual(vault.semanticObservationStream.subscribedObservationScope(), .visible)
 
-        let demand = bagman.semanticObservationStream.beginActiveObservationDemand()
-        XCTAssertTrue(bagman.semanticObservationStream.hasActiveObservationDemand)
-        XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandCount, 1)
-        XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandState, .active)
-        XCTAssertEqual(bagman.semanticObservationStream.subscribedObservationScope(), .visible)
+        let demand = vault.semanticObservationStream.beginActiveObservationDemand()
+        XCTAssertTrue(vault.semanticObservationStream.hasActiveObservationDemand)
+        XCTAssertEqual(vault.semanticObservationStream.activeObservationDemandCount, 1)
+        XCTAssertEqual(vault.semanticObservationStream.activeObservationDemandState, .active)
+        XCTAssertEqual(vault.semanticObservationStream.subscribedObservationScope(), .visible)
 
         do {
-            let discovery = bagman.semanticObservationStream.subscribe(scope: .discovery)
-            XCTAssertEqual(bagman.semanticObservationStream.subscribedObservationScope(), .discovery)
+            let discovery = vault.semanticObservationStream.subscribe(scope: .discovery)
+            XCTAssertEqual(vault.semanticObservationStream.subscribedObservationScope(), .discovery)
             _ = discovery
         }
 
-        XCTAssertEqual(bagman.semanticObservationStream.subscribedObservationScope(), .visible)
+        XCTAssertEqual(vault.semanticObservationStream.subscribedObservationScope(), .visible)
 
         demand.cancel()
 
-        XCTAssertFalse(bagman.semanticObservationStream.hasActiveObservationDemand)
-        XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandCount, 0)
-        XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandState, .idle)
-        XCTAssertEqual(bagman.semanticObservationStream.subscribedObservationScope(), .visible)
+        XCTAssertFalse(vault.semanticObservationStream.hasActiveObservationDemand)
+        XCTAssertEqual(vault.semanticObservationStream.activeObservationDemandCount, 0)
+        XCTAssertEqual(vault.semanticObservationStream.activeObservationDemandState, .idle)
+        XCTAssertEqual(vault.semanticObservationStream.subscribedObservationScope(), .visible)
     }
 
     func testInterfaceTreeKeepsLiveEvidenceOutOfTreeState() async {
@@ -290,12 +290,12 @@ extension TheVaultResolutionTests {
 
     func testLatestSettledSemanticObservationAdvancesMonotonically() async {
         let first = InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(first)
-        let firstObservation = await bagman.semanticObservationStream.latestCommittedSnapshot()
+        await vault.semanticObservationStream.commitVisibleObservationForTesting(first)
+        let firstObservation = await vault.semanticObservationStream.latestReadSnapshot()
 
         let second = InterfaceObservation.makeForTests(elements: [(element(label: "Second"), "second")])
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(second)
-        let secondObservation = await bagman.semanticObservationStream.latestCommittedSnapshot()
+        await vault.semanticObservationStream.commitVisibleObservationForTesting(second)
+        let secondObservation = await vault.semanticObservationStream.latestReadSnapshot()
 
         XCTAssertNotNil(firstObservation)
         XCTAssertNotNil(secondObservation)
@@ -317,9 +317,9 @@ extension TheVaultResolutionTests {
             firstResponderHeistId: "email"
         )
 
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(observation)
+        await vault.semanticObservationStream.commitVisibleObservationForTesting(observation)
 
-        let committedSnapshot = await bagman.semanticObservationStream.latestCommittedSnapshot()
+        let committedSnapshot = await vault.semanticObservationStream.latestReadSnapshot()
         let snapshot = try XCTUnwrap(committedSnapshot?.observation)
         XCTAssertEqual(snapshot.liveCapture.firstResponderHeistId, "email")
         XCTAssertNil(snapshot.liveCapture.object(for: "email"))
@@ -328,7 +328,7 @@ extension TheVaultResolutionTests {
     func testSettledSemanticObservationEventContainsNoLiveTripwireIdentity() async {
         let observation = InterfaceObservation.makeForTests(elements: [(element(label: "Home"), "home")])
 
-        let event = await bagman.semanticObservationStream.commitVisibleObservationForTesting(observation)
+        let event = await vault.semanticObservationStream.commitVisibleObservationForTesting(observation)
 
         XCTAssertFalse(containsLiveTripwireIdentity(event))
     }
@@ -336,20 +336,18 @@ extension TheVaultResolutionTests {
     func testSettledVisibleCommitUpdatesSemanticTruth() async {
         let observation = InterfaceObservation.makeForTests(elements: [(element(label: "Settled"), "settled")])
 
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(observation)
+        await vault.semanticObservationStream.commitVisibleObservationForTesting(observation)
 
-        XCTAssertEqual(bagman.interfaceTree.orderedElements.first?.element.label, "Settled")
-        let invalidated = await bagman.semanticObservationStream.latestSettledObservationInvalidated()
-        XCTAssertFalse(invalidated)
-        XCTAssertNil(bagman.latestFailedSettleDiagnosticEvidence)
+        XCTAssertEqual(vault.interfaceTree.orderedElements.first?.element.label, "Settled")
+        XCTAssertNil(vault.latestFailedSettleDiagnosticEvidence)
     }
 
     func testSettledSemanticObservationEventCarriesPreviousTraceAndFacts() async throws {
         let first = InterfaceObservation.makeForTests(elements: [
             (element(label: "Home", traits: .header), "home"),
         ])
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(first)
-        let committedFirstEvent = await bagman.semanticObservationStream.latestCommittedEvent()
+        await vault.semanticObservationStream.commitVisibleObservationForTesting(first)
+        let committedFirstEvent = await vault.semanticObservationStream.latestReadEvent()
         let firstEvent = try XCTUnwrap(committedFirstEvent)
 
         XCTAssertEqual(firstEvent.sequence, 1)
@@ -361,8 +359,8 @@ extension TheVaultResolutionTests {
             (element(label: "Home", traits: .header), "home"),
             (element(label: "Toast"), "toast"),
         ])
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(second)
-        let committedSecondEvent = await bagman.semanticObservationStream.latestCommittedEvent()
+        await vault.semanticObservationStream.commitVisibleObservationForTesting(second)
+        let committedSecondEvent = await vault.semanticObservationStream.latestReadEvent()
         let secondEvent = try XCTUnwrap(committedSecondEvent)
 
         XCTAssertEqual(secondEvent.sequence, 2)
@@ -392,15 +390,15 @@ extension TheVaultResolutionTests {
                 ),
             ]
         )
-        await bagman.semanticObservationStream.commitDiscoveryObservationForTesting(discovery)
+        await vault.semanticObservationStream.commitDiscoveryObservationForTesting(discovery)
 
         let refreshedVisible = InterfaceObservation.makeForTests(elements: [(visible, "custom_rotors")])
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(refreshedVisible)
+        await vault.semanticObservationStream.commitVisibleObservationForTesting(refreshedVisible)
 
-        let committedEvent = await bagman.semanticObservationStream.latestCommittedEvent()
+        let committedEvent = await vault.semanticObservationStream.latestReadEvent()
         let event = try XCTUnwrap(committedEvent)
         XCTAssertEqual(event.scope, .visible)
-        XCTAssertEqual(bagman.interfaceElementIDs, ["buttonheist_demo", "custom_rotors"])
+        XCTAssertEqual(vault.interfaceElementIDs, ["buttonheist_demo", "custom_rotors"])
 
         let labels = try XCTUnwrap(event.trace.captures.last)
             .interface
@@ -411,37 +409,35 @@ extension TheVaultResolutionTests {
 
     func testDiagnosticEvidenceInvalidatesLatestSettledObservationWithoutReplacingIt() async {
         let settled = InterfaceObservation.makeForTests(elements: [(element(label: "Settled"), "settled")])
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(settled)
-        let sequence = await bagman.semanticObservationStream.latestCommittedSnapshot()?.sequence
+        await vault.semanticObservationStream.commitVisibleObservationForTesting(settled)
+        let sequence = await vault.semanticObservationStream.latestReadSnapshot()?.sequence
 
         let diagnostic = InterfaceObservation.makeForTests(elements: [(element(label: "Timeout"), "timeout")])
-        await bagman.recordFailedSettleDiagnosticEvidence(diagnostic)
+        await vault.recordFailedSettleDiagnosticEvidence(diagnostic)
 
-        let retainedSequence = await bagman.semanticObservationStream.latestCommittedSnapshot()?.sequence
-        let invalidated = await bagman.semanticObservationStream.latestSettledObservationInvalidated()
+        let retainedSequence = await vault.semanticObservationStream.latestReadSnapshot()?.sequence
         XCTAssertEqual(retainedSequence, sequence)
-        XCTAssertEqual(bagman.interfaceTree.orderedElements.first?.element.label, "Settled")
-        XCTAssertEqual(bagman.latestFailedSettleDiagnosticEvidence?.tree.orderedElements.first?.element.label, "Timeout")
-        XCTAssertTrue(invalidated)
-        XCTAssertNil(bagman.resolveVisibleTarget(literalTarget(ResolvedElementPredicate.label("Timeout"))).resolvedElement)
+        XCTAssertEqual(vault.interfaceTree.orderedElements.first?.element.label, "Settled")
+        XCTAssertEqual(vault.latestFailedSettleDiagnosticEvidence?.tree.orderedElements.first?.element.label, "Timeout")
+        XCTAssertNil(vault.resolveVisibleTarget(literalTarget(ResolvedElementPredicate.label("Timeout"))).resolvedElement)
         XCTAssertEqual(
-            bagman.resolveVisibleTarget(literalTarget(ResolvedElementPredicate.label("Settled"))).resolvedElement?.element.label,
+            vault.resolveVisibleTarget(literalTarget(ResolvedElementPredicate.label("Settled"))).resolvedElement?.element.label,
             "Settled"
         )
     }
 
     func testObservedEvidenceUpdatesVisibleWorldWithoutReplacingSettledTruth() async {
         let settled = InterfaceObservation.makeForTests(elements: [(element(label: "Settled"), "settled")])
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(settled)
+        await vault.semanticObservationStream.commitVisibleObservationForTesting(settled)
 
         let observed = InterfaceObservation.makeForTests(elements: [(element(label: "Observed"), "observed")])
-        bagman.observeInterface(observed)
+        vault.observeInterface(observed)
 
-        XCTAssertEqual(bagman.interfaceTree.orderedElements.first?.element.label, "Settled")
-        XCTAssertEqual(bagman.latestObservation.tree.orderedElements.first?.element.label, "Observed")
-        XCTAssertNil(bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Observed"))).resolvedElement)
-        XCTAssertNil(bagman.resolveVisibleTarget(literalTarget(ResolvedElementPredicate.label("Observed"))).resolvedElement)
-        XCTAssertEqual(bagman.viewportElementIDs, ["observed"])
+        XCTAssertEqual(vault.interfaceTree.orderedElements.first?.element.label, "Settled")
+        XCTAssertEqual(vault.latestObservation.tree.orderedElements.first?.element.label, "Observed")
+        XCTAssertNil(vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Observed"))).resolvedElement)
+        XCTAssertNil(vault.resolveVisibleTarget(literalTarget(ResolvedElementPredicate.label("Observed"))).resolvedElement)
+        XCTAssertEqual(vault.viewportElementIDs, ["observed"])
     }
 
     func testLiveVisibleEntriesUseFreshObservedRevealMetadataOverSettledCache() async throws {
@@ -458,7 +454,7 @@ extension TheVaultResolutionTests {
             scrollMembership: InterfaceTree.ScrollMembership(containerPath: containerPath, index: 100),
             element: row
         )
-        await bagman.semanticObservationStream.commitDiscoveryObservationForTesting(InterfaceObservation.makeForTests(
+        await vault.semanticObservationStream.commitDiscoveryObservationForTesting(InterfaceObservation.makeForTests(
             elements: ["row": staleEntry],
             hierarchy: [.container(scrollContainer, children: [])],
             firstResponderHeistId: nil,
@@ -469,15 +465,15 @@ extension TheVaultResolutionTests {
             scrollMembership: InterfaceTree.ScrollMembership(containerPath: containerPath, index: 500),
             element: row
         )
-        bagman.observeInterface(InterfaceObservation.makeForTests(
+        vault.observeInterface(InterfaceObservation.makeForTests(
             elements: ["row": freshEntry],
             hierarchy: [.container(scrollContainer, children: [.element(row, traversalIndex: 0)])],
             heistIdsByPath: [rowPath: "row"],
             firstResponderHeistId: nil,
         ))
 
-        XCTAssertEqual(bagman.latestObservation.tree.findElement(heistId: "row")?.scrollMembership?.index, 500)
-        XCTAssertEqual(try XCTUnwrap(bagman.liveInterfaceElement(heistId: "row")).scrollMembership?.index, 500)
+        XCTAssertEqual(vault.latestObservation.tree.findElement(heistId: "row")?.scrollMembership?.index, 500)
+        XCTAssertEqual(try XCTUnwrap(vault.liveInterfaceElement(heistId: "row")).scrollMembership?.index, 500)
     }
 
     func testLiveVisibleEntriesDoNotPreserveSettledRevealMetadataWhenFreshObservationHasNone() async throws {
@@ -487,7 +483,7 @@ extension TheVaultResolutionTests {
             scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: nil),
             element: row
         )
-        await bagman.semanticObservationStream.commitDiscoveryObservationForTesting(InterfaceObservation.makeForTests(
+        await vault.semanticObservationStream.commitDiscoveryObservationForTesting(InterfaceObservation.makeForTests(
             elements: ["row": staleEntry],
             hierarchy: [],
             firstResponderHeistId: nil,
@@ -498,15 +494,15 @@ extension TheVaultResolutionTests {
             scrollMembership: nil,
             element: row
         )
-        bagman.observeInterface(InterfaceObservation.makeForTests(
+        vault.observeInterface(InterfaceObservation.makeForTests(
             elements: ["row": freshEntry],
             hierarchy: [.element(row, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): "row"],
             firstResponderHeistId: nil,
         ))
 
-        XCTAssertNil(bagman.latestObservation.tree.findElement(heistId: "row")?.scrollMembership)
-        XCTAssertNil(try XCTUnwrap(bagman.liveInterfaceElement(heistId: "row")).scrollMembership)
+        XCTAssertNil(vault.latestObservation.tree.findElement(heistId: "row")?.scrollMembership)
+        XCTAssertNil(try XCTUnwrap(vault.liveInterfaceElement(heistId: "row")).scrollMembership)
     }
 
 }

@@ -22,7 +22,7 @@ extension TheBrainsScrollTests {
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [TreePath([0]): .init(view: scrollView)]
         ))
-        let baselineSequence = await brains.vault.semanticObservationStream.latestCommittedEvent()?.sequence
+        let baselineSequence = await brains.vault.semanticObservationStream.latestReadEvent()?.sequence
 
         let result = await brains.navigation.executeScroll(
             try resolvedScrollTarget(ScrollTarget())
@@ -30,7 +30,7 @@ extension TheBrainsScrollTests {
 
         XCTAssertTrue(result.success, "Expected default scroll to pick the only visible container: \(String(describing: result.message))")
         XCTAssertGreaterThan(scrollView.contentOffset.y, 0)
-        let committedEvent = await brains.vault.semanticObservationStream.latestCommittedEvent()
+        let committedEvent = await brains.vault.semanticObservationStream.latestReadEvent()
         let committedMovement = try XCTUnwrap(committedEvent)
         XCTAssertEqual(committedMovement.scope, .discovery)
         XCTAssertNotEqual(committedMovement.sequence, baselineSequence)

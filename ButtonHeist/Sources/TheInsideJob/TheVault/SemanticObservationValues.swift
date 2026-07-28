@@ -232,7 +232,6 @@ extension Observation {
     }
 }
 
-/// A semantic observation admitted for commit.
 internal struct CommittableInterfaceObservation {
     internal let observation: InterfaceObservation
     internal let tripwireSignal: TheTripwire.TripwireSignal

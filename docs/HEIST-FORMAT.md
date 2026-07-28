@@ -193,10 +193,10 @@ HeistPlan("purchaseFlow") {
         .expect(.exists(.element(.label("Search Items"), .value("milk"))))
 
     Activate(.label("Milk"))
-        .expect(.changed(.elements([.appeared(.element(
+        .expect(.elementsChanged([.appeared(.element(
             .label(.prefix("Milk")),
             .identifier(.contains("cart"))
-        ))])))
+        ))]))
 
     WaitFor(.missing(.label("Loading")), timeout: 5)
         .else {
@@ -213,10 +213,10 @@ HeistDef<String>("addToCart", parameter: "item") { item in
         .expect(.exists(.element(.label("Search Items"), .value(item))))
 
     Activate(.label(item))
-        .expect(.changed(.elements([.appeared(.element(
+        .expect(.elementsChanged([.appeared(.element(
             .label(.prefix(item)),
             .identifier(.contains("cart"))
-        ))])))
+        ))]))
 }
 
 HeistPlan("cartFlow") {
@@ -227,7 +227,7 @@ HeistPlan("cartFlow") {
     If {
             Case(.label("Checkout")) {
                 Activate(.label("Checkout"))
-                    .expect(.changed(.screen([.exists(.label("Receipt"))])))
+                    .expect(.screenChanged([.exists(.label("Receipt"))]))
             }
 
         Else {

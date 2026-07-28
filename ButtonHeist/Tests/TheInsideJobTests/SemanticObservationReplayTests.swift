@@ -25,9 +25,9 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
             receiveUnavailable: { _ in XCTFail("Expected retained history") }
         )
 
-        relay.replay(.events([.snapshot(first), .snapshot(second)]))
+        relay.replay(.events([.replayed(first), .replayed(second)]))
 
-        XCTAssertEqual(received, [.snapshot(first), .snapshot(second)])
+        XCTAssertEqual(received, [.replayed(first), .replayed(second)])
     }
 
     func testReplayRelayDeduplicatesSubscriptionHandoff() async {
@@ -44,10 +44,10 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
             receiveUnavailable: { _ in XCTFail("Expected retained history") }
         )
 
-        relay.receive(.snapshot(raced))
-        relay.replay(.events([.snapshot(retained), .snapshot(raced)]))
+        relay.receive(.replayed(raced))
+        relay.replay(.events([.replayed(retained), .replayed(raced)]))
 
-        XCTAssertEqual(received, [.snapshot(retained), .snapshot(raced)])
+        XCTAssertEqual(received, [.replayed(retained), .replayed(raced)])
     }
 
     func testReplayRelayReportsExpiredHistoryBeforeBufferedDelivery() async {
@@ -79,11 +79,11 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
             receiveUnavailable: { unavailable.append($0) }
         )
 
-        relay.receive(.snapshot(latest))
+        relay.receive(.replayed(latest))
         relay.replay(history)
 
         XCTAssertEqual(unavailable, [history])
-        XCTAssertEqual(received, [.snapshot(latest)])
+        XCTAssertEqual(received, [.replayed(latest)])
     }
 
     func testIndependentStreamReplaysDoNotShareProgress() async throws {
@@ -340,7 +340,7 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
         _ = await vault.semanticObservationStream.commitVisibleObservationForTesting(
             observation(label: "Invalidated", heistId: "invalidated")
         )
-        await vault.semanticObservationStream.invalidateLatestSettledObservation()
+        await vault.semanticObservationStream.discardCurrentObservation()
         await waitForObservationWaiterCount(1)
 
         let final = await vault.semanticObservationStream.commitVisibleObservationForTesting(

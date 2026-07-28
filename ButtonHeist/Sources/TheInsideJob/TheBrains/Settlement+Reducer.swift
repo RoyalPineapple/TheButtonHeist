@@ -244,20 +244,8 @@ private extension Settlement.Reducer {
         to session: inout Settlement.Session
     ) -> [Settlement.Effect] {
         session.latestObservation = admission
-        // ponytail: all three replacement ticks come from this one admission, so
-        // the pause between them is zero. The real timeline stops ticking at
-        // detection, classifies, ticks the screen info, explores, and only then
-        // delivers the graph — which means the graph here is the visible
-        // hierarchy, not an explored one. Wire the emission to the exploration
-        // stages when the tick stream can be paused.
-        let ticks = Tick.observation(
-            admission.event.moment.capture,
-            isChange: admission.event.isChange,
-            isReplacement: admission.event.continuity.isReplacement,
-            screenHeading: admission.event.snapshot.screenHeading
-        )
-        session.tickLog.append(contentsOf: ticks)
-        session.requirement.expectation = session.requirement.expectation.folding(ticks)
+        session.tickLog.append(admission.tick)
+        session.requirement.expectation = session.requirement.expectation.folding([admission.tick])
         if case .established(let readiness) = session.readiness,
            session.command.waitsForObservation
                || session.requirement.predicate?.semantics == .currentState
@@ -333,24 +321,21 @@ private extension Settlement.Reducer {
     /// The settle rule, in full.
     ///
     /// A session completes when readiness is established, the handoff belongs to
-    /// that readiness, every authored predicate has drained, and the tree is
-    /// still.
+    /// that readiness, and every predicate has matched — stillness among them,
+    /// last, so an empty list already means the tree stopped after what the caller
+    /// asked for happened.
     ///
-    /// The drain comes first and the stream question comes after it: stillness
-    /// means the tree has stopped moving, which answers whether the run is over
-    /// only once what the caller asked for has already happened.
-    ///
-    /// Every event asks this, because any of them can supply the last missing
-    /// piece — a reading drains a predicate or quietens the tree, and readiness
-    /// arriving can complete a run whose tree went quiet before it.
+    /// What remains here is ownership: whether this evidence is this run's, and
+    /// whether the action it was waiting on ever went out. Every event asks,
+    /// because readiness arriving can complete a run whose predicates matched
+    /// before it.
     static func completedOutcome(_ session: Settlement.Session) -> Settlement.TerminalIntent? {
         guard case .established(let readiness) = session.readiness,
               let handoff = session.handoff.admission,
               handoff.belongs(to: readiness) else { return nil }
         if session.triggerEvidence.dispatchFailed { return .dispatchFailed }
         guard session.triggerEvidence.permitsCompletion,
-              session.requirement.expectation.isMet,
-              session.tickLog.isStill else { return nil }
+              session.requirement.expectation.isMet else { return nil }
         return .settled
     }
 

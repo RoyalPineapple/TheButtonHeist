@@ -542,16 +542,25 @@ final class SettlementReducerTests: SemanticObservationStreamTestCase {
         return decision
     }
 
-    /// An admission of `event`.
+    /// An admission of `event`'s last moment.
     ///
     /// The event is the whole evidence: nothing is read back out of the store to
-    /// corroborate it, so there is no second version of what the run saw.
+    /// corroborate it, so there is no second version of what the run saw. The
+    /// vault says which moments the reading was, and a single admission carries
+    /// one of them, so this is the moment the reading ends on.
     private func admission(
         _ event: Observation.SnapshotEvent,
         source: Settlement.ObservationAdmissionSource = .observation,
         instant: ContinuousClock.Instant = RuntimeElapsed.now
     ) -> Settlement.ObservationAdmission {
-        Settlement.ObservationAdmission(event: event, source: source, instant: instant)
+        Settlement.ObservationAdmission(
+            tick: event.isChange
+                ? .elementsChanged(event.moment.capture)
+                : .noChange,
+            event: event,
+            source: source,
+            instant: instant
+        )
     }
 
     private func announcement(sequence: UInt64, text: String) -> Observation.AnnouncementEvent {

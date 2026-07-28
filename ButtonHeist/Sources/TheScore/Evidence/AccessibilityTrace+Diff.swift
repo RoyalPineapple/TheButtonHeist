@@ -6,10 +6,6 @@ import AccessibilitySnapshotModel
 
 public extension AccessibilityTrace.ChangeFact {
 
-    /// Compare two full accessibility captures and emit the canonical facts.
-    ///
-    /// Captures remain trace truth. This facade delegates the derived fact
-    /// stream to `AccessibilityTraceDiff`.
     static func between(
         _ before: AccessibilityTrace.Capture,
         _ after: AccessibilityTrace.Capture

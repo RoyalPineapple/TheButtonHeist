@@ -6,10 +6,6 @@ import Foundation
 /// once, against the tree as it is, and take a branch. It carries no notion of
 /// change, of a boundary, or of before and after — those belong to
 /// `AccessibilityPredicate`, which is what an `expect` takes.
-///
-/// It used to be spelled `ChangeDeclaration.ScreenAssertion`, which said
-/// "screen" for something that only ever asked about an element and never
-/// consulted a screen at all.
 public enum PresenceCondition: Codable, Sendable, Equatable {
     case exists(AccessibilityTarget)
     case missing(AccessibilityTarget)

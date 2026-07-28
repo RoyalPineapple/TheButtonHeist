@@ -674,7 +674,7 @@ The Button Heist has one current-tree projection and one retained ordered histor
 Actions, `get_interface` subtree queries, waits, expectations, and repeat-loop
 stop conditions use one `AccessibilityTarget` language. Authored conditions use
 the concrete `AccessibilityPredicate` root, `ElementPredicate`, `StringMatch`,
-and `ChangeDeclaration` assertion types. Resolution produces package-only
+`ScreenPredicate`, and `ElementAssertion` types. Resolution produces package-only
 concrete values for execution; no generic predicate phase or alternate
 evaluator sits between authoring and execution. For a single action's
 end-to-end sequence, see the [action pipeline diagram](diagrams/action-pipeline.md).
@@ -809,17 +809,17 @@ The public predicate layer is a concrete root with concrete declaration types:
 
 - Root predicates: `.exists(target)`, `.missing(target)`,
   `.changed(...)`, and `.announcement(...)`.
-- Screen declaration: `.changed(.screen([.exists(target), .missing(target)]))`.
-- Elements declaration: `.changed(.elements([.exists(target),
+- Screen declaration: `.screenChanged([.exists(target), .missing(target)])`.
+- Elements declaration: `.elementsChanged([.exists(target),
   .missing(target), .appeared(target), .disappeared(target),
-  .updated(target, change)]))`.
+  .updated(target, change)])`.
 
 `exists` and `missing` always evaluate against the current delivered tree,
 including elements, containers, and descendant-scoped targets. `appeared`,
-`disappeared`, and `updated` consume ordered element facts. The nested
-`ChangeDeclaration.ScreenAssertion` and `ChangeDeclaration.ElementAssertion`
-types make invalid combinations such as an `updated` screen assertion
-unconstructible.
+`disappeared`, and `updated` consume ordered element facts. Separating
+`ScreenPredicate` from `ElementAssertion` makes invalid combinations such as an
+`updated` screen assertion unconstructible: a screen predicate matches the
+screen it arrived at and names no elements at all.
 
 The wait reducer also records a bounded set of semantic candidates from unmet
 observations it has already evaluated. On timeout, the projector renders exact
@@ -878,7 +878,7 @@ observation leases before the reducer constructs the terminal result.
 
 `.exists(target)` and `.missing(target)` resolve any element, container, or
 descendant-scoped `AccessibilityTarget` against current state.
-`.changed(.elements(...))` and `.changed(.screen(...))` require their declared
+`.elementsChanged(...)` and `.screenChanged(...)` require their declared
 fact evidence; a lifecycle assertion never passes from final state alone.
 
 ### Replay

@@ -4,28 +4,21 @@
 extension Observation {
     internal actor StoreOwner {
         private var store: Store
-        private var deliveryGeneration = DeliveryGeneration.initial
-        private var nextDeliveryOrder: UInt64 = 0
-        private var latestDeliveryToken: DeliveryToken?
 
         internal init(store: Store = Store()) {
             self.store = store
         }
 
-        internal func latestCommittedEvent() -> SnapshotEvent? {
-            store.latestCommittedEvent
+        internal func latestReadEvent() -> SnapshotEvent? {
+            store.latestReadEvent
         }
 
-        internal func latestCommittedSnapshot() -> Snapshot? {
-            store.latestCommittedSnapshot
+        internal func latestReadSnapshot() -> Snapshot? {
+            store.latestReadSnapshot
         }
 
-        internal func latestCommittedMoment() -> Moment? {
-            store.latestCommittedMoment
-        }
-
-        internal func latestSettledObservationInvalidated() -> Bool {
-            store.latestSettledObservationInvalidated
+        internal func latestReadMoment() -> Moment? {
+            store.latestReadMoment
         }
 
         internal func latestSettleFailureDiagnostic() -> String? {
@@ -48,18 +41,12 @@ extension Observation {
             store.interfaceTree
         }
 
-        @discardableResult
-        internal func invalidateCurrentObservation() -> DeliveryGeneration {
-            store.invalidateCurrentObservation()
-            return advanceDeliveryGeneration()
+        internal func discardCurrentObservation() {
+            store.discardCurrentObservation()
         }
 
-        @discardableResult
-        internal func invalidateIfSignalChanged(
-            to signal: TheTripwire.TripwireSignal
-        ) -> DeliveryGeneration? {
-            guard store.invalidateIfSignalChanged(to: signal) else { return nil }
-            return advanceDeliveryGeneration()
+        internal func discardIfSignalChanged(to signal: TheTripwire.TripwireSignal) {
+            store.discardIfSignalChanged(to: signal)
         }
 
         internal func admittedObservation(
@@ -110,31 +97,17 @@ extension Observation {
             read(store.log)
         }
 
-        internal func commitAdmission(_ admission: Admission) throws -> CommittedDelivery {
-            let committed = try store.commitObservation(admission)
-            nextDeliveryOrder += 1
-            let token = DeliveryToken(
-                generation: deliveryGeneration,
-                order: nextDeliveryOrder
-            )
-            latestDeliveryToken = token
-            return CommittedDelivery(token: token, committed: committed)
-        }
-
-        internal func resolveDelivery(
-            for token: DeliveryToken,
-            readmitting admission: Admission?
-        ) throws -> DeliveryResolution {
-            if token.generation == deliveryGeneration,
-               token.order > 0,
-               token.order <= nextDeliveryOrder,
-               let latestDeliveryToken {
-                return .current(DeliveryAdmission(currentCommitOrder: latestDeliveryToken.order))
-            }
-            guard token.generation != deliveryGeneration,
-                  nextDeliveryOrder == 0,
-                  let admission else { return .superseded }
-            return .readmitted(try commitAdmission(admission))
+        /// Reads the admission and returns the ticks it minted, in order.
+        ///
+        /// The order is the whole contract: a boundary's departure, identity and
+        /// arrival are three moments, and the caller puts them into the pipe one
+        /// at a time as they stand here. When they get there is not part of it.
+        internal func readAdmission(
+            _ admission: Admission
+        ) throws -> (read: Store.ReadObservation, ticks: [Tick]) {
+            var ticks: [Tick] = []
+            let read = try store.readObservation(admission) { ticks.append($0) }
+            return (read, ticks)
         }
 
         internal func settlementDidArm(at moment: Moment) {
@@ -145,74 +118,17 @@ extension Observation {
             store.settlementDidFinish(at: moment)
         }
 
-        @discardableResult
-        internal func requireReplacement() -> DeliveryGeneration {
-            store.requireReplacement()
-            return advanceDeliveryGeneration()
-        }
-
-        @discardableResult
-        internal func clearCurrentInterface() -> DeliveryGeneration {
-            store.clearCurrentInterface()
-            return advanceDeliveryGeneration()
-        }
-
         internal func recordSettleFailure(_ diagnostic: String?) {
             store.recordSettleFailure(diagnostic)
         }
 
-        @discardableResult
-        internal func reset(
-            retentionLimit: Int = Store.defaultRetentionLimit
-        ) -> DeliveryGeneration {
+        internal func reset(retentionLimit: Int = Store.defaultRetentionLimit) {
             store = Store(retentionLimit: retentionLimit)
-            return advanceDeliveryGeneration()
-        }
-
-        private func advanceDeliveryGeneration() -> DeliveryGeneration {
-            deliveryGeneration = deliveryGeneration.advanced()
-            nextDeliveryOrder = 0
-            latestDeliveryToken = nil
-            return deliveryGeneration
         }
     }
 }
 
 extension Observation.StoreOwner {
-    internal struct DeliveryGeneration: RawRepresentable, Sendable, Equatable, Hashable, Comparable {
-        internal static let initial = DeliveryGeneration(rawValue: 0)
-
-        internal let rawValue: UInt64
-
-        fileprivate func advanced() -> DeliveryGeneration {
-            DeliveryGeneration(rawValue: rawValue + 1)
-        }
-
-        internal static func < (lhs: DeliveryGeneration, rhs: DeliveryGeneration) -> Bool {
-            lhs.rawValue < rhs.rawValue
-        }
-    }
-
-    internal struct DeliveryToken: Sendable, Equatable, Hashable {
-        internal let generation: DeliveryGeneration
-        internal let order: UInt64
-    }
-
-    internal struct CommittedDelivery: Sendable {
-        internal let token: DeliveryToken
-        internal let committed: Observation.Store.CommittedObservation
-    }
-
-    internal struct DeliveryAdmission: Sendable {
-        internal let currentCommitOrder: UInt64
-    }
-
-    internal enum DeliveryResolution: Sendable {
-        case current(DeliveryAdmission)
-        case readmitted(CommittedDelivery)
-        case superseded
-    }
-
     internal struct SettledWaitBaseline: Sendable {
         internal let requiredSequence: SettledObservationSequence?
         internal let moment: Observation.Moment?

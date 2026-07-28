@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 #if DEBUG
 import Foundation
+import ThePlans
 import TheScore
 
 private struct ObservationLogEntry: Sendable, Equatable {
@@ -82,6 +83,17 @@ extension Observation {
             )
         }
 
+        /// The tick for this reading, for a caller holding the reading alone.
+        ///
+        /// Two paths hold a reading without the tick the vault minted for it:
+        /// replay off the log, and a handoff capture. Both carry the vault's own
+        /// `isChange` answer, which this reads rather than recomputes. One
+        /// reading yields one tick here, so a screen boundary — three ticks at
+        /// the vault — arrives through these paths as its arrival alone.
+        internal var derivedTick: Tick {
+            isChange ? .elementsChanged(moment.capture) : .noChange
+        }
+
         /// Whether every element the viewport still shows is where it was.
         ///
         /// Elements arriving or leaving are a semantic change, which the hash
@@ -119,9 +131,30 @@ extension Observation {
         internal let announcement: CapturedAnnouncement
     }
 
+    /// One moment, as it leaves the vault.
+    ///
+    /// A live reading carries the tick the vault minted for it: the tick is what
+    /// the vault decided, the event is the reading it decided about. A screen
+    /// boundary is three moments and so three `.read` events, each with its own
+    /// tick.
+    ///
+    /// `.replayed` is a reading off the log, which carries no tick — a tick is a
+    /// decision made once, at the moment it was made, and the log records what
+    /// was read rather than what was decided. The two are separate cases so that
+    /// a consumer must say which it is handling.
     internal enum Event: Sendable, Equatable {
-        case snapshot(SnapshotEvent)
+        case read(SnapshotEvent, Tick)
+        case replayed(SnapshotEvent)
         case announcement(AnnouncementEvent)
+
+        internal var snapshotEvent: SnapshotEvent? {
+            switch self {
+            case .read(let event, _), .replayed(let event):
+                event
+            case .announcement:
+                nil
+            }
+        }
     }
 
     internal struct Log: Sendable, Equatable, RandomAccessCollection {
@@ -159,7 +192,7 @@ extension Observation {
                 previous: previous?.snapshot,
                 transition: transition
             )
-            append(.snapshot(event), at: index, protectedBy: activeBoundary)
+            append(.replayed(event), at: index, protectedBy: activeBoundary)
             return event
         }
 
@@ -380,7 +413,7 @@ extension Observation.Log {
 extension Observation.Event {
     internal func canFulfill(_ scope: SemanticObservationScope) -> Bool {
         switch self {
-        case .snapshot(let event):
+        case .read(let event, _), .replayed(let event):
             event.scope.canFulfill(scope)
         case .announcement:
             true
@@ -401,8 +434,7 @@ extension Observation.EventsSince {
 
 private extension Observation.Event {
     var snapshot: Observation.SnapshotEvent? {
-        guard case .snapshot(let event) = self else { return nil }
-        return event
+        snapshotEvent
     }
 
     var announcement: Observation.AnnouncementEvent? {

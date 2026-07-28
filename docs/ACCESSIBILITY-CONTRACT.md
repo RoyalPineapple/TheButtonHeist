@@ -31,7 +31,7 @@ For example:
 
 ```swift
 Activate(.label("Pay"))
-    .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
+    .expect(.elementsChanged([.appeared(.label("Payment Complete"))]))
 ```
 
 This step resolves the control declared as `Pay`, performs the activation

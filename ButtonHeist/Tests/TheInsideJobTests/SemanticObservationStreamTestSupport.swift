@@ -228,8 +228,12 @@ func scriptedSettlement(
             generation: .initial,
             observationBoundary: .including(observed.changed.moment)
         )))
-        run.send(.observationAdmitted(.init(event: observed.changed)))
-        run.send(.observationAdmitted(.init(event: observed.settled)))
+        for event in [observed.changed, observed.settled] {
+            run.send(.observationAdmitted(.init(
+                tick: event.derivedTick,
+                event: event
+            )))
+        }
     }
 
     if cancelled {

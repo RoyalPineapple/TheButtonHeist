@@ -477,6 +477,11 @@ private extension Settlement.ResultProjector {
             parts.append(Strings.Timeout.stillWaitingOn(
                 outstanding.first?.description ?? Strings.Diagnostic.none
             ))
+            // Nothing outstanding and still a timeout means the predicate was
+            // answered and the run ended for the other reason a run can: it
+            // never went still. Which ticks arrived, and whether the last one
+            // was stillness, is the difference.
+            parts.append(Strings.Diagnostic.tickLane(tickLog))
         case (.exists, _, _), (.missing, _, _):
             break
         }

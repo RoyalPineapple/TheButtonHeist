@@ -41,7 +41,7 @@ Reach for `get_screen` when layout, pixels, or current viewport geometry matters
 Allowed `perform(step:)` statements are one action or one `WaitFor(...)` statement:
 
 ```swift
-Activate(.label("Pay")).expect(.changed(.screen()))
+Activate(.label("Pay")).expect(.screenChanged())
 TypeText("milk", into: .label("Search"))
     .expect(.exists(.element(.label("Search"), .value("milk"))))
 Increment(.label("Quantity"))
@@ -96,7 +96,7 @@ Activate(.label("Pay"), ordinal: 0)
 **Waiting**: use `perform(step:)` with `WaitFor(...)` when the UI is updating asynchronously — network requests, timers, animations completing. The predicate should name the specific outcome:
 
 ```swift
-WaitFor(.changed(.screen()), timeout: 10)
+WaitFor(.screenChanged(), timeout: 10)
 WaitFor(.exists(.container(.label("Checkout"))), timeout: 5)
 WaitFor(.label("Receipt"), timeout: 5)
 WaitFor(.missing(.label("Loading")), timeout: 10)
@@ -111,9 +111,9 @@ happened. Container predicates can match `.label(...)`, `.value(...)`,
 `.dataTable(rowCount: .init(...), columnCount: .init(...))`, or
 `.matching(...)` combinations. Use `.within(container: .label("Checkout"), ...)`
 when an element target must resolve inside that container. Use
-`.changed(.screen([...]))` when the preceding action itself must prove a screen
+`.screenChanged([...])` when the preceding action itself must prove a screen
 transition. Use `.exists(...)` or `.missing(...)` for current-tree state. Use
-`.changed(.elements([.appeared(...), .disappeared(...), .updated(...)]))` only
+`.elementsChanged([.appeared(...), .disappeared(...), .updated(...)])` only
 when the observed transition itself is required; final state alone never
 satisfies those lifecycle assertions.
 
@@ -129,10 +129,10 @@ element in place:
 
 ```swift
 Increment(.label("Quantity"))
-    .expect(.changed(.elements([.updated(
+    .expect(.elementsChanged([.updated(
         .label("Quantity"),
         .value(before: "2", after: "3")
-    )])))
+    )]))
 ```
 
 `before` and `after` use the same matcher grammar as targets and state assertions.
@@ -163,7 +163,7 @@ returns invalid plans as ordinary structured validation content, so inspect
 ```swift
 HeistPlan {
     Activate(.label("Pay"))
-        .expect(.changed(.screen()))
+        .expect(.screenChanged())
 
     TypeText("milk", into: .label("Search"))
         .expect(.exists(.element(.label("Search"), .value("milk"))))
@@ -178,21 +178,21 @@ HeistPlan("shop") {
         TypeText(item, into: .label("Search Items"))
             .expect(.exists(.element(.label("Search Items"), .value(item))))
         Activate(.label(item))
-            .expect(.changed(.elements([.appeared(.element(
+            .expect(.elementsChanged([.appeared(.element(
                 .label(.prefix(item)),
                 .identifier(.contains("cart"))
-            ))])))
+            ))]))
     }
 
     RunHeist("Cart.addItem", "Milk")
-        .expect(.changed(.elements([.appeared(.element(
+        .expect(.elementsChanged([.appeared(.element(
             .label("subtotal"),
             .value(.contains("1 item"))
-        ))])))
+        ))]))
 
     If(.label("Pay")) {
         Activate(.label("Pay"))
-            .expect(.changed(.screen()))
+            .expect(.screenChanged())
     }.else {
         Warn("Pay button unavailable")
     }
@@ -264,7 +264,7 @@ For operations that take time, keep using the DSL:
 
 ```swift
 Activate(.label("Pay"))
-    .expect(.changed(.screen([.exists(.label("Receipt"))])))
+    .expect(.screenChanged([.exists(.label("Receipt"))]))
 
 WaitFor(.label("Receipt"), timeout: 10)
 ```
@@ -281,7 +281,7 @@ know what should change:
 
 ```swift
 Activate(.label("Continue"))
-    .expect(.changed(.screen()))
+    .expect(.screenChanged())
 
 TypeText("milk", into: .label("Search"))
     .expect(.exists(.element(.label("Search"), .value("milk"))))

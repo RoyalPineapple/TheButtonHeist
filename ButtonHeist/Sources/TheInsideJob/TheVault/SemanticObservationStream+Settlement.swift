@@ -59,8 +59,8 @@ extension Observation.Stream {
         scope: SemanticObservationScope,
         after sequence: SettledObservationSequence?
     ) async -> Observation.Store.AdmittedObservation? {
-        await invalidateSettledObservationIfScreenChangedSinceCommit()
-        await invalidateDeliveryIfSignalChanged(to: currentTripwireSignal())
+        await discardIfScreenChangedSinceRead()
+        await discardIfSignalChanged(to: currentTripwireSignal())
         return await storeOwner.admittedObservation(scope: scope, after: sequence)
     }
 
@@ -127,7 +127,6 @@ extension Observation.Stream {
                 selection: .unclaimedScoped
             )
         let sourceObservation = committableObservation.observation
-        deliveryState.observeSourceCapture(sourceObservation.captureID)
         let identityObservation = notificationIdentityObservation ?? sourceObservation
         let notificationSnapshot = Observation.NotificationSnapshot(
             evidence: vault.resolveAccessibilityNotificationEvidence(
@@ -155,95 +154,31 @@ extension Observation.Stream {
             viewportFrames: sourceObservation.tree.viewportFrames,
             placementTolerance: CoarseFrameComparison.currentTolerance
         )
-        var delivery: Observation.StoreOwner.CommittedDelivery
+        let read: Observation.Store.ReadObservation
+        let ticks: [Tick]
         do {
-            delivery = try await storeOwner.commitAdmission(admission)
+            (read, ticks) = try await storeOwner.readAdmission(admission)
         } catch {
-            preconditionFailure("Committed interface observation failed validation: \(error)")
+            preconditionFailure("Interface observation failed validation: \(error)")
         }
-        var didReadmit = false
-        while true {
-            precondition(
-                delivery.committed.captureID == sourceObservation.captureID,
-                "Observation commit must preserve its source capture identity"
-            )
-            await beforeCommittedDelivery(delivery.token)
-            let canReadmit = !didReadmit
-                && deliveryState.isLatestSourceCapture(sourceObservation.captureID)
-            let resolution: Observation.StoreOwner.DeliveryResolution
-            do {
-                resolution = try await storeOwner.resolveDelivery(
-                    for: delivery.token,
-                    readmitting: canReadmit ? admission : nil
-                )
-            } catch {
-                preconditionFailure("Re-admitted interface observation failed validation: \(error)")
-            }
-            switch resolution {
-            case .current(let deliveryAdmission):
-                await beforeResolvedDeliveryEnqueue(delivery.token)
-                if let outcome = enqueueValidatedDelivery(
-                    delivery,
-                    admission: deliveryAdmission,
-                    sourceObservation: sourceObservation
-                ) {
-                    if outcome.event != nil {
-                        await completeObservationWaiters()
-                    }
-                    return outcome
-                }
-                return await waitForPublication(of: delivery.token)
-            case .readmitted(let readmittedDelivery):
-                didReadmit = true
-                delivery = readmittedDelivery
-            case .superseded:
-                return .superseded
-            }
-        }
-    }
-
-    private func enqueueValidatedDelivery(
-        _ delivery: Observation.StoreOwner.CommittedDelivery,
-        admission: Observation.StoreOwner.DeliveryAdmission,
-        sourceObservation: InterfaceObservation
-    ) -> Observation.PublicationOutcome? {
-        guard let vault else { return .superseded }
-        let enqueueResult = deliveryState.enqueue(
-            PendingDelivery(
-                delivery: delivery,
-                sourceObservation: sourceObservation
-            ),
-            currentCommitOrder: admission.currentCommitOrder
+        precondition(
+            read.captureID == sourceObservation.captureID,
+            "A reading must preserve its source capture identity"
         )
-        guard case .ready(let ready) = enqueueResult else {
-            completePublication(of: delivery.token, with: .superseded)
-            return .superseded
+        if let reattached = try? sourceObservation.replacingTreeWithCurrentCapture(read.tree) {
+            vault.recordCommittedObservation(
+                reattached,
+                sourceObservation: sourceObservation
+            )
         }
-        var deliveredEvent: Observation.SnapshotEvent?
-        for item in ready {
-            let pending = item.pending
-            if item.reattachesLiveCapture {
-                let committedObservation: InterfaceObservation
-                do {
-                    committedObservation = try pending.sourceObservation.replacingTreeWithCurrentCapture(
-                        pending.delivery.committed.tree
-                    )
-                } catch {
-                    preconditionFailure("Committed live observation failed validation: \(error)")
-                }
-                vault.recordCommittedObservation(
-                    committedObservation,
-                    sourceObservation: pending.sourceObservation
-                )
-            }
-            let event = pending.delivery.committed.event
-            publishImmediately(.snapshot(event))
-            completePublication(of: pending.delivery.token, with: .delivered(event))
-            if pending.delivery.token == delivery.token {
-                deliveredEvent = event
-            }
+        // One at a time, in the order the vault minted them: a boundary's
+        // departure, identity and arrival are three moments, and each one is a
+        // pass through the machine of its own.
+        for tick in ticks {
+            publishImmediately(.read(read.event, tick))
         }
-        return deliveredEvent.map(Observation.PublicationOutcome.delivered)
+        await completeObservationWaiters()
+        return .delivered(read.event)
     }
 
     internal func refreshVisibleObservation(
@@ -277,7 +212,7 @@ extension Observation.Stream {
     private func startVisibleRefresh(
         tripwireSignal: TheTripwire.TripwireSignal
     ) async -> ObservationSettlement {
-        await invalidateDeliveryIfSignalChanged(to: tripwireSignal)
+        await discardIfSignalChanged(to: tripwireSignal)
         let task = Task { @MainActor in
             await self.produceVisibleSettlement(tripwireSignal: tripwireSignal)
         }
@@ -305,12 +240,11 @@ extension Observation.Stream {
         return token
     }
 
-    /// Reads the tree once and commits what it read.
+    /// Reads the tree once and emits what it read.
     ///
     /// A reading is never held back until something agrees the tree stopped
-    /// moving. Whether it moved is the store's own answer, carried on the event;
-    /// stillness is the `.noChange` tick that answer produces, drained like any
-    /// other predicate.
+    /// moving. Whether it moved is the vault's own answer; stillness is the
+    /// `.noChange` tick that answer produces, drained like any other predicate.
     private func produceVisibleSettlement(
         tripwireSignal: TheTripwire.TripwireSignal
     ) async -> ObservationSettlement {
@@ -351,45 +285,26 @@ extension Observation.Stream {
         }
     }
 
-    internal func requireScreenReplacement() async {
-        let generation = await storeOwner.requireReplacement()
-        synchronizeDeliveryGeneration(generation, clearingSource: true)
-    }
-
-    internal func clearCurrentInterface() async {
-        let generation = await storeOwner.clearCurrentInterface()
-        synchronizeDeliveryGeneration(
-            generation,
-            clearingProjection: true,
-            clearingSource: true
-        )
-    }
-
-    internal func invalidateLatestSettledObservation() async {
-        let generation = await storeOwner.invalidateCurrentObservation()
-        synchronizeDeliveryGeneration(generation)
-    }
-
-    /// A scoped `screenChanged` notification recorded after the latest settled
-    /// commit means the settled screen has already been replaced — the
-    /// notification is a completion signal, so the invalidation is definitive,
-    /// not speculative. Serve-path reads then wait for a fresh cycle instead
-    /// of returning the stale world.
+    /// Throws away what the vault holds, here and in the mirror.
     ///
-    /// The notification bus records this as scoped at event time, so ambient
-    /// host-app notifications outside command execution cannot later churn
-    /// settled state. `layoutChanged` deliberately does not invalidate: it
-    /// also fires for in-place updates and would starve reads on chatty
-    /// screens.
-    func invalidateSettledObservationIfScreenChangedSinceCommit() async {
+    /// The reading after this one opens a new screen, because it has nothing to
+    /// continue from.
+    internal func discardCurrentObservation() async {
+        await storeOwner.discardCurrentObservation()
+        forgetReadState()
+    }
+
+    /// Throws the tree away when a screen change landed after the last reading.
+    ///
+    /// The notification is the world saying the screen went; what the vault
+    /// holds describes the one before it.
+    func discardIfScreenChangedSinceRead() async {
         guard let vault,
-              !(await storeOwner.latestSettledObservationInvalidated()),
-              await storeOwner.latestCommittedEvent() != nil,
+              await storeOwner.latestReadEvent() != nil,
               vault.accessibilityNotifications.latestScopedScreenChangedSequence
               > (await storeOwner.scopedScreenChangedSequence())
         else { return }
-        let generation = await storeOwner.invalidateCurrentObservation()
-        synchronizeDeliveryGeneration(generation, clearingSource: true)
+        await discardCurrentObservation()
     }
 
     /// Admits the tree as it stands right now.
@@ -398,8 +313,7 @@ extension Observation.Stream {
     /// was taken on, so structural UIKit state moving underneath it means the
     /// reading describes a screen we are no longer looking at. Accessibility
     /// notifications are movement on the same screen — UIKit posts them
-    /// throughout a transition — so they let the reading through. Whether the
-    /// tree moved is the store's comparison, answered on commit.
+    /// throughout a transition — so they let the reading through.
     func admitCurrentObservation(
         _ observation: InterfaceObservation? = nil,
         vault: TheVault,

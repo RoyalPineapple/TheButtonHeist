@@ -53,9 +53,9 @@ final class SemanticObservationLifecycleTests: SemanticObservationStreamTestCase
             timestamp: timestamp
         )
         var store = Observation.Store()
-        store.requireReplacement()
+        store.discardCurrentObservation()
 
-        let commit = try store.commitObservation(Observation.Admission(
+        let read = try store.readObservation(Observation.Admission(
             tree: screen.tree,
             captureID: screen.captureID,
             tripwireSignal: .empty,
@@ -75,12 +75,12 @@ final class SemanticObservationLifecycleTests: SemanticObservationStreamTestCase
             timestamp: timestamp,
             viewportFrames: screen.tree.viewportFrames,
             placementTolerance: CoarseFrameComparison.currentTolerance
-        ))
+        )) { _ in }
 
-        XCTAssertEqual(commit.event.sequence, 1)
-        XCTAssertEqual(commit.event.generation, ScreenGeneration.initial.advanced())
-        XCTAssertEqual(commit.event.trace.captures.last?.interface, interface)
-        XCTAssertEqual(store.interfaceTree, commit.tree)
+        XCTAssertEqual(read.event.sequence, 1)
+        XCTAssertEqual(read.event.generation, ScreenGeneration.initial.advanced())
+        XCTAssertEqual(read.event.trace.captures.last?.interface, interface)
+        XCTAssertEqual(store.interfaceTree, read.tree)
         XCTAssertEqual(store.sequence, 1)
         XCTAssertEqual(store.notificationIndex, notificationBatch.through)
         XCTAssertEqual(store.scopedScreenChangedSequence, 1)
@@ -101,8 +101,8 @@ final class SemanticObservationLifecycleTests: SemanticObservationStreamTestCase
     func testLifecycleReplacementRetainsThePublishedEventAndItsExactLineage() async throws {
         let screen = observation(label: "Stable", heistId: "stable")
         let firstEvent = await vault.semanticObservationStream.commitVisibleObservationForTesting(screen)
-        await vault.semanticObservationStream.requireScreenReplacement()
-        await vault.semanticObservationStream.requireScreenReplacement()
+        await vault.semanticObservationStream.discardCurrentObservation()
+        await vault.semanticObservationStream.discardCurrentObservation()
         let secondEvent = await vault.semanticObservationStream.commitVisibleObservationForTesting(screen)
 
         let baseline = firstEvent.moment
@@ -110,7 +110,7 @@ final class SemanticObservationLifecycleTests: SemanticObservationStreamTestCase
         let history = await vault.semanticObservationStream.storeOwner.readLog {
             $0.events(since: baseline)
         }
-        XCTAssertEqual(history, .events([.snapshot(secondEvent)]))
+        XCTAssertEqual(history, .events([.replayed(secondEvent)]))
         XCTAssertEqual(secondEvent.generation, firstEvent.generation.advanced())
         XCTAssertEqual(secondEvent.previousMoment, firstEvent.moment)
         guard case .screenBoundary(let previous) = secondEvent.transition else {
@@ -140,7 +140,7 @@ final class SemanticObservationLifecycleTests: SemanticObservationStreamTestCase
         )
         heist.cancel()
 
-        await vault.semanticObservationStream.requireScreenReplacement()
+        await vault.semanticObservationStream.discardCurrentObservation()
         let secondEvent = await vault.semanticObservationStream.commitVisibleObservationForTesting(screen)
 
         XCTAssertEqual(secondEvent.generation, firstEvent.generation.advanced())

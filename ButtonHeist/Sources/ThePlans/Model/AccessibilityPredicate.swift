@@ -230,10 +230,6 @@ private enum AccessibilityPredicateWireCodec {
                 match: try container.decodeIfPresent(StringMatch.self, forKey: .match)
             ))
         case .changed:
-            try decoder.rejectUnknownKeys(
-                allowed: ["type", "scope", "assertions", "match"],
-                typeName: "changed predicate"
-            )
             let scopeString = try container.decode(String.self, forKey: .scope)
             guard let scope = AccessibilityChangedWireScope(rawValue: scopeString) else {
                 throw DecodingError.dataCorruptedError(
@@ -246,10 +242,20 @@ private enum AccessibilityPredicateWireCodec {
             case .screen:
                 // A screen predicate asks about the screen, so it carries a
                 // match and no assertion list: elements are never named here.
+                // Admitting the union of both scopes' keys and then reading one
+                // accepts a document whose authored meaning it discards.
+                try decoder.rejectUnknownKeys(
+                    allowed: ["type", "scope", "match"],
+                    typeName: "changed predicate with screen scope"
+                )
                 return .screenChanged(ScreenPredicate(
                     match: try container.decodeIfPresent(StringMatch.self, forKey: .match)
                 ))
             case .elements:
+                try decoder.rejectUnknownKeys(
+                    allowed: ["type", "scope", "assertions"],
+                    typeName: "changed predicate with elements scope"
+                )
                 var assertions = try container.nestedUnkeyedContainer(forKey: .assertions)
                 return .elementsChanged(try decodeAssertions(from: &assertions) {
                     try decodeElementAssertion(from: $0)

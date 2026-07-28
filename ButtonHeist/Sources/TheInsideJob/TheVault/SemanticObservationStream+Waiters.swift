@@ -139,7 +139,7 @@ extension Observation.Stream {
         )
     }
 
-    internal func latestCommittedObservationMoment(
+    internal func latestReadObservationMoment(
         scope: SemanticObservationScope
     ) async -> Observation.Moment? {
         await storeOwner.latestMoment(scope: scope)

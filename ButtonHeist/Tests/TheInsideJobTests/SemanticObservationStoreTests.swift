@@ -10,31 +10,31 @@ import XCTest
 final class SemanticObservationStoreTests: XCTestCase {
     func testMomentIncludesSnapshotAndStartsAtFollowingLogFact() throws {
         var store = Observation.Store()
-        let baseline = try commit(scope: .visible, in: &store)
-        let current = try commit(scope: .visible, in: &store)
+        let baseline = try read(scope: .visible, in: &store)
+        let current = try read(scope: .visible, in: &store)
 
         XCTAssertEqual(baseline.moment.snapshot, baseline.snapshot)
-        XCTAssertEqual(store.log.events(since: baseline.moment), .events([.snapshot(current)]))
+        XCTAssertEqual(store.log.events(since: baseline.moment), .events([.replayed(current)]))
         XCTAssertEqual(store.snapshotEvent(at: baseline.moment), baseline)
     }
 
     func testReadsFromOneMomentDoNotShareProgress() throws {
         var store = Observation.Store()
-        let baseline = try commit(scope: .visible, in: &store)
-        let first = try commit(scope: .visible, in: &store)
-        let second = try commit(scope: .visible, in: &store)
+        let baseline = try read(scope: .visible, in: &store)
+        let first = try read(scope: .visible, in: &store)
+        let second = try read(scope: .visible, in: &store)
 
-        let expected: Observation.EventsSince = .events([.snapshot(first), .snapshot(second)])
+        let expected: Observation.EventsSince = .events([.replayed(first), .replayed(second)])
         XCTAssertEqual(store.log.events(since: baseline.moment), expected)
         XCTAssertEqual(store.log.events(since: baseline.moment), expected)
     }
 
     func testEvictionReportsTypedExpiredHistory() throws {
         var store = Observation.Store(retentionLimit: 2)
-        let baseline = try commit(scope: .visible, in: &store)
-        _ = try commit(scope: .visible, in: &store)
-        _ = try commit(scope: .visible, in: &store)
-        let current = try commit(scope: .visible, in: &store)
+        let baseline = try read(scope: .visible, in: &store)
+        _ = try read(scope: .visible, in: &store)
+        _ = try read(scope: .visible, in: &store)
+        let current = try read(scope: .visible, in: &store)
 
         XCTAssertEqual(
             store.log.events(since: baseline.moment),
@@ -44,28 +44,28 @@ final class SemanticObservationStoreTests: XCTestCase {
                 current: current.moment
             ))
         )
-        XCTAssertEqual(store.latestCommittedEvent, current)
+        XCTAssertEqual(store.latestReadEvent, current)
     }
 
     func testSourceScopeProjectsOneLogAcrossFulfilledScopes() throws {
         var store = Observation.Store()
-        let discovery = try commit(scope: .discovery, in: &store)
-        let visible = try commit(scope: .visible, in: &store)
+        let discovery = try read(scope: .discovery, in: &store)
+        let visible = try read(scope: .visible, in: &store)
 
-        XCTAssertEqual(store.log.events(since: discovery.moment), .events([.snapshot(visible)]))
+        XCTAssertEqual(store.log.events(since: discovery.moment), .events([.replayed(visible)]))
         XCTAssertEqual(store.latestMoment(scope: .visible), visible.moment)
         XCTAssertEqual(store.latestMoment(scope: .discovery), discovery.moment)
     }
 
     func testHistoryProjectionKeepsOnlyEventsThatFulfillTheRequestedScope() throws {
         var store = Observation.Store()
-        let baseline = try commit(scope: .visible, in: &store)
-        _ = try commit(scope: .visible, in: &store)
-        let discovery = try commit(scope: .discovery, in: &store)
+        let baseline = try read(scope: .visible, in: &store)
+        _ = try read(scope: .visible, in: &store)
+        let discovery = try read(scope: .discovery, in: &store)
 
         XCTAssertEqual(
             store.log.events(since: baseline.moment).projected(for: .discovery),
-            .events([.snapshot(discovery)])
+            .events([.replayed(discovery)])
         )
     }
 
@@ -87,47 +87,52 @@ final class SemanticObservationStoreTests: XCTestCase {
         let first = try log.record(snapshot: snapshot(sequence: 1), continuity: .sameGeneration)
         let second = try log.record(snapshot: snapshot(sequence: 2), continuity: .sameGeneration)
 
-        XCTAssertEqual(Array(log), [.snapshot(first), .snapshot(second)])
+        XCTAssertEqual(Array(log), [.replayed(first), .replayed(second)])
         XCTAssertEqual(log.distance(from: log.startIndex, to: log.endIndex), 2)
         XCTAssertEqual(log.distance(from: log.endIndex, to: log.startIndex), -2)
-        XCTAssertEqual(log[log.index(log.startIndex, offsetBy: 1)], .snapshot(second))
+        XCTAssertEqual(log[log.index(log.startIndex, offsetBy: 1)], .replayed(second))
     }
 
-    func testInvalidationPreservesLogButBlocksAdmittedRead() throws {
+    /// A discard leaves the log alone and takes the tree.
+    ///
+    /// The log is a recording, so what was read stays read. What goes is the
+    /// tree the next reading would have continued from, which is why there is
+    /// nothing left to admit.
+    func testDiscardKeepsTheLogAndTakesTheTree() throws {
         var store = Observation.Store()
-        let initial = try commit(scope: .visible, in: &store)
+        let initial = try read(scope: .visible, in: &store)
 
-        store.invalidateCurrentObservation()
+        store.discardCurrentObservation()
 
-        XCTAssertTrue(store.latestSettledObservationInvalidated)
-        XCTAssertEqual(store.latestCommittedEvent, initial)
+        XCTAssertEqual(store.latestReadEvent, initial)
         XCTAssertNil(store.admittedObservation(scope: .visible, after: nil))
-        XCTAssertEqual(store.latestCommittedEvent, initial)
+        XCTAssertEqual(store.interfaceTree, .empty)
     }
 
-    func testStoreOwnerCommitsValueAdmissionFromStructuredChild() async throws {
+    func testStoreOwnerReadsValueAdmissionFromStructuredChild() async throws {
         let owner = Observation.StoreOwner()
         let admission = admission(scope: .visible)
 
-        let delivery = try await withThrowingTaskGroup(
-            of: Observation.StoreOwner.CommittedDelivery.self
+        let read = try await withThrowingTaskGroup(
+            of: (read: Observation.Store.ReadObservation, ticks: [Tick]).self
         ) { group in
             group.addTask {
-                try await owner.commitAdmission(admission)
+                try await owner.readAdmission(admission)
             }
             return try await group.next()!
         }
 
-        let latest = await owner.latestCommittedEvent()
-        XCTAssertEqual(delivery.committed.event.sequence, 1)
-        XCTAssertEqual(latest, delivery.committed.event)
+        let latest = await owner.latestReadEvent()
+        XCTAssertEqual(read.read.event.sequence, 1)
+        XCTAssertEqual(latest, read.read.event)
+        XCTAssertEqual(read.ticks.count, 1)
     }
 
-    private func commit(
+    private func read(
         scope: SemanticObservationScope,
         in store: inout Observation.Store
     ) throws -> Observation.SnapshotEvent {
-        try store.commitObservation(admission(scope: scope)).event
+        try store.readObservation(admission(scope: scope)) { _ in }.event
     }
 
     private func admission(scope: SemanticObservationScope) -> Observation.Admission {

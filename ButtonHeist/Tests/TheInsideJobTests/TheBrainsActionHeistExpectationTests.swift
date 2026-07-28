@@ -28,7 +28,7 @@ extension TheBrainsActionTests {
 
     func testExecuteCommandDoesNotStartObservationWhenRuntimeInactive() async {
         let inactiveBrains = TheBrains(tripwire: TheTripwire())
-        let initialSnapshot = await inactiveBrains.vault.semanticObservationStream.latestCommittedSnapshot()
+        let initialSnapshot = await inactiveBrains.vault.semanticObservationStream.latestReadSnapshot()
         XCTAssertNil(initialSnapshot)
         XCTAssertFalse(inactiveBrains.vault.semanticObservationStream.isActive)
 

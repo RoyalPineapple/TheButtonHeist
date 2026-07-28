@@ -20,13 +20,16 @@ extension AccessibilityTrace {
         for capture in captures {
             if let previous,
                AccessibilityObservationChangeReducer.reduce(between: previous, and: capture) == .screenChanged {
-                log.append(contentsOf: TickLog.replacement(
-                    screen: ScreenFacts(idAfter: InterfaceSummary.screenName(for: capture.interface)),
-                    arriving: capture
-                ))
-            } else {
-                log.append(.elementsChanged(capture))
+                // The old screen's nodes depart, the identity moves, the new
+                // screen's nodes arrive. The departure leg is an empty tree
+                // because identity does not survive a boundary, so a `missing`
+                // half has a reading to match on that holds none of what left.
+                log.append(.elementsChanged(.empty(at: capture.interface.timestamp)))
+                log.append(.screenChanged(ScreenFacts(
+                    idAfter: InterfaceSummary.screenName(for: capture.interface)
+                )))
             }
+            log.append(.elementsChanged(capture))
             previous = capture
         }
         return log

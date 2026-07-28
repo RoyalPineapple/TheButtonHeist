@@ -18,22 +18,6 @@ package enum Tick: Sendable, Equatable {
     case announcement(String)
     case noChange
 
-    package enum Kind: Equatable, Sendable {
-        case elementsChanged
-        case screenChanged
-        case announcement
-        case noChange
-    }
-
-    package var kind: Kind {
-        switch self {
-        case .elementsChanged: return .elementsChanged
-        case .screenChanged: return .screenChanged
-        case .announcement: return .announcement
-        case .noChange: return .noChange
-        }
-    }
-
     /// The tree this tick read, when it read one.
     package var interface: Interface? {
         guard case .elementsChanged(let capture) = self else { return nil }
@@ -67,14 +51,10 @@ package struct PendingPredicate: Equatable, Sendable {
     let kind: Kind
     let scope: ReadingScope?
 
-    /// The lane this predicate reads, so a consumer can ask which kind of tick
-    /// the run is blocked on without parsing its description.
-    package var tick: Tick.Kind { lane }
-
     /// The resolved question this predicate is waiting to have answered.
     ///
-    /// `nil` for a bare lane predicate ("any element change") and for the
-    /// stillness gate, neither of which names anything.
+    /// `nil` for a bare predicate ("any element change") and for the stillness
+    /// gate, neither of which names anything.
     package var query: ResolvedAccessibilityPredicate? {
         switch kind {
         case .elementsChanged(let query): return query
@@ -113,151 +93,129 @@ package struct PendingPredicate: Equatable, Sendable {
         }
     }
 
-    var lane: Tick.Kind {
-        switch kind {
-        case .elementsChanged: return .elementsChanged
-        case .screenChanged: return .screenChanged
-        case .announcement: return .announcement
-        case .noChange: return .noChange
-        }
+    /// What evaluating a tick against this predicate found.
+    enum Evaluation: Equatable {
+        /// The tick is not what this predicate asks about.
+        case indifferent
+        /// Matched, at this reading.
+        ///
+        /// The reading is hashed at the scope the assertion named, so a change's
+        /// second predicate can be required to differ from what matched its
+        /// first.
+        case matched(reading: Int)
+        /// This predicate's question, put to this tick and not matched.
+        case unmatched
     }
 
-    func reads(_ tick: Tick) -> Bool {
-        lane == tick.kind
-    }
-
-    func admits(_ tick: Tick) -> Bool {
-        reads(tick) && matches(tick)
-    }
-
-    func matching(_ tick: Tick) -> Int? {
-        guard matches(tick) else { return nil }
-        guard let interface = tick.interface, let scope else { return tick.reading }
-        return scope.reading(in: interface)
-    }
-
-    func matches(_ tick: Tick) -> Bool {
+    /// Evaluate a tick against this predicate.
+    ///
+    /// One stream, so every predicate sees every tick and most of them have
+    /// nothing to say about most of them. Pattern-matching the tick against the
+    /// question is the whole of it: a combination that does not line up is
+    /// indifference, not an error.
+    func evaluate(_ tick: Tick) -> Evaluation {
         switch (tick, kind) {
         case (.elementsChanged(let capture), .elementsChanged(let query?)):
             return query.matches(capture.interface)
-        case (.elementsChanged, .elementsChanged(nil)):
-            return true
+                ? .matched(reading: reading(of: capture.interface, or: tick))
+                : .unmatched
+        case (.elementsChanged(let capture), .elementsChanged(nil)):
+            return .matched(reading: reading(of: capture.interface, or: tick))
         case (.screenChanged(let facts), .screenChanged(let query?)):
-            return query.matches(facts)
+            return query.matches(facts) ? .matched(reading: tick.reading) : .unmatched
         case (.screenChanged, .screenChanged(nil)):
-            return true
+            return .matched(reading: tick.reading)
         case (.announcement(let spoken), .announcement(let query?)):
-            return query.matches(spoken)
+            return query.matches(spoken) ? .matched(reading: tick.reading) : .unmatched
         case (.announcement, .announcement(nil)):
-            return true
+            return .matched(reading: tick.reading)
         case (.noChange, .noChange):
-            return true
-        default:
-            preconditionFailure("\(tick.kind) asked of a predicate that does not read it")
+            return .matched(reading: tick.reading)
+        case (.elementsChanged, _), (.screenChanged, _), (.announcement, _), (.noChange, _):
+            return .indifferent
         }
+    }
+
+    /// The reading this predicate compares at, which is the scope its assertion
+    /// named or the whole tree when it named none.
+    private func reading(of interface: Interface, or tick: Tick) -> Int {
+        scope.map { $0.reading(in: interface) } ?? tick.reading
     }
 }
 
-/// One authored assertion, and how much of it is left to fulfil.
+/// One authored assertion, and what is left of it.
 ///
-/// Three states, which are the three things a step can be. A `presence` asks
-/// about a moment. An `awaitingBefore` asks about a change, which is two
-/// predicates fulfilled in order on readings that differ. An `awaitingAfter` is
-/// that change with its first predicate fulfilled: it holds the reading that
-/// fulfilled it, so the one still owed can be asked to differ from it.
-///
-/// The pairing is a state rather than an array because it is the meaning. When
-/// only the first predicate is fulfilled, the second has to keep its own place,
-/// or a leftover `exists(X)` is indistinguishable from an unrelated predicate
-/// that happened to land at that index.
-struct PendingStep: Equatable {
-    private enum State: Equatable {
-        case presence(PendingPredicate)
-        case awaitingBefore(PendingPredicate, after: PendingPredicate)
-        case awaitingAfter(PendingPredicate, fulfilledAt: Int)
-    }
+/// Three cases, because an assertion is one predicate or two and a half-answered
+/// pair is neither. A change is two readings that differ, so once the first
+/// predicate of a pair matches it is gone and what survives is the reading that
+/// matched it beside the predicate still owed.
+enum PendingStep: Equatable {
+    /// One predicate, about a single reading.
+    case single(PendingPredicate)
+    /// Two predicates, in order, neither matched.
+    case pair(PendingPredicate, PendingPredicate)
+    /// The reading the first predicate matched at, and the one still owed, which
+    /// has to match at a reading that differs from it.
+    case owed(after: Int, PendingPredicate)
 
-    private let state: State
-
-    private init(_ state: State) {
-        self.state = state
-    }
-
-    static func presence(_ predicate: PendingPredicate) -> Self {
-        Self(.presence(predicate))
-    }
-
-    static func change(
-        before: PendingPredicate,
-        after: PendingPredicate
-    ) -> Self {
-        Self(.awaitingBefore(before, after: after))
-    }
-
-    /// Any change at all: two legs every element tick answers, separated only by
-    /// the reading.
+    /// Any change at all: two predicates every element tick matches, separated
+    /// only by the reading.
     ///
     /// A change is a comparison, and one tick is one reading — it shows a state,
     /// not a change. So this waits for two, exactly as `updated` does when no
     /// property narrows it. The reading is the whole graph, so what counts as
     /// different is anything an assertion could have named, anywhere.
-    static let anyChange = Self.change(
-        before: .elementsChanged(),
-        after: .elementsChanged()
-    )
+    static let anyChange = Self.pair(.elementsChanged(), .elementsChanged())
 
     /// The predicates this step is still waiting on, in order.
     var pending: [PendingPredicate] {
-        switch state {
-        case .presence(let predicate): return [predicate]
-        case .awaitingBefore(let before, let after): return [before, after]
-        case .awaitingAfter(let after, _): return [after]
+        switch self {
+        case .single(let predicate): return [predicate]
+        case .pair(let first, let second): return [first, second]
+        case .owed(_, let predicate): return [predicate]
         }
     }
 
-    /// What a step says about a tick it was offered.
+    /// What evaluating a tick did to this step.
     ///
-    /// Three answers, and only one of them stops the tick. Yes and don't-care
-    /// both pass it to the step behind; a no keeps it, because everything behind
-    /// this step comes after it.
-    enum Answer: Equatable {
-        /// Not this step's lane. It has no opinion and the tick carries on.
+    /// Only `.unmatched` stops the tick. Indifference and a match both pass it to
+    /// the step behind, because a tick can answer one predicate in each of
+    /// several consecutive steps.
+    enum Evaluation: Equatable {
+        /// The tick says nothing this step asked about.
         case indifferent
-        /// The offered predicate is fulfilled and a predicate is still owed.
-        /// This is the step waiting on it.
-        case awaiting(PendingStep)
-        /// Every predicate of the step is fulfilled, so it drains.
-        case drained
-        /// The offered predicate is not fulfilled. The tick goes no further.
-        case unfulfilled
+        /// A predicate matched. What remains, or nothing when the step is done.
+        case matched(PendingStep?)
+        /// This step's question, put to this tick and not answered. The tick goes
+        /// no further, because everything behind this step comes after it.
+        case unmatched
     }
 
-    /// Offer this step a tick.
+    /// Evaluate a tick against the predicate this step is owed.
     ///
-    /// Exactly one predicate is offered — the head, because the ones behind it
-    /// in a step are unreachable until it is fulfilled. So a change's second leg
-    /// is never offered the tick that fulfilled its first.
-    ///
-    /// What fulfils the first leg is hashed at the scope its assertion named: a
-    /// property, an element, or the whole tree. The second leg has to match
-    /// something that hashes differently at that same scope, which is the whole
-    /// of what makes the pair a change.
-    func offered(_ tick: Tick) -> Answer {
-        switch state {
-        case .presence(let predicate):
-            guard predicate.reads(tick) else { return .indifferent }
-            guard predicate.matches(tick) else { return .unfulfilled }
-            return .drained
-        case .awaitingBefore(let before, let after):
-            guard before.reads(tick) else { return .indifferent }
-            guard let reading = before.matching(tick) else { return .unfulfilled }
-            return .awaiting(Self(.awaitingAfter(after, fulfilledAt: reading)))
-        case .awaitingAfter(let after, let fulfilledAt):
-            guard after.reads(tick) else { return .indifferent }
-            guard let arrived = after.matching(tick), arrived != fulfilledAt else {
-                return .unfulfilled
+    /// Only the owed predicate sees the tick — the one behind it in a pair is
+    /// unreachable until this one matches, so a change's second predicate never
+    /// sees the tick that matched its first.
+    func evaluate(_ tick: Tick) -> Evaluation {
+        switch self {
+        case .single(let predicate):
+            switch predicate.evaluate(tick) {
+            case .indifferent: return .indifferent
+            case .matched: return .matched(nil)
+            case .unmatched: return .unmatched
             }
-            return .drained
+        case .pair(let first, let second):
+            switch first.evaluate(tick) {
+            case .indifferent: return .indifferent
+            case .matched(let reading): return .matched(.owed(after: reading, second))
+            case .unmatched: return .unmatched
+            }
+        case .owed(let previous, let predicate):
+            switch predicate.evaluate(tick) {
+            case .indifferent: return .indifferent
+            case .matched(let reading) where reading != previous: return .matched(nil)
+            case .matched, .unmatched: return .unmatched
+            }
         }
     }
 }
@@ -269,9 +227,9 @@ struct PendingStep: Equatable {
 /// ticks it has seen, so it is derived from the tick log rather than a live thing
 /// to be synchronized against.
 ///
-/// Scope: what the caller asked for. Whether the tree has stopped moving is a
-/// property of the observation stream and `TickLog.isStill` answers it, so a run
-/// waiting for both a predicate and a settled tree asks each of them.
+/// Scope: what the caller asked for, and then stillness. The stillness predicate
+/// is last, and the list is ordered, so nothing evaluates it until what the
+/// caller asked for has already happened.
 package struct Expectation: Equatable, Sendable {
     private var pending: [PendingStep]
 
@@ -286,36 +244,42 @@ package struct Expectation: Equatable, Sendable {
     /// same answer.
     package func folding(_ ticks: some Sequence<Tick>) -> Self {
         ticks.reduce(into: self) { expectation, tick in
-            expectation.pending = Self.draining(expectation.pending, tick)
+            expectation.pending = Self.remaining(of: expectation.pending, after: tick)
         }
     }
 
-    /// The list after one tick has flowed through it.
+    /// What is left of the list once one tick has flowed through it.
     ///
     /// An authored list is a narrative — this happened, then this happened, then
-    /// this happened — so a tick is offered to the steps in order. A step that
-    /// is indifferent or fulfilled passes it to the next; one that is not
-    /// fulfilled keeps it, and the tick goes no further, because everything
-    /// behind that step comes after it. A step with every predicate fulfilled
-    /// drains; one with a predicate left waits where it is.
+    /// this happened — so the tick is evaluated against the steps in order. A
+    /// step that is indifferent or that matched passes it to the next; one that
+    /// did not match keeps it, and the tick goes no further, because everything
+    /// behind that step comes after it.
     ///
-    /// One tick can therefore fulfil a predicate in several consecutive steps,
+    /// One tick can therefore match a predicate in several consecutive steps,
     /// which is what keeps the verdict independent of how finely the tripwire
     /// sampled, and is what lets two things swapped in one frame both be read:
-    /// the tree still holding the old one fulfils the arrival's `missing` and
+    /// the tree still holding the old one matches the arrival's `missing` and
     /// then the departure's `exists` behind it.
-    private static func draining(_ pending: [PendingStep], _ tick: Tick) -> [PendingStep] {
-        guard let next = pending.first else { return [] }
-        let behind = { draining(Array(pending.dropFirst()), tick) }
-        switch next.offered(tick) {
-        case .indifferent: return [next] + behind()
-        case .awaiting(let step): return [step] + behind()
-        case .drained: return behind()
-        case .unfulfilled: return pending
+    private static func remaining(
+        of pending: [PendingStep],
+        after tick: Tick
+    ) -> [PendingStep] {
+        guard let head = pending.first else { return [] }
+        switch head.evaluate(tick) {
+        case .unmatched:
+            return pending
+        case .indifferent:
+            return [head] + remaining(of: Array(pending.dropFirst()), after: tick)
+        case .matched(let rest):
+            return (rest.map { [$0] } ?? []) + remaining(of: Array(pending.dropFirst()), after: tick)
         }
     }
 
-    /// Whether every authored predicate has drained.
+    /// Whether every authored predicate has matched.
+    ///
+    /// A predicate that matched is gone, so an empty list is the only record that
+    /// it happened.
     package var isMet: Bool { pending.isEmpty }
 
     /// What the caller is still waiting on, head first, in authored order.
@@ -323,29 +287,6 @@ package struct Expectation: Equatable, Sendable {
         pending.flatMap(\.pending)
     }
 
-}
-
-extension Tick {
-    /// The ticks one observation is, in order.
-    ///
-    /// A reading is ticks before it is anything else, and which ticks it is
-    /// follows from the reading alone: the store has already made the one
-    /// comparison — semantics and placements against the reading before — so
-    /// this only names them.
-    package static func observation(
-        _ capture: AccessibilityTrace.Capture,
-        isChange: Bool,
-        isReplacement: Bool,
-        screenHeading: String?
-    ) -> [Tick] {
-        guard isReplacement else {
-            return [isChange ? .elementsChanged(capture) : .noChange]
-        }
-        return TickLog.replacement(
-            screen: ScreenFacts(idAfter: screenHeading),
-            arriving: capture
-        )
-    }
 }
 
 enum ReadingScope: Equatable {
@@ -438,24 +379,24 @@ extension ResolvedAccessibilityPredicate {
     var pendingSteps: [PendingStep] {
         switch self {
         case .exists, .missing:
-            return [.presence(.elementsChanged(self))]
+            return [.single(.elementsChanged(self))]
         case .announcement(let query):
-            return [.presence(.announcement(query))]
+            return [.single(.announcement(query))]
         case .screenChanged(let query):
-            return [.presence(.screenChanged(query))]
+            return [.single(.screenChanged(query))]
         case .elementsChanged(let assertions):
             guard !assertions.isEmpty else { return [.anyChange] }
             return assertions.map { assertion in
                 let scope = assertion.readingScope
-                let legs = assertion.composed.map {
+                let composed = assertion.composed.map {
                     PendingPredicate.elementsChanged($0, scope: scope)
                 }
-                return legs.count == 1
-                    ? .presence(legs[0])
-                    : .change(before: legs[0], after: legs[1])
+                return composed.count == 1
+                    ? .single(composed[0])
+                    : .pair(composed[0], composed[1])
             }
         case .noChange:
-            return []
+            return [.single(.noChange)]
         }
     }
 

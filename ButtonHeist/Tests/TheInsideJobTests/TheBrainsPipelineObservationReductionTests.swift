@@ -49,7 +49,7 @@ extension TheBrainsPipelineTests {
         let history = await brains.vault.semanticObservationStream.storeOwner.readLog {
             $0.events(since: newBaseline)
         }
-        XCTAssertEqual(history, .events([.snapshot(nextEvent)]))
+        XCTAssertEqual(history, .events([.replayed(nextEvent)]))
     }
 
     func testPassiveCommitConsumesScopedScreenChangedSinceLastCommit() async {

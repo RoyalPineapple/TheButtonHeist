@@ -42,7 +42,7 @@ extension Observation {
         internal nonisolated static let defaultRetentionLimit = 256
 
         internal private(set) var log: Log
-        private var availability = Availability.invalidated(sourceScope: nil)
+        private var admittedTripwireSignal: TheTripwire.TripwireSignal?
         internal private(set) var interfaceTree: InterfaceTree = .empty
         internal private(set) var sequence: SettledObservationSequence = 0
         private var notificationIndices = StoreNotificationIndices()
@@ -51,30 +51,21 @@ extension Observation {
         private var replacementRequired = false
         private var activeSettlementBoundaries: [Moment] = []
 
-        internal var latestCommittedEvent: SnapshotEvent? {
-            switch availability {
-            case .admitted, .invalidated(.some):
-                log.latestSnapshotEvent
-            case .invalidated(.none):
-                nil
-            }
+        /// The newest reading in the log.
+        ///
+        /// Callers ask this for its position, to wait for what comes after it.
+        /// The log is a sequence, so the newest entry is the answer — there is no
+        /// freshness to consult, because the machine has no now.
+        internal var latestReadEvent: SnapshotEvent? {
+            log.latestSnapshotEvent
         }
 
-        internal var latestCommittedSnapshot: Snapshot? {
-            latestCommittedEvent?.snapshot
+        internal var latestReadSnapshot: Snapshot? {
+            latestReadEvent?.snapshot
         }
 
-        internal var latestCommittedMoment: Moment? {
-            latestCommittedEvent?.moment
-        }
-
-        internal var latestSettledObservationInvalidated: Bool {
-            switch availability {
-            case .invalidated:
-                true
-            case .admitted:
-                false
-            }
+        internal var latestReadMoment: Moment? {
+            latestReadEvent?.moment
         }
 
         internal var notificationIndex: AccessibilityNotificationCursor {
@@ -85,34 +76,45 @@ extension Observation {
             log = Log(retentionLimit: retentionLimit)
         }
 
-        internal mutating func invalidateCurrentObservation() {
-            switch availability {
-            case .admitted(let sourceScope, _):
-                availability = .invalidated(sourceScope: sourceScope)
-            case .invalidated:
-                break
-            }
+        /// Throws away what the vault holds.
+        ///
+        /// There is nothing to mark: the tree goes, and the reading after this
+        /// one opens a new screen because it has nothing to continue from.
+        internal mutating func discardCurrentObservation() {
+            interfaceTree = .empty
+            admittedTripwireSignal = nil
+            replacementRequired = true
+            settleFailureDiagnostic = nil
         }
 
-        @discardableResult
-        internal mutating func invalidateIfSignalChanged(
+        /// Throws the tree away when the signal it was read under is gone.
+        ///
+        /// A reading describes the window state it was taken under, so a signal
+        /// that moved means what the vault holds describes something that is no
+        /// longer there. There is nothing to mark stale: the tree goes, and the
+        /// next reading is the next reading.
+        internal mutating func discardIfSignalChanged(
             to tripwireSignal: TheTripwire.TripwireSignal
-        ) -> Bool {
-            guard case .admitted(let sourceScope, let admittedSignal) = availability,
-                  admittedSignal != tripwireSignal else { return false }
-            availability = .invalidated(sourceScope: sourceScope)
-            return true
+        ) {
+            guard let admittedSignal = admittedTripwireSignal,
+                  admittedSignal != tripwireSignal else { return }
+            discardCurrentObservation()
         }
 
+        /// The newest reading past `sequence`, when it answers this scope.
+        ///
+        /// The newest reading is the present — a tick is now until the next one
+        /// arrives — so this asks about position only: is there one after the one
+        /// the caller already has.
         internal func admittedObservation(
             scope: SemanticObservationScope,
             after sequence: SettledObservationSequence?
         ) -> AdmittedObservation? {
-            guard case .admitted(let sourceScope, let tripwireSignal) = availability,
-                  sourceScope.canFulfill(scope),
+            guard let admittedTripwireSignal,
                   let latest = log.latestSnapshotEvent,
+                  latest.scope.canFulfill(scope),
                   latest.sequence > (sequence ?? 0) else { return nil }
-            return AdmittedObservation(event: latest, tripwireSignal: tripwireSignal)
+            return AdmittedObservation(event: latest, tripwireSignal: admittedTripwireSignal)
         }
 
         internal func readSnapshot(
@@ -163,9 +165,18 @@ extension Observation {
             log.prune(protectedBy: earliestActiveSettlementBoundary)
         }
 
-        internal mutating func commitObservation(
-            _ admission: Admission
-        ) throws -> CommittedObservation {
+        /// Reads the admission into the vault, emitting a tick at each moment it
+        /// passes through.
+        ///
+        /// One reading is one moment when the screen held, and three when it was
+        /// replaced: the old screen's nodes depart, the identity moves, the new
+        /// screen's nodes arrive. The ticks go out as those moments happen, so
+        /// the departure is emitted while the old tree is still what the vault
+        /// holds and the arrival only after the new one is installed.
+        internal mutating func readObservation(
+            _ admission: Admission,
+            emit: (Tick) -> Void
+        ) throws -> ReadObservation {
             let notificationLane: StoreNotificationLane
             let notificationSnapshot: NotificationSnapshot
             switch admission.notificationAdmission {
@@ -210,6 +221,12 @@ extension Observation {
             let continuity = replacementRequired
                 ? ScreenContinuity.replacement(.screenChangedNotification)
                 : classifiedContinuity
+            if continuity.isReplacement {
+                // The departure, emitted before the old tree is let go. Identity
+                // does not survive a boundary, so a `missing` half needs a
+                // reading holding none of what left.
+                emit(.elementsChanged(.empty(at: admission.timestamp)))
+            }
             let nextTree = continuity.isReplacement ? admission.tree : candidateTree
             let generation = continuity.isReplacement
                 ? (log.latestSnapshotEvent?.generation ?? .initial).advanced()
@@ -252,27 +269,22 @@ extension Observation {
             next.scopedScreenChangedSequence = notifications.scopedScreenChangedThrough
             next.settleFailureDiagnostic = nil
             next.replacementRequired = false
-            next.availability = .admitted(
-                sourceScope: admission.scope,
-                tripwireSignal: admission.tripwireSignal
-            )
+            next.admittedTripwireSignal = admission.tripwireSignal
             self = next
-            return CommittedObservation(
+            if continuity.isReplacement {
+                // The identity moves, ahead of the arriving graph: naming a
+                // screen needs only what is on it, so a caller waiting on the
+                // name does not also wait for the tree.
+                emit(.screenChanged(ScreenFacts(idAfter: event.snapshot.screenHeading)))
+                emit(.elementsChanged(event.moment.capture))
+            } else {
+                emit(event.isChange ? .elementsChanged(event.moment.capture) : .noChange)
+            }
+            return ReadObservation(
                 tree: nextTree,
                 captureID: admission.captureID,
                 event: event
             )
-        }
-
-        internal mutating func requireReplacement() {
-            invalidateCurrentObservation()
-            replacementRequired = true
-            settleFailureDiagnostic = nil
-        }
-
-        internal mutating func clearCurrentInterface() {
-            interfaceTree = .empty
-            requireReplacement()
         }
 
         internal mutating func recordSettleFailure(_ diagnostic: String?) {
@@ -333,16 +345,12 @@ extension Observation.Store {
         internal let tripwireSignal: TheTripwire.TripwireSignal
     }
 
-    internal struct CommittedObservation: Sendable {
+    internal struct ReadObservation: Sendable {
         internal let tree: InterfaceTree
         internal let captureID: InterfaceCaptureID
         internal let event: Observation.SnapshotEvent
     }
 
-    private enum Availability: Sendable, Equatable {
-        case admitted(sourceScope: SemanticObservationScope, tripwireSignal: TheTripwire.TripwireSignal)
-        case invalidated(sourceScope: SemanticObservationScope?)
-    }
 }
 
 #endif // DEBUG

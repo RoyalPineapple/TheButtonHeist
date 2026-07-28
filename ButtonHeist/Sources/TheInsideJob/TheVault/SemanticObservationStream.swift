@@ -29,47 +29,33 @@ internal final class Stream {
     private(set) var isMovingViewport = false
     let storeOwner = StoreOwner()
     var observationWaiters = WaiterStore<UInt64, SemanticObservationWaiter>()
-    private var subscribers: [UInt64: Subscriber] = [:]
-    var deliveryState = DeliveryState()
-    private var publicationWaiters: [
-        StoreOwner.DeliveryToken: CheckedContinuation<PublicationOutcome, Never>
-    ] = [:]
+    private var receive: @MainActor (Event) -> Void = { _ in }
     /// Runs at the top of every visible reading, before the tree is read.
-    /// The seam tests use to count readings and to hold one open while they
-    /// check whether a second consumer starts its own or joins this one.
     var beforeVisibleReading: @MainActor () async -> Void = {}
-    var beforeCommittedDelivery: @MainActor (StoreOwner.DeliveryToken) async -> Void = { _ in }
-    var beforeResolvedDeliveryEnqueue: @MainActor (StoreOwner.DeliveryToken) async -> Void = { _ in }
-    var latestDeliveredSnapshotEvent: SnapshotEvent?
-    var latestDeliveredInterfaceTree: InterfaceTree = .empty
+    /// What the vault holds, readable without awaiting the store.
+    ///
+    /// The store is the record and lives behind an actor; callers on the main
+    /// actor that need the current tree synchronously read it here, written as
+    /// each tick goes out.
+    private(set) var latestReadSnapshotEvent: SnapshotEvent?
+    private(set) var latestReadInterfaceTree: InterfaceTree = .empty
 
     // MARK: - Subscriber-Facing Settled Observation History
 
     var lifecycle = SemanticObservationLifecycle.stopped
-    internal func latestCommittedEvent() async -> SnapshotEvent? {
-        await storeOwner.latestCommittedEvent()
-    }
-    /// Invalidates only latest fulfilled events as admitted waiter results.
-    /// Settled semantic truth remains in `TheVault` until the next explicit
-    /// commit.
-    internal func latestSettledObservationInvalidated() async -> Bool {
-        await storeOwner.latestSettledObservationInvalidated()
+    internal func latestReadEvent() async -> SnapshotEvent? {
+        await storeOwner.latestReadEvent()
     }
     internal func latestSettleFailureDiagnostic() async -> String? {
         await storeOwner.latestSettleFailureDiagnostic()
     }
 
-    /// The scoped screen change the settled commit already accounts for.
-    ///
-    /// A commit takes this up to the scoped changes it was told about, so the
-    /// bus running ahead of it is what a screen change since the commit looks
-    /// like, and is the comparison the serve path makes.
-    internal func committedScopedScreenChangedSequence() async -> UInt64 {
+    internal func readScopedScreenChangedSequence() async -> UInt64 {
         await storeOwner.scopedScreenChangedSequence()
     }
 
-    internal func latestCommittedSnapshot() async -> Snapshot? {
-        await storeOwner.latestCommittedSnapshot()
+    internal func latestReadSnapshot() async -> Snapshot? {
+        await storeOwner.latestReadSnapshot()
     }
 
     internal var isActive: Bool {
@@ -78,10 +64,6 @@ internal final class Stream {
 
     internal var observationWaiterCount: Int {
         observationWaiters.count
-    }
-
-    internal var publicationWaiterCount: Int {
-        publicationWaiters.count
     }
 
     internal var activeObservationDemandCount: Int {
@@ -109,8 +91,8 @@ internal final class Stream {
         discovery: @escaping SemanticObservationLifecycle.DiscoveryObservation
     ) async {
         guard !lifecycle.replaceDiscoveryIfRunning(discovery) else { return }
-        let generation = await storeOwner.invalidateCurrentObservation()
-        synchronizeDeliveryGeneration(generation, clearingSource: true)
+        await storeOwner.discardCurrentObservation()
+        forgetReadState()
         lastPassiveDiscoveryStartedAt = nil
         if let vault {
             AccessibilityNotificationObserver.shared.subscribe(vault.accessibilityNotifications)
@@ -134,64 +116,48 @@ internal final class Stream {
         }
     }
 
+    /// Raises the scope the vault reads at, without listening.
+    ///
+    /// Holding a scope is how a caller says how hard to look; the vault reads at
+    /// the widest scope anyone holds. Ticks are a separate question, and only the
+    /// running heist step asks it.
     internal func subscribe(scope: SemanticObservationScope) -> SemanticObservationSubscription {
-        subscribe(scope: scope, receive: { _ in })
+        let id = scopePressure.addSubscription(scope: scope)
+        return SemanticObservationSubscription(id: id, scope: scope, stream: self)
     }
 
+    /// Raises the scope and takes the ticks.
+    ///
+    /// There is one receiver because there is one of everything downstream: one
+    /// brains running one heist step. Nothing routes, because there is nowhere
+    /// else a tick could go.
     internal func subscribe(
         scope: SemanticObservationScope,
         receive: @escaping @MainActor (Event) -> Void
     ) -> SemanticObservationSubscription {
-        let id = scopePressure.addSubscription(scope: scope)
-        subscribers[id] = Subscriber(scope: scope, receive: receive)
-        return SemanticObservationSubscription(id: id, scope: scope, stream: self)
+        self.receive = receive
+        return subscribe(scope: scope)
     }
 
     internal func removeSubscription(_ id: UInt64) {
-        subscribers.removeValue(forKey: id)
         scopePressure.removeSubscription(id)
     }
 
     func publishImmediately(_ event: Event) {
-        if case .snapshot(let snapshotEvent) = event {
-            latestDeliveredSnapshotEvent = snapshotEvent
-            latestDeliveredInterfaceTree = snapshotEvent.snapshot.observation.tree
+        if let snapshotEvent = event.snapshotEvent {
+            latestReadSnapshotEvent = snapshotEvent
+            latestReadInterfaceTree = snapshotEvent.snapshot.observation.tree
         }
-        for subscriber in subscribers.values where event.canFulfill(subscriber.scope) {
-            subscriber.receive(event)
-        }
+        receive(event)
     }
 
-    func synchronizeDeliveryGeneration(
-        _ generation: StoreOwner.DeliveryGeneration,
-        clearingProjection: Bool = false,
-        clearingSource: Bool = false
-    ) {
-        guard deliveryState.synchronize(to: generation, clearingSource: clearingSource) else { return }
-        let waiters = publicationWaiters.values
-        publicationWaiters.removeAll(keepingCapacity: true)
-        waiters.forEach { $0.resume(returning: .superseded) }
-        guard clearingProjection else { return }
-        latestDeliveredSnapshotEvent = nil
-        latestDeliveredInterfaceTree = .empty
-    }
-
-    func waitForPublication(
-        of token: StoreOwner.DeliveryToken
-    ) async -> PublicationOutcome {
-        await withCheckedContinuation { continuation in
-            precondition(
-                publicationWaiters.updateValue(continuation, forKey: token) == nil,
-                "Observation delivery may have only one publication waiter"
-            )
-        }
-    }
-
-    func completePublication(
-        of token: StoreOwner.DeliveryToken,
-        with outcome: PublicationOutcome
-    ) {
-        publicationWaiters.removeValue(forKey: token)?.resume(returning: outcome)
+    /// Forgets what the vault held.
+    ///
+    /// Paired with the store throwing its tree away: the mirror describes what
+    /// the store holds, so it goes when that does.
+    func forgetReadState() {
+        latestReadSnapshotEvent = nil
+        latestReadInterfaceTree = .empty
     }
 
     /// Runs `movement` with every reading taken during it attributed to the
@@ -257,11 +223,11 @@ internal final class Stream {
             return await observeVisibleSemanticState()
         case .discovery:
             guard let discovery = lifecycle.discovery else {
-                await invalidateLatestSettledObservation()
+                await discardCurrentObservation()
                 return true
             }
             guard let exploration = await discovery() else {
-                await invalidateLatestSettledObservation()
+                await discardCurrentObservation()
                 return true
             }
             _ = exploration
@@ -282,17 +248,14 @@ internal final class Stream {
             timeout: .milliseconds(Int(TheTripwire.singleTickSettleTimeout * 1_000)),
             demand: .ambient
         )
-        await invalidateDeliveryIfSignalChanged(to: currentTripwireSignal())
+        await discardIfSignalChanged(to: currentTripwireSignal())
         guard !Task.isCancelled else { return false }
         _ = await refreshVisibleObservation()
         return !Task.isCancelled
     }
 
-    func invalidateDeliveryIfSignalChanged(
-        to signal: TheTripwire.TripwireSignal
-    ) async {
-        guard let generation = await storeOwner.invalidateIfSignalChanged(to: signal) else { return }
-        synchronizeDeliveryGeneration(generation, clearingSource: true)
+    func discardIfSignalChanged(to signal: TheTripwire.TripwireSignal) async {
+        await storeOwner.discardIfSignalChanged(to: signal)
     }
 
 }
@@ -310,80 +273,6 @@ extension Observation.Stream {
     struct VisibleRefreshTask {
         let token: VisibleRefreshToken
         let task: Task<ObservationSettlement, Never>
-    }
-
-    private struct Subscriber {
-        let scope: SemanticObservationScope
-        let receive: @MainActor (Observation.Event) -> Void
-    }
-
-    struct PendingDelivery {
-        let delivery: Observation.StoreOwner.CommittedDelivery
-        let sourceObservation: InterfaceObservation
-    }
-
-    struct ReadyDelivery {
-        let pending: PendingDelivery
-        let reattachesLiveCapture: Bool
-    }
-
-    struct DeliveryState {
-        private(set) var generation = Observation.StoreOwner.DeliveryGeneration.initial
-        private var nextOrder: UInt64 = 1
-        private var pending: [UInt64: PendingDelivery] = [:]
-        private var latestSourceCaptureID: InterfaceCaptureID?
-
-        mutating func observeSourceCapture(_ captureID: InterfaceCaptureID) {
-            latestSourceCaptureID = captureID
-        }
-
-        func isLatestSourceCapture(_ captureID: InterfaceCaptureID) -> Bool {
-            latestSourceCaptureID == captureID
-        }
-
-        mutating func synchronize(
-            to generation: Observation.StoreOwner.DeliveryGeneration,
-            clearingSource: Bool = false
-        ) -> Bool {
-            guard generation > self.generation else { return false }
-            self.generation = generation
-            nextOrder = 1
-            pending.removeAll(keepingCapacity: true)
-            if clearingSource {
-                latestSourceCaptureID = nil
-            }
-            return true
-        }
-
-        mutating func enqueue(
-            _ delivery: PendingDelivery,
-            currentCommitOrder: UInt64
-        ) -> DeliveryEnqueueResult {
-            guard delivery.delivery.token.generation >= generation else {
-                return .superseded
-            }
-            _ = synchronize(to: delivery.delivery.token.generation)
-            guard delivery.delivery.token.order >= nextOrder else {
-                return .superseded
-            }
-            pending[delivery.delivery.token.order] = delivery
-
-            var contiguous: [ReadyDelivery] = []
-            while let next = pending.removeValue(forKey: nextOrder) {
-                contiguous.append(ReadyDelivery(
-                    pending: next,
-                    reattachesLiveCapture: nextOrder == currentCommitOrder
-                        && next.sourceObservation.captureID == latestSourceCaptureID
-                ))
-                nextOrder += 1
-            }
-            return .ready(contiguous)
-        }
-    }
-
-    enum DeliveryEnqueueResult {
-        case ready([ReadyDelivery])
-        case superseded
     }
 
     enum VisibleRefreshPhase {

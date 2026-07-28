@@ -47,7 +47,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
         let boundary = ScriptedSettlementBoundary(
             baseline: baseline,
             changed: changed,
-            history: .events([.snapshot(changed)])
+            history: .events([.replayed(changed)])
         )
         let executor = Settlement.Executor(boundary: boundary)
 
@@ -69,7 +69,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
             baseline: baseline,
             changed: changed,
             settling: reading.settled,
-            history: .events([.snapshot(changed)]),
+            history: .events([.replayed(changed)]),
             observationOnlyEvidence: true,
             longRunningObservationEffects: true
         )
@@ -194,7 +194,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
             baseline: baseline,
             changed: changed,
             settling: reading.settled,
-            history: .events([.snapshot(changed)]),
+            history: .events([.replayed(changed)]),
             observationOnlyEvidence: true,
             finalizationGate: gate
         )
@@ -232,7 +232,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
             baseline: baseline,
             changed: changed,
             settling: reading.settled,
-            history: .events([.snapshot(changed)]),
+            history: .events([.replayed(changed)]),
             observationOnlyEvidence: true,
             viewportExit: .failed(.originUnavailable)
         )
@@ -262,7 +262,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
             baseline: baseline,
             changed: stale,
             settling: currentReading.settled,
-            history: .events([.snapshot(stale), .snapshot(current)]),
+            history: .events([.replayed(stale), .replayed(current)]),
             captureScenario: .invalidateOnce(current: current)
         )
 
@@ -284,7 +284,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
             baseline: baseline,
             changed: stale,
             settling: currentReading.settled,
-            history: .events([.snapshot(stale), .snapshot(current)]),
+            history: .events([.replayed(stale), .replayed(current)]),
             captureScenario: .invalidateTwice(current: current)
         )
 
@@ -303,7 +303,7 @@ final class SettlementExecutionTests: SemanticObservationStreamTestCase {
         let boundary = ScriptedSettlementBoundary(
             baseline: baseline,
             changed: changed,
-            history: .events([.snapshot(changed)]),
+            history: .events([.replayed(changed)]),
             publishesAfterDisarm: true
         )
 
@@ -716,14 +716,14 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
     /// settle. A boundary that stopped at the change would be scripting a tree
     /// that was still moving when the run ended.
     private func observeChangedThenQuiet(into sink: Settlement.ExecutionSink) {
-        sink.observe(.snapshot(changed))
+        sink.observe(.read(changed, changed.derivedTick))
         observeQuietReading(into: sink)
     }
 
     /// Delivers `changed`, then the quiet reading that follows it.
     private func observeReadingPair(changed: Observation.SnapshotEvent) {
         guard let sink = lock.withLock({ state.sink }) else { return }
-        sink.observe(.snapshot(changed))
+        sink.observe(.read(changed, changed.derivedTick))
         observeQuietReading(into: sink)
     }
 
@@ -731,7 +731,7 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
     private func observeQuietReading(into sink: Settlement.ExecutionSink? = nil) {
         guard let settling,
               let sink = sink ?? lock.withLock({ state.sink }) else { return }
-        sink.observe(.snapshot(settling))
+        sink.observe(.read(settling, settling.derivedTick))
     }
 
     func events(since moment: Observation.Moment) async -> Observation.EventsSince {
@@ -858,7 +858,7 @@ private final class ScriptedSettlementBoundary: SettlementExecutionBoundary, @un
             record(.observationEffectsJoined)
         }
         if publishesAfterDisarm {
-            sink?.observe(.snapshot(changed))
+            sink?.observe(.read(changed, changed.derivedTick))
             sink?.observeReadiness(.established(
                 observationBoundary: .including(changed.moment)
             ))

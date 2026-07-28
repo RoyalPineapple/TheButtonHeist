@@ -124,7 +124,7 @@ variables:
 func testCheckoutCompletes() {
     runHeistSync("Checkout.pay", recordResult: .always, to: resultsURL) {
         Activate(.label("Pay"))
-            .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
+            .expect(.elementsChanged([.appeared(.label("Payment Complete"))]))
     }
 }
 ```
@@ -249,15 +249,15 @@ reveal, element inflation, and live geometry through the runtime pipeline.
 
 ```swift
 CustomAction("Archive", on: .label("Message"))
-    .expect(.changed(.elements()))
+    .expect(.elementsChanged())
 
 TypeText("Bruschetta", into: .label("Search Items"))
     .expect(.exists(.element(.label("Search Items"), .value("Bruschetta"))))
 
 Increment(.label("Quantity"))
-    .expect(.changed(.elements([
+    .expect(.elementsChanged([
         .updated(.label("Quantity"), .value(before: "2", after: "3"))
-    ])))
+    ]))
 
 Increment(.label("Volume"))
     .until(.exists(.element(label: "Volume", value: "100")), timeout: 5)
@@ -304,7 +304,7 @@ Activate(.element(
 All checks must pass in order. Contradictory checks are valid source but cannot
 match any element in practice.
 
-Use `.changed(.elements([.updated(...)]))` for explicit same-screen property
+Use `.elementsChanged([.updated(...)])` for explicit same-screen property
 change assertions in action expectations. The first argument is an
 `AccessibilityTarget` and the second argument is the property change matcher.
 Use `before:` and `after:` when the
@@ -319,8 +319,8 @@ over `.updated(...)`. Keep `.updated(...)` for changes that should remain
 same-screen element deltas.
 
 The element assertion stays explicit inside the declaration:
-`.changed(.elements([.updated(.label("Quantity"),
-.value(before: "2", after: "3"))]))`.
+`.elementsChanged([.updated(.label("Quantity"),
+.value(before: "2", after: "3"))])`.
 
 Standalone `WaitFor(...)` uses the same evaluator as action expectations.
 Current-tree `exists` and `missing` may pass immediately. `appeared`,
@@ -348,11 +348,11 @@ scrollability through
 `.scrollable(true)`, custom actions through `.actions(.init(...))`, or explicit
 `.matching(...)` check chains.
 
-Use `.changed(.screen())` for navigation. Assertions inside `.screen([...])`
+Use `.screenChanged()` for navigation. Assertions inside `.screen([...])`
 are destination current-tree assertions:
-`.changed(.screen([.exists(.label("Receipt"))]))`. The type system exposes only
+`.screenChanged([.exists(.label("Receipt"))])`. The type system exposes only
 `.exists(...)` and `.missing(...)` in that list; lifecycle and update
-assertions are available only inside `.changed(.elements([...]))`.
+assertions are available only inside `.elementsChanged([...])`.
 
 `ForEach` has two durable authoring forms:
 
@@ -452,8 +452,8 @@ is the same target concept: `Activate(.label("Pay"))` is shorthand for an
 `WaitFor(.label("Pay"))` is shorthand for `.exists(.label("Pay"))`. Change
 declarations are never elided. Write `.exists(.container(...))` for current
 container presence, `.within(container:..., target)` for descendant scope,
-`.changed(.screen())` for navigation, and
-`.changed(.elements([.appeared(...)]))` for lifecycle evidence.
+`.screenChanged()` for navigation, and
+`.elementsChanged([.appeared(...)])` for lifecycle evidence.
 
 There is no runtime Swift execution and no hidden fallback: a local Swift file
 either compiles to an admissible `HeistPlan` ahead of time or the command fails.

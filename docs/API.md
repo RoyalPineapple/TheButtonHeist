@@ -570,10 +570,11 @@ available.
 
 ### Expectations
 
-Expectations use the concrete `AccessibilityPredicate` root and
-`ChangeDeclaration` assertion types. At the root, the valid forms are `exists`,
-`missing`, `changed`, and `announcement`. `changed` has exactly one
-scope and always carries an `assertions` array:
+Expectations use the concrete `AccessibilityPredicate` root with the
+`ScreenPredicate` and `ElementAssertion` types. At the root, the valid forms are
+`exists`, `missing`, `screenChanged`, `elementsChanged`, and `announcement`.
+`screenChanged` carries an optional `match`; `elementsChanged` carries an
+`assertions` array:
 
 ```json
 {"type":"changed","scope":"screen","assertions":[{"type":"exists","target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Receipt"}}]}}]}

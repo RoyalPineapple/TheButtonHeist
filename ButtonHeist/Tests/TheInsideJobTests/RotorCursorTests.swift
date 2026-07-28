@@ -154,7 +154,7 @@ final class RotorCursorTests: XCTestCase {
         )
         try expectSuccessfulStep(hostHeistId: hostHeistId, rotorName: "Items")
 
-        await vault.semanticObservationStream.requireScreenReplacement()
+        await vault.semanticObservationStream.discardCurrentObservation()
         await installRotorScreen(
             hostHeistId: hostHeistId,
             hostObject: host,

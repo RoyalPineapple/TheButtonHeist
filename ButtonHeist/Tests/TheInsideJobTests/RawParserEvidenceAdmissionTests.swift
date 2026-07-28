@@ -29,7 +29,7 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
         XCTAssertEqual(brains.vault.interfaceTree.interfaceHash, committedHash)
         XCTAssertNotNil(brains.vault.interfaceTree.findElement(heistId: "committed"))
         XCTAssertNil(brains.vault.interfaceTree.findElement(heistId: "raw"))
-        let retainedAfterRefresh = await stream.latestCommittedEvent()
+        let retainedAfterRefresh = await stream.latestReadEvent()
         XCTAssertEqual(retainedAfterRefresh, committedEvent)
 
         let diagnostic = observation(label: "Diagnostic", heistId: "diagnostic")
@@ -42,7 +42,7 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
         XCTAssertEqual(brains.vault.interfaceTree.interfaceHash, committedHash)
         XCTAssertNotNil(brains.vault.interfaceTree.findElement(heistId: "committed"))
         XCTAssertNil(brains.vault.interfaceTree.findElement(heistId: "diagnostic"))
-        let retainedAfterDiagnostic = await stream.latestCommittedEvent()
+        let retainedAfterDiagnostic = await stream.latestReadEvent()
         XCTAssertEqual(retainedAfterDiagnostic, committedEvent)
     }
 
@@ -63,7 +63,7 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
 
         XCTAssertNotNil(event.moment)
         XCTAssertNotNil(brains.vault.interfaceTree.findElement(heistId: "raw"))
-        let committedEvent = await stream.latestCommittedEvent()
+        let committedEvent = await stream.latestReadEvent()
         XCTAssertEqual(committedEvent, event)
     }
 

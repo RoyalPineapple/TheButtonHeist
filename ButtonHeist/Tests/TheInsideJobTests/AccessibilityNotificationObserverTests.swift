@@ -805,7 +805,7 @@ final class SettledObservationInvalidationTests: ButtonHeistObservationTestCase 
     }
 
     private func committedScopedScreenChangedCursor() async -> UInt64 {
-        await brains.vault.semanticObservationStream.committedScopedScreenChangedSequence()
+        await brains.vault.semanticObservationStream.readScopedScreenChangedSequence()
     }
 }
 

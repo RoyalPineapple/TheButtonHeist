@@ -16,6 +16,26 @@ struct CanonicalAccessibilityPredicateTests {
         )
     }
 
+    /// A scope decides which key carries the authored meaning, so the other one
+    /// is not a spare field to ignore. Admitting both and reading one accepts a
+    /// document and silently drops what it asked for.
+    @Test("a changed predicate rejects the key belonging to the other scope")
+    func changedScopeRejectsForeignKeys() throws {
+        let screenWithAssertions = Data(#"""
+        {"type":"changed","scope":"screen","assertions":[{"type":"exists","target":{"checks":[]}}]}
+        """#.utf8)
+        #expect(throws: (any Error).self) {
+            try JSONDecoder().decode(AccessibilityPredicate.self, from: screenWithAssertions)
+        }
+
+        let elementsWithMatch = Data(#"""
+        {"type":"changed","scope":"elements","assertions":[],"match":{"mode":"exact","value":"Settings"}}
+        """#.utf8)
+        #expect(throws: (any Error).self) {
+            try JSONDecoder().decode(AccessibilityPredicate.self, from: elementsWithMatch)
+        }
+    }
+
     @Test("elements JSON uses one canonical target and assertion language")
     func elementsJSON() throws {
         let predicate = AccessibilityPredicate.elementsChanged([

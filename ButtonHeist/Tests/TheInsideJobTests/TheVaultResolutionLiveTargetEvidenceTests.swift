@@ -15,7 +15,7 @@ extension TheVaultResolutionTests {
             frame: AccessibilityRect(CGRect(x: 0, y: 900, width: 240, height: 80)),
             customActions: [.init(name: "Archive")]
         )
-        await bagman.installObservationForTesting(InterfaceObservation.makeForTests(
+        await vault.installObservationForTesting(InterfaceObservation.makeForTests(
             tree: InterfaceTree(
                 elements: [:],
                 containers: [
@@ -30,7 +30,7 @@ extension TheVaultResolutionTests {
             liveCapture: LiveCapture.makeForTests()
         ))
 
-        let result = bagman.resolveTarget(try resolvedTarget(
+        let result = vault.resolveTarget(try resolvedTarget(
             .container(.identifier("actions"))
         ))
         switch result {
@@ -46,7 +46,7 @@ extension TheVaultResolutionTests {
     func testContainerTargetResolutionReportsStructuredFacts() async throws {
         let primaryPath = TreePath([0, 1])
         let secondaryPath = TreePath([0, 2])
-        await bagman.installObservationForTesting(InterfaceObservation.makeForTests(
+        await vault.installObservationForTesting(InterfaceObservation.makeForTests(
             tree: InterfaceTree(
                 elements: [:],
                 containers: [
@@ -77,7 +77,7 @@ extension TheVaultResolutionTests {
             .type(.semanticGroup),
             .semantic(.label("Actions"))
         )
-        let ambiguous = bagman.resolveTarget(try resolvedTarget(
+        let ambiguous = vault.resolveTarget(try resolvedTarget(
             .container(predicate)
         ))
         guard case .ambiguous(let facts) = ambiguous else {
@@ -95,7 +95,7 @@ extension TheVaultResolutionTests {
         XCTAssertTrue(ambiguous.diagnostics.contains("container target is ambiguous across 2 containers"))
         XCTAssertFalse(ambiguous.diagnostics.contains("containerName"))
 
-        let outOfRange = bagman.resolveTarget(try resolvedTarget(
+        let outOfRange = vault.resolveTarget(try resolvedTarget(
             .container(predicate, ordinal: 3)
         ))
         guard case .notFound(let notFoundFacts) = outOfRange else {
@@ -112,15 +112,15 @@ extension TheVaultResolutionTests {
     func testGeneratedConcreteTargetUsesMinimumPredicateSelector() async throws {
         let selected = element(label: "Mode", value: "A", traits: [.button, .selected])
         let other = element(label: "Mode", value: "B", traits: [.button, .selected])
-        await bagman.installObservationForTesting(InterfaceObservation.makeForTests(elements: [
+        await vault.installObservationForTesting(InterfaceObservation.makeForTests(elements: [
             (selected, "mode_a"),
             (other, "mode_b"),
         ]))
 
-        let treeElement = try XCTUnwrap(bagman.interfaceElement(heistId: "mode_a"))
+        let treeElement = try XCTUnwrap(vault.interfaceElement(heistId: "mode_a"))
 
         XCTAssertEqual(
-            bagman.minimumUniqueTarget(for: treeElement),
+            vault.minimumUniqueTarget(for: treeElement),
             AccessibilityTarget.element(
                 .label("Mode"),
                 .traits([.button]),
@@ -147,7 +147,7 @@ extension TheVaultResolutionTests {
         let object = UIAccessibilityElement(accessibilityContainer: NSObject())
         object.accessibilityFrame = sourceFrame
         object.accessibilityActivationPoint = sourcePoint
-        await bagman.installObservationForTesting(InterfaceObservation.makeForTests(
+        await vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [(currentElement, "quantity_1")],
             objects: ["quantity_1": object]
         ))
@@ -161,13 +161,13 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(matcher.checks, [.identifier(.exact("quantity_stepper"))])
         XCTAssertNil(ordinal)
 
-        guard let resolved = bagman.resolveTarget(try resolvedTarget(executableTarget)).resolvedElement else {
+        guard let resolved = vault.resolveTarget(try resolvedTarget(executableTarget)).resolvedElement else {
             XCTFail("Expected semantic replay selector to resolve against current observation")
             return
         }
         XCTAssertEqual(resolved.heistId, "quantity_1")
 
-        guard case .resolved(let liveTarget) = bagman.resolveLiveActionTarget(for: resolved) else {
+        guard case .resolved(let liveTarget) = vault.resolveLiveActionTarget(for: resolved) else {
             XCTFail("Expected current accessibility capture to provide action geometry")
             return
         }
@@ -193,7 +193,7 @@ extension TheVaultResolutionTests {
         let liveObject = UIAccessibilityElement(accessibilityContainer: NSObject())
         liveObject.accessibilityFrame = staleFrame
         liveObject.accessibilityActivationPoint = stalePoint
-        await bagman.installObservationForTesting(InterfaceObservation.makeForTests(
+        await vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [(settledElement, "rotor_host")],
             objects: ["rotor_host": liveObject]
         ))
@@ -208,21 +208,21 @@ extension TheVaultResolutionTests {
             activationPoint: freshPoint,
             customRotors: [.init(name: "Errors")]
         )
-        bagman.observeInterface(InterfaceObservation.makeForTests(
+        vault.observeInterface(InterfaceObservation.makeForTests(
             elements: [(freshElement, "rotor_host")],
             objects: ["rotor_host": liveObject]
         ))
 
         let target = literalTarget(ResolvedElementPredicate.identifier("rotor_host"))
-        let settled = try XCTUnwrap(bagman.resolveTarget(target).resolvedElement)
+        let settled = try XCTUnwrap(vault.resolveTarget(target).resolvedElement)
         XCTAssertEqual(settled.element.shape.frame, staleFrame)
         XCTAssertEqual(settled.element.bhResolvedActivationPoint, stalePoint)
 
-        let visible = try XCTUnwrap(bagman.resolveVisibleTarget(target).resolvedElement)
+        let visible = try XCTUnwrap(vault.resolveVisibleTarget(target).resolvedElement)
         XCTAssertEqual(visible.element.shape.frame, staleFrame)
         XCTAssertEqual(visible.element.bhResolvedActivationPoint, stalePoint)
 
-        guard case .resolved(let liveTarget) = bagman.resolveLiveActionTarget(for: settled) else {
+        guard case .resolved(let liveTarget) = vault.resolveLiveActionTarget(for: settled) else {
             return XCTFail("Expected fresh live action target")
         }
         XCTAssertEqual(liveTarget.frame, freshFrame)
@@ -240,13 +240,13 @@ extension TheVaultResolutionTests {
             traits: .adjustable,
             frame: settledFrame
         )
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(
+        await vault.semanticObservationStream.commitVisibleObservationForTesting(
             InterfaceObservation.makeForTests(elements: [(settledElement, committedId)])
         )
         let target = try resolvedTarget(
             AccessibilityTarget.element(.label("Shared Control"), traits: [.adjustable])
         )
-        let semanticTarget = try XCTUnwrap(bagman.resolveVisibleTarget(target).resolvedElement)
+        let semanticTarget = try XCTUnwrap(vault.resolveVisibleTarget(target).resolvedElement)
 
         let rawObject = NSObject()
         let rawFrame = CGRect(x: 80, y: 160, width: 180, height: 52)
@@ -255,24 +255,24 @@ extension TheVaultResolutionTests {
             traits: .adjustable,
             frame: rawFrame
         )
-        bagman.observeInterface(InterfaceObservation.makeForTests(
+        vault.observeInterface(InterfaceObservation.makeForTests(
             elements: [(rawElement, rawId)],
             objects: [rawId: rawObject]
         ))
 
-        XCTAssertNil(bagman.interfaceElement(heistId: rawId))
-        XCTAssertEqual(bagman.resolveVisibleTarget(target).resolvedElement?.heistId, committedId)
-        XCTAssertNil(bagman.liveInterfaceElement(heistId: committedId))
-        guard case .objectUnavailable = bagman.resolveLiveActionTarget(for: semanticTarget) else {
+        XCTAssertNil(vault.interfaceElement(heistId: rawId))
+        XCTAssertEqual(vault.resolveVisibleTarget(target).resolvedElement?.heistId, committedId)
+        XCTAssertNil(vault.liveInterfaceElement(heistId: committedId))
+        guard case .objectUnavailable = vault.resolveLiveActionTarget(for: semanticTarget) else {
             return XCTFail("Expected different-HeistId raw evidence to remain non-dispatchable")
         }
 
-        bagman.observeInterface(InterfaceObservation.makeForTests(
+        vault.observeInterface(InterfaceObservation.makeForTests(
             elements: [(rawElement, committedId)],
             objects: [committedId: rawObject]
         ))
 
-        guard case .resolved(let liveTarget) = bagman.resolveLiveActionTarget(for: semanticTarget) else {
+        guard case .resolved(let liveTarget) = vault.resolveLiveActionTarget(for: semanticTarget) else {
             return XCTFail("Expected committed identity to admit raw live evidence")
         }
         XCTAssertTrue(liveTarget.object === rawObject)
@@ -288,10 +288,10 @@ extension TheVaultResolutionTests {
             objects: ["save": liveObject]
         )
 
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(observation)
+        await vault.semanticObservationStream.commitVisibleObservationForTesting(observation)
 
-        XCTAssertNotNil(bagman.liveObject(for: "save"))
-        XCTAssertNil(LiveCapture.makeForTests(snapshot: bagman.interfaceTree.viewportCapture).object(for: "save"))
+        XCTAssertNotNil(vault.liveObject(for: "save"))
+        XCTAssertNil(LiveCapture.makeForTests(snapshot: vault.interfaceTree.viewportCapture).object(for: "save"))
     }
 
     func testLiveContainerTargetAcquiresFreshGeometryFromLatestLiveCapture() async throws {
@@ -328,7 +328,7 @@ extension TheVaultResolutionTests {
                 firstResponderHeistId: nil,
             )
         )
-        await bagman.semanticObservationStream.commitDiscoveryObservationForTesting(settledObservationScreen)
+        await vault.semanticObservationStream.commitDiscoveryObservationForTesting(settledObservationScreen)
         let liveScreen = InterfaceObservation.makeForTests(
             tree: InterfaceTree(
                 elements: [:],
@@ -350,15 +350,15 @@ extension TheVaultResolutionTests {
                 firstResponderHeistId: nil,
             )
         )
-        bagman.observeInterface(liveScreen)
+        vault.observeInterface(liveScreen)
 
-        let resolved = bagman.resolveTarget(try resolvedTarget(
+        let resolved = vault.resolveTarget(try resolvedTarget(
             .container(.identifier("actions"))
         ))
         guard case .resolved(.container(let semanticTarget)) = resolved else {
             return XCTFail("Expected semantic container, got \(resolved.diagnostics)")
         }
-        guard case .resolved(let liveTarget) = bagman.resolveLiveContainerTarget(for: semanticTarget) else {
+        guard case .resolved(let liveTarget) = vault.resolveLiveContainerTarget(for: semanticTarget) else {
             return XCTFail("Expected fresh live container target")
         }
 
@@ -381,15 +381,15 @@ extension TheVaultResolutionTests {
                 ),
             ]
         )
-        await bagman.semanticObservationStream.commitDiscoveryObservationForTesting(discovery)
+        await vault.semanticObservationStream.commitDiscoveryObservationForTesting(discovery)
 
         let refreshedBottom = InterfaceObservation.makeForTests(elements: [(customRotors, "custom_rotors")])
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(refreshedBottom)
+        await vault.semanticObservationStream.commitVisibleObservationForTesting(refreshedBottom)
 
-        XCTAssertEqual(bagman.viewportElementIDs, ["custom_rotors"])
-        XCTAssertEqual(bagman.interfaceElementIDs, ["controls_demo", "custom_rotors"])
+        XCTAssertEqual(vault.viewportElementIDs, ["custom_rotors"])
+        XCTAssertEqual(vault.interfaceElementIDs, ["controls_demo", "custom_rotors"])
         XCTAssertEqual(
-            bagman.resolveTarget(try resolvedTarget(
+            vault.resolveTarget(try resolvedTarget(
                 AccessibilityTarget.element(.label("Controls Demo"), traits: [.button])
             )).resolvedElement?.heistId,
             "controls_demo"
@@ -409,16 +409,16 @@ extension TheVaultResolutionTests {
                 ),
             ]
         )
-        await bagman.semanticObservationStream.commitDiscoveryObservationForTesting(discovery)
+        await vault.semanticObservationStream.commitDiscoveryObservationForTesting(discovery)
 
         let freshVisible = element(label: "Fresh Row", traits: .button)
         let refreshedTop = InterfaceObservation.makeForTests(elements: [(freshVisible, "shared_row")])
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(refreshedTop)
+        await vault.semanticObservationStream.commitVisibleObservationForTesting(refreshedTop)
 
-        XCTAssertEqual(bagman.viewportElementIDs, ["shared_row"])
-        XCTAssertEqual(bagman.interfaceElementIDs, ["shared_row"])
-        XCTAssertEqual(bagman.interfaceElement(heistId: "shared_row")?.element.label, "Fresh Row")
-        XCTAssertNil(bagman.interfaceElement(heistId: "bottom_row"))
+        XCTAssertEqual(vault.viewportElementIDs, ["shared_row"])
+        XCTAssertEqual(vault.interfaceElementIDs, ["shared_row"])
+        XCTAssertEqual(vault.interfaceElement(heistId: "shared_row")?.element.label, "Fresh Row")
+        XCTAssertNil(vault.interfaceElement(heistId: "bottom_row"))
     }
 
     func testViewportUpdateDropsDiscoveryMemoryWhenScreenIdChangesDespiteSharedVisibleElement() async {
@@ -439,7 +439,7 @@ extension TheVaultResolutionTests {
             ]
         )
         XCTAssertEqual(previousDiscovery.tree.id, "controls_demo")
-        await bagman.semanticObservationStream.commitDiscoveryObservationForTesting(previousDiscovery)
+        await vault.semanticObservationStream.commitDiscoveryObservationForTesting(previousDiscovery)
 
         let currentHeader = element(label: "ButtonHeist Demo", traits: .header)
         let sharedCurrentAction = element(label: "Shared Action", traits: .button)
@@ -448,12 +448,12 @@ extension TheVaultResolutionTests {
             (sharedCurrentAction, "shared_action"),
         ])
         XCTAssertEqual(currentVisible.tree.id, "buttonheist_demo")
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(currentVisible)
+        await vault.semanticObservationStream.commitVisibleObservationForTesting(currentVisible)
 
-        XCTAssertEqual(bagman.viewportElementIDs, ["buttonheist_demo", "shared_action"])
-        XCTAssertEqual(bagman.interfaceElementIDs, ["buttonheist_demo", "shared_action"])
-        XCTAssertNil(bagman.interfaceElement(heistId: "controls_demo"))
-        XCTAssertNil(bagman.interfaceElement(heistId: "stale_offscreen"))
+        XCTAssertEqual(vault.viewportElementIDs, ["buttonheist_demo", "shared_action"])
+        XCTAssertEqual(vault.interfaceElementIDs, ["buttonheist_demo", "shared_action"])
+        XCTAssertNil(vault.interfaceElement(heistId: "controls_demo"))
+        XCTAssertNil(vault.interfaceElement(heistId: "stale_offscreen"))
     }
 
 }

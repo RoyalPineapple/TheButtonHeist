@@ -55,9 +55,9 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
         let history = await vault.semanticObservationStream.storeOwner.readLog {
             $0.events(since: discovery.moment)
         }
-        let visibleMoment = await vault.semanticObservationStream.latestCommittedObservationMoment(scope: .visible)
-        let discoveryMoment = await vault.semanticObservationStream.latestCommittedObservationMoment(scope: .discovery)
-        XCTAssertEqual(history, .events([.snapshot(visible)]))
+        let visibleMoment = await vault.semanticObservationStream.latestReadObservationMoment(scope: .visible)
+        let discoveryMoment = await vault.semanticObservationStream.latestReadObservationMoment(scope: .discovery)
+        XCTAssertEqual(history, .events([.replayed(visible)]))
         XCTAssertEqual(visibleMoment, visible.moment)
         XCTAssertEqual(discoveryMoment, discovery.moment)
     }
@@ -133,7 +133,7 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
         let history = await vault.semanticObservationStream.storeOwner.readLog {
             $0.events(since: initialDiscovery.moment)
         }
-        XCTAssertEqual(history, .events([.snapshot(replacementVisible), .snapshot(replacementDiscovery)]))
+        XCTAssertEqual(history, .events([.replayed(replacementVisible), .replayed(replacementDiscovery)]))
         guard case .sameGeneration(let previous) = replacementDiscovery.transition else {
             return XCTFail("Expected the skipped discovery scope to cross the retained screen boundary")
         }
