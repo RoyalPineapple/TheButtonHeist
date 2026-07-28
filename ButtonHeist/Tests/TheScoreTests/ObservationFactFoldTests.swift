@@ -1,102 +1,129 @@
-import AccessibilitySnapshotModel
 import ButtonHeistTestSupport
-import Foundation
+import Testing
 import ThePlans
-import XCTest
 @testable import TheScore
 
-/// Predicate state is a fold over ordered observation facts.
-///
-/// An expectation is determined by its authored predicates and the facts it has
-/// seen, so the same log always folds to the same answer.
-final class ObservationFactFoldTests: XCTestCase {
-
-    /// Folding a log is feeding its facts one at a time. If these ever diverge,
-    /// the fold is carrying state the step-by-step path does not.
-    func testFoldingALogMatchesFeedingTheSameFactsOneAtATime() throws {
-        let facts: [Observation.Fact] = [
-            .elementsChanged(interface(["Cart"])),
-            .elementsChanged(interface(["Pay"])),
+@Suite struct ObservationFactFoldTests {
+    @Test func `same authored events produce the same result at every prefix`() throws {
+        let predicates = [
+            try resolved(.exists(.label("Pay"))),
+            try resolved(.screenChanged("Checkout")),
+        ]
+        let events: [Observation.Event] = [
+            .elementsChanged(snapshot(["Cart"])),
+            .elementsChanged(snapshot(["Pay"])),
+            .screenChanged(ScreenFacts(idAfter: "Checkout")),
             .noChange,
         ]
+        var first = Expectation(predicates)
+        var second = Expectation(predicates)
 
-        var stepped = try Expectation([exists("Pay")])
-        for fact in facts {
-            stepped = stepped.folding([fact])
+        for event in events {
+            #expect(first.evaluate(event) == second.evaluate(event))
         }
-
-        XCTAssertEqual(try Expectation([exists("Pay")]).folding(facts), stepped)
-        XCTAssertTrue(stepped.isMet)
+        #expect(first.result == .satisfied)
+        #expect(second.result == .satisfied)
     }
 
-    func testScreenReplacementFactsDrainInAuthoredOrder() {
-        let facts = screenReplacementFacts(arriving: interface(["Checkout"]))
+    @Test func `a consumed prefix does not alter a fresh replay`() throws {
+        let predicates = [try resolved(.exists(.label("Pay")))]
+        var prefix = Expectation(predicates)
+        var replay = Expectation(predicates)
 
-        guard case .elementsChanged(let departure) = facts[0],
-              case .screenChanged(let screen) = facts[1],
-              case .elementsChanged(let arrival) = facts[2]
+        #expect(prefix.evaluate(
+            .elementsChanged(snapshot(["Cart"]))
+        ) != .satisfied)
+        #expect(replay.evaluate(
+            .elementsChanged(snapshot(["Cart"]))
+        ) == prefix.result)
+        #expect(replay.evaluate(
+            .elementsChanged(snapshot(["Pay"]))
+        ) == .satisfied)
+    }
+
+    @Test func `screen replacement is authored as departure boundary arrival`() {
+        let events = screenReplacementEvents(
+            arriving: snapshot(["Checkout"])
+        )
+
+        guard case .elementsChanged(let departure) = events[0],
+              case .screenChanged(let screen) = events[1],
+              case .elementsChanged(let arrival) = events[2]
         else {
-            return XCTFail("Expected departure, screen boundary, and arrival facts")
+            Issue.record("Expected departure, screen boundary, and arrival")
+            return
         }
-        XCTAssertTrue(departure.interface.projectedElements.isEmpty)
-        XCTAssertEqual(screen, ScreenFacts(idAfter: "Checkout"))
-        XCTAssertEqual(arrival, interface(["Checkout"]))
+        #expect(departure.interface.projectedElements.isEmpty)
+        #expect(screen == ScreenFacts(idAfter: "Checkout"))
+        #expect(arrival == snapshot(["Checkout"]))
     }
 
-    /// The empty departure answers `missing`; only the arrival answers `exists`.
-    func testAppearedDrainsAcrossAReplacementBecauseItsLegsReadDifferentFacts() throws {
-        let facts = screenReplacementFacts(arriving: interface(["Checkout"]))
-        let appeared = try changed(.appeared(.label("Checkout")))
+    @Test func `appearance consumes departure then arrival across a screen boundary`() throws {
+        let predicate = try resolved(.elementsChanged([
+            .appeared(.label("Checkout")),
+        ]))
+        let events = screenReplacementEvents(
+            arriving: snapshot(["Checkout"])
+        )
+        var expectation = Expectation([predicate])
 
-        XCTAssertTrue(Expectation([appeared]).folding(facts + [.noChange]).isMet)
-        XCTAssertFalse(
-            Expectation([appeared]).folding(facts.dropLast() + [.noChange]).isMet,
-            "Without the arrival tick the after leg has nothing to drain on"
+        #expect(expectation.evaluate(events[0]) == .waiting(predicate.description))
+        #expect(expectation.evaluate(events[1]) == .waiting(predicate.description))
+        #expect(expectation.evaluate(events[2]) == .satisfied)
+    }
+
+    @Test func `disappearance consumes presence then departure across a screen boundary`() throws {
+        let predicate = try resolved(.elementsChanged([
+            .disappeared(.label("Library")),
+        ]))
+        var expectation = Expectation([predicate])
+
+        #expect(expectation.evaluate(
+            .elementsChanged(snapshot(["Library"]))
+        ) == .waiting(predicate.description))
+        #expect(expectation.evaluate(
+            .screenChanged(ScreenFacts(idAfter: "Checkout"))
+        ) == .waiting(predicate.description))
+        #expect(expectation.evaluate(
+            .elementsChanged(snapshot([]))
+        ) == .satisfied)
+    }
+
+    @Test func `no-change event is retained in authored order without answering other lanes`() throws {
+        let predicates = [
+            try resolved(.noChange),
+            try resolved(.notification("Saved")),
+        ]
+        var expectation = Expectation(predicates)
+
+        #expect(expectation.evaluate(
+            .notification(try #require(
+                Observation.Notification(text: "Saved", element: nil)
+            ))
+        ) != .satisfied)
+        #expect(expectation.evaluate(.noChange) == .satisfied)
+    }
+
+    private func resolved(
+        _ predicate: AccessibilityPredicate
+    ) throws -> Observation.Event.Predicate {
+        try predicate.resolve(in: .empty)
+    }
+
+    private func snapshot(_ labels: [String]) -> Observation.Snapshot {
+        Observation.Snapshot(
+            interface: makeTestInterface(elements: labels.map {
+                makeTestHeistElement(description: $0, label: $0)
+            }),
+            context: .empty
         )
     }
 
-    func testRunsOfStillnessCoalesceIntoOneTick() {
-        var log = TickLog()
-        log.append(.elementsChanged(interface(["Cart"])))
-        log.append(.noChange)
-        log.append(.noChange)
-        log.append(contentsOf: [.noChange, .noChange])
-
-        XCTAssertEqual(
-            log.ticks,
-            [.elementsChanged(interface(["Cart"])), .noChange],
-            "A still tree restated is the same fact, so only the first is logged"
-        )
-
-        // Stillness withdrawn and regained is two facts, not one.
-        log.append(.elementsChanged(interface(["Cart", "Pay"])))
-        log.append(.noChange)
-        XCTAssertEqual(log.ticks.count, 4)
-    }
-
-    // MARK: - Helpers
-
-    private func exists(_ label: String) throws -> ResolvedAccessibilityPredicate {
-        try AccessibilityPredicate.exists(.label(label)).resolve(in: .empty)
-    }
-
-    private func changed(
-        _ assertions: ElementAssertion...
-    ) throws -> ResolvedAccessibilityPredicate {
-        try AccessibilityPredicate.elementsChanged(assertions).resolve(in: .empty)
-    }
-
-    private func interface(_ labels: [String]) -> AccessibilityTrace.Capture {
-        makeTestCapture(
-            elements: labels.map { makeTestHeistElement(description: $0, label: $0) }
-        )
-    }
-
-    private func screenReplacementFacts(
-        arriving: AccessibilityTrace.Capture
-    ) -> [Observation.Fact] {
+    private func screenReplacementEvents(
+        arriving: Observation.Snapshot
+    ) -> [Observation.Event] {
         [
-            .elementsChanged(.empty(at: Date(timeIntervalSince1970: 0))),
+            .elementsChanged(.empty(timestamp: arriving.interface.timestamp)),
             .screenChanged(ScreenFacts(idAfter: "Checkout")),
             .elementsChanged(arriving),
         ]
