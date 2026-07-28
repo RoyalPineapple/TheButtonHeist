@@ -98,7 +98,11 @@ import ThePlans
         ])
 
         #expect(interface.annotations.elements == [
-            InterfaceElementAnnotation(path: TreePath([0, 0]), actions: [.activate]),
+            InterfaceElementAnnotation(
+                path: TreePath([0, 0]),
+                actions: [.activate],
+                geometry: button.geometry
+            ),
         ])
         #expect(interface.annotations.containers == [
             InterfaceContainerAnnotation(path: TreePath([0]), containerName: "actions_group"),
@@ -111,7 +115,7 @@ import ThePlans
         #expect(traversalIndex == 0)
         #expect(element.usesDefaultActivationPoint)
         #expect(element.activationPoint == AccessibilityPoint(x: 50, y: 40))
-        #expect(interface.projectedElements.first?.actions == [.activate])
+        #expect(interface.projectedElements.first?.semantics.assertable.orderedActions == [.activate])
     }
 
     @Test func `interface fixture preserves explicit activation and normalizes unavailable evidence`() {

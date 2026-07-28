@@ -1,3 +1,4 @@
+import ButtonHeistTestSupport
 import XCTest
 import ThePlans
 @testable import TheScore
@@ -278,7 +279,7 @@ final class ElementPredicateTests: XCTestCase {
     }
 
     func testExplicitBroadStringMatchesLabelIdentifierAndValue() throws {
-        let element = HeistElement(
+        let element = makeTestHeistElement(
             description: "No results found",
             label: "No results found",
             value: "0 results",
@@ -302,13 +303,11 @@ final class ElementPredicateTests: XCTestCase {
     }
 
     func testIsEmptyStringMatchMatchesNilAndEmptyStrings() throws {
-        let valuedElement = HeistElement(
+        let valuedElement = makeTestHeistElement(
             description: "Delete",
             label: "Delete",
             value: "Discount",
-            identifier: nil,
             traits: [.button],
-            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
             actions: [.activate]
         )
 
@@ -323,10 +322,9 @@ final class ElementPredicateTests: XCTestCase {
     }
 
     func testSemanticSurfacePredicatesMatchHintActionsCustomContentAndRotors() throws {
-        let element = HeistElement(
+        let element = makeTestHeistElement(
             description: "Combo row",
             label: "Coke",
-            value: nil,
             identifier: "combo-choice-Coke",
             hint: "Double tap to edit",
             traits: [.staticText],
@@ -457,8 +455,8 @@ final class ElementPredicateTests: XCTestCase {
     }
 
     func testIdentifierExactMatch() {
-        let element = HeistElement(
-            description: "x", label: nil, value: nil,
+        let element = makeTestHeistElement(
+            description: "x", label: nil,
             identifier: "save_btn", traits: [],
             frameX: 0, frameY: 0, frameWidth: 0, frameHeight: 0, actions: []
         )
@@ -468,9 +466,9 @@ final class ElementPredicateTests: XCTestCase {
     }
 
     func testValueExactMatch() {
-        let element = HeistElement(
+        let element = makeTestHeistElement(
             description: "x", label: nil, value: "50%",
-            identifier: nil, traits: [],
+            traits: [],
             frameX: 0, frameY: 0, frameWidth: 0, frameHeight: 0, actions: []
         )
         XCTAssertTrue(element.matches(ResolvedElementPredicate.value("50%")))
@@ -495,7 +493,7 @@ final class ElementPredicateTests: XCTestCase {
     }
 
     func testCompoundPredicateAllFieldsExact() throws {
-        let element = HeistElement(
+        let element = makeTestHeistElement(
             description: "Dark Mode", label: "Dark Mode", value: "ON",
             identifier: "darkModeToggle", traits: [.button, .selected],
             frameX: 0, frameY: 0, frameWidth: 0, frameHeight: 0, actions: []

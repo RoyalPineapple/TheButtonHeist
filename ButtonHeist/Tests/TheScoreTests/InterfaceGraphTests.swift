@@ -21,14 +21,34 @@ final class InterfaceGraphTests: XCTestCase {
             .element(makeTestAccessibilityElement(third), traversalIndex: 1),
         ]
 
-        let graph = Interface(timestamp: Date(timeIntervalSince1970: 1), tree: tree).graph
+        let graph = try Interface(
+            timestamp: Date(timeIntervalSince1970: 1),
+            tree: tree,
+            annotations: InterfaceAnnotations(elements: [
+                InterfaceElementAnnotation(
+                    path: TreePath([0, 0]),
+                    actions: second.semantics.assertable.orderedActions,
+                    geometry: second.geometry
+                ),
+                InterfaceElementAnnotation(
+                    path: TreePath([0, 1, 0]),
+                    actions: first.semantics.assertable.orderedActions,
+                    geometry: first.geometry
+                ),
+                InterfaceElementAnnotation(
+                    path: TreePath([1]),
+                    actions: third.semantics.assertable.orderedActions,
+                    geometry: third.geometry
+                ),
+            ])
+        ).graph
 
         XCTAssertEqual(graph.elementsInTraversalOrder.map(\.path), [
             TreePath([0, 1, 0]),
             TreePath([1]),
             TreePath([0, 0]),
         ])
-        XCTAssertEqual(graph.elementsInTraversalOrder.map(\.projectedElement.label), [
+        XCTAssertEqual(graph.elementsInTraversalOrder.map(\.projectedElement.semantics.assertable.label), [
             "First",
             "Third",
             "Second",
@@ -77,10 +97,15 @@ final class InterfaceGraphTests: XCTestCase {
     }
 
     func testDuplicateAnnotationPathsRejected() {
-        let annotation = InterfaceElementAnnotation(path: TreePath([0]), actions: [.activate])
+        let element = makeElement(label: "Save")
+        let annotation = InterfaceElementAnnotation(
+            path: TreePath([0]),
+            actions: [.activate],
+            geometry: element.geometry
+        )
         XCTAssertThrowsError(try Interface(
             timestamp: Date(timeIntervalSince1970: 1),
-            tree: [.element(makeTestAccessibilityElement(makeElement(label: "Save")), traversalIndex: 0)],
+            tree: [.element(makeTestAccessibilityElement(element), traversalIndex: 0)],
             annotations: InterfaceAnnotations(elements: [annotation, annotation])
         )) { error in
             XCTAssertEqual(error as? InterfaceGraphValidationError, .duplicateElementAnnotationPath(TreePath([0])))
@@ -88,24 +113,29 @@ final class InterfaceGraphTests: XCTestCase {
     }
 
     func testAnnotationPathWithoutNodeRejected() {
+        let element = makeElement(label: "Save")
         XCTAssertThrowsError(try Interface(
             timestamp: Date(timeIntervalSince1970: 1),
-            tree: [.element(makeTestAccessibilityElement(makeElement(label: "Save")), traversalIndex: 0)],
+            tree: [.element(makeTestAccessibilityElement(element), traversalIndex: 0)],
             annotations: InterfaceAnnotations(elements: [
-                InterfaceElementAnnotation(path: TreePath([1]), actions: [.activate]),
+                InterfaceElementAnnotation(
+                    path: TreePath([1]),
+                    actions: [.activate],
+                    geometry: element.geometry
+                ),
             ])
         )) { error in
             XCTAssertEqual(error as? InterfaceGraphValidationError, .elementAnnotationForMissingPath(TreePath([1])))
         }
     }
 
-    func testAnnotationAndTraceIdentityLookupByPath() throws {
+    func testAnnotationAndObservationIdentityLookupByPath() throws {
         let save = makeElement(label: "Save")
         let cancel = makeElement(label: "Cancel")
         let savePath = TreePath([0])
         let cancelPath = TreePath([1])
-        let saveIdentity = TraceElementIdentity("save_button")
-        let cancelIdentity = TraceElementIdentity("cancel_button")
+        let saveIdentity = Observation.ElementIdentity("save_button")
+        let cancelIdentity = Observation.ElementIdentity("cancel_button")
 
         let graph = try Interface(
             timestamp: Date(timeIntervalSince1970: 1),
@@ -114,10 +144,18 @@ final class InterfaceGraphTests: XCTestCase {
                 .element(makeTestAccessibilityElement(cancel), traversalIndex: 1),
             ],
             annotations: InterfaceAnnotations(elements: [
-                InterfaceElementAnnotation(path: savePath, actions: [.activate]),
-                InterfaceElementAnnotation(path: cancelPath, actions: []),
+                InterfaceElementAnnotation(
+                    path: savePath,
+                    actions: [.activate],
+                    geometry: save.geometry
+                ),
+                InterfaceElementAnnotation(
+                    path: cancelPath,
+                    actions: [],
+                    geometry: cancel.geometry
+                ),
             ]),
-            traceIdentities: InterfaceTraceIdentities([
+            observationIdentities: InterfaceElementIdentities([
                 savePath: saveIdentity,
                 cancelPath: cancelIdentity,
             ])
@@ -126,12 +164,13 @@ final class InterfaceGraphTests: XCTestCase {
         let saveRecord = graph.elementsInTraversalOrder.first { $0.path == savePath }
         let cancelRecord = graph.elementsInTraversalOrder.first { $0.path == cancelPath }
         XCTAssertEqual(saveRecord?.annotation?.actions, [.activate])
-        XCTAssertEqual(saveRecord?.traceIdentity, saveIdentity)
-        XCTAssertEqual(cancelRecord?.traceIdentity, cancelIdentity)
+        XCTAssertEqual(saveRecord?.observationIdentity, saveIdentity)
+        XCTAssertEqual(cancelRecord?.observationIdentity, cancelIdentity)
     }
 
     func testElementPathIndexReusesPathDistinctCanonicalRecords() throws {
-        let duplicate = makeTestAccessibilityElement(makeElement(label: "Duplicate"))
+        let duplicateElement = makeElement(label: "Duplicate")
+        let duplicate = makeTestAccessibilityElement(duplicateElement)
         let firstPath = TreePath([0, 0])
         let secondPath = TreePath([0, 1])
         let graph = try Interface(
@@ -143,12 +182,20 @@ final class InterfaceGraphTests: XCTestCase {
                 ]),
             ],
             annotations: InterfaceAnnotations(elements: [
-                InterfaceElementAnnotation(path: firstPath, actions: [.activate]),
-                InterfaceElementAnnotation(path: secondPath, actions: [.custom("Archive")]),
+                InterfaceElementAnnotation(
+                    path: firstPath,
+                    actions: [.activate],
+                    geometry: duplicateElement.geometry
+                ),
+                InterfaceElementAnnotation(
+                    path: secondPath,
+                    actions: [.custom("Archive")],
+                    geometry: duplicateElement.geometry
+                ),
             ]),
-            traceIdentities: InterfaceTraceIdentities([
-                firstPath: TraceElementIdentity("duplicate_first"),
-                secondPath: TraceElementIdentity("duplicate_second"),
+            observationIdentities: InterfaceElementIdentities([
+                firstPath: Observation.ElementIdentity("duplicate_first"),
+                secondPath: Observation.ElementIdentity("duplicate_second"),
             ])
         ).graph
 
@@ -163,34 +210,39 @@ final class InterfaceGraphTests: XCTestCase {
         XCTAssertEqual(indexedNodes, [first, second])
         XCTAssertEqual(first.annotation?.actions, [.activate])
         XCTAssertEqual(second.annotation?.actions, [.custom("Archive")])
-        XCTAssertEqual(first.traceIdentity, TraceElementIdentity("duplicate_first"))
-        XCTAssertEqual(second.traceIdentity, TraceElementIdentity("duplicate_second"))
+        XCTAssertEqual(first.observationIdentity, Observation.ElementIdentity("duplicate_first"))
+        XCTAssertEqual(second.observationIdentity, Observation.ElementIdentity("duplicate_second"))
         XCTAssertNil(graph.element(at: TreePath([9])))
     }
 
-    func testTraceIdentityPathWithoutElementRejected() {
+    func testObservationIdentityPathWithoutElementRejected() {
         XCTAssertThrowsError(try Interface(
             timestamp: Date(timeIntervalSince1970: 1),
             tree: [
                 .container(makeTestAccessibilityContainer(type: .list), children: []),
             ],
-            traceIdentities: InterfaceTraceIdentities([
-                TreePath([0]): TraceElementIdentity("container_identity"),
+            observationIdentities: InterfaceElementIdentities([
+                TreePath([0]): Observation.ElementIdentity("container_identity"),
             ])
         )) { error in
-            XCTAssertEqual(error as? InterfaceGraphValidationError, .traceIdentityForContainerPath(TreePath([0])))
+            XCTAssertEqual(error as? InterfaceGraphValidationError, .observationIdentityForContainerPath(TreePath([0])))
         }
     }
 
     func testInterfaceDerivesCanonicalGraphProjection() throws {
         let path = TreePath([0])
+        let element = makeElement(label: "Save")
         let interface = try Interface(
             timestamp: Date(timeIntervalSince1970: 1),
             tree: [
-                .element(makeTestAccessibilityElement(makeElement(label: "Save")), traversalIndex: 0),
+                .element(makeTestAccessibilityElement(element), traversalIndex: 0),
             ],
             annotations: InterfaceAnnotations(elements: [
-                InterfaceElementAnnotation(path: path, actions: [.activate]),
+                InterfaceElementAnnotation(
+                    path: path,
+                    actions: [.activate],
+                    geometry: element.geometry
+                ),
             ])
         )
 
@@ -200,7 +252,7 @@ final class InterfaceGraphTests: XCTestCase {
         XCTAssertEqual(firstRead, secondRead)
         XCTAssertEqual(firstRead.node(at: path), interface.tree[0])
         XCTAssertEqual(firstRead.elementsInTraversalOrder.first?.annotation?.actions, [.activate])
-        XCTAssertEqual(interface.projectedElements.map(\.label), ["Save"])
+        XCTAssertEqual(interface.projectedElements.map(\.semantics.assertable.label), ["Save"])
     }
 
     func testProjectedInterfaceDerivesMetadataPathsFromTreeNodes() {
@@ -216,7 +268,8 @@ final class InterfaceGraphTests: XCTestCase {
             elementMetadata: { _, _, _ in
                 InterfaceElementProjectionMetadata(
                     actions: [.activate],
-                    traceIdentity: TraceElementIdentity("save_button")
+                    geometry: makeElement(label: "Save").geometry,
+                    observationIdentity: Observation.ElementIdentity("save_button")
                 )
             },
             containerMetadata: { _, _ in
@@ -228,19 +281,24 @@ final class InterfaceGraphTests: XCTestCase {
         let containerPath = TreePath([0])
         XCTAssertEqual(interface.annotations.elements.map(\.path), [elementPath])
         XCTAssertEqual(interface.annotations.containers.map(\.path), [containerPath])
-        XCTAssertEqual(interface.graph.element(at: elementPath)?.traceIdentity, TraceElementIdentity("save_button"))
-        XCTAssertEqual(interface.projectedElements.map(\.label), ["Save"])
+        XCTAssertEqual(interface.graph.element(at: elementPath)?.observationIdentity, Observation.ElementIdentity("save_button"))
+        XCTAssertEqual(interface.projectedElements.map(\.semantics.assertable.label), ["Save"])
     }
 
     func testDecodedInterfaceHasValidatedUsableGraph() throws {
         let path = TreePath([0])
+        let element = makeElement(label: "Save")
         let original = try Interface(
             timestamp: Date(timeIntervalSince1970: 1),
             tree: [
-                .element(makeTestAccessibilityElement(makeElement(label: "Save")), traversalIndex: 0),
+                .element(makeTestAccessibilityElement(element), traversalIndex: 0),
             ],
             annotations: InterfaceAnnotations(elements: [
-                InterfaceElementAnnotation(path: path, actions: [.activate]),
+                InterfaceElementAnnotation(
+                    path: path,
+                    actions: [.activate],
+                    geometry: element.geometry
+                ),
             ])
         )
 
@@ -254,13 +312,18 @@ final class InterfaceGraphTests: XCTestCase {
     }
 
     func testInterfaceDecodeRejectsInvalidGraphInput() throws {
+        let element = makeElement(label: "Save")
         let original = try Interface(
             timestamp: Date(timeIntervalSince1970: 1),
             tree: [
-                .element(makeTestAccessibilityElement(makeElement(label: "Save")), traversalIndex: 0),
+                .element(makeTestAccessibilityElement(element), traversalIndex: 0),
             ],
             annotations: InterfaceAnnotations(elements: [
-                InterfaceElementAnnotation(path: TreePath([0]), actions: [.activate]),
+                InterfaceElementAnnotation(
+                    path: TreePath([0]),
+                    actions: [.activate],
+                    geometry: element.geometry
+                ),
             ])
         )
         var payload = try XCTUnwrap(
@@ -285,15 +348,20 @@ final class InterfaceGraphTests: XCTestCase {
     }
 
     func testInterfaceConstructionValidatesPathIndexedEvidence() {
+        let element = makeElement(label: "Save")
         let tree: [AccessibilityHierarchy] = [
-            .element(makeTestAccessibilityElement(makeElement(label: "Save")), traversalIndex: 0),
+            .element(makeTestAccessibilityElement(element), traversalIndex: 0),
         ]
 
         XCTAssertThrowsError(try Interface(
             timestamp: Date(timeIntervalSince1970: 1),
             tree: tree,
             annotations: InterfaceAnnotations(elements: [
-                InterfaceElementAnnotation(path: TreePath([1]), actions: [.activate]),
+                InterfaceElementAnnotation(
+                    path: TreePath([1]),
+                    actions: [.activate],
+                    geometry: element.geometry
+                ),
             ])
         )) { error in
             XCTAssertEqual(
@@ -305,52 +373,46 @@ final class InterfaceGraphTests: XCTestCase {
         XCTAssertThrowsError(try Interface(
             timestamp: Date(timeIntervalSince1970: 1),
             tree: tree,
-            traceIdentities: InterfaceTraceIdentities([
-                TreePath([1]): TraceElementIdentity("missing_element"),
+            observationIdentities: InterfaceElementIdentities([
+                TreePath([1]): Observation.ElementIdentity("missing_element"),
             ])
         )) { error in
             XCTAssertEqual(
                 error as? InterfaceGraphValidationError,
-                .traceIdentityForMissingPath(TreePath([1]))
+                .observationIdentityForMissingPath(TreePath([1]))
             )
         }
     }
 
-    func testDerivedGraphAndTraceIdentityRemainOutsideWireAndEqualityContracts() throws {
+    func testDerivedGraphAndObservationIdentityRemainOutsideWireAndEqualityContracts() throws {
         let path = TreePath([0])
         let tree: [AccessibilityHierarchy] = [
             .element(makeTestAccessibilityElement(makeElement(label: "Save")), traversalIndex: 0),
         ]
         let plain = Interface(timestamp: Date(timeIntervalSince1970: 1), tree: tree)
-        let traced = try Interface(
+        let observed = try Interface(
             timestamp: Date(timeIntervalSince1970: 1),
             tree: tree,
-            traceIdentities: InterfaceTraceIdentities([
-                path: TraceElementIdentity("save_button"),
+            observationIdentities: InterfaceElementIdentities([
+                path: Observation.ElementIdentity("save_button"),
             ])
         )
 
-        XCTAssertEqual(traced, plain)
-        XCTAssertNotEqual(traced.graph, plain.graph)
-        XCTAssertEqual(try jsonObject(traced), try jsonObject(plain))
-        let payload = try jsonObject(traced)
+        XCTAssertEqual(observed, plain)
+        XCTAssertNotEqual(observed.graph, plain.graph)
+        XCTAssertEqual(try jsonObject(observed), try jsonObject(plain))
+        let payload = try jsonObject(observed)
         XCTAssertNil(payload["graph"])
-        XCTAssertNil(payload["traceIdentities"])
+        XCTAssertNil(payload["observationIdentities"])
 
-        let decoded = try JSONDecoder().decode(Interface.self, from: JSONEncoder().encode(traced))
+        let decoded = try JSONDecoder().decode(Interface.self, from: JSONEncoder().encode(observed))
         XCTAssertEqual(decoded.graph, plain.graph)
     }
 
     private func makeElement(label: String) -> HeistElement {
-        HeistElement(
+        makeTestHeistElement(
             description: label,
             label: label,
-            value: nil,
-            identifier: nil,
-            frameX: 0,
-            frameY: 0,
-            frameWidth: 100,
-            frameHeight: 44,
             activationPointEvidence: .defaultCenter(ScreenPoint(x: 50, y: 22)),
             actions: []
         )

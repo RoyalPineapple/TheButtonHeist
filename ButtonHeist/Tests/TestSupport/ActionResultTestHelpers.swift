@@ -2,32 +2,19 @@ import Foundation
 import ThePlans
 @testable import TheScore
 
-package func makeTestTraceEvidence(
-    _ trace: AccessibilityTrace,
-    completeness: AccessibilityTraceEvidence.Completeness
-) -> AccessibilityTraceEvidence {
-    guard let evidence = AccessibilityTraceEvidence(
-        trace: trace,
-        completeness: completeness
-    ) else {
-        preconditionFailure("test trace evidence requires a current capture")
-    }
-    return evidence
-}
-
 package enum HeistResultFixture {
     package static func actionResult(
         succeeded: Bool = true,
         payload: ActionResult.Payload = .activate,
         message: String? = nil,
         failureKind: ActionFailure.Kind? = nil,
-        traceEvidence: AccessibilityTraceEvidence? = nil,
+        observationEvidence: Observation.Evidence? = nil,
         subjectEvidence: ActionSubjectEvidence? = nil,
         activationTrace: ActivationTrace? = nil,
         screenActionHandler: ScreenActionHandlerName? = nil,
         timing: ActionPerformanceTiming? = nil
     ) -> ActionResult {
-        let observation = traceEvidence.map(ActionResultObservationEvidence.trace) ?? .none
+        let observation = observationEvidence.map(ActionResultObservationEvidence.observed) ?? .none
         if succeeded {
             if let activationTrace {
                 guard payload == .activate else {
@@ -352,104 +339,6 @@ package enum HeistResultFixture {
             category: result.outcome.failureKind == .elementNotFound ? .targetResolution : .action,
             contract: "action dispatch succeeds",
             observed: result.message ?? "action failed"
-        )
-    }
-}
-
-package extension AccessibilityTrace {
-    static func noChangeForTests(elementCount: Int) -> AccessibilityTrace {
-        TestActionResultTrace.noChange(elementCount: elementCount)
-    }
-
-    static func elementsChangedForTests(
-        elementCount: Int,
-        edits: ElementEdits
-    ) -> AccessibilityTrace {
-        TestActionResultTrace.elementsChanged(elementCount: elementCount, edits: edits)
-    }
-
-    static func screenChangedForTests(replacementInterface: Interface) -> AccessibilityTrace {
-        TestActionResultTrace.screenChanged(replacementInterface: replacementInterface)
-    }
-}
-
-private enum TestActionResultTrace {
-    static func noChange(elementCount: Int) -> AccessibilityTrace {
-        let interface = interface(elements: placeholders(count: elementCount))
-        return AccessibilityTrace(first: interface).appending(interface)
-    }
-
-    static func elementsChanged(elementCount: Int, edits: ElementEdits) -> AccessibilityTrace {
-        let before = interface(elements: beforeElements(for: edits, elementCount: elementCount))
-        let after = interface(elements: afterElements(for: edits, elementCount: elementCount))
-        if edits.isEmpty {
-            return AccessibilityTrace(first: before).appending(
-                before,
-                context: AccessibilityTrace.Context(keyboardVisible: true)
-            )
-        }
-        return AccessibilityTrace(first: before).appending(after)
-    }
-
-    static func screenChanged(replacementInterface: Interface) -> AccessibilityTrace {
-        AccessibilityTrace(
-            capture: AccessibilityTrace.Capture(
-                sequence: 1,
-                interface: interface(elements: []),
-                context: AccessibilityTrace.Context(screenId: "before")
-            )
-        ).appending(
-            replacementInterface,
-            context: AccessibilityTrace.Context(screenId: "after"),
-            transition: AccessibilityTrace.Transition(accessibilityNotifications: [
-                AccessibilityNotificationEvidence(
-                    sequence: 1,
-                    kind: .screenChanged,
-                    timestamp: Date(timeIntervalSince1970: 1),
-                    notificationData: .none,
-                    associatedElement: .none
-                ),
-            ])
-        )
-    }
-
-    private static func interface(elements: [HeistElement]) -> Interface {
-        makeTestInterface(elements: elements)
-    }
-
-    private static func beforeElements(for edits: ElementEdits, elementCount: Int) -> [HeistElement] {
-        padded(edits.removed + edits.updated.map(\.before), count: elementCount)
-    }
-
-    private static func afterElements(for edits: ElementEdits, elementCount: Int) -> [HeistElement] {
-        padded(edits.added + edits.updated.map(\.after), count: elementCount)
-    }
-
-    private static func padded(_ elements: [HeistElement], count: Int) -> [HeistElement] {
-        let missing = max(0, count - elements.count)
-        return elements + placeholders(count: missing, prefix: "__stable_")
-    }
-
-    private static func placeholders(count: Int, prefix: String = "__element_") -> [HeistElement] {
-        guard count > 0 else { return [] }
-        return (0..<count).map { placeholder(id: "\(prefix)\($0)", label: "Element \($0)") }
-    }
-
-    private static func placeholder(
-        id: String,
-        label: String,
-        value: String? = nil,
-        identifier: String? = nil,
-        hint: String? = nil,
-        traits: [HeistTrait] = [.button]
-    ) -> HeistElement {
-        makeTestHeistElement(
-            label: label,
-            value: value,
-            identifier: identifier,
-            hint: hint,
-            traits: traits,
-            actions: [.activate]
         )
     }
 }

@@ -79,9 +79,10 @@ extension WireTypeRoundTripTests {
         let result = ActionResult.success(
             payload: .activate,
             message: "activated",
-            observation: .settledTrace(
-                makeTestTraceEvidence(
-                    .noChangeForTests(elementCount: 0),
+            observation: .settled(
+                makeTestObservationEvidence(
+                    current: makeTestObservationSnapshot(elements: []),
+                    events: [.noChange],
                     completeness: .incomplete
                 ),
                 .settled(duration: 74)

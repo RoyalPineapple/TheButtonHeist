@@ -9,16 +9,28 @@ final class ActionSubjectEvidenceWireTests: XCTestCase {
             .predicate(ElementPredicate(label: "Delete", traits: [.button]))
             .resolve(in: .empty)
         let element = HeistElement(
-            description: "Delete",
-            label: "Delete",
-            value: nil,
-            identifier: "delete_button",
-            traits: [.button],
-            frameX: 10,
-            frameY: 20,
-            frameWidth: 100,
-            frameHeight: 44,
-            actions: [.activate]
+            semantics: HeistElement.Semantics(
+                spokenDescription: "Delete",
+                assertable: HeistElement.Semantics.AssertableProperties(
+                    label: "Delete",
+                    value: nil,
+                    identifier: "delete_button",
+                    traits: [.button],
+                    actions: [.activate]
+                ),
+                respondsToUserInteraction: true
+            ),
+            geometry: HeistElement.Geometry(
+                screen: .onscreen(
+                    frame: .available(ScreenRect(x: 10, y: 20, width: 100, height: 44)),
+                    activationPoint: .unavailable
+                ),
+                view: HeistElement.Geometry.ViewSpace(
+                    ownerPath: .root,
+                    frame: ViewRect(x: 10, y: 20, width: 100, height: 44),
+                    activationPoint: nil
+                )
+            )
         )
         let evidence = ActionSubjectEvidence(
             source: .resolvedSemanticTarget,
@@ -59,7 +71,10 @@ final class ActionSubjectEvidenceWireTests: XCTestCase {
         XCTAssertEqual(try checks[1].string("kind"), "traits")
         XCTAssertEqual(try checks[1].strings("values"), ["button"])
         let encodedElement = try subjectEvidence.object("element")
-        XCTAssertEqual(try encodedElement.string("identifier"), "delete_button")
+        let semantics = try encodedElement.object("semantics")
+        let assertable = try semantics.object("assertable")
+        XCTAssertEqual(try assertable.string("identifier"), "delete_button")
+        _ = try encodedElement.object("geometry")
         XCTAssertNoThrow(try encodedElement.assertMissing("heistId"), "subject evidence must not expose runtime ids")
 
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
@@ -99,16 +114,21 @@ final class ActionSubjectEvidenceWireTests: XCTestCase {
           "phase": "resolvedBeforeDispatch",
           "target": { "checks": [{ "kind": "label", "match": { "mode": "exact", "value": "Delete" } }] },
           "element": {
-            "description": "Delete",
-            "label": "Delete",
-            "traits": ["button"],
-            "frameX": 0,
-            "frameY": 0,
-            "frameWidth": 100,
-            "frameHeight": 44,
-            "activationPointEvidence": {"source": "unavailable"},
-            "respondsToUserInteraction": true,
-            "actions": ["activate"]
+            "semantics": {
+              "spokenDescription": "Delete",
+              "assertable": {
+                "label": "Delete",
+                "traits": ["button"],
+                "customContent": [],
+                "rotors": [],
+                "actions": ["activate"]
+              },
+              "respondsToUserInteraction": true
+            },
+            "geometry": {
+              "screen": {"visibility": "offscreen"},
+              "view": {"ownerPath": {"indices": []}}
+            }
           }
         }
         """.utf8)
@@ -139,16 +159,21 @@ final class ActionSubjectEvidenceWireTests: XCTestCase {
           "phase": "resolvedBeforeDispatch",
           "target": { "checks": [{ "kind": "label", "match": { "mode": "exact", "value": "Delete" } }] },
           "element": {
-            "description": "Delete",
-            "label": "Delete",
-            "traits": ["button"],
-            "frameX": 0,
-            "frameY": 0,
-            "frameWidth": 100,
-            "frameHeight": 44,
-            "activationPointEvidence": {"source": "unavailable"},
-            "respondsToUserInteraction": true,
-            "actions": ["activate"]
+            "semantics": {
+              "spokenDescription": "Delete",
+              "assertable": {
+                "label": "Delete",
+                "traits": ["button"],
+                "customContent": [],
+                "rotors": [],
+                "actions": ["activate"]
+              },
+              "respondsToUserInteraction": true
+            },
+            "geometry": {
+              "screen": {"visibility": "offscreen"},
+              "view": {"ownerPath": {"indices": []}}
+            }
           },
           "resolution": {"origin": "visible", "adjustments": []},
           "heistId": "old-runtime-id"

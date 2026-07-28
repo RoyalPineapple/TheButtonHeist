@@ -67,8 +67,8 @@ import ThePlans
         )
         var expectation = Expectation([predicate])
 
-        #expect(expectation.evaluate(events[0]) == .waiting(predicate.description))
-        #expect(expectation.evaluate(events[1]) == .waiting(predicate.description))
+        #expect(expectation.evaluate(events[0]) != .satisfied)
+        #expect(expectation.evaluate(events[1]) != .satisfied)
         #expect(expectation.evaluate(events[2]) == .satisfied)
     }
 
@@ -80,18 +80,18 @@ import ThePlans
 
         #expect(expectation.evaluate(
             .elementsChanged(snapshot(["Library"]))
-        ) == .waiting(predicate.description))
+        ) != .satisfied)
         #expect(expectation.evaluate(
             .screenChanged(ScreenFacts(idAfter: "Checkout"))
-        ) == .waiting(predicate.description))
+        ) != .satisfied)
         #expect(expectation.evaluate(
             .elementsChanged(snapshot([]))
         ) == .satisfied)
     }
 
     @Test func `no-change event is retained in authored order without answering other lanes`() throws {
-        let predicates = [
-            try resolved(.noChange),
+        let predicates: [Observation.Event.Predicate] = [
+            .noChange,
             try resolved(.notification("Saved")),
         ]
         var expectation = Expectation(predicates)

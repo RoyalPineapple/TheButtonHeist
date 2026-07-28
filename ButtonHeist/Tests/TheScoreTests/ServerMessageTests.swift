@@ -61,10 +61,9 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testInterfaceEncodeDecode() throws {
-        let element = HeistElement(
+        let element = makeTestHeistElement(
             description: "Button",
             label: "Submit",
-            value: nil,
             identifier: "submit_btn",
             frameX: 10, frameY: 20, frameWidth: 100, frameHeight: 44,
             actions: [.activate]
@@ -82,7 +81,7 @@ final class ServerMessageTests: XCTestCase {
 
         if case .interface(let decodedPayload) = decoded {
             XCTAssertEqual(decodedPayload.projectedElements.count, 1)
-            XCTAssertEqual(decodedPayload.projectedElements[0].label, "Submit")
+            XCTAssertEqual(decodedPayload.projectedElements[0].semantics.assertable.label, "Submit")
         } else {
             XCTFail("Expected interface, got \(decoded)")
         }
@@ -198,10 +197,9 @@ final class ServerMessageTests: XCTestCase {
         XCTAssertEqual(serverError.message, "oops")
     }
     func testScreenEncodeDecode() throws {
-        let element = HeistElement(
+        let element = makeTestHeistElement(
             description: "Pay",
             label: "Pay",
-            value: nil,
             identifier: "pay_button",
             traits: [.button],
             frameX: 20,
@@ -232,8 +230,12 @@ final class ServerMessageTests: XCTestCase {
             XCTAssertEqual(decodedPayload.width, 390)
             XCTAssertEqual(decodedPayload.height, 844)
             XCTAssertEqual(decodedPayload.interface?.projectedElements, [element])
-            XCTAssertEqual(decodedPayload.interface?.projectedElements.first?.frameX, 20)
-            XCTAssertEqual(decodedPayload.interface?.projectedElements.first?.activationPointX, 100)
+            let decodedElement = try XCTUnwrap(decodedPayload.interface?.projectedElements.first)
+            guard case .onscreen(let frame, let activationPoint) = decodedElement.geometry.screen else {
+                return XCTFail("Expected onscreen geometry")
+            }
+            XCTAssertEqual(frame.rect?.x.value, 20)
+            XCTAssertEqual(activationPoint.point?.x, 100)
         } else {
             XCTFail("Expected screen, got \(decoded)")
         }

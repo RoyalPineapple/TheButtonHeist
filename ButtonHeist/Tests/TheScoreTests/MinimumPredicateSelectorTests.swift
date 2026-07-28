@@ -1,3 +1,4 @@
+import ButtonHeistTestSupport
 import XCTest
 import ThePlans
 @testable import TheScore
@@ -275,18 +276,16 @@ final class MinimumPredicateSelectorTests: XCTestCase {
         frameWidth: Double = 100,
         frameHeight: Double = 44
     ) -> HeistElement {
-        HeistElement(
+        makeTestHeistElement(
             description: label ?? "element",
             label: label,
             value: value,
             identifier: identifier,
             traits: traits,
-            frameEvidence: ScreenFrameEvidence(CGRect(
-                x: frameX,
-                y: frameY,
-                width: frameWidth,
-                height: frameHeight
-            )),
+            frameX: frameX,
+            frameY: frameY,
+            frameWidth: frameWidth,
+            frameHeight: frameHeight,
             actions: []
         )
     }

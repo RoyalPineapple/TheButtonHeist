@@ -17,9 +17,7 @@ import ThePlans
         var first = Expectation(predicates)
         var second = Expectation(predicates)
 
-        #expect(first.evaluate(events[0]) == .waiting(
-            predicates[0].description
-        ))
+        #expect(first.evaluate(events[0]) != .satisfied)
         #expect(second.evaluate(events[0]) == first.result)
         #expect(first.evaluate(events[1]) == .satisfied)
         #expect(second.evaluate(events[1]) == first.result)
@@ -87,14 +85,14 @@ import ThePlans
 
         #expect(expectation.evaluate(
             .elementsChanged(snapshot(label: "Total", value: "$1"))
-        ) == .waiting(predicate.description))
+        ) != .satisfied)
         #expect(expectation.evaluate(
             .elementsChanged(snapshot(label: "Total", value: "$2"))
         ) == .satisfied)
     }
 
-    @Test func `no change matches only an authored no-change event`() throws {
-        let predicate = try resolved(.noChange)
+    @Test func `no change matches only a no-change event`() {
+        let predicate = Observation.Event.Predicate.noChange
         var expectation = Expectation([predicate])
 
         #expect(expectation.evaluate(

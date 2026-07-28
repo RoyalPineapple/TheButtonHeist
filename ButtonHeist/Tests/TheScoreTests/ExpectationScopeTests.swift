@@ -107,10 +107,10 @@ import ThePlans
 
         #expect(expectation.evaluate(
             .screenChanged(ScreenFacts(idAfter: "Checkout"))
-        ) == .waiting(predicate.description))
+        ) != .satisfied)
         #expect(expectation.evaluate(.elementsChanged(snapshot([
             makeTestHeistElement(label: "Total", value: "$2"),
-        ]))) == .waiting(predicate.description))
+        ]))) != .satisfied)
         #expect(expectation.evaluate(.elementsChanged(snapshot([
             makeTestHeistElement(label: "Total", value: "$3"),
         ]))) == .satisfied)

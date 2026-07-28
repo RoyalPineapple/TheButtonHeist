@@ -82,29 +82,46 @@ import TheScore
         let notApplicable = HeistReport.project(result: try HeistResult(steps: [], durationMs: 0))
         #expect(notApplicable.accessibilityChange == .notApplicable)
 
-        let incomplete = report(trace: makeTestTrace(before: before, after: after), completeness: .incomplete)
+        let incomplete = report(
+            evidence: evidence(before: before, after: after, completeness: .incomplete)
+        )
         #expect(incomplete.accessibilityChange == .incomplete)
 
-        let unchanged = report(trace: makeTestTrace(before: before, after: before), completeness: .complete)
+        let unchanged = report(
+            evidence: evidence(before: before, after: before, completeness: .complete)
+        )
         #expect(unchanged.accessibilityChange == .unchanged)
 
-        let changed = report(trace: makeTestTrace(before: before, after: after), completeness: .complete)
-        guard case .changed(let trace) = changed.accessibilityChange else {
+        let changed = report(
+            evidence: evidence(before: before, after: after, completeness: .complete)
+        )
+        guard case .changed(let evidence) = changed.accessibilityChange else {
             Issue.record("Expected a complete accessibility change")
             return
         }
-        #expect(trace.captures.first?.interface == before)
-        #expect(trace.captures.last?.interface == after)
+        #expect(evidence.baseline?.interface == before)
+        #expect(evidence.current?.interface == after)
     }
 
-    private func report(
-        trace: AccessibilityTrace,
-        completeness: AccessibilityTraceEvidence.Completeness
-    ) -> HeistReport {
-        let evidence = makeTestTraceEvidence(trace, completeness: completeness)
+    private func report(evidence: Observation.Evidence) -> HeistReport {
         let action = HeistResultFixture.action(
-            result: HeistResultFixture.actionResult(traceEvidence: evidence)
+            result: HeistResultFixture.actionResult(observationEvidence: evidence)
         )
         return HeistReport.project(result: HeistResultFixture.result(steps: [action], durationMs: 0))
+    }
+
+    private func evidence(
+        before: Interface,
+        after: Interface,
+        completeness: Observation.Evidence.Completeness
+    ) -> Observation.Evidence {
+        let baseline = Observation.Snapshot(interface: before, context: .empty)
+        let current = Observation.Snapshot(interface: after, context: .empty)
+        return makeTestObservationEvidence(
+            baseline: baseline,
+            current: current,
+            events: before == after ? [.noChange] : [.elementsChanged(current)],
+            completeness: completeness
+        )
     }
 }

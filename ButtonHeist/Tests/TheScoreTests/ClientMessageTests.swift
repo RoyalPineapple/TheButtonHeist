@@ -738,13 +738,10 @@ extension HeistElement {
         label: String? = nil,
         traits: [HeistTrait] = []
     ) -> HeistElement {
-        HeistElement(
+        makeTestHeistElement(
             description: label ?? "stub",
             label: label,
-            value: nil,
-            identifier: nil,
             traits: traits,
-            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
             actions: []
         )
     }

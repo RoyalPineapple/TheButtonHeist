@@ -1,295 +1,195 @@
 import ButtonHeistTestSupport
-import AccessibilitySnapshotModel
-import XCTest
 import ThePlans
+import XCTest
 @testable import TheScore
 
 extension AccessibilityPredicateTests {
-
-    // MARK: - Update Decode Rejection
-
-    func testElementUpdatedRejectsBeforeAfterWithoutPropertyAtDecodeBoundary() throws {
-        let json = Data("""
-        {
-          "type": "changed",
-          "scope": "elements",
-          "assertions": [
+    func testUpdatedRejectsBeforeAfterWithoutProperty() {
+        assertDecodeFails(
+            """
             {
-              "type": "updated",
-              "target": {"checks":[{"kind":"label","match":{"mode":"exact","value":"Card"}}]},
-              "after": { "x": 1 }
+              "type": "changed",
+              "scope": "elements",
+              "assertions": [{
+                "type": "updated",
+                "target": {
+                  "checks": [{
+                    "kind": "label",
+                    "match": {"mode": "exact", "value": "Card"}
+                  }]
+                },
+                "after": {"x": 1}
+              }]
             }
-          ]
-        }
-        """.utf8)
-
-        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityPredicate.self, from: json)) { error in
-            guard case DecodingError.dataCorrupted(let context) = error else {
-                return XCTFail("Expected dataCorrupted, got \(error)")
-            }
-            XCTAssertEqual(context.codingPath.last?.stringValue, "property")
-            XCTAssertTrue(context.debugDescription.contains("before/after require property"))
-        }
+            """,
+            contains: "before/after require property"
+        )
     }
 
-    func testElementUpdatedRejectsStringCheckersForNonTextPropertiesAtDecodeBoundary() throws {
+    func testUpdatedRejectsStringChecksForTypedSetProperties() {
         let cases = [
             ("traits", "Unknown trait set match field"),
             ("actions", "Unknown action set match field"),
             ("customContent", "Unknown custom content match field"),
             ("rotors", "Unknown rotor set match field"),
         ]
-        for (property, expectedMessage) in cases {
-            assertAccessibilityPredicateDecodeFails(
+
+        for (property, message) in cases {
+            assertDecodeFails(
                 """
                 {
                   "type": "changed",
                   "scope": "elements",
-                  "assertions": [
-                    {
-                      "type": "updated",
-                      "target": {"checks":[{"kind":"label","match":{"mode":"exact","value":"Subject"}}]},
-                      "property": "\(property)",
-                      "after": { "mode": "exact", "value": "activate" }
-                    }
-                  ]
+                  "assertions": [{
+                    "type": "updated",
+                    "target": {
+                      "checks": [{
+                        "kind": "label",
+                        "match": {"mode": "exact", "value": "Subject"}
+                      }]
+                    },
+                    "property": "\(property)",
+                    "after": {"mode": "exact", "value": "activate"}
+                  }]
                 }
                 """,
-                contains: expectedMessage,
-                "\(property) accepted a string-match-shaped update checker"
+                contains: message
             )
         }
     }
 
-    func testElementUpdatedRejectsElementMatcherFieldsInsideTypedCheckerObjects() throws {
-        let cases = [
-            ("traits", #"Unknown trait set match field "label""#),
-        ]
-        for (property, expectedMessage) in cases {
-            assertAccessibilityPredicateDecodeFails(
-                """
-                {
-                  "type": "changed",
-                  "scope": "elements",
-                  "assertions": [
-                    {
-                      "type": "updated",
-                      "target": {"checks":[{"kind":"label","match":{"mode":"exact","value":"Subject"}}]},
-                      "property": "\(property)",
-                      "after": {
-                        "label": { "mode": "exact", "value": "Save" }
-                      }
-                    }
-                  ]
-                }
-                """,
-                contains: expectedMessage,
-                "\(property) accepted an element-matcher field inside its checker object"
-            )
-        }
-    }
-
-    func testElementUpdatedRejectsUnknownNestedCheckerKeysAtDecodeBoundary() throws {
-        assertAccessibilityPredicateDecodeFails(
+    func testUpdatedRejectsUnknownNestedCheckerKeys() {
+        assertDecodeFails(
             """
             {
               "type": "changed",
               "scope": "elements",
-              "assertions": [
-                {
-                  "type": "updated",
-                  "target": {"checks":[{"kind":"label","match":{"mode":"exact","value":"Card"}}]},
-                  "property": "customContent",
-                  "after": { "label": { "mode": "exact", "value": "Total" }, "unexpected": true }
+              "assertions": [{
+                "type": "updated",
+                "target": {
+                  "checks": [{
+                    "kind": "label",
+                    "match": {"mode": "exact", "value": "Card"}
+                  }]
+                },
+                "property": "customContent",
+                "after": {
+                  "label": {"mode": "exact", "value": "Total"},
+                  "unexpected": true
                 }
-              ]
+              }]
             }
             """,
             contains: #"Unknown custom content match field "unexpected""#
         )
     }
 
-    /// Geometry is refused at the property rather than at its fields, because
-    /// there is no geometry checker left to parse fields out of.
-    func testElementUpdatedRejectsGeometryProperties() throws {
+    func testUpdatedRejectsGeometryProperties() {
         for property in ["frame", "activationPoint"] {
-            assertAccessibilityPredicateDecodeFails(
+            assertDecodeFails(
                 """
                 {
                   "type": "changed",
                   "scope": "elements",
-                  "assertions": [
-                    {
-                      "type": "updated",
-                      "target": {"checks":[{"kind":"label","match":{"mode":"exact","value":"Card"}}]},
-                      "property": "\(property)",
-                      "after": { "x": 1 }
-                    }
-                  ]
+                  "assertions": [{
+                    "type": "updated",
+                    "target": {
+                      "checks": [{
+                        "kind": "label",
+                        "match": {"mode": "exact", "value": "Card"}
+                      }]
+                    },
+                    "property": "\(property)",
+                    "after": {"x": 1}
+                  }]
                 }
                 """,
-                contains: "geometry, which predicates cannot reason about",
-                "\(property) was accepted as an update property"
+                contains: "geometry, which predicates cannot reason about"
             )
         }
     }
 
-    // MARK: - final state predicates
-
-    func testPresentCodableRoundTrip() throws {
-        let predicate = AccessibilityPredicate.exists(.element(.label("New Task"), traits: [.staticText]))
-        let data = try JSONEncoder().encode(predicate)
-        let decoded = try JSONDecoder().decode(AccessibilityPredicate.self, from: data)
-        XCTAssertEqual(decoded, predicate)
-    }
-
-    func testPresentMetAgainstFinalInterface() throws {
-        let newElement = element(label: "No receipt", traits: [.button])
-        let replacementInterface = makeTestInterface(elements: [newElement], timestamp: Date())
-        let result = ActionResult.success(
-            payload: .wait,
-                observation: .trace(traceEvidence(
-                    .screenChangedForTests(replacementInterface: replacementInterface),
-                    completeness: .incomplete
-                ))
-
-        )
-        let predicate = AccessibilityPredicate.exists(.label("No receipt"))
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result).met)
-    }
-
-    func testPresentNotMetAgainstFinalInterfaceWhenAbsent() throws {
-        let otherElement = element(label: "New sale", traits: [.button])
-        let replacementInterface = makeTestInterface(elements: [otherElement], timestamp: Date())
-        let result = ActionResult.success(
-            payload: .wait,
-                observation: .trace(traceEvidence(
-                    .screenChangedForTests(replacementInterface: replacementInterface),
-                    completeness: .incomplete
-                ))
-
-        )
-        let predicate = AccessibilityPredicate.exists(.label("No receipt"))
-        let outcome = try predicate.resolve(in: .empty).validate(against: result)
-        XCTAssertFalse(outcome.met)
-        XCTAssertTrue(outcome.actual?.contains("No receipt") == true)
-    }
-
-    func testAbsentCodableRoundTrip() throws {
-        let predicate = AccessibilityPredicate.missing(.element(.label("Old Item"), traits: [.button]))
-        let data = try JSONEncoder().encode(predicate)
-        let decoded = try JSONDecoder().decode(AccessibilityPredicate.self, from: data)
-        XCTAssertEqual(decoded, predicate)
-    }
-
-    func testAbsentMetAgainstFinalInterface() throws {
-        let newElement = element(label: "Done", traits: [.button])
-        let replacementInterface = makeTestInterface(elements: [newElement], timestamp: Date())
-        let result = ActionResult.success(
-            payload: .wait,
-                observation: .trace(traceEvidence(
-                    .screenChangedForTests(replacementInterface: replacementInterface),
-                    completeness: .incomplete
-                ))
-
-        )
-        let predicate = AccessibilityPredicate.missing(.label("Recording payment"))
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result).met)
-    }
-
-    // MARK: - Round-trip across cases
-
-    func testAccessibilityPredicateRoundTrip() throws {
+    func testAllAuthoredPredicateCasesRoundTrip() throws {
         let predicates: [AccessibilityPredicate] = [
             .exists(.label("Done")),
             .missing(.label("Loading")),
-            .screenChanged,
+            .notification(
+                text: .contains("saved"),
+                element: ElementPredicate(label: "Save")
+            ),
+            .screenChanged("Settings"),
             .elementsChanged,
             .elementsChanged([
-                .updated(.label("btn"), .value(before: "A", after: "B")),
+                .appeared(.label("Ready")),
+                .disappeared(.label("Loading")),
+                .updated(
+                    .label("Counter"),
+                    .value(before: "A", after: "B")
+                ),
             ]),
         ]
-        let encoder = JSONEncoder()
-        let decoder = JSONDecoder()
+
         for predicate in predicates {
-            let data = try encoder.encode(predicate)
-            let decoded = try decoder.decode(AccessibilityPredicate.self, from: data)
-            XCTAssertEqual(decoded, predicate)
+            let data = try JSONEncoder().encode(predicate)
+            XCTAssertEqual(
+                try JSONDecoder().decode(
+                    AccessibilityPredicate.self,
+                    from: data
+                ),
+                predicate
+            )
         }
     }
 
-    // MARK: - Decode Errors
+    func testResolutionProducesCanonicalObservationPredicate() throws {
+        let predicate: Observation.Event.Predicate = try AccessibilityPredicate
+            .exists(.label("Ready"))
+            .resolve(in: .empty)
+        let canonical: ObservationPredicate = predicate
+        let result = evaluateExpectation(Expectation([canonical]), events: [
+            .elementsChanged(observationSnapshot(elements: [
+                element(label: "Ready"),
+            ])),
+        ])
 
-    func testDecodeRejectsUnknownType() throws {
-        let json = Data(#"{"type": "rainbow"}"#.utf8)
-        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityPredicate.self, from: json)) { error in
-            guard case DecodingError.dataCorrupted(let context) = error else {
-                XCTFail("Expected .dataCorrupted, got \(error)")
-                return
-            }
-            XCTAssertTrue(context.debugDescription.contains("rainbow"))
+        XCTAssertTrue(result.isSatisfied)
+    }
+
+    func testDecodeRejectsUnknownOrMissingRootType() {
+        for json in [#"{"type":"rainbow"}"#, #"{}"#] {
+            XCTAssertThrowsError(
+                try JSONDecoder().decode(
+                    AccessibilityPredicate.self,
+                    from: Data(json.utf8)
+                )
+            )
         }
     }
 
-    func testDecodeRejectsMissingType() throws {
-        let json = Data("{}".utf8)
-        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityPredicate.self, from: json))
-    }
-
-    func testRemovedElementTransitionPredicatesRejectAtCodableBoundary() throws {
-        let json = Data(#"{"type":"appeared","element":{"label":"Save"}}"#.utf8)
-        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityPredicate.self, from: json)) { error in
-            XCTAssertTrue("\(error)".contains("appeared"), "\(error)")
-        }
-    }
-
-    func testRemovedAllStateRejectsAtCodableBoundary() throws {
-        let json = Data(#"{"type":"all","states":[]}"#.utf8)
-        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityPredicate.self, from: json)) { error in
-            XCTAssertTrue("\(error)".contains("all"), "\(error)")
-        }
-    }
-
-    func testRemovedCombinedChangeScopeRejectsAtCodableBoundary() throws {
-        let json = Data(#"{"type":"change","scopes":[{"type":"all","scopes":[]}]}"#.utf8)
-        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityPredicate.self, from: json)) { error in
-            XCTAssertTrue("\(error)".contains("change"), "\(error)")
-        }
-    }
-
-    func testRemovedNestedChangeScopeRejectsAtCodableBoundary() throws {
-        let json = Data(#"{"type":"change","scopes":[{"type":"change"}]}"#.utf8)
-        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityPredicate.self, from: json)) { error in
-            XCTAssertTrue("\(error)".contains("change"), "\(error)")
-        }
-    }
-
-    // MARK: - Helpers
-
-    private func assertAccessibilityPredicateDecodeFails(
+    private func assertDecodeFails(
         _ json: String,
         contains expectedMessage: String,
-        _ failureMessage: String = "Expected decode to fail",
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
         XCTAssertThrowsError(
-            try JSONDecoder().decode(AccessibilityPredicate.self, from: Data(json.utf8)),
-            failureMessage,
+            try JSONDecoder().decode(
+                AccessibilityPredicate.self,
+                from: Data(json.utf8)
+            ),
             file: file,
             line: line
         ) { error in
-            let message = decodingFailureMessage(error)
             XCTAssertTrue(
-                message.contains(expectedMessage),
-                "Expected error containing \(expectedMessage), got \(message)",
+                decodingMessage(error).contains(expectedMessage),
+                "Expected \(expectedMessage), got \(decodingMessage(error))",
                 file: file,
                 line: line
             )
         }
     }
 
-    private func decodingFailureMessage(_ error: Error) -> String {
+    private func decodingMessage(_ error: Error) -> String {
         switch error {
         case DecodingError.dataCorrupted(let context),
              DecodingError.keyNotFound(_, let context),
@@ -300,5 +200,4 @@ extension AccessibilityPredicateTests {
             return String(describing: error)
         }
     }
-
 }

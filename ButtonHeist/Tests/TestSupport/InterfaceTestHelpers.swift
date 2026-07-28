@@ -62,27 +62,38 @@ package func makeTestInterface(
     makeTestInterface(nodes: elements.map(TestInterfaceNode.element), timestamp: timestamp)
 }
 
-/// A reading of these elements, as a tick carries it.
-///
-/// A tick holds the whole capture, so tests that only care about the tree say
-/// so here rather than restating the sequencing at every call.
-package func makeTestCapture(
+/// A canonical semantic snapshot containing these elements.
+package func makeTestObservationSnapshot(
     elements: [HeistElement],
     timestamp: Date = Date(timeIntervalSince1970: 0)
-) -> AccessibilityTrace.Capture {
-    AccessibilityTrace.Capture(
-        sequence: 1,
-        interface: makeTestInterface(elements: elements, timestamp: timestamp)
+) -> Observation.Snapshot {
+    Observation.Snapshot(
+        interface: makeTestInterface(elements: elements, timestamp: timestamp),
+        context: .empty
     )
 }
 
-package func makeTestCapture(
+package func makeTestObservationSnapshot(
     nodes: [TestInterfaceNode],
     timestamp: Date = Date(timeIntervalSince1970: 0)
-) -> AccessibilityTrace.Capture {
-    AccessibilityTrace.Capture(
-        sequence: 1,
-        interface: makeTestInterface(nodes: nodes, timestamp: timestamp)
+) -> Observation.Snapshot {
+    Observation.Snapshot(
+        interface: makeTestInterface(nodes: nodes, timestamp: timestamp),
+        context: .empty
+    )
+}
+
+package func makeTestObservationEvidence(
+    baseline: Observation.Snapshot? = nil,
+    current: Observation.Snapshot? = nil,
+    events: [Observation.Event] = [],
+    completeness: Observation.Evidence.Completeness = .complete
+) -> Observation.Evidence {
+    Observation.Evidence(
+        baseline: baseline,
+        current: current,
+        events: events,
+        completeness: completeness
     )
 }
 
@@ -97,13 +108,16 @@ package func makeTestInterface(
     func convert(_ node: TestInterfaceNode, path: TreePath) -> AccessibilityHierarchy {
         let element: AccessibilityElement
         let actions: [ElementAction]
+        let geometry: HeistElement.Geometry
         switch node {
         case .element(let heistElement):
             element = makeTestAccessibilityElement(heistElement)
-            actions = heistElement.actions
+            actions = heistElement.semantics.assertable.orderedActions
+            geometry = heistElement.geometry
         case .parsedElement(let parsedElement, let parsedActions):
             element = parsedElement
             actions = parsedActions
+            geometry = testGeometry(for: parsedElement, ownerPath: path.parent ?? .root)
         case .container(let container, let containerName, let children):
             containerAnnotations.append(InterfaceContainerAnnotation(path: path, containerName: containerName))
             return .container(
@@ -116,7 +130,9 @@ package func makeTestInterface(
 
         let index = traversalIndex
         traversalIndex += 1
-        elementAnnotations.append(InterfaceElementAnnotation(path: path, actions: actions))
+        elementAnnotations.append(
+            InterfaceElementAnnotation(path: path, actions: actions, geometry: geometry)
+        )
         return .element(element, traversalIndex: index)
     }
 
@@ -129,7 +145,10 @@ package func makeTestInterface(
         projecting: tree,
         elementMetadata: { path, _, _ in
             guard let annotation = annotations.elementByPath[path] else { return nil }
-            return InterfaceElementProjectionMetadata(actions: annotation.actions)
+            return InterfaceElementProjectionMetadata(
+                actions: annotation.actions,
+                geometry: annotation.geometry
+            )
         },
         containerMetadata: { path, _ in
             guard let annotation = annotations.containerByPath[path] else { return nil }
@@ -138,6 +157,39 @@ package func makeTestInterface(
                 scrollInventory: annotation.scrollInventory
             )
         }
+    )
+}
+
+private func testGeometry(
+    for element: AccessibilityElement,
+    ownerPath: TreePath
+) -> HeistElement.Geometry {
+    let screenFrame = ScreenFrameEvidence(element.shape)
+    let screenActivationPoint: ActivationPointEvidence
+    if element.usesDefaultActivationPoint,
+       let frame = screenFrame.rect,
+       let x = try? FiniteCoordinate(validating: frame.midX),
+       let y = try? FiniteCoordinate(validating: frame.midY) {
+        screenActivationPoint = .defaultCenter(ScreenPoint(x: x, y: y))
+    } else if let x = try? FiniteCoordinate(validating: element.activationPoint.x),
+              let y = try? FiniteCoordinate(validating: element.activationPoint.y) {
+        screenActivationPoint = .explicit(ScreenPoint(x: x, y: y))
+    } else {
+        screenActivationPoint = .unavailable
+    }
+    let viewActivationPoint = try? ViewPoint(
+        validating: CGPoint(
+            x: element.activationPoint.x,
+            y: element.activationPoint.y
+        )
+    )
+    return HeistElement.Geometry(
+        screen: .onscreen(frame: screenFrame, activationPoint: screenActivationPoint),
+        view: HeistElement.Geometry.ViewSpace(
+            ownerPath: ownerPath,
+            frame: screenFrame.rect.flatMap { try? ViewRect(validating: $0.cgRect) },
+            activationPoint: viewActivationPoint
+        )
     )
 }
 
@@ -169,41 +221,66 @@ package func makeTestHeistElement(
     rotors: [HeistRotor]? = nil,
     actions: [ElementAction]? = nil
 ) -> HeistElement {
+    let frame = try? ScreenRect(validating: CGRect(
+        x: frameX,
+        y: frameY,
+        width: frameWidth,
+        height: frameHeight
+    ))
     let defaultActivationPointEvidence: ActivationPointEvidence
-    if let x = try? FiniteCoordinate(validating: frameX + frameWidth / 2),
+    if let frame,
+       let x = try? FiniteCoordinate(validating: frame.midX),
+       let y = try? FiniteCoordinate(validating: frame.midY) {
+        defaultActivationPointEvidence = .defaultCenter(ScreenPoint(x: x, y: y))
+    } else if let x = try? FiniteCoordinate(validating: frameX + frameWidth / 2),
        let y = try? FiniteCoordinate(validating: frameY + frameHeight / 2) {
         defaultActivationPointEvidence = .defaultCenter(ScreenPoint(x: x, y: y))
     } else {
         defaultActivationPointEvidence = .unavailable
     }
+    let screenActivationPoint = activationPointEvidence ?? defaultActivationPointEvidence
+    let viewActivationPoint = screenActivationPoint.point.flatMap { point in
+        try? ViewPoint(validating: CGPoint(x: point.x, y: point.y))
+    }
     return HeistElement(
-        description: description ?? label ?? identifier ?? "Element",
-        label: label,
-        value: value,
-        identifier: identifier,
-        hint: hint,
-        traits: traits,
-        frameEvidence: (try? ScreenRect(validating: CGRect(
-            x: frameX,
-            y: frameY,
-            width: frameWidth,
-            height: frameHeight
-        ))).map(ScreenFrameEvidence.available) ?? .unavailable,
-        activationPointEvidence: activationPointEvidence ?? defaultActivationPointEvidence,
-        respondsToUserInteraction: respondsToUserInteraction,
-        customContent: customContent,
-        rotors: rotors,
-        actions: actions ?? (traits.contains(.button) ? [.activate] : [])
+        semantics: HeistElement.Semantics(
+            spokenDescription: description ?? label ?? identifier ?? "Element",
+            assertable: HeistElement.Semantics.AssertableProperties(
+                label: label,
+                value: value,
+                identifier: identifier,
+                hint: hint,
+                traits: Set(traits),
+                customContent: Set(customContent ?? []),
+                rotors: Set(rotors ?? []),
+                actions: Set(actions ?? (traits.contains(.button) ? [.activate] : []))
+            ),
+            respondsToUserInteraction: respondsToUserInteraction
+        ),
+        geometry: HeistElement.Geometry(
+            screen: .onscreen(
+                frame: frame.map(ScreenFrameEvidence.available) ?? .unavailable,
+                activationPoint: screenActivationPoint
+            ),
+            view: HeistElement.Geometry.ViewSpace(
+                ownerPath: .root,
+                frame: frame.flatMap { try? ViewRect(validating: $0.cgRect) },
+                activationPoint: viewActivationPoint
+            )
+        )
     )
 }
 
 package func makeTestAccessibilityElement(_ element: HeistElement) -> AccessibilityElement {
-    guard let frame = element.screenFrame else {
+    let semantics = element.semantics
+    let assertable = semantics.assertable
+    guard case .onscreen(let frameEvidence, let activationPointEvidence) = element.geometry.screen,
+          let frame = frameEvidence.rect else {
         preconditionFailure("parser-backed test elements require available frame evidence")
     }
     let activationPoint: AccessibilityPoint
     let usesDefaultActivationPoint: Bool
-    switch element.activationPointEvidence {
+    switch activationPointEvidence {
     case .unavailable:
         activationPoint = AccessibilityPoint(
             x: frame.midX,
@@ -219,12 +296,12 @@ package func makeTestAccessibilityElement(_ element: HeistElement) -> Accessibil
     }
 
     return AccessibilityElement(
-        description: element.description,
-        label: element.label,
-        value: element.value,
-        traits: AccessibilityTraits.fromNames(element.traits.map(\.rawValue)),
-        identifier: element.identifier,
-        hint: element.hint,
+        description: semantics.spokenDescription,
+        label: assertable.label,
+        value: assertable.value,
+        traits: AccessibilityTraits.fromNames(assertable.traits.map(\.rawValue)),
+        identifier: assertable.identifier,
+        hint: assertable.hint,
         userInputLabels: nil,
         shape: .frame(AccessibilityRect(
             x: frame.x.value,
@@ -235,16 +312,16 @@ package func makeTestAccessibilityElement(_ element: HeistElement) -> Accessibil
         activationPoint: activationPoint,
         usesDefaultActivationPoint: usesDefaultActivationPoint,
         customActions: [],
-        customContent: element.customContent?.map {
+        customContent: assertable.orderedCustomContent.map {
             AccessibilityElement.CustomContent(
                 label: $0.label,
                 value: $0.value,
                 isImportant: $0.isImportant
             )
-        } ?? [],
-        customRotors: element.rotors?.map { AccessibilityElement.CustomRotor(name: $0.name) } ?? [],
+        },
+        customRotors: assertable.orderedRotors.map { AccessibilityElement.CustomRotor(name: $0.name) },
         accessibilityLanguage: nil,
-        respondsToUserInteraction: element.respondsToUserInteraction
+        respondsToUserInteraction: semantics.respondsToUserInteraction
     )
 }
 
@@ -324,38 +401,4 @@ package func makeTestScrollableContainer(
         isModalBoundary: isModalBoundary,
         customActions: customActions
     )
-}
-
-package func makeTestTrace(
-    before beforeInterface: Interface,
-    after afterInterface: Interface,
-    beforeScreenId: String? = "screen",
-    afterScreenId: String? = "screen",
-    afterTransition: AccessibilityTrace.Transition = .init()
-) -> AccessibilityTrace {
-    let beforeCapture = AccessibilityTrace.Capture(
-        sequence: 1,
-        interface: beforeInterface,
-        context: AccessibilityTrace.Context(screenId: beforeScreenId)
-    )
-    let afterCapture = AccessibilityTrace.Capture(
-        sequence: 2,
-        interface: afterInterface,
-        parentHash: beforeCapture.hash,
-        context: AccessibilityTrace.Context(screenId: afterScreenId),
-        transition: afterTransition
-    )
-    return AccessibilityTrace(captures: [beforeCapture, afterCapture])
-}
-
-package func makeTestScreenChangedTransition(sequence: UInt64 = 1) -> AccessibilityTrace.Transition {
-    AccessibilityTrace.Transition(accessibilityNotifications: [
-        AccessibilityNotificationEvidence(
-            sequence: sequence,
-            kind: .screenChanged,
-            timestamp: Date(timeIntervalSince1970: TimeInterval(sequence)),
-            notificationData: .none,
-            associatedElement: .none
-        ),
-    ])
 }

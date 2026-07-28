@@ -172,13 +172,7 @@ import TheScore
             command: command,
             result: .success(
                 payload: .activate,
-                observation: .settledTrace(
-                    makeTestTraceEvidence(
-                        .noChangeForTests(elementCount: 0),
-                        completeness: .incomplete
-                    ),
-                    .settled(duration: 3)
-                ),
+                observation: settledObservation(duration: 3, completeness: .incomplete),
                 timing: actionTiming
             ),
             expectation: ExpectationResult(met: true, predicate: predicate),
@@ -190,13 +184,7 @@ import TheScore
         let check = try #require(HeistSettlementEvidence.MatchedCheck(
             actionResult: .success(
                 payload: .wait,
-                observation: .settledTrace(
-                    makeTestTraceEvidence(
-                        .noChangeForTests(elementCount: 0),
-                        completeness: .complete
-                    ),
-                    .settled(duration: 13)
-                ),
+                observation: settledObservation(duration: 13, completeness: .complete),
                 timing: waitTiming
             ),
             expectation: ExpectationResult.Met(predicate: predicate)
@@ -216,13 +204,7 @@ import TheScore
             expectation: ExpectationResult.Met(predicate: predicate),
             actionResult: .success(
                 payload: .wait,
-                observation: .settledTrace(
-                    makeTestTraceEvidence(
-                        .noChangeForTests(elementCount: 0),
-                        completeness: .complete
-                    ),
-                    .settled(duration: 23)
-                ),
+                observation: settledObservation(duration: 23, completeness: .complete),
                 timing: repeatTiming
             )
         ))
@@ -286,6 +268,20 @@ import TheScore
             finalSemanticEvidenceMs: 25,
             totalMs: 60
         )
+    }
+
+    private func settledObservation(
+        duration: ElapsedMilliseconds,
+        completeness: Observation.Evidence.Completeness
+    ) -> ActionResultObservationEvidence {
+        let snapshot = makeTestObservationSnapshot(elements: [])
+        let evidence = makeTestObservationEvidence(
+            baseline: snapshot,
+            current: snapshot,
+            events: [.noChange],
+            completeness: completeness
+        )
+        return .settled(evidence, .settled(duration: duration))
     }
 
     private func values(

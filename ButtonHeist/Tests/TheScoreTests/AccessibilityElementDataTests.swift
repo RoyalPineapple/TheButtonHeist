@@ -3,236 +3,249 @@ import ThePlans
 import TheScore
 
 final class HeistElementTests: XCTestCase {
-
-    func testEncodingRoundTrip() throws {
-        let element = makeElement(label: "RoundTrip")
-
-        let data = try JSONEncoder().encode(element)
-        let decoded = try JSONDecoder().decode(HeistElement.self, from: data)
-
-        XCTAssertEqual(element, decoded)
-    }
-
-    func testActivationPointEvidenceCasesRoundTrip() throws {
-        let cases: [ActivationPointEvidence] = [
-            .explicit(ScreenPoint(x: 12, y: 34)),
-            .defaultCenter(ScreenPoint(x: 50, y: 22)),
-            .unavailable,
-        ]
-
-        for evidence in cases {
-            let data = try JSONEncoder().encode(evidence)
-            XCTAssertEqual(try JSONDecoder().decode(ActivationPointEvidence.self, from: data), evidence)
-        }
-    }
-
-    func testEncodingUsesOnlyCanonicalActivationPointEvidence() throws {
-        let element = HeistElement(
-            description: "Save",
-            label: "Save",
-            value: nil,
-            identifier: nil,
-            frameX: 0,
-            frameY: 0,
-            frameWidth: 100,
-            frameHeight: 44,
-            activationPointEvidence: .explicit(ScreenPoint(x: 51, y: 22)),
-            actions: []
-        )
-
-        let data = try JSONEncoder().encode(element)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let evidence = try XCTUnwrap(json["activationPointEvidence"] as? [String: Any])
-
-        XCTAssertNil(json["activationPointX"])
-        XCTAssertNil(json["activationPointY"])
-        XCTAssertEqual(evidence["source"] as? String, "explicit")
-        XCTAssertNotNil(evidence["point"])
-    }
-
-    func testElementWithAllFields() throws {
-        let element = HeistElement(
-            description: "A complex button",
-            label: "Submit Form",
-            value: "Enabled",
-            identifier: "submit_button_id",
-            frameX: 50, frameY: 100, frameWidth: 200, frameHeight: 60,
-            actions: [.activate, .custom("Delete"), .custom("Edit"), .custom("Share")]
-        )
+    func testNestedElementContractRoundTrips() throws {
+        let element = makeElement()
 
         let data = try JSONEncoder().encode(element)
         let decoded = try JSONDecoder().decode(HeistElement.self, from: data)
-
-        XCTAssertEqual(decoded.description, "A complex button")
-        XCTAssertEqual(decoded.label, "Submit Form")
-        XCTAssertEqual(decoded.value, "Enabled")
-        XCTAssertEqual(decoded.identifier, "submit_button_id")
-        XCTAssertEqual(decoded.actions, [.activate, .custom("Delete"), .custom("Edit"), .custom("Share")])
-    }
-
-    func testElementWithNilOptionals() throws {
-        let element = HeistElement(
-            description: "Minimal",
-            label: nil,
-            value: nil,
-            identifier: nil,
-            frameX: 0, frameY: 0, frameWidth: 0, frameHeight: 0,
-            actions: []
-        )
-
-        let data = try JSONEncoder().encode(element)
-        let decoded = try JSONDecoder().decode(HeistElement.self, from: data)
-
-        XCTAssertEqual(element, decoded)
-        XCTAssertNil(decoded.label)
-        XCTAssertNil(decoded.value)
-        XCTAssertNil(decoded.identifier)
-    }
-
-    func testUnavailableFrameEvidenceRoundTripsWithoutFabricatedCoordinates() throws {
-        let element = HeistElement(
-            description: "Unavailable",
-            label: "Unavailable",
-            value: nil,
-            identifier: nil,
-            frameEvidence: .unavailable,
-            actions: []
-        )
-
-        let data = try JSONEncoder().encode(element)
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let decoded = try JSONDecoder().decode(HeistElement.self, from: data)
+        let semantics = try XCTUnwrap(object["semantics"] as? [String: Any])
+        let geometry = try XCTUnwrap(object["geometry"] as? [String: Any])
+        let view = try XCTUnwrap(geometry["view"] as? [String: Any])
 
-        XCTAssertNil(object["frameX"])
-        XCTAssertNil(object["frameY"])
-        XCTAssertNil(object["frameWidth"])
-        XCTAssertNil(object["frameHeight"])
-        XCTAssertEqual(decoded.frameEvidence, .unavailable)
-        XCTAssertNil(decoded.activationPointX)
-        XCTAssertNil(decoded.activationPointY)
+        XCTAssertEqual(decoded, element)
+        XCTAssertEqual(Set(object.keys), ["semantics", "geometry"])
+        XCTAssertEqual(
+            Set(semantics.keys),
+            ["spokenDescription", "assertable", "respondsToUserInteraction"]
+        )
+        XCTAssertEqual(Set(geometry.keys), ["screen", "view"])
+        XCTAssertEqual(Set(view.keys), ["ownerPath", "frame", "activationPoint"])
+        XCTAssertNil(object["description"])
+        XCTAssertNil(geometry["scrollContent"])
+        XCTAssertNil(view["containerPath"])
     }
 
-    func testDecodeRejectsPartialOrInvalidFrameEvidence() {
-        let invalidFrames = [
-            #""frameX":0,"frameY":0,"frameWidth":100"#,
-            #""frameX":0,"frameY":0,"frameWidth":-1,"frameHeight":44"#,
-            #""frameX":"NaN","frameY":0,"frameWidth":100,"frameHeight":44"#,
-        ]
-        let decoder = JSONDecoder()
-        decoder.nonConformingFloatDecodingStrategy = .convertFromString(
-            positiveInfinity: "Infinity",
-            negativeInfinity: "-Infinity",
-            nan: "NaN"
-        )
+    func testGeometryRequiresScreenAndView() {
+        let semantics = canonicalSemanticsJSON
+        let missingScreen = """
+        {"semantics":\(semantics),"geometry":{"view":\(canonicalViewJSON)}}
+        """
+        let missingView = """
+        {"semantics":\(semantics),"geometry":{"screen":\(canonicalScreenJSON)}}
+        """
 
-        for frame in invalidFrames {
-            let json = """
-            {
-              "description": "Invalid",
-              "traits": [],
-              \(frame),
-              "activationPointEvidence": {"source": "unavailable"},
-              "respondsToUserInteraction": true,
-              "actions": []
+        XCTAssertThrowsError(try decode(missingScreen))
+        XCTAssertThrowsError(try decode(missingView))
+    }
+
+    func testStrictContractRejectsUnknownKeysAtEveryElementLayer() {
+        let unknownOuterKey = """
+        {
+          "semantics": \(canonicalSemanticsJSON),
+          "geometry": {
+            "screen": \(canonicalScreenJSON),
+            "view": \(canonicalViewJSON)
+          },
+          "unexpected": true
+        }
+        """
+        let unknownGeometryKey = """
+        {
+          "semantics": \(canonicalSemanticsJSON),
+          "geometry": {
+            "screen": \(canonicalScreenJSON),
+            "view": \(canonicalViewJSON),
+            "unexpected": true
+          }
+        }
+        """
+        let unknownViewKey = """
+        {
+          "semantics": \(canonicalSemanticsJSON),
+          "geometry": {
+            "screen": \(canonicalScreenJSON),
+            "view": {
+              "ownerPath": [],
+              "frame": null,
+              "activationPoint": null,
+              "unexpected": true
             }
-            """
-            XCTAssertThrowsError(try decoder.decode(HeistElement.self, from: Data(json.utf8)))
-        }
-    }
-
-    func testElementWithRotorsRoundTrips() throws {
-        let element = HeistElement(
-            description: "Validation Results",
-            label: "Validation Results",
-            value: nil,
-            identifier: nil,
-            frameX: 0, frameY: 0, frameWidth: 320, frameHeight: 400,
-            rotors: [HeistRotor(name: "Errors"), HeistRotor(name: "Warnings")],
-            actions: []
-        )
-
-        let data = try JSONEncoder().encode(element)
-        let decoded = try JSONDecoder().decode(HeistElement.self, from: data)
-
-        XCTAssertEqual(decoded.rotors, element.rotors)
-    }
-
-    func testActionsCanonicalizeAtConstructionBoundary() {
-        let element = HeistElement(
-            description: "Actions",
-            label: "Actions",
-            value: nil,
-            identifier: nil,
-            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
-            actions: [.custom("Share"), .activate, .custom("Delete"), .activate, .typeText, .decrement, .increment]
-        )
-
-        XCTAssertEqual(element.actions, [.activate, .typeText, .increment, .decrement, .custom("Delete"), .custom("Share")])
-    }
-
-    func testActionsCanonicalizeAtDecodeBoundaryAndEncodeDeterministically() throws {
-        let json = """
-        {
-          "description": "Actions",
-          "label": "Actions",
-          "traits": [],
-          "frameX": 0,
-          "frameY": 0,
-          "frameWidth": 100,
-          "frameHeight": 44,
-          "activationPointEvidence": {"source": "unavailable"},
-          "respondsToUserInteraction": true,
-          "actions": [
-            {"custom": "Share"},
-            "activate",
-            "typeText",
-            {"custom": "Delete"},
-            "activate"
-          ]
-        }
-        """
-        let decoded = try JSONDecoder().decode(HeistElement.self, from: Data(json.utf8))
-        let encoded = try JSONEncoder().encode(decoded)
-        let encodedProjection = try JSONDecoder().decode(EncodedElementActionsProjection.self, from: encoded)
-
-        XCTAssertEqual(decoded.actions, [.activate, .typeText, .custom("Delete"), .custom("Share")])
-        XCTAssertEqual(encodedProjection.actions, [.activate, .typeText, .custom("Delete"), .custom("Share")])
-    }
-
-    func testDecodeRejectsLegacyActivationPointCoordinates() {
-        let json = """
-        {
-          "description": "Save",
-          "label": "Save",
-          "traits": [],
-          "frameX": 0,
-          "frameY": 0,
-          "frameWidth": 100,
-          "frameHeight": 44,
-          "activationPointX": 50,
-          "activationPointY": 22,
-          "respondsToUserInteraction": true,
-          "actions": []
+          }
         }
         """
 
-        XCTAssertThrowsError(try JSONDecoder().decode(HeistElement.self, from: Data(json.utf8)))
+        XCTAssertThrowsError(try decode(unknownOuterKey))
+        XCTAssertThrowsError(try decode(unknownGeometryKey))
+        XCTAssertThrowsError(try decode(unknownViewKey))
     }
 
-    // MARK: - Helpers
+    func testSemanticsEqualityAndHashAreIndependentFromGeometry() {
+        let element = makeElement()
+        let moved = HeistElement(
+            semantics: element.semantics,
+            geometry: shiftedGeometry(from: element.geometry)
+        )
 
-    private func makeElement(label: String) -> HeistElement {
+        XCTAssertEqual(element.semantics, moved.semantics)
+        XCTAssertEqual(Set([element.semantics, moved.semantics]).count, 1)
+        XCTAssertNotEqual(element.geometry, moved.geometry)
+        XCTAssertNotEqual(element, moved)
+        XCTAssertEqual(Set([element, moved]).count, 2)
+    }
+
+    func testScreenSpaceEqualityAndHashAreIndependentFromViewSpace() {
+        let geometry = makeElement().geometry
+        let changedView = HeistElement.Geometry(
+            screen: geometry.screen,
+            view: .init(
+                ownerPath: TreePath([1]),
+                frame: geometry.view.frame,
+                activationPoint: geometry.view.activationPoint
+            )
+        )
+
+        XCTAssertEqual(geometry.screen, changedView.screen)
+        XCTAssertEqual(Set([geometry.screen, changedView.screen]).count, 1)
+        XCTAssertNotEqual(geometry.view, changedView.view)
+        XCTAssertNotEqual(geometry, changedView)
+        XCTAssertEqual(Set([geometry, changedView]).count, 2)
+    }
+
+    func testViewSpaceEqualityAndHashAreIndependentFromScreenSpace() {
+        let geometry = makeElement().geometry
+        let changedScreen = HeistElement.Geometry(
+            screen: .offscreen,
+            view: geometry.view
+        )
+
+        XCTAssertEqual(geometry.view, changedScreen.view)
+        XCTAssertEqual(Set([geometry.view, changedScreen.view]).count, 1)
+        XCTAssertNotEqual(geometry.screen, changedScreen.screen)
+        XCTAssertNotEqual(geometry, changedScreen)
+        XCTAssertEqual(Set([geometry, changedScreen]).count, 2)
+    }
+
+    func testAssertableCollectionsEncodeDeterministically() throws {
+        let element = makeElement()
+        let encoded = try JSONEncoder().encode(element)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        let semantics = try XCTUnwrap(object["semantics"] as? [String: Any])
+        let assertable = try XCTUnwrap(semantics["assertable"] as? [String: Any])
+        let actions = try XCTUnwrap(assertable["actions"] as? [Any])
+        let customAction = try XCTUnwrap(actions[1] as? [String: String])
+
+        XCTAssertEqual(assertable["traits"] as? [String], ["button", "header"])
+        XCTAssertEqual(actions[0] as? String, "activate")
+        XCTAssertEqual(customAction, ["custom": "Delete"])
+    }
+
+    private var canonicalSemanticsJSON: String {
+        """
+        {
+          "spokenDescription": "Save. Button.",
+          "assertable": {
+            "label": "Save",
+            "traits": ["button"],
+            "customContent": [],
+            "rotors": [],
+            "actions": ["activate"]
+          },
+          "respondsToUserInteraction": true
+        }
+        """
+    }
+
+    private var canonicalScreenJSON: String {
+        """
+        {
+          "visibility": "onscreen",
+          "frame": {
+            "availability": "available",
+            "rect": {"x": 10, "y": 20, "width": 100, "height": 44}
+          },
+          "activationPoint": {
+            "source": "explicit",
+            "point": {"x": 60, "y": 42}
+          }
+        }
+        """
+    }
+
+    private var canonicalViewJSON: String {
+        """
+        {
+          "ownerPath": [],
+          "frame": {"x": 10, "y": 20, "width": 100, "height": 44},
+          "activationPoint": {"x": 60, "y": 42}
+        }
+        """
+    }
+
+    private func decode(_ json: String) throws -> HeistElement {
+        try JSONDecoder().decode(HeistElement.self, from: Data(json.utf8))
+    }
+
+    private func makeElement() -> HeistElement {
         HeistElement(
-            description: label,
-            label: label,
-            value: nil,
-            identifier: nil,
-            frameX: 10, frameY: 20, frameWidth: 100, frameHeight: 44,
-            actions: [.activate]
+            semantics: .init(
+                spokenDescription: "Save. Button.",
+                assertable: .init(
+                    label: "Save",
+                    value: nil,
+                    identifier: "save",
+                    hint: "Saves changes",
+                    traits: [.header, .button],
+                    customContent: [
+                        .init(label: "Status", value: "Ready", isImportant: true),
+                    ],
+                    rotors: [.init(name: "Actions")],
+                    actions: [.custom("Delete"), .activate]
+                ),
+                respondsToUserInteraction: true
+            ),
+            geometry: .init(
+                screen: .onscreen(
+                    frame: .available(ScreenRect(
+                        x: 10,
+                        y: 20,
+                        width: 100,
+                        height: 44
+                    )),
+                    activationPoint: .explicit(ScreenPoint(x: 60, y: 42))
+                ),
+                view: .init(
+                    ownerPath: .root,
+                    frame: ViewRect(
+                        x: 10,
+                        y: 20,
+                        width: 100,
+                        height: 44
+                    ),
+                    activationPoint: ViewPoint(x: 60, y: 42)
+                )
+            )
         )
     }
 
-    private struct EncodedElementActionsProjection: Decodable {
-        let actions: [ElementAction]
+    private func shiftedGeometry(
+        from geometry: HeistElement.Geometry
+    ) -> HeistElement.Geometry {
+        .init(
+            screen: .onscreen(
+                frame: .available(ScreenRect(
+                    x: 30,
+                    y: 40,
+                    width: 100,
+                    height: 44
+                )),
+                activationPoint: .explicit(ScreenPoint(x: 80, y: 62))
+            ),
+            view: .init(
+                ownerPath: TreePath([1]),
+                frame: geometry.view.frame,
+                activationPoint: geometry.view.activationPoint
+            )
+        )
     }
 }
