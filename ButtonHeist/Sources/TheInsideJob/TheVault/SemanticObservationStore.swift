@@ -202,12 +202,21 @@ extension Observation {
                     : previousTree.merging(admission.tree)
                 candidateTree = comparedTree
             }
-            let continuity = ScreenClassifier.classify(
-                from: previousTree == .empty ? nil : previousTree,
-                to: comparedTree,
-                notifications: notifications.kinds,
-                lineage: admission.lineage
-            )
+            // A tree thrown away is a screen that went. The classifier compares
+            // two trees and cannot see that, because what it would compare
+            // against is exactly what is gone — so the store, which knows a
+            // reading came before this one, says so. With nothing read yet there
+            // is no screen to have left, and the reading is a first sighting.
+            let continuity = if previousTree == .empty, log.latestSnapshotEvent != nil {
+                ScreenContinuity.replacement(.screenChangedNotification)
+            } else {
+                ScreenClassifier.classify(
+                    from: previousTree == .empty ? nil : previousTree,
+                    to: comparedTree,
+                    notifications: notifications.kinds,
+                    lineage: admission.lineage
+                )
+            }
             if continuity.isReplacement {
                 // The departure, emitted before the old tree is let go. Identity
                 // does not survive a boundary, so a `missing` half needs a
