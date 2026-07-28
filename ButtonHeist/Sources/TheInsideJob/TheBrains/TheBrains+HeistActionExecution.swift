@@ -20,7 +20,7 @@ extension TheBrains {
         index _: Int,
         path: HeistExecutionPath,
         start: RuntimeElapsed.Instant,
-        runtime: HeistExecutionRuntime,
+        host: HeistExecution.Host,
         environment: HeistExecutionEnvironment
     ) async -> HeistExecutionStepResult {
         let resolvedCommand: ResolvedHeistActionCommand
@@ -38,11 +38,11 @@ extension TheBrains {
         }
 
         let expectation = step.expectationPolicy.expectedStep
-        let resolvedExpectation: Settlement.ActionExpectation?
+        let resolvedExpectation: HeistExecution.ActionExpectation?
         do {
             resolvedExpectation = try expectation.map {
                 let resolved = try $0.resolve(in: environment)
-                return Settlement.ActionExpectation(
+                return HeistExecution.ActionExpectation(
                     authored: $0.predicate,
                     resolved: resolved.predicate,
                     timeout: resolved.timeout
@@ -69,10 +69,15 @@ extension TheBrains {
             )
         }
 
-        let execution = await runtime.execute(resolvedCommand, resolvedExpectation)
+        let result = await host.execute(.action(.init(
+            command: resolvedCommand,
+            expectation: resolvedExpectation,
+            readinessAllowance: SemanticObservationTiming.defaultTimeout
+        )))
+        let evidence = HeistExecution.ResultProjector.projectAction(result)
         return actionStepResult(
             command: step.command,
-            evidence: execution.evidence,
+            evidence: evidence,
             expectation: expectation,
             path: path,
             start: start
@@ -129,14 +134,31 @@ extension TheBrains {
     }
 
     internal func failureScreenshotStep(
-        runtime: HeistExecutionRuntime,
+        host: HeistExecution.Host,
         failedPath: HeistExecutionPath,
         mode: ScreenCaptureMode
     ) async -> HeistExecutionStepResult? {
         let start = RuntimeElapsed.now
-        let result = mode == .raw
-            ? await runtime.execute(.takeScreenshot, nil).result
-            : await executeTakeScreenshot(mode: mode).result
+        let result: ActionResult
+        if mode == .raw {
+            let execution = await host.execute(.action(.init(
+                command: .takeScreenshot,
+                expectation: nil,
+                readinessAllowance: SemanticObservationTiming.defaultTimeout
+            )))
+            guard case .action(let action) = execution else {
+                preconditionFailure("Screenshot dispatch requires an action result")
+            }
+            result = HeistExecution.ResultProjector.projectAction(.action(action))
+                .result
+                ?? .failure(
+                    payload: .screenshot(nil),
+                    failureKind: .actionFailed,
+                    message: "screenshot result unavailable"
+                )
+        } else {
+            result = await executeTakeScreenshot(mode: mode).result
+        }
         guard result.method == .takeScreenshot else { return nil }
 
         let command = HeistActionCommand.takeScreenshot

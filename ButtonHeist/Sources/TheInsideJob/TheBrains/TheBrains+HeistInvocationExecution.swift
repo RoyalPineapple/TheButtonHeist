@@ -34,9 +34,8 @@ extension TheBrains {
     }
 
     internal struct InvocationExpectationContext {
-        internal let predicate: Settlement.Predicate
+        internal let predicate: HeistExecution.Predicate
         internal let timeout: WaitTimeout
-        internal let currentState: Settlement.Result
     }
 
     private enum InvocationExpectationPreparation {
@@ -67,7 +66,7 @@ extension TheBrains {
         index _: Int,
         path: HeistExecutionPath,
         start: RuntimeElapsed.Instant,
-        runtime: HeistExecutionRuntime,
+        host: HeistExecution.Host,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
@@ -93,7 +92,7 @@ extension TheBrains {
         }
 
         let expectationContext: InvocationExpectationContext?
-        switch await prepareInvocationExpectation(context: context, environment: environment, runtime: runtime) {
+        switch await prepareInvocationExpectation(context: context, environment: environment, host: host) {
         case .none:
             expectationContext = nil
         case .prepared(let prepared):
@@ -104,7 +103,7 @@ extension TheBrains {
 
         let children = await executeHeistSteps(
             definition.body,
-            runtime: runtime,
+            host: host,
             environment: childEnvironment,
             scope: HeistExecutionScope(
                 plan: definition,
@@ -116,7 +115,7 @@ extension TheBrains {
         )
         let expectationOutcome = await evaluateInvocationExpectation(
             expectationContext,
-            runtime: runtime,
+            host: host,
             childExecution: children
         )
         return completedInvocationResult(
@@ -160,7 +159,7 @@ extension TheBrains {
     private func prepareInvocationExpectation(
         context: InvocationExecutionContext,
         environment: HeistExecutionEnvironment,
-        runtime: HeistExecutionRuntime
+        host: HeistExecution.Host
     ) async -> InvocationExpectationPreparation {
         guard let expectation = context.invoke.expectation else { return .none }
         let resolved: ResolvedWaitStep
@@ -173,42 +172,28 @@ extension TheBrains {
                 error: error
             ))
         }
-        let predicate = Settlement.Predicate(
+        let predicate = HeistExecution.Predicate(
             authored: expectation.predicate,
             resolved: resolved.predicate
         )
-        let currentState = await runtime.settle(
-            .currentState(scope: predicate.observationScope)
-        )
         return .prepared(InvocationExpectationContext(
             predicate: predicate,
-            timeout: resolved.timeout,
-            currentState: currentState
+            timeout: resolved.timeout
         ))
     }
 
     private func evaluateInvocationExpectation(
         _ context: InvocationExpectationContext?,
-        runtime: HeistExecutionRuntime,
+        host: HeistExecution.Host,
         childExecution: HeistExecutedChildren
     ) async -> InvocationExpectationOutcome {
         guard case .passed = childExecution, let context else { return .notEvaluated }
-        let baseline: Settlement.Baseline
-        if let moment = context.currentState.currentObservation?.moment {
-            baseline = .supplied(.init(moment: moment))
-        } else {
-            baseline = switch context.predicate.resolved {
-            case .exists, .missing: .capture
-            case .announcement, .noChange, .screenChanged, .elementsChanged: .unavailable(.unavailable)
-            }
-        }
-        let settlement = await runtime.settle(Settlement.Command(
+        let settlement = await host.execute(HeistExecution.Command(
             observing: context.predicate.authored,
             resolved: context.predicate.resolved,
-            timeout: context.timeout,
-            baseline: baseline
+            timeout: context.timeout
         ))
-        let evidence = Settlement.ResultProjector.projectWait(settlement)
+        let evidence = HeistExecution.ResultProjector.projectWait(settlement)
         guard let failure = invocationExpectationFailure(
             predicateExpression: context.predicate.authored,
             evidence: evidence

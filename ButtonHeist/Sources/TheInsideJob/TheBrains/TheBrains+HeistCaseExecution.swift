@@ -11,7 +11,7 @@ extension TheBrains {
         index: Int,
         path: HeistExecutionPath,
         start: RuntimeElapsed.Instant,
-        runtime: HeistExecutionRuntime,
+        host: HeistExecution.Host,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
@@ -24,7 +24,7 @@ extension TheBrains {
             return caseResolutionFailure(index: index, path: path, start: start, error: error)
         }
 
-        let currentState = await runtime.settle(
+        let currentState = await host.execute(
             .currentState(scope: resolvedCases.observationScope)
         )
         let selection = evaluatePredicateCases(
@@ -40,7 +40,7 @@ extension TheBrains {
                 path: path,
                 start: start
             ),
-            runtime: runtime,
+            host: host,
             environment: environment,
             scope: scope
         )
@@ -50,7 +50,7 @@ extension TheBrains {
     /// terminal no-match node.
     private func dispatchPredicateCases(
         _ dispatch: PredicateCaseDispatch,
-        runtime: HeistExecutionRuntime,
+        host: HeistExecution.Host,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
@@ -59,7 +59,7 @@ extension TheBrains {
             let selectedCaseIndex = Int(selectedCaseOrdinal)
             let children = await executeHeistSteps(
                 dispatch.cases[selectedCaseIndex].body,
-                runtime: runtime,
+                host: host,
                 environment: environment,
                 scope: scope,
                 path: dispatch.path.conditionalCaseBody(at: selectedCaseIndex)
@@ -80,7 +80,7 @@ extension TheBrains {
             let selection = dispatch.selection.selectingElseBranch()
             let children = await executeHeistSteps(
                 elseBody,
-                runtime: runtime,
+                host: host,
                 environment: environment,
                 scope: scope,
                 path: dispatch.path.conditionalElseBody()

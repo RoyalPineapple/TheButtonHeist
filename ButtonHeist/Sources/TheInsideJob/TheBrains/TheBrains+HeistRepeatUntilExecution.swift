@@ -11,14 +11,14 @@ extension TheBrains {
         index _: Int,
         path: HeistExecutionPath,
         start: RuntimeElapsed.Instant,
-        runtime: HeistExecutionRuntime,
+        host: HeistExecution.Host,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
         let context = RepeatUntil.Context(
             path: path,
             start: start,
-            runtime: runtime,
+            host: host,
             environment: environment,
             scope: scope
         )
@@ -29,7 +29,7 @@ extension TheBrains {
             return repeatUntilResolutionFailure(step, path: path, start: start, error: error)
         }
 
-        let initialState = await runtime.settle(
+        let initialState = await host.execute(
             .currentState(scope: resolved.predicate.observationScope)
         )
         let state = RepeatUntil.LoopState.running(
@@ -66,7 +66,7 @@ extension TheBrains {
             let iterationPath = context.path.repeatUntilIteration(at: iterationIndex)
             let iterationResults = await executeHeistSteps(
                 step.body,
-                runtime: context.runtime,
+                host: context.host,
                 environment: context.environment,
                 scope: context.scope,
                 path: iterationPath.iterationBody()

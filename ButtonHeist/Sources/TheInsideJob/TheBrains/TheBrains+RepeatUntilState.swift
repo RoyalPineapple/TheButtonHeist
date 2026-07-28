@@ -13,7 +13,7 @@ extension TheBrains.RepeatUntil {
     internal struct Context {
         internal let path: HeistExecutionPath
         internal let start: RuntimeElapsed.Instant
-        internal let runtime: TheBrains.HeistExecutionRuntime
+        internal let host: HeistExecution.Host
         internal let environment: HeistExecutionEnvironment
         internal let scope: TheBrains.HeistExecutionScope
     }

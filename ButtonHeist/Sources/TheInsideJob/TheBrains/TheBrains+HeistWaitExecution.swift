@@ -15,7 +15,7 @@ extension TheBrains {
         index _: Int,
         path: HeistExecutionPath,
         start: RuntimeElapsed.Instant,
-        runtime: HeistExecutionRuntime,
+        host: HeistExecution.Host,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
@@ -33,14 +33,12 @@ extension TheBrains {
             )
         }
 
-        let settlement = await runtime.settle(Settlement.Command(
+        let settlement = await host.execute(HeistExecution.Command(
             observing: step.predicate,
             resolved: resolvedWait.predicate,
-            timeout: resolvedWait.timeout,
-            baseline: .capture,
-            startedAt: start
+            timeout: resolvedWait.timeout
         ))
-        let evidence = Settlement.ResultProjector.projectWait(settlement)
+        let evidence = HeistExecution.ResultProjector.projectWait(settlement)
         switch evidence.outcome {
         case .matched:
             return waitStepResult(
@@ -65,7 +63,7 @@ extension TheBrains {
 
             let children = await executeHeistSteps(
                 elseBody,
-                runtime: runtime,
+                host: host,
                 environment: environment,
                 scope: scope,
                 path: path.waitElseBody()
@@ -93,7 +91,7 @@ extension TheBrains {
                 start: start
             )
         case .handledElse, .continued:
-            preconditionFailure("Settlement wait projection cannot produce \(evidence.outcome)")
+            preconditionFailure("HeistExecution wait projection cannot produce \(evidence.outcome)")
         }
     }
 

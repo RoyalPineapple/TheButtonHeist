@@ -7,13 +7,19 @@ import TheScore
 
 extension TheBrains.RepeatUntil {
     internal struct ObservedState {
-        internal let settlement: Settlement.Result
+        internal let settlement: HeistExecution.Result
 
         internal var summary: String? {
-            settlement.currentObservation?.summary
+            guard let snapshot = settlement.currentObservation else { return nil }
+            let interfaceSummary =
+                "interface: \(snapshot.interface.projectedElements.count) elements"
+            guard let screenID = snapshot.context.screenId else {
+                return interfaceSummary
+            }
+            return "screen: \(screenID); \(interfaceSummary)"
         }
 
-        internal init(_ settlement: Settlement.Result) {
+        internal init(_ settlement: HeistExecution.Result) {
             self.settlement = settlement
         }
     }
@@ -135,28 +141,25 @@ extension TheBrains {
                 actual: String(describing: error)
             ))
         }
-        let command: Settlement.Command
-        if let observation {
+        let command: HeistExecution.Command
+        if observation != nil {
             let authored = AccessibilityPredicate.elementsChanged
-            let resolved = ResolvedAccessibilityPredicate.elementsChanged([])
-            command = Settlement.Command(
+            let resolved: Observation.Event.Predicate = .elementsChanged([])
+            command = HeistExecution.Command(
                 observing: authored,
                 resolved: resolved,
-                timeout: progressTimeout,
-                baseline: observation.settlement.currentObservation.map {
-                    Settlement.Baseline.supplied(.init(moment: $0.moment))
-                } ?? .unavailable(.unavailable)
+                timeout: progressTimeout
             )
         } else {
-            command = Settlement.Command(
+            command = HeistExecution.Command(
                 observing: step.predicateExpression,
                 resolved: step.predicate,
                 timeout: progressTimeout
             )
         }
-        let settlement = await context.runtime.settle(command)
-        let evidence = Settlement.ResultProjector.projectWait(settlement)
-        let stopCheck = Settlement.PredicateEvaluation.evaluate(
+        let settlement = await context.host.execute(command)
+        let evidence = HeistExecution.ResultProjector.projectWait(settlement)
+        let stopCheck = HeistExecution.PredicateEvaluation.evaluate(
             step.predicate,
             expression: step.predicateExpression,
             in: settlement

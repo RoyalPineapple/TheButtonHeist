@@ -27,73 +27,32 @@ extension TheBrains {
             self.invocationStack = invocationStack
         }
     }
+}
 
-    internal struct HeistExecutionRuntime {
-        internal let execute: @MainActor (
-            ResolvedHeistActionCommand,
-            Settlement.ActionExpectation?
-        ) async -> RuntimeActionExecution
-        internal let settle: @MainActor (Settlement.Command) async -> Settlement.Result
-
-        internal init(
-            execute: @escaping @MainActor (
-                ResolvedHeistActionCommand,
-                Settlement.ActionExpectation?
-            ) async -> RuntimeActionExecution,
-            settle: @escaping @MainActor (Settlement.Command) async -> Settlement.Result
-        ) {
-            self.execute = execute
-            self.settle = settle
-        }
-
-        @MainActor
-        internal static func live(_ brains: TheBrains) -> HeistExecutionRuntime {
-            HeistExecutionRuntime(
-                execute: { command, expectation in
-                    await brains.executeRuntimeActionForHeist(
-                        command,
-                        expectation: expectation
-                    )
-                },
-                settle: { command in
-                    await brains.executeSettlementCommand(command)
-                }
-            )
-        }
-    }
-
+extension TheBrains {
     internal func executeHeistPlan(_ plan: HeistPlan, argument: HeistArgument = .none) async -> ActionResult {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(payload: .heist(nil))
         }
 
-        let demand = vault.semanticObservationStream.beginActiveObservationDemand()
-        defer { demand.cancel() }
         if tripwire.isPulseRunning,
            await interactionCoordinator.refreshedVisibleObservation() == nil {
             return await treeUnavailableResult(payload: .heist(nil))
         }
-        return await executeHeistPlan(plan, argument: argument, runtime: .live(self))
-    }
-
-    internal func executeHeistPlanForTest(
-        _ plan: HeistPlan,
-        argument: HeistArgument = .none,
-        runtime: HeistExecutionRuntime
-    ) async -> ActionResult {
-        await executeHeistPlan(plan, argument: argument, runtime: runtime)
+        let host = HeistExecution.Host(brains: self)
+        await host.start()
+        let result = await executeHeistPlan(plan, argument: argument, host: host)
+        await host.finish()
+        return result
     }
 
     private func executeHeistPlan(
         _ plan: HeistPlan,
         argument: HeistArgument,
-        runtime: HeistExecutionRuntime
+        host: HeistExecution.Host
     ) async -> ActionResult {
         let notificationScope = vault.accessibilityNotifications.beginHeistScope()
         defer { notificationScope.cancel() }
-
-        let demand = vault.semanticObservationStream.beginActiveObservationDemand()
-        defer { demand.cancel() }
 
         let heistStart = RuntimeElapsed.now
         let environment: HeistExecutionEnvironment
@@ -108,7 +67,7 @@ extension TheBrains {
         }
         let execution = await executeHeistStepAccumulator(
             plan.body,
-            runtime: runtime,
+            host: host,
             environment: environment,
             scope: HeistExecutionScope(plan: plan),
             path: .body
@@ -118,7 +77,7 @@ extension TheBrains {
         if let failedPath = abortedAtPath,
            let mode = failureEvidencePolicy.captureMode,
            let failureScreenshotStep = await failureScreenshotStep(
-            runtime: runtime,
+            host: host,
             failedPath: failedPath,
             mode: mode
            ) {
@@ -153,14 +112,14 @@ extension TheBrains {
 
     internal func executeHeistSteps(
         _ steps: [HeistStep],
-        runtime: HeistExecutionRuntime,
+        host: HeistExecution.Host,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope,
         path: HeistExecutionPath = .body
     ) async -> HeistExecutedChildren {
         await executeHeistStepAccumulator(
             steps,
-            runtime: runtime,
+            host: host,
             environment: environment,
             scope: scope,
             path: path
@@ -169,7 +128,7 @@ extension TheBrains {
 
     private func executeHeistStepAccumulator(
         _ steps: [HeistStep],
-        runtime: HeistExecutionRuntime,
+        host: HeistExecution.Host,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope,
         path: HeistExecutionPath
@@ -187,7 +146,7 @@ extension TheBrains {
                     step,
                     index: index,
                     path: stepPath,
-                    runtime: runtime,
+                    host: host,
                     environment: environment,
                     scope: scope
                 )
@@ -201,7 +160,7 @@ extension TheBrains {
         _ step: HeistStep,
         index: Int,
         path: HeistExecutionPath,
-        runtime: HeistExecutionRuntime,
+        host: HeistExecution.Host,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
@@ -213,7 +172,7 @@ extension TheBrains {
                 index: index,
                 path: path,
                 start: start,
-                runtime: runtime,
+                host: host,
                 environment: environment
             )
         case .wait(let waitStep):
@@ -222,7 +181,7 @@ extension TheBrains {
                 index: index,
                 path: path,
                 start: start,
-                runtime: runtime,
+                host: host,
                 environment: environment,
                 scope: scope
             )
@@ -232,7 +191,7 @@ extension TheBrains {
                 index: index,
                 path: path,
                 start: start,
-                runtime: runtime,
+                host: host,
                 environment: environment,
                 scope: scope
             )
@@ -242,7 +201,7 @@ extension TheBrains {
                 index: index,
                 path: path,
                 start: start,
-                runtime: runtime,
+                host: host,
                 environment: environment,
                 scope: scope
             )
@@ -252,7 +211,7 @@ extension TheBrains {
                 index: index,
                 path: path,
                 start: start,
-                runtime: runtime,
+                host: host,
                 environment: environment,
                 scope: scope
             )
@@ -262,7 +221,7 @@ extension TheBrains {
                 index: index,
                 path: path,
                 start: start,
-                runtime: runtime,
+                host: host,
                 environment: environment,
                 scope: scope
             )
@@ -276,7 +235,7 @@ extension TheBrains {
                 index: index,
                 path: path,
                 start: start,
-                runtime: runtime,
+                host: host,
                 environment: environment,
                 scope: scope
             )
@@ -286,7 +245,7 @@ extension TheBrains {
                 index: index,
                 path: path,
                 start: start,
-                runtime: runtime,
+                host: host,
                 environment: environment,
                 scope: scope
             )
@@ -298,13 +257,13 @@ extension TheBrains {
         index _: Int,
         path: HeistExecutionPath,
         start: RuntimeElapsed.Instant,
-        runtime: HeistExecutionRuntime,
+        host: HeistExecution.Host,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
         let children = await executeHeistSteps(
             plan.body,
-            runtime: runtime,
+            host: host,
             environment: environment,
             scope: HeistExecutionScope(
                 plan: plan,

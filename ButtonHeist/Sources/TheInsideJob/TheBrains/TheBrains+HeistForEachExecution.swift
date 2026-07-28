@@ -50,7 +50,7 @@ extension TheBrains {
         let kind: ForEachLoopKind
         let body: [HeistStep]
         let path: HeistExecutionPath
-        let runtime: HeistExecutionRuntime
+        let host: HeistExecution.Host
         let environment: HeistExecutionEnvironment
         let scope: HeistExecutionScope
     }
@@ -102,7 +102,7 @@ extension TheBrains {
         index: Int,
         path: HeistExecutionPath,
         start: RuntimeElapsed.Instant,
-        runtime: HeistExecutionRuntime,
+        host: HeistExecution.Host,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
@@ -117,7 +117,7 @@ extension TheBrains {
                 error: error
             )
         }
-        let currentState = await runtime.settle(.currentState(scope: .discovery))
+        let currentState = await host.execute(.currentState(scope: .discovery))
         guard let event = currentState.currentObservation else {
             return forEachUnavailableResult(
                 index: index,
@@ -129,7 +129,7 @@ extension TheBrains {
 
         let matchSignature = ForEachMatchSignature(
             matching: resolvedMatching,
-            elements: event.moment.capture.interface.projectedElements
+            elements: event.interface.projectedElements
         )
         let matchedCount = matchSignature.count
         if matchedCount > step.limit {
@@ -150,19 +150,19 @@ extension TheBrains {
                 kind: .element,
                 body: step.body,
                 path: path,
-                runtime: runtime,
+                host: host,
                 environment: environment,
                 scope: scope
             ),
             nextItem: { iterationIndex in
                 if iterationIndex > 0 {
-                    let nextState = await runtime.settle(.currentState(scope: .discovery))
+                    let nextState = await host.execute(.currentState(scope: .discovery))
                     guard let nextEvent = nextState.currentObservation else {
                         return .postObservationUnavailable(iterationIndex: iterationIndex - 1)
                     }
                     let nextSignature = ForEachMatchSignature(
                         matching: resolvedMatching,
-                        elements: nextEvent.moment.capture.interface.projectedElements
+                        elements: nextEvent.interface.projectedElements
                     )
                     if nextSignature == currentSignature {
                         nextOrdinal += 1
@@ -233,7 +233,7 @@ extension TheBrains {
             let iterationPath = context.kind.iterationPath(from: context.path, at: iterationIndex)
             let iterationResults = await executeHeistSteps(
                 context.body,
-                runtime: context.runtime,
+                host: context.host,
                 environment: bind(context.environment, item),
                 scope: context.scope,
                 path: iterationPath.iterationBody()
@@ -335,7 +335,7 @@ extension TheBrains {
         index _: Int,
         path: HeistExecutionPath,
         start: RuntimeElapsed.Instant,
-        runtime: HeistExecutionRuntime,
+        host: HeistExecution.Host,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
@@ -345,7 +345,7 @@ extension TheBrains {
                 kind: .string,
                 body: step.body,
                 path: path,
-                runtime: runtime,
+                host: host,
                 environment: environment,
                 scope: scope
             ),
