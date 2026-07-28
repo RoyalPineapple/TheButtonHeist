@@ -31,12 +31,13 @@ final class TheBrains {
 
     func capturedAnnouncements() -> AnnouncementListPayload {
         let notifications = vault.accessibilityNotifications.notifications()
+        let evidence = vault.resolveAccessibilityNotificationEvidence(
+            notifications,
+            in: vault.latestObservation
+        )
         return AnnouncementListPayload(
-            announcements: notifications.compactMap(\.capturedAnnouncement),
-            notifications: vault.resolveAccessibilityNotificationEvidence(
-                notifications,
-                in: vault.latestObservation
-            ),
+            announcements: evidence.compactMap(\.capturedAnnouncement),
+            notifications: evidence,
             captureState: AccessibilityNotificationObserver.shared.lifecycleState.captureState
         )
     }
@@ -149,7 +150,7 @@ final class TheBrains {
         do {
             let interface = try vault.selectInterface(query)
             let diagnostics = exploration.progress.interfaceDiagnostics(
-                for: exploration.event.snapshot.observation,
+                for: vault.latestObservation,
                 includedElementCount: interface.projectedElements.count
             )
             return .success(interface

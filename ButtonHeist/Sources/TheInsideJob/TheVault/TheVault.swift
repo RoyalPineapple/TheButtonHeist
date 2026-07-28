@@ -49,7 +49,7 @@ final class TheVault {
     // MARK: - Interface State
 
     var interfaceTree: InterfaceTree {
-        semanticObservationStream.latestReadInterfaceTree
+        semanticObservationStream.stateOwner.interfaceTree
     }
     var latestObservation: InterfaceObservation = .empty
     var latestFailedSettleDiagnosticEvidence: InterfaceObservation?
@@ -73,9 +73,14 @@ final class TheVault {
     struct RotorCursor {
         let hostHeistId: HeistId
         let rotorName: RotorName
-        let generation: ScreenGeneration
+        let selectionHistoryIndex: Int
         let selectionHeistId: HeistId
         let textRange: TextRangeReference?
+    }
+
+    struct RotorHistoryAdmission {
+        let historyIndex: Int
+        let invalidatedCursor: RotorCursor?
     }
 
     /// Drop rotor mode. Called when any non-rotor interaction runs.

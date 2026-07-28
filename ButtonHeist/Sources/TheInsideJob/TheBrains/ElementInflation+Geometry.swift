@@ -46,7 +46,7 @@ extension ElementInflation {
 
         let treeElement = liveTarget.treeElement
         let description = Navigation.ScrollTargetDescription(treeElement).description
-        let settledSequence = await vault.semanticObservationStream.latestReadEvent()?.sequence
+        let historyIndex = await vault.semanticObservationStream.stateOwner.historyEndIndex()
         let admittedTarget: Result<AdmittedSemanticTarget, SemanticTargetResolutionFailure>
         if let admitted = inflatedTarget.identity.admittedSemanticTarget {
             admittedTarget = .success(admitted)
@@ -88,7 +88,7 @@ extension ElementInflation {
                 sourceTarget: inflatedTarget.target,
                 pinnedElement: treeElement,
                 method: method,
-                after: settledSequence,
+                after: historyIndex,
                 deadline: inflatedTarget.deadline,
                 resolution: inflatedTarget.resolution.adding(.activationPointPlacement)
             ) {

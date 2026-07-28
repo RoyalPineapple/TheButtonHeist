@@ -1,107 +1,28 @@
 #if canImport(UIKit)
 #if DEBUG
-import Foundation
 import ButtonHeistSupport
-
+import Foundation
 import TheScore
 
 internal enum SemanticObservationWaitResult: Sendable, Equatable {
-    case observation(Observation.SnapshotEvent)
+    case observation(TheVault.State.Current)
     case cycleCompleted
     case deadlineReached
     case cancelled
-    case unavailable(Observation.LogReadError)
+    case unavailable(Observation.History.ReadError)
 }
 
 internal struct SemanticObservationWaiter: Sendable {
-    let moment: Observation.Moment?
+    let historyIndex: Int
     let scope: SemanticObservationScope
     let completesAfterObservationCycle: Bool
     let oneShot: TimedOneShot<SemanticObservationWaitResult>
 }
 
 @MainActor
-internal final class ObservationReplayRelay {
-    private enum Phase {
-        case buffering([Observation.Event])
-        case live
-    }
-
-    private let receiveEvent: (Observation.Event) -> Void
-    private let receiveUnavailable: (Observation.EventsSince) -> Void
-    private var phase = Phase.buffering([])
-
-    internal init(
-        receiveEvent: @escaping (Observation.Event) -> Void,
-        receiveUnavailable: @escaping (Observation.EventsSince) -> Void
-    ) {
-        self.receiveEvent = receiveEvent
-        self.receiveUnavailable = receiveUnavailable
-    }
-
-    internal func receive(_ event: Observation.Event) {
-        switch phase {
-        case .buffering(var events):
-            events.append(event)
-            phase = .buffering(events)
-        case .live:
-            receiveEvent(event)
-        }
-    }
-
-    internal func replay(_ history: Observation.EventsSince) {
-        let buffered: [Observation.Event]
-        switch phase {
-        case .buffering(let events):
-            buffered = events
-        case .live:
-            preconditionFailure("Observation history may be replayed only once")
-        }
-        phase = .live
-
-        let replayedEvents: [Observation.Event]
-        switch history {
-        case .events(let events):
-            replayedEvents = events
-            events.forEach(receiveEvent)
-        case .expired, .unavailable:
-            replayedEvents = []
-            receiveUnavailable(history)
-        }
-        buffered.lazy
-            .filter { !replayedEvents.contains($0) }
-            .forEach(receiveEvent)
-    }
-}
-
-@MainActor
 extension Observation.Stream {
-    internal func events(
-        since moment: Observation.Moment,
-        scope: SemanticObservationScope
-    ) async -> Observation.EventsSince {
-        await storeOwner.readLog {
-            $0.events(since: moment).projected(for: scope)
-        }
-    }
-
-    internal func subscribe(
-        scope: SemanticObservationScope,
-        replayingAfter moment: Observation.Moment,
-        receive: @escaping @MainActor (Observation.Event) -> Void,
-        historyUnavailable: @escaping @MainActor (Observation.EventsSince) -> Void
-    ) async -> SemanticObservationSubscription {
-        let relay = ObservationReplayRelay(
-            receiveEvent: receive,
-            receiveUnavailable: historyUnavailable
-        )
-        let subscription = subscribe(scope: scope, receive: relay.receive)
-        relay.replay(await events(since: moment, scope: scope))
-        return subscription
-    }
-
     internal func waitForObservation(
-        since moment: Observation.Moment?,
+        after historyIndex: Int,
         scope: SemanticObservationScope,
         deadline: SemanticObservationDeadline?,
         completingAfterCurrentCycle: Bool = false
@@ -123,7 +44,7 @@ extension Observation.Stream {
             cancellationValue: .cancelled,
             onRegistered: { oneShot in
                 observationWaiters.insert(SemanticObservationWaiter(
-                    moment: moment,
+                    historyIndex: historyIndex,
                     scope: scope,
                     completesAfterObservationCycle: completingAfterCurrentCycle,
                     oneShot: oneShot
@@ -139,23 +60,18 @@ extension Observation.Stream {
         )
     }
 
-    internal func latestReadObservationMoment(
-        scope: SemanticObservationScope
-    ) async -> Observation.Moment? {
-        await storeOwner.latestMoment(scope: scope)
-    }
-
-    internal func settledEvent(
+    internal func nextObservation(
         scope: SemanticObservationScope,
-        after sequence: SettledObservationSequence?,
+        after historyIndex: Int?,
         timeout: Double?
-    ) async -> Observation.SnapshotEvent? {
-        let baseline = await storeOwner.settledWaitBaseline(scope: scope, after: sequence)
-        let requiredSequence = baseline.requiredSequence
+    ) async -> TheVault.State.Current? {
         if timeout == 0 {
             guard isActive else { return nil }
             if scope != .discovery {
-                return await admittedObservation(scope: scope, after: requiredSequence)?.event
+                return await admittedObservation(
+                    scope: scope,
+                    after: historyIndex
+                )
             }
         }
         let deadline = timeout == 0 ? nil : timeout.map {
@@ -164,21 +80,27 @@ extension Observation.Stream {
                 timeoutSeconds: $0
             )
         }
-        var moment = baseline.moment
+        var cursor = historyIndex ?? (await stateOwner.historyEndIndex())
         while true {
             switch await waitForObservation(
-                since: moment,
+                after: cursor,
                 scope: scope,
                 deadline: deadline,
                 completingAfterCurrentCycle: timeout == 0 && scope == .discovery
             ) {
-            case .observation(let event):
-                moment = event.moment
-                if let latest = await admittedObservation(scope: scope, after: requiredSequence)?.event {
+            case .observation:
+                if let latest = await admittedObservation(
+                    scope: scope,
+                    after: cursor
+                ) {
                     return latest
                 }
+                cursor = await stateOwner.historyEndIndex()
             case .cycleCompleted:
-                return await admittedObservation(scope: scope, after: requiredSequence)?.event
+                return await admittedObservation(
+                    scope: scope,
+                    after: historyIndex
+                )
             case .deadlineReached, .cancelled, .unavailable:
                 return nil
             }
@@ -222,9 +144,10 @@ extension Observation.Stream {
     ) async {
         guard let waiter = observationWaiters[waiterID],
               let result = await observationWaitResult(
-            for: waiter,
-            completedScope: completedScope
-        ) else { return }
+                for: waiter,
+                completedScope: completedScope
+              )
+        else { return }
         resolveObservationWaiter(waiterID, with: result)
     }
 
@@ -232,12 +155,15 @@ extension Observation.Stream {
         for waiter: SemanticObservationWaiter,
         completedScope: SemanticObservationScope?
     ) async -> SemanticObservationWaitResult? {
-        switch await storeOwner.readSnapshot(since: waiter.moment, scope: waiter.scope) {
-        case .event(let event):
-            return .observation(event)
+        switch await stateOwner.current(
+            after: waiter.historyIndex,
+            scope: waiter.scope
+        ) {
+        case .success(.some(let current)):
+            return .observation(current)
         case .failure(let error):
             return .unavailable(error)
-        case .pending:
+        case .success(nil):
             if waiter.completesAfterObservationCycle,
                let completedScope,
                completedScope.canFulfill(waiter.scope) {

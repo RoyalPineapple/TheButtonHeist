@@ -101,6 +101,7 @@ extension ElementInflation {
             } else {
                 pendingRetry = (reason, refreshedResolution)
             }
+            let historyIndex = await vault.semanticObservationStream.stateOwner.historyEndIndex()
             let refresh: TargetRefreshTerminal
             switch identity {
             case .captureLocal(let target):
@@ -108,7 +109,7 @@ extension ElementInflation {
                     for: target,
                     treeElement: currentElement,
                     method: method,
-                    after: await vault.semanticObservationStream.latestReadEvent()?.sequence,
+                    after: historyIndex,
                     deadline: deadline,
                     resolution: pendingRetry.resolution
                 )
@@ -118,7 +119,7 @@ extension ElementInflation {
                     sourceTarget: sourceTarget,
                     pinnedElement: currentElement,
                     method: method,
-                    after: await vault.semanticObservationStream.latestReadEvent()?.sequence,
+                    after: historyIndex,
                     deadline: deadline,
                     resolution: pendingRetry.resolution
                 )

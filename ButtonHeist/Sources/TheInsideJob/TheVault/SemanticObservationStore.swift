@@ -42,17 +42,31 @@ extension TheVault {
     internal struct State {
         internal nonisolated static let defaultRetentionLimit = 256
 
+        private struct NavigationAdmission {
+            let scope: SemanticObservationScope
+            let continuity: ScreenContinuity
+        }
+
         internal private(set) var history: Observation.History
-        internal private(set) var current: Current?
+        internal private(set) var currentSnapshot: Observation.Snapshot?
         internal private(set) var interfaceTree: InterfaceTree = .empty
-        internal private(set) var sequence: SettledObservationSequence = 0
         internal private(set) var scopedScreenChangedSequence: UInt64 = 0
         internal private(set) var settleFailureDiagnostic: String?
 
+        private var navigationAdmission: NavigationAdmission?
         private var admittedTripwireSignal: TheTripwire.TripwireSignal?
         private var notificationIndices = StoreNotificationIndices()
         private var replacementRequired = false
         private var protectedHistoryIndex: Int?
+
+        internal var current: Current? {
+            guard let currentSnapshot, let navigationAdmission else { return nil }
+            return Current(
+                snapshot: currentSnapshot,
+                scope: navigationAdmission.scope,
+                continuity: navigationAdmission.continuity
+            )
+        }
 
         internal var notificationIndex: AccessibilityNotificationCursor {
             notificationIndices.latest
@@ -63,7 +77,8 @@ extension TheVault {
         }
 
         internal mutating func discardCurrentObservation() {
-            current = nil
+            currentSnapshot = nil
+            navigationAdmission = nil
             interfaceTree = .empty
             admittedTripwireSignal = nil
             replacementRequired = true
@@ -86,17 +101,19 @@ extension TheVault {
 
         internal func admittedObservation(
             scope: SemanticObservationScope,
-            after sequence: SettledObservationSequence?
-        ) -> AdmittedObservation? {
-            guard let admittedTripwireSignal,
+            after historyIndex: Int?
+        ) -> Result<Current?, Observation.History.ReadError> {
+            guard admittedTripwireSignal != nil,
                   let current,
-                  current.scope.canFulfill(scope),
-                  current.sequence > (sequence ?? 0)
-            else { return nil }
-            return AdmittedObservation(
-                current: current,
-                tripwireSignal: admittedTripwireSignal
-            )
+                  current.scope.canFulfill(scope)
+            else { return .success(nil) }
+            guard let historyIndex else { return .success(current) }
+            do {
+                _ = try history.events(after: historyIndex)
+                return .success(history.endIndex > historyIndex ? current : nil)
+            } catch {
+                return .failure(error)
+            }
         }
 
         internal func current(
@@ -113,17 +130,6 @@ extension TheVault {
             } catch {
                 return .failure(error)
             }
-        }
-
-        internal func current(
-            scope: SemanticObservationScope,
-            at sequence: SettledObservationSequence
-        ) -> Current? {
-            guard let current,
-                  current.scope.canFulfill(scope),
-                  current.sequence == sequence
-            else { return nil }
-            return current
         }
 
         internal mutating func protectHistory(from index: Int) {
@@ -155,13 +161,13 @@ extension TheVault {
             history.evidence(
                 in: range,
                 baseline: baseline,
-                current: current?.snapshot
+                current: currentSnapshot
             )
         }
 
         internal mutating func readObservation(
             _ admission: Observation.Admission
-        ) -> ReadObservation {
+        ) -> Observation.Publication {
             let notificationRead = notificationRead(for: admission.notificationAdmission)
             let notifications = notificationRead.notifications
             let previousTree = interfaceTree
@@ -193,7 +199,6 @@ extension TheVault {
                 )
             }
             let nextTree = continuity.isReplacement ? admission.tree : candidateTree
-            let nextSequence = sequence + 1
             let snapshot = Self.snapshot(
                 tree: nextTree,
                 admission: admission,
@@ -219,8 +224,8 @@ extension TheVault {
                     currentEvent,
                 ]
             } else {
-                let changed = current.map {
-                    !$0.snapshot.hasSameObservedState(
+                let changed = currentSnapshot.map {
+                    !$0.hasSameObservedState(
                         as: snapshot,
                         geometryTolerance: admission.geometryTolerance
                     )
@@ -239,26 +244,21 @@ extension TheVault {
             let current = Current(
                 snapshot: snapshot,
                 scope: admission.scope,
-                event: currentEvent,
-                continuity: continuity,
-                tree: nextTree,
-                captureID: admission.captureID,
-                semanticSignal: admission.tripwireSignal.semanticValue,
-                notificationSequence: notifications.through.sequence,
-                sequence: nextSequence
+                continuity: continuity
             )
-            next.current = current
+            next.currentSnapshot = snapshot
+            next.navigationAdmission = NavigationAdmission(
+                scope: admission.scope,
+                continuity: continuity
+            )
             next.interfaceTree = nextTree
-            next.sequence = nextSequence
             next.notificationIndices[notificationRead.lane] = notifications.through
             next.scopedScreenChangedSequence = notifications.scopedScreenChangedThrough
             next.settleFailureDiagnostic = nil
             next.replacementRequired = false
             next.admittedTripwireSignal = admission.tripwireSignal
             self = next
-            return ReadObservation(
-                tree: nextTree,
-                captureID: admission.captureID,
+            return Observation.Publication(
                 current: current,
                 historyRange: historyRange,
                 events: events
@@ -316,21 +316,6 @@ extension TheVault {
                 )
             )
         }
-    }
-}
-
-extension TheVault.State {
-    internal struct AdmittedObservation: Sendable, Equatable {
-        internal let current: Current
-        internal let tripwireSignal: TheTripwire.TripwireSignal
-    }
-
-    internal struct ReadObservation: Sendable {
-        internal let tree: InterfaceTree
-        internal let captureID: InterfaceCaptureID
-        internal let current: Current
-        internal let historyRange: Range<Int>
-        internal let events: [Observation.Event]
     }
 }
 

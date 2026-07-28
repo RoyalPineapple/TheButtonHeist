@@ -86,7 +86,7 @@ extension ElementInflation {
             )
         }
 
-        let settledSequence = await vault.semanticObservationStream.latestReadEvent()?.sequence
+        let historyIndex = await vault.semanticObservationStream.stateOwner.historyEndIndex()
         let reveal = await revealSemanticTarget(
             admittedTarget,
             initialElement: treeElement,
@@ -111,7 +111,7 @@ extension ElementInflation {
                     transaction: transaction,
                     resolution: resolution
                 ),
-                after: settledSequence,
+                after: historyIndex,
                 deadline: deadline
             ) {
             case .treeElement(let resolved, let refreshedResolution):
@@ -158,7 +158,7 @@ extension ElementInflation {
         sourceTarget: ResolvedAccessibilityTarget,
         pinnedElement: InterfaceTree.Element,
         method: ActionMethod,
-        after settledSequence: SettledObservationSequence?,
+        after historyIndex: Int?,
         deadline: SemanticObservationDeadline,
         resolution: ActionSubjectResolution
     ) async -> TargetRefreshTerminal {
@@ -169,7 +169,7 @@ extension ElementInflation {
                 method: method,
                 resolution: resolution
             ),
-            after: settledSequence,
+            after: historyIndex,
             deadline: deadline
         )
     }
@@ -178,7 +178,7 @@ extension ElementInflation {
         for target: ResolvedAccessibilityTarget,
         treeElement: InterfaceTree.Element,
         method: ActionMethod,
-        after settledSequence: SettledObservationSequence?,
+        after historyIndex: Int?,
         deadline: SemanticObservationDeadline,
         resolution: ActionSubjectResolution
     ) async -> TargetRefreshTerminal {
@@ -189,30 +189,30 @@ extension ElementInflation {
                 method: method,
                 resolution: resolution
             ),
-            after: settledSequence,
+            after: historyIndex,
             deadline: deadline
         )
     }
 
     private func awaitTargetRefresh(
         mode: TargetRefreshMode,
-        after settledSequence: SettledObservationSequence?,
+        after historyIndex: Int?,
         deadline: SemanticObservationDeadline
     ) async -> TargetRefreshTerminal {
-        var sequence = settledSequence
+        var cursor = historyIndex
         var didAttemptKnownTargetReveal = false
         var resolution = mode.resolution
 
         while deadline.hasTimeRemaining(at: RuntimeElapsed.now) {
             guard !Task.isCancelled else { return .cancelled }
-            guard let event = await vault.semanticObservationStream.settledEvent(
+            guard await vault.semanticObservationStream.nextObservation(
                 scope: .visible,
-                after: sequence,
+                after: cursor,
                 timeout: deadline.remainingSeconds()
-            ) else {
+            ) != nil else {
                 return Task.isCancelled ? .cancelled : .timedOut
             }
-            sequence = event.sequence
+            cursor = await vault.semanticObservationStream.stateOwner.historyEndIndex()
 
             switch targetRefreshResolution(
                 mode: mode,

@@ -43,7 +43,7 @@ extension Navigation {
         deadline: SemanticObservationDeadline? = nil,
         maxScrollsPerContainer: Int? = nil,
         maxScrollsPerDiscovery: Int? = nil,
-        onObservation: ((Observation.SnapshotEvent) async -> ViewportExplorationDecision)? = nil,
+        onObservation: ((TheVault.State.Current) async -> ViewportExplorationDecision)? = nil,
     ) async -> InterfaceExplorationResult? {
         let explorer = ViewportExplorer(
             navigation: self,
@@ -55,12 +55,12 @@ extension Navigation {
             ),
             searchOrder: searchOrder,
         )
-        return await explorer.exploreViewports(exitPosition: exitPosition) { event in
-            if let decision = await onObservation?(event), decision == .goalSatisfied {
+        return await explorer.exploreViewports(exitPosition: exitPosition) { current in
+            if let decision = await onObservation?(current), decision == .goalSatisfied {
                 return .goalSatisfied
             }
             guard let target else { return .continue }
-            return vault.hasVisibleTerminalResolution(target, in: event.snapshot.observation.tree)
+            return vault.hasVisibleTerminalResolution(target, in: vault.latestObservation.tree)
                 ? .goalSatisfied
                 : .continue
         }
@@ -73,7 +73,7 @@ extension Navigation {
         discoveryCommitPolicy: DiscoveryCommitPolicy,
         notificationWindow: AccessibilityNotificationScopeLease? = nil,
         afterViewportMovement: Bool = false
-    ) async -> Observation.SnapshotEvent? {
+    ) async -> TheVault.State.Current? {
         defer { notificationWindow?.cancel() }
         guard afterViewportMovement
                 || (!Task.isCancelled && hasTimeRemaining(before: deadline))
@@ -98,12 +98,12 @@ extension Navigation {
             // land, so a page that still looks unmoved is mid-flight, not a
             // failed scroll. Whether the reading counts as a change is the
             // vault's question.
-            if let event = await vault.semanticObservationStream.commitSettledDiscoveryObservation(
+            if let current = await vault.semanticObservationStream.commitSettledDiscoveryObservation(
                 discoveryCommitPolicy: discoveryCommitPolicy,
                 afterViewportMovement: afterViewportMovement,
                 notificationBatch: notificationWindow?.capture()
-            )?.event {
-                return event
+            )?.current {
+                return current
             }
         } while transitionDeadline.hasTimeRemaining(at: RuntimeElapsed.now)
             && (afterViewportMovement || hasTimeRemaining(before: deadline))

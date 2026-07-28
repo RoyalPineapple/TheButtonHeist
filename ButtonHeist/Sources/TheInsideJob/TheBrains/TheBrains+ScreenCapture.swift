@@ -59,7 +59,7 @@ extension TheBrains {
         guard let observation = await interactionCoordinator.admittedVisibleObservation(timeout: 1.0) else {
             return .failure(.accessibilityTreeUnavailable)
         }
-        let moment = observation.event.moment
+        let interface = observation.snapshot.interface
 
         guard let screenCapture = vault.captureScreen() else {
             return .failure(.appWindowUnavailable)
@@ -69,7 +69,7 @@ extension TheBrains {
             guard let payload = renderAccessibilitySnapshotPayload(
                 image: screenCapture.image,
                 bounds: screenCapture.bounds,
-                interface: moment.capture.interface
+                interface: interface
             ) else {
                 return .failure(.accessibilitySnapshotRenderingFailed)
             }
@@ -84,7 +84,7 @@ extension TheBrains {
             pngData: pngData.base64EncodedString(),
             width: screenCapture.bounds.width,
             height: screenCapture.bounds.height,
-            interface: moment.capture.interface
+            interface: interface
         ) else {
             return .failure(.invalidScreenDimensions)
         }

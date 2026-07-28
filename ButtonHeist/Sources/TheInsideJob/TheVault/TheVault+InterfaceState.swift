@@ -16,10 +16,6 @@ extension TheVault {
         await semanticObservationStream.discardCurrentObservation()
     }
 
-    func invalidateSettledObservationFromTripwire() async {
-        await semanticObservationStream.discardCurrentObservation()
-    }
-
     /// Refresh the latest live viewport evidence. The returned value remains the raw
     /// capture-local observation for geometry and exploration consumers.
     @discardableResult

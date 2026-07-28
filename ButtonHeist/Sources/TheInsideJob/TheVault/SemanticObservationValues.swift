@@ -3,166 +3,41 @@
 import Foundation
 import TheScore
 
-internal struct ScreenGeneration: RawRepresentable, Sendable, Equatable, Hashable {
-    internal static let initial = ScreenGeneration(rawValue: 0)
+extension TheVault.State {
+    /// Read projection of the Vault's current snapshot and navigation admission.
+    ///
+    /// The State owns the snapshot and interface tree. This projection carries
+    /// neither a second tree nor capture identity.
+    internal struct Current: Sendable, Equatable {
+        internal let snapshot: Observation.Snapshot
+        internal let scope: SemanticObservationScope
+        internal let continuity: ScreenContinuity
 
-    internal let rawValue: UInt64
-
-    internal func advanced() -> ScreenGeneration {
-        ScreenGeneration(rawValue: rawValue + 1)
-    }
-}
-
-extension Observation {
-    internal struct Gap: Sendable, Equatable {
-        internal let reason: Reason
-        internal let baseline: Moment
-        internal let current: Moment
-    }
-
-    internal enum TransitionValidationError: Error, Sendable, Equatable {
-        case logIndexDidNotAdvance
-        case generationMismatch(from: ScreenGeneration, to: ScreenGeneration)
-        case replacementGenerationDidNotAdvance(from: ScreenGeneration, to: ScreenGeneration)
-    }
-
-    internal enum Transition: Sendable, Equatable {
-        case initial
-        case sameGeneration(previous: Moment)
-        case screenBoundary(previous: Moment)
-
-        internal var previousMoment: Moment? {
-            switch self {
-            case .initial:
-                nil
-            case .sameGeneration(let previous), .screenBoundary(let previous):
-                previous
-            }
-        }
-    }
-
-    internal struct Snapshot: Sendable, Equatable {
-        internal let sequence: SettledObservationSequence
-        internal let generation: ScreenGeneration
-        internal let sourceScope: SemanticObservationScope
-        internal let semanticSignal: TheTripwire.SemanticSignal
-        internal let notificationSequence: UInt64
-        internal let trace: AccessibilityTrace
-        private let tree: InterfaceTree
-        private let captureID: InterfaceCaptureID
-
-        /// The semantic state of this screen, for asking whether it moved.
-        ///
-        /// The hash and not `==`: `InterfaceTree` holds its `viewportCapture`,
-        /// so comparing two whole trees counts a scroll that revealed nothing
-        /// as a change. The hash is the semantic reading, which is the one the
-        /// question means.
-        internal var semanticHash: String {
-            tree.interfaceHash
-        }
-
-        /// Where this screen's visible elements sat when it was read.
-        ///
-        /// Paired with `semanticHash` to ask whether the tree moved at all:
-        /// semantics catch a label or a value changing, placements catch an
-        /// element still sliding into position.
-        ///
-        /// Held as frames rather than a digest because the comparison is a
-        /// tolerance, not an equality: "within 8pt of" has nothing to hash.
-        internal let viewportFrames: [HeistId: CGRect]
-
-        /// How far an element may drift and still count as having held still.
-        /// Read from the device when this observation was taken, because the
-        /// comparison happens off the main actor and cannot ask.
-        internal let placementTolerance: CGFloat
-
-        /// What a screen predicate matches this screen by: its first heading.
-        ///
-        /// The same rule the replayed trace uses, deliberately — one reading, so
-        /// a caller writing `changed(.screen("Order Details"))` cannot match
-        /// live and miss on replay. Nil when the screen has no heading, which
-        /// makes a named predicate refuse: there is nothing to have matched.
         internal var screenHeading: String? {
-            trace.captures.last.flatMap { InterfaceSummary.screenName(for: $0.interface) }
+            InterfaceSummary.screenName(for: snapshot.interface)
         }
-
-        internal var observation: InterfaceObservation {
-            do {
-                return try InterfaceObservation.build(
-                    tree: tree,
-                    dispatchReferences: .empty,
-                    captureID: captureID
-                )
-            } catch {
-                preconditionFailure("Committed semantic observation failed validation: \(error)")
-            }
+        internal var summary: String {
+            let interfaceSummary = "interface: \(snapshot.interface.projectedElements.count) elements"
+            guard let screenID = snapshot.context.screenId else { return interfaceSummary }
+            return "screen: \(screenID); \(interfaceSummary)"
         }
-
-        internal init(
-            sequence: SettledObservationSequence,
-            generation: ScreenGeneration,
-            sourceScope: SemanticObservationScope,
-            tree: InterfaceTree,
-            captureID: InterfaceCaptureID,
-            semanticSignal: TheTripwire.SemanticSignal,
-            notificationSequence: UInt64,
-            trace: AccessibilityTrace,
-            viewportFrames: [HeistId: CGRect],
-            placementTolerance: CGFloat
-        ) {
-            self.sequence = sequence
-            self.generation = generation
-            self.sourceScope = sourceScope
-            self.semanticSignal = semanticSignal
-            self.notificationSequence = notificationSequence
-            self.trace = trace
-            self.tree = tree
-            self.captureID = captureID
-            self.viewportFrames = viewportFrames
-            self.placementTolerance = placementTolerance
-        }
-
-        internal init(
-            sequence: SettledObservationSequence,
-            generation: ScreenGeneration,
-            sourceScope: SemanticObservationScope,
-            observation: InterfaceObservation,
-            semanticSignal: TheTripwire.SemanticSignal,
-            notificationSequence: UInt64,
-            trace: AccessibilityTrace,
-            viewportFrames: [HeistId: CGRect],
-            placementTolerance: CGFloat
-        ) {
-            self.init(
-                sequence: sequence,
-                generation: generation,
-                sourceScope: sourceScope,
-                tree: observation.tree,
-                captureID: observation.captureID,
-                semanticSignal: semanticSignal,
-                notificationSequence: notificationSequence,
-                trace: trace,
-                viewportFrames: viewportFrames,
-                placementTolerance: placementTolerance
-            )
-        }
-    }
-
-}
-
-extension Observation.Gap {
-    internal enum Reason: Sendable, Equatable {
-        case noObservationAfterBaseline
-        case scopeChanged
-        case historyUnavailable
-        case historyEvicted
     }
 }
 
 extension Observation {
+    /// One admitted observation's exact retained range and authored events.
+    internal struct Publication: Sendable {
+        internal let current: TheVault.State.Current
+        internal let historyRange: Range<Int>
+        internal let events: [Event]
+
+        internal func events(after historyIndex: Int) -> ArraySlice<Event> {
+            events.dropFirst(Swift.max(0, historyIndex - historyRange.lowerBound))
+        }
+    }
+
     internal struct Admission: Sendable {
         internal let tree: InterfaceTree
-        internal let captureID: InterfaceCaptureID
         internal let tripwireSignal: TheTripwire.TripwireSignal
         internal let discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy
         internal let lineage: ScreenLineage
@@ -175,7 +50,7 @@ extension Observation {
         internal let viewportFrames: [HeistId: CGRect]
         /// The device's touch-target size, captured eagerly because the
         /// comparison that uses it runs off the main actor.
-        internal let placementTolerance: CGFloat
+        internal let geometryTolerance: CGFloat
     }
 
     internal enum NotificationAdmission: Sendable {
@@ -183,50 +58,42 @@ extension Observation {
         case action(NotificationSnapshot)
     }
 
-    internal enum PublicationOutcome: Sendable {
-        case delivered(Store.ReadObservation)
-        case superseded
-
-        internal var event: SnapshotEvent? {
-            guard case .delivered(let read) = self else { return nil }
-            return read.event
-        }
-    }
-
     internal struct NotificationSnapshot: Sendable {
-        internal let evidence: [AccessibilityNotificationEvidence]
+        internal let admittedNotifications: [AdmittedNotification]
         internal let through: AccessibilityNotificationCursor
         internal let scopedScreenChangedThrough: UInt64
-        internal let gap: AccessibilityNotificationGap?
 
         internal func notifications(
             after cursor: AccessibilityNotificationCursor,
             scopedScreenChangedCursor: UInt64
         ) -> Notifications {
-            let selectedEvidence = evidence.filter { $0.sequence > cursor.sequence }
+            let selectedNotifications = admittedNotifications.filter {
+                $0.sequence > cursor.sequence
+            }
             return Notifications(
-                kinds: selectedEvidence.map(\.kind),
-                evidence: selectedEvidence,
+                admittedNotifications: selectedNotifications,
                 through: AccessibilityNotificationCursor(
                     sequence: max(cursor.sequence, through.sequence)
                 ),
                 scopedScreenChangedThrough: max(
                     scopedScreenChangedCursor,
                     scopedScreenChangedThrough
-                ),
-                gap: gap.flatMap {
-                    $0.droppedThroughSequence > cursor.sequence ? $0 : nil
-                }
+                )
             )
         }
     }
 
     internal struct Notifications: Sendable {
-        internal let kinds: [AccessibilityNotificationKind]
-        internal let evidence: [AccessibilityNotificationEvidence]
+        internal let admittedNotifications: [AdmittedNotification]
         internal let through: AccessibilityNotificationCursor
         internal let scopedScreenChangedThrough: UInt64
-        internal let gap: AccessibilityNotificationGap?
+    }
+
+    internal struct AdmittedNotification: Sendable, Equatable {
+        internal let sequence: UInt64
+        internal let kind: AccessibilityNotificationKind
+        internal let text: String?
+        internal let element: HeistElement.Semantics?
     }
 }
 
@@ -276,15 +143,10 @@ internal struct CommittableInterfaceObservation {
 
 }
 
-/// The settlement result available after an action observation attempt.
 @MainActor
-internal struct ObservationSettlement {
-    internal enum CommitOutcome {
-        case committed(Observation.SnapshotEvent)
-        case unavailable
-    }
-
-    internal let commitOutcome: CommitOutcome
+internal enum VisibleObservationOutcome {
+    case committed(TheVault.State.Current)
+    case unavailable
 }
 
 #endif // DEBUG

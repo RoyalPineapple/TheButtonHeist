@@ -17,30 +17,30 @@ final class InteractionCoordinator {
 
     func refreshedVisibleObservation(
         timeout: Double? = InteractionCoordinator.defaultTimeoutSeconds
-    ) async -> Observation.Store.AdmittedObservation? {
+    ) async -> TheVault.State.Current? {
         await vault.semanticObservationStream.refreshedVisibleObservation(timeout: timeout)
     }
 
     func admittedVisibleObservation(
         timeout: Double? = InteractionCoordinator.defaultTimeoutSeconds
-    ) async -> Observation.Store.AdmittedObservation? {
+    ) async -> TheVault.State.Current? {
         await vault.semanticObservationStream.admittedVisibleObservation(timeout: timeout)
     }
 
-    func settledEvent(
+    func settledCurrent(
         scope: SemanticObservationScope,
-        after sequence: SettledObservationSequence?,
+        after historyIndex: Int?,
         timeout: Double?
-    ) async -> Observation.SnapshotEvent? {
-        if sequence == nil, timeout == 0 {
+    ) async -> TheVault.State.Current? {
+        if historyIndex == nil, timeout == 0 {
             return await vault.semanticObservationStream.admittedObservation(
                 scope: scope,
                 after: nil
-            )?.event
+            )
         }
-        return await vault.semanticObservationStream.settledEvent(
+        return await vault.semanticObservationStream.nextObservation(
             scope: scope,
-            after: sequence,
+            after: historyIndex,
             timeout: timeout ?? Self.defaultTimeoutSeconds
         )
     }
