@@ -248,14 +248,9 @@ internal final class Stream {
             timeout: .milliseconds(Int(TheTripwire.singleTickSettleTimeout * 1_000)),
             demand: .ambient
         )
-        await discardIfSignalChanged(to: currentTripwireSignal())
         guard !Task.isCancelled else { return false }
         _ = await refreshVisibleObservation()
         return !Task.isCancelled
-    }
-
-    func discardIfSignalChanged(to signal: TheTripwire.TripwireSignal) async {
-        await storeOwner.discardIfSignalChanged(to: signal)
     }
 
 }

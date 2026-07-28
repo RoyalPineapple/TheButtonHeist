@@ -45,10 +45,6 @@ extension Observation {
             store.discardCurrentObservation()
         }
 
-        internal func discardIfSignalChanged(to signal: TheTripwire.TripwireSignal) {
-            store.discardIfSignalChanged(to: signal)
-        }
-
         internal func admittedObservation(
             scope: SemanticObservationScope,
             after sequence: SettledObservationSequence?

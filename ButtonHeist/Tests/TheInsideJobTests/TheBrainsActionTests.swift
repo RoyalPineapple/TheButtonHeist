@@ -499,7 +499,16 @@ final class TheBrainsActionTests: XCTestCase {
         )
         var log = Observation.Log(retentionLimit: 1)
         do {
-            return try log.record(snapshot: snapshot, continuity: .sameGeneration)
+            // A scripted screen change is a screen change: the notification and
+            // the continuity are one fact, so a fixture that stages the first
+            // states the second. Recording the notification as `.sameGeneration`
+            // would script a reading whose evidence and whose meaning disagree.
+            return try log.record(
+                snapshot: snapshot,
+                continuity: screenChanged
+                    ? .replacement(.screenChangedNotification)
+                    : .sameGeneration
+            )
         } catch {
             preconditionFailure("Test observation fixture produced an invalid transition: \(error)")
         }

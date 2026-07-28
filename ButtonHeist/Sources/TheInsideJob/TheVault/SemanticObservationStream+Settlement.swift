@@ -60,7 +60,6 @@ extension Observation.Stream {
         after sequence: SettledObservationSequence?
     ) async -> Observation.Store.AdmittedObservation? {
         await discardIfScreenChangedSinceRead()
-        await discardIfSignalChanged(to: currentTripwireSignal())
         return await storeOwner.admittedObservation(scope: scope, after: sequence)
     }
 
@@ -212,7 +211,6 @@ extension Observation.Stream {
     private func startVisibleRefresh(
         tripwireSignal: TheTripwire.TripwireSignal
     ) async -> ObservationSettlement {
-        await discardIfSignalChanged(to: tripwireSignal)
         let task = Task { @MainActor in
             await self.produceVisibleSettlement(tripwireSignal: tripwireSignal)
         }

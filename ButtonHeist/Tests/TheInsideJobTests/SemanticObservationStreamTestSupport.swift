@@ -193,6 +193,23 @@ class SemanticObservationStreamTestCase: XCTestCase {
 /// still moving when it ended. Quiet is committed rather than asserted —
 /// `isChange` is derived from the snapshot before it, so the quiet half is a
 /// real event from the vault like its change.
+/// The ticks the vault would mint for this reading.
+///
+/// Standing in for the vault means minting what the vault mints: a reading that
+/// held the screen is one tick, and a reading that replaced it is three — the
+/// old screen's nodes depart, the identity moves, the new screen's nodes arrive.
+/// A script that collapsed a boundary into its arrival alone would describe a
+/// world where screens change without anything being able to wait for it.
+@MainActor
+private func scriptedTicks(for event: Observation.SnapshotEvent) -> [Tick] {
+    guard event.continuity.isReplacement else { return [event.derivedTick] }
+    return [
+        .elementsChanged(.empty(at: event.moment.capture.interface.timestamp)),
+        .screenChanged(ScreenFacts(idAfter: event.snapshot.screenHeading)),
+        .elementsChanged(event.moment.capture),
+    ]
+}
+
 @MainActor
 func scriptedSettlement(
     _ command: Settlement.Command,
@@ -229,10 +246,12 @@ func scriptedSettlement(
             observationBoundary: .including(observed.changed.moment)
         )))
         for event in [observed.changed, observed.settled] {
-            run.send(.observationAdmitted(.init(
-                tick: event.derivedTick,
-                event: event
-            )))
+            for tick in scriptedTicks(for: event) {
+                run.send(.observationAdmitted(.init(
+                    tick: tick,
+                    event: event
+                )))
+            }
         }
     }
 

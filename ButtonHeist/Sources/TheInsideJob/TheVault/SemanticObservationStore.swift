@@ -48,7 +48,6 @@ extension Observation {
         private var notificationIndices = StoreNotificationIndices()
         internal private(set) var scopedScreenChangedSequence: UInt64 = 0
         internal private(set) var settleFailureDiagnostic: String?
-        private var replacementRequired = false
         private var activeSettlementBoundaries: [Moment] = []
 
         /// The newest reading in the log.
@@ -78,27 +77,18 @@ extension Observation {
 
         /// Throws away what the vault holds.
         ///
-        /// There is nothing to mark: the tree goes, and the reading after this
-        /// one opens a new screen because it has nothing to continue from.
+        /// The empty tree is the whole record: the next reading has nothing
+        /// before it, so the classifier compares against nothing and says what
+        /// the reading is. Nothing is marked, because there is nothing a mark
+        /// could add to a tree that is already gone.
+        ///
+        /// The settle diagnostic stays. It records why a past settle failed,
+        /// which is a fact about something that already happened; the tree is
+        /// what the vault holds now. Letting go of the second says nothing about
+        /// the first.
         internal mutating func discardCurrentObservation() {
             interfaceTree = .empty
             admittedTripwireSignal = nil
-            replacementRequired = true
-            settleFailureDiagnostic = nil
-        }
-
-        /// Throws the tree away when the signal it was read under is gone.
-        ///
-        /// A reading describes the window state it was taken under, so a signal
-        /// that moved means what the vault holds describes something that is no
-        /// longer there. There is nothing to mark stale: the tree goes, and the
-        /// next reading is the next reading.
-        internal mutating func discardIfSignalChanged(
-            to tripwireSignal: TheTripwire.TripwireSignal
-        ) {
-            guard let admittedSignal = admittedTripwireSignal,
-                  admittedSignal != tripwireSignal else { return }
-            discardCurrentObservation()
         }
 
         /// The newest reading past `sequence`, when it answers this scope.
@@ -212,15 +202,12 @@ extension Observation {
                     : previousTree.merging(admission.tree)
                 candidateTree = comparedTree
             }
-            let classifiedContinuity = ScreenClassifier.classify(
+            let continuity = ScreenClassifier.classify(
                 from: previousTree == .empty ? nil : previousTree,
                 to: comparedTree,
                 notifications: notifications.kinds,
                 lineage: admission.lineage
             )
-            let continuity = replacementRequired
-                ? ScreenContinuity.replacement(.screenChangedNotification)
-                : classifiedContinuity
             if continuity.isReplacement {
                 // The departure, emitted before the old tree is let go. Identity
                 // does not survive a boundary, so a `missing` half needs a
@@ -268,7 +255,6 @@ extension Observation {
             next.notificationIndices[notificationLane] = notifications.through
             next.scopedScreenChangedSequence = notifications.scopedScreenChangedThrough
             next.settleFailureDiagnostic = nil
-            next.replacementRequired = false
             next.admittedTripwireSignal = admission.tripwireSignal
             self = next
             if continuity.isReplacement {

@@ -30,16 +30,12 @@ final class TickLogFoldTests: XCTestCase {
     }
 
     func testAReplacementIsThreeOrderedTicks() {
-        let arriving = interface(["Checkout"])
-        let ticks = TickLog.replacement(
-            screen: ScreenFacts(idAfter: "Checkout"),
-            arriving: arriving
-        )
+        let ticks = replacement(arriving: interface(["Checkout"]))
 
-        XCTAssertEqual(ticks.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
-        XCTAssertEqual(ticks.last, .elementsChanged(arriving))
-        guard case .elementsChanged(let emptied) = ticks[0] else {
-            return XCTFail("Expected the departure tick to carry a tree")
+        guard case .elementsChanged(let emptied) = ticks[0],
+              case .screenChanged = ticks[1],
+              case .elementsChanged = ticks[2] else {
+            return XCTFail("A replacement departs, moves identity, then arrives")
         }
         XCTAssertTrue(emptied.interface.projectedElements.isEmpty, "The old screen empties first")
     }
@@ -48,10 +44,7 @@ final class TickLogFoldTests: XCTestCase {
     /// until the before leg drained, so the empty tree answers `missing` and only
     /// the arriving graph answers `exists`.
     func testAppearedDrainsAcrossAReplacementBecauseItsLegsReadDifferentTicks() throws {
-        let ticks = TickLog.replacement(
-            screen: ScreenFacts(idAfter: "Checkout"),
-            arriving: interface(["Checkout"])
-        )
+        let ticks = replacement(arriving: interface(["Checkout"]))
         let appeared = try changed(.appeared(.label("Checkout")))
 
         XCTAssertTrue(Expectation([appeared]).folding(ticks + [.noChange]).isMet)
@@ -81,6 +74,20 @@ final class TickLogFoldTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    /// The three ticks a screen replacement emits, in order.
+    ///
+    /// The vault mints these as one reading passes through its three moments —
+    /// the old screen's nodes depart, the identity moves, the new screen's nodes
+    /// arrive. Written out here as values, so a fold can be asked about the
+    /// sequence without a vault to produce it.
+    private func replacement(arriving: AccessibilityTrace.Capture) -> [Tick] {
+        [
+            .elementsChanged(.empty(at: Date(timeIntervalSince1970: 0))),
+            .screenChanged(ScreenFacts(idAfter: "Checkout")),
+            .elementsChanged(arriving),
+        ]
+    }
 
     private func exists(_ label: String) throws -> ResolvedAccessibilityPredicate {
         try AccessibilityPredicate.exists(.label(label)).resolve(in: .empty)

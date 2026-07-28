@@ -64,6 +64,14 @@ package struct PendingPredicate: Equatable, Sendable {
         }
     }
 
+    /// Whether this is the stillness gate rather than a leg of the expectation.
+    ///
+    /// The gate is outstanding until stillness arrives, so a caller listing what
+    /// an expectation is still waiting *on* asks this to leave it out.
+    package var isStillnessGate: Bool {
+        kind == .noChange
+    }
+
     static func elementsChanged(
         _ query: ResolvedAccessibilityPredicate? = nil,
         scope: ReadingScope? = nil

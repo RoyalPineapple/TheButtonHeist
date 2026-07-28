@@ -425,7 +425,7 @@ final class PredicateTruthMatrixTests: XCTestCase {
     /// What the expectation is still waiting on, without the settlement gate —
     /// which is outstanding until stillness arrives and is not a leg.
     private func legs(of expectation: Expectation) -> [String] {
-        expectation.outstanding.filter { $0.tick != .noChange }.map(\.description)
+        expectation.outstanding.filter { !$0.isStillnessGate }.map(\.description)
     }
 
     private struct Decomposition {
@@ -810,7 +810,7 @@ final class PredicateTruthMatrixTests: XCTestCase {
     /// Compared as values against what `Shape` resolves to, so a row states
     /// *which* search is outstanding rather than testing a rendered word.
     private func owed(_ expectation: Expectation) -> [ResolvedAccessibilityPredicate] {
-        expectation.outstanding.filter { $0.tick != .noChange }.compactMap(\.query)
+        expectation.outstanding.filter { !$0.isStillnessGate }.compactMap(\.query)
     }
 
     private func nameless() throws -> ResolvedAccessibilityPredicate {
