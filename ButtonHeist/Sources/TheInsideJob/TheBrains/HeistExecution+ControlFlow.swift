@@ -222,19 +222,9 @@ private extension HeistExecution.Machine {
     ) -> HeistExecution.State {
         switch step {
         case .action(let action):
-            switch begin(action: action, context: context) {
-            case .pending(let state):
-                return state
-            case .complete(let result):
-                return resume(afterCompletedLeaf: result)
-            }
+            return begin(action: action, context: context)
         case .wait(let wait):
-            switch begin(wait: wait, context: context) {
-            case .pending(let state):
-                return state
-            case .complete(let result):
-                return resume(afterCompletedLeaf: result)
-            }
+            return begin(wait: wait, context: context)
         case .conditional(let conditional):
             return begin(conditional: conditional, context: context)
         case .forEachElement(let loop):
@@ -466,12 +456,7 @@ private extension HeistExecution.Machine {
         selection: HeistCaseSelectionResult,
         children: HeistExecutedChildren
     ) -> HeistExecutionStepResult {
-        let evidence = HeistCaseSelectionEvidence(
-            selection: selection.outcome == .noMatch
-                && !children.values.isEmpty
-                ? selection.selectingElseBranch()
-                : selection
-        )
+        let evidence = HeistCaseSelectionEvidence(selection: selection)
         switch children {
         case .passed(let children):
             return .conditional(
@@ -876,7 +861,7 @@ private extension HeistExecution.Machine {
         failedIterationIndex: Int
     ) -> HeistExecutionStepResult {
         let observed = loop.previousMatchHash == nil
-            ? "could not observe settled semantic hierarchy before evaluating for_each_element"
+            ? "could not observe the current semantic snapshot before evaluating for_each_element"
             : "iteration \(failedIterationIndex) post-observation unavailable"
         let evidence = HeistFailedForEachElementEvidence(admitted: .executedSummary(
             matchedCount: loop.matchedCount,
@@ -890,7 +875,7 @@ private extension HeistExecution.Machine {
                 evidence: .observed(evidence),
                 failure: .init(
                     category: .runtimeUnavailable,
-                    contract: "settled semantic hierarchy is observable before for_each_element matching",
+                    contract: "an admitted semantic snapshot is observable before for_each_element matching",
                     observed: observed
                 ),
                 children: passingChildren(loop.iterations)
@@ -1190,15 +1175,13 @@ private extension HeistExecution.Machine {
                 )
             )
         }
-        guard let expectationResult,
-              let expectation = expectationResult.waitEvidence else {
+        guard let expectationResult else {
             preconditionFailure("An invocation expectation must complete as a wait result")
         }
-        let evidence = HeistInvocationEvidence.completed(
-            expectation: .wait(expectation)
-        )
-        guard !expectation.actionResult.outcome.isSuccess
-                || !expectation.expectation.met else {
+        if let matched = expectationResult.passedWaitEvidence {
+            let evidence = HeistInvocationEvidence.completed(
+                expectation: .waitPassed(matched)
+            )
             return .invocation(
                 path: invocation.context.path,
                 invocationPath: invocation.step.path,
@@ -1209,6 +1192,12 @@ private extension HeistExecution.Machine {
                 )
             )
         }
+        guard let unmatched = expectationResult.unmatchedWaitEvidence else {
+            preconditionFailure("An invocation expectation must retain wait evidence")
+        }
+        let evidence = HeistInvocationEvidence.completed(
+            expectation: .waitUnmatched(unmatched)
+        )
         return .invocation(
             path: invocation.context.path,
             invocationPath: invocation.step.path,
@@ -1218,7 +1207,7 @@ private extension HeistExecution.Machine {
                 failure: .init(
                     category: .expectation,
                     contract: "heist invocation expectation is met",
-                    observed: invocationExpectationObserved(expectation),
+                    observed: invocationExpectationObserved(unmatched),
                     expected: invocation.step.expectation?.predicate.description
                 ),
                 children: children
@@ -1311,16 +1300,9 @@ private extension HeistExecution.Machine {
     }
 
     func invocationExpectationObserved(
-        _ evidence: HeistSettlementEvidence
+        _ evidence: HeistWaitUnmatchedEvidence
     ) -> String {
-        [
-            evidence.expectation.actual,
-            evidence.actionResult.message,
-            evidence.actionResult.outcome.failureKind.map {
-                "failureKind=\($0.rawValue)"
-            },
-            evidence.actionResult.settled.map { "settled=\($0)" },
-        ].compactMap { $0 }.joined(separator: "; ")
+        evidence.expectation.actual ?? "invocation expectation was not met"
     }
 }
 
@@ -1454,17 +1436,18 @@ private extension HeistExecution.Machine {
         bodyChildren: HeistPassingChildren,
         result: HeistExecutionStepResult
     ) -> HeistExecution.State {
-        guard let evidence = result.waitEvidence else {
+        guard let expectation = result.waitExpectation,
+              let observation = result.waitObservation else {
             preconditionFailure("repeat_until check requires wait evidence")
         }
-        let snapshot = evidence.actionResult.observationEvidence?.current
-        switch evidence.expectation {
+        let snapshot = observation.current
+        switch expectation {
         case .met:
             return resumePassingRepeat(
                 loop,
                 resolved: resolvedRepeat(loop),
                 children: bodyChildren,
-                evaluation: evidence.expectation,
+                evaluation: expectation,
                 snapshot: snapshot
             )
         case .unmet(let expectation):
@@ -1823,24 +1806,16 @@ private extension HeistExecution.Machine {
         _ waitElse: HeistExecution.WaitElseContinuation,
         children: HeistExecutedChildren
     ) -> HeistExecutionStepResult {
-        let evidence = HeistSettlementEvidence.handledElse(
-            .init(
-                executed: waitElse.evidence.actionResult,
-                expectation: waitElse.evidence.expectation
-            ),
-            baselineSummary: waitElse.evidence.baselineSummary,
-            finalSummary: waitElse.evidence.finalSummary
-        )
         let completion: HeistWaitCompletion
         switch children {
         case .passed(let children):
             completion = .passed(
-                evidence: .init(admitted: evidence),
+                evidence: .handledElse(waitElse.evidence),
                 children: children
             )
         case .aborted(let children):
             completion = .childAborted(
-                evidence: .init(admitted: evidence),
+                evidence: waitElse.evidence,
                 failure: childFailure(
                     category: .wait,
                     path: children.abortedAtPath
@@ -1891,10 +1866,7 @@ private extension HeistExecution.Machine {
     func snapshotSummary(
         _ snapshot: Observation.Snapshot?
     ) -> String? {
-        guard let snapshot else { return nil }
-        let interface = "interface: \(snapshot.interface.projectedElements.count) elements"
-        guard let screenID = snapshot.context.screenId else { return interface }
-        return "screen: \(screenID); \(interface)"
+        snapshot?.summary
     }
 
     func latestSnapshot(
@@ -1905,8 +1877,7 @@ private extension HeistExecution.Machine {
                 .observationEvidence?.current {
                 return current
             }
-            if let current = result.waitEvidence?.actionResult
-                .observationEvidence?.current {
+            if let current = result.waitObservation?.current {
                 return current
             }
             if let current = latestSnapshot(in: result.children) {
