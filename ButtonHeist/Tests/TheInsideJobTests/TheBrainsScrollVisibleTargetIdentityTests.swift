@@ -67,7 +67,7 @@ extension TheBrainsScrollTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
+        await brains.tripwire.awaitObservedWindow()
 
         let result = await brains.navigation.executeScrollToVisible(
             target: try resolvedScrollToVisibleTarget(
@@ -101,7 +101,10 @@ extension TheBrainsScrollTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
+        // Nothing waits for a reading here: the tree this test resolves against
+        // is the synthetic one installed below, and a live reading landing first
+        // would put the real offscreen views in the vault — which is exactly
+        // what the premature-resolution check says must not be there.
         let scrollContainerPath = TreePath([0])
         let liveScreen = InterfaceObservation.makeForTests(
             elements: [:],

@@ -42,7 +42,7 @@ extension TheBrainsActionTests {
             bridgeReadCountAtFocus = bridgeReadCount
         }
         brains.tripwire.startPulse()
-        await brains.tripwire.yieldFrames(3)
+        await brains.tripwire.awaitObservedWindow()
 
         let command = try HeistActionCommand.typeText(
             text: "hello",
@@ -87,7 +87,7 @@ extension TheBrainsActionTests {
             keyboardBridgeProvider: { keyboardImpl.bridge() }
         ))
         brains.tripwire.startPulse()
-        await brains.tripwire.yieldFrames(3)
+        await brains.tripwire.awaitObservedWindow()
 
         let heistId: HeistId = "message_field"
         let element = AccessibilityElement.make(
@@ -234,7 +234,7 @@ extension TheBrainsActionTests {
             keyboardBridgeProvider: { keyboardImpl.bridge() }
         ))
         brains.tripwire.startPulse()
-        await brains.tripwire.yieldFrames(3)
+        await brains.tripwire.awaitObservedWindow()
 
         let command = try HeistActionCommand.typeText(
             text: "hello",
@@ -285,7 +285,7 @@ extension TheBrainsActionTests {
             keyboardBridgeProvider: { keyboardImpl.bridge() }
         ))
         brains.tripwire.startPulse()
-        await brains.tripwire.yieldFrames(3)
+        await brains.tripwire.awaitObservedWindow()
 
         let command = try HeistActionCommand.typeText(
             text: .replacing("b"),
@@ -334,7 +334,7 @@ extension TheBrainsActionTests {
             keyboardBridgeProvider: { keyboardImpl.bridge() }
         ))
         brains.tripwire.startPulse()
-        await brains.tripwire.yieldFrames(3)
+        await brains.tripwire.awaitObservedWindow()
 
         let command = try HeistActionCommand.typeText(
             text: .replacing(""),

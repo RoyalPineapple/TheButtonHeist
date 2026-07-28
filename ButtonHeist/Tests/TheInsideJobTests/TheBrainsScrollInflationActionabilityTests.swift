@@ -326,7 +326,7 @@ extension TheBrainsScrollTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
+        await brains.tripwire.awaitObservedWindow()
         visibleObservationSource.useLiveCapture()
 
         let result = await brains.executeRuntimeAction(

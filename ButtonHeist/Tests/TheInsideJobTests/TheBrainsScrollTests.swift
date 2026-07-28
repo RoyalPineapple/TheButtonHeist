@@ -280,7 +280,6 @@ final class TheBrainsScrollTests: XCTestCase {
         }
 
         window.layoutIfNeeded()
-        await brains.tripwire.yieldFrames(3)
 
         XCTAssertNotNil(
             brains.vault.refreshLiveCapture(),

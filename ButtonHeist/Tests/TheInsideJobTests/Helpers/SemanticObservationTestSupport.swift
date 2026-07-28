@@ -124,6 +124,21 @@ final class VisibleObservationSourceFixture {
     }
 }
 
+extension TheTripwire {
+    /// Waits until a window installed just now has been read.
+    ///
+    /// A window is laid out by the time it is installed, so what is left to
+    /// wait for is the pulse taking a reading of it — which is a fact the
+    /// tripwire states. Counting frames names a number instead, and the number
+    /// is a guess about how long a machine takes; the busier the machine, the
+    /// worse the guess, which is why fixed counts fail under load and not at a
+    /// desk. The timeout is the one thing allowed to be a duration, because a
+    /// reading that never comes has to end the test rather than hang it.
+    func awaitObservedWindow() async {
+        _ = await waitForNextTick(timeout: .seconds(2), demand: .immediate)
+    }
+}
+
 @MainActor
 final class TripwireInvalidationFixture {
     private let continuation: AsyncStream<Void>.Continuation

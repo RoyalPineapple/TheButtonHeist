@@ -223,7 +223,7 @@ extension TheBrainsActionTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
+        await brains.tripwire.awaitObservedWindow()
 
         let target = try AccessibilityTarget.identifier("plain_action").resolve(in: .empty)
         var timing = ActionTiming()
@@ -251,7 +251,7 @@ extension TheBrainsActionTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
+        await brains.tripwire.awaitObservedWindow()
 
         let command = try HeistActionCommand.activate(.identifier("timed_action"))
             .resolve(in: .empty)
@@ -330,7 +330,7 @@ extension TheBrainsActionTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
+        await brains.tripwire.awaitObservedWindow()
 
         let successCommand = try HeistActionCommand.activate(.identifier("trace_success")).resolve(in: .empty)
         let success = await brains.executeRuntimeAction(successCommand)
@@ -499,7 +499,7 @@ extension TheBrainsActionTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(2)
+        await brains.tripwire.awaitObservedWindow()
 
         let target = AccessibilityTarget.identifier("missing_target")
         let commands: [(String, HeistActionCommand)] = [

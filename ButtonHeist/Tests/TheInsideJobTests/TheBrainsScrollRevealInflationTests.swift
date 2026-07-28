@@ -249,7 +249,7 @@ extension TheBrainsScrollTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
+        await brains.tripwire.awaitObservedWindow()
 
         let ancestorPath = TreePath([0])
         let missingOwnerPath = ancestorPath.appending(0)
@@ -349,7 +349,7 @@ extension TheBrainsScrollTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
+        await brains.tripwire.awaitObservedWindow()
 
         await installSyntheticObservation(fixture.initialObservation)
         fixture.siblingScrollView.onSetContentOffset = { _ in

@@ -148,8 +148,10 @@ extension TheBrainsScrollTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
-
+        // `installModalWindow` lays the window out before it returns and
+        // `refreshLiveCapture` reads it, so the reading below is of the window
+        // as installed. Waiting first would be waiting for something the next
+        // line does.
         let visibleScreen = try XCTUnwrap(
             brains.vault.refreshLiveCapture(),
             "Expected a live hierarchy for the interface discovery contamination regression test"
@@ -232,7 +234,8 @@ extension TheBrainsScrollTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
+        // The window is laid out by the time it is installed, so its origin
+        // reads true here and `refreshLiveCapture` reads the tree it belongs to.
         let initialVisualOrigin = Navigation.visualOrigin(in: scrollView)
         _ = try XCTUnwrap(
             brains.vault.refreshLiveCapture(),
@@ -292,7 +295,8 @@ extension TheBrainsScrollTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
+        // The window is laid out by the time it is installed, so its origin
+        // reads true here and `refreshLiveCapture` reads the tree it belongs to.
         let initialVisualOrigin = Navigation.visualOrigin(in: scrollView)
 
         _ = try XCTUnwrap(
@@ -496,7 +500,7 @@ extension TheBrainsScrollTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
+        // The installed window is already laid out, and this reads it.
         _ = brains.vault.refreshLiveCapture()
 
         let result = await brains.navigation.executeScrollToVisible(
@@ -777,7 +781,9 @@ extension TheBrainsScrollTests {
         scrollView.isPagingEnabled = isPagingEnabled
         rootView.addSubview(scrollView)
         let window = try installModalWindow(rootView: rootView)
-        await brains.tripwire.yieldFrames(3)
+        // The window has to have been read before the synthetic observation
+        // replaces what was read.
+        await brains.tripwire.awaitObservedWindow()
         await installSyntheticObservation(explorationObservation(label: label, scrollView: scrollView))
         return ExplorationViewportFixture(rootView: rootView, scrollView: scrollView, window: window)
     }
