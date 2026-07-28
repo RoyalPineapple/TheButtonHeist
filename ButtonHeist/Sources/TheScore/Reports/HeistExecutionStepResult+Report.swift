@@ -58,7 +58,7 @@ public extension HeistExecutionStepResult {
         case .action:
             actionEvidence?.result
         case .wait:
-            waitEvidence?.actionResult
+            reportWaitActionResult
         case .repeatUntil, .repeatUntilIteration:
             repeatUntilEvidence?.actionResult
         case .invocation:
@@ -81,7 +81,7 @@ public extension HeistExecutionStepResult {
         case .action:
             return actionEvidence?.expectation
         case .wait:
-            return waitEvidence?.expectation
+            return waitExpectation
         case .repeatUntil, .repeatUntilIteration:
             return repeatUntilEvidence?.expectation
         case .invocation:
@@ -115,6 +115,26 @@ public extension HeistExecutionStepResult {
 }
 
 private extension HeistExecutionStepResult {
+    var reportWaitActionResult: ActionResult? {
+        if let evidence = passedWaitEvidence {
+            return .success(
+                payload: .wait,
+                message: evidence.expectation.actual ?? "matched",
+                observation: .observed(evidence.observation)
+            )
+        }
+        guard let evidence = unmatchedWaitEvidence,
+              let failure else {
+            return nil
+        }
+        return .failure(
+            payload: .wait,
+            failureKind: failure.actionFailureKind,
+            message: failure.observed,
+            observation: .observed(evidence.observation)
+        )
+    }
+
     var reportSuccessMessage: String? {
         switch node {
         case .conditional:
@@ -157,6 +177,29 @@ private extension HeistExecutionStepResult {
             return message.description
         case .action, .wait, .failure, .heist, .warning:
             return nil
+        }
+    }
+}
+
+private extension HeistFailureDetail {
+    var actionFailureKind: ActionFailure.Kind {
+        switch category {
+        case .timeout:
+            .timeout
+        case .runtimeUnavailable:
+            .accessibilityTreeUnavailable
+        case .targetResolution:
+            .elementNotFound
+        case .validation:
+            .validationError
+        case .internalInvariant,
+             .action,
+             .expectation,
+             .wait,
+             .invocation,
+             .loop,
+             .explicitFailure:
+            .actionFailed
         }
     }
 }

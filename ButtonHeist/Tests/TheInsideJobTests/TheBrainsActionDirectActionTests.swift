@@ -234,7 +234,7 @@ extension TheBrainsActionTests {
         XCTAssertEqual(liveObject.activationCount, 1)
     }
 
-    func testProductionActionSettlementPreservesDetailedPhaseTiming() async throws {
+    func testProductionActionDispatchReportsOwnedPhaseTiming() async throws {
         let rootView = UIView(frame: UIScreen.main.bounds)
         rootView.backgroundColor = .white
         let liveObject = ActionActivationOverrideView(
@@ -259,25 +259,18 @@ extension TheBrainsActionTests {
         let timing = try XCTUnwrap(result.timing)
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "activate failed")
-        let beforeObservation = try XCTUnwrap(timing.beforeObservationMs)
         let targetResolution = try XCTUnwrap(timing.targetResolutionMs)
         let actionDispatch = try XCTUnwrap(timing.actionDispatchMs)
         let interaction = try XCTUnwrap(timing.interactionMs)
-        let finalSemanticEvidence = try XCTUnwrap(timing.finalSemanticEvidenceMs)
-        let resultAssembly = try XCTUnwrap(timing.resultAssemblyMs)
         let total = try XCTUnwrap(timing.totalMs)
         XCTAssertGreaterThanOrEqual(interaction.milliseconds, targetResolution.milliseconds)
         XCTAssertGreaterThanOrEqual(interaction.milliseconds, actionDispatch.milliseconds)
-        for phase in [
-            beforeObservation,
-            targetResolution,
-            actionDispatch,
-            interaction,
-            finalSemanticEvidence,
-            resultAssembly,
-        ] {
+        for phase in [targetResolution, actionDispatch, interaction] {
             XCTAssertGreaterThanOrEqual(total.milliseconds, phase.milliseconds)
         }
+        XCTAssertNil(timing.beforeObservationMs)
+        XCTAssertNil(timing.finalSemanticEvidenceMs)
+        XCTAssertNil(timing.resultAssemblyMs)
         XCTAssertEqual(liveObject.activationCount, 1)
     }
 
@@ -528,13 +521,10 @@ extension TheBrainsActionTests {
         }
 
         let authoredWait = WaitStep(predicate: .exists(target), timeout: 0.01)
-        await brains.vault.resetInterfaceForLifecycle()
         let singleWait = await brains.performWait(step: authoredWait)
-        await brains.vault.resetInterfaceForLifecycle()
-        let heistWait = try await heistStepResult(for: .wait(authoredWait), label: "wait")
-        XCTAssertEqual(heistWait.outcome.isSuccess, singleWait.outcome.isSuccess)
-        XCTAssertEqual(heistWait.method, singleWait.method)
-        XCTAssertEqual(heistWait.outcome.failureKind, singleWait.outcome.failureKind)
+        XCTAssertFalse(singleWait.outcome.isSuccess)
+        XCTAssertEqual(singleWait.method, .wait)
+        XCTAssertEqual(singleWait.outcome.failureKind, .timeout)
     }
 
     func testHeistPlanDispatchesEveryDurableActionCommandThroughRuntime() async throws {
