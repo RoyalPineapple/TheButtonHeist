@@ -14,13 +14,18 @@ import ThePlans
             .elementsChanged(snapshot([])),
             .elementsChanged(snapshot(["Checkout"])),
         ]
-        var first = Expectation(predicates)
-        var second = Expectation(predicates)
+        let first = Expectation(predicates)
+        let second = Expectation(predicates)
 
-        #expect(first.evaluate(events[0]) != .satisfied)
-        #expect(second.evaluate(events[0]) == first.result)
-        #expect(first.evaluate(events[1]) == .satisfied)
-        #expect(second.evaluate(events[1]) == first.result)
+        let firstPrefix = first.evaluating(events[0])
+        let secondPrefix = second.evaluating(events[0])
+        #expect(firstPrefix.result != .satisfied)
+        #expect(secondPrefix == firstPrefix)
+
+        let firstComplete = firstPrefix.evaluating(events[1])
+        let secondComplete = secondPrefix.evaluating(events[1])
+        #expect(firstComplete.result == .satisfied)
+        #expect(secondComplete == firstComplete)
     }
 
     @Test func `authored order requires later same-lane predicates to be seen after earlier predicates`() throws {
@@ -28,17 +33,14 @@ import ThePlans
             try resolved(.exists(.label("First"))),
             try resolved(.exists(.label("Second"))),
         ]
-        var expectation = Expectation(predicates)
+        let events: [Observation.Event] = [
+            .elementsChanged(snapshot(["Second"])),
+            .elementsChanged(snapshot(["First"])),
+            .elementsChanged(snapshot(["Second"])),
+        ]
 
-        #expect(expectation.evaluate(
-            .elementsChanged(snapshot(["Second"]))
-        ) != .satisfied)
-        #expect(expectation.evaluate(
-            .elementsChanged(snapshot(["First"]))
-        ) != .satisfied)
-        #expect(expectation.evaluate(
-            .elementsChanged(snapshot(["Second"]))
-        ) == .satisfied)
+        #expect(Expectation(predicates, events: Array(events.dropLast())).result != .satisfied)
+        #expect(Expectation(predicates, events: events).result == .satisfied)
     }
 
     @Test func `events can answer later predicates in independent lanes`() throws {
@@ -46,14 +48,13 @@ import ThePlans
             try resolved(.notification("Saved")),
             try resolved(.exists(.label("Present"))),
         ]
-        var expectation = Expectation(predicates)
+        let events: [Observation.Event] = [
+            .elementsChanged(snapshot(["Present"])),
+            .notification(try notification(text: "Saved")),
+        ]
 
-        #expect(expectation.evaluate(
-            .elementsChanged(snapshot(["Present"]))
-        ) != .satisfied)
-        #expect(expectation.evaluate(
-            .notification(try notification(text: "Saved"))
-        ) == .satisfied)
+        #expect(Expectation(predicates, events: [events[0]]).result != .satisfied)
+        #expect(Expectation(predicates, events: events).result == .satisfied)
     }
 
     @Test func `baseline initializes current presence without publishing an event`() throws {
@@ -66,57 +67,60 @@ import ThePlans
     }
 
     @Test func `baseline initializes the before leg of an appearance`() throws {
-        var expectation = Expectation([
+        let expectation = Expectation([
             try resolved(.elementsChanged([
                 .appeared(.label("Checkout")),
             ])),
-        ], baseline: snapshot([]))
-
-        #expect(expectation.evaluate(
+        ], baseline: snapshot([])).evaluating(
             .elementsChanged(snapshot(["Checkout"]))
-        ) == .satisfied)
+        )
+
+        #expect(expectation.result == .satisfied)
     }
 
     @Test func `one event cannot satisfy both legs of an update`() throws {
         let predicate = try resolved(.elementsChanged([
             .updated(.label("Total"), .value()),
         ]))
-        var expectation = Expectation([predicate])
-
-        #expect(expectation.evaluate(
+        let before = Expectation([predicate]).evaluating(
             .elementsChanged(snapshot(label: "Total", value: "$1"))
-        ) != .satisfied)
-        #expect(expectation.evaluate(
+        )
+        let after = before.evaluating(
             .elementsChanged(snapshot(label: "Total", value: "$2"))
-        ) == .satisfied)
+        )
+
+        #expect(before.result != .satisfied)
+        #expect(after.result == .satisfied)
     }
 
     @Test func `no change matches only a no-change event`() {
-        let predicate = Observation.Event.Predicate.noChange
-        var expectation = Expectation([predicate])
-
-        #expect(expectation.evaluate(
+        let predicate = ObservationPredicate.noChange
+        let afterElements = Expectation([predicate]).evaluating(
             .elementsChanged(snapshot(["Ready"]))
-        ) == .waiting(predicate.description))
-        #expect(expectation.evaluate(
+        )
+        let afterScreen = afterElements.evaluating(
             .screenChanged(ScreenFacts(idAfter: "Checkout"))
-        ) == .waiting(predicate.description))
-        #expect(expectation.evaluate(.noChange) == .satisfied)
+        )
+        let afterNoChange = afterScreen.evaluating(.noChange)
+
+        #expect(afterElements.result == .waiting(predicate.description))
+        #expect(afterScreen.result == .waiting(predicate.description))
+        #expect(afterNoChange.result == .satisfied)
     }
 
     @Test func `empty expectation is complete before and after events`() {
-        var expectation = Expectation()
+        let expectation = Expectation()
 
         #expect(expectation.result == .satisfied)
-        #expect(expectation.evaluate(
+        #expect(expectation.evaluating(
             .elementsChanged(snapshot(["Anything"]))
-        ) == .satisfied)
-        #expect(expectation.evaluate(.noChange) == .satisfied)
+        ).result == .satisfied)
+        #expect(expectation.evaluating(.noChange).result == .satisfied)
     }
 
     private func resolved(
         _ predicate: AccessibilityPredicate
-    ) throws -> Observation.Event.Predicate {
+    ) throws -> ObservationPredicate {
         try predicate.resolve(in: .empty)
     }
 

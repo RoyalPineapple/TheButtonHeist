@@ -1,58 +1,21 @@
 import ThePlans
-import Foundation
 
-extension AccessibilityTrace {
-    /// This trace's captures as the tick log they came from.
-    ///
-    /// A reconstruction, and the only one: the live run's log is not persisted
-    /// yet, so a stored trace rebuilds it from the captures. Each capture's
-    /// interface is a tick, and a replacement edge is the three ordered ticks a
-    /// replacement is.
-    ///
-    /// The rebuild carries the readings the run took. A stored trace is asked
-    /// only whether its predicates hold, which is what those readings answer.
-    ///
-    /// When the live log is durable this becomes a read instead of a rebuild,
-    /// and the classification below goes away — settlement already knew.
-    var tickLog: TickLog {
-        var log = TickLog()
-        var previous: Capture?
-        for capture in captures {
-            if let previous,
-               AccessibilityObservationChangeReducer.reduce(between: previous, and: capture) == .screenChanged {
-                // The old screen's nodes depart, the identity moves, the new
-                // screen's nodes arrive. The departure leg is an empty tree
-                // because identity does not survive a boundary, so a `missing`
-                // half has a reading to match on that holds none of what left.
-                log.append(.elementsChanged(.empty(at: capture.interface.timestamp)))
-                log.append(.screenChanged(ScreenFacts(
-                    idAfter: InterfaceSummary.screenName(for: capture.interface)
-                )))
-            }
-            log.append(.elementsChanged(capture))
-            previous = capture
-        }
-        return log
-    }
-}
-
-package extension ResolvedAccessibilityPredicate {
-    /// Answer this predicate by folding the trace's tick log.
-    ///
-    /// One algebra, fed from history instead of the wire: the same fold a live
-    /// run performs, over the same tick vocabulary.
-    func evaluate(in evidence: AccessibilityTraceEvidence) -> PredicateEvaluationResult {
-        let expectation = Expectation([self]).folding(evidence.trace.tickLog.ticks)
-        return PredicateEvaluationResult(
-            met: expectation.isMet,
-            actual: expectation.isMet ? nil : expectation.outstanding.map(\.description).joined(separator: "; ")
+package extension ObservationPredicate {
+    /// Answer this predicate from the exact evidence observed at runtime.
+    func evaluate(in evidence: Observation.Evidence) -> PredicateEvaluationResult {
+        let expectation = Expectation(
+            [self],
+            baseline: evidence.baseline,
+            events: evidence.events
         )
-    }
-
-    func validate(against result: ActionResult) -> PredicateEvaluationResult {
-        guard let evidence = result.traceEvidence else {
-            return PredicateEvaluationResult(met: false, actual: "no observed accessibility trace")
+        switch expectation.result {
+        case .satisfied:
+            return PredicateEvaluationResult(met: true, actual: nil)
+        case .waiting(let outstandingDescription):
+            return PredicateEvaluationResult(
+                met: false,
+                actual: outstandingDescription
+            )
         }
-        return evaluate(in: evidence)
     }
 }

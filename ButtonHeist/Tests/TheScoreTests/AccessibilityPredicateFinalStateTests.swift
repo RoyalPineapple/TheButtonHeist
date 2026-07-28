@@ -142,7 +142,7 @@ extension AccessibilityPredicateTests {
     }
 
     func testResolutionProducesCanonicalObservationPredicate() throws {
-        let predicate: Observation.Event.Predicate = try AccessibilityPredicate
+        let predicate: ObservationPredicate = try AccessibilityPredicate
             .exists(.label("Ready"))
             .resolve(in: .empty)
         let canonical: ObservationPredicate = predicate

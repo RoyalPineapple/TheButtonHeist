@@ -76,7 +76,7 @@ extension AccessibilityPredicateTests {
 
     private func resolvedScreen(
         _ predicate: AccessibilityPredicate
-    ) throws -> Observation.Event.Predicate {
+    ) throws -> ObservationPredicate {
         try predicate.resolve(in: .empty)
     }
 }

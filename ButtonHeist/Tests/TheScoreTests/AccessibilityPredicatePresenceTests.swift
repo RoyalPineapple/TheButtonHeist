@@ -259,7 +259,7 @@ final class AccessibilityPredicateTests: XCTestCase {
 
     private func resolved(
         _ predicate: AccessibilityPredicate
-    ) throws -> Observation.Event.Predicate {
+    ) throws -> ObservationPredicate {
         try predicate.resolve(in: .empty)
     }
 }

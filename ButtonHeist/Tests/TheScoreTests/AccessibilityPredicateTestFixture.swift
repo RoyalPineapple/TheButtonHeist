@@ -60,14 +60,9 @@ func evaluateExpectation(
     _ expectation: Expectation,
     events: some Sequence<Observation.Event>
 ) -> Expectation.Result {
-    var expectation = expectation
-    for event in events {
-        let result = expectation.evaluate(event)
-        if result == .satisfied {
-            return result
-        }
-    }
-    return expectation.result
+    events.reduce(expectation) { expectation, event in
+        expectation.evaluating(event)
+    }.result
 }
 
 extension Expectation.Result {

@@ -19,7 +19,9 @@ import ThePlans
         var second = Expectation(predicates)
 
         for event in events {
-            #expect(first.evaluate(event) == second.evaluate(event))
+            first = first.evaluating(event)
+            second = second.evaluating(event)
+            #expect(first == second)
         }
         #expect(first.result == .satisfied)
         #expect(second.result == .satisfied)
@@ -27,18 +29,15 @@ import ThePlans
 
     @Test func `a consumed prefix does not alter a fresh replay`() throws {
         let predicates = [try resolved(.exists(.label("Pay")))]
-        var prefix = Expectation(predicates)
-        var replay = Expectation(predicates)
+        let cart = Observation.Event.elementsChanged(snapshot(["Cart"]))
+        let pay = Observation.Event.elementsChanged(snapshot(["Pay"]))
+        let prefix = Expectation(predicates).evaluating(cart)
+        let replayPrefix = Expectation(predicates).evaluating(cart)
+        let replay = replayPrefix.evaluating(pay)
 
-        #expect(prefix.evaluate(
-            .elementsChanged(snapshot(["Cart"]))
-        ) != .satisfied)
-        #expect(replay.evaluate(
-            .elementsChanged(snapshot(["Cart"]))
-        ) == prefix.result)
-        #expect(replay.evaluate(
-            .elementsChanged(snapshot(["Pay"]))
-        ) == .satisfied)
+        #expect(prefix.result != .satisfied)
+        #expect(replayPrefix == prefix)
+        #expect(replay.result == .satisfied)
     }
 
     @Test func `screen replacement is authored as departure boundary arrival`() {
@@ -65,48 +64,50 @@ import ThePlans
         let events = screenReplacementEvents(
             arriving: snapshot(["Checkout"])
         )
-        var expectation = Expectation([predicate])
-
-        #expect(expectation.evaluate(events[0]) != .satisfied)
-        #expect(expectation.evaluate(events[1]) != .satisfied)
-        #expect(expectation.evaluate(events[2]) == .satisfied)
+        #expect(Expectation([predicate], events: [events[0]]).result != .satisfied)
+        #expect(Expectation(
+            [predicate],
+            events: Array(events.dropLast())
+        ).result != .satisfied)
+        #expect(Expectation([predicate], events: events).result == .satisfied)
     }
 
     @Test func `disappearance consumes presence then departure across a screen boundary`() throws {
         let predicate = try resolved(.elementsChanged([
             .disappeared(.label("Library")),
         ]))
-        var expectation = Expectation([predicate])
+        let events: [Observation.Event] = [
+            .elementsChanged(snapshot(["Library"])),
+            .screenChanged(ScreenFacts(idAfter: "Checkout")),
+            .elementsChanged(snapshot([])),
+        ]
 
-        #expect(expectation.evaluate(
-            .elementsChanged(snapshot(["Library"]))
-        ) != .satisfied)
-        #expect(expectation.evaluate(
-            .screenChanged(ScreenFacts(idAfter: "Checkout"))
-        ) != .satisfied)
-        #expect(expectation.evaluate(
-            .elementsChanged(snapshot([]))
-        ) == .satisfied)
+        #expect(Expectation([predicate], events: [events[0]]).result != .satisfied)
+        #expect(Expectation(
+            [predicate],
+            events: Array(events.dropLast())
+        ).result != .satisfied)
+        #expect(Expectation([predicate], events: events).result == .satisfied)
     }
 
     @Test func `no-change event is retained in authored order without answering other lanes`() throws {
-        let predicates: [Observation.Event.Predicate] = [
+        let predicates: [ObservationPredicate] = [
             .noChange,
             try resolved(.notification("Saved")),
         ]
-        var expectation = Expectation(predicates)
+        let notification = Observation.Event.notification(try #require(
+            Observation.Notification(text: "Saved", element: nil)
+        ))
+        let beforeNoChange = Expectation(predicates).evaluating(notification)
+        let complete = beforeNoChange.evaluating(.noChange)
 
-        #expect(expectation.evaluate(
-            .notification(try #require(
-                Observation.Notification(text: "Saved", element: nil)
-            ))
-        ) != .satisfied)
-        #expect(expectation.evaluate(.noChange) == .satisfied)
+        #expect(beforeNoChange.result != .satisfied)
+        #expect(complete.result == .satisfied)
     }
 
     private func resolved(
         _ predicate: AccessibilityPredicate
-    ) throws -> Observation.Event.Predicate {
+    ) throws -> ObservationPredicate {
         try predicate.resolve(in: .empty)
     }
 

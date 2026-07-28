@@ -5,7 +5,7 @@ import ThePlans
 
 @Suite struct ExpectationScopeTests {
     @Test func `graph semantic hash ignores geometry`() throws {
-        var expectation = Expectation([
+        let expectation = Expectation([
             try resolved(.elementsChanged),
         ])
         let before = snapshot([
@@ -17,25 +17,31 @@ import ThePlans
             makeTestHeistElement(label: "Pay", frameX: 400),
         ])
 
-        #expect(expectation.evaluate(.elementsChanged(before)) != .satisfied)
-        #expect(expectation.evaluate(.elementsChanged(after)) != .satisfied)
+        #expect(evaluateExpectation(
+            expectation,
+            events: [.elementsChanged(before)]
+        ) != .satisfied)
+        #expect(evaluateExpectation(
+            expectation,
+            events: [.elementsChanged(before), .elementsChanged(after)]
+        ) != .satisfied)
     }
 
     @Test func `graph semantic hash preserves duplicate cardinality`() throws {
-        var expectation = Expectation([
+        let expectation = Expectation([
             try resolved(.elementsChanged),
         ])
 
-        #expect(expectation.evaluate(
-            .elementsChanged(snapshot(["Ready"]))
-        ) != .satisfied)
-        #expect(expectation.evaluate(
-            .elementsChanged(snapshot(["Ready", "Ready"]))
-        ) == .satisfied)
+        let events: [Observation.Event] = [
+            .elementsChanged(snapshot(["Ready"])),
+            .elementsChanged(snapshot(["Ready", "Ready"])),
+        ]
+        #expect(evaluateExpectation(expectation, events: [events[0]]) != .satisfied)
+        #expect(evaluateExpectation(expectation, events: events) == .satisfied)
     }
 
     @Test func `graph semantic hash includes complete element semantics`() throws {
-        var expectation = Expectation([
+        let expectation = Expectation([
             try resolved(.elementsChanged),
         ])
         let before = snapshot([
@@ -53,76 +59,106 @@ import ThePlans
             ),
         ])
 
-        #expect(expectation.evaluate(.elementsChanged(before)) != .satisfied)
-        #expect(expectation.evaluate(.elementsChanged(after)) == .satisfied)
+        #expect(evaluateExpectation(
+            expectation,
+            events: [.elementsChanged(before)]
+        ) != .satisfied)
+        #expect(evaluateExpectation(
+            expectation,
+            events: [.elementsChanged(before), .elementsChanged(after)]
+        ) == .satisfied)
     }
 
     @Test func `target scope ignores changes outside the matched target`() throws {
         let predicate = try resolved(.elementsChanged([
             .updated(.label("Total"), .value()),
         ]))
-        var expectation = Expectation([predicate])
+        let events: [Observation.Event] = [
+            .elementsChanged(snapshot([
+                makeTestHeistElement(label: "Total", value: "$1"),
+                makeTestHeistElement(label: "Status", value: "Idle"),
+            ])),
+            .elementsChanged(snapshot([
+                makeTestHeistElement(label: "Total", value: "$1"),
+                makeTestHeistElement(label: "Status", value: "Busy"),
+            ])),
+            .elementsChanged(snapshot([
+                makeTestHeistElement(label: "Total", value: "$2"),
+                makeTestHeistElement(label: "Status", value: "Busy"),
+            ])),
+        ]
 
-        #expect(expectation.evaluate(.elementsChanged(snapshot([
-            makeTestHeistElement(label: "Total", value: "$1"),
-            makeTestHeistElement(label: "Status", value: "Idle"),
-        ]))) != .satisfied)
-        #expect(expectation.evaluate(.elementsChanged(snapshot([
-            makeTestHeistElement(label: "Total", value: "$1"),
-            makeTestHeistElement(label: "Status", value: "Busy"),
-        ]))) != .satisfied)
-        #expect(expectation.evaluate(.elementsChanged(snapshot([
-            makeTestHeistElement(label: "Total", value: "$2"),
-            makeTestHeistElement(label: "Status", value: "Busy"),
-        ]))) == .satisfied)
+        #expect(evaluateExpectation(
+            Expectation([predicate]),
+            events: Array(events.prefix(2))
+        ) != .satisfied)
+        #expect(evaluateExpectation(
+            Expectation([predicate]),
+            events: events
+        ) == .satisfied)
     }
 
     @Test func `property scope ignores changes to other properties`() throws {
         let predicate = try resolved(.elementsChanged([
             .updated(.label("Total"), .value()),
         ]))
-        var expectation = Expectation([predicate])
+        let events: [Observation.Event] = [
+            .elementsChanged(snapshot([
+                makeTestHeistElement(label: "Total", value: "$1", hint: "Old"),
+            ])),
+            .elementsChanged(snapshot([
+                makeTestHeistElement(label: "Total", value: "$1", hint: "New"),
+            ])),
+            .elementsChanged(snapshot([
+                makeTestHeistElement(label: "Total", value: "$2", hint: "New"),
+            ])),
+        ]
 
-        #expect(expectation.evaluate(.elementsChanged(snapshot([
-            makeTestHeistElement(label: "Total", value: "$1", hint: "Old"),
-        ]))) != .satisfied)
-        #expect(expectation.evaluate(.elementsChanged(snapshot([
-            makeTestHeistElement(label: "Total", value: "$1", hint: "New"),
-        ]))) != .satisfied)
-        #expect(expectation.evaluate(.elementsChanged(snapshot([
-            makeTestHeistElement(label: "Total", value: "$2", hint: "New"),
-        ]))) == .satisfied)
+        #expect(evaluateExpectation(
+            Expectation([predicate]),
+            events: Array(events.prefix(2))
+        ) != .satisfied)
+        #expect(evaluateExpectation(
+            Expectation([predicate]),
+            events: events
+        ) == .satisfied)
     }
 
     @Test func `screen boundary resets an unfinished property update`() throws {
         let predicate = try resolved(.elementsChanged([
             .updated(.label("Total"), .value()),
         ]))
-        var expectation = Expectation(
+        let expectation = Expectation(
             [predicate],
             baseline: snapshot([
                 makeTestHeistElement(label: "Total", value: "$1"),
             ])
         )
 
-        #expect(expectation.evaluate(
-            .screenChanged(ScreenFacts(idAfter: "Checkout"))
+        let events: [Observation.Event] = [
+            .screenChanged(ScreenFacts(idAfter: "Checkout")),
+            .elementsChanged(snapshot([
+                makeTestHeistElement(label: "Total", value: "$2"),
+            ])),
+            .elementsChanged(snapshot([
+                makeTestHeistElement(label: "Total", value: "$3"),
+            ])),
+        ]
+
+        #expect(evaluateExpectation(
+            expectation,
+            events: Array(events.prefix(2))
         ) != .satisfied)
-        #expect(expectation.evaluate(.elementsChanged(snapshot([
-            makeTestHeistElement(label: "Total", value: "$2"),
-        ]))) != .satisfied)
-        #expect(expectation.evaluate(.elementsChanged(snapshot([
-            makeTestHeistElement(label: "Total", value: "$3"),
-        ]))) == .satisfied)
+        #expect(evaluateExpectation(expectation, events: events) == .satisfied)
     }
 
     @Test func `container target scope does not require child elements`() throws {
-        var appeared = Expectation([
+        let appeared = Expectation([
             try resolved(.elementsChanged([
                 .appeared(.container(.identifier("checkout"))),
             ])),
         ])
-        var disappeared = Expectation([
+        let disappeared = Expectation([
             try resolved(.elementsChanged([
                 .disappeared(.container(.identifier("checkout"))),
             ])),
@@ -132,10 +168,10 @@ import ThePlans
             containerSnapshot(["checkout"])
         )
 
-        #expect(appeared.evaluate(missing) != .satisfied)
-        #expect(appeared.evaluate(exists) == .satisfied)
-        #expect(disappeared.evaluate(exists) != .satisfied)
-        #expect(disappeared.evaluate(missing) == .satisfied)
+        #expect(evaluateExpectation(appeared, events: [missing]) != .satisfied)
+        #expect(evaluateExpectation(appeared, events: [missing, exists]) == .satisfied)
+        #expect(evaluateExpectation(disappeared, events: [exists]) != .satisfied)
+        #expect(evaluateExpectation(disappeared, events: [exists, missing]) == .satisfied)
     }
 
     @Test func `notification text and element must match the same event`() throws {
@@ -159,17 +195,21 @@ import ThePlans
             text: "Saved",
             element: semantics
         ))
-        var separated = Expectation([predicate])
-        var together = Expectation([predicate])
+        let expectation = Expectation([predicate])
 
-        #expect(separated.evaluate(.notification(textOnly)) != .satisfied)
-        #expect(separated.evaluate(.notification(elementOnly)) != .satisfied)
-        #expect(together.evaluate(.notification(combined)) == .satisfied)
+        #expect(evaluateExpectation(
+            expectation,
+            events: [.notification(textOnly), .notification(elementOnly)]
+        ) != .satisfied)
+        #expect(evaluateExpectation(
+            expectation,
+            events: [.notification(combined)]
+        ) == .satisfied)
     }
 
     private func resolved(
         _ predicate: AccessibilityPredicate
-    ) throws -> Observation.Event.Predicate {
+    ) throws -> ObservationPredicate {
         try predicate.resolve(in: .empty)
     }
 
