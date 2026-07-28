@@ -114,9 +114,7 @@ extension Observation {
                 Swift.min(overflow, Swift.max(0, $0 - firstRetainedIndex))
             } ?? overflow
             guard removableCount > 0 else { return }
-            screenChangesBeforeStorage += storage.prefix(removableCount).reduce(into: 0) {
-                count,
-                event in
+            screenChangesBeforeStorage += storage.prefix(removableCount).reduce(into: 0) { count, event in
                 if case .screenChanged = event {
                     count += 1
                 }

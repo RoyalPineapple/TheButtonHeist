@@ -33,6 +33,11 @@ private struct StoreNotificationIndices {
     }
 }
 
+private struct StoreNotificationRead {
+    let lane: StoreNotificationLane
+    let notifications: Observation.Notifications
+}
+
 extension TheVault {
     internal struct State {
         internal nonisolated static let defaultRetentionLimit = 256
@@ -157,20 +162,8 @@ extension TheVault {
         internal mutating func readObservation(
             _ admission: Observation.Admission
         ) -> ReadObservation {
-            let lane: StoreNotificationLane
-            let notificationSnapshot: Observation.NotificationSnapshot
-            switch admission.notificationAdmission {
-            case .passive(let snapshot):
-                lane = .passive
-                notificationSnapshot = snapshot
-            case .action(let snapshot):
-                lane = .action
-                notificationSnapshot = snapshot
-            }
-            let notifications = notificationSnapshot.notifications(
-                after: notificationIndices[lane],
-                scopedScreenChangedCursor: scopedScreenChangedSequence
-            )
+            let notificationRead = notificationRead(for: admission.notificationAdmission)
+            let notifications = notificationRead.notifications
             let previousTree = interfaceTree
             let comparedTree: InterfaceTree
             let candidateTree: InterfaceTree
@@ -257,7 +250,7 @@ extension TheVault {
             next.current = current
             next.interfaceTree = nextTree
             next.sequence = nextSequence
-            next.notificationIndices[lane] = notifications.through
+            next.notificationIndices[notificationRead.lane] = notifications.through
             next.scopedScreenChangedSequence = notifications.scopedScreenChangedThrough
             next.settleFailureDiagnostic = nil
             next.replacementRequired = false
@@ -274,6 +267,28 @@ extension TheVault {
 
         internal mutating func recordSettleFailure(_ diagnostic: String?) {
             settleFailureDiagnostic = diagnostic
+        }
+
+        private func notificationRead(
+            for admission: Observation.NotificationAdmission
+        ) -> StoreNotificationRead {
+            let lane: StoreNotificationLane
+            let snapshot: Observation.NotificationSnapshot
+            switch admission {
+            case .passive(let admittedSnapshot):
+                lane = .passive
+                snapshot = admittedSnapshot
+            case .action(let admittedSnapshot):
+                lane = .action
+                snapshot = admittedSnapshot
+            }
+            return StoreNotificationRead(
+                lane: lane,
+                notifications: snapshot.notifications(
+                    after: notificationIndices[lane],
+                    scopedScreenChangedCursor: scopedScreenChangedSequence
+                )
+            )
         }
 
         private static func snapshot(
