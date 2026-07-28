@@ -51,7 +51,7 @@ extension TheBrainsScrollTests {
             offscreen: OffViewportScrollTarget(
                 staleRootButton,
                 heistId: "stale_controls_button",
-                contentActivationPoint: CGPoint(x: 0, y: 1_200),
+                viewActivationPoint: CGPoint(x: 0, y: 1_200),
                 scrollView: staleScrollView
             )
         )
@@ -114,8 +114,12 @@ extension TheBrainsScrollTests {
             try resolvedTarget(.label("Controls Demo").and(.traits([.button])))
         )
 
-        XCTAssertNotNil(discovered?.event.snapshot.observation.tree.findElement(heistId: "current_controls_header"))
-        XCTAssertNil(discovered?.event.snapshot.observation.tree.findElement(heistId: "stale_controls_button"))
+        let controls = discovered?.current.snapshot.interface.projectedElements.filter {
+            $0.semantics.assertable.label == "Controls Demo"
+        } ?? []
+        XCTAssertEqual(controls.count, 1)
+        XCTAssertTrue(controls[0].semantics.assertable.traits.contains(.header))
+        XCTAssertFalse(controls[0].semantics.assertable.traits.contains(.button))
     }
 
     func testFreshDiscoveryDropsRowsRememberedFromAnEarlierTree() async throws {
@@ -161,12 +165,17 @@ extension TheBrainsScrollTests {
             }.first,
             "Expected the parser to expose the fixture scroll view as a scroll container"
         )
-        let visibleEvent = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(visibleScreen)
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(visibleScreen)
 
         let staleRootRow = makeElement(label: "Auto-Settle Fixtures", traits: .button)
         let staleEntry = InterfaceTree.Element(
             heistId: "stale_auto_settle_fixtures",
             scrollMembership: InterfaceTree.ScrollMembership(containerPath: scrollContainerPath, index: nil),
+            geometry: testGeometry(
+                for: staleRootRow,
+                ownerPath: scrollContainerPath,
+                screen: .offscreen
+            ),
             element: staleRootRow
         )
         let staleScreen = InterfaceObservation.makeForTests(
@@ -185,12 +194,10 @@ extension TheBrainsScrollTests {
         ) else {
             return XCTFail("Expected word-list exploration to settle")
         }
-        let labels = try brains.vault.selectInterface(InterfaceQuery()).projectedElements.compactMap(\.label)
-        XCTAssertEqual(
-            exploration.event.generation,
-            visibleEvent.generation,
-            "Canonical viewport movement must preserve one list generation"
-        )
+        let labels = try brains.vault.selectInterface(InterfaceQuery()).projectedElements.compactMap {
+            $0.semantics.assertable.label
+        }
+        XCTAssertEqual(exploration.current.scope, .discovery)
         XCTAssertGreaterThan(exploration.progress.scrollCount, 0, "Expected discovery to scroll the word list")
         XCTAssertTrue(labels.contains("Words"), "Expected visible word in discovered interface: \(labels)")
         XCTAssertTrue(labels.contains("zymurgy"), "Expected scrolled word in discovered interface: \(labels)")
@@ -251,9 +258,12 @@ extension TheBrainsScrollTests {
 
         XCTAssertGreaterThanOrEqual(exploration.progress.scrollCount, 2)
         XCTAssertEqual(exploration.viewportExit, .restored)
-        XCTAssertNotNil(brains.vault.interfaceTree.orderedElements.first {
-            $0.element.label == "Beyond Blank Page"
-        })
+        let discoveredTarget = try XCTUnwrap(
+            exploration.current.snapshot.interface.projectedElements.first {
+                $0.semantics.assertable.label == "Beyond Blank Page"
+            }
+        )
+        XCTAssertEqual(discoveredTarget.geometry.screen, .offscreen)
         XCTAssertEqual(
             Navigation.visualOrigin(in: scrollView).y,
             initialVisualOrigin.y,
@@ -274,17 +284,17 @@ extension TheBrainsScrollTests {
         visible.accessibilityTraits = .staticText
         visible.isAccessibilityElement = true
 
-        let target = UIButton(type: .system)
-        target.frame = CGRect(x: 40, y: 760, width: 240, height: 44)
-        target.setTitle("Wait Discovery Target", for: .normal)
-        target.accessibilityLabel = "Wait Discovery Target"
-        target.accessibilityTraits = .button
-        target.isAccessibilityElement = true
+        let targetButton = UIButton(type: .system)
+        targetButton.frame = CGRect(x: 40, y: 760, width: 240, height: 44)
+        targetButton.setTitle("Wait Discovery Target", for: .normal)
+        targetButton.accessibilityLabel = "Wait Discovery Target"
+        targetButton.accessibilityTraits = .button
+        targetButton.isAccessibilityElement = true
 
-        scrollView.revealedElements = [target]
+        scrollView.revealedElements = [targetButton]
         scrollView.updateAccessibilityVisibility()
         scrollView.addSubview(visible)
-        scrollView.addSubview(target)
+        scrollView.addSubview(targetButton)
         rootView.addSubview(scrollView)
 
         let window = try installModalWindow(rootView: rootView)
@@ -309,18 +319,18 @@ extension TheBrainsScrollTests {
             return XCTFail("Expected wait discovery to find the offscreen target")
         }
 
-        XCTAssertNotNil(exploration.event.snapshot.observation.tree.orderedElements.first {
-            $0.element.label == "Wait Discovery Target"
-        })
+        let target = try XCTUnwrap(
+            exploration.current.snapshot.interface.projectedElements.first {
+                $0.semantics.assertable.label == "Wait Discovery Target"
+            }
+        )
         XCTAssertEqual(exploration.viewportExit, .restored)
         XCTAssertEqual(
             Navigation.visualOrigin(in: scrollView).y,
             initialVisualOrigin.y,
             accuracy: 0.01
         )
-        XCTAssertFalse(exploration.event.snapshot.observation.liveCapture.hierarchy.sortedElements.contains {
-            $0.label == "Wait Discovery Target"
-        })
+        XCTAssertEqual(target.geometry.screen, .offscreen)
     }
 
     func testPagedHorizontalDiscoveryRestoresStartingPage() async throws {
@@ -350,13 +360,17 @@ extension TheBrainsScrollTests {
         XCTAssertEqual(Navigation.visualOrigin(in: fixture.scrollView).x, initialOrigin.x, accuracy: 0.01)
     }
 
-    func testStopRequestObservedDuringScanningRestoresOrigin() async throws {
+    func testExplorationCallbackReceivesCurrentStateAndRestoresOrigin() async throws {
         let fixture = try await explorationViewport()
         defer { fixture.close() }
         publishVerticalOffsetObservations(from: fixture.scrollView)
         var stopRequested = false
+        var observedLabels: [String] = []
 
-        guard let exploration = await exploreViewport(onObservation: { _ in
+        guard let exploration = await exploreViewport(onObservation: { current in
+            observedLabels += current.snapshot.interface.projectedElements.compactMap {
+                $0.semantics.assertable.label
+            }
             stopRequested = stopRequested || fixture.scrollView.contentOffset.y > 0
             return stopRequested ? .goalSatisfied : .continue
         }) else {
@@ -364,6 +378,7 @@ extension TheBrainsScrollTests {
         }
 
         XCTAssertTrue(stopRequested)
+        XCTAssertTrue(observedLabels.contains("Scrolled"))
         XCTAssertEqual(exploration.viewportExit, .restored)
         XCTAssertEqual(Navigation.visualOrigin(in: fixture.scrollView).y, 0, accuracy: 0.01)
     }
@@ -507,9 +522,15 @@ extension TheBrainsScrollTests {
 
         XCTAssertTrue(result.success, "Expected scroll_to_visible to discover the target above; got \(result)")
         XCTAssertLessThanOrEqual(scrollView.contentOffset.y, 10)
-        XCTAssertTrue(brains.vault.latestObservation.tree.orderedElements.contains {
-            $0.element.label == "Top Target"
-        })
+        let current = await brains.vault.semanticObservationStream.stateOwner.current()
+        let visibleTarget = try XCTUnwrap(
+            current?.snapshot.interface.projectedElements.first {
+                $0.semantics.assertable.label == "Top Target"
+            }
+        )
+        guard case .onscreen = visibleTarget.geometry.screen else {
+            return XCTFail("Expected Top Target to be onscreen after scroll_to_visible")
+        }
     }
 
     func testKnownSemanticRevealIgnoresStaleDetachedScrollView() async throws {
@@ -546,7 +567,7 @@ extension TheBrainsScrollTests {
             offscreen: OffViewportScrollTarget(
                 staleTarget,
                 heistId: "target_button",
-                contentActivationPoint: CGPoint(x: 0, y: 1_200),
+                viewActivationPoint: CGPoint(x: 0, y: 1_200),
                 scrollView: staleScrollView
             )
         )
@@ -561,6 +582,11 @@ extension TheBrainsScrollTests {
         let recoveredEntry = InterfaceTree.Element(
             heistId: "target_button",
             scrollMembership: nil,
+            geometry: testGeometry(
+                for: recoveredTarget,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: recoveredTarget)
+            ),
             element: recoveredTarget
         )
         let recoveredScreen = InterfaceObservation.makeForTests(
@@ -614,7 +640,7 @@ extension TheBrainsScrollTests {
             offscreen: OffViewportScrollTarget(
                 knownTarget,
                 heistId: targetId,
-                contentActivationPoint: CGPoint(x: 160, y: 1_200),
+                viewActivationPoint: CGPoint(x: 160, y: 1_200),
                 scrollView: staleScrollView
             ),
             includeLiveScrollAncestor: false
@@ -637,6 +663,11 @@ extension TheBrainsScrollTests {
         let recoveredEntry = InterfaceTree.Element(
             heistId: targetId,
             scrollMembership: InterfaceTree.ScrollMembership(containerPath: scrollContainerPath, index: nil),
+            geometry: testGeometry(
+                for: recoveredTarget,
+                ownerPath: scrollContainerPath,
+                screen: TheVault.onscreenSpace(for: recoveredTarget)
+            ),
             element: recoveredTarget
         )
         let recoveredScreen = InterfaceObservation.makeForTests(
@@ -654,7 +685,14 @@ extension TheBrainsScrollTests {
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [:]
         )
-        XCTAssertTrue(recoveredScreen.tree.viewportElementIDs.contains(recoveredEntry.heistId))
+        let recoveredProjection = TheVault.WireConversion.convert(
+            recoveredEntry.element,
+            geometry: recoveredEntry.geometry
+        )
+        XCTAssertEqual(recoveredProjection.semantics.assertable.label, "Coke")
+        guard case .onscreen = recoveredProjection.geometry.screen else {
+            return XCTFail("Expected recovered Coke target to be onscreen")
+        }
         XCTAssertNotNil(recoveredScreen.liveCapture.object(for: recoveredEntry.heistId))
         let target = try resolvedTarget(AccessibilityTarget.label("Coke").and(.traits([.button])))
         var revealAttempts = 0
@@ -698,7 +736,7 @@ extension TheBrainsScrollTests {
             offscreen: OffViewportScrollTarget(
                 offscreen,
                 heistId: "offscreen_button",
-                contentActivationPoint: CGPoint(x: 0, y: 1_200),
+                viewActivationPoint: CGPoint(x: 0, y: 1_200),
                 scrollView: scrollView
             )
         )
@@ -728,7 +766,7 @@ extension TheBrainsScrollTests {
             offscreen: OffViewportScrollTarget(
                 offscreen,
                 heistId: "offscreen_button",
-                contentActivationPoint: CGPoint(x: 0, y: 1_200),
+                viewActivationPoint: CGPoint(x: 0, y: 1_200),
                 scrollView: scrollView
             )
         )
@@ -798,7 +836,7 @@ extension TheBrainsScrollTests {
     private func exploreViewport(
         exitPosition: Navigation.ViewportExitPosition = .origin,
         maxScrolls: Int = 3,
-        onObservation: ((Observation.SnapshotEvent) async -> Navigation.ViewportExplorationDecision)? = nil
+        onObservation: ((TheVault.State.Current) async -> Navigation.ViewportExplorationDecision)? = nil
     ) async -> Navigation.InterfaceExplorationResult? {
         await brains.navigation.exploreScreen(
             startingFresh: true,

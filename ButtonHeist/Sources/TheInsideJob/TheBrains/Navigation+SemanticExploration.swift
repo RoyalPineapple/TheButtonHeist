@@ -81,18 +81,18 @@ extension Navigation {
     }
 
     struct InterfaceExplorationResult {
-        let event: Observation.SnapshotEvent
+        let current: TheVault.State.Current
         let progress: InterfaceExplorationProgress
         let didMoveViewport: Bool
         let viewportExit: ViewportExit.Outcome
 
         internal init(
-            event: Observation.SnapshotEvent,
+            current: TheVault.State.Current,
             progress: InterfaceExplorationProgress,
             didMoveViewport: Bool = false,
             viewportExit: ViewportExit.Outcome
         ) {
-            self.event = event
+            self.current = current
             self.progress = progress
             self.didMoveViewport = didMoveViewport
             self.viewportExit = viewportExit
@@ -154,13 +154,13 @@ extension Navigation {
 
         mutating func finish(
             startTime: CFTimeInterval,
-            event: Observation.SnapshotEvent,
+            current: TheVault.State.Current,
             didMoveViewport: Bool,
             viewportExit: ViewportExit.Outcome
         ) -> InterfaceExplorationResult {
             progress.explorationTime = CACurrentMediaTime() - startTime
             return InterfaceExplorationResult(
-                event: event,
+                current: current,
                 progress: progress,
                 didMoveViewport: didMoveViewport,
                 viewportExit: viewportExit

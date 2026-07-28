@@ -22,7 +22,7 @@ extension Navigation {
             preferredScreenRect: CGRect,
             minimumScreenRect: CGRect
         )
-        case revealContentPoint(ScrollContentPoint, in: ScrollableTarget)
+        case revealViewPoint(ViewPoint, in: ScrollableTarget)
         case restoreVisualOrigin(CGPoint, in: ViewportRestorationTarget)
 
     }
@@ -40,13 +40,13 @@ extension Navigation {
     struct ViewportTransition {
         let outcome: ScrollSettleOutcome
         let previousVisibleIds: Set<HeistId>
-        let event: Observation.SnapshotEvent?
+        let current: TheVault.State.Current?
 
         static func unavailable(previousVisibleIds: Set<HeistId> = []) -> ViewportTransition {
             ViewportTransition(
                 outcome: .unavailable,
                 previousVisibleIds: previousVisibleIds,
-                event: nil
+                current: nil
             )
         }
     }
@@ -84,13 +84,13 @@ extension Navigation {
         let primitiveOutcome = await dispatchViewportMovement(intent)
         switch primitiveOutcome {
         case .moved:
-            let event = await settledExplorationPage(
+            let current = await settledExplorationPage(
                 deadline: deadline,
                 discoveryCommitPolicy: discoveryCommitPolicy,
                 notificationWindow: notificationWindow,
                 afterViewportMovement: true
             )
-            guard let event else {
+            guard let current else {
                 return .unavailable(previousVisibleIds: previousVisibleIds)
             }
             return ViewportTransition(
@@ -99,14 +99,14 @@ extension Navigation {
                     previousVisibleIds: previousVisibleIds
                 ),
                 previousVisibleIds: previousVisibleIds,
-                event: event
+                current: current
             )
         case .alreadyInPosition:
             notificationWindow.cancel()
             return ViewportTransition(
                 outcome: .unchanged,
                 previousVisibleIds: previousVisibleIds,
-                event: nil
+                current: nil
             )
         case .unavailable:
             notificationWindow.cancel()
@@ -155,9 +155,9 @@ extension Navigation {
                     minimumScreenRect: minimumScreenRect
                 )
             } ?? .unavailable
-        case .revealContentPoint(let point, let target):
+        case .revealViewPoint(let point, let target):
             return target.dispatchOnFreshScrollView(in: vault) { scrollView in
-                safecracker.revealContentPoint(point, in: scrollView)
+                safecracker.revealViewPoint(point, in: scrollView)
             } ?? .unavailable
         case .restoreVisualOrigin(let origin, let target):
             switch target {

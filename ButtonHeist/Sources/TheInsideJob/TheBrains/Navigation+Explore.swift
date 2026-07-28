@@ -98,9 +98,8 @@ extension Navigation {
             // land, so a page that still looks unmoved is mid-flight, not a
             // failed scroll. Whether the reading counts as a change is the
             // vault's question.
-            if let current = await vault.semanticObservationStream.commitSettledDiscoveryObservation(
+            if let current = await vault.semanticObservationStream.commitDiscoveryObservation(
                 discoveryCommitPolicy: discoveryCommitPolicy,
-                afterViewportMovement: afterViewportMovement,
                 notificationBatch: notificationWindow?.capture()
             )?.current {
                 return current
