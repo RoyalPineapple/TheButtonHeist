@@ -1,145 +1,149 @@
 #if canImport(UIKit)
 #if DEBUG
 
-extension Observation {
-    internal actor StoreOwner {
-        private var store: Store
+extension TheVault {
+    internal actor StateOwner {
+        private var state: State
 
-        internal init(store: Store = Store()) {
-            self.store = store
+        internal init(state: State = State()) {
+            self.state = state
         }
 
-        internal func latestReadEvent() -> SnapshotEvent? {
-            store.latestReadEvent
+        internal func current() -> State.Current? {
+            state.current
         }
 
-        internal func latestReadSnapshot() -> Snapshot? {
-            store.latestReadSnapshot
-        }
-
-        internal func latestReadMoment() -> Moment? {
-            store.latestReadMoment
+        internal func latestSnapshot() -> Observation.Snapshot? {
+            state.current?.snapshot
         }
 
         internal func latestSettleFailureDiagnostic() -> String? {
-            store.settleFailureDiagnostic
+            state.settleFailureDiagnostic
         }
 
         internal func notificationIndex() -> AccessibilityNotificationCursor {
-            store.notificationIndex
+            state.notificationIndex
         }
 
         internal func sequence() -> SettledObservationSequence {
-            store.sequence
+            state.sequence
+        }
+
+        internal func historyEndIndex() -> Int {
+            state.history.endIndex
         }
 
         internal func scopedScreenChangedSequence() -> UInt64 {
-            store.scopedScreenChangedSequence
+            state.scopedScreenChangedSequence
         }
 
         internal func interfaceTree() -> InterfaceTree {
-            store.interfaceTree
+            state.interfaceTree
         }
 
         internal func discardCurrentObservation() {
-            store.discardCurrentObservation()
+            state.discardCurrentObservation()
         }
 
         internal func invalidateCurrentAdmission() {
-            store.invalidateCurrentAdmission()
+            state.invalidateCurrentAdmission()
         }
 
         internal func discardIfSignalChanged(to signal: TheTripwire.TripwireSignal) {
-            store.discardIfSignalChanged(to: signal)
+            state.discardIfSignalChanged(to: signal)
         }
 
         internal func admittedObservation(
             scope: SemanticObservationScope,
             after sequence: SettledObservationSequence?
-        ) -> Store.AdmittedObservation? {
-            store.admittedObservation(scope: scope, after: sequence)
+        ) -> State.AdmittedObservation? {
+            state.admittedObservation(scope: scope, after: sequence)
         }
 
-        internal func readSnapshot(
-            since moment: Moment?,
+        internal func current(
+            after historyIndex: Int?,
             scope: SemanticObservationScope
-        ) -> SnapshotRead {
-            store.readSnapshot(since: moment, scope: scope)
+        ) -> Result<State.Current?, Observation.History.ReadError> {
+            state.current(after: historyIndex, scope: scope)
         }
 
-        internal func latestMoment(scope: SemanticObservationScope) -> Moment? {
-            store.latestMoment(scope: scope)
-        }
-
-        internal func moment(
+        internal func current(
             scope: SemanticObservationScope,
             at sequence: SettledObservationSequence
-        ) -> Moment? {
-            store.moment(scope: scope, at: sequence)
+        ) -> State.Current? {
+            state.current(scope: scope, at: sequence)
         }
 
-        internal func settledWaitBaseline(
+        internal func baseline(
             scope: SemanticObservationScope,
             after sequence: SettledObservationSequence?
-        ) -> SettledWaitBaseline {
-            if let sequence {
-                return SettledWaitBaseline(
+        ) -> ObservationBaseline {
+            if let sequence,
+               let current = state.current(scope: scope, at: sequence) {
+                return ObservationBaseline(
                     requiredSequence: sequence,
-                    moment: store.moment(scope: scope, at: sequence)
+                    historyIndex: state.history.endIndex,
+                    snapshot: current.snapshot
                 )
             }
-            let moment = store.latestMoment(scope: scope)
-            return SettledWaitBaseline(
-                requiredSequence: moment?.sequence,
-                moment: moment
+            let current = state.current.flatMap {
+                $0.scope.canFulfill(scope) ? $0 : nil
+            }
+            return ObservationBaseline(
+                requiredSequence: current?.sequence ?? sequence,
+                historyIndex: state.history.endIndex,
+                snapshot: current?.snapshot
             )
         }
 
-        internal func readLog<Value: Sendable>(
-            _ read: @Sendable (Log) -> Value
-        ) -> Value {
-            read(store.log)
+        internal func events(
+            after historyIndex: Int
+        ) -> Result<[Observation.Event], Observation.History.ReadError> {
+            do {
+                return .success(Array(
+                    try state.history.events(after: historyIndex)
+                ))
+            } catch {
+                return .failure(error)
+            }
         }
 
-        /// Reads the admission and returns its already-recorded events.
-        ///
-        /// The order is the whole contract: a boundary's departure, identity and
-        /// arrival are three moments, and the caller puts them into the pipe one
-        /// at a time as they stand here. When they get there is not part of it.
+        internal func evidence(
+            in range: Range<Int>,
+            baseline: Observation.Snapshot?
+        ) -> Observation.Evidence {
+            state.evidence(in: range, baseline: baseline)
+        }
+
         internal func readAdmission(
-            _ admission: Admission
-        ) throws -> Store.ReadObservation {
-            try store.readObservation(admission)
+            _ admission: Observation.Admission
+        ) -> State.ReadObservation {
+            state.readObservation(admission)
         }
 
-        internal func settlementDidArm(at moment: Moment) {
-            store.settlementDidArm(at: moment)
+        internal func protectHistory(from index: Int) {
+            state.protectHistory(from: index)
         }
 
-        internal func settlementDidFinish(at moment: Moment) {
-            store.settlementDidFinish(at: moment)
-        }
-
-        internal func recordAnnouncement(
-            _ announcement: CapturedAnnouncement
-        ) -> Event {
-            store.recordAnnouncement(announcement)
+        internal func releaseHistory(from index: Int) {
+            state.releaseHistory(from: index)
         }
 
         internal func recordSettleFailure(_ diagnostic: String?) {
-            store.recordSettleFailure(diagnostic)
+            state.recordSettleFailure(diagnostic)
         }
 
-        internal func reset(retentionLimit: Int = Store.defaultRetentionLimit) {
-            store = Store(retentionLimit: retentionLimit)
+        internal func reset(retentionLimit: Int = State.defaultRetentionLimit) {
+            state = State(retentionLimit: retentionLimit)
         }
     }
 }
 
-extension Observation.StoreOwner {
-    internal struct SettledWaitBaseline: Sendable {
+extension TheVault.StateOwner {
+    internal struct ObservationBaseline: Sendable {
         internal let requiredSequence: SettledObservationSequence?
-        internal let moment: Observation.Moment?
+        internal let historyIndex: Int
+        internal let snapshot: Observation.Snapshot?
     }
 }
 

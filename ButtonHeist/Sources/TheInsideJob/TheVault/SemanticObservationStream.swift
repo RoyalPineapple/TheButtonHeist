@@ -5,10 +5,42 @@ import ButtonHeistSupport
 
 import TheScore
 
-/// Coordinates semantic observation scheduling, settlement, and delivery.
+/// Coordinates semantic observation scheduling, capture, and delivery.
 extension Observation {
 @MainActor
 internal final class Stream {
+    private struct PublishedEvents {
+        let range: Range<Int>
+        let events: [Event]
+
+        func events(after historyIndex: Int) -> ArraySlice<Event> {
+            events.dropFirst(Swift.max(0, historyIndex - range.lowerBound))
+        }
+    }
+
+    private enum EventReceiver {
+        case installing(
+            subscriptionID: UInt64,
+            receive: @MainActor (Event) -> Void,
+            buffered: [PublishedEvents]
+        )
+        case active(
+            subscriptionID: UInt64,
+            receive: @MainActor (Event) -> Void,
+            pending: [Event],
+            nextIndex: Int,
+            isDelivering: Bool
+        )
+
+        var subscriptionID: UInt64 {
+            switch self {
+            case .installing(let subscriptionID, _, _),
+                 .active(let subscriptionID, _, _, _, _):
+                subscriptionID
+            }
+        }
+    }
+
     private static let passiveDiscoveryCadence: Duration = .seconds(1)
 
     weak var vault: TheVault?
@@ -27,9 +59,9 @@ internal final class Stream {
     /// A viewport transition holds this for as long as it drives the scroll,
     /// which is what lets an ambient reading state `.viewportMovement`.
     private(set) var isMovingViewport = false
-    let storeOwner = StoreOwner()
+    let stateOwner = TheVault.StateOwner()
     var observationWaiters = WaiterStore<UInt64, SemanticObservationWaiter>()
-    private var receive: @MainActor (Event) -> Void = { _ in }
+    private var eventReceiver: EventReceiver?
     /// Runs at the top of every visible reading, before the tree is read.
     var beforeVisibleReading: @MainActor () async -> Void = {}
     /// What the vault holds, readable without awaiting the store.
@@ -37,25 +69,25 @@ internal final class Stream {
     /// The store is the record and lives behind an actor; callers on the main
     /// actor that need the current tree synchronously read it here, written as
     /// each tick goes out.
-    private(set) var latestReadSnapshotEvent: SnapshotEvent?
+    private(set) var latestCurrent: TheVault.State.Current?
     private(set) var latestReadInterfaceTree: InterfaceTree = .empty
 
     // MARK: - Subscriber-Facing Settled Observation History
 
     var lifecycle = SemanticObservationLifecycle.stopped
-    internal func latestReadEvent() async -> SnapshotEvent? {
-        await storeOwner.latestReadEvent()
+    internal func current() async -> TheVault.State.Current? {
+        await stateOwner.current()
     }
     internal func latestSettleFailureDiagnostic() async -> String? {
-        await storeOwner.latestSettleFailureDiagnostic()
+        await stateOwner.latestSettleFailureDiagnostic()
     }
 
     internal func readScopedScreenChangedSequence() async -> UInt64 {
-        await storeOwner.scopedScreenChangedSequence()
+        await stateOwner.scopedScreenChangedSequence()
     }
 
     internal func latestReadSnapshot() async -> Snapshot? {
-        await storeOwner.latestReadSnapshot()
+        await stateOwner.latestSnapshot()
     }
 
     internal var isActive: Bool {
@@ -91,7 +123,7 @@ internal final class Stream {
         discovery: @escaping SemanticObservationLifecycle.DiscoveryObservation
     ) async {
         guard !lifecycle.replaceDiscoveryIfRunning(discovery) else { return }
-        await storeOwner.discardCurrentObservation()
+        await stateOwner.discardCurrentObservation()
         forgetReadState()
         lastPassiveDiscoveryStartedAt = nil
         if let vault {
@@ -126,33 +158,158 @@ internal final class Stream {
         return SemanticObservationSubscription(id: id, scope: scope, stream: self)
     }
 
-    /// Raises the scope and takes the ticks.
+    /// Raises the scope and receives retained and live events without a gap.
     ///
-    /// There is one receiver because there is one of everything downstream: one
-    /// brains running one heist step. Nothing routes, because there is nowhere
-    /// else a tick could go.
+    /// The receiver is installed before history is read. Publications that race
+    /// with that actor hop are buffered by range, then only the suffix not
+    /// already present in retained history is delivered.
     internal func subscribe(
         scope: SemanticObservationScope,
-        receive: @escaping @MainActor (Event) -> Void
-    ) -> SemanticObservationSubscription {
-        self.receive = receive
-        return subscribe(scope: scope)
+        replayingAfter historyIndex: Int,
+        receive: @escaping @MainActor (Event) -> Void,
+        historyUnavailable: @escaping @MainActor (History.ReadError) -> Void
+    ) async -> SemanticObservationSubscription {
+        precondition(
+            eventReceiver == nil,
+            "Only one observation event consumer may be active"
+        )
+        let subscription = subscribe(scope: scope)
+        eventReceiver = .installing(
+            subscriptionID: subscription.id,
+            receive: receive,
+            buffered: []
+        )
+        let replay = await stateOwner.events(after: historyIndex)
+        guard eventReceiver?.subscriptionID == subscription.id else {
+            return subscription
+        }
+        guard case .installing(_, _, let buffered) = eventReceiver else {
+            preconditionFailure("Observation receiver changed while installing")
+        }
+        switch replay {
+        case .success(let retained):
+            let replayEndIndex = historyIndex + retained.count
+            let live = buffered.flatMap { publication in
+                publication.events(after: replayEndIndex)
+            }
+            activate(
+                retained + live,
+                to: subscription.id,
+                receive: receive
+            )
+        case .failure(let error):
+            historyUnavailable(error)
+            guard case .installing(_, _, let latestBuffered) = eventReceiver,
+                  eventReceiver?.subscriptionID == subscription.id
+            else { return subscription }
+            activate(
+                latestBuffered.flatMap(\.events),
+                to: subscription.id,
+                receive: receive
+            )
+        }
+        return subscription
     }
 
     internal func removeSubscription(_ id: UInt64) {
         scopePressure.removeSubscription(id)
-    }
-
-    func publishImmediately(_ event: Event) {
-        if let snapshotEvent = event.snapshotEvent {
-            latestReadSnapshotEvent = snapshotEvent
-            latestReadInterfaceTree = snapshotEvent.snapshot.observation.tree
+        if eventReceiver?.subscriptionID == id {
+            eventReceiver = nil
         }
-        receive(event)
     }
 
-    func publishAnnouncement(_ announcement: CapturedAnnouncement) async {
-        publishImmediately(await storeOwner.recordAnnouncement(announcement))
+    func publish(_ read: TheVault.State.ReadObservation) {
+        latestCurrent = read.current
+        latestReadInterfaceTree = read.tree
+        guard let receiver = eventReceiver else { return }
+        switch receiver {
+        case .installing(let subscriptionID, let receive, let buffered):
+            self.eventReceiver = .installing(
+                subscriptionID: subscriptionID,
+                receive: receive,
+                buffered: buffered + [PublishedEvents(
+                    range: read.historyRange,
+                    events: read.events
+                )]
+            )
+        case .active(
+            let subscriptionID,
+            let receive,
+            let pending,
+            let nextIndex,
+            let isDelivering
+        ):
+            eventReceiver = .active(
+                subscriptionID: subscriptionID,
+                receive: receive,
+                pending: pending + read.events,
+                nextIndex: nextIndex,
+                isDelivering: isDelivering
+            )
+            drain(subscriptionID: subscriptionID)
+        }
+    }
+
+    private func activate(
+        _ events: [Event],
+        to subscriptionID: UInt64,
+        receive: @escaping @MainActor (Event) -> Void
+    ) {
+        eventReceiver = .active(
+            subscriptionID: subscriptionID,
+            receive: receive,
+            pending: events,
+            nextIndex: 0,
+            isDelivering: false
+        )
+        drain(subscriptionID: subscriptionID)
+    }
+
+    private func drain(subscriptionID: UInt64) {
+        guard case .active(
+            let activeSubscriptionID,
+            let receive,
+            let initialPending,
+            let initialIndex,
+            false
+        ) = eventReceiver,
+              activeSubscriptionID == subscriptionID
+        else { return }
+        eventReceiver = .active(
+            subscriptionID: subscriptionID,
+            receive: receive,
+            pending: initialPending,
+            nextIndex: initialIndex,
+            isDelivering: true
+        )
+        while case .active(
+            let activeSubscriptionID,
+            let currentReceive,
+            let pending,
+            let nextIndex,
+            true
+        ) = eventReceiver,
+              activeSubscriptionID == subscriptionID {
+            guard nextIndex < pending.count else {
+                eventReceiver = .active(
+                    subscriptionID: subscriptionID,
+                    receive: currentReceive,
+                    pending: [],
+                    nextIndex: 0,
+                    isDelivering: false
+                )
+                return
+            }
+            let event = pending[nextIndex]
+            eventReceiver = .active(
+                subscriptionID: subscriptionID,
+                receive: currentReceive,
+                pending: pending,
+                nextIndex: nextIndex + 1,
+                isDelivering: true
+            )
+            receive(event)
+        }
     }
 
     /// Forgets what the vault held.
@@ -160,14 +317,14 @@ internal final class Stream {
     /// Paired with the store throwing its tree away: the mirror describes what
     /// the store holds, so it goes when that does.
     func forgetReadState() {
-        latestReadSnapshotEvent = nil
+        latestCurrent = nil
         latestReadInterfaceTree = .empty
     }
 
     /// Keeps committed semantic truth readable while requiring a fresh
     /// observation before it can be admitted to a waiter.
     func invalidateCurrentAdmission() async {
-        await storeOwner.invalidateCurrentAdmission()
+        await stateOwner.invalidateCurrentAdmission()
     }
 
     /// Runs `movement` with every reading taken during it attributed to the
@@ -265,7 +422,7 @@ internal final class Stream {
     }
 
     func discardIfSignalChanged(to signal: TheTripwire.TripwireSignal) async {
-        await storeOwner.discardIfSignalChanged(to: signal)
+        await stateOwner.discardIfSignalChanged(to: signal)
     }
 
 }
@@ -282,7 +439,7 @@ extension Observation.Stream {
 
     struct VisibleRefreshTask {
         let token: VisibleRefreshToken
-        let task: Task<ObservationSettlement, Never>
+        let task: Task<VisibleObservationOutcome, Never>
     }
 
     enum VisibleRefreshPhase {
