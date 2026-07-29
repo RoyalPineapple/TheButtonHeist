@@ -7,7 +7,7 @@ import TheScore
 
 @MainActor
 final class AccessibilityNotificationCallbackLifecycleTests: XCTestCase {
-    func testStopRejectsCallbackRetainedByPrivateSPI() throws {
+    func testStopRejectsCallbackRetainedByPrivateSPI() async throws {
         let harness = CallbackHarness()
         let observer = makeObserver(harness: harness)
         defer { observer.uninstall() }
@@ -19,13 +19,13 @@ final class AccessibilityNotificationCallbackLifecycleTests: XCTestCase {
         observer.uninstall()
         callback(1000, nil, nil)
 
-        XCTAssertTrue(actionWindow.capture()?.events.isEmpty == true)
-        actionWindow.cancel()
+        let batch = await actionWindow.admitCaptured { Optional($0) }
+        XCTAssertTrue(batch?.events.isEmpty == true)
         XCTAssertEqual(observer.latestSequence, 0)
         XCTAssertEqual(harness.uninstallCount, 1)
     }
 
-    func testRemovedCallbackCannotPublishIntoLaterActionWindow() throws {
+    func testRemovedCallbackCannotPublishIntoLaterActionWindow() async throws {
         let harness = CallbackHarness()
         let observer = makeObserver(harness: harness)
         defer { observer.uninstall() }
@@ -43,11 +43,12 @@ final class AccessibilityNotificationCallbackLifecycleTests: XCTestCase {
         removedCallback(1005, nil, nil)
         removedCallback(1008, "Stale announcement" as NSString, nil)
 
-        let staleBatch = try XCTUnwrap(actionWindow.capture())
+        let staleBatch = try XCTUnwrap(
+            await actionWindow.admitCaptured { Optional($0) }
+        )
         XCTAssertEqual(actionWindow.cursor.sequence, 0)
         XCTAssertTrue(staleBatch.events.isEmpty)
         XCTAssertEqual(staleBatch.through.sequence, 0)
-        actionWindow.cancel()
         XCTAssertEqual(observer.latestSequence, 0)
 
         let activeCallback = try XCTUnwrap(harness.callbacks.last)
@@ -56,8 +57,9 @@ final class AccessibilityNotificationCallbackLifecycleTests: XCTestCase {
         activeCallback(1005, nil, nil)
         activeCallback(1008, "Current announcement" as NSString, nil)
 
-        let activeBatch = try XCTUnwrap(activeWindow.capture())
-        activeWindow.cancel()
+        let activeBatch = try XCTUnwrap(
+            await activeWindow.admitCaptured { Optional($0) }
+        )
         XCTAssertEqual(activeWindow.cursor.sequence, 0)
         XCTAssertEqual(activeBatch.events.map(\.sequence), [1, 2, 3])
         XCTAssertEqual(activeBatch.through.sequence, 3)
@@ -68,7 +70,7 @@ final class AccessibilityNotificationCallbackLifecycleTests: XCTestCase {
         XCTAssertEqual(observer.latestSequence, 3)
     }
 
-    func testCallbacksDeliveredIntoOpenActionWindowAreCapturedWithoutLoss() throws {
+    func testCallbacksDeliveredIntoOpenActionWindowAreCapturedWithoutLoss() async throws {
         let harness = CallbackHarness()
         let observer = makeObserver(harness: harness)
         defer { observer.uninstall() }
@@ -79,17 +81,18 @@ final class AccessibilityNotificationCallbackLifecycleTests: XCTestCase {
 
         callback(1000, nil, nil)
         callback(UInt32.max, nil, nil)
-        let batch = try XCTUnwrap(actionWindow.capture())
+        let batch = try XCTUnwrap(
+            await actionWindow.admitCaptured { Optional($0) }
+        )
 
         XCTAssertEqual(actionWindow.cursor.sequence, 0)
         XCTAssertEqual(batch.events.map(\.sequence), [1, 2])
         XCTAssertEqual(batch.through.sequence, 2)
         XCTAssertEqual(batch.events.map(\.kind), [.screenChanged, .unknown(.max)])
         XCTAssertNil(batch.gap)
-        actionWindow.cancel()
     }
 
-    func testCallbackImmediatelyNormalizesMutableObjectiveCPayload() throws {
+    func testCallbackImmediatelyNormalizesMutableObjectiveCPayload() async throws {
         let harness = CallbackHarness()
         let observer = makeObserver(harness: harness)
         defer { observer.uninstall() }
@@ -102,43 +105,13 @@ final class AccessibilityNotificationCallbackLifecycleTests: XCTestCase {
         callback(1008, mutablePayload, nil)
         mutablePayload.setString("Mutated after callback")
 
-        let events = actionWindow.capture()?.events ?? []
-        actionWindow.cancel()
+        let events = await actionWindow.admitCaptured { Optional($0.events) } ?? []
         XCTAssertEqual(events.count, 1)
         let event = try XCTUnwrap(events.first)
         guard case .string(let value) = event.notificationData else {
             return XCTFail("Expected normalized string payload")
         }
         XCTAssertEqual(value, "Original announcement")
-    }
-
-    func testOverlappingScopeLeasesRemainScopedUntilLastIdempotentCancellation() {
-        let bus = AccessibilityNotificationBus()
-        var heist: AccessibilityNotificationScopeLease? = bus.beginHeistScope()
-        var action: AccessibilityNotificationScopeLease? = bus.beginActionWindow()
-
-        heist?.cancel()
-        heist?.cancel()
-        heist = nil
-        bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
-        action?.cancel()
-        action?.cancel()
-        action = nil
-        bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
-
-        var secondHeist: AccessibilityNotificationScopeLease? = bus.beginHeistScope()
-        var secondAction: AccessibilityNotificationScopeLease? = bus.beginActionWindow()
-        XCTAssertNotNil(secondHeist)
-        secondAction?.cancel()
-        secondAction = nil
-        bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
-        secondHeist = nil
-        bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
-
-        XCTAssertEqual(
-            bus.checkpoint(after: .origin, selection: .all).events.map(\.provenance),
-            [.scoped, .ambient, .scoped, .ambient]
-        )
     }
 
     private func makeObserver(harness: CallbackHarness) -> AccessibilityNotificationObserver {
