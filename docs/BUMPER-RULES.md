@@ -1,9 +1,11 @@
 # Bumper Bowling Rules
 
-Button Heist uses Bumper Bowling only for repository-wide source invariants
-that Swift, SwiftLint, and behavioral tests cannot express directly. SwiftPM
-and Tuist own target dependencies, Swift access control owns private
-construction, and tests own runtime and wire contracts.
+Button Heist uses Bumper Bowling to shape repository-wide source boundaries
+that Swift, SwiftLint, and behavioral tests cannot express directly. A shaper
+names the one place a capability belongs and tells a change how to rejoin the
+canonical pipeline. It is not a style linter or a catalog of banned old names.
+SwiftPM and Tuist own target dependencies, Swift access control owns private
+construction, and tests own runtime and wire behavior.
 
 Every retained rule below protects a current typed or capability boundary.
 Rules that preserve an implementation helper, a deleted pipeline, or a state
@@ -11,7 +13,7 @@ that access control already makes unconstructible are intentionally absent.
 
 ## Architecture Scope
 
-| Rule ID | Invariant | Repair | Verification and deletion condition |
+| Rule ID | Shape | Repair | Verification and deletion condition |
 | --- | --- | --- | --- |
 | `duplicate_ownership` | Every included path and module has one Button Heist component owner, so scoped rules have an unambiguous lane. | Remove the overlapping `Owns` or `Modules` declaration. | Verification: Bumper validates its component configuration before applying scoped rules. Delete when Bumper no longer uses component ownership for scoping. |
 | `forbidden_import` | ThePlans and TheScore remain value layers. ThePlans excludes UI, persistence, testing, CLI, MCP, networking, Objective-C, and live accessibility parser authority; TheScore excludes UI, persistence, and testing authority. | Normalize boundary evidence into Button Heist values before it enters a value layer. | Verification: Bumper evaluates imports against the component shapes on every repository run. Delete an exclusion when the build graph makes that import impossible. |
@@ -25,7 +27,7 @@ remain authoritative for target dependencies and cycles.
 These rules operate on modules and components rather than exact implementation
 files. Moving code inside its owning component does not change policy.
 
-| Rule ID | Invariant | Repair | Verification and deletion condition |
+| Rule ID | Shape | Repair | Verification and deletion condition |
 | --- | --- | --- | --- |
 | `buttonheist.ui_framework_ownership` | UIKit and SwiftUI remain in runtime and demo components. | Perform UI work at the runtime or demo boundary and pass values inward. | Verification: focused valid and invalid import fixtures plus repository evaluation. Delete when target dependencies make these imports impossible elsewhere. |
 | `buttonheist.network_framework_ownership` | Network.framework remains in runtime transport or TheScore's typed TLS boundary. | Move network authority to transport or TLS code and pass typed outcomes inward. | Verification: focused component mutation fixtures plus repository evaluation. Delete when the build graph encodes the same capability boundary. |
@@ -35,7 +37,7 @@ files. Moving code inside its owning component does not change policy.
 
 ## User Accessibility
 
-| Rule ID | Invariant | Repair | Verification and deletion condition |
+| Rule ID | Shape | Repair | Verification and deletion condition |
 | --- | --- | --- | --- |
 | `buttonheist.demo_accessibility_identifier` | Demo controls are discoverable through the semantics available to accessibility users, rather than test-only identifiers. Named SPI research fixtures remain exempt. | Improve the control's label, value, traits, hint, or actions. | Verification: standard `memberReferenceOwnership` with demo, research-fixture, and non-demo fixtures. Delete when demo and research targets split and the demo target cannot call the identifier API. |
 
@@ -44,7 +46,7 @@ files. Moving code inside its owning component does not change policy.
 These checks use lexical and explicit-type syntax only. They do not pretend to
 resolve Swift types or infer runtime ownership.
 
-| Rule ID | Invariant | Repair | Verification and deletion condition |
+| Rule ID | Shape | Repair | Verification and deletion condition |
 | --- | --- | --- | --- |
 | `buttonheist.any_boundary` | Production `Any` appears only in the three current Foundation and Objective-C boundary declarations and is normalized immediately. | Add a typed boundary value and convert the external object there. | Verification: invalid arbitrary API and valid named-boundary fixtures plus repository evaluation. Delete when Foundation exposes typed equivalents or the bridges move into isolated targets. |
 | `buttonheist.callback_isolation` | Stored `onFoo` callback types declare `@Sendable` or a global actor, including file-local callback aliases. | State the callback's actor or Sendability contract in its type. | Verification: direct and aliased valid and invalid fixtures plus strict-concurrency compilation. Delete when Swift requires equivalent isolation for every stored callback shape. |
@@ -55,13 +57,18 @@ resolve Swift types or infer runtime ownership.
 These shapers guard semantic effect boundaries that Swift access control cannot
 express across files in the runtime target.
 
-| Rule ID | Invariant | Repair | Verification and deletion condition |
+| Rule ID | Shape | Repair | Verification and deletion condition |
 | --- | --- | --- | --- |
+| `buttonheist.observation_pulse_clock_ownership` | `TheTripwire+Pulse.swift` constructs the sole `CADisplayLink`, so every semantic observation cycle is driven by one UIKit display pulse. | Request pulse demand through `Observation.Stream`; do not construct another observation clock. | Verification: one canonical-construction fixture and one competing-clock fixture plus repository evaluation. Delete when the pulse owner moves behind a target boundary that makes `CADisplayLink` construction inaccessible elsewhere. |
+| `buttonheist.observation_pulse_demand_ownership` | `Observation.Stream` is the sole writer of Tripwire observation demand. Its scope-pressure reduction maps zero demand to `nil`, which pauses the display link, and maps live demand to the canonical pulse policy. | Add or release a typed observation subscription or active demand through the stream. | Verification: one stream-owner fixture and one competing-demand fixture plus repository evaluation; behavioral tests own pause/resume semantics. Delete when the demand mutator becomes inaccessible outside the stream. |
+| `buttonheist.notification_cycle_claim_ownership` | `Observation.Stream` is the sole claimant of notification ingress for a pulse cycle, keeping claim, capture, commit, and acknowledgement on one pipeline. | Request an observation publication and consume its normalized events. | Verification: one stream-owner fixture and one competing-claim fixture plus repository evaluation. Delete when cycle claims become private implementation of the stream. |
+| `buttonheist.semantic_observation_live_capture_ownership` | `SemanticObservationStream+CaptureAdmission.swift` is the sole production caller of raw visible capture, so live UIKit evidence cannot bypass notification claim, parsing, commit, publication, or evaluation. | Request a visible or discovery-scope observation publication from `Observation.Stream`. | Verification: one canonical call fixture and one competing direct-capture fixture plus repository evaluation. Delete when raw capture becomes inaccessible outside the cycle boundary. |
 | `buttonheist.semantic_observation_commit_ownership` | `Observation.Stream` is the only runtime caller that admits a captured reading through `TheVault.StateOwner`, so current truth, history, lineage, and delivery order cannot be advanced by competing paths. | Admit captured observations through the observation stream. | Verification: standard `memberReferenceOwnership` with valid Stream and invalid competing caller fixtures plus repository evaluation. Delete when StateOwner admission becomes inaccessible outside the stream owner. |
 | `buttonheist.semantic_observation_store_mutation_ownership` | `TheVault.StateOwner` is the only runtime caller that mutates `TheVault.State` with an admitted observation. | Commit through StateOwner rather than mutating Vault state directly. | Verification: standard `memberReferenceOwnership` with valid StateOwner and invalid competing mutator fixtures plus repository evaluation. Delete when state mutation becomes file-private to StateOwner. |
+| `buttonheist.heist_execution_machine_purity` | `HeistExecution.Machine` remains a deterministic reducer over values; UIKit, Vault access, clocks, tasks, continuations, observation resources, and `TheBrains` stay in Host. | Perform the effect in Host and pass a typed input into Machine. | Verification: a value-only reducer passes; focused UIKit, Vault, task, subscription, and deadline mutations fail with source evidence. Delete when Machine moves to a value-only target that cannot reference runtime capabilities. |
 | `buttonheist.heist_execution_machine_ownership` | `HeistExecution.Host` is the only runtime owner that constructs the complete-heist machine. Actions, waits, and control flow advance through that one machine instead of creating per-operation executors. | Run the plan through the existing heist host. | Verification: standard `constructionOwnership` with valid host and invalid competing-owner fixtures plus repository evaluation. Delete when the machine initializer becomes inaccessible outside its host. |
 | `buttonheist.heist_execution_host_ownership` | `TheBrains+HeistExecution` is the only runtime entry that constructs a heist host, so transport and in-app requests cannot introduce a second execution pipeline beside canonical request admission. | Submit the heist through the existing `TheBrains.executeHeistPlan` entry. | Verification: standard `constructionOwnership` with valid canonical-entry and invalid competing-entry fixtures plus repository evaluation. Delete when the host initializer becomes file-private to the canonical entry. |
-| `buttonheist.scroll_content_offset_ownership` | `TheSafecracker+Scroll.swift` is the only production owner of direct `UIScrollView.setContentOffset` dispatch; demo fixtures remain outside the runtime effect boundary. | Express viewport movement as a `Navigation.ViewportMovementIntent` and dispatch it through TheSafecracker. | Verification: standard `memberReferenceOwnership` with one valid owner fixture, one invalid competing runtime fixture, and repository evaluation. Delete when direct content-offset mutation becomes inaccessible outside TheSafecracker. |
+| `buttonheist.scroll_content_offset_ownership` | `TheSafecracker+Scroll.swift` owns the physical `UIScrollView.setContentOffset` effect; discovery and inflation own typed movement commands and request observation publications after dispatch. | Express viewport movement as a `Navigation.ViewportMovementIntent`, dispatch it through TheSafecracker, and await the stream publication. | Verification: standard `memberReferenceOwnership` with one valid owner fixture, one invalid competing runtime fixture, and repository evaluation. Delete when direct content-offset mutation becomes inaccessible outside TheSafecracker. |
 | `buttonheist.transport_event_consumption_ownership` | `TransportControlPlane.swift` is the only production owner that consumes `ServerTransport.transportEvents`, so request admission and transport-control sideband messages cannot acquire a competing MainActor-bound event loop. | Consume transport events through the existing off-main `TransportControlPlane` and yield admitted app work through its capacity-admitted MainActor stream. | Verification: standard `memberReferenceOwnership` with a valid canonical-owner fixture, an invalid competing consumer fixture, and repository evaluation. Delete when `ServerTransport` can expose its event stream only to `TransportControlPlane`. |
 
 ## Plan Language Boundaries
@@ -71,7 +78,7 @@ access-control model have rejected most invalid constructions. They use
 Bumper's source queries and repository facts; no project syntax visitor
 reparses or reinterprets Swift.
 
-| Rule ID | Invariant | Repair | Verification and deletion condition |
+| Rule ID | Shape | Repair | Verification and deletion condition |
 | --- | --- | --- | --- |
 | `buttonheist.heist_content_opacity` | `HeistContent` is an opaque authoring fragment with no public stored builder bookkeeping. | Keep steps, nested definitions, and diagnostics internal to the result builder and construct a `HeistPlan` through its public initializer. | Verification: internal and public stored-property fixtures plus repository evaluation. Delete when `HeistContent` moves into an implementation-only module behind a public result-builder function. |
 | `buttonheist.plan_else_ownership` | Only `WaitFor` and `IfContent` expose a DSL `else` branch. `RepeatUntil` timeout is failure, not an executable alternate body. | Model loop timeout behavior through wait predicates or surrounding conditionals instead of adding loop-local else bodies. | Verification: valid wait/conditional fixtures, invalid `RepeatUntil` fixture, and repository evaluation. Delete when Swift access control or separate modules make unsupported DSL `else` declarations unrepresentable. |
@@ -79,8 +86,8 @@ reparses or reinterprets Swift.
 
 ## Rule Lifecycle
 
-A new blocking rule must demonstrate valid Swift that violates a durable
-repository invariant, explain why the compiler, build graph, and tests cannot
-own it, and include one valid and one invalid in-memory fixture. When a native
-boundary makes the bad state unconstructible, delete the Bumper rule and its
-fixture in the same change.
+A new blocking shaper must demonstrate valid Swift that can construct a
+competing owner, explain why the compiler, build graph, and tests cannot own the
+boundary, and include one valid and one invalid in-memory fixture. When a native
+boundary makes that competing owner unconstructible, delete the shaper, its
+fixture, and its documentation in the same change.

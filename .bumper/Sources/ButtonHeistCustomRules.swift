@@ -41,6 +41,23 @@ let buttonHeistRules = RuleSet {
     heistContentOpacityRule
     planElseOwnershipRule
     exportedTupleContractRule
+    heistExecutionMachinePurityRule
+    directLiveCaptureOwnershipRule
+    Rules.constructionOwnership(
+        "CADisplayLink",
+        allowed: .files([observationPulseClockPath]),
+        id: "buttonheist.observation_pulse_clock_ownership"
+    )
+    Rules.memberReferenceOwnership(
+        "setObservationPulseDemand",
+        allowed: .files([semanticObservationStreamPath]),
+        id: "buttonheist.observation_pulse_demand_ownership"
+    )
+    Rules.memberReferenceOwnership(
+        "freezeObservationCycleClaim",
+        allowed: .files([semanticObservationStreamPath]),
+        id: "buttonheist.notification_cycle_claim_ownership"
+    )
     Rules.memberReferenceOwnership(
         "commitAdmission",
         allowed: .files([semanticObservationCaptureAdmissionPath]),
@@ -86,12 +103,24 @@ private let demoAccessibilityIdentifierResearchFixtures: Set<RelativeFilePath> =
 
 private let semanticObservationCaptureAdmissionPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream+CaptureAdmission.swift"
+private let semanticObservationStreamPath: RelativeFilePath =
+    "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream.swift"
 private let semanticObservationStoreOwnerPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStoreOwner.swift"
+private let observationPulseClockPath: RelativeFilePath =
+    "ButtonHeist/Sources/TheInsideJob/TheTripwire/TheTripwire+Pulse.swift"
 private let heistExecutionHostPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheBrains/HeistExecution+Host.swift"
 private let heistExecutionEntryPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistExecution.swift"
+private let heistExecutionMachinePaths: Set<RelativeFilePath> = [
+    "ButtonHeist/Sources/TheInsideJob/TheBrains/HeistExecution.swift",
+    "ButtonHeist/Sources/TheInsideJob/TheBrains/HeistExecution+Reducer.swift",
+    "ButtonHeist/Sources/TheInsideJob/TheBrains/HeistExecution+ControlFlow.swift",
+    "ButtonHeist/Sources/TheInsideJob/TheBrains/HeistExecution+Leaf.swift",
+    "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistActionExecution.swift",
+    "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistWaitExecution.swift",
+]
 private let scrollContentOffsetOwnerPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheSafecracker/TheSafecracker+Scroll.swift"
 private let transportEventOwnerPaths: Set<RelativeFilePath> = [
@@ -100,6 +129,88 @@ private let transportEventOwnerPaths: Set<RelativeFilePath> = [
 ]
 private let startupConfigurationPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/Lifecycle/StartupConfiguration.swift"
+
+private let machineRuntimeCapabilities: Set<String> = [
+    "CheckedContinuation",
+    "RuntimeElapsed",
+    "SemanticObservationDeadline",
+    "SemanticObservationDemand",
+    "SemanticObservationSubscription",
+    "Task",
+    "TheBrains",
+    "TheVault",
+]
+
+private let heistExecutionMachinePurityRule = Rules.files(
+    "buttonheist.heist_execution_machine_purity",
+    severity: .error,
+    summary: "HeistExecution.Machine is a deterministic value reducer; Host owns UIKit, clocks, tasks, and live resources.",
+    scope: .files(heistExecutionMachinePaths)
+) { file in
+    let imports = SyntaxQuery<ImportDeclSyntax>()
+        .filter { match in
+            match.node.path.first?.name.text == "UIKit"
+        }
+        .matches(in: file)
+        .map { match in
+            machinePurityFailure(
+                match: match,
+                capability: "UIKit",
+                observed: match.node.trimmedDescription
+            )
+        }
+
+    let typeReferences = SyntaxQuery<IdentifierTypeSyntax>()
+        .filter { match in
+            machineRuntimeCapabilities.contains(match.node.name.text)
+        }
+        .matches(in: file)
+        .map { match in
+            machinePurityFailure(
+                match: match,
+                capability: match.node.name.text,
+                observed: match.node.trimmedDescription
+            )
+        }
+
+    let valueReferences = SyntaxQuery<DeclReferenceExprSyntax>()
+        .filter { match in
+            machineRuntimeCapabilities.contains(match.node.baseName.text)
+        }
+        .matches(in: file)
+        .map { match in
+            machinePurityFailure(
+                match: match,
+                capability: match.node.baseName.text,
+                observed: match.node.trimmedDescription
+            )
+        }
+
+    return imports + typeReferences + valueReferences
+}
+
+private let directLiveCaptureOwnershipRule = Rules.files(
+    "buttonheist.semantic_observation_live_capture_ownership",
+    severity: .error,
+    summary: "Production live capture enters through the semantic observation cycle.",
+    scope: runtimeScope
+) { file in
+    guard file.path != semanticObservationCaptureAdmissionPath else { return [] }
+    return functionCalls()
+        .filter { match in
+            match.node.calleeBaseName == "captureVisibleObservation"
+        }
+        .matches(in: file)
+        .map { match in
+            match.failure(
+                message: "direct live capture bypasses the semantic observation cycle",
+                evidence: ViolationEvidence(
+                    observed: match.node.trimmedDescription,
+                    expectation: "request a semantic observation publication from Observation.Stream"
+                )
+            )
+        }
+}
 
 private let anyBoundaryRule = Rules.files(
     "buttonheist.any_boundary",
@@ -496,4 +607,18 @@ private func functionName(_ node: FunctionDeclSyntax) -> String {
 private func isAllowedPlanElseOwner(_ node: FunctionDeclSyntax) -> Bool {
     let owner = node.bumper.lexicalContext.enclosingNominalNames.first
     return owner == "WaitFor" || owner == "IfContent"
+}
+
+private func machinePurityFailure<Node: SyntaxProtocol>(
+    match: SyntaxMatch<Node>,
+    capability: String,
+    observed: String
+) -> RuleFailure {
+    match.failure(
+        message: "HeistExecution.Machine owns runtime capability: \(capability)",
+        evidence: ViolationEvidence(
+            observed: observed,
+            expectation: "keep runtime capabilities in HeistExecution.Host and pass values through typed inputs"
+        )
+    )
 }

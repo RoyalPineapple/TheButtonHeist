@@ -519,13 +519,30 @@ Completed heist plans use `heistResult` with the `HeistResult` as the direct
 payload. A failure to produce that aggregate uses the canonical `error`
 message; it is never encoded as an `actionResult` or a null heist payload.
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    participant Host
+
+    Client->>Server: heistPlan
+    Server->>Host: execute admitted plan
+    alt Execution completes, including a failed step
+        Host-->>Server: HeistResult
+        Server-->>Client: heistResult(HeistResult)
+    else Aggregate cannot be produced
+        Host-->>Server: typed execution failure
+        Server-->>Client: error
+    end
+```
+
 The machine records one `ActionDispatchResult` together with predicate and
 observation evidence. One projector derives the action result without another
 intermediate result shape.
 `HeistActionEvidence.completed` contains one required `result` and optional
-`expectation` predicate truth. The action result owns the overall terminal
-outcome; the optional predicate evidence does not create another action or wait
-result. Decoders reject unknown keys and any non-current evidence shape.
+`expectationEvidence`. The action result owns the overall terminal outcome; the
+optional expectation evidence does not create another action or wait result.
+Decoders reject unknown keys and any non-current evidence shape.
 
 Action evidence is required and bound to the wire result outcome. Its `observation`
 is exactly one tagged case: `none`, `announcement`, or `observed`.
@@ -537,19 +554,21 @@ evidence fields, and sibling result warnings are invalid input.
 Fence projections surface that warning inside the projected action result, not
 beside the result on report evidence.
 
-A wait is not an action and never embeds an `ActionResult`. A passed wait node
-encodes one closed evidence value:
+A wait is not an action and never embeds an `ActionResult`. Passed and
+child-aborted wait nodes carry one `HeistExpectationEvidence`; a failed wait
+carries that evidence or `null` when observation was unavailable. The evidence
+object contains exactly `predicate`, `boundPredicate`, `observation`, and
+`terminalCause`. `predicate` preserves authored presentation; `boundPredicate`
+is the one canonical executable predicate. The evidence stores no verdict or
+second expectation result.
 
-```json
-{"type":"matched","evidence":{"observation":{...},"expectation":{"met":{...}}}}
-{"type":"handled_else","evidence":{"observation":{...},"expectation":{"unmet":{...}}}}
-```
-
-A failed or child-aborted wait node encodes
-`{"observation":{...},"expectation":{...}}` directly. The node's `outcome` is
-the sole owner of pass, failure, and child-abort state. Baseline and final
-summaries in public report JSON are derived from the observation snapshots;
-they are not stored in durable wait evidence.
+The node's `outcome` is the sole owner of pass, failure, and child-abort state.
+Report projection replays `boundPredicate` over `observation`, applies the
+terminal cause, and attaches the authored `predicate` to the derived
+`ExpectationResult`. A coverage gap fails replay as the same typed
+`Observation.Gap`; decoding cannot bless incomplete evidence with a stored
+verdict. Baseline and final summaries in public report JSON are derived from
+the observation snapshots and are not stored separately.
 
 `ActionResult.Payload` is the sole semantic payload. `ActionResult` custom
 `Codable` derives `method` from its case and emits `payload` data only when the
@@ -589,7 +608,23 @@ endpoint temporal model exists.
 Only admitted `Observation.Snapshot` values are committed and represented in
 History events. A raw `InterfaceObservation` is live parser evidence and cannot be
 published directly. Visible and discovery captures share the same admission,
-commit, and publication boundary.
+commit, and publication boundary. Production callers request freshness from
+`Observation.Stream`; only its cycle boundary invokes raw live capture.
+
+TheTripwire's single persistent `CADisplayLink` is the observation pulse clock.
+`Observation.Stream` reduces all visible and discovery subscriptions to one
+demand. Zero demand pauses the link. A pulse starts one cycle, which claims
+notification ingress, captures and parses UIKit state, commits snapshot and
+history, publishes ordered events to the active evaluator, then acknowledges
+the claim. A pulse received during that work is coalesced as one pending pulse.
+Business deadlines can cancel an operation but do not create another capture
+clock.
+
+Discovery and inflation move the viewport through a typed
+`Navigation.ViewportMovementIntent`. After a successful physical dispatch, the
+movement command requests a discovery-scope publication and waits for that
+committed result. It never parses or commits the viewport directly, and the
+explorer cannot request another movement before consuming the publication.
 
 `Observation.Event` is a closed four-case value:
 `elementsChanged(Snapshot)`, `screenChanged(ScreenFacts)`,
@@ -611,17 +646,19 @@ Unknown raw codes do not escape normalization. UIKit does not guarantee delivery
 of a useful notification for every change; absence permits explicit snapshot
 classification but is not itself evidence of replacement or stability.
 
-An admitted action observation contributes one checkpointed notification batch.
-`AccessibilityNotificationBus` retains the ingress events; checkpointing never
-clears or transfers ownership of them. The selected events are strictly after
-the action window's opening cursor and no later than the batch's exact
-through-cursor. The Vault normalizes selected payloads into
-`Observation.Event.notification`; it does not expose the ingress cursor on the
-event or durable evidence. Cancelling an action releases its attribution scope
-without manufacturing a notification event. The ingress log remains
-non-destructive, and ambient events remain outside scoped heist evidence. A
-scoped `screenChanged` recorded after batch capture still invalidates the
-committed observation.
+`AccessibilityNotificationBus` retains one bounded ingress sequence. At cycle
+start, `Observation.Stream` freezes one exact batch and uses only that batch for
+the capture. The Vault normalizes selected payloads into
+`Observation.Event.notification`. A successful semantic commit acknowledges
+the claim; a failed or cancelled capture leaves it pending and does not invent
+an event. If retained ingress is incomplete, the cycle opens a new baseline
+instead of encoding `noChange` from partial evidence.
+
+Actions and waits select durable evidence from canonical
+`Observation.History` after their machine-owned boundary. They do not own
+notification ingress, a private event record, or an independent position type.
+A scoped `screenChanged` arriving after one cycle's claim remains pending and
+invalidates the committed observation before it can be reused as current.
 
 Notification object payloads never carry UIKit identity. An attached object is
 parsed independently into current `HeistElement.Semantics`; it carries no graph
