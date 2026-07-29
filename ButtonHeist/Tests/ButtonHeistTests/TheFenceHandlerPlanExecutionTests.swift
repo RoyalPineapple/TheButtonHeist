@@ -74,7 +74,7 @@ extension TheFenceHandlerTests {
             }
             XCTAssertEqual(report, HeistReport.project(result: scriptedResult))
             let resultURL = try assertSingleResultArtifactURL(in: directory)
-            XCTAssertEqual(try HeistResultCodec.decode(contentsOf: resultURL), scriptedResult)
+            XCTAssertEqual(try HeistResultCodec.decode(contentsOf: resultURL).result, scriptedResult)
         }
     }
 

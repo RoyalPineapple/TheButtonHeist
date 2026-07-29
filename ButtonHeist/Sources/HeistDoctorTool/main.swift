@@ -70,7 +70,7 @@ struct HeistDoctorCommand: ParsableCommand {
     private static func decodeResult(at path: String) throws -> HeistResult {
         let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
         do {
-            return try HeistResultCodec.decode(contentsOf: url)
+            return try HeistResultCodec.decode(contentsOf: url).result
         } catch let error as DecodingError {
             throw ValidationError("failed to decode HeistResult at \(path): \(error)")
         } catch let error as HeistResultCodecError {

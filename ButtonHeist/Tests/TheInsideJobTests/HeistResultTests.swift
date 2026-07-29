@@ -38,9 +38,9 @@ final class HeistResultTests: XCTestCase {
                 Warn("sync")
             })
 
-            let resultURL = try assertSingleResultArtifactURL(in: directory, matchingSuffix: "-passed.json.gz")
-            let result = try HeistResultCodec.decode(contentsOf: resultURL)
-            XCTAssertEqual(result, heist.result)
+            let resultURL = try assertSingleResultArtifactURL(in: directory)
+            let recording = try HeistResultCodec.decode(contentsOf: resultURL)
+            XCTAssertEqual(recording.result, heist.result)
         }
     }
 
