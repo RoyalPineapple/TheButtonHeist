@@ -189,16 +189,22 @@ extension TheBrains {
         _ plan: HeistPlan,
         fallbackPayload: ActionResult.Payload
     ) async -> ActionResult {
-        let execution = await executeHeistPlan(plan)
-        guard case .heist(let result?) = execution.payload,
-              let actionResult = result.steps.first?.reportActionResult else {
+        let result: HeistResult
+        switch await executeHeistPlan(plan) {
+        case .success(let executionResult):
+            result = executionResult
+        case .failure(let failure):
             return .failure(
                 payload: fallbackPayload,
-                failureKind: execution.outcome.failureKind ?? .actionFailed,
-                message: execution.message ?? "single-step heist produced no action result"
+                failureKind: failure.actionFailureKind,
+                message: failure.description
             )
         }
-        return actionResult
+        return result.steps.first?.reportActionResult ?? .failure(
+            payload: fallbackPayload,
+            failureKind: .actionFailed,
+            message: "single-step heist produced no action result"
+        )
     }
 
     nonisolated static func actionFailureKind(

@@ -162,7 +162,7 @@ func targetArgumentValue(
 func scriptedHeistResponse(
     _ result: HeistResult = HeistResultFixture.result(steps: [HeistResultFixture.action()])
 ) -> ServerMessage {
-    .actionResult(.success(payload: .heist(result)))
+    .heistResult(result)
 }
 
 func stringMatchArgumentValue(_ value: String, mode: String = "exact") -> HeistValue {

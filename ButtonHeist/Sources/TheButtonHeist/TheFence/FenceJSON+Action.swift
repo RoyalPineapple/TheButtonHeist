@@ -14,7 +14,6 @@ private enum PublicActionResultCodingKey: String, CodingKey {
     case value
     case rotor
     case screenshot
-    case heistExecution
     case delta
     case screenName
     case screenId
@@ -107,8 +106,6 @@ extension ActionProjection: Encodable {
             try container.encode(PublicRotorResult(result: rotor), forKey: .rotor)
         case .screenshot(let width, let height):
             try container.encode(PublicScreenshotResult(width: width, height: height), forKey: .screenshot)
-        case .heistExecutionStepCount(let stepCount):
-            try container.encode(PublicHeistExecutionActionResult(stepCount: stepCount), forKey: .heistExecution)
         case .none:
             break
         }
@@ -128,10 +125,6 @@ extension ActionProjection: Encodable {
 struct PublicScreenshotResult: Encodable {
     let width: Double
     let height: Double
-}
-
-struct PublicHeistExecutionActionResult: Encodable {
-    let stepCount: Int
 }
 
 /// Status vocabulary for public command responses.

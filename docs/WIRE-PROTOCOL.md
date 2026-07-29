@@ -515,6 +515,10 @@ Action responses use `actionResult`:
 {"buttonHeistVersion":"<semver>","type":"actionResult","payload":{"outcome":{"kind":"success"},"method":"activate","evidence":{"observation":{"kind":"none"}}}}
 ```
 
+Completed heist plans use `heistResult` with the `HeistResult` as the direct
+payload. A failure to produce that aggregate uses the canonical `error`
+message; it is never encoded as an `actionResult` or a null heist payload.
+
 The machine records one `ActionDispatchResult` together with predicate and
 observation evidence. One projector derives the action result without another
 intermediate result shape.

@@ -48,7 +48,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
         case getPasteboard(String?)
         case screenshot(ScreenPayload?)
         case rotor(RotorResult?)
-        case heist(HeistResult?)
         case scroll
         case scrollToVisible
         case scrollToEdge
@@ -73,7 +72,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
             case .getPasteboard: .getPasteboard
             case .screenshot: .takeScreenshot
             case .rotor: .rotor
-            case .heist: .heistPlan
             case .scroll: .scroll
             case .scrollToVisible: .scrollToVisible
             case .scrollToEdge: .scrollToEdge
@@ -350,8 +348,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
             return .screenshot(try container.decodeIfPresent(ScreenPayload.self, forKey: .payload))
         case .rotor:
             return .rotor(try container.decodeIfPresent(RotorResult.self, forKey: .payload))
-        case .heistPlan:
-            return .heist(try container.decodeIfPresent(HeistResult.self, forKey: .payload))
         case .scroll:
             return try decodePayloadWithoutData(.scroll, method: method, from: container)
         case .scrollToVisible:
@@ -388,8 +384,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
             try container.encodeIfPresent(screen, forKey: .payload)
         case .rotor(let rotor):
             try container.encodeIfPresent(rotor, forKey: .payload)
-        case .heist(let result):
-            try container.encodeIfPresent(result, forKey: .payload)
         case .activate,
              .increment,
              .decrement,

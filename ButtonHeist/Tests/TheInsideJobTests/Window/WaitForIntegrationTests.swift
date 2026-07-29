@@ -127,14 +127,11 @@ final class WaitForIntegrationTests: XCTestCase {
     }
 
     private func executeHeistStep(_ step: HeistStep) async throws -> ActionResult {
-        let result = await insideJob.brains.executeHeistPlan(try HeistPlan(body: [step]))
-        guard case .heist(let heistResult) = result.payload,
-              let stepResult = heistResult?.steps.first,
-              let actionResult = stepResult.reportActionResult else {
-            XCTFail("Expected one heist step result")
-            return result
-        }
-        return actionResult
+        let result = try await insideJob.brains.executeHeistPlan(try HeistPlan(body: [step])).get()
+        return try XCTUnwrap(
+            result.steps.first?.reportActionResult,
+            "Expected one heist step result"
+        )
     }
 
     private func waitForObservationDemand(after baseline: Int) async {

@@ -63,6 +63,9 @@ public enum ServerMessage: Codable, Sendable {
     /// Result of an action command
     case actionResult(ActionResult)
 
+    /// Complete result of a heist-plan execution.
+    case heistResult(HeistResult)
+
     /// Screen capture response with PNG data
     case screen(ScreenPayload)
 

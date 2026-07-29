@@ -176,9 +176,7 @@ extension TheFence {
 extension TheFence.PendingResponseExpectation where Response == ActionResult {
     static var action: Self {
         Self(responseName: "action") { message in
-            guard case .actionResult(let result) = message,
-                  result.heistResult == nil
-            else { return nil }
+            guard case .actionResult(let result) = message else { return nil }
             return result
         }
     }
@@ -232,9 +230,7 @@ extension TheFence.PendingResponseExpectation where Response == [Observation.Not
 extension TheFence.PendingResponseExpectation where Response == HeistResult {
     static var heistExecution: Self {
         Self(responseName: "heist execution") { message in
-            guard case .actionResult(let actionResult) = message,
-                  let result = actionResult.heistResult
-            else { return nil }
+            guard case .heistResult(let result) = message else { return nil }
             return result
         }
     }
@@ -249,7 +245,7 @@ private extension ServerMessage {
             return "main-thread probe"
         case .interface:
             return "interface"
-        case .actionResult(let result) where result.heistResult != nil:
+        case .heistResult:
             return "heist execution"
         case .actionResult:
             return "action"
@@ -266,12 +262,5 @@ private extension ServerMessage {
              .status:
             return nil
         }
-    }
-}
-
-private extension ActionResult {
-    var heistResult: HeistResult? {
-        guard case .heist(let result?) = payload else { return nil }
-        return result
     }
 }

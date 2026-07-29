@@ -12,6 +12,35 @@ import XCTest
 @MainActor
 final class HeistResultTests: XCTestCase {
 
+    func testInactiveRuntimeProducesTypedExecutionFailure() async throws {
+        let job = try TheInsideJob(token: "inactive-heist-boundary-test")
+        let execution = await job.brains.executeHeistPlan(try HeistPlan {
+            Warn("unreachable")
+        })
+
+        guard case .failure(let failure) = execution else {
+            return XCTFail("Expected typed heist execution failure")
+        }
+        guard case .runtimeUnavailable = failure else {
+            return XCTFail("Expected runtimeUnavailable, got \(failure)")
+        }
+        XCTAssertEqual(failure.serverError.kind, .general)
+        XCTAssertEqual(failure.serverError.message, "ButtonHeist runtime is not active.")
+    }
+
+    func testExecutionFailureTransportPreservesDiagnosticsAndKind() {
+        let detail = HeistExecution.Failure.Detail(
+            HeistResultTestFailure("duplicate execution path")
+        )
+        let runtimeFailure = HeistExecution.Failure.runtimeBoundary(detail)
+        let admissionFailure = HeistExecution.Failure.invalidResult(detail)
+
+        XCTAssertEqual(runtimeFailure.serverError.kind, .general)
+        XCTAssertTrue(runtimeFailure.serverError.message.description.contains("duplicate execution path"))
+        XCTAssertEqual(admissionFailure.serverError.kind, .validationError)
+        XCTAssertTrue(admissionFailure.serverError.message.description.contains("duplicate execution path"))
+    }
+
     func testRunHeistFacadeProducesCanonicalInvocationResult() async throws {
         let heist = try await runHeist("PublicFacade.warn") {
             Warn("ok")
@@ -439,9 +468,8 @@ final class HeistResultTests: XCTestCase {
         }
 
         await job.brains.startSemanticObservation()
-        let directAction = await job.brains.executeHeistPlan(plan)
+        let directResult = try await job.brains.executeHeistPlan(plan).get()
         job.brains.stopSemanticObservation()
-        let directResult = try XCTUnwrap(directAction.resultPayload)
 
         let heist = try await Heist(plan, runtime: .insideJob(job))
 
@@ -467,19 +495,12 @@ private final class RuntimeCapture {
             self.plan = plan
             self.argument = argument
             self.timeout = timeout
-            return await self.job.executeInAppHeist(
+            return try await self.job.executeInAppHeist(
                 plan,
                 argument: argument,
                 timeout: timeout
             )
         }
-    }
-}
-
-private extension ActionResult {
-    var resultPayload: HeistResult? {
-        guard case .heist(let result) = payload else { return nil }
-        return result
     }
 }
 

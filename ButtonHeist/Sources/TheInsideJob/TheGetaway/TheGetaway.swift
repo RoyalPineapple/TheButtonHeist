@@ -204,13 +204,18 @@ final class TheGetaway {
                 generation: generation
             )
         case .heistPlan(let run):
-            let actionResult = await brains.executeHeistPlan(
+            let message: ServerMessage = switch await brains.executeHeistPlan(
                 run.plan,
                 argument: run.argument,
                 timeout: run.timeout
-            )
-            await sendActionResult(
-                actionResult: actionResult,
+            ) {
+            case .success(let result):
+                .heistResult(result)
+            case .failure(let failure):
+                .error(failure.serverError)
+            }
+            await sendMessage(
+                message,
                 requestId: requestId,
                 respond: respond,
                 generation: generation

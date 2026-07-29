@@ -55,29 +55,6 @@ final class PublicActionResultJSONTests: XCTestCase {
         try result.assertMissing("heistExecution")
     }
 
-    func testStandaloneActionResponseEncodesHeistExecutionPayloadSummary() throws {
-        let result = try HeistResult(
-            steps: [
-                HeistResultFixture.warning(message: "heads up"),
-            ],
-            durationMs: 1
-        )
-        let response = FenceResponse.action(
-            command: .runHeist,
-            result: ActionResult.success(
-                payload: .heist(result),
-                message: "ran",
-            )
-        )
-
-        let object = try publicJSONProbe(response).object()
-
-        XCTAssertEqual(try object.object("heistExecution").int("stepCount"), 1)
-        try object.assertMissing("value")
-        try object.assertMissing("rotor")
-        try object.assertMissing("screenshot")
-    }
-
     func testStandaloneActionResponseOmitsPayloadFieldsWhenAbsent() throws {
         let response = FenceResponse.action(
             command: .activate,

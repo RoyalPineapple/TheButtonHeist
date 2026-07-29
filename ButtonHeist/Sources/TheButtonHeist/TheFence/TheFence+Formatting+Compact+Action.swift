@@ -31,8 +31,6 @@ extension FenceResponse {
         switch projection.payload {
         case .rotor(let rotor):
             text = Self.compactRotor(rotor)
-        case .heistExecutionStepCount(let stepCount):
-            text = "\(TheFence.Command.runHeist.rawValue): \(stepCount) step(s)"
         case .screenshot(let width, let height):
             text = "screenshot: \(Int(width))x\(Int(height))"
         case .value, .none:

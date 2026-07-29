@@ -19,7 +19,6 @@ enum ActionPayloadProjection: Sendable {
     case value(String)
     case rotor(RotorResult)
     case screenshot(width: Double, height: Double)
-    case heistExecutionStepCount(Int)
     case none
 }
 
@@ -92,8 +91,6 @@ struct ActionProjection: Sendable {
         case .screenshot(let screen):
             guard let screen else { return .none }
             return .screenshot(width: screen.width, height: screen.height)
-        case .heist(let result):
-            return result.map { .heistExecutionStepCount($0.steps.count) } ?? .none
         case .activate,
              .increment,
              .decrement,

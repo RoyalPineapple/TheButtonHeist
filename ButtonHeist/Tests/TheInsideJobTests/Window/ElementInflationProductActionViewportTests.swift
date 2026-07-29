@@ -22,25 +22,15 @@ extension ElementInflationProductTests {
             label: "Heist Parity Heist",
             heist: true
         )
-        let result = try XCTUnwrap(heist.result.resultPayload)
-        let step = try XCTUnwrap(result.steps.first)
-        guard let actionEvidence = step.actionEvidence else {
-            return XCTFail("Expected heist action evidence")
-        }
-        let stepResult = try XCTUnwrap(actionEvidence.result)
-
         XCTAssertTrue(single.result.outcome.isSuccess, single.result.message ?? "single activate failed")
-        XCTAssertTrue(heist.result.outcome.isSuccess, heistFailureDescription(heist.result))
+        XCTAssertTrue(heist.result.outcome.isSuccess, heist.result.message ?? "heist activate failed")
         guard single.result.outcome.isSuccess, heist.result.outcome.isSuccess else { return }
         XCTAssertEqual(single.activationCount, 1)
         XCTAssertEqual(heist.activationCount, 1)
-        XCTAssertEqual(step.kind, .action)
-        XCTAssertEqual(step.status, .passed)
         XCTAssertEqual(single.result.method, .activate)
-        XCTAssertEqual(stepResult.method, .activate)
-        XCTAssertEqual(stepResult.outcome.isSuccess, single.result.outcome.isSuccess)
-        XCTAssertEqual(stepResult.method, single.result.method)
-        XCTAssertEqual(stepResult.outcome.failureKind, single.result.outcome.failureKind)
+        XCTAssertEqual(heist.result.method, .activate)
+        XCTAssertEqual(heist.result.outcome.isSuccess, single.result.outcome.isSuccess)
+        XCTAssertEqual(heist.result.outcome.failureKind, single.result.outcome.failureKind)
     }
 
     func testDirectViewportScrollMovesTheRequestedViewport() async throws {
@@ -81,8 +71,11 @@ extension ElementInflationProductTests {
                     .element(.identifier(identifier), traits: [.button])
                 ))),
             ])
-            let result = await brains.executeHeistPlan(plan)
-            return (result, fixture.target.activationCount)
+            let result = try await brains.executeHeistPlan(plan).get()
+            return (
+                try XCTUnwrap(result.steps.first?.reportActionResult),
+                fixture.target.activationCount
+            )
         }
 
         let result = await brains.executeRuntimeAction(
@@ -93,32 +86,6 @@ extension ElementInflationProductTests {
         return (result, fixture.target.activationCount)
     }
 
-    private func heistFailureDescription(_ result: ActionResult) -> String {
-        guard let payload = result.resultPayload else {
-            return result.message ?? "heist activate failed"
-        }
-        guard let failedStep = payload.firstFailedStep else {
-            return result.message ?? "heist activate failed without a failed result step"
-        }
-        let actionMessage = failedStep.reportActionResult?.message
-        return [
-            result.message,
-            "failedStep=\(failedStep.path)",
-            "kind=\(failedStep.kind.rawValue)",
-            failedStep.reportMessage.map { "message=\($0)" },
-            actionMessage.map { "actionMessage=\($0)" },
-        ]
-        .compactMap(\.self)
-        .joined(separator: "; ")
-    }
-
-}
-
-private extension ActionResult {
-    var resultPayload: HeistResult? {
-        guard case .heist(let result) = payload else { return nil }
-        return result
-    }
 }
 
 #endif // canImport(UIKit)

@@ -39,7 +39,6 @@ final class ActionResultEvidenceContractTests: XCTestCase {
             (.getPasteboard("text"), .getPasteboard),
             (.screenshot(nil), .takeScreenshot),
             (.rotor(nil), .rotor),
-            (.heist(nil), .heistPlan),
             (.scroll, .scroll),
             (.scrollToVisible, .scrollToVisible),
             (.scrollToEdge, .scrollToEdge),

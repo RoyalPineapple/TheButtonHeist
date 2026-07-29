@@ -403,15 +403,11 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func heistStepResult(for step: HeistStep, label: String) async throws -> ActionResult {
-        let result = await brains.executeHeistPlan(try HeistPlan(body: [step]))
-        guard case .heist(let payload) = result.payload,
-              let heistResult = payload,
-              let stepResult = heistResult.steps.first,
-              let actionResult = stepResult.reportActionResult else {
-            XCTFail("Expected heist execution step result for \(label)")
-            return result
-        }
-        return actionResult
+        let result = try await brains.executeHeistPlan(try HeistPlan(body: [step])).get()
+        return try XCTUnwrap(
+            result.steps.first?.reportActionResult,
+            "Expected heist execution step result for \(label)"
+        )
     }
 
     func waitForSettledSemanticWaiter(

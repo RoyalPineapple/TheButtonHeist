@@ -147,10 +147,7 @@ public struct Heist: Sendable {
         timeout: HeistTimeout,
         runtime: InAppHeistRuntime
     ) async throws -> HeistResult {
-        let actionResult = await runtime.execute(plan, argument, timeout)
-        guard case .heist(let result?) = actionResult.payload else {
-            throw RuntimeError(actionResult: actionResult)
-        }
+        let result = try await runtime.execute(plan, argument, timeout)
         HeistResultRecording.recordIfEnabled(result, plan: plan)
         guard !result.isFailure else {
             throw Failure(result)
@@ -210,20 +207,14 @@ public extension Heist {
         }
     }
 
-    private struct RuntimeError: Error, Sendable, LocalizedError, CustomStringConvertible {
-        let actionResult: ActionResult
-
-        var errorDescription: String? { description }
-
-        var description: String {
-            let message = actionResult.message ?? "heist execution did not return a heist result"
-            return "Heist runtime failed: \(message)"
-        }
-    }
 }
 
 struct InAppHeistRuntime {
-    let execute: @MainActor (HeistPlan, HeistArgument, HeistTimeout) async -> ActionResult
+    let execute: @MainActor (
+        HeistPlan,
+        HeistArgument,
+        HeistTimeout
+    ) async throws -> HeistResult
 
     @MainActor
     static var shared: InAppHeistRuntime {
@@ -233,7 +224,7 @@ struct InAppHeistRuntime {
     @MainActor
     static func insideJob(_ job: TheInsideJob) -> InAppHeistRuntime {
         InAppHeistRuntime { plan, argument, timeout in
-            await job.executeInAppHeist(
+            try await job.executeInAppHeist(
                 plan,
                 argument: argument,
                 timeout: timeout
@@ -248,7 +239,7 @@ extension TheInsideJob {
         _ plan: HeistPlan,
         argument: HeistArgument = .none,
         timeout: HeistTimeout = .default
-    ) async -> ActionResult {
+    ) async throws -> HeistResult {
         switch await brains.executeInAppRequest({ [self] in
             await executeAdmittedInAppHeist(
                 plan,
@@ -257,35 +248,23 @@ extension TheInsideJob {
             )
         }) {
         case .completed(let result):
-            return result
+            return try result.get()
         case .cancelled:
-            return inAppHeistSubmissionFailure("In-app heist execution was cancelled")
-        case .rejected(.busy(let capacity)):
-            return inAppHeistSubmissionFailure(
-                "Interaction queue is full at \(capacity) pending requests"
-            )
+            throw HeistExecution.Failure.submissionCancelled
+        case .rejected(.busy):
+            throw HeistExecution.Failure.interactionQueueFull
         case .rejected(.cleanupTimedOut):
-            return inAppHeistSubmissionFailure(
-                "The previous interaction did not finish cancellation cleanup"
-            )
+            throw HeistExecution.Failure.cleanupTimedOut
         case .rejected(.stopping):
-            return inAppHeistSubmissionFailure("ButtonHeist runtime is stopping")
+            throw HeistExecution.Failure.runtimeStopping
         }
-    }
-
-    private func inAppHeistSubmissionFailure(_ message: String) -> ActionResult {
-        .failure(
-            payload: .heist(nil),
-            failureKind: .actionFailed,
-            message: message
-        )
     }
 
     private func executeAdmittedInAppHeist(
         _ plan: HeistPlan,
         argument: HeistArgument,
         timeout: HeistTimeout
-    ) async -> ActionResult {
+    ) async -> Result<HeistResult, HeistExecution.Failure> {
         let shouldRestoreRuntime = !brains.semanticObservationIsActive
         if shouldRestoreRuntime {
             tripwire.startPulse()
