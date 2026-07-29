@@ -44,14 +44,29 @@ struct RenderResponseTests {
             value: "Loaded by scroll",
             identifier: "lazy_row"
         )
-        let trace = AccessibilityTrace(first: try Self.interface([row]))
-            .appending(try Self.interface([row, lazyRow]))
+        let baseline = Observation.Snapshot(
+            interface: try Self.interface([row]),
+            context: .empty
+        )
+        let current = Observation.Snapshot(
+            interface: try Self.interface([row, lazyRow]),
+            context: .empty
+        )
+        let observationEvidence = Observation.Evidence(
+            baseline: baseline,
+            current: current,
+            events: [.elementsChanged(current)],
+            completeness: .complete
+        )
         let command = HeistActionCommand.activate(.predicate(ElementPredicate(label: "Load More")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let response = FenceResponse.heistExecution(
             plan: plan,
             report: HeistReport.project(
-                result: try Self.passedExecutionResult(command: command, trace: trace)
+                result: try Self.passedExecutionResult(
+                    command: command,
+                    observationEvidence: observationEvidence
+                )
             )
         )
 
@@ -64,27 +79,20 @@ struct RenderResponseTests {
         let action = try #require(evidence["action"]?.objectValue)
         let actionResult = try #require(action["result"]?.objectValue)
         let delta = try #require(actionResult["delta"]?.objectValue)
-        let digest = try #require(delta["interactionDigest"]?.objectValue)
         let edits = try #require(delta["edits"]?.objectValue)
         let added = try #require(edits["added"]?.arrayValue)
         let addedElement = try #require(added.first?.objectValue)
-        let omitted = try #require(actionResult["omitted"]?.objectValue)
-        let traceOmission = try #require(omitted["accessibilityTrace"]?.objectValue)
-
         #expect(root["status"]?.stringValue == "ok")
         #expect(node["action"] == nil)
         #expect(actionResult["method"]?.stringValue == "activate")
         #expect(delta["kind"]?.stringValue == "elementsChanged")
-        #expect(digest["nodeCountBefore"] == Value.int(1))
-        #expect(digest["nodeCountAfter"] == Value.int(2))
-        #expect(digest["nodeCountChanged"] == Value.bool(true))
-        #expect(digest["elementSetChanged"] == Value.bool(true))
+        #expect(delta["elementCount"] == Value.int(2))
         #expect(addedElement["label"]?.stringValue == "Lazy Row")
         #expect(addedElement["value"]?.stringValue == "Loaded by scroll")
         #expect(addedElement["identifier"]?.stringValue == "lazy_row")
-        #expect(traceOmission["projectedAs"]?.stringValue == "delta")
-        #expect(traceOmission["omittedCount"] == Value.int(2))
-        #expect(!containsObjectKey("captures", in: result.structuredContent))
+        #expect(actionResult["omitted"] == nil)
+        #expect(!containsObjectKey("events", in: result.structuredContent))
+        #expect(!containsObjectKey("baseline", in: result.structuredContent))
         guard case .text(let text, _, _)? = result.content.first else {
             Issue.record("expected compact text content")
             return
@@ -274,17 +282,13 @@ struct RenderResponseTests {
 
     private static func passedExecutionResult(
         command: HeistActionCommand,
-        trace: AccessibilityTrace
+        observationEvidence: Observation.Evidence
     ) throws -> HeistResult {
         let encoder = JSONEncoder()
-        let traceEvidence = try #require(AccessibilityTraceEvidence(
-            trace: trace,
-            completeness: .complete
-        ))
         let evidence = HeistActionEvidence.completed(
             result: .success(
                 payload: .activate,
-                observation: .trace(traceEvidence)
+                observation: .observed(observationEvidence)
             ),
             expectation: nil
         )

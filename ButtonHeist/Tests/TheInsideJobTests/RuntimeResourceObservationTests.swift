@@ -107,37 +107,6 @@ final class RuntimeResourceObservationTests: XCTestCase {
         XCTAssertEqual(UIApplication.shared.isIdleTimerDisabled, idleTimerBaseline)
     }
 
-    func testSuspendResourceReleasePreservesLatestSettleFailureDiagnostic() async {
-        await activateRuntime()
-        let diagnostic = await recordSettleFailureDiagnostic()
-
-        job.releaseRuntimeOwnedResources(
-            policy: .suspend,
-            idleTimerBaseline: resources.idleTimerBaseline
-        )
-
-        let retainedDiagnostic = await job.brains.vault.semanticObservationStream.latestSettleFailureDiagnostic()
-        XCTAssertEqual(retainedDiagnostic, diagnostic)
-        XCTAssertTrue(job.lifecycleObservationIsInstalled)
-        XCTAssertFalse(job.brains.semanticObservationIsActive)
-        XCTAssertFalse(job.brains.vault.semanticObservationStream.isActive)
-        XCTAssertFalse(job.tripwire.isPulseRunning)
-    }
-
-    func testStopPreservesLatestSettleFailureDiagnostic() async {
-        await activateRuntime()
-        let diagnostic = await recordSettleFailureDiagnostic()
-
-        await job.stop()
-
-        let retainedDiagnostic = await job.brains.vault.semanticObservationStream.latestSettleFailureDiagnostic()
-        XCTAssertEqual(retainedDiagnostic, diagnostic)
-        XCTAssertFalse(job.lifecycleObservationIsInstalled)
-        XCTAssertFalse(job.brains.semanticObservationIsActive)
-        XCTAssertFalse(job.brains.vault.semanticObservationStream.isActive)
-        XCTAssertFalse(job.tripwire.isPulseRunning)
-    }
-
     func testInactiveCommandFailsWithoutStartingObservation() async {
         let result = await job.brains.executeRuntimeAction(.activate(literalTarget(ResolvedElementPredicate.label("Save"))))
 
@@ -146,24 +115,6 @@ final class RuntimeResourceObservationTests: XCTestCase {
         XCTAssertEqual(result.message, TheBrains.runtimeInactiveMessage)
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.brains.vault.semanticObservationStream.isActive)
-    }
-
-    /// Drives the one thing that records a settle diagnostic: a reading whose
-    /// tripwire signal no longer matches the screen it was taken under.
-    /// `.empty` can never match a live signal, so this always fails that check.
-    private func recordSettleFailureDiagnostic() async -> String {
-        let stream = job.brains.vault.semanticObservationStream
-        _ = await stream.admitCurrentObservation(
-            vault: job.brains.vault,
-            tripwireSignal: .empty,
-            lineage: .resting
-        )
-        guard let diagnostic = await stream.latestSettleFailureDiagnostic() else {
-            XCTFail("Expected settle failure diagnostic")
-            return ""
-        }
-        XCTAssertTrue(diagnostic.contains("the view hierarchy moved"), diagnostic)
-        return diagnostic
     }
 
     private func activateRuntime() async {

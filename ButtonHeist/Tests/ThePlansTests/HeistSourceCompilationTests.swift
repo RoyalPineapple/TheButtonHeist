@@ -158,9 +158,9 @@ private func assertCanonicalSourceRoundTripPreservesBranchSemantics() throws {
             21
         ),
         ("WaitFor(.change(.screen()))", "unsupported accessibility predicate '.change'", 21),
-        ("WaitFor(.announcement())", "empty announcement predicate must use .announcement", 34),
+        ("WaitFor(.notification())", "empty notification predicate must use .notification", 34),
         (
-            #"WaitFor(.announcement(containing: "done"))"#,
+            #"WaitFor(.notification(containing: "done"))"#,
             "expected a string literal or scoped string reference",
             34
         ),

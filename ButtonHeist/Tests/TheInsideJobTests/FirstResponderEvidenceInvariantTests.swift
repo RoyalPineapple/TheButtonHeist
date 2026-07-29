@@ -222,15 +222,15 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
         let expectedAuthoredTarget = AccessibilityTarget.label("Email")
         let expectedResolvedTarget = literalTarget(ResolvedElementPredicate.label("Email"))
 
-        let semantic = await brains.vault.semanticObservationStream
+        let publication = await brains.vault.semanticObservationStream
             .commitVisibleObservationForTesting(screen)
         let authoredTarget = try XCTUnwrap(brains.vault.firstResponderTarget(in: screen.tree))
         let resolvedTarget = try authoredTarget.resolve(in: .empty)
 
         XCTAssertEqual(authoredTarget, expectedAuthoredTarget)
         XCTAssertEqual(resolvedTarget, expectedResolvedTarget)
-        XCTAssertEqual(semantic.trace.captures.last?.context.firstResponder, authoredTarget)
-        XCTAssertEqual(semantic.trace.captures.last?.context.keyboardVisible, false)
+        XCTAssertEqual(publication.current.snapshot.context.firstResponder, authoredTarget)
+        XCTAssertEqual(publication.current.snapshot.context.keyboardVisible, false)
     }
 
     func testAmbiguousLiveResponderEvidenceIsNotGuessed() async {

@@ -44,7 +44,7 @@ struct HandoffAdmission {
             default:
                 return nil
             }
-        case .info, .interface, .actionResult, .screen, .announcements, .status, .pong, .mainThreadProbe:
+        case .info, .interface, .actionResult, .screen, .notifications, .status, .pong, .mainThreadProbe:
             return nil
         }
     }

@@ -85,51 +85,100 @@ struct CanonicalAccessibilityPredicateTests {
         ) == elementUpdate)
     }
 
-    @Test("announcement JSON is canonical and root only")
-    func announcementJSON() throws {
-        let any = AccessibilityPredicate.announcement
-        let matching = AccessibilityPredicate.announcement(.contains("processed"))
+    @Test("updated admits only element-terminal targets through the canonical target wire")
+    func updatedTargetAdmission() throws {
+        let target = AccessibilityElementTarget.within(
+            container: .identifier("Checkout"),
+            .target(.identifier("count"), ordinal: 2)
+        )
+        let assertion = ElementAssertion.updated(
+            target,
+            .value(before: "1", after: "2")
+        )
 
-        #expect(try json(any) == #"{"type":"announcement"}"#)
+        let encoded = try JSONEncoder().encode(assertion)
+        #expect(try JSONDecoder().decode(ElementAssertion.self, from: encoded) == assertion)
+
+        let containerTarget = Data(#"""
+        {
+          "type": "updated",
+          "target": { "container": { "checks": [{ "kind": "identifier", "match": { "mode": "exact", "value": "Checkout" } }] } },
+          "property": "value",
+          "after": { "mode": "exact", "value": "2" }
+        }
+        """#.utf8)
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(ElementAssertion.self, from: containerTarget)
+        }
+
+        let scopedContainerTarget = Data(#"""
+        {
+          "type": "updated",
+          "target": {
+            "container": { "checks": [{ "kind": "identifier", "match": { "mode": "exact", "value": "Checkout" } }] },
+            "target": { "container": { "checks": [{ "kind": "identifier", "match": { "mode": "exact", "value": "List" } }] } }
+          },
+          "property": "value",
+          "after": { "mode": "exact", "value": "2" }
+        }
+        """#.utf8)
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(ElementAssertion.self, from: scopedContainerTarget)
+        }
+    }
+
+    @Test("notification JSON carries text and one standalone element predicate")
+    func notificationJSON() throws {
+        let any = AccessibilityPredicate.notification
+        let matchingText = AccessibilityPredicate.notification(.contains("processed"))
+        let matchingElement = AccessibilityPredicate.notification(element: .label("Saved"))
+        let matchingBoth = AccessibilityPredicate.notification(
+            text: .contains("processed"),
+            element: .element(.label("Saved"), .traits([.staticText]))
+        )
+
+        #expect(try json(any) == #"{"type":"notification"}"#)
         #expect(
-            try json(matching) ==
-            #"{"match":{"mode":"contains","value":"processed"},"type":"announcement"}"#
+            try json(matchingText) ==
+            #"{"text":{"mode":"contains","value":"processed"},"type":"notification"}"#
         )
         #expect(
-            try JSONDecoder().decode(
-                AccessibilityPredicate.self,
-                from: Data(#"{"match":{"mode":"contains","value":"processed"},"type":"announcement"}"#.utf8)
-            ) == matching
+            try json(matchingElement) ==
+            #"{"element":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Saved"}}]},"type":"notification"}"#
+        )
+        #expect(
+            try JSONDecoder().decode(AccessibilityPredicate.self, from: JSONEncoder().encode(matchingBoth))
+                == matchingBoth
         )
         #expect(throws: DecodingError.self) {
             _ = try JSONDecoder().decode(
                 PresenceCondition.self,
-                from: Data(#"{"type":"announcement"}"#.utf8)
+                from: Data(#"{"type":"notification"}"#.utf8)
             )
         }
         #expect(throws: DecodingError.self) {
             _ = try JSONDecoder().decode(
                 ElementAssertion.self,
-                from: Data(#"{"type":"announcement"}"#.utf8)
+                from: Data(#"{"type":"notification"}"#.utf8)
             )
         }
         #expect(throws: DecodingError.self) {
             _ = try JSONDecoder().decode(
                 AccessibilityPredicate.self,
-                from: Data(#"{"type":"announcement","target":{"ref":"row"}}"#.utf8)
+                from: Data(#"{"type":"notification","target":{"ref":"row"}}"#.utf8)
             )
         }
     }
 
-    @Test("branch presence projects through distinct authored and resolved types")
+    @Test("branch presence projects into the execution predicate currency")
     func presenceConditionRootPredicate() throws {
         let condition = PresenceCondition.exists(.label("Receipt"))
         let root = AccessibilityPredicate.exists(.label("Receipt"))
         let resolvedCondition: ResolvedPresenceCondition = try condition.resolve(in: .empty)
-        let resolvedRoot: ResolvedAccessibilityPredicate = try root.resolve(in: .empty)
+        let executionRoot: ObservationPredicate = try root.resolve(in: .empty)
 
         #expect(condition.rootPredicate == root)
-        #expect(resolvedCondition.rootPredicate == resolvedRoot)
+        #expect(resolvedCondition.rootPredicate == executionRoot)
     }
 
     @Test("container-only targets use the canonical target slot")

@@ -34,7 +34,8 @@ extension TheVault {
     func performRotor(
         selection rotorSelection: RotorSelection,
         direction: RotorDirection,
-        on liveTarget: LiveActionTarget
+        on liveTarget: LiveActionTarget,
+        history: RotorHistoryAdmission
     ) -> RotorOutcome {
         let object = liveTarget.object
         let rotors = object.accessibilityCustomRotors ?? []
@@ -78,13 +79,14 @@ extension TheVault {
         // A different host or rotor starts a new traversal. A continuation on
         // the same host and rotor must resolve against the current observation;
         // losing that evidence is an explicit failure, never an implicit reset.
+        if let invalidatedCursor = history.invalidatedCursor,
+           invalidatedCursor.hostHeistId == hostHeistId,
+           invalidatedCursor.rotorName == rotorName {
+            return .continuationInvalidated
+        }
         if let cursor = rotorCursor,
            cursor.hostHeistId == hostHeistId,
            cursor.rotorName == rotorName {
-            guard cursor.generation == currentRotorGeneration else {
-                rotorCursor = nil
-                return .continuationInvalidated
-            }
             guard let currentObject = currentLiveCapture.object(for: cursor.selectionHeistId) else {
                 rotorCursor = nil
                 return .currentItemUnavailable(cursor.selectionHeistId.rawValue)
@@ -131,18 +133,61 @@ extension TheVault {
         rotorCursor = RotorCursor(
             hostHeistId: hostHeistId,
             rotorName: rotorName,
-            generation: currentRotorGeneration,
+            selectionHistoryIndex: history.historyIndex,
             selectionHeistId: resolved.heistId,
             textRange: cursorTextRange
         )
         return .succeeded(RotorHit(rotor: rotorName, treeElement: resolved, textRange: textRange))
     }
+
+    /// Admits the held rotor selection against the ordered observation history.
+    ///
+    /// A screen boundary or unavailable retained history invalidates
+    /// continuation. The returned index is the history position immediately
+    /// preceding dispatch and becomes the next successful selection's cursor.
+    func admitRotorHistory() async -> RotorHistoryAdmission {
+        guard let cursor = rotorCursor else {
+            return RotorHistoryAdmission(
+                historyIndex: await semanticObservationStream.stateOwner.historyEndIndex(),
+                invalidatedCursor: nil
+            )
+        }
+
+        switch await semanticObservationStream.stateOwner.events(
+            after: cursor.selectionHistoryIndex
+        ) {
+        case .success(let events):
+            let historyIndex = cursor.selectionHistoryIndex + events.count
+            guard events.contains(where: \.isScreenChange) else {
+                return RotorHistoryAdmission(
+                    historyIndex: historyIndex,
+                    invalidatedCursor: nil
+                )
+            }
+            clearRotorCursor(ifHolding: cursor)
+            return RotorHistoryAdmission(
+                historyIndex: historyIndex,
+                invalidatedCursor: cursor
+            )
+        case .failure:
+            clearRotorCursor(ifHolding: cursor)
+            return RotorHistoryAdmission(
+                historyIndex: await semanticObservationStream.stateOwner.historyEndIndex(),
+                invalidatedCursor: cursor
+            )
+        }
+    }
 }
 
 private extension TheVault {
-
-    var currentRotorGeneration: ScreenGeneration {
-        semanticObservationStream.latestReadSnapshotEvent?.generation ?? .initial
+    func clearRotorCursor(ifHolding cursor: RotorCursor) {
+        guard rotorCursor?.selectionHistoryIndex == cursor.selectionHistoryIndex,
+              rotorCursor?.hostHeistId == cursor.hostHeistId,
+              rotorCursor?.rotorName == cursor.rotorName,
+              rotorCursor?.selectionHeistId == cursor.selectionHeistId,
+              rotorCursor?.textRange == cursor.textRange
+        else { return }
+        rotorCursor = nil
     }
 
     /// Return the known `InterfaceTree.Element` corresponding to a UIKit accessibility
@@ -202,6 +247,13 @@ private extension TheVault {
             startOffset: input.offset(from: input.beginningOfDocument, to: range.start),
             endOffset: input.offset(from: input.beginningOfDocument, to: range.end)
         )
+    }
+}
+
+private extension Observation.Event {
+    var isScreenChange: Bool {
+        if case .screenChanged = self { return true }
+        return false
     }
 }
 

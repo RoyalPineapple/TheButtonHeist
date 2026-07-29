@@ -106,7 +106,7 @@ final class ClientMessageTests: XCTestCase {
             .ping,
             .status,
             .getPasteboard,
-            .getAnnouncements,
+            .getNotifications,
             .requestScreen(),
             .heistPlan(HeistPlanRun(plan: try HeistPlan(body: [
                 .action(ActionStep(
@@ -156,10 +156,27 @@ final class ClientMessageTests: XCTestCase {
         let object = try XCTUnwrap(
             JSONSerialization.jsonObject(with: encoded) as? [String: Any]
         )
-        XCTAssertEqual(Set(object.keys), ["argument", "plan"])
+        XCTAssertEqual(Set(object.keys), ["argument", "plan", "timeout"])
         let decoded = try JSONDecoder().decode(HeistPlanRun.self, from: encoded)
         XCTAssertEqual(decoded.argument, .none)
+        XCTAssertEqual(decoded.timeout, .default)
         XCTAssertEqual(decoded.plan.body.count, 1)
+    }
+
+    func testHeistPlanRunRequiresTimeoutOnWire() throws {
+        let run = HeistPlanRun(plan: try HeistPlan(body: [
+            .wait(WaitStep(predicate: .exists(.label("Ready")), timeout: 1)),
+        ]))
+        let encoded = try JSONEncoder().encode(run)
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        object.removeValue(forKey: "timeout")
+
+        XCTAssertThrowsError(try JSONDecoder().decode(
+            HeistPlanRun.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        ))
     }
 
     func testHeistPlanRunRejectsRemovedAndUnknownFields() throws {
@@ -208,6 +225,7 @@ final class ClientMessageTests: XCTestCase {
         }
         let decodedPlan = decodedRun.plan
         XCTAssertEqual(decodedRun.argument, HeistArgument.none)
+        XCTAssertEqual(decodedRun.timeout, .default)
         XCTAssertEqual(decodedPlan.body.count, 3)
         guard case .action(let decodedAction) = decodedPlan.body[0],
               decodedAction.expectationPolicy.expectedStep?.predicate == .screenChanged else {
@@ -497,31 +515,34 @@ final class ClientMessageTests: XCTestCase {
         }
     }
 
-    func testGetAnnouncementsRoundTrip() throws {
-        let message = ClientMessage.getAnnouncements
+    func testGetNotificationsRoundTrip() throws {
+        let message = ClientMessage.getNotifications
         let data = try JSONEncoder().encode(message)
+        let object = try JSONProbe(data: data)
+        XCTAssertEqual(try object.string("type"), "getNotifications")
+        try object.assertMissing("payload")
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
-        if case .getAnnouncements = decoded {
+        if case .getNotifications = decoded {
             // pass
         } else {
-            XCTFail("Expected getAnnouncements, got \(decoded)")
+            XCTFail("Expected getNotifications, got \(decoded)")
         }
     }
 
-    func testGetAnnouncementsEnvelopeRoundTrip() throws {
+    func testGetNotificationsEnvelopeRoundTrip() throws {
         let envelope = RequestEnvelope(
-            requestId: "ann-get",
-            message: .getAnnouncements
+            requestId: "notifications-get",
+            message: .getNotifications
         )
         let data = try JSONEncoder().encode(envelope)
         let decoded = try JSONDecoder().decode(RequestEnvelope.self, from: data)
 
-        XCTAssertEqual(decoded.requestId, "ann-get")
-        if case .getAnnouncements = decoded.message {
+        XCTAssertEqual(decoded.requestId, "notifications-get")
+        if case .getNotifications = decoded.message {
             // pass
         } else {
-            XCTFail("Expected getAnnouncements, got \(decoded.message)")
+            XCTFail("Expected getNotifications, got \(decoded.message)")
         }
     }
 

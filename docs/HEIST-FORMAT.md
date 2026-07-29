@@ -280,8 +280,8 @@ edit, render it as canonical DSL.
 ## Runtime contract
 
 Normal heists express semantic intent and semantic outcomes. The Button Heist owns
-reveal, element inflation, settlement, live geometry, and diagnostics while the
-plan runs.
+viewport reveal, element inflation, observation, live geometry, deadline
+enforcement, and diagnostics while the plan runs.
 
 Runtime validation rejects non-executable plans before dispatch: unresolved
 refs, invalid payloads, oversized loops, excessive depth, noncanonical

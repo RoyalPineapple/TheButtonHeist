@@ -24,6 +24,7 @@ extension Actions {
             requireInteractive: false,
             activationPointPolicy: .liveObjectOnly
         ) { context in
+            let rotorHistory = await self.vault.admitRotorHistory()
             let outcome: TheVault.RotorOutcome
             let result: TheSafecracker.ActionDispatchResult
             switch self.vault.dispatchOnFreshLiveActionTarget(
@@ -32,7 +33,8 @@ extension Actions {
                 let outcome = self.vault.performRotor(
                     selection: selection,
                     direction: direction,
-                    on: liveTarget
+                    on: liveTarget,
+                    history: rotorHistory
                 )
                 let result = Self.rotorDispatchOutcome(
                     outcome: outcome,
@@ -61,6 +63,21 @@ extension Actions {
         _ hit: TheVault.RotorHit,
     ) async {
         guard let treeElement = hit.treeElement else { return }
+
+        if let ownerPath = treeElement.scrollContainerPath,
+           let point = treeElement.geometry.view.activationPoint(ownedBy: ownerPath),
+           case .success(let target) = vault.liveScrollTarget(at: ownerPath) {
+            let transition = await navigation.performViewportTransition(
+                .revealViewPoint(
+                    point,
+                    in: .uiScrollView(
+                        container: target.container,
+                        scrollView: target.scrollView
+                    )
+                )
+            )
+            if transition.outcome == .moved { return }
+        }
 
         if case .objectUnavailable = vault.resolveLiveActionTarget(for: treeElement) {
             _ = await navigation.elementInflation.revealSemanticTarget(
@@ -192,9 +209,15 @@ extension Actions {
         _ hit: TheVault.RotorHit,
         direction: RotorDirection
     ) -> TheSafecracker.ActionDispatchResult {
-        let foundElement = hit.treeElement.map { HeistElement(accessibilityElement: $0.element) }
+        let foundElement = hit.treeElement.map { treeElement in
+            HeistElement(
+                accessibilityElement: treeElement.element,
+                geometry: treeElement.geometry
+            )
+        }
         var message = "Rotor '\(hit.rotor)' found"
-        if let describedElement = foundElement?.label ?? foundElement?.description {
+        if let describedElement = foundElement?.semantics.assertable.label
+            ?? foundElement?.semantics.spokenDescription {
             message += " \(describedElement)"
         }
         if let textRange = hit.textRange {

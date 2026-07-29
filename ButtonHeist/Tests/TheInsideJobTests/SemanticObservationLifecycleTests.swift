@@ -52,9 +52,43 @@ final class SemanticObservationLifecycleTests: XCTestCase {
         XCTAssertFalse(stream.lifecycle.isRunning)
     }
 
+    func testVisibleCaptureReturnsTypedSourceFailure() async {
+        let unavailableVault = TheVault(
+            tripwire: TheTripwire(),
+            visibleObservationSource: { _ in nil }
+        )
+
+        let outcome = await unavailableVault.semanticObservationStream
+            .refreshVisibleObservation()
+
+        XCTAssertEqual(outcome, .unavailable(.sourceTreeUnavailable))
+    }
+
+    func testVisibleCaptureReturnsTypedRuntimeFailureAfterVaultRelease() async {
+        var releasedVault: TheVault? = TheVault(tripwire: TheTripwire())
+        let stream = releasedVault!.semanticObservationStream
+        releasedVault = nil
+
+        let outcome = await stream.refreshVisibleObservation()
+
+        XCTAssertEqual(outcome, .unavailable(.runtimeUnavailable))
+    }
+
+    func testVisibleCaptureReturnsTypedCancellation() async {
+        let stream = vault.semanticObservationStream
+        let capture = Task { @MainActor in
+            await stream.refreshVisibleObservation()
+        }
+        capture.cancel()
+
+        let outcome = await capture.value
+
+        XCTAssertEqual(outcome, .unavailable(.cancelled))
+    }
+
     func testSubscriptionPublishesVaultHistoryInAuthoredOrder() async throws {
         let stream = vault.semanticObservationStream
-        let before = await stream.stateOwner.readAdmission(admission())
+        let before = await stream.stateOwner.commitAdmission(admission())
         stream.publish(before)
         var received: [Observation.Event] = []
         var historyError: Observation.History.ReadError?
@@ -66,7 +100,7 @@ final class SemanticObservationLifecycleTests: XCTestCase {
             historyUnavailable: { historyError = $0 }
         )
         await stream.stateOwner.discardCurrentObservation()
-        let during = await stream.stateOwner.readAdmission(admission())
+        let during = await stream.stateOwner.commitAdmission(admission())
         stream.publish(during)
         let expected = before.events + during.events
         let current = await stream.stateOwner.current()
@@ -82,7 +116,7 @@ final class SemanticObservationLifecycleTests: XCTestCase {
         XCTAssertEqual(history, expected)
 
         subscription.cancel()
-        let afterCancellation = await stream.stateOwner.readAdmission(admission())
+        let afterCancellation = await stream.stateOwner.commitAdmission(admission())
         stream.publish(afterCancellation)
         let currentAfterCancellation = await stream.stateOwner.current()
         let historyAfterCancellation = try await stream.stateOwner.events(after: 0).get()
@@ -98,22 +132,19 @@ final class SemanticObservationLifecycleTests: XCTestCase {
         let observation = InterfaceObservation.empty
         return Observation.Admission(
             tree: observation.tree,
-            captureID: observation.captureID,
             tripwireSignal: .empty,
             discoveryCommitPolicy: .mergeIntoInterface,
             lineage: .resting,
             scope: scope,
             notificationAdmission: .action(.init(
-                evidence: [],
                 admittedNotifications: [],
                 through: .origin,
-                scopedScreenChangedThrough: 0,
-                gap: nil
+                scopedScreenChangedThrough: 0
             )),
             keyboardVisible: nil,
             timestamp: Date(timeIntervalSince1970: 0),
             viewportFrames: observation.tree.viewportFrames,
-            geometryTolerance: CoarseFrameComparison.currentTolerance
+            geometryTolerance: CoarseFrameComparison.currentGeometryTolerance
         )
     }
 }

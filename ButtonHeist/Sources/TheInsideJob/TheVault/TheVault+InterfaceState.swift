@@ -12,7 +12,6 @@ extension TheVault {
 
     func resetInterfaceForLifecycle() async {
         latestObservation = .empty
-        latestFailedSettleDiagnosticEvidence = nil
         await semanticObservationStream.discardCurrentObservation()
     }
 
@@ -30,12 +29,6 @@ extension TheVault {
         sourceObservation _: InterfaceObservation
     ) {
         observeInterface(observation)
-        latestFailedSettleDiagnosticEvidence = nil
-    }
-
-    func recordFailedSettleDiagnosticEvidence(_ observation: InterfaceObservation?) async {
-        latestFailedSettleDiagnosticEvidence = observation
-        await semanticObservationStream.invalidateCurrentAdmission()
     }
 
     func observeInterface(_ observation: InterfaceObservation) {

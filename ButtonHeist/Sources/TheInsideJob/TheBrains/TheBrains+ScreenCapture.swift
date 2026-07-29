@@ -91,31 +91,6 @@ extension TheBrains {
         return .success(payload)
     }
 
-    func executeTakeScreenshot(
-        mode: ScreenCaptureMode = .raw
-    ) async -> RuntimeActionExecution {
-        let timing = ActionTiming()
-        switch await captureScreenPayload(mode: mode) {
-        case .success(let payload):
-            return RuntimeActionExecution(
-                result: .success(
-                    payload: .screenshot(payload),
-                    message: "Captured screenshot \(Int(payload.width))x\(Int(payload.height))",
-                    timing: timing.freeze()
-                )
-            )
-        case .failure(let failure):
-            return RuntimeActionExecution(
-                result: .failure(
-                    payload: .screenshot(nil),
-                    failureKind: failure.actionFailureKind,
-                    message: failure.message,
-                    timing: timing.freeze()
-                )
-            )
-        }
-    }
-
     func dispatchTakeScreenshot(
         mode: ScreenCaptureMode = .raw
     ) async -> TheSafecracker.ActionDispatchResult {

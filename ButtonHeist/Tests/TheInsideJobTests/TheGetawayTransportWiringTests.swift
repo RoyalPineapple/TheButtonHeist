@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import ButtonHeistSupport
 import os
+import UIKit
 import XCTest
 import TheScore
 @testable import TheInsideJob
@@ -47,7 +48,7 @@ final class TheGetawayTransportWiringTests: XCTestCase {
         let priorResponses = TransportResponseSink()
         await controlPlane.observe(.dataReceived(
             clientId: clientId,
-            data: try requestData(id: "prior-incarnation", message: .getAnnouncements),
+            data: try requestData(id: "prior-incarnation", message: .getNotifications),
             respond: priorResponses.respond
         ))
         await waitForPendingDepth(1, brains: brains)
@@ -63,7 +64,7 @@ final class TheGetawayTransportWiringTests: XCTestCase {
         let currentResponses = TransportResponseSink()
         await controlPlane.observe(.dataReceived(
             clientId: clientId,
-            data: try requestData(id: "current-incarnation", message: .getAnnouncements),
+            data: try requestData(id: "current-incarnation", message: .getNotifications),
             respond: currentResponses.respond
         ))
         await waitForPendingDepth(1, brains: brains)
@@ -73,6 +74,83 @@ final class TheGetawayTransportWiringTests: XCTestCase {
 
         XCTAssertEqual(priorResponses.count, 0)
         XCTAssertEqual(currentResponses.count, 1)
+        await getaway.tearDown()
+        await muscle.tearDown()
+    }
+
+    func testGetNotificationsReturnsCanonicalVaultHistoryProjection() async throws {
+        let clientId = 7
+        let muscle = TheMuscle(sessionToken: "transport-wiring-token", sessionReleaseTimeout: 1)
+        let brains = TheBrains(tripwire: TheTripwire())
+        let getaway = TheGetaway(
+            muscle: muscle,
+            brains: brains,
+            identity: .init(
+                launchId: "transport-wiring-launch",
+                effectiveInstanceId: "transport-wiring-instance",
+                tlsActive: false
+            )
+        )
+        let transport = ServerTransport(token: "transport-wiring-token")
+        let wiringOutcome = await getaway.wireTransport(transport) { _ in }
+        guard case .admitted(let admission) = wiringOutcome else {
+            return XCTFail("Expected transport wiring to be admitted")
+        }
+        let controlPlane = try XCTUnwrap(getaway.transportWiring.wired?.controlPlane)
+        await controlPlane.observe(.clientConnected(
+            clientId: clientId,
+            remoteAddress: "127.0.0.1"
+        ))
+        try await authenticate(
+            clientId: clientId,
+            muscle: muscle,
+            generation: admission.deliveryGeneration
+        )
+
+        let elementOnlyButton = UIButton(type: .system)
+        elementOnlyButton.accessibilityLabel = "Subtotal"
+        let notificationWindow = brains.vault.accessibilityNotifications.beginActionWindow()
+        brains.vault.accessibilityNotifications.recordForTesting(
+            code: 1008,
+            notificationData: CapturedAccessibilityNotificationPayload("Saved" as NSString),
+            associatedElement: .none
+        )
+        brains.vault.accessibilityNotifications.recordForTesting(
+            code: 1001,
+            notificationData: .none,
+            associatedElement: CapturedAccessibilityNotificationPayload(elementOnlyButton)
+        )
+        brains.vault.accessibilityNotifications.recordForTesting(
+            code: 1008,
+            notificationData: CapturedAccessibilityNotificationPayload("Ready" as NSString),
+            associatedElement: .none
+        )
+        let batch = try XCTUnwrap(notificationWindow.capture())
+        _ = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            .makeForTests(),
+            notificationBatch: batch
+        )
+        notificationWindow.cancel()
+
+        let responses = TransportResponseSink()
+        await controlPlane.observe(.dataReceived(
+            clientId: clientId,
+            data: try requestData(id: "notifications", message: .getNotifications),
+            respond: responses.respond
+        ))
+        await responses.delivered.wait()
+
+        guard case .notifications(let notifications) = try XCTUnwrap(responses.messages.first) else {
+            await getaway.tearDown()
+            await muscle.tearDown()
+            return XCTFail("Expected canonical notifications response")
+        }
+        XCTAssertEqual(notifications, brains.notifications())
+        XCTAssertEqual(notifications.map(\.text), ["Saved", nil, "Ready"])
+        XCTAssertEqual(notifications[0].element, nil)
+        XCTAssertEqual(notifications[1].element?.assertable.label, "Subtotal")
+        XCTAssertNil(notifications[2].element)
+
         await getaway.tearDown()
         await muscle.tearDown()
     }

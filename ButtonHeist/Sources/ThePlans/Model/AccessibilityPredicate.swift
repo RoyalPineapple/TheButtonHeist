@@ -9,14 +9,20 @@ public enum ElementAssertion: Codable, Sendable, Equatable {
     case missing(AccessibilityTarget)
     case appeared(AccessibilityTarget)
     case disappeared(AccessibilityTarget)
-    case updated(AccessibilityTarget, ElementPropertyChange)
+    case updated(AccessibilityElementTarget, ElementPropertyChange)
 
-    package func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedElementAssertion {
+    package func resolve(
+        in environment: HeistExecutionEnvironment
+    ) throws -> ResolvedElementAssertion {
         switch self {
-        case .exists(let target): return .exists(try target.resolve(in: environment))
-        case .missing(let target): return .missing(try target.resolve(in: environment))
-        case .appeared(let target): return .appeared(try target.resolve(in: environment))
-        case .disappeared(let target): return .disappeared(try target.resolve(in: environment))
+        case .exists(let target):
+            return .exists(try target.resolve(in: environment))
+        case .missing(let target):
+            return .missing(try target.resolve(in: environment))
+        case .appeared(let target):
+            return .appeared(try target.resolve(in: environment))
+        case .disappeared(let target):
+            return .disappeared(try target.resolve(in: environment))
         case .updated(let target, let change):
             return .updated(
                 try target.resolve(in: environment),
@@ -35,15 +41,15 @@ public struct AccessibilityPredicate: Codable, Sendable, Equatable {
     /// What a caller can ask of a run.
     ///
     /// Each case is a question about one kind of evidence. Stillness is not
-    /// here: it is the settlement gate, which every run holds and nobody
-    /// authors.
+    /// here: it is an observation-admission requirement, which every run holds
+    /// and nobody authors.
     ///
     /// `presence` is the odd one and is not a kind of evidence: it is a search
     /// against whatever tree is current, and it is also the leg the element
     /// assertions decompose into.
     package enum Value: Sendable, Equatable {
         case presence(Presence)
-        case announcement(AnnouncementPredicate)
+        case notification(NotificationPredicate)
         case screenChanged(ScreenPredicate)
         case elementsChanged([ElementAssertion])
     }
@@ -62,14 +68,21 @@ public struct AccessibilityPredicate: Codable, Sendable, Equatable {
         Self(core: .presence(.missing(target)))
     }
 
-    public static var announcement: Self { Self(core: .announcement(AnnouncementPredicate())) }
-    public static func announcement(_ predicate: AnnouncementPredicate) -> Self {
-        Self(core: .announcement(predicate))
+    public static var notification: Self { Self(core: .notification(NotificationPredicate())) }
+    public static func notification(_ text: String) -> Self {
+        Self(core: .notification(NotificationPredicate(text: .exact(text))))
     }
-    public static func announcement(_ text: String) -> Self { .announcement(AnnouncementPredicate(text)) }
-    public static func announcement(_ match: StringMatch) -> Self {
-        .announcement(AnnouncementPredicate(match: match))
+    @_disfavoredOverload
+    public static func notification(_ text: StringMatch) -> Self {
+        Self(core: .notification(NotificationPredicate(text: text)))
     }
+    public static func notification(
+        text: StringMatch? = nil,
+        element: ElementPredicate? = nil
+    ) -> Self {
+        Self(core: .notification(NotificationPredicate(text: text, element: element)))
+    }
+
     /// The screen changed, and optionally which screen it arrived at.
     ///
     /// This asks about the screen itself. Which elements left the old screen and
@@ -94,14 +107,20 @@ public struct AccessibilityPredicate: Codable, Sendable, Equatable {
         Self(core: .elementsChanged(assertions))
     }
 
-    package func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedAccessibilityPredicate {
+    package func resolve(in environment: HeistExecutionEnvironment) throws -> ObservationPredicate {
         switch core {
-        case .presence(.exists(let target)): return .exists(try target.resolve(in: environment))
-        case .presence(.missing(let target)): return .missing(try target.resolve(in: environment))
-        case .announcement(let predicate): return .announcement(try predicate.resolve(in: environment))
-        case .screenChanged(let predicate): return .screenChanged(try predicate.resolve(in: environment))
+        case .presence(.exists(let target)):
+            return .elementsChanged([.exists(try target.resolve(in: environment))])
+        case .presence(.missing(let target)):
+            return .elementsChanged([.missing(try target.resolve(in: environment))])
+        case .notification(let predicate):
+            return .notification(try predicate.resolve(in: environment))
+        case .screenChanged(let predicate):
+            return .screenChanged(try predicate.resolve(in: environment))
         case .elementsChanged(let assertions):
-            return .elementsChanged(try assertions.map { try $0.resolve(in: environment) })
+            return .elementsChanged(try assertions.map {
+                try $0.resolve(in: environment)
+            })
         }
     }
 }
@@ -111,38 +130,36 @@ package enum ResolvedElementAssertion: Sendable, Equatable {
     case missing(ResolvedAccessibilityTarget)
     case appeared(ResolvedAccessibilityTarget)
     case disappeared(ResolvedAccessibilityTarget)
-    case updated(ResolvedAccessibilityTarget, ResolvedElementPropertyChange)
+    case updated(ResolvedAccessibilityElementTarget, ResolvedElementPropertyChange)
 
     package var target: ResolvedAccessibilityTarget {
         switch self {
-        case .exists(let target), .missing(let target), .appeared(let target), .disappeared(let target):
+        case .exists(let target),
+             .missing(let target),
+             .appeared(let target),
+             .disappeared(let target):
             return target
         case .updated(let target, _):
-            return target
+            return target.accessibilityTarget
         }
     }
 }
 
-package enum ResolvedAccessibilityPredicate: Sendable, Equatable {
-    /// A search against the tree as it is. Also the leg every element assertion
-    /// decomposes into.
-    case exists(ResolvedAccessibilityTarget)
-    case missing(ResolvedAccessibilityTarget)
-
-    case announcement(ResolvedAnnouncementPredicate)
+/// The single execution-ready observation predicate currency.
+package enum ObservationPredicate: Sendable, Equatable {
+    case elementsChanged([ResolvedElementAssertion])
+    case notification(NotificationPredicate.Execution)
     case noChange
     case screenChanged(ResolvedScreenPredicate)
-    case elementsChanged([ResolvedElementAssertion])
 
     package var singularTarget: ResolvedAccessibilityTarget? {
         switch self {
-        case .exists(let target), .missing(let target):
-            return target
         case .elementsChanged(let assertions):
             guard assertions.count == 1 else { return nil }
             return assertions[0].target
-        case .announcement, .noChange, .screenChanged:
-            // None of these names an element, so there is no target here.
+        case .notification, .noChange, .screenChanged:
+            // A notification element is a standalone semantic subject, not an
+            // accessibility target. The other cases name no element.
             return nil
         }
     }
@@ -154,7 +171,7 @@ private enum PresencePredicateWireType: String, CaseIterable {
 }
 
 private enum RootPredicateWireType: String, CaseIterable {
-    case announcement
+    case notification
     case changed
 }
 
@@ -167,7 +184,7 @@ private enum ElementAssertionWireType: String, CaseIterable {
 private enum AccessibilityChangedWireScope: String, CaseIterable { case screen, elements }
 
 private enum AccessibilityPredicateCodingKeys: String, CodingKey, CaseIterable {
-    case type, target, scope, assertions, property, before, after, match
+    case type, target, scope, assertions, property, before, after, match, text, element
 }
 
 extension AccessibilityPredicate {
@@ -224,10 +241,14 @@ private enum AccessibilityPredicateWireCodec {
             )
         }
         switch type {
-        case .announcement:
-            try decoder.rejectUnknownKeys(allowed: ["type", "match"], typeName: "announcement predicate")
-            return .announcement(AnnouncementPredicate(
-                match: try container.decodeIfPresent(StringMatch.self, forKey: .match)
+        case .notification:
+            try decoder.rejectUnknownKeys(
+                allowed: ["type", "text", "element"],
+                typeName: "notification predicate"
+            )
+            return .notification(NotificationPredicate(
+                text: try container.decodeIfPresent(StringMatch.self, forKey: .text),
+                element: try container.decodeIfPresent(ElementPredicate.self, forKey: .element)
             ))
         case .changed:
             let scopeString = try container.decode(String.self, forKey: .scope)
@@ -323,7 +344,10 @@ private enum AccessibilityPredicateWireCodec {
                     )
                 )
             }
-            return .updated(try container.decode(AccessibilityTarget.self, forKey: .target), change)
+            return .updated(
+                try container.decode(AccessibilityElementTarget.self, forKey: .target),
+                change
+            )
         }
     }
 
@@ -334,9 +358,10 @@ private enum AccessibilityPredicateWireCodec {
             try encodePresence(.exists, target: target, to: &container)
         case .presence(.missing(let target)):
             try encodePresence(.missing, target: target, to: &container)
-        case .announcement(let announcement):
-            try container.encode(RootPredicateWireType.announcement.rawValue, forKey: .type)
-            try container.encodeIfPresent(announcement.match, forKey: .match)
+        case .notification(let notification):
+            try container.encode(RootPredicateWireType.notification.rawValue, forKey: .type)
+            try container.encodeIfPresent(notification.text, forKey: .text)
+            try container.encodeIfPresent(notification.element, forKey: .element)
         case .screenChanged(let predicate):
             try container.encode(RootPredicateWireType.changed.rawValue, forKey: .type)
             try container.encode(AccessibilityChangedWireScope.screen.rawValue, forKey: .scope)
@@ -456,17 +481,15 @@ extension AccessibilityPredicate: CustomStringConvertible {
     }
 }
 
-extension ResolvedAccessibilityPredicate: CustomStringConvertible {
+extension ObservationPredicate: CustomStringConvertible {
     package var description: String {
         switch self {
-        case .exists(let target): return CanonicalValueDescription.call("exists", [target.description])
-        case .missing(let target): return CanonicalValueDescription.call("missing", [target.description])
-        case .announcement(let announcement): return announcement.description
+        case .elementsChanged(let assertions):
+            return CanonicalValueDescription.call("elementsChanged", assertions.map(\.description))
+        case .notification(let notification): return notification.description
         case .noChange: return "the tree to stop changing"
         case .screenChanged(let predicate):
             return CanonicalValueDescription.call("screenChanged", [predicate.description])
-        case .elementsChanged(let assertions):
-            return CanonicalValueDescription.call("elementsChanged", assertions.map(\.description))
         }
     }
 }
@@ -482,10 +505,14 @@ extension ElementAssertion: CustomStringConvertible {
 extension ResolvedElementAssertion: CustomStringConvertible {
     package var description: String {
         switch self {
-        case .exists(let target): return CanonicalValueDescription.call("exists", [target.description])
-        case .missing(let target): return CanonicalValueDescription.call("missing", [target.description])
-        case .appeared(let target): return CanonicalValueDescription.call("appeared", [target.description])
-        case .disappeared(let target): return CanonicalValueDescription.call("disappeared", [target.description])
+        case .exists(let target):
+            return CanonicalValueDescription.call("exists", [target.description])
+        case .missing(let target):
+            return CanonicalValueDescription.call("missing", [target.description])
+        case .appeared(let target):
+            return CanonicalValueDescription.call("appeared", [target.description])
+        case .disappeared(let target):
+            return CanonicalValueDescription.call("disappeared", [target.description])
         case .updated(let target, let change):
             return CanonicalValueDescription.call("updated", [target.description, change.description])
         }

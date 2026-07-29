@@ -6,7 +6,7 @@ This is the design as approved, kept as the record of why the collapse
 happened. Code references and the "what exists today" survey below describe
 the state *before* the change — that survey is the motivation, not a
 description of the tree. For how settlement works now, read
-`docs/diagrams/settle-loop.md`.
+`docs/diagrams/heist-execution.md`.
 
 **One part of this plan did not survive implementation: the four-case
 animation-delta rule.** It shipped, failed, and was removed in the same PR.

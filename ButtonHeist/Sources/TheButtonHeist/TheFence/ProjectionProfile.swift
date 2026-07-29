@@ -127,7 +127,6 @@ struct ProjectionLimits: Sendable, Equatable {
 }
 
 enum ProjectionOmissionReason: String, Sendable {
-    case rawAccessibilityTrace = "raw accessibility trace omitted from public heist report"
     case rawSubjectEvidence = "raw subject evidence omitted from public heist report"
     case scrollSubtreeElementBudget = "scroll-subtree-element-budget"
     case totalNodeBudget = "total-node-budget"

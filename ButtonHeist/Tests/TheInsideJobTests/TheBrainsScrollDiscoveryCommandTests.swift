@@ -478,6 +478,35 @@ extension TheBrainsScrollTests {
         XCTAssertEqual(Navigation.visualOrigin(in: fixture.scrollView).y, 0, accuracy: 0.01)
     }
 
+    func testRestorationUsesCurrentViewForUnchangedSemanticContainer() async throws {
+        let fixture = try await explorationViewport()
+        defer { fixture.close() }
+        let replacement = RecordingScrollView(frame: fixture.scrollView.frame)
+        replacement.contentSize = fixture.scrollView.contentSize
+        var replaced = false
+        fixture.scrollView.onSetContentOffset = { [unowned self] scrollView in
+            guard !replaced else { return }
+            replaced = true
+            scrollView.removeFromSuperview()
+            fixture.rootView.addSubview(replacement)
+            self.visibleObservationSource.observation = self.explorationObservation(
+                label: "Origin",
+                scrollView: replacement
+            )
+        }
+
+        guard let exploration = await exploreViewport(onObservation: { _ in
+            replaced ? .goalSatisfied : .continue
+        }) else {
+            return XCTFail("Expected discovery to restore through the replacement view")
+        }
+
+        XCTAssertTrue(replaced)
+        XCTAssertEqual(exploration.viewportExit, .restored)
+        XCTAssertNotNil(replacement.window)
+        XCTAssertEqual(Navigation.visualOrigin(in: replacement).y, 0, accuracy: 0.01)
+    }
+
     func testScrollToVisibleDiscoversTargetAboveCurrentViewport() async throws {
         let rootView = UIView()
         rootView.backgroundColor = .white

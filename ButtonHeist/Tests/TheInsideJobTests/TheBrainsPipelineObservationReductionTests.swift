@@ -33,12 +33,12 @@ extension TheBrainsPipelineTests {
         XCTAssertEqual(arrival, boundary.current.snapshot)
         XCTAssertEqual(
             ElementEdits.between(oldScreen.current.snapshot.interface, departure.interface)
-                .removed.map(\.label),
+                .removed.compactMap(\.semantics.assertable.label),
             ["Checkout"]
         )
         XCTAssertEqual(
             ElementEdits.between(departure.interface, arrival.interface)
-                .added.map(\.label),
+                .added.compactMap(\.semantics.assertable.label),
             ["Checkout"]
         )
 
@@ -177,7 +177,8 @@ extension TheBrainsPipelineTests {
         )
 
         XCTAssertEqual(
-            boundary.current.snapshot.interface.projectedElements.compactMap(\.label),
+            boundary.current.snapshot.interface.projectedElements
+                .compactMap(\.semantics.assertable.label),
             ["Old control", "Details", "Persistent status"]
         )
     }
@@ -201,17 +202,18 @@ extension TheBrainsPipelineTests {
         let oldScreen = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Menu", .header, "menu_header")])
         )
+        let screenBoundary = await brains.vault.semanticObservationStream.stateOwner
+            .observationBoundary(scope: .discovery)
         let newScreen = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Checkout", .header, "checkout_header")]),
             notificationBatch: notificationBatch(kind: .screenChanged)
         )
-        let screenEvidence = Observation.Evidence(
-            baseline: oldScreen.current.snapshot,
-            current: newScreen.current.snapshot,
-            events: newScreen.events,
-            completeness: .complete
-        )
+        let screenEvidence = await brains.vault.semanticObservationStream.stateOwner
+            .evidence(after: screenBoundary)
 
+        XCTAssertEqual(screenEvidence.baseline, oldScreen.current.snapshot)
+        XCTAssertEqual(screenEvidence.current, newScreen.current.snapshot)
+        XCTAssertEqual(screenEvidence.events, newScreen.events)
         XCTAssertTrue(
             try resolvedPredicate(.screenChanged).evaluate(in: screenEvidence).met
         )
@@ -222,16 +224,17 @@ extension TheBrainsPipelineTests {
         let oldVolume = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
+        let elementBoundary = await brains.vault.semanticObservationStream.stateOwner
+            .observationBoundary(scope: .discovery)
         let newVolume = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "60%")
         )
-        let elementEvidence = Observation.Evidence(
-            baseline: oldVolume.current.snapshot,
-            current: newVolume.current.snapshot,
-            events: newVolume.events,
-            completeness: .complete
-        )
+        let elementEvidence = await brains.vault.semanticObservationStream.stateOwner
+            .evidence(after: elementBoundary)
 
+        XCTAssertEqual(elementEvidence.baseline, oldVolume.current.snapshot)
+        XCTAssertEqual(elementEvidence.current, newVolume.current.snapshot)
+        XCTAssertEqual(elementEvidence.events, newVolume.events)
         XCTAssertTrue(
             try resolvedPredicate(.elementsChanged).evaluate(in: elementEvidence).met
         )

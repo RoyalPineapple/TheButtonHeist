@@ -3,8 +3,8 @@
 The Button Heist proves structural accessibility: that elements are declared,
 reachable, and activatable through the accessibility contract. This page states
 what it cannot see, defines the terms its evidence depends on, and gives the
-triage discipline for turning failures into good bug reports. A tool whose
-pitch is settled evidence owes you a precise definition of both words.
+triage discipline for turning failures into good bug reports. A tool that
+claims observed evidence owes you a precise definition of what was observed.
 
 ## Platform scope
 
@@ -40,35 +40,34 @@ commands while a SpringBoard alert is visible; that surface is outside the app
 tree by design. See the paired example in
 [Adoption examples](../examples/adoption-examples.md#pairing-with-xcuitest-for-system-dialogs).
 
-## What "settled" means
+## What observed evidence means
 
-Evidence is captured against a settled interface, and "settled" has an exact
-definition (drawn as a state machine in the
-[settle loop diagram](diagrams/settle-loop.md)):
+The runtime does not own a polling-based settle loop or a hidden stability
+timeout. Evidence is derived from the Vault's current admitted snapshot and its
+ordered `Observation.Event` history (drawn in the
+[heist execution diagram](diagrams/heist-execution.md)):
 
-- The settle loop re-parses the accessibility tree about every 100 ms and
-  computes a content fingerprint over each element's label, identifier, value,
-  traits, and geometry.
-- The interface is settled after **3 consecutive quiet cycles** with an
-  identical fingerprint — a roughly 300 ms floor. Because the fingerprint
-  includes position and size, an element still sliding or resizing cannot pass
-  for settled.
-- Elements carrying the `updatesFrequently` trait are masked out of the
-  fingerprint, so spinners and tickers do not block settlement forever.
-- A separate lightweight tripwire pulses at roughly 10 Hz over the
-  presentation layer (in-flight animations, navigation, window identity) and
-  resets the baseline when it sees a visible transition. It never reads the
-  accessibility tree.
-- If the interface has not settled after **5 seconds** (the default hard
-  timeout), the runtime stops waiting and reports the capture as explicitly
-  unsettled rather than silently treating it as settled. Diagnostic evidence
-  from a non-clean settle is kept separate from settled semantic truth.
+- A MainActor boundary parses one complete accessibility reading into an
+  immutable `Observation.Snapshot`.
+- The Vault compares that reading with current truth, commits the new current
+  snapshot, then records and publishes the corresponding ordered events.
+- `elementsChanged` carries the new snapshot. A screen replacement records
+  old-tree departures, one `screenChanged` marker, then new-tree arrivals.
+- `noChange` is emitted only after a fresh complete reading proves that all
+  observed semantics, screen- and view-space geometry, activation points, focus,
+  keyboard, screen, and window context are unchanged under the one geometry
+  tolerance.
+- Accessibility notifications and viewport movement can trigger another
+  reading, but notification kind never substitutes for the resulting parsed
+  state.
+- Current-state predicates read the current snapshot. Temporal predicates fold
+  the exact event order after their private history boundary.
 
-Two premises make waiting for stability the right default rather than an
-arbitrary delay: an iOS interface spends most of its life at rest, so settle
-converges quickly; and an element in transition should not be interacted with
-anyway — the window in which The Button Heist declines to act is the window in
-which acting would be wrong.
+Authored leaf and whole-heist timeouts are the only execution deadlines. The
+MainActor host owns both as absolute policies and schedules one task for the
+earlier deadline. On expiry it cancels in-flight work, admits final evidence,
+and gives the deterministic machine one final crank. There is no separate
+five-second cap or diagnostic-only observation path.
 
 ## Realized content
 
@@ -119,8 +118,9 @@ rule out the alternatives:
    reach, or computed the wrong activation point. Treating every failed
    activation as accessibility debt without ruling this out files bugs against
    the app for the tool's own blind spots.
-2. **A false settle.** The capture may have committed against a state that
-   was still becoming itself, or timed out unsettled.
+2. **Incomplete observation evidence.** A transition may not have produced the
+   capture or ordered events the expectation required before its authored
+   deadline.
 3. **A stale test.** The contract may have legitimately changed.
 
 The match is not exact in either direction: a gesture-driven control can fail

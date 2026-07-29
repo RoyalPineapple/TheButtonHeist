@@ -170,7 +170,7 @@ MainActor hop. Admitted message families then have one route:
 | `ping` | Authenticated transport-control sideband | `pong` |
 | `mainThreadProbe` | Authenticated transport-control sideband plus a public main-run-loop round trip | `mainThreadProbe` |
 | `status` | One capacity-admitted MainActor stream | `status` |
-| `requestInterface`, `getPasteboard`, `getAnnouncements`, `requestScreen`, `runtimeAction`, `heistPlan` | One capacity-admitted MainActor stream, then the single TheBrains interaction executor | Typed response for the admitted request |
+| `requestInterface`, `getPasteboard`, `getNotifications`, `requestScreen`, `runtimeAction`, `heistPlan` | One capacity-admitted MainActor stream, then the single TheBrains interaction executor | Typed response for the admitted request |
 
 The sideband exists so transport control can remain responsive while the UI
 executor is occupied or the app's main thread is wedged. It does not create a
@@ -304,7 +304,28 @@ seconds since 2001-01-01 00:00:00 UTC.
     ],
     "annotations": {
       "elements": [
-        { "path": { "indices": [0] }, "actions": ["activate"] }
+        {
+          "path": { "indices": [0] },
+          "actions": ["activate"],
+          "geometry": {
+            "screen": {
+              "visibility": "onscreen",
+              "frame": {
+                "source": "available",
+                "rect": { "x": 16, "y": 140, "width": 361, "height": 44 }
+              },
+              "activationPoint": {
+                "source": "defaultCenter",
+                "point": { "x": 196.5, "y": 162 }
+              }
+            },
+            "view": {
+              "ownerPath": { "indices": [] },
+              "frame": { "x": 16, "y": 140, "width": 361, "height": 44 },
+              "activationPoint": { "x": 196.5, "y": 162 }
+            }
+          }
+        }
       ],
       "containers": []
     }
@@ -343,6 +364,23 @@ predicate chain. Inclusion uses the positive check (`.traits([...])`,
 `.actions([...])`, etc.); exclusion wraps that same check as
 `.exclude(.traits([...]))`.
 
+### Notifications
+
+```json
+{"buttonHeistVersion":"<semver>","type":"getNotifications"}
+```
+
+```json
+{"buttonHeistVersion":"<semver>","type":"notifications","payload":[{"text":"Payment complete"},{"element":{"spokenDescription":"Receipt","assertable":{"label":"Receipt","traits":["staticText"],"customContent":[],"rotors":[],"actions":[]},"respondsToUserInteraction":false}}]}
+```
+
+The response payload is the ordered `[Observation.Notification]` projection
+retained in the Vault's canonical history. A notification carries normalized
+`text`, element semantics, or both. It does not carry capture health, raw UIKit
+notification kinds, ingress sequence values, timestamps, or unresolved UIKit
+objects. An empty array means the retained history contains no notification
+events.
+
 ### One-Step Semantic Action
 
 ```json
@@ -373,13 +411,14 @@ predicate chain. Inclusion uses the positive check (`.traits([...])`,
         }
       ]
     },
-    "argument": { "type": "none" }
+    "argument": { "type": "none" },
+    "timeout": 60
   }
 }
 ```
 
 Semantic action steps identify elements semantically. The host first resolves
-the target against settled state and derives one deadline from the selected
+the target against current admitted state and derives one deadline from the selected
 element's scroll-membership ancestor graph. If inflation crosses a capture
 boundary, the host removes the terminal ordinal and admits the target only when
 that semantic form uniquely selects the same element in the complete committed
@@ -390,8 +429,11 @@ stabilization, and dispatch. Missing or ambiguous re-resolution fails the action
 the host never retains a stale id or substitutes a sibling. Cached coordinates
 and `HeistId` values from a prior capture are not authority.
 
-`heistPlan.payload` is strict: its only keys are `plan` and `argument`, and both
-are required. The decoder rejects every unknown key, including proposed
+`heistPlan.payload` is strict: its only keys are `plan`, `argument`, and
+`timeout`, and all three are required. `timeout` is the whole-heist deadline in
+seconds. It must be finite and greater than zero; it defaults to 60 seconds at
+the authoring boundary and has no policy maximum. The decoder rejects every
+unknown key, including proposed
 continuity, evidence, or diagnostic controls. Action-linked evidence and
 automatic timeout diagnostics remain runtime-internal; no opt-in, token, or
 result field crosses the wire.
@@ -414,27 +456,26 @@ media only through explicit, size-bounded opt-ins.
 ### Wait
 
 ```json
-{"buttonHeistVersion":"<semver>","type":"heistPlan","payload":{"plan":{"version":2,"parameter":{"type":"none"},"body":[{"type":"wait","wait":{"predicate":{"type":"changed","scope":"screen","assertions":[]},"timeout":30}}]},"argument":{"type":"none"}}}
+{"buttonHeistVersion":"<semver>","type":"heistPlan","payload":{"plan":{"version":2,"parameter":{"type":"none"},"body":[{"type":"wait","wait":{"predicate":{"type":"changed","scope":"screen"},"timeout":30}}]},"argument":{"type":"none"},"timeout":60}}
 ```
 
-The host lowers a standalone wait to an observation-triggered
-`Settlement.Command`; it performs no action dispatch. The command captures an
-invocation-local `Observation.Moment` and announcement position, so it cannot
-consume prior action or heist evidence. `exists` and `missing` evaluate current
-state in the returned handoff snapshot. Lifecycle assertions require ordered
-post-baseline Log events and never pass from an implied final state.
+The host lowers a standalone wait to a one-step `HeistPlan`; it performs no
+action dispatch. The machine opens an invocation-local Vault history boundary,
+so the wait cannot consume prior action or heist evidence. `exists` and
+`missing` evaluate the current admitted snapshot. Temporal assertions require
+ordered post-boundary events and never pass from an implied final state.
 
 The response is a heist execution result, even for a single wait. Public report
-JSON includes `netDelta` only when the complete accumulated execution trace
+JSON includes `netDelta` only when the complete accumulated observation evidence
 proves a change; not-applicable, incomplete, and complete unchanged evidence do
 not emit a delta.
 
 On timeout, the runtime may append bounded exact-predicate mismatch details from
 observations the wait already evaluated to the existing failure message and
-report. It performs no extra capture, settlement, reveal, discovery, polling,
+report. It performs no extra capture, observation, reveal, discovery, polling,
 or predicate evaluation, and adds no wire field.
 
-To assert current settled container presence without requiring a transition,
+To assert current container presence without requiring a transition,
 put the container in the canonical target slot:
 `{"type":"exists","target":{"container":{"checks":[{"kind":"identifier","match":{"mode":"exact","value":"Checkout"}}]}}}`.
 Scoped targets use `{"container":{"checks":[...]},"target":{...}}` so
@@ -443,19 +484,21 @@ resolution is limited to descendants of the matching container.
 The strict predicate wire grammar is:
 
 ```json
-{"type":"changed","scope":"screen","assertions":[]}
+{"type":"notification","text":{"mode":"contains","value":"Payment complete"},"element":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Receipt"}}]}}
+{"type":"changed","scope":"screen","match":{"mode":"exact","value":"Checkout"}}
 {"type":"changed","scope":"elements","assertions":[{"type":"appeared","target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Toast"}}]}}]}
 ```
 
-`screen` assertions accept `exists` and `missing`; `elements` assertions also
-accept `appeared`, `disappeared`, and `updated`. `change`, `scopes`,
-`screenChanged`, and flat target wrappers are invalid.
+`notification` accepts only optional `text` and `element`; `screen` accepts
+only an optional `match`; `elements` accepts `exists`, `missing`, `appeared`,
+`disappeared`, and `updated` assertions. `change`, `scopes`, `screenChanged`,
+and flat target wrappers are invalid.
 
-Raw heist result steps contain only `path`, `durationMs`, and one semantic
+Raw heist result steps contain only `path` and one semantic
 `node`. The node's `type` selects its authored fields and legal completion:
 
 ```json
-{"path":"$.body[0]","durationMs":1,"node":{"type":"warning","outcome":"passed","message":"notice","children":[]}}
+{"path":"$.body[0]","node":{"type":"warning","outcome":"passed","message":"notice","children":[]}}
 ```
 
 Inside `node`, `outcome` determines whether that node may carry evidence,
@@ -472,35 +515,37 @@ Action responses use `actionResult`:
 {"buttonHeistVersion":"<semver>","type":"actionResult","payload":{"outcome":{"kind":"success"},"method":"activate","evidence":{"observation":{"kind":"none"}}}}
 ```
 
-App-side settlement records one `ActionDispatchResult` together with predicate,
-readiness, and observation-handoff evidence. One projector derives the action
-result without another intermediate result shape.
+The machine records one `ActionDispatchResult` together with predicate and
+observation evidence. One projector derives the action result without another
+intermediate result shape.
 `HeistActionEvidence.completed` contains one required `result` and optional
 `expectation` predicate truth. The action result owns the overall terminal
 outcome; the optional predicate evidence does not create another action or wait
-result. Only a standalone wait projects `HeistSettlementEvidence`. Decoders
-reject unknown keys and any non-current evidence shape.
+result. Decoders reject unknown keys and any non-current evidence shape.
 
 Action evidence is required and bound to the wire result outcome. Its `observation`
-is exactly one tagged case: `none`, `announcement`, `trace`, or `settledTrace`.
-Only `settledTrace` owns the tagged settlement shape
-`{"kind":"settled|timedOut|observationHandoffTimedOut","durationMs":...,"path":"..."}`. Successful
-settlement may include `path` as `semanticStability`, `uikitIdle`, or
-`accessibilityQuietWindow`. Timed-out settlement cannot carry a path.
-`observationHandoffTimedOut` requires a path and means readiness was established,
-but no observation eligible for that readiness generation was admitted before
-the deadline. It reports `settled == false` while preserving the readiness proof.
-The `trace` case cannot include `settlement`.
-`settledTrace` with `timedOut` may carry result-local action-settlement
-diagnostic captures, but those captures are not admitted to settled semantic
-state.
-Captured announcements derive from the trace; standalone announcements use the
-`announcement` case. Settlement duration does not also appear in stored timing.
+is exactly one tagged case: `none`, `announcement`, or `observed`.
+Captured announcements derive from `Observation.Evidence`; standalone
+announcements use the `announcement` case.
 Warnings are valid only in successful evidence and are not duplicated on a
 containing heist action result. Missing evidence, optional evidence bags, flat
 evidence fields, and sibling result warnings are invalid input.
 Fence projections surface that warning inside the projected action result, not
 beside the result on report evidence.
+
+A wait is not an action and never embeds an `ActionResult`. A passed wait node
+encodes one closed evidence value:
+
+```json
+{"type":"matched","evidence":{"observation":{...},"expectation":{"met":{...}}}}
+{"type":"handled_else","evidence":{"observation":{...},"expectation":{"unmet":{...}}}}
+```
+
+A failed or child-aborted wait node encodes
+`{"observation":{...},"expectation":{...}}` directly. The node's `outcome` is
+the sole owner of pass, failure, and child-abort state. Baseline and final
+summaries in public report JSON are derived from the observation snapshots;
+they are not stored in durable wait evidence.
 
 `ActionResult.Payload` is the sole semantic payload. `ActionResult` custom
 `Codable` derives `method` from its case and emits `payload` data only when the
@@ -521,94 +566,88 @@ when the error belongs to the action. Server-level failures use the `error`
 message with `kind` and `message`. Where each result field is produced during
 an action is drawn in the [action pipeline diagram](diagrams/action-pipeline.md).
 
-## Traces, Facts, and Public Deltas
+## Observations, Events, and Public Deltas
 
-`Observation.Store` is the in-app semantic owner. It atomically commits the
-current tree, typed lineage, and one retained `Observation.Log` before
-`Observation.Stream` publishes the same event. `Observation.Moment` pairs an
-immutable snapshot with its private Log index. Temporal predicates consume
-direct `Log.events(since:)` results; they do not merge a private trace or claim
-notification ownership. Current-state predicates read the returned handoff
+`TheVault.State` is the in-app semantic owner. It atomically commits the current
+snapshot and interface tree, records every event in one retained
+`Observation.History`, then publishes the same event through
+`Observation.Stream`. A leaf's private observation boundary carries its
+baseline snapshot and history index. Temporal predicates fold the ordered
+events after that boundary; they do not maintain private history or claim
+notification ownership. Current-state predicates read the current admitted
 snapshot.
 
-`AccessibilityTrace` is the durable wire/result evidence materialized from
-that lineage, and the runtime derives ordered `ChangeFact` values from its
-adjacent captures. An action-settlement timeout may return a diagnostic trace
-in its result, but that trace is not committed or usable as a settled
-observation baseline. No separate stored or endpoint temporal model exists.
+`Observation.Evidence` is the durable result evidence projected from that
+lineage. It carries the bounded baseline, current snapshot, ordered events, and
+completeness from which public deltas are derived. No separate stored or
+endpoint temporal model exists.
 
-Only admitted `Observation.Snapshot` values are committed and recorded in the
-Log. A raw `InterfaceObservation` is live parser evidence and cannot be
+Only admitted `Observation.Snapshot` values are committed and represented in
+History events. A raw `InterfaceObservation` is live parser evidence and cannot be
 published directly. Visible and discovery captures share the same admission,
 commit, and publication boundary.
 
-Facts have two kinds: `elementsChanged` and `screenChanged`. A screen boundary
-always derives three ordered facts: old-tree departures, the screen marker,
-then new-tree arrivals. `updated` entries can only be derived from captures in
-the same screen generation. A fact-free window emits no fact at all.
+`Observation.Event` is a closed four-case value:
+`elementsChanged(Snapshot)`, `screenChanged(ScreenFacts)`,
+`notification(Notification)`, or bare `noChange`. A screen boundary records
+three ordered events: old-tree departures, the screen marker, then new-tree
+arrivals. `updated` entries can only be derived from snapshots in the same
+ordered segment, with no intervening screen marker. Every admitted capture
+records at least one event; complete observed equality records `noChange`.
 
-Scoped notification evidence has one semantic shape: `screenChanged`,
-`elementChanged` with a `layout` or `value` subtype, `announcement`, or
-`unknown` with its raw code. A scoped screen notification authoritatively
-classifies replacement even when tree hashes are equal. Element and
-announcement notifications remain same-generation evidence. Unknown kinds
-retain their raw code and never become screen evidence by themselves.
-UIKit does not guarantee delivery of a useful notification for every change;
-absence permits explicit snapshot classification but is not itself evidence of
-either replacement or stability.
+Raw notification kinds are package-internal ingress data. The bus retains
+`screenChanged`, `elementChanged` with `layout` or `value`, `announcement`, and
+unknown raw codes long enough to drive screen classification and recapture.
+Before publication, the Vault consumes the kind and emits
+`Observation.Event.notification` only for normalized text or element semantics.
+A scoped screen notification can also cause a separate `screenChanged` event.
+Unknown raw codes do not escape normalization. UIKit does not guarantee delivery
+of a useful notification for every change; absence permits explicit snapshot
+classification but is not itself evidence of replacement or stability.
 
-An admitted action commit contributes one checkpointed notification batch.
+An admitted action observation contributes one checkpointed notification batch.
 `AccessibilityNotificationBus` retains the ingress events; checkpointing never
 clears or transfers ownership of them. The selected events are strictly after
 the action window's opening cursor and no later than the batch's exact
-through-cursor. That through-cursor becomes the observation's notification
-cursor. A failed settle closes the attribution window and does not attach its
-events to that action-settlement diagnostic trace. The ingress log remains
-non-destructive:
-because no settled cursor advanced, an eligible scoped event can still be
-claimed by the next admitted commit. Ambient events remain outside scoped heist
-evidence. If the bounded notification stream discarded relevant events, the
-destination capture carries
-`transition.accessibilityNotificationGap.droppedThroughSequence`; a gapped edge
-does not claim complete notification evidence. A scoped `screenChanged` after
-batch capture is outside that cursor and still invalidates the committed
-observation.
+through-cursor. The Vault normalizes selected payloads into
+`Observation.Event.notification`; it does not expose the ingress cursor on the
+event or durable evidence. Cancelling an action releases its attribution scope
+without manufacturing a notification event. The ingress log remains
+non-destructive, and ambient events remain outside scoped heist evidence. A
+scoped `screenChanged` recorded after batch capture still invalidates the
+committed observation.
 
-Notification object payloads never carry UIKit identity. A resolved element
-payload contains an `AccessibilityNotificationElementReference` with the
-destination interface's canonical semantic graph `path`, `traversalIndex`, and
-resolution method. The path and traversal index identify one record in that
-graph's traversal order. Failed correlation remains explicit as an unresolved
-payload.
+Notification object payloads never carry UIKit identity. An attached object is
+parsed independently into current `HeistElement.Semantics`; it carries no graph
+identity, geometry, path, traversal index, or resolution method. If the object
+cannot be parsed, the normalized notification has no attached element semantics.
 
 First-responder state is captured internally as a capture-local `HeistId` and
-retained in the value-only capture snapshot, never as a UIKit object identity.
-When trace context exposes `firstResponder`, the host projects that captured id
-once to an `AccessibilityTarget`; internal ids do not cross the wire. A
+retained in the value-only snapshot, never as a UIKit object identity. When
+`Observation.Context` exposes `firstResponder`, the host projects that captured
+id once to an `AccessibilityTarget`; internal ids do not cross the wire. A
 first-responder action pins the captured id and fails if inflation finishes on a
 different id or the current first responder changed during inflation.
 
-Observed notification evidence and inferred screen classification occupy
-different transition fields. `transition.accessibilityNotifications` retains
-the notification records. `transition.fallbackReason` separately retains the
-typed reason inferred by `ScreenClassifier` from settled snapshots.
-`ScreenClassifier` owns precedence: scoped `screenChanged` is authoritative.
-Without that notification, every settled pair is still classified from its
-snapshots; `elementChanged` and `announcement` remain notification facts but do
-not veto a replacement proved by the snapshots. Every inferred replacement
-records one of `modalBoundaryChanged`, `selectedTabChanged`,
-`navigationMarkerChanged`, `primaryHeaderChanged`, or `rootShapeChanged` in
-`transition.fallbackReason`. Parsed screen IDs, first-responder state, geometry,
-and observation-generation counters never originate a screen classification;
-the generation records the classifier's result.
+Observed notifications and screen classification occupy distinct ordered
+events. `.notification` retains normalized notification content, while
+`.screenChanged` records the boundary and its `ScreenFacts`. `ScreenClassifier`
+owns precedence: scoped `screenChanged` is authoritative.
+Without that notification, every admitted pair is still classified from its
+snapshots; `elementChanged` and `announcement` remain ingress-only recapture
+triggers and do not veto a replacement proved by the snapshots. Every inferred
+replacement records the resulting boundary as `.screenChanged`. Parsed screen
+IDs, first-responder state, geometry, and snapshot metadata never independently
+originate a screen classification; the ordered event records the classifier's
+result.
 
-For UIKit value controls, both `elementChanged` subtypes and `announcement` are
-recapture triggers. The notification kind does not assert the new value;
-Button Heist re-reads the delivered node and derives any value update from the
-before/after captures. SwiftUI value notifications use that same path.
+For UIKit value controls, both `elementChanged` subtypes and `announcement`
+trigger recapture. The ingress kind does not assert the new value; Button Heist
+re-reads the delivered node and derives any value update from successive
+admitted snapshots. SwiftUI value notifications use that same path.
 
 Fence JSON projections of action and result evidence add a compact `delta`
-field; the raw `actionResult` message carries the source trace evidence instead.
+field; the raw `actionResult` message carries the source observation evidence.
 The delta is a one-way lossy fold over ordered facts. It is discriminated as
 `noChange`, `elementsChanged`, or `screenChanged` and is never used to evaluate
 a predicate. A screen marker dominates the final public delta kind even when
@@ -648,7 +687,7 @@ Clients may issue `mainThreadProbe` explicitly to diagnose whether the main run
 loop can still execute scheduled work. TheFence does not emit probes
 automatically before, during, or after another request. Every app request keeps
 one normal response deadline; a probe cannot compete with or replace its
-terminal result. Settlement and idle deadlines remain in-process UI evidence
-deadlines and do not classify connection or main-thread liveness.
+terminal result. Heist and leaf deadlines remain in-process execution policies
+and do not classify connection or main-thread liveness.
 
 After reconnecting, clients should request fresh interface state before acting.

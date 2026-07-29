@@ -28,93 +28,6 @@ extension ElapsedMilliseconds: ExpressibleByIntegerLiteral {
     }
 }
 
-public struct ActionSettlementEvidence: Codable, Sendable, Equatable {
-    private enum State: Sendable, Equatable {
-        case settled
-        case timedOut
-        case observationHandoffTimedOut
-    }
-
-    private let state: State
-    public let durationMs: ElapsedMilliseconds
-
-    private enum Kind: String, Codable {
-        case settled
-        case timedOut
-        case observationHandoffTimedOut
-    }
-
-    private enum CodingKeys: String, CodingKey, CaseIterable {
-        case kind
-        case durationMs
-    }
-
-    public static func settled(duration: ElapsedMilliseconds) -> ActionSettlementEvidence {
-        ActionSettlementEvidence(state: .settled, duration: duration)
-    }
-
-    public static func timedOut(duration: ElapsedMilliseconds) -> ActionSettlementEvidence {
-        ActionSettlementEvidence(state: .timedOut, duration: duration)
-    }
-
-    public static func observationHandoffTimedOut(
-        duration: ElapsedMilliseconds
-    ) -> ActionSettlementEvidence {
-        ActionSettlementEvidence(state: .observationHandoffTimedOut, duration: duration)
-    }
-
-    public var settled: Bool {
-        if case .settled = state { return true }
-        return false
-    }
-
-    public var readinessEstablished: Bool {
-        switch state {
-        case .settled, .observationHandoffTimedOut:
-            true
-        case .timedOut:
-            false
-        }
-    }
-
-    public var observationHandoffCompleted: Bool {
-        if case .settled = state { return true }
-        return false
-    }
-
-    private init(state: State, duration: ElapsedMilliseconds) {
-        self.state = state
-        durationMs = duration
-    }
-
-    public init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ActionSettlementEvidence")
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let duration = try container.decode(ElapsedMilliseconds.self, forKey: .durationMs)
-        switch try container.decode(Kind.self, forKey: .kind) {
-        case .settled:
-            self.init(state: .settled, duration: duration)
-        case .timedOut:
-            self.init(state: .timedOut, duration: duration)
-        case .observationHandoffTimedOut:
-            self.init(state: .observationHandoffTimedOut, duration: duration)
-        }
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        switch state {
-        case .settled:
-            try container.encode(Kind.settled, forKey: .kind)
-        case .timedOut:
-            try container.encode(Kind.timedOut, forKey: .kind)
-        case .observationHandoffTimedOut:
-            try container.encode(Kind.observationHandoffTimedOut, forKey: .kind)
-        }
-        try container.encode(durationMs, forKey: .durationMs)
-    }
-}
-
 /// The result of executing an action command, including post-action diagnostics.
 public struct ActionResult: Codable, Sendable, Equatable {
     public enum Payload: Sendable, Equatable {
@@ -184,19 +97,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public var observationEvidence: Observation.Evidence? {
         evidence.observationEvidence
     }
-    /// True when the runtime saw the tree come to rest: a reading arrived whose
-    /// comparison against the one before it found nothing new, so the action's
-    /// effects had finished landing before the response was built.
-    ///
-    /// False means the timeout elapsed first, which is the only way this is
-    /// false. It does not say the action failed, and it does not say the
-    /// reported state is wrong — the observation is a real reading, just one taken
-    /// while the tree may still have been moving, so an element's position or a
-    /// value mid-animation may not be where it ended up.
-    public var settled: Bool? { evidence.settlement?.settled }
-    /// Wall-clock milliseconds from action start to the reading that resolved
-    /// this settlement — the one that came to rest, or the timeout.
-    public var settleTimeMs: ElapsedMilliseconds? { evidence.settlement?.durationMs }
     /// Semantic subject the runtime resolved before dispatching the action.
     public var subjectEvidence: ActionSubjectEvidence? { evidence.subjectEvidence }
     /// Semantic activation dispatch-path diagnostics, present for `activate`.

@@ -53,8 +53,18 @@ import TheScore
         let expectationAfter = makeTestInterface(elements: [
             element(label: "Still Processing", traits: [.staticText]),
         ])
-        let dispatchTrace = AccessibilityTrace(first: before).appending(dispatchAfter)
-        let actionTrace = dispatchTrace.appending(expectationAfter)
+        let baseline = doctorSnapshot(interface: before)
+        let dispatchSnapshot = doctorSnapshot(interface: dispatchAfter)
+        let expectationSnapshot = doctorSnapshot(interface: expectationAfter)
+        let observation = Observation.Evidence(
+            baseline: baseline,
+            current: expectationSnapshot,
+            events: [
+                .elementsChanged(dispatchSnapshot),
+                .elementsChanged(expectationSnapshot),
+            ],
+            completeness: .incomplete
+        )
         let predicate = AccessibilityPredicate.screenChanged
         let failure = HeistFailureDetail(
             category: .expectation,
@@ -69,21 +79,27 @@ import TheScore
                 payload: .activate,
                 failureKind: .timeout,
                 message: "wait timed out",
-                observation: .trace(makeTestTraceEvidence(actionTrace, completeness: .incomplete))
+                observation: .observed(observation)
             ),
             expectation: ExpectationResult(
                 met: false,
                 predicate: predicate,
                 actual: "timed out waiting for checkout"
             ),
-            durationMs: 1,
             failure: failure
         )
 
         let repairEvidence = try HeistDoctor.repairEvidence(from: step)
 
         #expect(repairEvidence.beforeSnapshot == before)
-        #expect(repairEvidence.changeFacts == actionTrace.changeFacts)
+        #expect(repairEvidence.observedChanges == [
+            .semanticElementsRemoved,
+            .semanticElementsAdded,
+            .semanticElementsRemoved,
+            .semanticElementsAdded,
+        ])
+        #expect(repairEvidence.semanticEvidence.contains("Processing"))
+        #expect(repairEvidence.semanticEvidence.contains("Still Processing"))
         #expect(repairEvidence.command == .activate(target))
         #expect(repairEvidence.method == .activate)
         #expect(repairEvidence.expectation?.met == false)
@@ -140,20 +156,18 @@ import TheScore
         after: Interface?,
         actionSucceeded: Bool
     ) throws -> HeistResult {
-        let trace = after
-            .map { AccessibilityTrace(first: before).appending($0) }
-            ?? AccessibilityTrace(first: before)
+        let observation = doctorObservationEvidence(before: before, after: after)
         let actionResult = if actionSucceeded {
             ActionResult.success(
                 payload: .activate,
-                observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
+                observation: .observed(observation)
             )
         } else {
             ActionResult.failure(
                 payload: .activate,
                 failureKind: .elementNotFound,
                 message: "No element matching \(target)",
-                observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
+                observation: .observed(observation)
             )
         }
         let step = status == .failed
@@ -161,7 +175,6 @@ import TheScore
                 path: path,
                 command: .activate(target),
                 result: actionResult,
-                durationMs: 1,
                 failure: HeistFailureDetail(
                     category: .targetResolution,
                     contract: "action dispatch succeeds",
@@ -172,12 +185,32 @@ import TheScore
             : HeistResultFixture.action(
                 path: path,
                 command: .activate(target),
-                result: actionResult,
-                durationMs: 1
+                result: actionResult
             )
         return try HeistResult(
             steps: [step],
             durationMs: 1
         )
     }
+}
+
+private func doctorObservationEvidence(
+    before: Interface,
+    after: Interface?
+) -> Observation.Evidence {
+    let baseline = doctorSnapshot(interface: before)
+    let current = after.map { doctorSnapshot(interface: $0) } ?? baseline
+    return Observation.Evidence(
+        baseline: baseline,
+        current: current,
+        events: after == nil ? [] : [.elementsChanged(current)],
+        completeness: .incomplete
+    )
+}
+
+private func doctorSnapshot(interface: Interface) -> Observation.Snapshot {
+    Observation.Snapshot(
+        interface: interface,
+        context: .empty
+    )
 }

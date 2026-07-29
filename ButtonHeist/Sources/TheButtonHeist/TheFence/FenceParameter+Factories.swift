@@ -14,6 +14,10 @@ import TheScore
         defaultValue: .summary
     )
     public static let heistName = FenceParameter<String>.string(.heist, required: true)
+    public static let heistTimeout = FenceParameter<HeistTimeout>.heistTimeout(
+        .timeout,
+        defaultValue: .default
+    )
     public static let heistValidationLint = FenceParameter<HeistValidationLintMode>.enumValue(
         .lint,
         defaultValue: .compositionQuality

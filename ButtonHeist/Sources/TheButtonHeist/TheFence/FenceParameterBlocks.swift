@@ -102,6 +102,12 @@ internal enum FenceParameterBlocks: Sendable {
             enumValues: AccessibilityPredicate.wireTypeValues
         ),
         objectParam(.target, properties: inlineAccessibilityTargetFields, validation: .customPayload),
+        stringMatchParam(.text),
+        objectParam(
+            .element,
+            properties: [predicateChecksParam(.checks)],
+            validation: .customPayload
+        ),
         stringMatchParam(.match),
         param(.scope, .string, enumValues: ChangedScope.allCases.map(\.rawValue)),
         arrayParam(

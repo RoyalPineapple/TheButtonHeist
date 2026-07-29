@@ -71,7 +71,6 @@ package enum HeistResultFixture {
         command: HeistActionCommand = .activate(.predicate(ElementPredicate(label: "Button"))),
         result: ActionResult = actionResult(),
         expectation: ExpectationResult? = nil,
-        durationMs: ElapsedMilliseconds = 1,
         failure: HeistFailureDetail? = nil
     ) -> HeistExecutionStepResult {
         let evidence = HeistActionEvidence.completed(result: result, expectation: expectation)
@@ -83,7 +82,6 @@ package enum HeistResultFixture {
             }
             return HeistExecutionStepResult.action(
                 path: executionPath(path),
-                durationMs: durationMs,
                 execution: .failed(command: command, evidence: evidence, failure: resolvedFailure)
             )
         }
@@ -92,72 +90,66 @@ package enum HeistResultFixture {
         }
         return HeistExecutionStepResult.action(
             path: executionPath(path),
-            durationMs: durationMs,
             execution: .passed(command: command, evidence: evidence)
         )
     }
 
     package static func wait(
         path: String = "$.body[0]",
-        actionResult: ActionResult = .success(payload: .wait),
-        expectation: ExpectationResult = ExpectationResult(
-            met: true,
+        expectation: ExpectationResult.Met = ExpectationResult.Met(
             predicate: .exists(.label("Done"))
         ),
-        durationMs: ElapsedMilliseconds = 1,
-        failure: HeistFailureDetail? = nil
+        observation: Observation.Evidence = Observation.Evidence(
+            baseline: nil,
+            current: nil,
+            events: [],
+            completeness: .complete
+        )
     ) -> HeistExecutionStepResult {
-        let evidence: HeistSettlementEvidence
-        if failure == nil {
-            guard let met = ExpectationResult.Met(expectation),
-                  let matched = HeistSettlementEvidence.MatchedCheck(
-                      actionResult: actionResult,
-                      expectation: met
-                  ) else {
-                preconditionFailure("passed wait fixture requires matched evidence")
-            }
-            evidence = .matched(matched)
-        } else {
-            guard let unmatched = HeistSettlementEvidence.UnmatchedCheck(
-                actionResult: actionResult,
-                expectation: expectation
-            ) else {
-                preconditionFailure("failed wait fixture requires unmatched evidence")
-            }
-            evidence = .failed(unmatched)
-        }
-
-        let predicate = expectation.predicate
-            ?? AccessibilityPredicate.exists(.label("predicate"))
-        let completion: HeistWaitCompletion
-        if let failure {
-            guard let evidence = HeistFailedWaitEvidence(evidence) else {
-                preconditionFailure("failed wait result fixture requires failing evidence")
-            }
-            completion = .failed(evidence: .observed(evidence), failure: failure)
-        } else {
-            guard let evidence = HeistPassedWaitEvidence(evidence) else {
-                preconditionFailure("passed wait result fixture requires matched evidence")
-            }
-            completion = .passed(evidence: evidence)
-        }
-        return .wait(
+        .wait(
             path: executionPath(path),
-            durationMs: durationMs,
-            predicate: predicate,
+            predicate: expectation.predicate
+                ?? AccessibilityPredicate.exists(.label("predicate")),
             timeout: 1,
-            completion: completion
+            completion: .passed(evidence: .matched(HeistWaitMatchedEvidence(
+                observation: observation,
+                expectation: expectation
+            )))
+        )
+    }
+
+    package static func failedWait(
+        path: String = "$.body[0]",
+        expectation: ExpectationResult.Unmet,
+        observation: Observation.Evidence = Observation.Evidence(
+            baseline: nil,
+            current: nil,
+            events: [],
+            completeness: .complete
+        ),
+        failure: HeistFailureDetail
+    ) -> HeistExecutionStepResult {
+        .wait(
+            path: executionPath(path),
+            predicate: expectation.predicate
+                ?? AccessibilityPredicate.exists(.label("predicate")),
+            timeout: 1,
+            completion: .failed(
+                evidence: HeistWaitUnmatchedEvidence(
+                    observation: observation,
+                    expectation: expectation
+                ),
+                failure: failure
+            )
         )
     }
 
     package static func warning(
         path: String = "$.body[0]",
-        message: String,
-        durationMs: ElapsedMilliseconds = 1
+        message: String
     ) -> HeistExecutionStepResult {
         .warning(
             path: executionPath(path),
-            durationMs: durationMs,
             message: HeistWarningMessage(stringLiteral: message),
             completion: .passed()
         )
@@ -165,12 +157,10 @@ package enum HeistResultFixture {
 
     package static func explicitFailure(
         path: String = "$.body[0]",
-        message: String,
-        durationMs: ElapsedMilliseconds = 1
+        message: String
     ) -> HeistExecutionStepResult {
         .failure(
             path: executionPath(path),
-            durationMs: durationMs,
             message: HeistFailureMessage(stringLiteral: message),
             completion: .failed(failure: HeistFailureDetail(
                 category: .explicitFailure,
@@ -184,19 +174,16 @@ package enum HeistResultFixture {
         path: String = "$.body[0]",
         status: HeistExecutionStepStatus = .passed,
         selection: HeistCaseSelectionResult,
-        durationMs: ElapsedMilliseconds? = nil,
         failure: HeistFailureDetail? = nil,
         children: [HeistExecutionStepResult] = []
     ) -> HeistExecutionStepResult {
         let evidence = HeistCaseSelectionEvidence(selection: selection)
-        let resolvedDuration = durationMs ?? selection.elapsedMs
         if let abortedAtChildPath = children.firstFailedStep?.path {
             guard let children = HeistAbortedChildren(children) else {
                 preconditionFailure("conditional aborted children require the first failed path")
             }
             return .conditional(
                 path: executionPath(path),
-                durationMs: resolvedDuration,
                 completion: .childAborted(
                     evidence: evidence,
                     failure: failure ?? HeistFailureDetail(
@@ -211,7 +198,6 @@ package enum HeistResultFixture {
         if status == .failed {
             return .conditional(
                 path: executionPath(path),
-                durationMs: resolvedDuration,
                 completion: .failed(
                     evidence: .observed(evidence),
                     failure: failure ?? HeistFailureDetail(
@@ -225,7 +211,6 @@ package enum HeistResultFixture {
         }
         return .conditional(
             path: executionPath(path),
-            durationMs: resolvedDuration,
             completion: .passed(evidence: evidence, children: passingChildren(children))
         )
     }
@@ -238,7 +223,6 @@ package enum HeistResultFixture {
         ordinal: Int,
         value: String,
         status: HeistExecutionStepStatus,
-        durationMs: ElapsedMilliseconds = 1,
         failureReason: String? = nil,
         children: [HeistExecutionStepResult]
     ) -> HeistExecutionStepResult {
@@ -268,7 +252,6 @@ package enum HeistResultFixture {
             }
             return HeistExecutionStepResult.forEachStringIteration(
                 path: executionPath(resolvedPath),
-                durationMs: durationMs,
                 declaration: declaration,
                 completion: .childAborted(
                     evidence: admittedEvidence,
@@ -287,7 +270,6 @@ package enum HeistResultFixture {
             }
             return HeistExecutionStepResult.forEachStringIteration(
                 path: executionPath(resolvedPath),
-                durationMs: durationMs,
                 declaration: declaration,
                 completion: .failed(
                     evidence: .observed(evidence),
@@ -301,7 +283,6 @@ package enum HeistResultFixture {
         }
         return HeistExecutionStepResult.forEachStringIteration(
             path: executionPath(resolvedPath),
-            durationMs: durationMs,
             declaration: declaration,
             completion: .passed(evidence: evidence, children: passingChildren(children))
         )

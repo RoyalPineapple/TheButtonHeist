@@ -6,7 +6,7 @@ import ThePlans
 import TheScore
 
 extension TheBrains {
-    /// Internal changed-wait entry point through the canonical Settlement path.
+    /// Internal changed-wait entry point through the canonical HeistExecution path.
     func executeChangedWait(
         timeout: TimeInterval,
         expectation: AccessibilityPredicate?
@@ -24,11 +24,12 @@ extension TheBrains {
         defer { finishChangedWait() }
 
         let predicate = expectation ?? .elementsChanged
-        let resolvedTimeout: WaitTimeout
-        let resolved: ResolvedAccessibilityPredicate
         do {
-            resolvedTimeout = try WaitTimeout(validatingSeconds: timeout)
-            resolved = try predicate.resolve(in: .empty)
+            let resolvedTimeout = try WaitTimeout(validatingSeconds: timeout)
+            let plan = try HeistPlan(body: [
+                .wait(WaitStep(predicate: predicate, timeout: resolvedTimeout)),
+            ])
+            return await executeSingleStepPlan(plan, fallbackPayload: .wait)
         } catch {
             return .failure(
                 payload: .wait,
@@ -36,12 +37,6 @@ extension TheBrains {
                 message: "could not resolve changed wait predicate: \(error)"
             )
         }
-        let result = await executeSettlementCommand(Settlement.Command(
-            observing: predicate,
-            resolved: resolved,
-            timeout: resolvedTimeout
-        ))
-        return Settlement.ResultProjector.projectWait(result).actionResult
     }
 }
 

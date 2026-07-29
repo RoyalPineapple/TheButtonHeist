@@ -14,16 +14,16 @@ extension TheVault {
             state.current
         }
 
-        internal func latestSettleFailureDiagnostic() async -> String? {
-            state.settleFailureDiagnostic
-        }
-
         internal func notificationIndex() async -> AccessibilityNotificationCursor {
             state.notificationIndex
         }
 
         internal func historyEndIndex() async -> Int {
             state.history.endIndex
+        }
+
+        internal func notifications() -> [Observation.Notification] {
+            state.notifications
         }
 
         internal func scopedScreenChangedSequence() async -> UInt64 {
@@ -42,8 +42,8 @@ extension TheVault {
             state.invalidateCurrentAdmission()
         }
 
-        internal func discardIfSignalChanged(to signal: TheTripwire.TripwireSignal) async {
-            state.discardIfSignalChanged(to: signal)
+        internal func invalidateAdmissionIfSignalChanged(to signal: TheTripwire.TripwireSignal) async {
+            state.invalidateAdmissionIfSignalChanged(to: signal)
         }
 
         internal func admittedObservation(
@@ -73,16 +73,21 @@ extension TheVault {
         }
 
         internal func evidence(
-            in range: Range<Int>,
-            baseline: Observation.Snapshot?
+            after boundary: State.HistoryBoundary
         ) async -> Observation.Evidence {
-            state.evidence(in: range, baseline: baseline)
+            state.evidence(after: boundary)
         }
 
-        internal func readAdmission(
+        internal func observationBoundary(
+            scope: SemanticObservationScope
+        ) async -> State.HistoryBoundary {
+            state.observationBoundary(scope: scope)
+        }
+
+        internal func commitAdmission(
             _ admission: Observation.Admission
         ) async -> Observation.Publication {
-            state.readObservation(admission)
+            state.commitObservation(admission)
         }
 
         internal func protectHistory(from index: Int) async {
@@ -91,10 +96,6 @@ extension TheVault {
 
         internal func releaseHistory(from index: Int) async {
             state.releaseHistory(from: index)
-        }
-
-        internal func recordSettleFailure(_ diagnostic: String?) async {
-            state.recordSettleFailure(diagnostic)
         }
 
         internal func reset(retentionLimit: Int = State.defaultRetentionLimit) async {

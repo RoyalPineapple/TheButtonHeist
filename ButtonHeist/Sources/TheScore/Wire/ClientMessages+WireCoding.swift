@@ -95,8 +95,8 @@ private func clientMessageWireRepresentation(
         return ClientMessageWireRepresentation(type: .status, payload: nil)
     case .getPasteboard:
         return ClientMessageWireRepresentation(type: .getPasteboard, payload: nil)
-    case .getAnnouncements:
-        return ClientMessageWireRepresentation(type: .getAnnouncements, payload: nil)
+    case .getNotifications:
+        return ClientMessageWireRepresentation(type: .getNotifications, payload: nil)
     case .requestScreen(let payload):
         return ClientMessageWireRepresentation(
             type: .requestScreen,
@@ -143,9 +143,9 @@ private func decodeClientMessage(from payloadDecoder: Decoder?, type: ClientWire
     case .getPasteboard:
         try noPayload()
         return .getPasteboard
-    case .getAnnouncements:
+    case .getNotifications:
         try noPayload()
-        return .getAnnouncements
+        return .getNotifications
     case .requestScreen:
         if let payloadDecoder {
             return .requestScreen(try ScreenRequestPayload(from: payloadDecoder))

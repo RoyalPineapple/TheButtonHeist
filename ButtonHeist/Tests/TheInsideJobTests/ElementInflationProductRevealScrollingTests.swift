@@ -52,7 +52,10 @@ extension ElementInflationProductTests {
         guard result.outcome.isSuccess else { return }
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(result.subjectEvidence?.source, .resolvedSemanticTarget)
-        XCTAssertEqual(result.subjectEvidence?.element.identifier, fixture.knownHeistId.rawValue)
+        XCTAssertEqual(
+            result.subjectEvidence?.element.semantics.assertable.identifier,
+            fixture.knownHeistId.rawValue
+        )
         XCTAssertEqual(
             result.subjectEvidence?.resolution,
             ActionSubjectResolution(origin: .known, adjustments: [.semanticReveal])
@@ -127,11 +130,13 @@ extension ElementInflationProductTests {
         await invalidation.wait()
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "semantic type_text failed")
-        XCTAssertEqual(result.settled, true)
         guard result.outcome.isSuccess else { return }
         XCTAssertEqual(result.method, .typeText)
         XCTAssertEqual(result.subjectEvidence?.source, .textInputTarget)
-        XCTAssertEqual(result.subjectEvidence?.element.identifier, fixture.knownHeistId.rawValue)
+        XCTAssertEqual(
+            result.subjectEvidence?.element.semantics.assertable.identifier,
+            fixture.knownHeistId.rawValue
+        )
         XCTAssertEqual(fixture.target.text, "leave at desk")
         XCTAssertTrue(fixture.target.isFirstResponder)
         XCTAssertTrue(fixture.scrollView.didReceiveRevealRequest)
@@ -147,6 +152,9 @@ extension ElementInflationProductTests {
             label: "Customer Name"
         )
         defer { fixture.cleanup() }
+        let visible = try XCTUnwrap(brains.vault.refreshLiveCapture())
+        _ = await brains.vault.semanticObservationStream
+            .commitVisibleObservationForTesting(visible)
 
         XCTAssertEqual(fixture.scrollView.contentOffset, .zero)
         XCTAssertFalse(fixture.target.isFirstResponder)
@@ -158,7 +166,10 @@ extension ElementInflationProductTests {
         )
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "visible text field activate failed")
-        XCTAssertEqual(result.subjectEvidence?.element.identifier, fixture.knownHeistId.rawValue)
+        XCTAssertEqual(
+            result.subjectEvidence?.element.semantics.assertable.identifier,
+            fixture.knownHeistId.rawValue
+        )
         XCTAssertEqual(
             result.subjectEvidence?.resolution,
             ActionSubjectResolution(origin: .visible)
@@ -199,7 +210,10 @@ extension ElementInflationProductTests {
         )
         guard result.outcome.isSuccess else { return }
         XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(result.subjectEvidence?.element.identifier, fixture.knownHeistId.rawValue)
+        XCTAssertEqual(
+            result.subjectEvidence?.element.semantics.assertable.identifier,
+            fixture.knownHeistId.rawValue
+        )
         XCTAssertEqual(fixture.target.activationCount, 1)
         XCTAssertEqual(revealOrder, [
             ObjectIdentifier(fixture.outerScrollView),
@@ -265,7 +279,10 @@ extension ElementInflationProductTests {
             nestedScrollFailureDescription(result, fixture: fixture)
         )
         guard result.outcome.isSuccess else { return }
-        XCTAssertEqual(result.subjectEvidence?.element.identifier, fixture.knownHeistId.rawValue)
+        XCTAssertEqual(
+            result.subjectEvidence?.element.semantics.assertable.identifier,
+            fixture.knownHeistId.rawValue
+        )
         XCTAssertEqual(fixture.target.activationCount, 1)
         XCTAssertTrue(fixture.outerScrollView.didReceiveRevealRequest)
         XCTAssertTrue(fixture.innerScrollView.didReceiveRevealRequest)
@@ -467,7 +484,7 @@ extension ElementInflationProductTests {
                 size: fixture.target.bounds.size
             )
         )
-        let observedActivationPoint = try observedContentActivationPoint(
+        let viewSpace = try viewSpace(
             origin: fixture.frameOrigin,
             size: fixture.target.bounds.size,
             ownerPath: scrollContainerPath
@@ -475,7 +492,7 @@ extension ElementInflationProductTests {
         let entry = InterfaceTree.Element(
             heistId: fixture.knownHeistId,
             scrollMembership: InterfaceTree.ScrollMembership(containerPath: scrollContainerPath, index: nil),
-            observedScrollContentActivationPoint: observedActivationPoint,
+            geometry: HeistElement.Geometry(screen: .offscreen, view: viewSpace),
             element: element
         )
         var elements = screen.tree.elements
@@ -492,6 +509,7 @@ extension ElementInflationProductTests {
         _ fixture: NestedScrollRevealFixture,
         decoy: NestedScrollDecoy = .absent
     ) async throws {
+        await brains.tripwire.yieldFrames(2)
         let screen = try XCTUnwrap(brains.vault.refreshLiveCapture())
         let outerContainerPath = try XCTUnwrap(
             liveScrollableContainerPath(for: fixture.outerScrollView, in: screen),
@@ -531,7 +549,7 @@ extension ElementInflationProductTests {
                 size: fixture.target.bounds.size
             )
         )
-        let observedTargetActivationPoint = try observedContentActivationPoint(
+        let targetViewSpace = try viewSpace(
             origin: fixture.targetFrameOrigin,
             size: fixture.target.bounds.size,
             ownerPath: innerContainerPath
@@ -539,15 +557,15 @@ extension ElementInflationProductTests {
         let entry = InterfaceTree.Element(
             heistId: fixture.knownHeistId,
             scrollMembership: InterfaceTree.ScrollMembership(containerPath: innerContainerPath, index: nil),
-            observedScrollContentActivationPoint: observedTargetActivationPoint,
+            geometry: HeistElement.Geometry(screen: .offscreen, view: targetViewSpace),
             element: element
         )
         var elements = screen.tree.elements
         elements[entry.heistId] = entry
 
         var containers = screen.tree.containers
-        let observedContainerActivationPoint = try capturedInnerContainer?.observedScrollContentActivationPoint
-            ?? observedContentActivationPoint(
+        let containerViewSpace = try capturedInnerContainer?.viewSpace
+            ?? viewSpace(
             origin: fixture.innerFrameOrigin,
             size: fixture.innerScrollView.frame.size,
             ownerPath: outerContainerPath
@@ -556,10 +574,10 @@ extension ElementInflationProductTests {
             container: innerContainer,
             path: innerContainerPath,
             containerName: innerContainerName,
-            contentFrame: CGRect(origin: .zero, size: fixture.innerScrollView.frame.size),
+            viewSpace: containerViewSpace,
             scrollMembership: capturedInnerContainer?.scrollMembership
                 ?? InterfaceTree.ScrollMembership(containerPath: outerContainerPath, index: nil),
-            observedScrollContentActivationPoint: observedContainerActivationPoint
+            scrollInventory: capturedInnerContainer?.scrollInventory
         )
 
         let liveCapture: LiveCapture
@@ -579,10 +597,11 @@ extension ElementInflationProductTests {
             )
         }
 
-        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
-            tree: InterfaceTree(elements: elements, containers: containers),
-            liveCapture: liveCapture
-        ))
+        await brains.vault.semanticObservationStream
+            .commitDiscoveryObservationForTesting(InterfaceObservation.makeForTests(
+                tree: InterfaceTree(elements: elements, containers: containers),
+                liveCapture: liveCapture
+            ))
         visibleObservationSource.useLiveCapture()
     }
     private func nestedInnerScrollContainerPath(

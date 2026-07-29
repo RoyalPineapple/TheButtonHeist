@@ -3,10 +3,10 @@ import TheScore
 
 enum EvidenceMinimumMatcher {
     static func minimumTarget(actionResult: ActionResult) -> AccessibilityTarget? {
-        guard actionResult.traceEvidence?.isComplete == true,
+        guard let observation = actionResult.observationEvidence,
+              observation.completeness == .complete,
               let evidence = actionResult.subjectEvidence,
-              let trace = actionResult.accessibilityTrace,
-              let before = trace.captures.first
+              let before = observation.baseline
         else { return nil }
 
         let elements = before.interface.projectedElements
@@ -15,8 +15,7 @@ enum EvidenceMinimumMatcher {
             elements: elements.enumerated().map { offset, element in
                 PredicateSelectionContext.Element(id: contextElementId(forOffset: offset), element: element)
             },
-            screenId: before.context.screenId,
-            semanticHash: before.hash,
+            screenId: before.context.screenId ?? InterfaceSummary.screenId(for: before.interface),
             scope: .visible
         )
         return MinimumPredicateSelector.minimumUniquePredicate(

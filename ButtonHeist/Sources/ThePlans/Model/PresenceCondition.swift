@@ -38,10 +38,12 @@ package enum ResolvedPresenceCondition: Sendable, Equatable {
     case exists(ResolvedAccessibilityTarget)
     case missing(ResolvedAccessibilityTarget)
 
-    package var rootPredicate: ResolvedAccessibilityPredicate {
+    package var rootPredicate: ObservationPredicate {
         switch self {
-        case .exists(let target): return .exists(target)
-        case .missing(let target): return .missing(target)
+        case .exists(let target):
+            return .elementsChanged([.exists(target)])
+        case .missing(let target):
+            return .elementsChanged([.missing(target)])
         }
     }
 }

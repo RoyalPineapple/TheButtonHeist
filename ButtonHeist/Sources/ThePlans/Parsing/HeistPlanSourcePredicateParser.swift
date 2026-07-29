@@ -8,8 +8,8 @@ extension HeistPlanSourceParser {
             return try parseScreenChanged()
         case "elementsChanged":
             return try parseElementsChanged()
-        case "announcement":
-            return try parseAnnouncementPredicate()
+        case "notification":
+            return try parseNotificationPredicate()
         case "exists", "missing":
             let target = try parseCurrentTreeTarget()
             return name == "exists" ? .exists(target) : .missing(target)
@@ -18,14 +18,34 @@ extension HeistPlanSourceParser {
         }
     }
 
-    mutating func parseAnnouncementPredicate() throws -> AccessibilityPredicate {
-        guard consumeSymbol("(") else { return .announcement }
+    mutating func parseNotificationPredicate() throws -> AccessibilityPredicate {
+        guard consumeSymbol("(") else { return .notification }
         if consumeSymbol(")") {
-            throw error(previous, "empty announcement predicate must use .announcement")
+            throw error(previous, "empty notification predicate must use .notification")
         }
-        let expression = try parseStringMatchCallArgument(field: "announcement")
+
+        if consumeLabel("text") {
+            let text = try parseStringMatchFieldValue(field: "notification text")
+            let element: ElementPredicate?
+            if consumeSymbol(",") {
+                try expectIdentifier("element")
+                try expectSymbol(":")
+                element = try parseElementPredicate()
+            } else {
+                element = nil
+            }
+            try expectSymbol(")")
+            return .notification(text: text, element: element)
+        }
+        if consumeLabel("element") {
+            let element = try parseElementPredicate()
+            try expectSymbol(")")
+            return .notification(element: element)
+        }
+
+        let expression = try parseStringMatchCallArgument(field: "notification")
         try expectSymbol(")")
-        return .announcement(expression)
+        return .notification(expression)
     }
 
     mutating func parseScreenChanged() throws -> AccessibilityPredicate {
@@ -100,7 +120,14 @@ extension HeistPlanSourceParser {
 
     mutating func parseUpdatedAssertion() throws -> ElementAssertion {
         try expectSymbol("(")
-        let target = try parseTargetExpr()
+        let targetToken = currentToken
+        let parsedTarget = try parseTargetExpr()
+        let target: AccessibilityElementTarget
+        do {
+            target = try AccessibilityElementTarget(admitting: parsedTarget)
+        } catch let grammarError as AccessibilityTargetGrammarError {
+            throw error(targetToken, grammarError.diagnosticDescription)
+        }
         try expectSymbol(",")
         let change = try parsePropertyChangeExpr()
         try expectSymbol(")")

@@ -91,7 +91,7 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertTrue(response.isFailure)
     }
 
-    func testMatchedAnnouncementExpectationWinsOverUnrelatedTraceAnnouncement() throws {
+    func testMatchedAnnouncementExpectationWinsOverUnrelatedObservedNotification() throws {
         let response = FenceResponse.action(
             command: .wait,
             result: ActionResult.success(
@@ -100,7 +100,7 @@ extension TheFenceCompactFormattingContractTests {
             ),
             expectation: ExpectationResult(
                 met: true,
-                predicate: .announcement("Ticket saved."),
+                predicate: .notification("Ticket saved."),
                 actual: "Ticket saved."
             )
         )
@@ -155,12 +155,12 @@ extension TheFenceCompactFormattingContractTests {
     }
 
     func testScreenExpectationFailureHintUsesTypedElementChangesRegardlessOfActualText() throws {
-        let trace = makeTestTrace(
+        let evidence = makeObservationEvidence(
             before: makeTestInterface(elementCount: 1),
             after: makeTestInterface(elementCount: 2)
         )
         let result = HeistResultFixture.actionResult(
-            traceEvidence: makeTestTraceEvidence(trace, completeness: .incomplete)
+            observationEvidence: evidence
         )
         let response = FenceResponse.action(
             command: .activate,
@@ -216,15 +216,15 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertFalse(compact.contains(".screenChanged requires a screen-level transition"), compact)
     }
 
-    func testActivateNoChangeExpectationFailureUsesTypedSettledTraceRegardlessOfActualText() throws {
+    func testActivateNoChangeExpectationFailureUsesCompleteEvidenceRegardlessOfActualText() throws {
         let unchanged = makeTestInterface(elementCount: 1)
-        let trace = makeTestTrace(before: unchanged, after: unchanged)
+        let evidence = makeObservationEvidence(
+            before: unchanged,
+            completeness: .complete
+        )
         let result = ActionResult.success(
             payload: .activate,
-            observation: .settledTrace(
-                makeTestTraceEvidence(trace, completeness: .complete),
-                .settled(duration: 1)
-            )
+            observation: .observed(evidence)
         )
         let response = FenceResponse.action(
             command: .activate,
@@ -269,7 +269,7 @@ extension TheFenceCompactFormattingContractTests {
     }
 
     func testActivateNoChangeExpectationHintDoesNotTrustNoChangeActualText() throws {
-        let trace = makeTestTrace(
+        let evidence = makeObservationEvidence(
             before: makeTestInterface(elementCount: 1),
             after: makeTestInterface(elementCount: 2)
         )
@@ -277,7 +277,7 @@ extension TheFenceCompactFormattingContractTests {
             command: .activate,
             result: HeistResultFixture.actionResult(
                 payload: .activate,
-                traceEvidence: makeTestTraceEvidence(trace, completeness: .incomplete)
+                observationEvidence: evidence
             ),
             expectation: ExpectationResult(
                 met: false,
@@ -295,10 +295,8 @@ extension TheFenceCompactFormattingContractTests {
 
     func testActivateNoChangeExpectationHintRequiresSuccessfulActivateMethod() {
         let unchanged = makeTestInterface(elementCount: 1)
-        let trace = makeTestTrace(before: unchanged, after: unchanged)
-        let observation = ActionResultObservationEvidence.settledTrace(
-            makeTestTraceEvidence(trace, completeness: .incomplete),
-            .settled(duration: 1)
+        let observation = ActionResultObservationEvidence.observed(
+            makeObservationEvidence(before: unchanged, after: unchanged)
         )
         let expectation = ExpectationResult(
             met: false,
@@ -343,15 +341,13 @@ extension TheFenceCompactFormattingContractTests {
     }
 
     func testActivateNoChangeCarriesActivationTraceWithoutFailingAction() throws {
+        let interface = makeTestInterface(elementCount: 3)
         let response = FenceResponse.action(
             command: .activate,
             result: HeistResultFixture.actionResult(
                 payload: .activate,
-                traceEvidence: makeTestTraceEvidence(
-                    makeTestTrace(
-                        before: makeTestInterface(elementCount: 3),
-                        after: makeTestInterface(elementCount: 3)
-                    ),
+                observationEvidence: makeObservationEvidence(
+                    before: interface,
                     completeness: .complete
                 ),
                 activationTrace: ActivationTrace(.activationPointFallback(

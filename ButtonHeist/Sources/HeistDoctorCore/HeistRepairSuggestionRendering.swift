@@ -132,8 +132,11 @@ enum HeistRepairSuggestionRenderer {
         lastSuccess: HeistRepairEvidence,
         currentFailure: HeistRepairEvidence
     ) -> [RepairSuggestionReason] {
-        var reasons = changeFactReasons(source: .lastSuccess, facts: lastSuccess.changeFacts)
-        reasons.append(contentsOf: changeFactReasons(source: .currentFailure, facts: currentFailure.changeFacts))
+        var reasons = observedChangeReasons(source: .lastSuccess, changes: lastSuccess.observedChanges)
+        reasons.append(contentsOf: observedChangeReasons(
+            source: .currentFailure,
+            changes: currentFailure.observedChanges
+        ))
         if let expectation = lastSuccess.expectation, expectation.met {
             reasons.append(.lastSuccessfulExpectationMet)
         }
@@ -143,44 +146,14 @@ enum HeistRepairSuggestionRenderer {
         return reasons
     }
 
-    private static func changeFactReasons(
+    private static func observedChangeReasons(
         source: RepairEvidenceSource,
-        facts: [AccessibilityTrace.ChangeFact]
+        changes: [RepairChangeFactObservation]
     ) -> [RepairSuggestionReason] {
-        guard !facts.isEmpty else {
+        guard !changes.isEmpty else {
             return [.changeFact(source, .noSemanticChange)]
         }
-        return facts.flatMap { fact in
-            changeFactObservations(fact).map { .changeFact(source, $0) }
-        }
-    }
-
-    private static func changeFactObservations(
-        _ fact: AccessibilityTrace.ChangeFact
-    ) -> [RepairChangeFactObservation] {
-        switch fact {
-        case .screenChanged:
-            return [.screenChange]
-        case .elementsChanged(let elements):
-            let valueChanges = elements.updated.flatMap(\.changes)
-                .filter { $0.property == .value }
-                .map { RepairChangeFactObservation.valueChange(
-                    old: $0.oldDisplayText,
-                    new: $0.newDisplayText
-                ) }
-            var observations: [RepairChangeFactObservation] = []
-            if !elements.disappeared.isEmpty {
-                observations.append(.semanticElementsRemoved)
-            }
-            if !elements.appeared.isEmpty {
-                observations.append(.semanticElementsAdded)
-            }
-            observations.append(contentsOf: valueChanges)
-            if observations.isEmpty {
-                observations.append(.elementChanges)
-            }
-            return observations
-        }
+        return changes.map { .changeFact(source, $0) }
     }
 
     private static func confidence(

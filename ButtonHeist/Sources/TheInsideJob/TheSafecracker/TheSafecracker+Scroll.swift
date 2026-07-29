@@ -126,13 +126,13 @@ extension TheSafecracker {
         return .moved
     }
 
-    func revealContentPoint(
-        _ contentPoint: ScrollContentPoint,
+    func revealViewPoint(
+        _ viewPoint: ViewPoint,
         in scrollView: UIScrollView
     ) -> ScrollPrimitiveOutcome {
         guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return .unavailable }
 
-        let point = contentPoint.cgPoint
+        let point = viewPoint.cgPoint
         let insets = scrollView.adjustedContentInset
         let visibleWidth = max(1, scrollView.bounds.width - insets.left - insets.right)
         let visibleHeight = max(1, scrollView.bounds.height - insets.top - insets.bottom)
@@ -162,8 +162,8 @@ extension TheSafecracker {
         fullVisibleRect: CGRect,
         in scrollView: UIScrollView
     ) -> CGRect {
-        let contentRect = scrollView.convert(screenRect, from: nil)
-        return fullVisibleRect.intersection(contentRect)
+        let viewRect = scrollView.convert(screenRect, from: nil)
+        return fullVisibleRect.intersection(viewRect)
     }
 
     private func visibleRect(in scrollView: UIScrollView, at offset: CGPoint) -> CGRect {

@@ -44,13 +44,13 @@ the same trade for the same reason — a heist is a bounded recording of an
 accessibility interaction, and crossing the line would make it a program that
 may never stop.
 
-**Settle-then-assert is EarlGrey's synchronization thesis, better specified.**
+**Observe-then-assert is EarlGrey's synchronization thesis, made replayable.**
 EarlGrey's insight was that a test should act only when the app is idle,
 and that the framework — not the author — should own knowing when that is.
-The Button Heist keeps the thesis and specifies the mechanism publicly:
-"settled" has an exact fingerprint-based definition
-([Scope and limits](SCOPE-AND-LIMITS.md)), and every step also asserts its
-outcome against the settled tree after acting.
+The Button Heist keeps the thesis without a hidden idle currency. The Vault
+commits complete snapshots and ordered events; the heist machine evaluates its
+outcome from that replayable history
+([Scope and limits](SCOPE-AND-LIMITS.md)).
 
 **One target language prevents projection drift.** Actions, predicates, and
 `get_interface` subtree queries all ask the same question: which accessibility
@@ -64,10 +64,11 @@ containers.
 several meaningful edges before an expectation is fulfilled. A pair of endpoint
 captures cannot distinguish a transient appearance from no change, and it
 cannot preserve notification evidence that arrives between equal hashes.
-`AccessibilityTrace` therefore retains settled captures and derives one ordered
-`ChangeFact` stream. A screen boundary is represented in that stream as all old
-nodes departing, the screen marker, then all new nodes arriving. Updates remain
-same-generation facts.
+`Observation.History` therefore retains ordered events and projects bounded
+`Observation.Evidence` for each result. A screen boundary is represented in
+that event sequence as all old nodes departing, the screen marker, then all new
+nodes arriving. Updates are valid only when no screen marker separates their
+snapshots.
 
 The public `delta` deliberately solves a different problem: compact response
 rendering. It folds facts in temporal order and squashes them like stacked
@@ -105,7 +106,7 @@ The predicate grammar deliberately omits general negation and disjunction. An
 expectation is a contract, and an open-ended negation — "the value is anything
 except 5" — is a green light over an undefined state: it passes for wrong
 reasons as easily as right ones. Where a negative matters, the grammar gives
-it a positive form: `.missing(...)` asserts absence from the settled tree, and
+it a positive form: `.missing(...)` asserts absence from current admitted truth, and
 trait exclusion (`.exclude(.traits([.selected]))`) asserts "a button that is
 not selected." Where a meaningful state is not yet expressible as a typed
 check, the right move is to expose it as one — fix the interface, not the

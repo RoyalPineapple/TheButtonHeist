@@ -23,63 +23,6 @@ private struct Relaxation {
 }
 
 extension TheVault {
-
-    func presenceWaitTimeoutMessage(
-        for predicate: ResolvedAccessibilityPredicate,
-        elapsed: String
-    ) -> String? {
-        let target: ResolvedAccessibilityTarget
-        let absent: Bool
-        switch predicate {
-        case .exists(let accessibilityTarget):
-            target = accessibilityTarget
-            absent = false
-        case .missing(let accessibilityTarget):
-            target = accessibilityTarget
-            absent = true
-        default:
-            return nil
-        }
-
-        let expected = absent ? "element to disappear" : "element to appear"
-        let reason = absent ? "element still present" : "element not found"
-        let diagnostics = resolveTarget(target).diagnostics
-        var parts = [
-            "timed out after \(elapsed)s waiting for \(expected)",
-            "expected: \(waitForTargetDescription(target))",
-            "interface: \(interfaceElementCount) elements",
-        ]
-        if let screenId = lastScreenId {
-            parts.append("screen: \(screenId)")
-        }
-        if diagnostics.isEmpty {
-            parts.append("last result: \(reason)")
-        } else {
-            parts.append("last result: \(reason): \(diagnostics)")
-        }
-        parts.append(
-            "Next: get_interface() to inspect current elements, " +
-                "then retry wait with an exact predicate."
-        )
-        return parts.joined(separator: "; ")
-    }
-
-    private func waitForTargetDescription(_ target: ResolvedAccessibilityTarget) -> String {
-        switch target {
-        case .predicate(let predicate, let ordinal):
-            var description = Diagnostics.formatMatcher(predicate)
-            if let ordinal {
-                description += " ordinal=\(ordinal)"
-            }
-            return description
-        case .within(let container, let target):
-            return "\(waitForTargetDescription(target)) within \(container)"
-        case .container(let container, let ordinal):
-            guard let ordinal else { return "container \(container)" }
-            return "container \(container) ordinal=\(ordinal)"
-        }
-    }
-
     enum Diagnostics {
 
     static func matcherNotFound(
@@ -292,16 +235,17 @@ extension TheVault {
     }
 
     private static func exactPredicateDescription(_ failedPredicate: ResolvedElementPredicate, element: HeistElement) -> String {
-        ResolvedElementPredicate(failedPredicate.checks.compactMap { check in
+        let properties = element.semantics.assertable
+        return ResolvedElementPredicate(failedPredicate.checks.compactMap { check in
             switch check {
             case .label:
-                return element.label.map { .label(.exact($0)) }
+                return properties.label.map { .label(.exact($0)) }
             case .identifier:
-                return element.identifier.map { .identifier(.exact($0)) }
+                return properties.identifier.map { .identifier(.exact($0)) }
             case .value:
-                return element.value.map { .value(.exact($0)) }
+                return properties.value.map { .value(.exact($0)) }
             case .hint:
-                return element.hint.map { .hint(.exact($0)) }
+                return properties.hint.map { .hint(.exact($0)) }
             case .traits(let traits):
                 return .traits(traits)
             case .actions(let actions):

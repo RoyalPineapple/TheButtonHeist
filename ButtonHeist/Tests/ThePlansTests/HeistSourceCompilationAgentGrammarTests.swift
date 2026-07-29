@@ -167,6 +167,19 @@ import Testing
     ))
     expect(beforeOnlyUpdate, contains: "value update predicate requires after when before is set")
 
+    let containerUpdate = compileError(root(
+        #"Activate(.label("Pay")).expect("# +
+            #".elementsChanged([.updated(.container(.identifier("Checkout")), .value("$3"))]))"#
+    ))
+    expect(containerUpdate, contains: "element updates require an element target")
+
+    let scopedContainerUpdate = compileError(root(
+        #"Activate(.label("Pay")).expect("# +
+            #".elementsChanged([.updated(.within(container: .identifier("Checkout"), "# +
+            #".container(.identifier("List"))), .value("$3"))]))"#
+    ))
+    expect(scopedContainerUpdate, contains: "element updates require an element target")
+
     // An element assertion written inside `.screen(...)` is the costume mistake:
     // `.screen` names the arrived-at screen, so the correction has to point at
     // `.elements([...])`, which is where an element question belongs.

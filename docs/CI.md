@@ -97,7 +97,7 @@ the coverage contract; CI does not partition these suites with test selectors:
 | Scheme | Coverage |
 |--------|----------|
 | `TheInsideJobTests` | Deterministic core runtime and protocol tests |
-| `TheInsideJobIntegrationTests` | Real loopback, TLS, live-window, gesture, and settle integration tests |
+| `TheInsideJobIntegrationTests` | Real loopback, TLS, live-window, gesture, and observation integration tests |
 | `DogfoodFeatureFlowTests` | One semantic list mutation through the public heist API |
 | `DogfoodRuntimeContractTests` | Public roots/prebuilt plans and advanced control flow |
 | `AdversarialMutationTests` | Async reveal and stale-live-object recovery |

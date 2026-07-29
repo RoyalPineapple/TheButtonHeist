@@ -59,7 +59,6 @@ final class ActionResultEvidenceContractTests: XCTestCase {
             .announcement("Ready"),
             .observed(complete),
             .observed(incomplete),
-            .settled(incomplete, .settled(duration: 12)),
         ]
 
         for observation in observations {
@@ -88,10 +87,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         )
         let result = ActionResult.activationSuccess(
             message: "done",
-            observation: .settled(
-                observationEvidence,
-                .settled(duration: 125)
-            ),
+            observation: .observed(observationEvidence),
             subjectEvidence: try weakActivationSubjectEvidence(),
             activationTrace: ActivationTrace(.activationPointFallback(
                 axActivateReturned: false,
@@ -108,7 +104,6 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         let encodedObservationEvidence = try XCTUnwrap(
             observation["observationEvidence"] as? [String: Any]
         )
-        let settlement = try XCTUnwrap(observation["settlement"] as? [String: Any])
         let timing = try XCTUnwrap(evidence["timing"] as? [String: Any])
 
         XCTAssertEqual(Set(object.keys), Set(["outcome", "method", "message", "evidence"]))
@@ -116,23 +111,19 @@ final class ActionResultEvidenceContractTests: XCTestCase {
             Set(evidence.keys),
             Set(["observation", "subjectEvidence", "activationTrace", "timing", "warning"])
         )
-        XCTAssertEqual(observation["kind"] as? String, "settled")
-        XCTAssertEqual(Set(observation.keys), Set(["kind", "observationEvidence", "settlement"]))
+        XCTAssertEqual(observation["kind"] as? String, "observed")
+        XCTAssertEqual(Set(observation.keys), Set(["kind", "observationEvidence"]))
         XCTAssertEqual(
             Set(encodedObservationEvidence.keys),
             Set(["baseline", "current", "events", "completeness"])
         )
         XCTAssertEqual(encodedObservationEvidence["completeness"] as? String, "incomplete")
         XCTAssertNil(observation["announcement"])
-        XCTAssertEqual(settlement["kind"] as? String, "settled")
-        XCTAssertEqual(settlement["durationMs"] as? Int, 125)
         XCTAssertEqual(timing["actionDispatchMs"] as? Int, 4)
-        XCTAssertNil(timing["settleMs"])
 
         let decoded = try JSONDecoder().decode(ActionResult.self, from: encoded)
         XCTAssertEqual(decoded, result)
         XCTAssertEqual(decoded.announcement, "Checkout")
-        XCTAssertEqual(decoded.settleTimeMs, 125)
         XCTAssertEqual(decoded.timing?.actionDispatchMs, 4)
         XCTAssertEqual(decoded.warning?.code, "activation_weak_affordance_evidence")
     }
@@ -237,19 +228,6 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         """)
     }
 
-    func testEvidenceDecodingRejectsSettlementTimingOutsideObservation() {
-        assertActionResultRejects("""
-        {
-          "outcome": {"kind": "success"},
-          "method": "wait",
-          "evidence": {
-            "observation": {"kind": "none"},
-            "timing": {"settleMs": 5}
-          }
-        }
-        """)
-    }
-
     func testAnnouncementAdmissionRejectsEmptySourceAndJSONValues() throws {
         XCTAssertThrowsError(try ActionAnnouncementText(validating: "")) { error in
             XCTAssertEqual(String(describing: error), "action announcement must not be empty")
@@ -278,41 +256,13 @@ final class ActionResultEvidenceContractTests: XCTestCase {
                 "elapsed milliseconds must not be negative"
             )
         }
-        XCTAssertThrowsError(try JSONDecoder().decode(
-            ActionSettlementEvidence.self,
-            from: Data(#"{"kind":"settled","durationMs":-1}"#.utf8)
-        ))
-    }
-
-    /// A timed-out settlement cannot report success on any axis.
-    ///
-    /// This used to be a decoder rejection: the wire carried a separate
-    /// settlement `path`, so a `timedOut` evidence could be handed a successful
-    /// one and had to be refused. The kind is now the only discriminator and
-    /// every success flag is derived from it, so the contradiction is
-    /// unrepresentable rather than rejected. Assert the derivation instead.
-    func testTimedOutSettlementReportsNoSuccessOnAnyAxis() throws {
-        let decoded = try JSONDecoder().decode(
-            ActionSettlementEvidence.self,
-            from: Data(
-                #"{"kind":"timedOut","durationMs":125}"#.utf8
-            )
-        )
-
-        XCTAssertFalse(decoded.settled)
-        XCTAssertFalse(decoded.readinessEstablished)
-        XCTAssertFalse(decoded.observationHandoffCompleted)
-        XCTAssertEqual(decoded, .timedOut(duration: 125))
     }
 
     func testActionPerformanceTimingRejectsEveryNegativeWireField() {
         for key in [
-            "beforeObservationMs",
             "targetResolutionMs",
             "actionDispatchMs",
             "interactionMs",
-            "finalSemanticEvidenceMs",
-            "resultAssemblyMs",
             "totalMs",
         ] {
             XCTAssertThrowsError(try JSONDecoder().decode(

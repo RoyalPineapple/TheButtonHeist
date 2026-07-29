@@ -2,14 +2,14 @@ import Foundation
 
 /// What a caller asks of a screen boundary.
 ///
-/// A screen boundary is a tick like any other, so it takes a predicate like any
+/// A screen boundary is an event like any other, so it takes a predicate like any
 /// other. This one reads screen facts — the identity the run was on and the one
 /// it arrived at — and never a tree. Which elements left and which arrived are
 /// element questions, answered by the snapshots on either side of the boundary.
 ///
 /// An empty predicate matches any boundary: `changed(.screen())` asks only that
-/// a screen change happened, the same way `announcement` with no match asks only
-/// that something was spoken.
+/// a screen change happened, the same way an empty notification predicate asks
+/// only that a notification was published.
 public struct ScreenPredicate: Codable, Sendable, Equatable, Hashable {
     /// The screen arrived at. Nil asks nothing of it.
     public let match: StringMatch?
@@ -47,7 +47,7 @@ extension ScreenPredicate: CustomStringConvertible {
 ///
 /// Identity only, no tree. Which screen was left is not here because nothing
 /// asks — a predicate about the crossing is a predicate about where it landed.
-public struct ScreenFacts: Sendable, Equatable {
+public struct ScreenFacts: Codable, Sendable, Equatable {
     public let idAfter: String?
 
     public init(idAfter: String?) {

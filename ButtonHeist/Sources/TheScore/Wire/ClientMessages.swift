@@ -66,8 +66,8 @@ public enum ClientMessage: Codable, Sendable, Equatable {
     /// Read text from the general pasteboard
     case getPasteboard
 
-    /// Read recent spoken accessibility text captured from public AX notifications.
-    case getAnnouncements
+    /// Read canonical accessibility notifications retained by observation history.
+    case getNotifications
 
     /// Request a capture of the current screen
     case requestScreen(ScreenRequestPayload = .init())
@@ -87,15 +87,22 @@ public enum ClientMessage: Codable, Sendable, Equatable {
 public struct HeistPlanRun: Codable, Sendable, Equatable {
     public let plan: HeistPlan
     public let argument: HeistArgument
+    public let timeout: HeistTimeout
 
-    public init(plan: HeistPlan, argument: HeistArgument = .none) {
+    public init(
+        plan: HeistPlan,
+        argument: HeistArgument = .none,
+        timeout: HeistTimeout = .default
+    ) {
         self.plan = plan
         self.argument = argument
+        self.timeout = timeout
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case plan
         case argument
+        case timeout
     }
 
     public init(from decoder: Decoder) throws {
@@ -103,11 +110,13 @@ public struct HeistPlanRun: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         plan = try container.decode(HeistPlan.self, forKey: .plan)
         argument = try container.decode(HeistArgument.self, forKey: .argument)
+        timeout = try container.decode(HeistTimeout.self, forKey: .timeout)
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(plan, forKey: .plan)
         try container.encode(argument, forKey: .argument)
+        try container.encode(timeout, forKey: .timeout)
     }
 }

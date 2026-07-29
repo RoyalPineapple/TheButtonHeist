@@ -26,17 +26,32 @@ extension TheFence {
         try await sendAndAwait(message, expecting: .screen, timeout: timeout)
     }
 
-    func sendAndAwaitAnnouncements(timeout: TimeInterval) async throws -> AnnouncementListPayload {
-        try await sendAndAwait(.getAnnouncements, expecting: .announcements, timeout: timeout)
+    func sendAndAwaitNotifications(
+        timeout: TimeInterval
+    ) async throws -> [Observation.Notification] {
+        try await sendAndAwait(
+            .getNotifications,
+            expecting: .notifications,
+            timeout: timeout
+        )
     }
 
     func sendAndAwaitHeistExecution(
         _ plan: HeistPlan,
         argument: HeistArgument = .none,
-        timeout: TimeInterval
+        timeout: HeistTimeout,
+        transportHeadroom: TimeInterval
     ) async throws -> HeistResult {
-        let message = ClientMessage.heistPlan(HeistPlanRun(plan: plan, argument: argument))
-        return try await sendAndAwait(message, expecting: .heistExecution, timeout: timeout)
+        let message = ClientMessage.heistPlan(HeistPlanRun(
+            plan: plan,
+            argument: argument,
+            timeout: timeout
+        ))
+        return try await sendAndAwait(
+            message,
+            expecting: .heistExecution,
+            timeout: timeout.seconds + transportHeadroom
+        )
     }
 
     func cancelAllPendingRequests(error: Error = FenceError.actionTimeout) {

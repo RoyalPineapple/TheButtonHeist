@@ -3,39 +3,27 @@ import ThePlans
 
 /// Optional local timing breakdown for one observed action pipeline.
 public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
-    public let beforeObservationMs: ElapsedMilliseconds?
     public let targetResolutionMs: ElapsedMilliseconds?
     public let actionDispatchMs: ElapsedMilliseconds?
     public let interactionMs: ElapsedMilliseconds?
-    public let finalSemanticEvidenceMs: ElapsedMilliseconds?
-    public let resultAssemblyMs: ElapsedMilliseconds?
     public let totalMs: ElapsedMilliseconds?
 
     public init(
-        beforeObservationMs: ElapsedMilliseconds? = nil,
         targetResolutionMs: ElapsedMilliseconds? = nil,
         actionDispatchMs: ElapsedMilliseconds? = nil,
         interactionMs: ElapsedMilliseconds? = nil,
-        finalSemanticEvidenceMs: ElapsedMilliseconds? = nil,
-        resultAssemblyMs: ElapsedMilliseconds? = nil,
         totalMs: ElapsedMilliseconds? = nil
     ) {
-        self.beforeObservationMs = beforeObservationMs
         self.targetResolutionMs = targetResolutionMs
         self.actionDispatchMs = actionDispatchMs
         self.interactionMs = interactionMs
-        self.finalSemanticEvidenceMs = finalSemanticEvidenceMs
-        self.resultAssemblyMs = resultAssemblyMs
         self.totalMs = totalMs
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case beforeObservationMs
         case targetResolutionMs
         case actionDispatchMs
         case interactionMs
-        case finalSemanticEvidenceMs
-        case resultAssemblyMs
         case totalMs
     }
 
@@ -43,15 +31,9 @@ public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ActionPerformanceTiming")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            beforeObservationMs: try container.decodeIfPresent(ElapsedMilliseconds.self, forKey: .beforeObservationMs),
             targetResolutionMs: try container.decodeIfPresent(ElapsedMilliseconds.self, forKey: .targetResolutionMs),
             actionDispatchMs: try container.decodeIfPresent(ElapsedMilliseconds.self, forKey: .actionDispatchMs),
             interactionMs: try container.decodeIfPresent(ElapsedMilliseconds.self, forKey: .interactionMs),
-            finalSemanticEvidenceMs: try container.decodeIfPresent(
-                ElapsedMilliseconds.self,
-                forKey: .finalSemanticEvidenceMs
-            ),
-            resultAssemblyMs: try container.decodeIfPresent(ElapsedMilliseconds.self, forKey: .resultAssemblyMs),
             totalMs: try container.decodeIfPresent(ElapsedMilliseconds.self, forKey: .totalMs)
         )
     }
@@ -87,25 +69,15 @@ extension ActionAnnouncementText: ExpressibleByStringLiteral {
 public enum ActionResultObservationEvidence: Codable, Sendable, Equatable {
     case none
     case announcement(ActionAnnouncementText)
-    case trace(AccessibilityTraceEvidence)
-    case settledTrace(AccessibilityTraceEvidence, ActionSettlementEvidence)
+    case observed(Observation.Evidence)
 
-    public var traceEvidence: AccessibilityTraceEvidence? {
+    public var observationEvidence: Observation.Evidence? {
         switch self {
-        case .trace(let evidence), .settledTrace(let evidence, _):
+        case .observed(let evidence):
             return evidence
         case .none, .announcement:
             return nil
         }
-    }
-
-    public var accessibilityTrace: AccessibilityTrace? {
-        traceEvidence?.trace
-    }
-
-    public var settlement: ActionSettlementEvidence? {
-        guard case .settledTrace(_, let settlement) = self else { return nil }
-        return settlement
     }
 
     public var announcement: String? {
@@ -114,23 +86,21 @@ public enum ActionResultObservationEvidence: Codable, Sendable, Equatable {
             return nil
         case .announcement(let text):
             return text.description
-        case .trace(let evidence), .settledTrace(let evidence, _):
-            return evidence.trace.capturedAnnouncements.first?.text
+        case .observed(let evidence):
+            return evidence.notificationTexts.first
         }
     }
 
     private enum Kind: String, Codable {
         case none
         case announcement
-        case trace
-        case settledTrace
+        case observed
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case kind
         case announcement
-        case traceEvidence
-        case settlement
+        case observationEvidence
     }
 
     public init(from decoder: Decoder) throws {
@@ -149,20 +119,13 @@ public enum ActionResultObservationEvidence: Codable, Sendable, Equatable {
                 typeName: "announcement action observation"
             )
             self = .announcement(try container.decode(ActionAnnouncementText.self, forKey: .announcement))
-        case .trace:
+        case .observed:
             try container.rejectIncompatibleFields(
-                allowing: [.kind, .traceEvidence],
-                typeName: "trace action observation"
+                allowing: [.kind, .observationEvidence],
+                typeName: "observed action observation"
             )
-            self = .trace(try container.decode(AccessibilityTraceEvidence.self, forKey: .traceEvidence))
-        case .settledTrace:
-            try container.rejectIncompatibleFields(
-                allowing: [.kind, .traceEvidence, .settlement],
-                typeName: "settledTrace action observation"
-            )
-            self = .settledTrace(
-                try container.decode(AccessibilityTraceEvidence.self, forKey: .traceEvidence),
-                try container.decode(ActionSettlementEvidence.self, forKey: .settlement)
+            self = .observed(
+                try container.decode(Observation.Evidence.self, forKey: .observationEvidence)
             )
         }
     }
@@ -175,13 +138,9 @@ public enum ActionResultObservationEvidence: Codable, Sendable, Equatable {
         case .announcement(let text):
             try container.encode(Kind.announcement, forKey: .kind)
             try container.encode(text, forKey: .announcement)
-        case .trace(let evidence):
-            try container.encode(Kind.trace, forKey: .kind)
-            try container.encode(evidence, forKey: .traceEvidence)
-        case .settledTrace(let evidence, let settlement):
-            try container.encode(Kind.settledTrace, forKey: .kind)
-            try container.encode(evidence, forKey: .traceEvidence)
-            try container.encode(settlement, forKey: .settlement)
+        case .observed(let evidence):
+            try container.encode(Kind.observed, forKey: .kind)
+            try container.encode(evidence, forKey: .observationEvidence)
         }
     }
 

@@ -331,7 +331,7 @@ struct LiveCapture {
             try validateScrollEvidence(
                 at: item.path,
                 membership: treeElement.scrollMembership,
-                observedPoint: treeElement.observedScrollContentActivationPoint,
+                viewSpace: treeElement.geometry.view,
                 hierarchy: snapshot.hierarchy
             )
         }
@@ -356,7 +356,7 @@ struct LiveCapture {
             try validateScrollEvidence(
                 at: item.path,
                 membership: treeContainer.scrollMembership,
-                observedPoint: treeContainer.observedScrollContentActivationPoint,
+                viewSpace: treeContainer.viewSpace,
                 hierarchy: snapshot.hierarchy
             )
             if treeContainer.scrollInventory != nil, !item.container.isScrollable {
@@ -368,14 +368,17 @@ struct LiveCapture {
     private static func validateScrollEvidence(
         at path: TreePath,
         membership: InterfaceTree.ScrollMembership?,
-        observedPoint: InterfaceTree.ObservedScrollContentActivationPoint?,
+        viewSpace: HeistElement.Geometry.ViewSpace,
         hierarchy: [AccessibilityHierarchy]
     ) throws {
-        if observedPoint != nil, membership == nil {
-            throw ValidationError.observedScrollPointWithoutMembership(path: path)
+        guard let membership else {
+            guard viewSpace.ownerPath == .root else {
+                throw ValidationError.observedScrollPointWithoutMembership(path: path)
+            }
+            return
         }
-        guard let membership else { return }
-        guard membership.containerPath != path,
+        guard viewSpace.ownerPath == membership.containerPath,
+              membership.containerPath != path,
               path.hasPrefix(membership.containerPath),
               case .container(let container, _) = hierarchy.node(at: membership.containerPath),
               container.isScrollable

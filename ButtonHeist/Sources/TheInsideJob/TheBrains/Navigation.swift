@@ -30,7 +30,6 @@ final class Navigation {
                 return await self.exploreScreen(
                     target: target,
                     exitPosition: .current,
-                    searchOrder: .backwardFirst,
                 )
             },
             revealKnownTarget: { [weak self] request in

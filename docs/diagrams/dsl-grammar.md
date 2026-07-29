@@ -45,7 +45,7 @@ The concrete predicate path is shared everywhere:
   screen and names no elements. `.elementsChanged` carries `ElementAssertion`,
   which permits `exists`, `missing`, `appeared`, `disappeared`, and `updated`.
   Current-tree assertions use the resolved target directly; transition
-  assertions use observation-window evidence.
+  assertions use `Observation.Evidence`.
 
 The supported public action constructors are:
 

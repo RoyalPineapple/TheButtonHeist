@@ -64,12 +64,22 @@ extension TheVaultResolutionTests {
                     heistId: "checkout_pay",
                     path: checkoutPath,
                     scrollMembership: nil,
+                    geometry: testGeometry(
+                        for: checkoutPay,
+                        ownerPath: .root,
+                        screen: TheVault.onscreenSpace(for: checkoutPay)
+                    ),
                     element: checkoutPay
                 ),
                 "cart_pay": InterfaceTree.Element(
                     heistId: "cart_pay",
                     path: cartPath,
                     scrollMembership: nil,
+                    geometry: testGeometry(
+                        for: cartPay,
+                        ownerPath: .root,
+                        screen: TheVault.onscreenSpace(for: cartPay)
+                    ),
                     element: cartPay
                 ),
             ],
@@ -113,6 +123,11 @@ extension TheVaultResolutionTests {
                         heistId: "review_sale",
                         path: staleElementPath,
                         scrollMembership: InterfaceTree.ScrollMembership(containerPath: containerPath, index: 0),
+                        geometry: testGeometry(
+                            for: reviewSale,
+                            ownerPath: containerPath,
+                            screen: TheVault.onscreenSpace(for: reviewSale)
+                        ),
                         element: reviewSale
                     ),
                 ],
@@ -121,7 +136,11 @@ extension TheVaultResolutionTests {
                         container: container,
                         path: containerPath,
                         containerName: "order_entry_container",
-                        contentFrame: nil
+                        viewSpace: HeistElement.Geometry.ViewSpace(
+                            ownerPath: .root,
+                            frame: try ViewRect(validating: container.frame.cgRect),
+                            activationPoint: nil
+                        )
                     ),
                 ]
             ),

@@ -33,6 +33,13 @@ extension HeistCanonicalSwiftDSLRenderer {
         }
     }
 
+    func render(
+        target: AccessibilityElementTarget,
+        environment: RenderEnvironment
+    ) throws -> String {
+        try render(target: target.accessibilityTarget, environment: environment)
+    }
+
     func render(container: ContainerPredicate, environment: RenderEnvironment) throws -> String {
         let checks = container.authoredChecks
         if let shorthand = try renderSingleContainerCheck(checks, environment: environment) {

@@ -10,7 +10,9 @@ extension ElementEdits {
     var addedOptional: [HeistElement]? { added.isEmpty ? nil : added }
     /// Removed elements are wire `HeistElement`s (no heistId). Project their
     /// labels for assertion convenience.
-    var removedOptional: [String]? { removed.isEmpty ? nil : removed.map { $0.label ?? "" } }
+    var removedOptional: [String]? {
+        removed.isEmpty ? nil : removed.map { $0.semantics.assertable.label ?? "" }
+    }
     var updatedOptional: [ElementUpdate]? { updated.isEmpty ? nil : updated }
 }
 
@@ -95,26 +97,34 @@ final class WireConverterTests: XCTestCase {
         customRotors: [AccessibilityElement.CustomRotor] = [],
         respondsToUserInteraction: Bool = true
     ) -> InterfaceTree.Element {
-        InterfaceTree.Element(
+        let element = makeElement(
+            label: label, value: value, identifier: identifier, hint: hint,
+            traits: traits, frameX: frameX, frameY: frameY,
+            frameWidth: frameWidth, frameHeight: frameHeight,
+            activationPoint: activationPoint,
+            customContent: customContent,
+            customRotors: customRotors,
+            respondsToUserInteraction: respondsToUserInteraction
+        )
+        return InterfaceTree.Element(
             heistId: heistId,
             scrollMembership: nil,
-            element: makeElement(
-                label: label, value: value, identifier: identifier, hint: hint,
-                traits: traits, frameX: frameX, frameY: frameY,
-                frameWidth: frameWidth, frameHeight: frameHeight,
-                activationPoint: activationPoint,
-                customContent: customContent,
-                customRotors: customRotors,
-                respondsToUserInteraction: respondsToUserInteraction
-            )
+            geometry: testGeometry(
+                for: element,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: element)
+            ),
+            element: element
         )
     }
 
     /// Build a test tree node from a InterfaceTree.Element leaf.
     func wireLeaf(_ element: InterfaceTree.Element) -> TestInterfaceNode {
-        .parsedElement(
-            element.element,
-            actions: TheVault.WireConversion.convert(element.element).actions
+        .element(
+            TheVault.WireConversion.convert(
+                element.element,
+                geometry: element.geometry
+            )
         )
     }
 
@@ -273,9 +283,9 @@ final class WireConverterTests: XCTestCase {
         )
         let screen = TheVault.buildObservation(from: parse)
 
-        let annotations = WireConversion.toSemanticInterface(from: screen.tree).annotations.elements
+        let elements = WireConversion.toSemanticInterface(from: screen.tree).projectedElements
 
-        XCTAssertEqual(annotations.first?.actions, [])
+        XCTAssertEqual(elements.first?.semantics.assertable.actions, [])
     }
 
     func testToWireIncludesActivateFromParsedInteractivity() throws {
@@ -285,9 +295,12 @@ final class WireConverterTests: XCTestCase {
             respondsToUserInteraction: true
         )
 
-        let wire = WireConversion.convert(element.element)
+        let wire = WireConversion.convert(
+            element.element,
+            geometry: element.geometry
+        )
 
-        XCTAssertEqual(wire.actions, [.activate])
+        XCTAssertEqual(wire.semantics.assertable.actions, [.activate])
     }
 
     func testToWireIncludesTypeTextForEveryTextInputTrait() throws {
@@ -299,8 +312,13 @@ final class WireConverterTests: XCTestCase {
                 respondsToUserInteraction: false
             )
 
+            let wire = WireConversion.convert(
+                element.element,
+                geometry: element.geometry
+            )
+
             XCTAssertTrue(
-                WireConversion.convert(element.element).actions.contains(.typeText),
+                wire.semantics.assertable.actions.contains(.typeText),
                 "Expected typeText for \(trait.rawValue)"
             )
         }
@@ -314,7 +332,12 @@ final class WireConverterTests: XCTestCase {
             respondsToUserInteraction: false
         )
 
-        XCTAssertFalse(WireConversion.convert(element.element).actions.contains(.typeText))
+        let wire = WireConversion.convert(
+            element.element,
+            geometry: element.geometry
+        )
+
+        XCTAssertFalse(wire.semantics.assertable.actions.contains(.typeText))
     }
 
 }

@@ -42,6 +42,11 @@ extension TheVault {
     internal struct State {
         internal nonisolated static let defaultRetentionLimit = 256
 
+        internal struct HistoryBoundary: Sendable, Equatable {
+            internal let baseline: Observation.Snapshot?
+            internal let historyIndex: Int
+        }
+
         private struct NavigationAdmission {
             let scope: SemanticObservationScope
             let continuity: ScreenContinuity
@@ -51,7 +56,6 @@ extension TheVault {
         internal private(set) var currentSnapshot: Observation.Snapshot?
         internal private(set) var interfaceTree: InterfaceTree = .empty
         internal private(set) var scopedScreenChangedSequence: UInt64 = 0
-        internal private(set) var settleFailureDiagnostic: String?
 
         private var navigationAdmission: NavigationAdmission?
         private var admittedTripwireSignal: TheTripwire.TripwireSignal?
@@ -72,6 +76,15 @@ extension TheVault {
             notificationIndices.latest
         }
 
+        internal var notifications: [Observation.Notification] {
+            history.compactMap { event in
+                guard case .notification(let notification) = event else {
+                    return nil
+                }
+                return notification
+            }
+        }
+
         internal init(retentionLimit: Int = defaultRetentionLimit) {
             history = Observation.History(retentionLimit: retentionLimit)
         }
@@ -82,21 +95,19 @@ extension TheVault {
             interfaceTree = .empty
             admittedTripwireSignal = nil
             replacementRequired = true
-            settleFailureDiagnostic = nil
         }
 
         internal mutating func invalidateCurrentAdmission() {
             admittedTripwireSignal = nil
-            replacementRequired = true
         }
 
-        internal mutating func discardIfSignalChanged(
+        internal mutating func invalidateAdmissionIfSignalChanged(
             to tripwireSignal: TheTripwire.TripwireSignal
         ) {
             guard let admittedTripwireSignal,
                   admittedTripwireSignal != tripwireSignal
             else { return }
-            discardCurrentObservation()
+            invalidateCurrentAdmission()
         }
 
         internal func admittedObservation(
@@ -155,36 +166,51 @@ extension TheVault {
         }
 
         internal func evidence(
-            in range: Range<Int>,
-            baseline: Observation.Snapshot?
+            after boundary: HistoryBoundary
         ) -> Observation.Evidence {
             history.evidence(
-                in: range,
-                baseline: baseline,
+                in: boundary.historyIndex..<history.endIndex,
+                baseline: boundary.baseline,
                 current: currentSnapshot
             )
         }
 
-        internal mutating func readObservation(
+        internal func observationBoundary(
+            scope: SemanticObservationScope
+        ) -> HistoryBoundary {
+            let baseline: Observation.Snapshot?
+            switch admittedObservation(scope: scope, after: nil) {
+            case .success(let current):
+                baseline = current?.snapshot
+            case .failure:
+                baseline = nil
+            }
+            return HistoryBoundary(
+                baseline: baseline,
+                historyIndex: history.endIndex
+            )
+        }
+
+        internal mutating func commitObservation(
             _ admission: Observation.Admission
         ) -> Observation.Publication {
             let notificationRead = notificationRead(for: admission.notificationAdmission)
             let notifications = notificationRead.notifications
             let previousTree = interfaceTree
             let comparedTree: InterfaceTree
-            let candidateTree: InterfaceTree
             switch admission.scope {
             case .visible:
                 comparedTree = previousTree.updatingViewport(with: admission.tree)
-                candidateTree = switch admission.lineage {
-                case .resting: comparedTree
-                case .viewportMovement: previousTree.merging(admission.tree)
-                }
             case .discovery:
                 comparedTree = admission.discoveryCommitPolicy == .replaceInterface
                     ? admission.tree
                     : previousTree.merging(admission.tree)
-                candidateTree = comparedTree
+            }
+            let candidateTree = switch admission.lineage {
+            case .resting:
+                comparedTree
+            case .viewportMovement:
+                previousTree.merging(admission.tree)
             }
 
             let continuity: ScreenContinuity
@@ -254,7 +280,6 @@ extension TheVault {
             next.interfaceTree = nextTree
             next.notificationIndices[notificationRead.lane] = notifications.through
             next.scopedScreenChangedSequence = notifications.scopedScreenChangedThrough
-            next.settleFailureDiagnostic = nil
             next.replacementRequired = false
             next.admittedTripwireSignal = admission.tripwireSignal
             self = next
@@ -263,10 +288,6 @@ extension TheVault {
                 historyRange: historyRange,
                 events: events
             )
-        }
-
-        internal mutating func recordSettleFailure(_ diagnostic: String?) {
-            settleFailureDiagnostic = diagnostic
         }
 
         private func notificationRead(

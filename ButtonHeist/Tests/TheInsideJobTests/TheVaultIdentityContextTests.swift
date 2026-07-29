@@ -29,11 +29,14 @@ final class TheVaultIdentityContextTests: XCTestCase {
             hierarchy: hierarchy,
         )
 
-        XCTAssertEqual(result.contentFramesByPath[TreePath([0])]?.cgRect, container.frame.cgRect)
+        XCTAssertEqual(
+            result.viewSpacesByPath[TreePath([0])]?.frame?.cgRect,
+            container.frame.cgRect
+        )
         XCTAssertFalse(result.nestedInScrollViewPaths.contains(TreePath([0])))
     }
 
-    func testNestedContainerExpressedInParentScrollableContentSpace() {
+    func testIdentityContextKeepsParserViewGeometryAndScrollMembershipSeparate() {
         let scrollContainerPath = TreePath([0])
         let outer = AccessibilityContainer(
             type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 5000),
@@ -55,23 +58,19 @@ final class TheVaultIdentityContextTests: XCTestCase {
             scrollableContainerPaths: [scrollContainerPath]
         )
 
-        XCTAssertEqual(result.contentFramesByPath[TreePath([0])]?.cgRect, outer.frame.cgRect,
-                       "Top-level scrollable: no enclosing scrollable, frame stays in observation space")
+        XCTAssertEqual(
+            result.viewSpacesByPath[TreePath([0])]?.frame?.cgRect,
+            outer.frame.cgRect
+        )
         XCTAssertFalse(result.nestedInScrollViewPaths.contains(TreePath([0])))
 
-        let innerContent = result.contentFramesByPath[TreePath([0, 0])]
-        XCTAssertNotNil(innerContent)
-        XCTAssertEqual(innerContent?.origin.x ?? .nan, 0, accuracy: 0.5)
-        XCTAssertEqual(innerContent?.origin.y ?? .nan, 0, accuracy: 0.5,
-                       "Nested container identity drops moving viewport origin")
-        XCTAssertEqual(innerContent?.size, inner.frame.size.cgSize,
-                       "Size remains parser evidence; origin is capture-local hierarchy evidence")
+        let innerViewSpace = result.viewSpacesByPath[TreePath([0, 0])]
+        XCTAssertEqual(innerViewSpace?.ownerPath, .root)
+        XCTAssertEqual(innerViewSpace?.frame?.cgRect, inner.frame.cgRect)
         XCTAssertTrue(result.nestedInScrollViewPaths.contains(TreePath([0, 0])))
     }
 
-    func testNestedContainerScrollIndependence() {
-        // Same inner container, two different viewport-relative parser frames:
-        // semantic container identity must not follow moving viewport origin.
+    func testViewHierarchyOwnsViewGeometryWhenScreenCaptureMoves() {
         let scrollContainerPath = TreePath([0])
 
         let outer = AccessibilityContainer(
@@ -79,21 +78,23 @@ final class TheVaultIdentityContextTests: XCTestCase {
             frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 480)
         )
 
-        // Parse 1: inner is at observation-y 200.
         let innerParse1 = AccessibilityContainer(
             type: .list,
             frame: AccessibilityRect(x: 0, y: 200, width: 320, height: 200)
         )
+        let viewHierarchy: [AccessibilityHierarchy] = [
+            .container(outer, children: [
+                .container(innerParse1, children: [.element(makeElement(), traversalIndex: 0)])
+            ])
+        ]
         let result1 = TheVault.buildIdentityContext(
             hierarchy: [.container(outer, children: [
                 .container(innerParse1, children: [.element(makeElement(), traversalIndex: 0)])
             ])],
+            viewHierarchy: viewHierarchy,
             scrollableContainerPaths: [scrollContainerPath]
         )
 
-        // Parse 2: the same logical inner container — same data behind it — is
-        // now at observation-y -800. Its identity frame
-        // should still drop origin and keep size.
         let innerParse2 = AccessibilityContainer(
             type: .list,
             frame: AccessibilityRect(x: 0, y: -800, width: 320, height: 200)
@@ -102,12 +103,18 @@ final class TheVaultIdentityContextTests: XCTestCase {
             hierarchy: [.container(outer, children: [
                 .container(innerParse2, children: [.element(makeElement(), traversalIndex: 0)])
             ])],
+            viewHierarchy: viewHierarchy,
             scrollableContainerPaths: [scrollContainerPath]
         )
 
-        XCTAssertEqual(result1.contentFramesByPath[TreePath([0, 0])]?.origin.y ?? .nan, 0, accuracy: 0.5)
-        XCTAssertEqual(result2.contentFramesByPath[TreePath([0, 0])]?.origin.y ?? .nan, 0, accuracy: 0.5,
-                       "Inner container identity must be invariant under outer scroll")
+        XCTAssertEqual(
+            result1.viewSpacesByPath[TreePath([0, 0])],
+            result2.viewSpacesByPath[TreePath([0, 0])]
+        )
+        XCTAssertEqual(
+            result2.viewSpacesByPath[TreePath([0, 0])]?.frame?.cgRect,
+            innerParse1.frame.cgRect
+        )
         XCTAssertTrue(result1.nestedInScrollViewPaths.contains(TreePath([0, 0])))
         XCTAssertTrue(result2.nestedInScrollViewPaths.contains(TreePath([0, 0])))
     }
@@ -170,8 +177,8 @@ final class TheVaultIdentityContextTests: XCTestCase {
         )
         XCTAssertEqual(elementsByPath[outerElementPath]?.element, repeated)
         XCTAssertEqual(elementsByPath[innerElementPath]?.element, repeated)
-        XCTAssertEqual(result.contentFramesByPath[groupPath]?.origin, .zero)
-        XCTAssertEqual(result.contentFramesByPath[innerPath]?.origin, .zero)
+        XCTAssertEqual(result.viewSpacesByPath[groupPath]?.frame?.cgRect, group.frame.cgRect)
+        XCTAssertEqual(result.viewSpacesByPath[innerPath]?.frame?.cgRect, inner.frame.cgRect)
     }
 
     /// The regression this naming scheme exists for: a container that moves —
@@ -224,24 +231,41 @@ final class TheVaultIdentityContextTests: XCTestCase {
     }
 
     func testCoarseFrameComparisonUsesDeviceTolerances() {
-        XCTAssertEqual(CoarseFrameComparison.tolerance(for: .phone), 8)
-        XCTAssertEqual(CoarseFrameComparison.tolerance(for: .pad), 13)
+        XCTAssertEqual(CoarseFrameComparison.geometryTolerance(for: .phone), 8)
+        XCTAssertEqual(CoarseFrameComparison.geometryTolerance(for: .pad), 13)
     }
 
     /// `y = 100` is exactly where an 8pt grid would put a bucket edge, and a
     /// grid would call these frames moved. Distance has no edges to sit on.
     func testFramesWithinToleranceAreInTheSamePlaceEvenAcrossABucketEdge() {
         let onEdge = CGRect(x: 0, y: 100, width: 200, height: 44)
-        XCTAssertTrue(onEdge.isInSamePlace(as: onEdge.offsetBy(dx: 0, dy: 0.3), tolerance: 8))
-        XCTAssertTrue(onEdge.isInSamePlace(as: onEdge.offsetBy(dx: 0, dy: -0.3), tolerance: 8))
-        XCTAssertFalse(onEdge.isInSamePlace(as: onEdge.offsetBy(dx: 0, dy: 9), tolerance: 8))
+        XCTAssertTrue(
+            onEdge.isInSamePlace(
+                as: onEdge.offsetBy(dx: 0, dy: 0.3),
+                geometryTolerance: 8
+            )
+        )
+        XCTAssertTrue(
+            onEdge.isInSamePlace(
+                as: onEdge.offsetBy(dx: 0, dy: -0.3),
+                geometryTolerance: 8
+            )
+        )
+        XCTAssertFalse(
+            onEdge.isInSamePlace(
+                as: onEdge.offsetBy(dx: 0, dy: 9),
+                geometryTolerance: 8
+            )
+        )
     }
 
     /// Unreadable geometry is never in the same place as anything, including
     /// itself: a frame we could not read is not a frame we saw hold still.
     func testUnreadableFrameIsNeverInTheSamePlace() {
         let unreadable = CGRect(x: 0, y: 0, width: -1, height: 44)
-        XCTAssertFalse(unreadable.isInSamePlace(as: unreadable, tolerance: 8))
+        XCTAssertFalse(
+            unreadable.isInSamePlace(as: unreadable, geometryTolerance: 8)
+        )
     }
 
     func testDuplicateReadableContainerIdsGetTreePathSuffixes() {

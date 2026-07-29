@@ -86,7 +86,7 @@
     },
     {
       "cliExposure" : "directCommand",
-      "description" : "Read the recent accessibility notification stream: spoken text plus every captured announcement, elementChanged, valueChanged, and screenChanged event including those posted with no string payload. Reports capture health so an empty stream is distinguishable from a dead capture pipeline.",
+      "description" : "Read the ordered accessibility notifications retained by observation history, including spoken text and attached element semantics.",
       "family" : "observation",
       "inputSchemaSHA256" : "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
       "mcpAnnotations" : {
@@ -94,7 +94,7 @@
         "readOnlyHint" : true
       },
       "mcpExposure" : "directTool",
-      "name" : "get_announcements",
+      "name" : "get_notifications",
       "requiresConnectionBeforeDispatch" : true,
       "timeout" : {
         "base" : "health",

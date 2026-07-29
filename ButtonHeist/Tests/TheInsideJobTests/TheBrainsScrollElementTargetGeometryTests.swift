@@ -13,10 +13,17 @@ extension TheBrainsScrollTests {
     // MARK: - Element Scroll Target Resolution
 
     func testScrollWithVisibleElementReportsMissingScrollableAncestor() async throws {
+        let element = makeElement(label: "Item")
         let treeElement = InterfaceTree.Element(
             heistId: "item",
+            path: TreePath([0]),
             scrollMembership: nil,
-            element: makeElement(label: "Item")
+            geometry: testGeometry(
+                for: element,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: element)
+            ),
+            element: element
         )
         await installSyntheticObservation(InterfaceObservation.makeForTests(
             elements: [treeElement.heistId: treeElement],
@@ -41,10 +48,17 @@ extension TheBrainsScrollTests {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         scrollView.contentSize = CGSize(width: 400, height: 200)
 
+        let element = makeElement(label: "Item")
         let treeElement = InterfaceTree.Element(
             heistId: "item",
+            path: TreePath([0, 0]),
             scrollMembership: nil,
-            element: makeElement(label: "Item")
+            geometry: testGeometry(
+                for: element,
+                ownerPath: TreePath([0]),
+                screen: TheVault.onscreenSpace(for: element)
+            ),
+            element: element
         )
         await installLiveScrollTarget(treeElement, scrollView: scrollView, containerName: "axis_scroll")
 
@@ -65,10 +79,17 @@ extension TheBrainsScrollTests {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         scrollView.contentSize = CGSize(width: 400, height: 1200)
 
+        let element = makeElement(label: "Item")
         let treeElement = InterfaceTree.Element(
             heistId: "item",
+            path: TreePath([0, 0]),
             scrollMembership: nil,
-            element: makeElement(label: "Item")
+            geometry: testGeometry(
+                for: element,
+                ownerPath: TreePath([0]),
+                screen: TheVault.onscreenSpace(for: element)
+            ),
+            element: element
         )
         await installLiveScrollTarget(treeElement, scrollView: scrollView, containerName: "vertical_scroll")
 

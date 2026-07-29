@@ -44,15 +44,13 @@ extension InterfaceTreeTests {
     }
 
     func testMergingTakesOtherElementOnConflict() {
-        let oldEntry = InterfaceTree.Element(
+        let oldEntry = makeEntry(
             heistId: "save_button",
-            scrollMembership: nil,
-            element: makeElement(label: "Save", traits: .button)
+            label: "Save"
         )
-        let newEntry = InterfaceTree.Element(
+        let newEntry = makeEntry(
             heistId: "save_button",
-            scrollMembership: nil,
-            element: makeElement(label: "Save Changes", traits: .button)
+            label: "Save Changes"
         )
         let lhs = InterfaceObservation.makeForTests(
             elements: ["save_button": oldEntry],

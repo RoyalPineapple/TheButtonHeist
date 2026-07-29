@@ -32,10 +32,11 @@ extension TheBrainsScrollTests {
         visibleObservationSource.observation = discoveredScreen
         brains.navigation.elementInflation.exploration.discoverTarget = { _ in
             self.brains.vault.observeInterface(discoveredScreen)
-            let event = await self.brains.vault.semanticObservationStream
+            let current = await self.brains.vault.semanticObservationStream
                 .commitDiscoveryObservationForTesting(discoveredScreen)
+                .current
             return Navigation.InterfaceExplorationResult(
-                event: event,
+                current: current,
                 progress: .init(),
                 didMoveViewport: true,
                 viewportExit: .retained

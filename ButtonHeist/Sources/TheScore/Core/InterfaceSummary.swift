@@ -1,7 +1,7 @@
 import ThePlans
 import Foundation
 
-/// Derived orientation text for public presentation and trace summaries.
+/// Derived orientation text for public presentation and observation summaries.
 ///
 /// `Interface` stores accessibility capture truth. Screen names and summaries
 /// are projections from elements, not stored interface state.
@@ -20,11 +20,14 @@ public enum InterfaceSummary {
     /// classifier's reading, which prefers a header outside scrollable content.
     /// A caller writing `changed(.screen("Order Details"))` means the words on
     /// the screen, so the name is the label untouched — and one rule, so the
-    /// live tick and the replayed trace cannot disagree about it.
+    /// live event and the replayed history cannot disagree about it.
     public static func screenName(for interface: Interface) -> String? {
         interface.projectedElements
-            .first { $0.traits.contains(.header) && $0.label != nil }?
-            .label
+            .first {
+                $0.semantics.assertable.traits.contains(.header)
+                    && $0.semantics.assertable.label != nil
+            }?
+            .semantics.assertable.label
     }
 
     public static func screenTitle(for interface: Interface) -> String? {
@@ -59,7 +62,7 @@ private extension InterfaceSummary {
         var secureFields = 0
 
         for element in elements {
-            let traits = element.traits
+            let traits = element.semantics.assertable.traits
             if traits.contains(.secureTextField) {
                 secureFields += 1
             } else if traits.contains(.textEntry) {
@@ -100,28 +103,42 @@ private extension InterfaceSummary {
     }
 
     static func screenTitle(from elements: [HeistElement]) -> String? {
-        summaryElement(from: elements)?.label
+        summaryElement(from: elements)?.semantics.assertable.label
     }
 
     static func summaryElement(from elements: [HeistElement]) -> HeistElement? {
-        if let explicit = elements.first(where: { $0.traits.contains(.summaryElement) }) {
+        let visibleElements = elements.filter {
+            if case .onscreen = $0.geometry.screen { return true }
+            return false
+        }
+        if let explicit = visibleElements.first(where: {
+            $0.semantics.assertable.traits.contains(.summaryElement)
+        }) {
             return explicit
         }
-        return elements
+        return visibleElements
             .enumerated()
             .compactMap { index, element -> (index: Int, element: HeistElement)? in
-                guard element.traits.contains(.header), element.label != nil else { return nil }
+                let assertable = element.semantics.assertable
+                guard assertable.traits.contains(.header), assertable.label != nil else { return nil }
                 return (index, element)
             }
             .min { left, right in
-                if left.element.frameY != right.element.frameY {
-                    return (left.element.frameY ?? .infinity) < (right.element.frameY ?? .infinity)
+                let leftFrame = onscreenFrame(of: left.element)
+                let rightFrame = onscreenFrame(of: right.element)
+                if leftFrame?.y != rightFrame?.y {
+                    return (leftFrame?.y.value ?? .infinity) < (rightFrame?.y.value ?? .infinity)
                 }
-                if left.element.frameX != right.element.frameX {
-                    return (left.element.frameX ?? .infinity) < (right.element.frameX ?? .infinity)
+                if leftFrame?.x != rightFrame?.x {
+                    return (leftFrame?.x.value ?? .infinity) < (rightFrame?.x.value ?? .infinity)
                 }
                 return left.index < right.index
             }?
             .element
+    }
+
+    private static func onscreenFrame(of element: HeistElement) -> ScreenRect? {
+        guard case .onscreen(let frame, _) = element.geometry.screen else { return nil }
+        return frame.rect
     }
 }

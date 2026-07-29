@@ -71,7 +71,10 @@ private extension InterfaceTree {
                 heistId: entry.heistId,
                 path: remappedPath,
                 scrollMembership: remap(entry.scrollMembership, using: pathMap),
-                observedScrollContentActivationPoint: entry.observedScrollContentActivationPoint,
+                geometry: HeistElement.Geometry(
+                    screen: entry.geometry.screen,
+                    view: remap(entry.geometry.view, using: pathMap)
+                ),
                 element: entry.element
             )
         }
@@ -84,9 +87,8 @@ private extension InterfaceTree {
                 container: entry.container,
                 path: remappedPath,
                 containerName: entry.containerName,
-                contentRect: entry.contentFrame,
+                viewSpace: remap(entry.viewSpace, using: pathMap),
                 scrollMembership: remap(entry.scrollMembership, using: pathMap),
-                observedScrollContentActivationPoint: entry.observedScrollContentActivationPoint,
                 scrollInventory: entry.scrollInventory
             )
         }
@@ -105,6 +107,17 @@ private extension InterfaceTree {
         return ScrollMembership(
             containerPath: pathMap[membership.containerPath] ?? membership.containerPath,
             index: membership.index
+        )
+    }
+
+    private func remap(
+        _ viewSpace: HeistElement.Geometry.ViewSpace,
+        using pathMap: [TreePath: TreePath]
+    ) -> HeistElement.Geometry.ViewSpace {
+        HeistElement.Geometry.ViewSpace(
+            ownerPath: pathMap[viewSpace.ownerPath] ?? viewSpace.ownerPath,
+            frame: viewSpace.frame,
+            activationPoint: viewSpace.activationPoint
         )
     }
 }

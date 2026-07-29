@@ -10,7 +10,6 @@ import TheScore
         )
         let step = HeistExecutionStepResult.action(
             path: try HeistExecutionPath(validating: "$.body[0]"),
-            durationMs: 0,
             execution: .skipped(command: command)
         )
 
@@ -25,7 +24,6 @@ import TheScore
     @Test func `unavailable invocation evidence projects declaration identity`() throws {
         let step = HeistExecutionStepResult.invocation(
             path: try HeistExecutionPath(validating: "$.body[0]"),
-            durationMs: 1,
             invocationPath: "Cart.checkout",
             argument: .string("Milk"),
             completion: .failed(
@@ -48,14 +46,12 @@ import TheScore
     @Test func `report reducer derives summary from the admitted result tree`() throws {
         let child = HeistExecutionStepResult.warning(
             path: "$.body[0].heist.body[0]",
-            durationMs: 2,
             message: "notice",
             completion: .passed()
         )
         let children = try #require(HeistPassingChildren([child]))
         let root = HeistExecutionStepResult.heist(
             path: "$.body[0]",
-            durationMs: 3,
             name: "Checkout",
             completion: .passed(children: children)
         )

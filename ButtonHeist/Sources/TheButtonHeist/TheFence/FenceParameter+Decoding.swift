@@ -113,6 +113,30 @@ extension FenceParameter where Value == GestureDuration {
     }
 }
 
+extension FenceParameter where Value == HeistTimeout {
+    internal static func heistTimeout(
+        _ key: FenceParameterKey,
+        defaultValue: HeistTimeout
+    ) -> Self {
+        let spec = param(
+            key,
+            .number,
+            defaultValue: jsonSchemaNumber(defaultValue.seconds),
+            exclusiveMinimum: 0
+        )
+        return FenceParameter(
+            key: key,
+            spec: spec,
+            defaultValue: defaultValue,
+            convertValue: { value in
+                guard let seconds = value.numberValue else { return nil }
+                return try HeistTimeout(validatingSeconds: seconds)
+            },
+            encodeValue: { jsonSchemaNumber($0.seconds) }
+        )
+    }
+}
+
 extension FenceParameter where Value == Bool {
     internal static func boolean(
         _ key: FenceParameterKey,

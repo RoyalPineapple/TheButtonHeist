@@ -102,13 +102,19 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
         )
         let result = try XCTUnwrap(evidence.result)
         let observation = try XCTUnwrap(result.observationEvidence)
-        let settlement = try XCTUnwrap(result.evidence.settlement)
 
         XCTAssertEqual(evidence.expectation?.met, true)
-        XCTAssertTrue(observation.hostedElementEdits.added.contains { $0.label == "Processing" })
-        XCTAssertTrue(observation.hostedElementEdits.removed.contains { $0.label == "Submit" })
-        XCTAssertTrue(settlement.readinessEstablished)
-        XCTAssertTrue(settlement.observationHandoffCompleted)
+        XCTAssertTrue(
+            observation.hostedElementEdits.added.contains {
+                $0.semantics.assertable.label == "Processing"
+            }
+        )
+        XCTAssertTrue(
+            observation.hostedElementEdits.removed.contains {
+                $0.semantics.assertable.label == "Submit"
+            }
+        )
+        XCTAssertEqual(observation.completeness, .complete)
     }
 
     func testAnnouncementExpectationLatchesUntilReadyHandoff() async throws {
@@ -123,12 +129,11 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
             in: heist.result
         )
         let result = try XCTUnwrap(evidence.result)
-        let settlement = try XCTUnwrap(result.evidence.settlement)
+        let observation = try XCTUnwrap(result.observationEvidence)
 
         XCTAssertEqual(evidence.expectation?.met, true)
         XCTAssertEqual(evidence.announcement, "Ticket saved.")
-        XCTAssertTrue(settlement.readinessEstablished)
-        XCTAssertTrue(settlement.observationHandoffCompleted)
+        XCTAssertEqual(observation.completeness, .complete)
     }
 
     private func actionEvidence(

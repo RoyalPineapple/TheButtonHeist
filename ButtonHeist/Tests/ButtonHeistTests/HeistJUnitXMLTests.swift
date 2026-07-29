@@ -98,7 +98,6 @@ final class HeistJUnitXMLTests: XCTestCase {
         )
         let skipped = HeistExecutionStepResult.action(
             path: try HeistExecutionPath(validating: "$.body[1]"),
-            durationMs: 0,
             execution: .skipped(command: command)
         )
         let xml = junitXML(
@@ -146,8 +145,7 @@ final class HeistJUnitXMLTests: XCTestCase {
     private func passingAction(path: String, label: String) -> HeistExecutionStepResult {
         HeistResultFixture.action(
             path: path,
-            command: .activate(.predicate(ElementPredicate(label: .exact(label)))),
-            durationMs: 100
+            command: .activate(.predicate(ElementPredicate(label: .exact(label))))
         )
     }
 
@@ -163,8 +161,7 @@ final class HeistJUnitXMLTests: XCTestCase {
                 succeeded: false,
                 message: message,
                 failureKind: .elementNotFound
-            ),
-            durationMs: 100
+            )
         )
     }
 

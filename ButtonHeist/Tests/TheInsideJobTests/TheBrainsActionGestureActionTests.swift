@@ -311,11 +311,21 @@ extension TheBrainsActionTests {
                 hostHeistId: InterfaceTree.Element(
                     heistId: hostHeistId,
                     scrollMembership: .init(containerPath: scrollContainerPath, index: 0),
+                    geometry: testGeometry(
+                        for: hostElement,
+                        ownerPath: scrollContainerPath,
+                        screen: TheVault.onscreenSpace(for: hostElement)
+                    ),
                     element: hostElement
                 ),
                 resultHeistId: InterfaceTree.Element(
                     heistId: resultHeistId,
                     scrollMembership: .init(containerPath: scrollContainerPath, index: 1),
+                    geometry: testGeometry(
+                        for: resultElement,
+                        ownerPath: scrollContainerPath,
+                        screen: .offscreen
+                    ),
                     element: resultElement
                 ),
             ],

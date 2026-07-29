@@ -2,185 +2,70 @@
 #if DEBUG
 import Foundation
 import ThePlans
-import TheScore
+@_spi(ButtonHeistInternals) import TheScore
 
-extension TheBrains {
-    internal struct HeistActionResolutionFailure {
-        let command: HeistActionCommand
-        let errorDescription: String
-    }
-
-    internal struct HeistExpectationResolutionFailure {
-        let wait: WaitStep
-        let errorDescription: String
-    }
-
-    func executeActionStep(
-        _ step: ActionStep,
-        index _: Int,
-        path: HeistExecutionPath,
-        start: RuntimeElapsed.Instant,
-        host: HeistExecution.Host,
-        environment: HeistExecutionEnvironment
-    ) async -> HeistExecutionStepResult {
-        let resolvedCommand: ResolvedHeistActionCommand
+extension HeistExecution.Machine {
+    internal mutating func begin(
+        action step: ActionStep,
+        context: HeistExecution.StepContext
+    ) -> HeistExecution.State {
+        let command: ResolvedHeistActionCommand
         do {
-            resolvedCommand = try step.command.resolve(in: environment)
+            command = try step.command.resolve(in: context.environment)
         } catch {
-            return actionResolutionFailureResult(
-                HeistActionResolutionFailure(
-                    command: step.command,
-                    errorDescription: String(describing: error)
-                ),
-                path: path,
-                start: start
-            )
+            return resume(afterCompletedLeaf: HeistExecution.ResultProjector.actionResolutionFailure(
+                step: step,
+                context: context,
+                error: error
+            ))
         }
 
-        let expectation = step.expectationPolicy.expectedStep
-        let resolvedExpectation: HeistExecution.ActionExpectation?
+        let predicate: HeistExecution.Predicate?
+        let expectationTimeout: Duration
         do {
-            resolvedExpectation = try expectation.map {
-                let resolved = try $0.resolve(in: environment)
-                return HeistExecution.ActionExpectation(
-                    authored: $0.predicate,
-                    resolved: resolved.predicate,
-                    timeout: resolved.timeout
+            if let authored = step.expectationPolicy.expectedStep {
+                let resolved = try authored.resolve(in: context.environment)
+                predicate = HeistExecution.Predicate(
+                    authored: authored.predicate,
+                    resolved: resolved.predicate
                 )
+                expectationTimeout = HeistExecution.duration(resolved.timeout)
+            } else {
+                predicate = nil
+                expectationTimeout = .zero
             }
         } catch {
-            guard let expectation else {
-                preconditionFailure("Expectation resolution failed without an authored expectation")
-            }
-            let observed = "could not resolve heist expectation: \(error)"
-            return expectationResolutionFailureResult(
-                HeistExpectationResolutionFailure(
-                    wait: expectation,
-                    errorDescription: String(describing: error)
-                ),
-                command: step.command,
-                actionResult: .failure(
-                    payload: resolvedCommand.actionResultPayload,
-                    failureKind: .validationError,
-                    message: observed
-                ),
-                path: path,
-                start: start
-            )
-        }
-
-        let result = await host.execute(.action(.init(
-            command: resolvedCommand,
-            expectation: resolvedExpectation,
-            readinessAllowance: SemanticObservationTiming.defaultTimeout
-        )))
-        let evidence = HeistExecution.ResultProjector.projectAction(result)
-        return actionStepResult(
-            command: step.command,
-            evidence: evidence,
-            expectation: expectation,
-            path: path,
-            start: start
-        )
-    }
-
-    private func actionStepResult(
-        command: HeistActionCommand,
-        evidence: HeistActionEvidence,
-        expectation: WaitStep?,
-        path: HeistExecutionPath,
-        start: RuntimeElapsed.Instant
-    ) -> HeistExecutionStepResult {
-        let execution: HeistActionExecution
-        guard let result = evidence.result else {
-            preconditionFailure("Resolved action execution requires action result evidence")
-        }
-        if !result.outcome.isSuccess, let expectation, evidence.expectation != nil {
-            execution = .failed(
+            return resume(afterCompletedLeaf: HeistExecution.ResultProjector.expectationResolutionFailure(
+                step: step,
                 command: command,
-                evidence: .init(admitted: evidence),
-                failure: actionExpectationFailureDetail(
-                    wait: expectation,
-                    evidence: evidence
+                context: context,
+                error: error
+            ))
+        }
+
+        let id = nextID()
+        let timeout = SemanticObservationTiming.defaultTimeout + expectationTimeout
+        activeLeaf = .action(HeistExecution.ActionLeaf(
+            id: id,
+            step: step,
+            command: command,
+            predicate: predicate,
+            timeout: timeout,
+            context: context,
+            phase: .beginningObservation,
+            boundary: nil,
+            expectation: Expectation(),
+            dispatch: nil
+        ))
+        return .pending(.perform([
+            .beginObservation(
+                id,
+                HeistExecution.ObservationRequest(
+                    scope: predicate?.observationScope ?? .visible,
+                    timeout: timeout
                 )
-            )
-        } else if !result.outcome.isSuccess {
-            execution = .failed(
-                command: command,
-                evidence: .init(admitted: evidence),
-                failure: actionDispatchFailureDetail(command: command, result: result)
-            )
-        } else {
-            execution = .passed(command: command, evidence: .init(admitted: evidence))
-        }
-        return actionStepResult(
-            execution: execution,
-            path: path,
-            start: start
-        )
-    }
-
-    private func actionStepResult(
-        execution: HeistActionExecution,
-        path: HeistExecutionPath,
-        start: RuntimeElapsed.Instant
-    ) -> HeistExecutionStepResult {
-        let durationMs = elapsedMilliseconds(since: start)
-        return .action(
-            path: path,
-            durationMs: durationMs,
-            execution: execution
-        )
-    }
-
-    internal func failureScreenshotStep(
-        host: HeistExecution.Host,
-        failedPath: HeistExecutionPath,
-        mode: ScreenCaptureMode
-    ) async -> HeistExecutionStepResult? {
-        let start = RuntimeElapsed.now
-        let result: ActionResult
-        if mode == .raw {
-            let execution = await host.execute(.action(.init(
-                command: .takeScreenshot,
-                expectation: nil,
-                readinessAllowance: SemanticObservationTiming.defaultTimeout
-            )))
-            guard case .action(let action) = execution else {
-                preconditionFailure("Screenshot dispatch requires an action result")
-            }
-            result = HeistExecution.ResultProjector.projectAction(.action(action))
-                .result
-                ?? .failure(
-                    payload: .screenshot(nil),
-                    failureKind: .actionFailed,
-                    message: "screenshot result unavailable"
-                )
-        } else {
-            result = await executeTakeScreenshot(mode: mode).result
-        }
-        guard result.method == .takeScreenshot else { return nil }
-
-        let command = HeistActionCommand.takeScreenshot
-        let evidence = HeistActionEvidence.completed(result: result, expectation: nil)
-        let execution: HeistActionExecution
-        switch result.outcome {
-        case .success:
-            execution = .passed(command: command, evidence: .init(admitted: evidence))
-        case .failure:
-            execution = .failed(
-                command: command,
-                evidence: .init(admitted: evidence),
-                failure: failureScreenshotDetail(for: result)
-            )
-        }
-        let path = failedPath.failureAction(at: 0)
-        let durationMs = elapsedMilliseconds(since: start)
-        return .action(
-            path: path,
-            durationMs: durationMs,
-            execution: execution
-        )
+            ),
+        ]))
     }
 }
 

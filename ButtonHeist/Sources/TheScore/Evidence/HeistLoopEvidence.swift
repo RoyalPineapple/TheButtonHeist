@@ -1,6 +1,13 @@
 import Foundation
 import ThePlans
 
+public enum HeistPredicateEvidenceOutcome: String, Codable, Sendable, Equatable {
+    case matched
+    case continued
+    case handledElse = "handled_else"
+    case failed
+}
+
 public struct HeistForEachStringEvidence: Codable, Sendable, Equatable {
     public let iterationCount: Int
     private let shape: Shape

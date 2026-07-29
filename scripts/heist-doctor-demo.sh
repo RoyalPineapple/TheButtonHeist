@@ -163,25 +163,35 @@ struct DoctorDemoFixture {
         before: Interface,
         after: Interface?
     ) throws -> HeistResult {
-        let trace = after
-            .map { AccessibilityTrace(first: before).appending($0) }
-            ?? AccessibilityTrace(first: before)
-        guard let traceEvidence = AccessibilityTraceEvidence(trace: trace, completeness: .complete) else {
-            throw FixtureError.message("failed to build trace evidence")
-        }
+        let baseline = Observation.Snapshot(
+            sequence: 1,
+            interface: before,
+            context: .empty
+        )
+        let current = Observation.Snapshot(
+            sequence: 2,
+            interface: after ?? before,
+            context: .empty
+        )
+        let observationEvidence = Observation.Evidence(
+            baseline: baseline,
+            current: current,
+            events: after == nil ? [.noChange] : [.elementsChanged(current)],
+            completeness: .complete
+        )
         let actionResult: ActionResult
         switch outcome {
         case .passed:
             actionResult = .success(
                 payload: .activate,
-                observation: .trace(traceEvidence)
+                observation: .observed(observationEvidence)
             )
         case .failed:
             actionResult = .failure(
                 payload: .activate,
                 failureKind: .elementNotFound,
                 message: "No element matching \(target)",
-                observation: .trace(traceEvidence)
+                observation: .observed(observationEvidence)
             )
         }
         let command = HeistActionCommand.activate(target)

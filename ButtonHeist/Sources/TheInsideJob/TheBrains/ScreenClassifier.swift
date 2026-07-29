@@ -183,17 +183,19 @@ enum ScreenClassifier {
         }) {
             return .replacement(.screenChangedNotification)
         }
+        if lineage == .viewportMovement {
+            return .sameGeneration
+        }
         guard let before else { return .sameGeneration }
 
         let beforeSignature = before.signature
         let afterSignature = after.signature
-        let directLineageIsProven = hasDirectLineageEvidence(
+        let sharedFirstResponder = sharesFirstResponder(
             before: before,
-            after: after,
-            lineage: lineage
+            after: after
         )
         let sharedScrollContainer = sharesSemanticScrollContainer(before: before, after: after)
-        let sameGenerationIsProven = directLineageIsProven || sharedScrollContainer
+        let sameGenerationIsProven = sharedFirstResponder || sharedScrollContainer
 
         if beforeSignature.modalMarkers != afterSignature.modalMarkers {
             return .replacement(.inferred(.modalBoundaryChanged))
@@ -205,7 +207,7 @@ enum ScreenClassifier {
             return .replacement(.inferred(.navigationMarkerChanged))
         }
         if beforeSignature.primaryHeader != afterSignature.primaryHeader,
-           !directLineageIsProven,
+           !sharedFirstResponder,
            !isScrollableContentHeaderChange(
                before: beforeSignature.primaryHeader,
                after: afterSignature.primaryHeader,
@@ -266,20 +268,14 @@ enum ScreenClassifier {
         }
     }
 
-    private static func hasDirectLineageEvidence(
+    private static func sharesFirstResponder(
         before: Snapshot,
-        after: Snapshot,
-        lineage: ScreenLineage
+        after: Snapshot
     ) -> Bool {
-        if lineage == .viewportMovement {
-            return true
-        }
-        if let beforeResponder = before.firstResponderHeistId,
-           let afterResponder = after.firstResponderHeistId,
-           beforeResponder == afterResponder {
-            return true
-        }
-        return false
+        guard let beforeResponder = before.firstResponderHeistId,
+              let afterResponder = after.firstResponderHeistId
+        else { return false }
+        return beforeResponder == afterResponder
     }
 
     private static func sharesSemanticScrollContainer(

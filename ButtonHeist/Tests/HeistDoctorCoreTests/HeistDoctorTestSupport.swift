@@ -20,7 +20,8 @@ func passedEvidence(
     command: HeistActionCommand? = nil,
     target: AccessibilityTarget,
     before: Interface,
-    changeFacts: [AccessibilityTrace.ChangeFact] = [],
+    observedChanges: [RepairChangeFactObservation] = [],
+    semanticEvidence: [String] = [],
     expectation: ExpectationResult? = nil
 ) -> HeistRepairEvidence {
     let command = command ?? .activate(target)
@@ -30,7 +31,8 @@ func passedEvidence(
         command: command,
         target: target,
         beforeSnapshot: before,
-        changeFacts: changeFacts,
+        observedChanges: observedChanges,
+        semanticEvidence: semanticEvidence,
         method: method(for: command),
         expectation: expectation,
         outcome: .passed
@@ -43,7 +45,8 @@ func failedEvidence(
     command: HeistActionCommand? = nil,
     target: AccessibilityTarget,
     before: Interface,
-    changeFacts: [AccessibilityTrace.ChangeFact] = [],
+    observedChanges: [RepairChangeFactObservation] = [],
+    semanticEvidence: [String] = [],
     expectation: ExpectationResult? = nil
 ) -> HeistRepairEvidence {
     let command = command ?? .activate(target)
@@ -53,7 +56,8 @@ func failedEvidence(
         command: command,
         target: target,
         beforeSnapshot: before,
-        changeFacts: changeFacts,
+        observedChanges: observedChanges,
+        semanticEvidence: semanticEvidence,
         method: method(for: command),
         expectation: expectation,
         outcome: .failed(failureKind: .elementNotFound, message: nil)

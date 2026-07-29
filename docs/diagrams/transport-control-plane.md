@@ -25,7 +25,7 @@ flowchart LR
     subgraph main["MainActor"]
         STREAM["One bounded stream<br/>app work + coalesced control wake"]
         BRAINS["TheBrains<br/>single interaction executor"]
-        SETTLE["Settlement.Executor<br/>idle and semantic evidence"]
+        HEIST["HeistExecution.Host<br/>effects and observation delivery"]
     end
 
     CLIENT -- "mainThreadProbe" --> SOCKET
@@ -38,7 +38,7 @@ flowchart LR
     PROBE -- "responsive · mainThreadUnresponsive · workTimedOut" --> CLIENT
     PROBE -. "CFRunLoopPerformBlock + wake" .-> main
     STREAM --> BRAINS
-    BRAINS --> SETTLE
+    BRAINS --> HEIST
 ```
 
 `ping` and `mainThreadProbe` never enter the MainActor stream or TheBrains.

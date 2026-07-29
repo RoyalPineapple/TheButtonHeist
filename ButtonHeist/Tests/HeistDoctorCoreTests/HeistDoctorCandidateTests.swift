@@ -6,16 +6,10 @@ import TheScore
 @testable import HeistDoctorCore
 
 private func reportElement(label: String) -> HeistElement {
-    HeistElement(
+    makeTestHeistElement(
         description: label,
         label: label,
-        value: nil,
-        identifier: nil,
         traits: [.button],
-        frameX: 0,
-        frameY: 0,
-        frameWidth: 100,
-        frameHeight: 44,
         actions: [.activate]
     )
 }
@@ -69,11 +63,15 @@ private let repairJSONDiagnosisFixture = HeistRepairDiagnosis.suggested(
         let suggestion = try #require(suggestions.first)
         let evidence = try suggestion.object("newResolvedElement")
         let element = try evidence.object("element")
+        let semantics = try element.object("semantics")
+        let assertable = try semantics.object("assertable")
+        let screen = try element.object("geometry").object("screen")
+        let frame = try screen.object("frame").object("rect")
 
         #expect(try evidence.array("siblingText").count == 1)
-        #expect(try element.string("description") == "Remove")
-        #expect(try element.string("label") == "Remove")
-        #expect(try element.double("frameWidth") == 100)
+        #expect(try semantics.string("spokenDescription") == "Remove")
+        #expect(try assertable.string("label") == "Remove")
+        #expect(try frame.double("width") == 100)
         try probe.assertRecursivelyMissingKeys(["status", "featureStatus", "action" + "Kind"])
         #expect(decodedDiagnosis == repairJSONDiagnosisFixture)
     }

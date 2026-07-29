@@ -16,14 +16,31 @@ func `canonical authoring module exposes predicates with concrete types`() throw
     let containerExists: AccessibilityPredicate = .exists(.container(checkoutContainer))
     let valueChanged: ElementPropertyChange = .value(after: "Ready")
     let branchCondition: PresenceCondition = .exists(.label("Checkout"))
+    let updatedElement = AccessibilityElementTarget
+        .within(
+            container: checkoutContainer,
+            .target(.identifier("checkout.status"), ordinal: 1)
+        )
+        .and(.traits([.staticText]))
+        .excluding(.traits([.notEnabled]))
     let elementAssertion: ElementAssertion = .updated(
-        .identifier("checkout.status"),
+        updatedElement,
         valueChanged
     )
     let screenChanged: AccessibilityPredicate = .screenChanged("Checkout")
     let changed: AccessibilityPredicate = .elementsChanged([
         elementAssertion,
     ])
+    let notification = NotificationPredicate(
+        text: .contains("saved"),
+        element: .label("Saved")
+    )
+    let notificationPredicates: [AccessibilityPredicate] = [
+        .notification,
+        .notification("Saved"),
+        .notification(.contains("saved")),
+        .notification(text: notification.text, element: notification.element),
+    ]
 
     let plan = try HeistPlan {
         WaitFor(elementExists)
@@ -42,6 +59,7 @@ func `canonical authoring module exposes predicates with concrete types`() throw
     }
 
     #expect(plan.body.count == 7)
+    #expect(notificationPredicates.count == 4)
 }
 
 @Test
@@ -98,11 +116,29 @@ func `canonical matcher and target forms compile through the public module`() th
         .within(container: .label("Checkout"), .label("Pay")),
         .ref(reference),
     ]
+    let elementTargets: [AccessibilityElementTarget] = [
+        .label(matches[0]),
+        .identifier("checkout.button"),
+        .value(reference),
+        .hint(.contains("checkout")),
+        .traits([.button]),
+        .actions([.activate]),
+        .customContent(CustomContentMatch(label: "State", value: "Ready")),
+        .rotors(["Actions"]),
+        .exclude(.traits([.notEnabled])),
+        .element(checks[0], checks[1], traits: [.button], actions: [.activate]),
+        .target(predicates[0], ordinal: 0),
+        .within(container: .label("Checkout"), .label("Pay")),
+        .ref(reference),
+        .label("Pay").and(.traits([.button])),
+        .label("Pay").excluding(.traits([.notEnabled])),
+    ]
     #expect(matches[0].mode == .exact)
     #expect(
         !matches.isEmpty
             && !checks.isEmpty
             && !predicates.isEmpty
+            && !elementTargets.isEmpty
             && AccessibilityPredicate.exists(targets[0]) != .missing(targets[1])
     )
 }

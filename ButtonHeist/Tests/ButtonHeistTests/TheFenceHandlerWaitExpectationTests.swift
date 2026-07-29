@@ -29,9 +29,21 @@ extension TheFenceHandlerTests {
                 "timeout": .double(5),
             ],
             ["predicate": .object([
+                "type": .string("notification"),
+            ])],
+            ["predicate": .object([
+                "type": .string("notification"),
+                "text": stringMatchValue(mode: "contains", value: "Payment complete"),
+                "element": elementPredicateValue(label: "Receipt"),
+            ])],
+            ["predicate": .object([
                 "type": .string("changed"),
                 "scope": .string("screen"),
-                "assertions": .array([]),
+            ])],
+            ["predicate": .object([
+                "type": .string("changed"),
+                "scope": .string("screen"),
+                "match": stringMatchValue(mode: "exact", value: "Receipt"),
             ])],
             [
                 "predicate": .object([
@@ -41,22 +53,6 @@ extension TheFenceHandlerTests {
                 ]),
                 "timeout": .double(5),
             ],
-            ["predicate": .object([
-                "type": .string("changed"),
-                "scope": .string("screen"),
-                "assertions": .array([
-                    .object(["type": .string("exists"), "target": elementPredicateValue(label: "Done")]),
-                    .object(["type": .string("missing"), "target": elementPredicateValue(label: "Loading")]),
-                ]),
-            ])],
-            ["predicate": .object([
-                "type": .string("changed"),
-                "scope": .string("screen"),
-                "assertions": .array([.object([
-                    "type": .string("exists"),
-                    "target": elementPredicateValue(label: "Home"),
-                ])]),
-            ])],
         ]
 
         for arguments in cases {
@@ -65,21 +61,19 @@ extension TheFenceHandlerTests {
     }
 
     @ButtonHeistActor
-    func testWaitSendsDefaultMaximumTimeout() async {
+    func testWaitSendsDefaultTimeoutWhenOmitted() async {
         let (fence, mockConn) = makeConnectedFence()
         _ = try? await fence.execute(command: .wait, values: [
             "predicate": .object([
                 "type": .string("changed"),
                 "scope": .string("screen"),
-                "assertions": .array([]),
             ]),
-            "timeout": .double(60.0),
         ])
         guard let step = mockConn.sent.sentWaitSteps.last else {
             return XCTFail("Expected wait step")
         }
         XCTAssertEqual(step.predicate, .screenChanged)
-        XCTAssertEqual(step.timeout, 60.0)
+        XCTAssertEqual(step.timeout, defaultWaitTimeout)
     }
 
     @ButtonHeistActor
@@ -154,16 +148,15 @@ extension TheFenceHandlerTests {
         let result = try parseTypedExpectation(.object([
             "type": .string("changed"),
             "scope": .string("screen"),
-            "assertions": .array([]),
+            "match": stringMatchValue(mode: "exact", value: "Receipt"),
         ]))
-        XCTAssertEqual(result, .screenChanged)
+        XCTAssertEqual(result, .screenChanged("Receipt"))
     }
 
     @ButtonHeistActor
     func testParseExpectationRejectsGenericChangedPredicate() async {
         XCTAssertThrowsError(try parseTypedExpectation(.object([
             "type": .string("changed"),
-            "assertions": .array([]),
         ]))) { error in
             XCTAssertTrue(String(describing: error).contains("scope"), "Unexpected error: \(error)")
         }
@@ -326,15 +319,19 @@ extension TheFenceHandlerTests {
     }
 
     @ButtonHeistActor
-    func testParseExpectationAcceptsAnnouncementWithOptionalCanonicalMatch() async throws {
+    func testParseExpectationAcceptsNotificationWithOptionalCanonicalFields() async throws {
         let cases: [(value: HeistValue, expected: AccessibilityPredicate)] = [
-            (.object(["type": .string("announcement")]), .announcement),
+            (.object(["type": .string("notification")]), .notification),
             (
                 .object([
-                    "type": .string("announcement"),
-                    "match": stringMatchValue(mode: "contains", value: "Payment complete"),
+                    "type": .string("notification"),
+                    "text": stringMatchValue(mode: "contains", value: "Payment complete"),
+                    "element": elementPredicateValue(label: "Receipt"),
                 ]),
-                .announcement(.contains("Payment complete"))
+                .notification(
+                    text: .contains("Payment complete"),
+                    element: ElementPredicate(label: "Receipt")
+                )
             ),
         ]
 
@@ -344,15 +341,15 @@ extension TheFenceHandlerTests {
     }
 
     /// `elements` is the only scope with an assertion list, so it is the only
-    /// place an announcement can be smuggled in as an assertion. A screen
+    /// place a notification can be smuggled in as an assertion. A screen
     /// predicate asks about the screen and reads no list at all.
     @ButtonHeistActor
-    func testParseExpectationRejectsAnnouncementInElementsAssertionContext() async {
+    func testParseExpectationRejectsNotificationInElementsAssertionContext() async {
         XCTAssertThrowsError(try parseTypedExpectation(.object([
             "type": .string("changed"),
             "scope": .string("elements"),
             "assertions": .array([.object([
-                "type": .string("announcement"),
+                "type": .string("notification"),
             ])]),
         ]))) { error in
             XCTAssertTrue(

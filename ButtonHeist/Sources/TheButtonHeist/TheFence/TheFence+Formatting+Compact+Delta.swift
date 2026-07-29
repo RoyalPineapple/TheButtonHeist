@@ -19,12 +19,9 @@ extension FenceResponse {
 
         case .elementsChanged(let delta):
             let metadata = delta.metadata
-            var lines: [String] = []
-            lines.append(contentsOf: compactEditLines(delta.edits))
-            lines.append(contentsOf: compactNotificationLines(metadata.accessibilityNotifications))
             return CompactDeltaRendering(
                 summary: "elements changed (\(metadata.elementCount) elements)",
-                detailLines: lines
+                detailLines: compactEditLines(delta.edits)
             )
 
         case .screenChanged(let delta):
@@ -34,7 +31,6 @@ extension FenceResponse {
             } else {
                 lines.append("\(delta.screen.screenDescription) (\(delta.screen.elementCount) elements)")
             }
-            lines.append(contentsOf: compactNotificationLines(delta.metadata.accessibilityNotifications))
             return CompactDeltaRendering(summary: "screen changed", detailLines: lines)
         }
     }
@@ -87,21 +83,16 @@ extension FenceResponse {
         "  ~ \(name): \(change.property.rawValue) \"\(display(change.oldValue))\" → \"\(display(change.newValue))\""
     }
 
-    private static func compactNotificationLines(
-        _ notifications: [AccessibilityNotificationEvidence]
-    ) -> [String] {
-        notifications.map { "  ! accessibility notification \($0.kind) #\($0.sequence)" }
-    }
-
     private static func display(_ value: ElementPropertyValue?) -> String {
         value?.displayText ?? "nil"
     }
 
     private static func nonEmptyDescription(_ element: HeistElement) -> String {
-        if let label = element.label, !label.isEmpty { return label }
-        if let value = element.value, !value.isEmpty { return value }
-        if let identifier = element.identifier, !identifier.isEmpty { return identifier }
-        return element.description
+        let assertable = element.semantics.assertable
+        if let label = assertable.label, !label.isEmpty { return label }
+        if let value = assertable.value, !value.isEmpty { return value }
+        if let identifier = assertable.identifier, !identifier.isEmpty { return identifier }
+        return element.semantics.spokenDescription
     }
 
 }

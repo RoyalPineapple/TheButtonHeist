@@ -110,8 +110,8 @@ private func encodeServerMessage<Key: CodingKey>(
     case .screen(let payload):
         try container.encode(ServerWireMessageType.screen, forKey: typeKey)
         try payload.encode(to: container.superEncoder(forKey: payloadKey))
-    case .announcements(let payload):
-        try container.encode(ServerWireMessageType.announcements, forKey: typeKey)
+    case .notifications(let payload):
+        try container.encode(ServerWireMessageType.notifications, forKey: typeKey)
         try payload.encode(to: container.superEncoder(forKey: payloadKey))
     case .status(let payload):
         try container.encode(ServerWireMessageType.status, forKey: typeKey)
@@ -154,8 +154,8 @@ private func decodeServerMessage(from payloadDecoder: Decoder?, type: ServerWire
         return .actionResult(try ActionResult(from: try payload()))
     case .screen:
         return .screen(try ScreenPayload(from: try payload()))
-    case .announcements:
-        return .announcements(try AnnouncementListPayload(from: try payload()))
+    case .notifications:
+        return .notifications(try [Observation.Notification](from: try payload()))
     case .status:
         return .status(try StatusPayload(from: try payload()))
     }

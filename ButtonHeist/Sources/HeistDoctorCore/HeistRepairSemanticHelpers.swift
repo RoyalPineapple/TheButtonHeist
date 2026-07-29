@@ -28,7 +28,10 @@ func nonEmpty(_ value: String?) -> String? {
 }
 
 func primaryText(_ element: HeistElement) -> String? {
-    nonEmpty(element.label) ?? nonEmpty(element.value) ?? stableIdentifier(element.identifier)
+    let assertable = element.semantics.assertable
+    return nonEmpty(assertable.label)
+        ?? nonEmpty(assertable.value)
+        ?? stableIdentifier(assertable.identifier)
 }
 
 func repairFingerprintsAreCompatible(_ lhs: String?, _ rhs: String?) -> Bool {

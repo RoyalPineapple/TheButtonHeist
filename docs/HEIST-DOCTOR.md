@@ -68,13 +68,12 @@ By default, only failed heist runs are recorded. To also record passing runs:
 BUTTONHEIST_RESULTS_MODE="all"
 ```
 
-For local test runs, prefer the wrapper so the convention is the same as CI:
+For local test runs, use the canonical runner. It applies the result wrapper and
+uses the same convention as CI:
 
 ```bash
-scripts/run-with-heist-results.sh \
-  --suite local-tuist \
-  --mode all \
-  -- tuist test ButtonHeistTests --no-selective-testing
+BUTTONHEIST_RESULTS_MODE=all \
+  scripts/test-runner.py run ButtonHeistTests
 ```
 
 The runtime writes files under a heist-name and plan-fingerprint directory:
@@ -155,7 +154,7 @@ The useful evidence is already in `HeistResult`:
 - step paths and nested execution structure
 - authored action commands and expectations
 - action result and expectation result evidence
-- before/after accessibility traces
+- `Observation.Evidence` baseline/current snapshots and ordered events
 - resolved subject evidence for successful actions
 - failure details for the new failing action
 

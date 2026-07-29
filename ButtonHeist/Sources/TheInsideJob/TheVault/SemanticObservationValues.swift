@@ -16,15 +16,31 @@ extension TheVault.State {
         internal var screenHeading: String? {
             InterfaceSummary.screenName(for: snapshot.interface)
         }
-        internal var summary: String {
-            let interfaceSummary = "interface: \(snapshot.interface.projectedElements.count) elements"
-            guard let screenID = snapshot.context.screenId else { return interfaceSummary }
-            return "screen: \(screenID); \(interfaceSummary)"
-        }
+        internal var summary: String { snapshot.summary }
     }
 }
 
 extension Observation {
+    internal enum CaptureFailure: Error, Sendable, Equatable {
+        case runtimeUnavailable
+        case cancelled
+        case sourceTreeUnavailable
+        case hierarchyChangedDuringCapture
+
+        internal var diagnostic: String {
+            switch self {
+            case .runtimeUnavailable:
+                "the Button Heist runtime became unavailable during capture"
+            case .cancelled:
+                "the accessibility capture was cancelled"
+            case .sourceTreeUnavailable:
+                "the accessibility tree could not be read"
+            case .hierarchyChangedDuringCapture:
+                "the view hierarchy moved while the reading was taken"
+            }
+        }
+    }
+
     /// One admitted observation's exact retained range and authored events.
     internal struct Publication: Sendable {
         internal let current: TheVault.State.Current
@@ -144,9 +160,9 @@ internal struct CommittableInterfaceObservation {
 }
 
 @MainActor
-internal enum VisibleObservationOutcome {
+internal enum VisibleObservationOutcome: Equatable {
     case committed(TheVault.State.Current)
-    case unavailable
+    case unavailable(Observation.CaptureFailure)
 }
 
 #endif // DEBUG

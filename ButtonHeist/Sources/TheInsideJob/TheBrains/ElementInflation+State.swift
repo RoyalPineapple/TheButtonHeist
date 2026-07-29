@@ -261,7 +261,10 @@ extension ElementInflation.InflatedElementTarget {
         ActionSubjectEvidence(
             source: source,
             target: target,
-            element: TheVault.WireConversion.convert(treeElement.element),
+            element: TheVault.WireConversion.convert(
+                treeElement.element,
+                geometry: treeElement.geometry
+            ),
             resolution: resolution
         )
     }

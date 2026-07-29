@@ -20,16 +20,17 @@ struct ElementProjectionBucket: Sendable {
     }
 
     static func omissionKey(for element: HeistElement) -> String {
-        if let identifier = element.identifier, !identifier.isEmpty {
+        let assertable = element.semantics.assertable
+        if let identifier = assertable.identifier, !identifier.isEmpty {
             return "identifier:\(identifier)"
         }
-        if let label = element.label, !label.isEmpty {
+        if let label = assertable.label, !label.isEmpty {
             return "label:\(label)"
         }
-        if let value = element.value, !value.isEmpty {
+        if let value = assertable.value, !value.isEmpty {
             return "value:\(value)"
         }
-        return "description:\(element.description)"
+        return "description:\(element.semantics.spokenDescription)"
     }
 }
 
@@ -132,9 +133,6 @@ enum DeltaProjectionKind: String, Sendable {
 
 struct DeltaProjectionMetadata: Sendable {
     let elementCount: Int
-    let captureEdge: AccessibilityTrace.CaptureEdge?
-    let interactionDigest: AccessibilityTrace.InteractionDigest?
-    let accessibilityNotifications: [AccessibilityNotificationEvidence]
 }
 
 struct DeltaElementsChangedProjection: Sendable {
@@ -164,167 +162,122 @@ enum DeltaProjection: Sendable {
     }
 
     /// Public endpoint summary derived exclusively by folding the canonical
-    /// temporal fact stream. Predicate evaluation never consumes this shape.
+    /// observation window. Predicate evaluation never consumes this shape.
     init?(
-        trace: AccessibilityTrace,
-        isComplete: Bool,
+        evidence: Observation.Evidence,
         profile: ProjectionProfile,
         includeScreenInterface: Bool = false
     ) {
-        guard let finalCapture = trace.captures.last else { return nil }
-        let facts = trace.changeFacts
-        guard !facts.isEmpty || (isComplete && trace.captures.count >= 2) else { return nil }
-
-        let folded = DeltaFactFold(trace: trace).folding(facts)
+        guard let current = evidence.current ?? evidence.baseline else { return nil }
+        let folded = DeltaObservationFold(evidence: evidence).result
         let metadata = DeltaProjectionMetadata(
-            elementCount: finalCapture.interface.projectedElements.count,
-            captureEdge: folded.captureEdge,
-            interactionDigest: folded.interactionDigest,
-            accessibilityNotifications: folded.accessibilityNotifications
+            elementCount: current.interface.projectedElements.count
         )
 
         if folded.screenChanged {
             self = .screenChanged(DeltaScreenChangedProjection(
                 metadata: metadata,
                 screen: DeltaScreenProjection(
-                    interface: finalCapture.interface,
+                    interface: current.interface,
                     profile: profile,
                     includeInterface: includeScreenInterface
                 )
             ))
-        } else if !facts.isEmpty {
+        } else if folded.elementsChanged {
             self = .elementsChanged(DeltaElementsChangedProjection(
                 metadata: metadata,
                 edits: DeltaEditsProjection(edits: folded.edits, profile: profile)
             ))
-        } else {
+        } else if evidence.completeness == .complete {
             self = .noChange(metadata)
+        } else {
+            return nil
         }
     }
 }
 
-private struct DeltaFactFold {
-    private let trace: AccessibilityTrace
+private struct DeltaObservationFold {
+    let result: Result
 
-    init(trace: AccessibilityTrace) {
-        self.trace = trace
-    }
-
-    func folding(_ facts: [AccessibilityTrace.ChangeFact]) -> DeltaFoldResult {
-        facts.reduce(into: DeltaFoldAccumulator()) { accumulator, fact in
-            if let captureEdge = fact.metadata.captureEdge {
-                accumulator.captureEdges.append(captureEdge)
-            }
-            if let interactionDigest = fact.metadata.interactionDigest {
-                accumulator.interactionDigests.append(interactionDigest)
-            }
-            accumulator.accessibilityNotifications.append(contentsOf: fact.metadata.accessibilityNotifications)
-
-            switch fact {
+    init(evidence: Observation.Evidence) {
+        var previous = evidence.baseline
+        var accumulator = Accumulator()
+        for event in evidence.events {
+            switch event {
+            case .elementsChanged(let snapshot):
+                let edits = previous.map {
+                    ElementEdits.between($0.interface, snapshot.interface)
+                } ?? ElementEdits(
+                    added: snapshot.interface.projectedElements,
+                    removed: [],
+                    updated: []
+                )
+                accumulator.elementsChanged = true
+                edits.removed.forEach { accumulator.applyDisappearance($0) }
+                edits.added.forEach { accumulator.applyAppearance($0) }
+                edits.updated.forEach { accumulator.applyUpdate($0) }
+                previous = snapshot
             case .screenChanged:
                 accumulator.screenChanged = true
-            case .elementsChanged(let elements):
-                elements.disappeared.compactMap {
-                    projectedElement(for: $0, edge: elements.metadata.captureEdge, useAfterCapture: false)
-                }.forEach { accumulator.applyDisappearance($0) }
-                elements.appeared.compactMap {
-                    projectedElement(for: $0, edge: elements.metadata.captureEdge, useAfterCapture: true)
-                }.forEach { accumulator.applyAppearance($0) }
-                elements.updated.forEach { accumulator.applyUpdate($0) }
+            case .notification, .noChange:
+                break
             }
-        }.result
-    }
-
-    private func projectedElement(
-        for node: AccessibilityTrace.InterfaceChangeNode,
-        edge: AccessibilityTrace.CaptureEdge?,
-        useAfterCapture: Bool
-    ) -> HeistElement? {
-        guard node.kind == .element,
-              let edge,
-              let capture = trace.capture(ref: useAfterCapture ? edge.after : edge.before)
-        else { return nil }
-        return capture.interface.graph.element(at: node.path)?.projectedElement
-    }
-}
-
-private struct DeltaFoldAccumulator {
-    var added: [HeistElement] = []
-    var removed: [HeistElement] = []
-    var updated: [ElementUpdate] = []
-    var captureEdges: [AccessibilityTrace.CaptureEdge] = []
-    var interactionDigests: [AccessibilityTrace.InteractionDigest] = []
-    var accessibilityNotifications: [AccessibilityNotificationEvidence] = []
-    var screenChanged = false
-
-    mutating func applyAppearance(_ element: HeistElement) {
-        if let index = removed.firstIndex(of: element) {
-            removed.remove(at: index)
-        } else {
-            added.append(element)
         }
+        result = accumulator.result
     }
 
-    mutating func applyDisappearance(_ element: HeistElement) {
-        if let index = added.firstIndex(of: element) {
-            added.remove(at: index)
-        } else if let index = updated.firstIndex(where: { $0.after == element }) {
-            removed.append(updated.remove(at: index).before)
-        } else {
-            removed.append(element)
-        }
+    struct Result {
+        let edits: ElementEdits
+        let elementsChanged: Bool
+        let screenChanged: Bool
     }
 
-    mutating func applyUpdate(_ update: ElementUpdate) {
-        if let index = added.firstIndex(of: update.before) {
-            added[index] = update.after
-            return
-        }
-        if let index = updated.firstIndex(where: { $0.after == update.before }) {
-            let before = updated[index].before
-            if let composite = ElementEdits.between(before, update.after).updated.first {
-                updated[index] = composite
+    private struct Accumulator {
+        var added: [HeistElement] = []
+        var removed: [HeistElement] = []
+        var updated: [ElementUpdate] = []
+        var elementsChanged = false
+        var screenChanged = false
+
+        mutating func applyAppearance(_ element: HeistElement) {
+            if let index = removed.firstIndex(of: element) {
+                removed.remove(at: index)
             } else {
-                updated.remove(at: index)
+                added.append(element)
             }
-            return
         }
-        updated.append(update)
-    }
 
-    var result: DeltaFoldResult {
-        DeltaFoldResult(
-            edits: ElementEdits(added: added, removed: removed, updated: updated),
-            captureEdge: captureEdges.first.map { first in
-                AccessibilityTrace.CaptureEdge(
-                    before: first.before,
-                    after: captureEdges.last?.after ?? first.after
-                )
-            },
-            interactionDigest: interactionDigests.first.map { first in
-                let last = interactionDigests.last ?? first
-                return AccessibilityTrace.InteractionDigest(
-                    nodeCountBefore: first.nodeCountBefore,
-                    nodeCountAfter: last.nodeCountAfter,
-                    elementSetChanged: interactionDigests.contains { $0.elementSetChanged },
-                    screenIdBefore: first.screenIdBefore,
-                    screenIdAfter: last.screenIdAfter,
-                    firstResponderChanged: interactionDigests.contains { $0.firstResponderChanged }
-                )
-            },
-            accessibilityNotifications: accessibilityNotifications.uniqued().sorted {
-                if $0.sequence != $1.sequence { return $0.sequence < $1.sequence }
-                return $0.timestamp < $1.timestamp
-            },
-            screenChanged: screenChanged
-        )
-    }
-}
+        mutating func applyDisappearance(_ element: HeistElement) {
+            if let index = added.firstIndex(of: element) {
+                added.remove(at: index)
+            } else if let index = updated.firstIndex(where: { $0.after == element }) {
+                removed.append(updated.remove(at: index).before)
+            } else {
+                removed.append(element)
+            }
+        }
 
-private struct DeltaFoldResult {
-    let edits: ElementEdits
-    let captureEdge: AccessibilityTrace.CaptureEdge?
-    let interactionDigest: AccessibilityTrace.InteractionDigest?
-    let accessibilityNotifications: [AccessibilityNotificationEvidence]
-    let screenChanged: Bool
+        mutating func applyUpdate(_ update: ElementUpdate) {
+            if let index = added.firstIndex(of: update.before) {
+                added[index] = update.after
+            } else if let index = updated.firstIndex(where: { $0.after == update.before }) {
+                let before = updated[index].before
+                if let composite = ElementEdits.between(before, update.after).updated.first {
+                    updated[index] = composite
+                } else {
+                    updated.remove(at: index)
+                }
+            } else {
+                updated.append(update)
+            }
+        }
+
+        var result: Result {
+            Result(
+                edits: ElementEdits(added: added, removed: removed, updated: updated),
+                elementsChanged: elementsChanged,
+                screenChanged: screenChanged
+            )
+        }
+    }
 }

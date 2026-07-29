@@ -16,11 +16,21 @@ extension TheBrainsScrollTests {
         let firstEntry = InterfaceTree.Element(
             heistId: "duplicate_1",
             scrollMembership: nil,
+            geometry: testGeometry(
+                for: first,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: first)
+            ),
             element: first
         )
         let secondEntry = InterfaceTree.Element(
             heistId: "duplicate_2",
             scrollMembership: nil,
+            geometry: testGeometry(
+                for: second,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: second)
+            ),
             element: second
         )
         await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
@@ -132,10 +142,16 @@ extension TheBrainsScrollTests {
         let knownEntry = InterfaceTree.Element(
             heistId: "known_reveal_target",
             scrollMembership: InterfaceTree.ScrollMembership(containerPath: scrollContainerPath, index: nil),
-            observedScrollContentActivationPoint: observedContentActivationPoint(CGPoint(
-                x: firstTarget.frame.midX,
-                y: firstTarget.frame.midY
-            ), ownerPath: scrollContainerPath),
+            geometry: HeistElement.Geometry(
+                screen: .offscreen,
+                view: viewSpace(
+                    try ViewPoint(validating: CGPoint(
+                        x: firstTarget.frame.midX,
+                        y: firstTarget.frame.midY
+                    )),
+                    ownerPath: scrollContainerPath
+                )
+            ),
             element: interfaceElement
         )
         let knownScreen = InterfaceObservation.makeForTests(
@@ -157,12 +173,13 @@ extension TheBrainsScrollTests {
         let originalMoveViewport = inflation.exploration.moveViewport
         inflation.exploration.moveViewport = { _ in
             self.visibleObservationSource.observation = revealedScreen
-            let event = await self.brains.vault.semanticObservationStream
+            let current = await self.brains.vault.semanticObservationStream
                 .commitDiscoveryObservationAfterViewportMovementForTesting(revealedScreen)
+                .current
             return Navigation.ViewportTransition(
                 outcome: .moved,
                 previousVisibleIds: [],
-                event: event
+                current: current
             )
         }
         inflation.exploration.discoverTarget = { _ in nil }
@@ -198,6 +215,11 @@ extension TheBrainsScrollTests {
         let duplicateEntry = InterfaceTree.Element(
             heistId: "duplicate_reveal_target",
             scrollMembership: .init(containerPath: containerPath, index: nil),
+            geometry: testGeometry(
+                for: duplicateElement,
+                ownerPath: containerPath,
+                screen: TheVault.onscreenSpace(for: duplicateElement)
+            ),
             element: duplicateElement
         )
         return InterfaceObservation.makeForTests(

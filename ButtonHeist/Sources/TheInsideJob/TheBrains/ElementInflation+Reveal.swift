@@ -77,6 +77,13 @@ extension ElementInflation {
         )
 
         if vault.liveContains(heistId: treeElement.heistId),
+           treeElement.scrollMembership == nil,
+           case .offscreen = treeElement.geometry.screen {
+            return .failed(.noRevealPath(
+                semanticRevealFailureMessage(.missingScrollMembership, entry: treeElement)
+            ))
+        }
+        if vault.liveContains(heistId: treeElement.heistId),
            let committed = vault.interfaceElement(heistId: treeElement.heistId) {
             return .refreshing(
                 target: admittedIdentity,

@@ -119,15 +119,20 @@ extension TheVaultResolutionTests {
             type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 1_000),
             frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 480)
         )
-        let entry = InterfaceTree.Element(
+        let offscreenEntry = InterfaceTree.Element(
             heistId: "below_fold_button",
             path: elementPath,
             scrollMembership: InterfaceTree.ScrollMembership(containerPath: containerPath, index: nil),
+            geometry: testGeometry(
+                for: offScreen,
+                ownerPath: containerPath,
+                screen: .offscreen
+            ),
             element: offScreen
         )
 
         await vault.installObservationForTesting(InterfaceObservation.makeForTests(
-            elements: [entry.heistId: entry],
+            elements: [offscreenEntry.heistId: offscreenEntry],
             hierarchy: [.container(scrollContainer, children: [])],
             firstResponderHeistId: nil,
         ))
@@ -143,12 +148,23 @@ extension TheVaultResolutionTests {
             return
         }
 
+        let onscreenEntry = InterfaceTree.Element(
+            heistId: "below_fold_button",
+            path: elementPath,
+            scrollMembership: InterfaceTree.ScrollMembership(containerPath: containerPath, index: nil),
+            geometry: testGeometry(
+                for: offScreen,
+                ownerPath: containerPath,
+                screen: TheVault.onscreenSpace(for: offScreen)
+            ),
+            element: offScreen
+        )
         await vault.installObservationForTesting(InterfaceObservation.makeForTests(
-            elements: [entry.heistId: entry],
+            elements: [onscreenEntry.heistId: onscreenEntry],
             hierarchy: [.container(scrollContainer, children: [.element(offScreen, traversalIndex: 0)])],
-            heistIdsByPath: [elementPath: entry.heistId],
+            heistIdsByPath: [elementPath: onscreenEntry.heistId],
             elementRefs: [
-                entry.heistId: .init(object: object, scrollView: scrollView)
+                onscreenEntry.heistId: .init(object: object, scrollView: scrollView)
             ],
             firstResponderHeistId: nil,
         ))
@@ -177,6 +193,11 @@ extension TheVaultResolutionTests {
         let entry = InterfaceTree.Element(
             heistId: "button_visible",
             scrollMembership: nil,
+            geometry: testGeometry(
+                for: visible,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: visible)
+            ),
             element: visible
         )
         await vault.installObservationForTesting(InterfaceObservation.makeForTests(
@@ -418,13 +439,12 @@ extension TheVaultResolutionTests {
 
         // Client-side: HeistElement.matches uses the same StringMatch configuration.
         let heistElement = HeistElement(
-            description: "Save Draft",
-            label: "Save Draft",
-            value: "x",
-            identifier: "save_btn",
-            traits: [.button],
-            frameX: 0, frameY: 0, frameWidth: 0, frameHeight: 0,
-            actions: []
+            accessibilityElement: element,
+            geometry: testGeometry(
+                for: element,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: element)
+            )
         )
         let clientHit = heistElement.matches(matcher)
 
@@ -442,13 +462,12 @@ extension TheVaultResolutionTests {
     func testServerAndClientAgreeOnSmartQuoteLabel() async {
         let smart = element(label: "Don\u{2019}t skip")
         let heist = HeistElement(
-            description: "x",
-            label: "Don\u{2019}t skip",
-            value: nil,
-            identifier: nil,
-            traits: [],
-            frameX: 0, frameY: 0, frameWidth: 0, frameHeight: 0,
-            actions: []
+            accessibilityElement: smart,
+            geometry: testGeometry(
+                for: smart,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: smart)
+            )
         )
         let asciiMatcher = ResolvedElementPredicate.label("Don't skip")
 

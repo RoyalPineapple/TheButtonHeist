@@ -61,7 +61,7 @@ public enum AccessibilityPolicy {
     /// same heistId — these traits do not contribute to element identity.
     /// Consumed by:
     /// - `HeistIdAssignment` duplicate-id disambiguation
-    /// - `AccessibilityTrace.ChangeFact.between` (functional-move pairing)
+    /// - `ElementEdits.between` (functional-move pairing)
     /// - `MinimumPredicateSelector` (matcher suggestion — adds state only
     ///   when semantic predicates remain ambiguous)
     public static let stateTraits: Set<HeistTrait> = [
@@ -208,8 +208,9 @@ public enum AccessibilityPolicy {
         label: String?,
         identifier: String?,
         value: String?,
-        traits: [HeistTrait]
+        traits: some Sequence<HeistTrait>
     ) -> [AccessibilityMatcherFact] {
+        let traitSet = Set(traits)
         var facts: [AccessibilityMatcherFact] = []
         if let identifier = nonEmpty(identifier) {
             facts.append(.identifier(identifier))
@@ -217,7 +218,7 @@ public enum AccessibilityPolicy {
         if let label = nonEmpty(label) {
             facts.append(.label(label))
         }
-        for trait in orderedMatcherTraits(traits) {
+        for trait in orderedMatcherTraits(Array(traitSet)) {
             facts.append(.trait(trait))
         }
         if let value = nonEmpty(value) {
@@ -225,8 +226,7 @@ public enum AccessibilityPolicy {
         }
 
         if !facts.isEmpty {
-            let presentTraits = Set(traits)
-            for trait in orderedMatcherStateTraits where !presentTraits.contains(trait) {
+            for trait in orderedMatcherStateTraits where !traitSet.contains(trait) {
                 facts.append(.excludedTrait(trait))
             }
         }
@@ -234,11 +234,12 @@ public enum AccessibilityPolicy {
     }
 
     public static func matcherFacts(for element: HeistElement) -> [AccessibilityMatcherFact] {
-        matcherFacts(
-            label: element.label,
-            identifier: element.identifier,
-            value: element.value,
-            traits: element.traits
+        let assertable = element.semantics.assertable
+        return matcherFacts(
+            label: assertable.label,
+            identifier: assertable.identifier,
+            value: assertable.value,
+            traits: assertable.traits
         )
     }
 
@@ -271,7 +272,7 @@ public enum AccessibilityPolicy {
     /// When comparing two parses that both contain a tab bar, the parser
     /// computes the fraction of non-tab-bar content labels that persist
     /// across the snapshots. If fewer than this fraction persist, the
-    /// transition is classified as a screen change by trace projection.
+    /// transition is classified as a screen change by observation projection.
     ///
     /// Locked at `0.4` by `AccessibilityPolicyTests`. Changes to this
     /// threshold alter screen-change semantics and should be made with a

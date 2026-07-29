@@ -31,11 +31,17 @@ extension Navigation {
 
     @MainActor
     private final class ViewportOrigin {
+        let containerPath: TreePath
         let scrollViewID: ObjectIdentifier
         let origin: CGPoint
         weak var originalScrollView: UIScrollView?
 
-        init(scrollView: UIScrollView, origin: CGPoint) {
+        init(
+            containerPath: TreePath,
+            scrollView: UIScrollView,
+            origin: CGPoint
+        ) {
+            self.containerPath = containerPath
             scrollViewID = ObjectIdentifier(scrollView)
             self.origin = origin
             originalScrollView = scrollView
@@ -73,12 +79,17 @@ extension Navigation {
         }
 
         mutating func recordOrigin(
+            containerPath: TreePath,
             scrollView: UIScrollView,
             origin: CGPoint
         ) {
             let scrollViewID = ObjectIdentifier(scrollView)
             guard !origins.contains(where: { $0.scrollViewID == scrollViewID }) else { return }
-            origins.append(ViewportOrigin(scrollView: scrollView, origin: origin))
+            origins.append(ViewportOrigin(
+                containerPath: containerPath,
+                scrollView: scrollView,
+                origin: origin
+            ))
         }
     }
 
@@ -303,11 +314,18 @@ extension Navigation {
                     notifyObservation: true,
                     onObservation: onObservation
                 )
-                if container.scrollView.window == nil {
-                    state.originWasSuperseded = true
-                }
                 if observation.decision == .goalSatisfied { return .goalSatisfied }
                 if state.originWasSuperseded { return .screenReplaced }
+                if container.scrollView.window == nil {
+                    if let replacement = currentProgrammaticScrollTarget(
+                        for: container.semanticContainer.path
+                    ), case .uiScrollView(_, let replacementScrollView) = replacement,
+                       ObjectIdentifier(replacementScrollView) != container.scrollViewID {
+                        state.originWasSuperseded = true
+                        return .screenReplaced
+                    }
+                    return .interrupted
+                }
                 if let nestedOutcome = await scanNewlyVisibleNestedContainers(
                     inside: container,
                     onObservation: onObservation
@@ -429,6 +447,7 @@ extension Navigation {
             for viewportOrigin in state.origins.reversed() {
                 switch await restoreOrigin(
                     viewportOrigin.origin,
+                    containerPath: viewportOrigin.containerPath,
                     scrollViewID: viewportOrigin.scrollViewID,
                     originalScrollView: viewportOrigin.originalScrollView,
                     deadline: restorationDeadline,
@@ -452,6 +471,7 @@ extension Navigation {
         ) async -> OriginRestoreOutcome {
             await restoreOrigin(
                 container.savedVisualOrigin,
+                containerPath: container.path,
                 scrollViewID: container.scrollViewID,
                 originalScrollView: container.scrollView,
                 onObservation: onObservation
@@ -460,6 +480,7 @@ extension Navigation {
 
         private func restoreOrigin(
             _ origin: CGPoint,
+            containerPath: TreePath,
             scrollViewID: ObjectIdentifier,
             originalScrollView: UIScrollView?,
             deadline: SemanticObservationDeadline? = nil,
@@ -467,7 +488,10 @@ extension Navigation {
             onObservation: (TheVault.State.Current) async -> ViewportExplorationDecision
         ) async -> OriginRestoreOutcome {
             let intent: ViewportMovementIntent
-            if let target = currentProgrammaticScrollTarget(for: scrollViewID),
+            if let target = currentProgrammaticScrollTarget(for: containerPath),
+               case .uiScrollView = target {
+                intent = .restoreVisualOrigin(origin, in: .semantic(target))
+            } else if let target = currentProgrammaticScrollTarget(for: scrollViewID),
                case .uiScrollView = target {
                 intent = .restoreVisualOrigin(origin, in: .semantic(target))
             } else if let originalScrollView,
@@ -552,6 +576,7 @@ extension Navigation {
 
         private func recordOrigin(of container: ActiveContainerExploration) {
             state.recordOrigin(
+                containerPath: container.path,
                 scrollView: container.scrollView,
                 origin: container.savedVisualOrigin
             )
@@ -609,9 +634,6 @@ extension Navigation {
     ) async -> ElementInflation.SemanticTargetScanResult {
         var visibleTarget: InterfaceTree.Element?
         var resolutionFailure: ElementInflation.SemanticTargetResolutionFailure?
-        let searchOrder: ViewportSearchOrder = request.viewSpace.activationPoint == nil
-            ? .backwardFirst
-            : .forwardFirst
         if request.viewSpace.activationPoint != nil {
             switch await moveToStoredSeed(request.viewSpace, request: request) {
             case .revealed(let current, let exploration):
@@ -630,7 +652,7 @@ extension Navigation {
                 startingFresh: false,
                 deadline: request.deadline
             ),
-            searchOrder: searchOrder,
+            searchOrder: .forwardFirst,
             revealRootScrollViewID: request.revealRootScrollViewID,
         )
         let explored = await explorer.exploreViewports(exitPosition: .current) { _ in

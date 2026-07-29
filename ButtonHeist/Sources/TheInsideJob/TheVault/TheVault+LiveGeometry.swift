@@ -95,10 +95,10 @@ extension TheVault {
         guard viewportElementIDs.contains(treeElement.heistId) else { return nil }
         guard let liveElement = liveInterfaceElement(heistId: treeElement.heistId) else { return nil }
         let committedIdentity = AccessibilityPolicy.matcherIdentityFacts(
-            for: WireConversion.convert(treeElement.element)
+            for: WireConversion.convert(treeElement.element, geometry: treeElement.geometry)
         )
         let liveIdentity = AccessibilityPolicy.matcherIdentityFacts(
-            for: WireConversion.convert(liveElement.element)
+            for: WireConversion.convert(liveElement.element, geometry: liveElement.geometry)
         )
         guard liveIdentity == committedIdentity else { return nil }
         return liveElement
@@ -286,7 +286,7 @@ extension TheVault {
     }
 
     private static func viewportSize(of container: InterfaceTree.Container) -> CGSize {
-        container.contentFrame?.cgRect.size ?? container.container.frame.cgRect.size
+        container.viewSpace.frame?.cgRect.size ?? container.container.frame.cgRect.size
     }
 
     private static func isUsableFrame(_ frame: CGRect) -> Bool {

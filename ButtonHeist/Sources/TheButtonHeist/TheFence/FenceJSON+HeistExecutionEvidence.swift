@@ -81,27 +81,29 @@ private extension HeistReport.Evidence {
     }
 
     private enum WaitCodingKeys: String, CodingKey {
-        case outcome, result, expectation, baselineSummary, finalSummary
+        case outcome, expectation, baselineSummary, finalSummary, delta
     }
 
     private func encode(
-        _ evidence: HeistSettlementEvidence,
+        _ evidence: HeistReport.WaitEvidence,
         to encoder: Encoder,
         profile: ProjectionProfile
     ) throws {
         var container = encoder.container(keyedBy: WaitCodingKeys.self)
         try container.encode(evidence.outcome, forKey: .outcome)
-        try container.encode(
-            PublicHeistOutput.actionResult(
-                evidence.actionResult,
-                expectation: evidence.expectation,
-                profile: profile
-            ),
-            forKey: .result
-        )
         try container.encode(PublicHeistOutput.expectation(evidence.expectation), forKey: .expectation)
         try container.encodeIfPresent(evidence.baselineSummary, forKey: .baselineSummary)
         try container.encodeIfPresent(evidence.finalSummary, forKey: .finalSummary)
+        if let delta = DeltaProjection(
+            evidence: evidence.observation,
+            profile: profile,
+            includeScreenInterface: true
+        ) {
+            try container.encode(
+                PublicDelta(projection: delta, screenPolicy: .screenSummary),
+                forKey: .delta
+            )
+        }
     }
 
     private enum CaseSelectionCodingKeys: String, CodingKey {
@@ -226,9 +228,22 @@ private extension HeistReport.Evidence {
             PublicHeistOutput.expectation(evidence.expectation),
             forKey: .expectation
         )
-        if let waitEvidence = evidence.waitEvidence {
+        if let passed = evidence.passedWaitEvidence {
+            let waitEvidence: HeistReport.WaitEvidence
+            switch passed {
+            case .matched(let matched):
+                waitEvidence = .matched(matched)
+            case .handledElse(let unmatched):
+                waitEvidence = .handledElse(unmatched)
+            }
             try encode(
                 waitEvidence,
+                to: container.superEncoder(forKey: .expectationEvidence),
+                profile: profile
+            )
+        } else if let unmatched = evidence.unmatchedWaitEvidence {
+            try encode(
+                .unmatched(unmatched),
                 to: container.superEncoder(forKey: .expectationEvidence),
                 profile: profile
             )

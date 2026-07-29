@@ -10,7 +10,7 @@ import UIKit
 @MainActor
 final class ScreenGenerationTests: XCTestCase {
 
-    func testCommittedDiscoveryPagesMergeWithinGeneration() async {
+    func testCommittedDiscoveryPagesMergeWithoutScreenBoundary() async throws {
         let brains = TheBrains(tripwire: TheTripwire())
 
         let first = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
@@ -19,13 +19,22 @@ final class ScreenGenerationTests: XCTestCase {
         let second = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             screen(header: "Catalog", entries: [("Discovered", .button, "discovered")])
         )
+        let retained = try await brains.vault.semanticObservationStream.stateOwner
+            .events(after: first.historyRange.upperBound)
+            .get()
 
-        XCTAssertEqual(second.generation, first.generation)
+        XCTAssertEqual(first.historyRange.upperBound, second.historyRange.lowerBound)
+        XCTAssertEqual(retained, second.events)
+        XCTAssertFalse(retained.contains { event in
+            if case .screenChanged = event { return true }
+            return false
+        })
+        XCTAssertEqual(second.current.continuity, .sameGeneration)
         XCTAssertNotNil(brains.vault.interfaceTree.findElement(heistId: "visible"))
         XCTAssertNotNil(brains.vault.interfaceTree.findElement(heistId: "discovered"))
     }
 
-    func testCommittedDiscoveryReplacementRemovesPriorGeneration() async {
+    func testCommittedDiscoveryReplacementAdvancesGenerationThroughHistory() async throws {
         let brains = TheBrains(tripwire: TheTripwire())
         let before = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             screen(header: "Home", entries: [("Old Action", .button, "old_action")])
@@ -41,26 +50,22 @@ final class ScreenGenerationTests: XCTestCase {
             screen(header: "Settings", entries: [("New Action", .button, "new_action")]),
             notificationBatch: actionWindow.capture()
         )
+        let retained = try await brains.vault.semanticObservationStream.stateOwner
+            .events(after: before.historyRange.upperBound)
+            .get()
 
-        XCTAssertEqual(after.generation, before.generation.advanced())
+        XCTAssertEqual(before.historyRange.upperBound, after.historyRange.lowerBound)
+        XCTAssertEqual(retained, after.events)
+        XCTAssertEqual(retained.filter { event in
+            if case .screenChanged = event { return true }
+            return false
+        }.count, 1)
+        XCTAssertEqual(
+            after.current.continuity,
+            .replacement(.screenChangedNotification)
+        )
         XCTAssertNil(brains.vault.interfaceTree.findElement(heistId: "old_action"))
         XCTAssertNotNil(brains.vault.interfaceTree.findElement(heistId: "new_action"))
-    }
-
-    func testDiagnosticEvidenceCannotBecomeCommittedTarget() async {
-        let brains = TheBrains(tripwire: TheTripwire())
-        await brains.vault.recordFailedSettleDiagnosticEvidence(
-            screen(
-                header: "Checkout",
-                entries: [("Unsettled Purchase", .button, "unsettled_purchase")]
-            )
-        )
-        await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
-            screen(header: "Receipt", entries: [("Done", .button, "done")])
-        )
-
-        XCTAssertNil(brains.vault.interfaceTree.findElement(heistId: "unsettled_purchase"))
-        XCTAssertNotNil(brains.vault.interfaceTree.findElement(heistId: "done"))
     }
 
     func testScreenReplacementResetsManifestWithoutResettingDiscoveryBound() async {

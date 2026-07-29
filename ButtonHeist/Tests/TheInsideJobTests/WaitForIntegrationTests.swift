@@ -1,7 +1,6 @@
 #if canImport(UIKit)
-// Integration tests for performWaitFor — the settle-event polling loop that waits
-// for an element to appear or disappear. Requires the BH Demo test host
-// since wait_for polls the semantic accessibility tree via TheVault.
+// Integration tests for whole-heist waits over the semantic accessibility
+// observation stream. Requires the BH Demo test host.
 import ButtonHeistSupport
 import XCTest
 import ThePlans
@@ -67,31 +66,6 @@ final class WaitForIntegrationTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func collectResponse() -> (respond: SocketResponseHandler, result: () -> ActionResult?) {
-        // Test-only inspection box. Mutated only from within the @Sendable
-        // closure that captures it; not shared across threads in practice.
-        final class Box: @unchecked Sendable {
-            var data: Data?
-        }
-        let box = Box()
-        let respond: SocketResponseHandler = { data in
-            box.data = data
-            return .delivered
-        }
-        return (respond, {
-            guard let data = box.data else { return nil }
-            let envelope: ResponseEnvelope
-            do {
-                envelope = try JSONDecoder().decode(ResponseEnvelope.self, from: data)
-            } catch {
-                XCTFail("Failed to decode ResponseEnvelope: \(error)")
-                return nil
-            }
-            guard case .actionResult(let result) = envelope.message else { return nil }
-            return result
-        })
-    }
-
     @discardableResult
     private func addLabel(_ text: String, identifier: String? = nil, y: CGFloat = 100) -> UILabel {
         let label = UILabel()
@@ -129,32 +103,53 @@ final class WaitForIntegrationTests: XCTestCase {
             predicate: waitTarget.predicate,
             timeout: waitTarget.resolvedTimeout
         )
-        return await insideJob.brains.performWait(step: step)
+        return try await executeHeistStep(.wait(step))
     }
 
-    private func changedWait(
+    private func waitFor(
         expectation: AccessibilityPredicate,
         timeout: Double? = nil
     ) async -> ActionResult {
-        await insideJob.brains.executeChangedWait(
-            timeout: timeout ?? 5.0,
-            expectation: expectation
-        )
+        do {
+            let waitTimeout = try WaitTimeout.seconds(timeout ?? 5.0)
+            return try await executeHeistStep(.wait(WaitStep(
+                predicate: expectation,
+                timeout: waitTimeout
+            )))
+        } catch {
+            XCTFail("Could not execute wait plan: \(error)")
+            return .failure(
+                payload: .wait,
+                failureKind: .validationError,
+                message: String(describing: error)
+            )
+        }
     }
 
-    private func waitForSettlementDemand(after baseline: Int) async {
+    private func executeHeistStep(_ step: HeistStep) async throws -> ActionResult {
+        let result = await insideJob.brains.executeHeistPlan(try HeistPlan(body: [step]))
+        guard case .heist(let heistResult) = result.payload,
+              let stepResult = heistResult?.steps.first,
+              let actionResult = stepResult.reportActionResult else {
+            XCTFail("Expected one heist step result")
+            return result
+        }
+        return actionResult
+    }
+
+    private func waitForObservationDemand(after baseline: Int) async {
         for _ in 0..<1_000 {
             if insideJob.brains.vault.semanticObservationStream.activeObservationDemandCount > baseline {
                 return
             }
             await Task.yield()
         }
-        XCTFail("Changed wait did not arm Settlement observation demand")
+        XCTFail("Wait did not arm observation demand")
     }
 
     @discardableResult
-    private func waitForSettledVisibleObservation() async -> Bool {
-        await insideJob.brains.interactionCoordinator.settledEvent(
+    private func waitForVisibleObservation() async -> Bool {
+        await insideJob.brains.vault.semanticObservationStream.nextObservation(
             scope: .visible,
             after: nil,
             timeout: 1.0
@@ -163,18 +158,33 @@ final class WaitForIntegrationTests: XCTestCase {
 
     private func mutateVisibleHierarchy(_ body: () -> Void) async {
         body()
-        await insideJob.brains.vault.invalidateSettledObservationFromTripwire()
+        await insideJob.brains.vault.semanticObservationStream.invalidateCurrentAdmission()
     }
 
-    private func assertSuccessfulWaitSettlement(
-        _ result: ActionResult,
+    private func assertPredicate(
+        _ predicate: AccessibilityPredicate,
+        isMet expected: Bool,
+        in result: ActionResult,
         file: StaticString = #filePath,
         line: UInt = #line
     ) throws {
-        let settlement = try XCTUnwrap(result.evidence.settlement, file: file, line: line)
-        XCTAssertTrue(settlement.settled, file: file, line: line)
-        XCTAssertTrue(settlement.readinessEstablished, file: file, line: line)
-        XCTAssertTrue(settlement.observationHandoffCompleted, file: file, line: line)
+        let evidence = try XCTUnwrap(
+            result.observationEvidence,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            evidence.completeness,
+            .complete,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            try predicate.resolve(in: .empty).evaluate(in: evidence).met,
+            expected,
+            file: file,
+            line: line
+        )
     }
 
     // MARK: - Passive Observation
@@ -203,20 +213,20 @@ final class WaitForIntegrationTests: XCTestCase {
             "Regression setup must keep an unrelated CALayer animation active"
         )
 
-        await insideJob.brains.vault.invalidateSettledObservationFromTripwire()
-        let settledEvent = await insideJob.brains.interactionCoordinator.settledEvent(
+        await insideJob.brains.vault.semanticObservationStream.invalidateCurrentAdmission()
+        let observation = await insideJob.brains.vault.semanticObservationStream.nextObservation(
             scope: .visible,
             after: nil,
             timeout: 2.0
         )
 
-        let event = try XCTUnwrap(settledEvent)
+        let current = try XCTUnwrap(observation)
         XCTAssertTrue(
-            event.snapshot.observation.tree.orderedElements.contains { $0.element.label == "PassiveObservation-StableAX" },
+            current.snapshot.interface.tree.sortedElements.contains {
+                $0.label == "PassiveObservation-StableAX"
+            },
             "Passive visible observation should publish a stable AX tree even while unrelated layer motion continues"
         )
-        let diagnostic = await insideJob.brains.vault.semanticObservationStream.latestSettleFailureDiagnostic()
-        XCTAssertNil(diagnostic)
     }
 
     // MARK: - 1. Element already present — returns immediately
@@ -233,16 +243,19 @@ final class WaitForIntegrationTests: XCTestCase {
 
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
-        XCTAssertTrue(result.message?.hasPrefix("matched") == true)
         XCTAssertNil(result.outcome.failureKind)
-        try assertSuccessfulWaitSettlement(result)
+        try assertPredicate(
+            .exists(.label("WaitFor-AlreadyPresent")),
+            isMet: true,
+            in: result
+        )
     }
 
-    func testActionUsesSettledObservationWhileAnimationRemainsActive() async throws {
+    func testActionUsesObservedAccessibilityStateWhileAnimationRemainsActive() async throws {
         let button = addButton("Action-RepeatingAnimation")
         defer { button.removeFromSuperview() }
 
-        let baseline = await insideJob.brains.interactionCoordinator.settledEvent(
+        let baseline = await insideJob.brains.vault.semanticObservationStream.nextObservation(
             scope: .visible,
             after: nil,
             timeout: 1
@@ -259,38 +272,29 @@ final class WaitForIntegrationTests: XCTestCase {
         )
         defer { button.layer.removeAllAnimations() }
 
-        let command = try HeistActionCommand.activate(
-            .label("Action-RepeatingAnimation")
-        ).resolve(in: .empty)
-        let authoredExpectation = WaitStep(
-            predicate: .exists(.label("Action-RepeatingAnimation")),
-            timeout: try .seconds(1)
-        )
-        let resolvedExpectation = try authoredExpectation.resolve(in: .empty)
-        let expectation = Settlement.ActionExpectation(
-            authored: authoredExpectation.predicate,
-            resolved: resolvedExpectation.predicate,
-            timeout: resolvedExpectation.timeout
-        )
-        let execution = await insideJob.brains.executeRuntimeActionForHeist(
-            command,
-            expectation: expectation
-        )
-        let result = execution.result
+        let result = try await executeHeistStep(.action(ActionStep(
+            command: .activate(.label("Action-RepeatingAnimation")),
+            expectationPolicy: .expect(ActionExpectation(
+                predicate: .exists(.label("Action-RepeatingAnimation")),
+                timeout: try .seconds(1)
+            ))
+        )))
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "action failed")
-        // There is one settle rule now, so the path is always semantic
-        // stability. What this case still proves is that the AX diff — not the
-        // animation — decides: the loop settles while the repeat animation is
-        // demonstrably still running.
-        try assertSuccessfulWaitSettlement(result)
+        // The accessibility reading, not the animation, decides whether the
+        // expectation is met while the repeat animation remains active.
+        try assertPredicate(
+            .exists(.label("Action-RepeatingAnimation")),
+            isMet: true,
+            in: result
+        )
         XCTAssertFalse(
             (button.layer.animationKeys() ?? []).isEmpty,
             "The fixture animation must still be running, or this case proves nothing"
         )
     }
 
-    func testWaitForAppearTimeoutNamesExpectedMatcherAndInterfaceCount() async throws {
+    func testWaitForAppearTimeoutReturnsCompleteUnmetEvidence() async throws {
         let label = addLabel("WaitFor-Known-Anchor")
         defer { label.removeFromSuperview() }
 
@@ -299,18 +303,22 @@ final class WaitForIntegrationTests: XCTestCase {
             timeout: 1.0
         )
         let result = try XCTUnwrap(response)
-        let message = try XCTUnwrap(result.message)
-
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.outcome.failureKind, .timeout)
-        XCTAssertTrue(message.contains("waiting for element to appear"), "Unexpected message: \(message)")
-        XCTAssertTrue(message.contains("expected: label=\"WaitFor-Missing-Target\""), "Unexpected message: \(message)")
-        XCTAssertTrue(message.contains("interface:"), "Unexpected message: \(message)")
-        XCTAssertTrue(message.contains("Next: get_interface()"), "Unexpected message: \(message)")
+        try assertPredicate(
+            .exists(.label("WaitFor-Missing-Target")),
+            isMet: false,
+            in: result
+        )
+        try assertPredicate(
+            .exists(.label("WaitFor-Known-Anchor")),
+            isMet: true,
+            in: result
+        )
     }
 
-    func testTimeoutDiagnosticsExcludeImperceptibleUIKitDescendants() async throws {
+    func testTimeoutEvidenceExcludesImperceptibleUIKitDescendants() async throws {
         let combined = UIView(frame: CGRect(x: 10, y: 100, width: 240, height: 44))
         combined.isAccessibilityElement = true
         combined.accessibilityLabel = "Ticket saved., Dismiss"
@@ -326,19 +334,22 @@ final class WaitForIntegrationTests: XCTestCase {
             target: .label("Ticket saved."),
             timeout: 0.2
         )
-        let message = try XCTUnwrap(response?.message)
-
-        XCTAssertTrue(
-            message.contains(#"observed accessibility candidate label="Ticket saved., Dismiss""#),
-            message
+        let result = try XCTUnwrap(response)
+        XCTAssertFalse(result.outcome.isSuccess)
+        XCTAssertEqual(result.outcome.failureKind, .timeout)
+        try assertPredicate(
+            .exists(.label("Ticket saved., Dismiss")),
+            isMet: true,
+            in: result
         )
-        XCTAssertFalse(
-            message.contains(#"observed accessibility candidate label="Ticket saved." did not match"#),
-            message
+        try assertPredicate(
+            .exists(.label("Ticket saved.")),
+            isMet: false,
+            in: result
         )
     }
 
-    func testSequentialWaitTimeoutDiagnosticsRemainScopedToEachWindow() async throws {
+    func testSequentialWaitEvidenceRemainsScopedToEachOperation() async throws {
         let firstObservation = InterfaceObservation.makeForTests(elements: [(
             AccessibilityElement.make(
                 label: "First candidate",
@@ -372,13 +383,10 @@ final class WaitForIntegrationTests: XCTestCase {
             timeout: 0.2
         )
         let second = try XCTUnwrap(secondResult)
-        let firstMessage = try XCTUnwrap(first.message)
-        let secondMessage = try XCTUnwrap(second.message)
-
-        XCTAssertTrue(firstMessage.contains("First candidate"), firstMessage)
-        XCTAssertFalse(firstMessage.contains("Second candidate"), firstMessage)
-        XCTAssertTrue(secondMessage.contains("Second candidate"), secondMessage)
-        XCTAssertFalse(secondMessage.contains("First candidate"), secondMessage)
+        try assertPredicate(.exists(.label("First candidate")), isMet: true, in: first)
+        try assertPredicate(.exists(.label("Second candidate")), isMet: false, in: first)
+        try assertPredicate(.exists(.label("Second candidate")), isMet: true, in: second)
+        try assertPredicate(.exists(.label("First candidate")), isMet: false, in: second)
     }
 
     // MARK: - 2. Element appears after a delay
@@ -411,10 +419,17 @@ final class WaitForIntegrationTests: XCTestCase {
         let unwrapped = try XCTUnwrap(response)
         XCTAssertTrue(unwrapped.outcome.isSuccess)
         XCTAssertEqual(unwrapped.method, .wait)
-        let message = try XCTUnwrap(unwrapped.message)
-        XCTAssertTrue(message.contains("matched after"), "Unexpected message: \(message)")
         XCTAssertNil(unwrapped.outcome.failureKind)
-        try assertSuccessfulWaitSettlement(unwrapped)
+        try assertPredicate(
+            .exists(.label("WaitFor-Delayed")),
+            isMet: true,
+            in: unwrapped
+        )
+        try assertPredicate(
+            .elementsChanged([.appeared(.label("WaitFor-Delayed"))]),
+            isMet: true,
+            in: unwrapped
+        )
     }
 
     // MARK: - 3. wait_for absent: true on a present element — should timeout
@@ -433,7 +448,11 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.outcome.failureKind, .timeout)
-        XCTAssertTrue(result.message?.contains("element still present") == true)
+        try assertPredicate(
+            .missing(.label("WaitFor-StillHere")),
+            isMet: false,
+            in: result
+        )
     }
 
     // MARK: - 4. wait_for absent: true on an element that disappears
@@ -458,9 +477,12 @@ final class WaitForIntegrationTests: XCTestCase {
         let unwrapped = try XCTUnwrap(response)
         XCTAssertTrue(unwrapped.outcome.isSuccess)
         XCTAssertEqual(unwrapped.method, .wait)
-        XCTAssertTrue(unwrapped.message?.contains("absent confirmed") == true)
         XCTAssertNil(unwrapped.outcome.failureKind)
-        try assertSuccessfulWaitSettlement(unwrapped)
+        try assertPredicate(
+            .missing(.label("WaitFor-GoingAway")),
+            isMet: true,
+            in: unwrapped
+        )
     }
 
     // MARK: - 5. wait_for respects timeout value
@@ -478,8 +500,12 @@ final class WaitForIntegrationTests: XCTestCase {
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.outcome.failureKind, .timeout)
-        XCTAssertTrue(result.message?.contains("element not found") == true)
-        // Should complete around 2s — allow generous margin for settle loop overhead
+        try assertPredicate(
+            .exists(.label("WaitFor-NonExistent-Element")),
+            isMet: false,
+            in: result
+        )
+        // Allow a generous margin around the authored timeout for observation overhead.
         XCTAssertGreaterThanOrEqual(elapsed, 1.5, "Should wait at least close to the timeout")
         XCTAssertLessThan(elapsed, 5.0, "Should not wait much longer than the timeout")
     }
@@ -497,8 +523,11 @@ final class WaitForIntegrationTests: XCTestCase {
         let result = try XCTUnwrap(response)
 
         XCTAssertTrue(result.outcome.isSuccess)
-        XCTAssertTrue(result.message?.hasPrefix("matched") == true)
-        try assertSuccessfulWaitSettlement(result)
+        try assertPredicate(
+            .exists(.identifier("waitfor-test-id")),
+            isMet: true,
+            in: result
+        )
     }
 
     func testWaitForAbsentTreatsKnownOffViewportElementAsPresent() async throws {
@@ -532,7 +561,16 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.outcome.failureKind, .timeout)
-        XCTAssertTrue(result.message?.contains("timed out") == true, result.message ?? "missing wait message")
+        try assertPredicate(
+            .exists(.label("WaitFor-Offscreen-StillHere")),
+            isMet: true,
+            in: result
+        )
+        try assertPredicate(
+            .missing(.label("WaitFor-Offscreen-StillHere")),
+            isMet: false,
+            in: result
+        )
     }
 
     // MARK: - Absent already absent returns immediately
@@ -547,18 +585,21 @@ final class WaitForIntegrationTests: XCTestCase {
 
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
-        XCTAssertTrue(result.message?.contains("absent confirmed after") == true)
         XCTAssertNil(result.outcome.failureKind)
-        try assertSuccessfulWaitSettlement(result)
+        try assertPredicate(
+            .missing(.label("WaitFor-NeverExisted")),
+            isMet: true,
+            in: result
+        )
     }
 
-    // MARK: - Changed wait trace truth
+    // MARK: - Wait evidence truth
 
     func testWaitForStatePresentAlreadyPresentSucceedsFromCurrentState() async throws {
         let label = addLabel("WaitForChange-AlreadyPresent")
         defer { label.removeFromSuperview() }
 
-        let result = await changedWait(
+        let result = await waitFor(
             expectation: .exists(.label("WaitForChange-AlreadyPresent")),
             timeout: 1.0
         )
@@ -566,14 +607,15 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
         XCTAssertNil(result.outcome.failureKind)
-        XCTAssertTrue(
-            result.message?.contains("matched") == true
+        try assertPredicate(
+            .exists(.label("WaitForChange-AlreadyPresent")),
+            isMet: true,
+            in: result
         )
-        try assertSuccessfulWaitSettlement(result)
     }
 
     func testWaitForStateAbsentAlreadyAbsentSucceedsFromCurrentState() async throws {
-        let result = await changedWait(
+        let result = await waitFor(
             expectation: .missing(.label("WaitForChange-NeverExisted")),
             timeout: 1.0
         )
@@ -581,16 +623,17 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
         XCTAssertNil(result.outcome.failureKind)
-        XCTAssertTrue(
-            result.message?.contains("absent confirmed") == true
+        try assertPredicate(
+            .missing(.label("WaitForChange-NeverExisted")),
+            isMet: true,
+            in: result
         )
-        try assertSuccessfulWaitSettlement(result)
     }
 
     func testWaitForStatePresentOnNextEventReturnsThroughWaitPath() async throws {
         let baseline = addLabel("WaitForChange-Baseline")
         defer { baseline.removeFromSuperview() }
-        let didObserveBaseline = await waitForSettledVisibleObservation()
+        let didObserveBaseline = await waitForVisibleObservation()
         XCTAssertTrue(didObserveBaseline)
 
         var delayedLabel: UILabel?
@@ -598,11 +641,11 @@ final class WaitForIntegrationTests: XCTestCase {
         let baselineDemand = insideJob.brains.vault.semanticObservationStream
             .activeObservationDemandCount
         let mutationTask = Task { @MainActor in
-            await self.waitForSettlementDemand(after: baselineDemand)
+            await self.waitForObservationDemand(after: baselineDemand)
             delayedLabel = self.addLabel("WaitForChange-Delayed")
-            await self.insideJob.brains.vault.invalidateSettledObservationFromTripwire()
+            await self.insideJob.brains.vault.semanticObservationStream.invalidateCurrentAdmission()
         }
-        let result = await changedWait(
+        let result = await waitFor(
             expectation: .exists(.label("WaitForChange-Delayed")),
             timeout: 5.0
         )
@@ -610,13 +653,16 @@ final class WaitForIntegrationTests: XCTestCase {
 
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
-        XCTAssertTrue(result.message?.contains("matched after") == true, result.message ?? "missing wait message")
-        try assertSuccessfulWaitSettlement(result)
+        try assertPredicate(
+            .exists(.label("WaitForChange-Delayed")),
+            isMet: true,
+            in: result
+        )
     }
 
     func testWaitForStateAbsentOnNextEventReturnsThroughWaitPath() async throws {
         let label = addLabel("WaitForChange-Removed")
-        let didObserveBaseline = await waitForSettledVisibleObservation()
+        let didObserveBaseline = await waitForVisibleObservation()
         XCTAssertTrue(didObserveBaseline)
         XCTAssertTrue(
             insideJob.brains.vault.interfaceTree.orderedElements.contains {
@@ -628,12 +674,12 @@ final class WaitForIntegrationTests: XCTestCase {
         let baselineDemand = insideJob.brains.vault.semanticObservationStream
             .activeObservationDemandCount
         let mutationTask = Task { @MainActor in
-            await self.waitForSettlementDemand(after: baselineDemand)
+            await self.waitForObservationDemand(after: baselineDemand)
             await self.mutateVisibleHierarchy {
                 label.removeFromSuperview()
             }
         }
-        let result = await changedWait(
+        let result = await waitFor(
             expectation: .missing(.label("WaitForChange-Removed")),
             timeout: 5.0
         )
@@ -641,20 +687,20 @@ final class WaitForIntegrationTests: XCTestCase {
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "missing wait message")
         XCTAssertEqual(result.method, .wait)
-        XCTAssertTrue(
-            result.message?.contains("absent confirmed after") == true,
-            result.message ?? "missing wait message"
+        try assertPredicate(
+            .missing(.label("WaitForChange-Removed")),
+            isMet: true,
+            in: result
         )
-        try assertSuccessfulWaitSettlement(result)
     }
 
-    func testWaitForChangeElementsChangedRequiresFutureSettledDelta() async throws {
+    func testWaitForElementsChangedRequiresFutureElementChange() async throws {
         let changed = addLabel("WaitForChange-ElementsChanged")
         defer { changed.removeFromSuperview() }
-        let didObserveBaseline = await waitForSettledVisibleObservation()
+        let didObserveBaseline = await waitForVisibleObservation()
         XCTAssertTrue(didObserveBaseline)
 
-        let result = await changedWait(
+        let result = await waitFor(
             expectation: .elementsChanged,
             timeout: 0.2
         )
@@ -662,48 +708,14 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.outcome.failureKind, .timeout)
-        XCTAssertTrue(result.message?.contains("expected: changed(elements(*))") == true)
-        let settlement = try XCTUnwrap(result.evidence.settlement)
-        XCTAssertTrue(settlement.settled)
-        XCTAssertTrue(settlement.readinessEstablished)
-        XCTAssertTrue(settlement.observationHandoffCompleted)
-    }
-
-    func testChangedWaitCancellationReturnsCanonicalFailureAndReleasesLease() async throws {
-        let anchor = addLabel("WaitForChange-CancellationAnchor")
-        defer { anchor.removeFromSuperview() }
-        let baselineDemand = insideJob.brains.vault.semanticObservationStream
-            .activeObservationDemandCount
-        let waitTask = Task { @MainActor in
-            await self.changedWait(
-                expectation: .exists(.label("WaitForChange-NeverAppears")),
-                timeout: 5.0
-            )
-        }
-        await waitForSettlementDemand(after: baselineDemand)
-
-        waitTask.cancel()
-        let result = await waitTask.value
-
-        XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(result.method, .wait)
-        XCTAssertEqual(result.outcome.failureKind, .actionFailed)
-        XCTAssertTrue(result.message?.contains("settlement cancelled") == true)
-        XCTAssertFalse(try XCTUnwrap(result.evidence.settlement).settled)
-
-        let recovered = await changedWait(
-            expectation: .exists(.label("WaitForChange-CancellationAnchor")),
-            timeout: 1.0
-        )
-        XCTAssertTrue(recovered.outcome.isSuccess, recovered.message ?? "changed wait lease was not released")
-        try assertSuccessfulWaitSettlement(recovered)
+        try assertPredicate(.elementsChanged, isMet: false, in: result)
     }
 
     func testWaitForStateAbsentTimesOutWhenElementStillPresent() async throws {
         let label = addLabel("WaitForChange-StillPresent")
         defer { label.removeFromSuperview() }
 
-        let result = await changedWait(
+        let result = await waitFor(
             expectation: .missing(.label("WaitForChange-StillPresent")),
             timeout: 1.0
         )
@@ -711,51 +723,52 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.outcome.failureKind, .timeout)
-        XCTAssertTrue(
-            result.message?.contains("expected: label=\"WaitForChange-StillPresent\"") == true
+        try assertPredicate(
+            .missing(.label("WaitForChange-StillPresent")),
+            isMet: false,
+            in: result
         )
-        XCTAssertTrue(result.message?.contains("element still present") == true)
     }
 
-    func testWaitForChangeScreenChangedTimeoutSuggestsElementsChanged() async throws {
+    func testWaitForScreenChangedTimesOutWithoutScreenEvent() async throws {
         let label = addLabel("WaitForChange-ScreenChangedTimeout")
         defer { label.removeFromSuperview() }
 
-        let result = await changedWait(
+        let result = await waitFor(
             expectation: .screenChanged,
             timeout: 0.2
         )
-        let message = try XCTUnwrap(result.message)
-
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.outcome.failureKind, .timeout)
-        XCTAssertTrue(message.contains("expected: changed(screen(*))"), "Unexpected message: \(message)")
-        XCTAssertTrue(message.contains("last observed:"), "Unexpected message: \(message)")
+        try assertPredicate(.screenChanged, isMet: false, in: result)
+        let evidence = try XCTUnwrap(result.observationEvidence)
+        XCTAssertFalse(evidence.events.contains {
+            if case .screenChanged = $0 { return true }
+            return false
+        })
     }
 
-    func testWaitForChangeElementsChangedTimeoutDoesNotSuggestElementsChanged() async throws {
+    func testWaitForElementsChangedTimesOutWithoutElementChange() async throws {
         let label = addLabel("WaitForChange-ElementsChangedTimeout")
         defer { label.removeFromSuperview() }
 
-        let result = await changedWait(
+        let result = await waitFor(
             expectation: .elementsChanged,
             timeout: 0.2
         )
-        let message = try XCTUnwrap(result.message)
-
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.outcome.failureKind, .timeout)
-        XCTAssertTrue(message.contains("expected: changed(elements(*))"), "Unexpected message: \(message)")
+        try assertPredicate(.elementsChanged, isMet: false, in: result)
     }
 
-    func testWaitForChangeElementUpdatedWithOldValueRequiresObservedUpdate() async throws {
+    func testWaitForElementUpdatedWithOldValueRequiresObservedUpdate() async throws {
         let label = addLabel("WaitForChange-UpdateOldValue")
         label.accessibilityValue = "Ready"
         defer { label.removeFromSuperview() }
 
-        let result = await changedWait(
+        let result = await waitFor(
             expectation: .elementsChanged([.updated(
                 .label("WaitForChange-UpdateOldValue"),
                 .value(before: "Loading", after: "Ready")
@@ -766,6 +779,14 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.outcome.failureKind, .timeout)
+        try assertPredicate(
+            .elementsChanged([.updated(
+                .label("WaitForChange-UpdateOldValue"),
+                .value(before: "Loading", after: "Ready")
+            )]),
+            isMet: false,
+            in: result
+        )
     }
 
 }

@@ -35,7 +35,7 @@ flowchart TD
     SEED --> OWNER{"candidate path exactly<br/>matches owner path?"}
     OWNER -- "yes" --> POINT["dispatch point reveal<br/>through viewport transition"]
     OWNER -- "no: missing or mismatch" --> PAGE["skip coordinate and page<br/>an available ancestor"]
-    POINT --> COMMIT["settle and commit<br/>the resulting capture"]
+    POINT --> COMMIT["capture and commit<br/>the resulting viewport"]
     PAGE --> COMMIT
     COMMIT --> RERESOLVE{"resolve admitted semantic target<br/>in this committed InterfaceTree"}
     RERESOLVE -- "one match" --> CURRENT["adopt this capture's current HeistId<br/>and live reference"]
@@ -71,8 +71,8 @@ Notes:
   immediately before point dispatch; a missing or mismatched owner cannot donate
   its coordinate to an ancestor or sibling and instead selects the established
   ancestor paging route. Point reveal and paging both use the canonical viewport
-  transition, settlement, Store commit, and target re-resolution pipelines.
-  Content absent from settled semantic truth cannot be revealed, and exploration
+  transition, observation, Vault commit, and target re-resolution pipelines.
+  Content absent from admitted semantic truth cannot be revealed, and exploration
   never scans for an old `HeistId` as identity.
 - The ordinal is a capture-local disambiguator over a semantic base selector,
   never durable identity. A target that becomes unique only through its terminal

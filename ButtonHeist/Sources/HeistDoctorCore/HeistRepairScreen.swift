@@ -52,7 +52,8 @@ struct RepairScreen {
                 siblingText: siblingGroups[parentPath(core.path)]?.excluding(core.primaryText) ?? [],
                 headerText: Array(headers.suffix(3))
             )
-            if core.element.traits.contains(.header), let header = core.primaryText {
+            if core.element.semantics.assertable.traits.contains(.header),
+               let header = core.primaryText {
                 headers.append(header)
             }
             elements.append(element)

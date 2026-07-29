@@ -40,7 +40,7 @@ extension TheVault {
                 identifier: element.identifier,
                 hint: element.hint,
                 traits: Set(element.traits.heistTraits),
-                customContent: Set(customContent),
+                customContent: customContent,
                 rotors: Set(rotors.map { HeistRotor(name: $0.name) }),
                 actions: element.projectedActionSet.actions
             ),

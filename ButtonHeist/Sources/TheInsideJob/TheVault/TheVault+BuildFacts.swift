@@ -11,43 +11,43 @@ extension TheVault {
 
     struct ElementScrollFacts: Equatable {
         let membership: InterfaceTree.ScrollMembership
-        let observedScrollContentActivationPoint: InterfaceTree.ObservedScrollContentActivationPoint?
+        let viewSpace: HeistElement.Geometry.ViewSpace
 
         init(
             containerPath: TreePath,
             index: Int? = nil,
-            observedScrollContentActivationPoint: InterfaceTree.ObservedScrollContentActivationPoint? = nil
+            viewSpace: HeistElement.Geometry.ViewSpace
         ) {
             self.init(
                 membership: InterfaceTree.ScrollMembership(containerPath: containerPath, index: index),
-                observedScrollContentActivationPoint: observedScrollContentActivationPoint
+                viewSpace: viewSpace
             )
         }
 
         init(
             membership: InterfaceTree.ScrollMembership,
-            observedScrollContentActivationPoint: InterfaceTree.ObservedScrollContentActivationPoint? = nil
+            viewSpace: HeistElement.Geometry.ViewSpace
         ) {
             self.membership = membership
-            self.observedScrollContentActivationPoint = observedScrollContentActivationPoint
+            self.viewSpace = viewSpace
         }
     }
 
     struct ScrollFacts: Equatable {
         let contextContainerPaths: Set<TreePath>
         let elementsByPath: [TreePath: ElementScrollFacts]
-        let containerObservedScrollContentActivationPointsByPath: [TreePath: InterfaceTree.ObservedScrollContentActivationPoint]
+        let containerViewSpacesByPath: [TreePath: HeistElement.Geometry.ViewSpace]
         let inventoriesByPath: [TreePath: ScrollInventory]
 
         init(
             contextContainerPaths: Set<TreePath> = [],
             elementsByPath: [TreePath: ElementScrollFacts] = [:],
-            containerObservedScrollContentActivationPointsByPath: [TreePath: InterfaceTree.ObservedScrollContentActivationPoint] = [:],
+            containerViewSpacesByPath: [TreePath: HeistElement.Geometry.ViewSpace] = [:],
             inventoriesByPath: [TreePath: ScrollInventory] = [:]
         ) {
             self.contextContainerPaths = contextContainerPaths
             self.elementsByPath = elementsByPath
-            self.containerObservedScrollContentActivationPointsByPath = containerObservedScrollContentActivationPointsByPath
+            self.containerViewSpacesByPath = containerViewSpacesByPath
             self.inventoriesByPath = inventoriesByPath
         }
 
@@ -105,12 +105,11 @@ extension TheVault.BuildFacts {
             scroll: TheVault.ScrollFacts(
                 contextContainerPaths: identityContext.scrollableContainerPaths,
                 elementsByPath: elementScrollExtraction.elementsByPath,
-                containerObservedScrollContentActivationPointsByPath: containerObservedScrollContentActivationPoints(
+                containerViewSpacesByPath: containerViewSpaces(
                     identityContext: identityContext,
                     scrollViewsByPath: result.scrollViewsByPath
                 ),
                 inventoriesByPath: scrollInventories(
-                    visibleIndicesByContainerPath: elementScrollExtraction.visibleIndicesByContainerPath,
                     scrollViewsByPath: result.scrollViewsByPath,
                     reportedCountsByContainerPath: result.inventoryEnumeration.reportedCountsByContainerPath
                 )
@@ -133,7 +132,6 @@ extension TheVault.BuildFacts {
 
     private struct ElementScrollFactsExtraction {
         let elementsByPath: [TreePath: TheVault.ElementScrollFacts]
-        let visibleIndicesByContainerPath: [TreePath: Set<Int>]
     }
 
     private static func firstResponderPaths(in objectsByPath: [TreePath: NSObject]) -> Set<TreePath> {
@@ -150,7 +148,6 @@ extension TheVault.BuildFacts {
         scrollViewsByPath: [TreePath: UIScrollView]
     ) -> ElementScrollFactsExtraction {
         var elementsByPath: [TreePath: TheVault.ElementScrollFacts] = [:]
-        var visibleIndicesByContainerPath: [TreePath: Set<Int>] = [:]
 
         for identity in identityContext.elements {
             guard let membership = identity.scrollMembership,
@@ -158,15 +155,12 @@ extension TheVault.BuildFacts {
             else { continue }
 
             let index = scrollIndex(of: objectsByPath[identity.path], in: scrollView)
-            if let index {
-                visibleIndicesByContainerPath[membership.containerPath, default: []].insert(index)
-            }
             elementsByPath[identity.path] = TheVault.ElementScrollFacts(
                 membership: InterfaceTree.ScrollMembership(
                     containerPath: membership.containerPath,
                     index: index
                 ),
-                observedScrollContentActivationPoint: observedScrollContentActivationPoint(
+                viewSpace: viewSpace(
                     for: identity.element,
                     in: scrollView,
                     ownerPath: membership.containerPath
@@ -174,22 +168,17 @@ extension TheVault.BuildFacts {
             )
         }
 
-        return ElementScrollFactsExtraction(
-            elementsByPath: elementsByPath,
-            visibleIndicesByContainerPath: visibleIndicesByContainerPath
-        )
+        return ElementScrollFactsExtraction(elementsByPath: elementsByPath)
     }
 
     private static func scrollInventories(
-        visibleIndicesByContainerPath: [TreePath: Set<Int>],
         scrollViewsByPath: [TreePath: UIScrollView],
         reportedCountsByContainerPath: [TreePath: InventoryEnumeration.ReportedCount]
     ) -> [TreePath: ScrollInventory] {
         Dictionary(
             uniqueKeysWithValues: scrollViewsByPath.keys.compactMap { path in
                 guard let inventory = ScrollInventory(
-                    totalElementCount: reportedCountsByContainerPath[path]?.value,
-                    visibleIndices: (visibleIndicesByContainerPath[path] ?? []).sorted()
+                    totalElementCount: reportedCountsByContainerPath[path]?.value
                 ) else { return nil }
                 return (path, inventory)
             }
@@ -203,23 +192,25 @@ extension TheVault.BuildFacts {
         return index
     }
 
-    private static func observedScrollContentActivationPoint(
+    private static func viewSpace(
         for element: AccessibilityElement,
         in scrollView: UIScrollView,
         ownerPath: TreePath
-    ) -> InterfaceTree.ObservedScrollContentActivationPoint? {
-        let activationPoint = element.bhResolvedActivationPoint
-        guard activationPoint.x.isFinite, activationPoint.y.isFinite else { return nil }
-        return InterfaceTree.ObservedScrollContentActivationPoint(
-            scrollView.convert(activationPoint, from: nil),
-            ownerPath: ownerPath
+    ) -> HeistElement.Geometry.ViewSpace {
+        HeistElement.Geometry.ViewSpace(
+            ownerPath: ownerPath,
+            frame: try? ViewRect(validating: scrollView.convert(element.bhFrame, from: nil)),
+            activationPoint: try? ViewPoint(validating: scrollView.convert(
+                element.bhResolvedActivationPoint,
+                from: nil
+            ))
         )
     }
 
-    private static func containerObservedScrollContentActivationPoints(
+    private static func containerViewSpaces(
         identityContext: TheVault.IdentityContext,
         scrollViewsByPath: [TreePath: UIScrollView]
-    ) -> [TreePath: InterfaceTree.ObservedScrollContentActivationPoint] {
+    ) -> [TreePath: HeistElement.Geometry.ViewSpace] {
         Dictionary(
             uniqueKeysWithValues: identityContext.containers.compactMap { identity in
                 guard let membership = identity.scrollMembership,
@@ -227,13 +218,17 @@ extension TheVault.BuildFacts {
                 else { return nil }
                 let frame = identity.container.frame.cgRect
                 let activationPoint = CGPoint(x: frame.midX, y: frame.midY)
-                guard activationPoint.x.isFinite, activationPoint.y.isFinite,
-                      let observedPoint = InterfaceTree.ObservedScrollContentActivationPoint(
-                          scrollView.convert(activationPoint, from: nil),
-                          ownerPath: membership.containerPath
-                      )
-                else { return nil }
-                return (identity.path, observedPoint)
+                return (
+                    identity.path,
+                    HeistElement.Geometry.ViewSpace(
+                        ownerPath: membership.containerPath,
+                        frame: try? ViewRect(validating: scrollView.convert(frame, from: nil)),
+                        activationPoint: try? ViewPoint(validating: scrollView.convert(
+                            activationPoint,
+                            from: nil
+                        ))
+                    )
+                )
             }
         )
     }

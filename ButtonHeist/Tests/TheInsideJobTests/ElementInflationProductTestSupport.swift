@@ -100,6 +100,7 @@ final class ElementInflationProductTests: ButtonHeistRuntimeTestCase {
         refreshesFromUIKit: Bool = true
     ) async throws {
         let targetBrains = targetBrains ?? brains!
+        await targetBrains.tripwire.yieldFrames(2)
         let screen = try XCTUnwrap(targetBrains.vault.refreshLiveCapture())
         let identifier = semanticIdentifier ?? fixture.identifier
         let label = semanticLabel ?? fixture.label
@@ -120,7 +121,7 @@ final class ElementInflationProductTests: ButtonHeistRuntimeTestCase {
                 size: fixture.target.bounds.size
             )
         )
-        let observedActivationPoint = try observedContentActivationPoint(
+        let viewSpace = try viewSpace(
             origin: fixture.frameOrigin,
             size: fixture.target.bounds.size,
             ownerPath: scrollContainerPath
@@ -128,30 +129,35 @@ final class ElementInflationProductTests: ButtonHeistRuntimeTestCase {
         let entry = InterfaceTree.Element(
             heistId: fixture.knownHeistId,
             scrollMembership: InterfaceTree.ScrollMembership(containerPath: scrollContainerPath, index: nil),
-            observedScrollContentActivationPoint: observedActivationPoint,
+            geometry: HeistElement.Geometry(screen: .offscreen, view: viewSpace),
             element: element
         )
         var elements = screen.tree.elements
         elements[entry.heistId] = entry
 
-        await targetBrains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
-            tree: InterfaceTree(elements: elements, containers: screen.tree.containers),
-            liveCapture: screen.liveCapture
-        ))
+        await targetBrains.vault.semanticObservationStream
+            .commitDiscoveryObservationForTesting(InterfaceObservation.makeForTests(
+                tree: InterfaceTree(elements: elements, containers: screen.tree.containers),
+                liveCapture: screen.liveCapture
+            ))
         if refreshesFromUIKit, targetBrains === brains {
             visibleObservationSource.useLiveCapture()
         }
     }
 
-    func observedContentActivationPoint(
+    func viewSpace(
         origin: CGPoint,
         size: CGSize,
         ownerPath: TreePath
-    ) throws -> InterfaceTree.ObservedScrollContentActivationPoint {
-        try XCTUnwrap(InterfaceTree.ObservedScrollContentActivationPoint(CGPoint(
-            x: origin.x + size.width / 2,
-            y: origin.y + size.height / 2
-        ), ownerPath: ownerPath))
+    ) throws -> HeistElement.Geometry.ViewSpace {
+        HeistElement.Geometry.ViewSpace(
+            ownerPath: ownerPath,
+            frame: try ViewRect(validating: CGRect(origin: origin, size: size)),
+            activationPoint: try ViewPoint(validating: CGPoint(
+                x: origin.x + size.width / 2,
+                y: origin.y + size.height / 2
+            ))
+        )
     }
     func firstLiveScrollableContainerPath(in observation: InterfaceObservation) -> TreePath? {
         for item in observation.liveCapture.hierarchy.scrollablePathIndexedContainers {

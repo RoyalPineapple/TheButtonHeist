@@ -2,7 +2,8 @@
 ///
 /// The observation vocabulary: every property the tree observer can report a
 /// change on, geometry included. A moving frame is a real change and has to be
-/// nameable, because that is how settlement knows the tree is still moving.
+/// nameable, because that is how observation admission knows the tree is still
+/// moving.
 ///
 /// The predicate language uses a narrower type. See `AssertableProperty`.
 public enum ElementProperty: String, Codable, Sendable, CaseIterable, CodingKey {
@@ -54,9 +55,9 @@ public enum ElementProperty: String, Codable, Sendable, CaseIterable, CodingKey 
 /// - The identity matchers, `label` and `identifier`. Pairing an element across
 ///   two captures is what they do, so constraining them describes a different
 ///   element rather than a changed one.
-/// - Geometry, `frame` and `activationPoint`. A reading is taken over the
-///   projection, which carries no coordinates, so a geometry assertion could
-///   only ever say "this element was here, and is still here".
+/// - Geometry, `frame` and `activationPoint`. Predicate evaluation uses the
+///   semantic projection, which carries no coordinates, so a geometry assertion
+///   could only ever say "this element was here, and is still here".
 ///
 /// Geometry is not filtered out of the predicate language downstream, it is
 /// unrepresentable in it.
@@ -90,28 +91,17 @@ public enum AssertableProperty: String, Codable, Sendable, CaseIterable, CodingK
     public var intValue: Int? { nil }
 }
 
-/// Something that can be hashed over the part of it that means something.
-///
-/// The tree has two users and each reads a different part of it. `label`,
-/// `value`, `traits`, `hint`, `actions`, `rotors` and `customContent` are what
-/// a VoiceOver user perceives; `identifier` is what a developer names an
-/// element by and what a heist targets. Both are meaning. Geometry is neither:
-/// it is how the element is drawn, not what it is, and an element that moved
-/// still says exactly what it said before.
-///
-/// That boundary is why a reading exists. A reading decides whether a change's
-/// second leg found something new, so hashing geometry in would let a frame
-/// shifting a pixel satisfy an assertion nobody wrote.
-///
-/// Deliberately narrower than `Hashable`, and both live on the same types:
-/// `hash(into:)` identifies the value, this identifies what it means.
+/// The semantic comparison currency produced by `SemanticallyHashable`.
+public typealias SemanticHash = Int
+
+/// A value whose semantic identity can exclude non-semantic state such as
+/// geometry.
 public protocol SemanticallyHashable {
     func hashSemantic(into hasher: inout Hasher)
 }
 
-extension SemanticallyHashable {
-    /// This value's reading, as a number that only means "same" or "different".
-    public var semanticHash: Int {
+public extension SemanticallyHashable {
+    var semanticHash: SemanticHash {
         var hasher = Hasher()
         hashSemantic(into: &hasher)
         return hasher.finalize()

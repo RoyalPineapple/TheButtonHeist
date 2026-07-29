@@ -86,9 +86,7 @@ extension TheFenceHandlerTests {
         await assertValidationError(
             command: .getPasteboard,
             arguments: ["expect": .object([
-                "type": .string("changed"),
-                "scope": .string("screen"),
-                "assertions": .array([]),
+                "type": .string("notification"),
             ])],
             contains: "valid get_pasteboard parameter"
         )
@@ -267,7 +265,10 @@ extension TheFenceHandlerTests {
                     projecting: [selectedNode],
                     elementMetadata: { path, _, _ in
                         annotations.elementByPath[path].map {
-                            InterfaceElementProjectionMetadata(actions: $0.actions)
+                            InterfaceElementProjectionMetadata(
+                                actions: $0.actions,
+                                geometry: $0.geometry
+                            )
                         }
                     },
                     containerMetadata: { path, _ in

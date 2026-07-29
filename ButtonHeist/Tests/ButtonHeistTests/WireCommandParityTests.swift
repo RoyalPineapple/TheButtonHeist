@@ -7,7 +7,7 @@ final class WireCommandParityTests: XCTestCase {
 
     func testCommandRawValuesPreserveCanonicalWireSpellings() {
         XCTAssertEqual(TheFence.Command.allCases.map(\.rawValue), [
-            "ping", "list_devices", "get_interface", "get_screen", "get_announcements", "wait",
+            "ping", "list_devices", "get_interface", "get_screen", "get_notifications", "wait",
             "one_finger_tap", "long_press", "swipe", "drag", "scroll", "scroll_to_visible",
             "scroll_to_edge", "activate", "rotor", "type_text", "edit_action", "set_pasteboard",
             "get_pasteboard", "dismiss_keyboard", "perform", "run_heist", "validate_heist",
@@ -110,11 +110,26 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertEqual(TheFence.Command.ping.descriptor.timeout, .fixed(.health))
         XCTAssertEqual(TheFence.Command.getInterface.descriptor.timeout, .fixed(.explore))
         XCTAssertEqual(TheFence.Command.getScreen.descriptor.timeout, .fixed(.screenCapture))
-        XCTAssertEqual(TheFence.Command.runHeist.descriptor.timeout, .fixed(.longAction))
+        XCTAssertEqual(TheFence.Command.runHeist.descriptor.timeout, .heist)
         XCTAssertEqual(TheFence.Command.wait.descriptor.timeout, .wait)
         XCTAssertEqual(TheFence.Command.activate.descriptor.timeout, .singleStepAction(base: .standardAction))
         XCTAssertEqual(TheFence.Command.typeText.descriptor.timeout, .singleStepAction(base: .longAction))
         XCTAssertEqual(TheFence.Command.perform.descriptor.timeout, .performStep)
+    }
+
+    func testRunHeistDescriptorOwnsUnboundedTypedTimeoutDefault() {
+        let descriptor = TheFence.Command.runHeist.descriptor
+        let timeout = descriptor.parameter(named: .timeout)
+
+        XCTAssertEqual(timeout?.required, false)
+        XCTAssertEqual(
+            descriptor.requiredDefaultValue(for: FenceParameters.heistTimeout),
+            .default
+        )
+        XCTAssertEqual(
+            timeout?.maximum,
+            nil
+        )
     }
 
     @ButtonHeistActor
@@ -250,6 +265,25 @@ final class WireCommandParityTests: XCTestCase {
         }
     }
 
+    func testNotificationsUseCanonicalDirectWireContract() throws {
+        let notification = try XCTUnwrap(Observation.Notification(
+            text: "Checkout ready",
+            element: nil
+        ))
+
+        XCTAssertEqual(TheFence.Command.getNotifications.rawValue, "get_notifications")
+        XCTAssertEqual(
+            try encodedWireType(for: .getNotifications),
+            .getNotifications
+        )
+
+        let data = try JSONEncoder().encode(ServerMessage.notifications([notification]))
+        let encoded = try JSONDecoder().decode(EncodedNotificationResponse.self, from: data)
+
+        XCTAssertEqual(encoded.type, .notifications)
+        XCTAssertEqual(encoded.payload, [notification])
+    }
+
     func testEveryPublicTypedClientMessageOwnsItsWireIdentity() throws {
         let samples = try sampleClientMessages()
         XCTAssertEqual(
@@ -275,7 +309,7 @@ final class WireCommandParityTests: XCTestCase {
             .mainThreadProbe(mainThreadProbe),
             .status,
             .getPasteboard,
-            .getAnnouncements,
+            .getNotifications,
             .requestScreen(),
             .runtimeAction(.scroll(ScrollTarget(direction: .down))),
             .heistPlan(HeistPlanRun(plan: try HeistPlan(body: [
@@ -301,4 +335,9 @@ final class WireCommandParityTests: XCTestCase {
 
 private struct EncodedClientType: Decodable {
     let type: ClientWireMessageType
+}
+
+private struct EncodedNotificationResponse: Decodable {
+    let type: ServerWireMessageType
+    let payload: [Observation.Notification]
 }

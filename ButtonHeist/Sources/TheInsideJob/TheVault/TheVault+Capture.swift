@@ -55,7 +55,7 @@ extension TheVault {
         let scrollContainerPath: TreePath
         let scrollIndex: Int
         let element: AccessibilityElement
-        let observedScrollContentActivationPoint: InterfaceTree.ObservedScrollContentActivationPoint?
+        let viewSpace: HeistElement.Geometry.ViewSpace
     }
 
     /// Capture-local UIKit evidence before identity assignment and durable projection.
@@ -235,7 +235,7 @@ extension TheVault {
                     scrollContainerPath: containerPath,
                     scrollIndex: index,
                     element: element,
-                    observedScrollContentActivationPoint: observedScrollContentActivationPoint(
+                    viewSpace: viewSpace(
                         for: element,
                         in: scrollView,
                         ownerPath: containerPath
@@ -277,16 +277,18 @@ extension TheVault {
         )
     }
 
-    private func observedScrollContentActivationPoint(
+    private func viewSpace(
         for element: AccessibilityElement,
         in scrollView: UIScrollView,
         ownerPath: TreePath
-    ) -> InterfaceTree.ObservedScrollContentActivationPoint? {
-        let activationPoint = element.bhResolvedActivationPoint
-        guard activationPoint.x.isFinite, activationPoint.y.isFinite else { return nil }
-        return InterfaceTree.ObservedScrollContentActivationPoint(
-            scrollView.convert(activationPoint, from: nil),
-            ownerPath: ownerPath
+    ) -> HeistElement.Geometry.ViewSpace {
+        HeistElement.Geometry.ViewSpace(
+            ownerPath: ownerPath,
+            frame: try? ViewRect(validating: scrollView.convert(element.bhFrame, from: nil)),
+            activationPoint: try? ViewPoint(validating: scrollView.convert(
+                element.bhResolvedActivationPoint,
+                from: nil
+            ))
         )
     }
 

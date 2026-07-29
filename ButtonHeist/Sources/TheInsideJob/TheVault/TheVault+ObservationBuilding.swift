@@ -26,6 +26,7 @@ extension TheVault {
         let hierarchy = screenCoordinateHierarchy(from: result)
         let identityContext = buildIdentityContext(
             hierarchy: hierarchy,
+            viewHierarchy: result.hierarchy,
             scrollableContainerPaths: BuildFacts.scrollContextContainerPaths(
                 from: result
             )
@@ -50,6 +51,7 @@ extension TheVault {
     static func buildObservation(from result: CaptureResult, facts: BuildFacts) -> InterfaceObservation {
         let identityContext = buildIdentityContext(
             hierarchy: screenCoordinateHierarchy(from: result),
+            viewHierarchy: result.hierarchy,
             scrollableContainerPaths: facts.scroll.contextContainerPaths
         )
         let projection = buildObservationProjection(
@@ -79,7 +81,7 @@ extension TheVault {
         )
         let heistIdsByPath = Dictionary(
             uniqueKeysWithValues: entries.compactMap { entry in
-                entry.isInViewportCapture ? (entry.path, entry.heistId) : nil
+                entry.isInParserHierarchy ? (entry.path, entry.heistId) : nil
             }
         )
         let containersByPath = viewportContainers(
@@ -172,11 +174,11 @@ extension TheVault {
                     heistId: heistId,
                     path: candidate.path,
                     scrollMembership: candidate.scrollMembership(facts: facts),
-                    observedScrollContentActivationPoint: candidate.observedScrollContentActivationPoint(facts: facts),
+                    geometry: candidate.geometry(facts: facts),
                     element: candidate.element
                 ),
                 isFirstResponder: candidate.isFirstResponder(facts: facts),
-                isInViewportCapture: candidate.isInViewportCapture
+                isInParserHierarchy: candidate.isInParserHierarchy
             )
         }
     }
@@ -194,10 +196,9 @@ extension TheVault {
                         container: identity.container,
                         path: identity.path,
                         containerName: containerNamesByPath[identity.path],
-                        contentRect: identity.contentFrame,
+                        viewSpace: facts.scroll.containerViewSpacesByPath[identity.path]
+                            ?? identity.viewSpace,
                         scrollMembership: identity.scrollMembership,
-                        observedScrollContentActivationPoint: facts.scroll
-                            .containerObservedScrollContentActivationPointsByPath[identity.path],
                         scrollInventory: facts.scroll.inventoriesByPath[identity.path]
                     )
                 )
@@ -227,6 +228,28 @@ extension TheVault {
         return result.hierarchy.enumerated().map { rootIndex, root in
             translated(root, at: TreePath([rootIndex]), inherited: .zero)
         }
+    }
+
+    nonisolated static func onscreenSpace(
+        for element: AccessibilityElement
+    ) -> HeistElement.Geometry.ScreenSpace {
+        let frame = ScreenFrameEvidence(element.shape)
+        let activationPoint: ActivationPointEvidence
+        if element.usesDefaultActivationPoint {
+            if let rect = frame.rect,
+               let x = try? FiniteCoordinate(validating: rect.midX),
+               let y = try? FiniteCoordinate(validating: rect.midY) {
+                activationPoint = .defaultCenter(ScreenPoint(x: x, y: y))
+            } else {
+                activationPoint = .unavailable
+            }
+        } else if let x = try? FiniteCoordinate(validating: element.activationPoint.x),
+                  let y = try? FiniteCoordinate(validating: element.activationPoint.y) {
+            activationPoint = .explicit(ScreenPoint(x: x, y: y))
+        } else {
+            activationPoint = .unavailable
+        }
+        return .onscreen(frame: frame, activationPoint: activationPoint)
     }
 
     // MARK: - Container Name Index
@@ -297,7 +320,7 @@ extension TheVault {
             }
         }
 
-        var isInViewportCapture: Bool {
+        var isInParserHierarchy: Bool {
             switch self {
             case .viewport:
                 true
@@ -318,15 +341,24 @@ extension TheVault {
             }
         }
 
-        func observedScrollContentActivationPoint(
+        func geometry(
             facts: BuildFacts
-        ) -> InterfaceTree.ObservedScrollContentActivationPoint? {
-            switch self {
+        ) -> HeistElement.Geometry {
+            let view = switch self {
             case .viewport(let identity):
-                facts.scroll.element(at: identity.path)?.observedScrollContentActivationPoint
+                facts.scroll.element(at: identity.path)?.viewSpace ?? identity.viewSpace
             case .offscreenScrollInventory(let element):
-                element.observedScrollContentActivationPoint
+                element.viewSpace
             }
+            let screen: HeistElement.Geometry.ScreenSpace = switch self {
+            case .viewport where element.visibility == .onscreen:
+                TheVault.onscreenSpace(for: element)
+            case .viewport:
+                .offscreen
+            case .offscreenScrollInventory:
+                .offscreen
+            }
+            return HeistElement.Geometry(screen: screen, view: view)
         }
 
         func isFirstResponder(facts: BuildFacts) -> Bool {
@@ -359,7 +391,7 @@ extension TheVault {
         let path: TreePath
         let treeElement: InterfaceTree.Element
         let isFirstResponder: Bool
-        let isInViewportCapture: Bool
+        let isInParserHierarchy: Bool
 
         var heistId: HeistId {
             treeElement.heistId
@@ -410,7 +442,7 @@ extension TheVault {
         }
 
         func elementRef(for entry: ObservationBuildEntry) -> LiveCapture.ElementRef? {
-            guard entry.isInViewportCapture else { return nil }
+            guard case .onscreen = entry.treeElement.geometry.screen else { return nil }
             let object = objectsByPath[entry.path]
             let scrollView = entry.treeElement.scrollMembership.flatMap { membership in
                 scrollViewsByPath[membership.containerPath]

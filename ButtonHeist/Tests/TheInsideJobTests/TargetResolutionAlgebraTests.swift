@@ -128,11 +128,17 @@ final class TargetResolutionAlgebraTests: XCTestCase {
 
     func testSemanticAdmissionRemovesTerminalOrdinalWhenSemanticTargetIsUnique() async throws {
         let scrollPath = TreePath([0])
+        let selectedElement = element(label: "Save")
         let selected = InterfaceTree.Element(
             heistId: "save_button",
             path: TreePath([0, 0]),
             scrollMembership: .init(containerPath: scrollPath, index: 4),
-            element: element(label: "Save")
+            geometry: testGeometry(
+                for: selectedElement,
+                ownerPath: scrollPath,
+                screen: TheVault.onscreenSpace(for: selectedElement)
+            ),
+            element: selectedElement
         )
         await installTree(
             elements: [selected],
@@ -239,7 +245,11 @@ final class TargetResolutionAlgebraTests: XCTestCase {
             ),
             path: path,
             containerName: nil,
-            contentFrame: nil
+            viewSpace: HeistElement.Geometry.ViewSpace(
+                ownerPath: .root,
+                frame: nil,
+                activationPoint: nil
+            )
         )
     }
 

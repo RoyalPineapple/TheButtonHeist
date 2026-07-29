@@ -17,9 +17,10 @@ extension TheFenceCompactFormattingContractTests {
             identifier: "lazy_row",
             traits: [.staticText]
         )
-        let trace = makeTestTrace(
+        let evidence = makeObservationEvidence(
             before: makeTestInterface(elements: unchanged),
-            after: makeTestInterface(elements: unchanged + [lazyRow])
+            after: makeTestInterface(elements: unchanged + [lazyRow]),
+            afterScreenId: "screen"
         )
         let command = HeistActionCommand.activate(.predicate(ElementPredicate(label: "Load More")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
@@ -29,7 +30,7 @@ extension TheFenceCompactFormattingContractTests {
                     command: command,
                     result: ActionResult.success(
                         payload: .activate,
-                        observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
+                        observation: .observed(evidence)
                     )
                 ),
             ],
@@ -55,24 +56,13 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertEqual(try node.string("path"), "$.body[0]")
         XCTAssertEqual(try node.string("kind"), "action")
         XCTAssertEqual(try node.string("status"), "passed")
-        XCTAssertEqual(try node.int("durationMs"), 1)
+        try node.assertMissing("durationMs")
         XCTAssertEqual(try action.string("commandName"), "activate")
         XCTAssertEqual(try actionResult.string("status"), "ok")
         XCTAssertEqual(try actionResult.string("method"), "activate")
         XCTAssertEqual(try actionResult.string("screenId"), "screen")
         XCTAssertEqual(try delta.string("kind"), "elementsChanged")
         XCTAssertEqual(try delta.int("elementCount"), 4)
-        try assertPublicInteractionDigest(
-            delta.object("interactionDigest"),
-            expected: AccessibilityTrace.InteractionDigest(
-                nodeCountBefore: 3,
-                nodeCountAfter: 4,
-                elementSetChanged: true,
-                screenIdBefore: "screen",
-                screenIdAfter: "screen",
-                firstResponderChanged: false
-            )
-        )
         let added = try delta.object("edits").array("added")
         XCTAssertEqual(added.count, 1)
         try assertPublicElement(
@@ -82,7 +72,6 @@ extension TheFenceCompactFormattingContractTests {
             value: "Loaded by scroll",
             identifier: "lazy_row"
         )
-        try assertAccessibilityTraceProjectedAsDelta(actionResult, omittedCount: 2)
         try node.assertMissing("action")
         XCTAssertTrue(compact.contains("-> elements changed"), compact)
         XCTAssertFalse(compact.contains(#"+ "Lazy Row":"Loaded by scroll" staticText id="lazy_row""#), compact)
@@ -97,9 +86,10 @@ extension TheFenceCompactFormattingContractTests {
                 traits: [.staticText]
             )
         }
-        let trace = makeTestTrace(
+        let evidence = makeObservationEvidence(
             before: makeTestInterface(elements: []),
-            after: makeTestInterface(elements: addedRows)
+            after: makeTestInterface(elements: addedRows),
+            afterScreenId: "screen"
         )
         let command = HeistActionCommand.activate(.predicate(ElementPredicate(label: "Load More")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
@@ -111,7 +101,7 @@ extension TheFenceCompactFormattingContractTests {
                         command: command,
                         result: ActionResult.success(
                             payload: .activate,
-                            observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
+                            observation: .observed(evidence)
                         )
                     ),
                 ],
@@ -133,17 +123,6 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertEqual(try actionResult.string("screenId"), "screen")
         XCTAssertEqual(try delta.string("kind"), "elementsChanged")
         XCTAssertEqual(try delta.int("elementCount"), 8)
-        try assertPublicInteractionDigest(
-            delta.object("interactionDigest"),
-            expected: AccessibilityTrace.InteractionDigest(
-                nodeCountBefore: 0,
-                nodeCountAfter: 8,
-                elementSetChanged: true,
-                screenIdBefore: "screen",
-                screenIdAfter: "screen",
-                firstResponderChanged: false
-            )
-        )
         XCTAssertEqual(added.count, 5)
         for index in 0..<5 {
             try assertPublicElement(
@@ -161,7 +140,6 @@ extension TheFenceCompactFormattingContractTests {
         )
         try node.assertMissing("action")
         try delta.assertMissing("newInterface")
-        try assertAccessibilityTraceProjectedAsDelta(actionResult, omittedCount: 2)
         try json.assertRecursivelyMissingKeys(["captures"])
     }
 
@@ -173,12 +151,12 @@ extension TheFenceCompactFormattingContractTests {
                 traits: [.staticText]
             )
         }
-        let trace = makeTestTrace(
+        let evidence = makeObservationEvidence(
             before: makeTestInterface(elements: []),
             after: makeTestInterface(elements: afterRows),
             beforeScreenId: "before",
             afterScreenId: "checkout",
-            afterTransition: makeTestScreenChangedTransition()
+            screenChanged: true
         )
         let command = HeistActionCommand.activate(.predicate(ElementPredicate(label: "Checkout")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
@@ -190,7 +168,7 @@ extension TheFenceCompactFormattingContractTests {
                         command: command,
                         result: ActionResult.success(
                             payload: .activate,
-                            observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
+                            observation: .observed(evidence)
                         )
                     ),
                 ],
@@ -211,17 +189,6 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertEqual(try actionResult.string("screenId"), "checkout")
         XCTAssertEqual(try delta.string("kind"), "screenChanged")
         XCTAssertEqual(try delta.int("elementCount"), 8)
-        try assertPublicInteractionDigest(
-            delta.object("interactionDigest"),
-            expected: AccessibilityTrace.InteractionDigest(
-                nodeCountBefore: 0,
-                nodeCountAfter: 8,
-                elementSetChanged: true,
-                screenIdBefore: "before",
-                screenIdAfter: "checkout",
-                firstResponderChanged: false
-            )
-        )
         XCTAssertEqual(try screen.int("elementCount"), 8)
         XCTAssertEqual(elements.count, 5)
         for index in 0..<5 {
@@ -233,7 +200,6 @@ extension TheFenceCompactFormattingContractTests {
             )
         }
         XCTAssertEqual(try screen.int("omittedElementCount"), 3)
-        try assertAccessibilityTraceProjectedAsDelta(actionResult, omittedCount: 2)
         try node.assertMissing("action")
         try delta.assertMissing("newInterface")
         try json.assertRecursivelyMissingKeys(["tree", "captures"])
@@ -249,7 +215,7 @@ extension TheFenceCompactFormattingContractTests {
             identifier: "lazy_row",
             traits: [.staticText]
         )
-        let trace = makeTestTrace(
+        let evidence = makeObservationEvidence(
             before: makeTestInterface(elements: unchanged),
             after: makeTestInterface(elements: unchanged + [lazyRow])
         )
@@ -263,7 +229,7 @@ extension TheFenceCompactFormattingContractTests {
                         payload: .activate,
                         failureKind: .actionFailed,
                         message: "target stopped responding",
-                        observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
+                        observation: .observed(evidence)
                     ),
                     failure: HeistFailureDetail(
                         category: .action,

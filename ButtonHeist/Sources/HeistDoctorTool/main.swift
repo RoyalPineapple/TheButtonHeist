@@ -116,12 +116,12 @@ struct HeistDoctorCommand: ParsableCommand {
     }
 
     private static func elementEvidenceLine(_ evidence: HeistRepairElementEvidence) -> String {
-        let element = evidence.element
-        let traitSummary = element.traits.map(\.rawValue).joined(separator: ",")
+        let assertable = evidence.element.semantics.assertable
+        let traitSummary = assertable.orderedTraits.map(\.rawValue).joined(separator: ",")
         return [
-            element.label.map { "label=\"\($0)\"" },
-            element.value.map { "value=\"\($0)\"" },
-            element.identifier.map { "identifier=\"\($0)\"" },
+            assertable.label.map { "label=\"\($0)\"" },
+            assertable.value.map { "value=\"\($0)\"" },
+            assertable.identifier.map { "identifier=\"\($0)\"" },
             traitSummary.isEmpty ? nil : "traits=\(traitSummary)",
         ].compactMap { $0 }.joined(separator: " ")
     }

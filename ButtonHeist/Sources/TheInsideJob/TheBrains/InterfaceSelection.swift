@@ -55,8 +55,8 @@ extension TheVault {
     ) throws(InterfaceSelectionError) -> TreePath {
         switch resolution {
         case .resolved(.element(let element)):
-            let identity = element.heistId.traceElementIdentity
-            guard let path = projection.interface.graph.traceIdentityByPath.first(where: { $0.value == identity })?.key else {
+            let identity = element.heistId.observationElementIdentity
+            guard let path = projection.interface.graph.observationIdentityByPath.first(where: { $0.value == identity })?.key else {
                 throw .subtreeNotFound
             }
             return path
@@ -96,11 +96,18 @@ private extension TheVault.TargetMatchSet {
 private extension InterfaceTree.Element {
     @MainActor
     var subtreeCandidateSummary: String {
-        let projected = TheVault.WireConversion.convert(element)
+        let projected = TheVault.WireConversion.convert(element, geometry: geometry)
+        let semantics = projected.semantics
+        let properties = semantics.assertable
         return subtreeSummary("element", fields: [
-            ("element", projected.description), ("identifier", projected.identifier),
-            ("label", projected.label), ("value", projected.value),
-            ("traits", projected.traits.isEmpty ? nil : projected.traits.map(\.rawValue).joined(separator: ",")),
+            ("element", semantics.spokenDescription), ("identifier", properties.identifier),
+            ("label", properties.label), ("value", properties.value),
+            (
+                "traits",
+                properties.traits.isEmpty
+                    ? nil
+                    : properties.orderedTraits.map(\.rawValue).joined(separator: ",")
+            ),
         ])
     }
 }

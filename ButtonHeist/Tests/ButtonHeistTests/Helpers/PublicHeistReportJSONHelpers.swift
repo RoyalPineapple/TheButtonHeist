@@ -28,30 +28,6 @@ func assertPublicHeistSummary(
     }
 }
 
-func assertPublicInteractionDigest(
-    _ digest: JSONProbe,
-    expected: AccessibilityTrace.InteractionDigest,
-    file: StaticString = #filePath,
-    line: UInt = #line
-) throws {
-    XCTAssertEqual(try digest.int("nodeCountBefore"), expected.nodeCountBefore, file: file, line: line)
-    XCTAssertEqual(try digest.int("nodeCountAfter"), expected.nodeCountAfter, file: file, line: line)
-    XCTAssertEqual(try digest.bool("nodeCountChanged"), expected.nodeCountChanged, file: file, line: line)
-    XCTAssertEqual(try digest.bool("elementSetChanged"), expected.elementSetChanged, file: file, line: line)
-    if let screenIdBefore = expected.screenIdBefore {
-        XCTAssertEqual(try digest.string("screenIdBefore"), screenIdBefore, file: file, line: line)
-    } else {
-        try digest.assertMissing("screenIdBefore")
-    }
-    if let screenIdAfter = expected.screenIdAfter {
-        XCTAssertEqual(try digest.string("screenIdAfter"), screenIdAfter, file: file, line: line)
-    } else {
-        try digest.assertMissing("screenIdAfter")
-    }
-    XCTAssertEqual(try digest.bool("screenIdChanged"), expected.screenIdChanged, file: file, line: line)
-    XCTAssertEqual(try digest.bool("firstResponderChanged"), expected.firstResponderChanged, file: file, line: line)
-}
-
 func assertPublicElement(
     _ element: JSONProbe,
     traits: [String],
@@ -98,20 +74,4 @@ func assertPublicProjectionOmission(
     } else {
         try omission.assertMissing("omittedCount")
     }
-}
-
-func assertAccessibilityTraceProjectedAsDelta(
-    _ actionResult: JSONProbe,
-    omittedCount: Int,
-    file: StaticString = #filePath,
-    line: UInt = #line
-) throws {
-    try assertPublicProjectionOmission(
-        actionResult.object("omitted").object("accessibilityTrace"),
-        reason: ProjectionOmissionReason.rawAccessibilityTrace.rawValue,
-        projectedAs: "delta",
-        omittedCount: omittedCount,
-        file: file,
-        line: line
-    )
 }

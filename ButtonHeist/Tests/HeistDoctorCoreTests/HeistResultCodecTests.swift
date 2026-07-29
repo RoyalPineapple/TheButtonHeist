@@ -71,6 +71,6 @@ import TheScore
     }
 
     private func sampleResult() -> HeistResult {
-        HeistResultFixture.result(steps: [HeistResultFixture.action(durationMs: 12)], durationMs: 12)
+        HeistResultFixture.result(steps: [HeistResultFixture.action()], durationMs: 12)
     }
 }

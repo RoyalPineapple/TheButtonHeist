@@ -335,7 +335,10 @@ private let screenChangePredicate = AccessibilityPredicate.screenChanged
 }
 
 @Test func `describe waits expectations and expected effects`() throws {
-    let announcement = AccessibilityPredicate.announcement(.contains("saved"))
+    let notification = AccessibilityPredicate.notification(
+        text: .contains("saved"),
+        element: .identifier("save_status")
+    )
     let description = try HeistPlan(
         name: "submit",
         body: [
@@ -343,16 +346,26 @@ private let screenChangePredicate = AccessibilityPredicate.screenChanged
                 command: .activate(.predicate(.label("Submit"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done")), timeout: 1)))),
             .wait(WaitStep(predicate: .screenChanged, timeout: 2)),
-            .wait(WaitStep(predicate: announcement, timeout: 2)),
+            .wait(WaitStep(predicate: notification, timeout: 2)),
         ]
     ).describeHeist(at: "submit")
 
     #expect(description.semanticSurface.expectations == [existsLabel("Done")])
-    #expect(description.semanticSurface.waits == [screenChangePredicate, announcement])
+    #expect(description.semanticSurface.waits == [screenChangePredicate, notification])
     #expect(description.semanticSurface.expectedEffects == [
         existsLabel("Done"),
         screenChangePredicate,
-        announcement,
+        notification,
+    ])
+    #expect(description.semanticSurface.targetPredicates == [
+        .predicate(.label("Submit")),
+        .predicate(.label("Done")),
+        .predicate(.identifier("save_status")),
+    ])
+    #expect(description.semanticSurface.semanticSurfaces == [
+        .label(exactSemanticString("Submit")),
+        .label(exactSemanticString("Done")),
+        .identifier(exactSemanticString("save_status")),
     ])
 }
 

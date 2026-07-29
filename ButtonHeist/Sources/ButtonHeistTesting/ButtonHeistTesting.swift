@@ -67,10 +67,15 @@ struct HeistRunCommand: Equatable, Sendable {
 @discardableResult
 public func runHeist(
     _ path: HeistDefinitionPath,
+    timeout: HeistTimeout = .default,
     @HeistBuilder _ content: @escaping () throws -> HeistContent
 ) async throws -> Heist {
     let command = try HeistRunCommand(path, content)
-    return try await Heist(command.plan, argument: command.argument)
+    return try await Heist(
+        command.plan,
+        argument: command.argument,
+        timeout: timeout
+    )
 }
 
 /// Runs a prebuilt in-process heist plan through the app-hosted test runtime.
@@ -78,9 +83,10 @@ public func runHeist(
 @discardableResult
 public func runHeist(
     _ plan: HeistPlan,
-    argument: HeistArgument = .none
+    argument: HeistArgument = .none,
+    timeout: HeistTimeout = .default
 ) async throws -> Heist {
-    try await Heist(plan, argument: argument)
+    try await Heist(plan, argument: argument, timeout: timeout)
 }
 
 @MainActor
@@ -89,6 +95,7 @@ public func runHeist(
     _ path: HeistDefinitionPath,
     argument input: String,
     parameter: HeistReferenceName = "input",
+    timeout: HeistTimeout = .default,
     @HeistBuilder _ content: @escaping (HeistReferenceName) throws -> HeistContent
 ) async throws -> Heist {
     let command = try HeistRunCommand(
@@ -97,7 +104,11 @@ public func runHeist(
         parameter: parameter,
         content
     )
-    return try await Heist(command.plan, argument: command.argument)
+    return try await Heist(
+        command.plan,
+        argument: command.argument,
+        timeout: timeout
+    )
 }
 
 @_disfavoredOverload
@@ -107,6 +118,7 @@ public func runHeist(
     _ path: HeistDefinitionPath,
     argument input: AccessibilityTarget,
     parameter: HeistReferenceName = "input",
+    timeout: HeistTimeout = .default,
     @HeistBuilder _ content: @escaping (AccessibilityTarget) throws -> HeistContent
 ) async throws -> Heist {
     let command = try HeistRunCommand(
@@ -115,7 +127,11 @@ public func runHeist(
         parameter: parameter,
         content
     )
-    return try await Heist(command.plan, argument: command.argument)
+    return try await Heist(
+        command.plan,
+        argument: command.argument,
+        timeout: timeout
+    )
 }
 #endif // DEBUG
 #endif // canImport(UIKit)

@@ -43,11 +43,14 @@ extension ElementInflationProductTests {
         XCTAssertEqual(stepResult.outcome.failureKind, single.result.outcome.failureKind)
     }
 
-    func testExplicitViewportScrollCommandReportsViewportState() async throws {
+    func testDirectViewportScrollMovesTheRequestedViewport() async throws {
         let fixture = try installOffscreenActivationFixture(
             identifier: "explicit_scroll_revealed",
             label: "Explicit Scroll Revealed"
         )
+        let visible = try XCTUnwrap(brains.vault.refreshLiveCapture())
+        _ = await brains.vault.semanticObservationStream
+            .commitVisibleObservationForTesting(visible)
 
         let result = await brains.executeRuntimeAction(
             try HeistActionCommand.scroll(ScrollTarget(
@@ -59,9 +62,6 @@ extension ElementInflationProductTests {
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "explicit scroll failed")
         XCTAssertEqual(result.method, .scroll)
         XCTAssertGreaterThan(fixture.scrollView.contentOffset.y, 0)
-        XCTAssertNotNil(result.accessibilityTrace)
-        let trace = try XCTUnwrap(result.accessibilityTrace)
-        XCTAssertNotNil(trace.captures.last)
     }
 
     private func runSemanticActivateThroughCommand(

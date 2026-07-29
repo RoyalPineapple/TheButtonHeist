@@ -117,7 +117,7 @@ package enum TransientFlowScreen {
         .appeared(.label("Processing")),
         .disappeared(.label("Submit")),
     ])
-    package static let announcement = AccessibilityPredicate.announcement("Ticket saved.")
+    package static let announcement = AccessibilityPredicate.notification("Ticket saved.")
     package static let exactToastText = AccessibilityPredicate.exists(.label("Ticket saved."))
 }
 

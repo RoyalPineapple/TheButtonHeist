@@ -36,6 +36,11 @@ package struct Expectation: Sendable, Equatable {
         evaluating(.event(event))
     }
 
+    package func requiringNoChange() -> Expectation {
+        guard !pending.contains(where: \.isNoChange) else { return self }
+        return Expectation(pending: pending + [.current(.noChange)])
+    }
+
     package enum Result: Sendable, Equatable {
         case satisfied
         case waiting(String)
@@ -250,6 +255,11 @@ private extension Expectation {
                 return predicate.description
             }
         }
+
+        var isNoChange: Bool {
+            guard case .current(.noChange) = self else { return false }
+            return true
+        }
     }
 }
 
@@ -403,8 +413,8 @@ private extension ResolvedElementPropertyChangeValue {
     }
 }
 
-private extension NotificationPredicate.Execution {
-    func matches(_ notification: Observation.Notification) -> Bool {
+extension NotificationPredicate.Execution {
+    package func matches(_ notification: Observation.Notification) -> Bool {
         let textMatches = text.map { match in
             notification.text.map(match.matches) ?? false
         } ?? true

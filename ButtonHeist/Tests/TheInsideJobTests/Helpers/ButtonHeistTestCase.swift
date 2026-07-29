@@ -159,20 +159,20 @@ class ButtonHeistRuntimeTestCase: ButtonHeistTestCase {
     /// asks for the runtime again. It is the same tripwire either way: swapping
     /// the runtime changes what reads the app, not how many things read it.
     func restartRuntime() async throws {
-        brains.stopActionTestRuntime()
+        brains.stopTestObservation()
         brains = try makeBrains(tripwire: tripwire)
-        await brains.startActionTestRuntime()
+        await brains.startTestObservation()
     }
 
     final override func startObserving() async throws {
         tripwire = TheTripwire()
         brains = try makeBrains(tripwire: tripwire)
-        await brains.startActionTestRuntime()
+        await brains.startTestObservation()
     }
 
     final override func stopObserving() async throws {
         guard let brains else { return }
-        brains.stopActionTestRuntime()
+        brains.stopTestObservation()
         assertRuntimeStopped(brains)
         self.brains = nil
         tripwire = nil
@@ -214,6 +214,19 @@ class ButtonHeistRuntimeTestCase: ButtonHeistTestCase {
             file: file,
             line: line
         )
+    }
+}
+
+@MainActor
+extension TheBrains {
+    func startTestObservation() async {
+        tripwire.startPulse()
+        await startSemanticObservation()
+    }
+
+    func stopTestObservation() {
+        stopSemanticObservation()
+        tripwire.stopPulse()
     }
 }
 

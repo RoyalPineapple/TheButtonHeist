@@ -16,10 +16,9 @@ extension FenceResponse {
         if let expectations = report.summary.expectations {
             text += " [expectations: \(expectations.met)/\(expectations.checked)]"
         }
-        if case .changed(let trace) = report.accessibilityChange,
+        if case .changed(let evidence) = report.accessibilityChange,
            let netDelta = DeltaProjection(
-                trace: trace,
-                isComplete: true,
+                evidence: evidence,
                 profile: profile,
                 includeScreenInterface: true
            ) {
@@ -31,7 +30,7 @@ extension FenceResponse {
         for (index, step) in report.outputNodes.enumerated() {
             var line = "  [\(index)] \(Self.compactHeistStepName(step))"
             var detailLines: [String] = []
-            let delta = step.evidence?.traceDelta(profile: profile)
+            let delta = step.evidence?.observationDelta(profile: profile)
             if let failureMessage = step.failure?.message {
                 line += " -> error: \(failureMessage)"
                 detailLines = Self.compactHeistFailureDeltaLines(delta)
@@ -47,9 +46,6 @@ extension FenceResponse {
             }
             if let expectation = step.expectation {
                 line += expectation.met ? " ✓" : " ✗"
-            }
-            if let settlement = step.settlement, !settlement.settled {
-                detailLines.append("    settlement: \(Self.incompleteSettlementSummary(settlement))")
             }
             text += "\n\(line)"
             if !detailLines.isEmpty {
@@ -75,27 +71,41 @@ extension FenceResponse {
 }
 
 private extension HeistReport.Evidence {
-    func traceDelta(profile: ProjectionProfile) -> DeltaProjection? {
-        let result: ActionResult?
+    func observationDelta(profile: ProjectionProfile) -> DeltaProjection? {
         switch self {
         case .action(_, let evidence):
-            result = evidence.result
+            return evidence.result?.observationEvidence.flatMap {
+                DeltaProjection(
+                    evidence: $0,
+                    profile: profile,
+                    includeScreenInterface: true
+                )
+            }
         case .wait(let evidence):
-            result = evidence.actionResult
-        case .repeatUntil(_, let evidence):
-            result = evidence.actionResult
-        case .invocation(_, let evidence):
-            result = evidence.expectationActionResult
-        case .caseSelection, .forEachString, .forEachElement, .warning:
-            result = nil
-        }
-        return result?.traceEvidence.flatMap {
-            DeltaProjection(
-                trace: $0.trace,
-                isComplete: $0.isComplete,
+            return DeltaProjection(
+                evidence: evidence.observation,
                 profile: profile,
                 includeScreenInterface: true
             )
+        case .repeatUntil(_, let evidence):
+            return evidence.actionResult?.observationEvidence.flatMap {
+                DeltaProjection(
+                    evidence: $0,
+                    profile: profile,
+                    includeScreenInterface: true
+                )
+            }
+        case .invocation(_, let evidence):
+            return (evidence.waitObservation
+                ?? evidence.expectationActionResult?.observationEvidence).flatMap {
+                    DeltaProjection(
+                        evidence: $0,
+                        profile: profile,
+                        includeScreenInterface: true
+                    )
+                }
+        case .caseSelection, .forEachString, .forEachElement, .warning:
+            return nil
         }
     }
 }

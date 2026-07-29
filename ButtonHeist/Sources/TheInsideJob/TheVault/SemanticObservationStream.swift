@@ -49,7 +49,10 @@ internal final class Stream {
     /// way through a scroll can share no elements with the reading before it.
     /// A viewport transition holds this for as long as it drives the scroll,
     /// which is what lets an ambient reading state `.viewportMovement`.
-    private(set) var isMovingViewport = false
+    private var activeViewportMovementCount = 0
+    var captureLineage: ScreenLineage {
+        activeViewportMovementCount == 0 ? .resting : .viewportMovement
+    }
     let stateOwner = TheVault.StateOwner()
     var observationWaiters = WaiterStore<UInt64, SemanticObservationWaiter>()
     private var eventReceiver: EventReceiver?
@@ -59,10 +62,6 @@ internal final class Stream {
     // MARK: - Subscriber-Facing Observation History
 
     var lifecycle = SemanticObservationLifecycle.stopped
-    internal func latestSettleFailureDiagnostic() async -> String? {
-        await stateOwner.latestSettleFailureDiagnostic()
-    }
-
     internal var isActive: Bool {
         lifecycle.isRunning
     }
@@ -289,9 +288,8 @@ internal final class Stream {
     /// viewport movement it drives. A movement reached from inside another one
     /// is already covered, and the claim ends where the outermost one does.
     internal func movingViewport<Value>(_ movement: () async -> Value) async -> Value {
-        let wasMovingViewport = isMovingViewport
-        isMovingViewport = true
-        defer { isMovingViewport = wasMovingViewport }
+        activeViewportMovementCount += 1
+        defer { activeViewportMovementCount -= 1 }
         return await movement()
     }
 
@@ -373,14 +371,14 @@ internal final class Stream {
             timeout: .milliseconds(Int(TheTripwire.singleTickSettleTimeout * 1_000)),
             demand: .ambient
         )
-        await discardIfSignalChanged(to: currentTripwireSignal())
+        await invalidateAdmissionIfSignalChanged(to: currentTripwireSignal())
         guard !Task.isCancelled else { return false }
         _ = await refreshVisibleObservation()
         return !Task.isCancelled
     }
 
-    func discardIfSignalChanged(to signal: TheTripwire.TripwireSignal) async {
-        await stateOwner.discardIfSignalChanged(to: signal)
+    func invalidateAdmissionIfSignalChanged(to signal: TheTripwire.TripwireSignal) async {
+        await stateOwner.invalidateAdmissionIfSignalChanged(to: signal)
     }
 
 }

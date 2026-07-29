@@ -10,9 +10,9 @@ Architecture diagrams for Button Heist, one file per concern. Every diagram is M
 
 ## The runtime loop
 
-- [action-pipeline.md](action-pipeline.md) — one action end to end: target resolution, one dispatch outcome, settle, evidence, result
-- [observation-pipeline.md](observation-pipeline.md) — current tree, retained cursor-backed observations, screen boundaries, predicate evaluation, and the public fold
-- [settle-loop.md](settle-loop.md) — the tripwire and the settle loop; what "settled" means, with the constants
+- [action-pipeline.md](action-pipeline.md) — one action end to end: target resolution, one dispatch outcome, observation, evidence, result
+- [observation-pipeline.md](observation-pipeline.md) — current tree, Vault-owned history and ordered events, screen boundaries, predicate evaluation, and the public fold
+- [heist-execution.md](heist-execution.md) — the complete-heist state machine, MainActor effects, ordered events, and deadline boundary
 - [activation-policy.md](activation-policy.md) — the `activate` decision tree in VoiceOver order
 - [element-inflation.md](element-inflation.md) — `AccessibilityTarget` resolution: elements, containers, scope, diagnostics, auto-reveal
 - [currency-types.md](currency-types.md) — the type families and the internal/wire border

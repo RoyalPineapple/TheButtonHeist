@@ -22,6 +22,14 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testNotificationsCommandUsesCanonicalFenceDescriptor() async throws {
+        let descriptor = try await GetNotificationsCommand.parse([]).runnerDescriptor()
+
+        XCTAssertEqual(descriptor.fenceDescriptor.command, .getNotifications)
+        XCTAssertEqual(GetNotificationsCommand.configuration.commandName, "get_notifications")
+    }
+
+    @ButtonHeistActor
     func testOneShotDescriptorsOwnConnectedAndLocalLifecycleModes() async throws {
         let connected = try await PingCommand.parse([]).runnerDescriptor()
         let local = try await ListDevicesCommand.parse([]).runnerDescriptor()

@@ -172,7 +172,7 @@ import ThePlans
         #expect(passed.status == .passed)
         #expect(failed.status == .failed)
         #expect(warning.warningEvidence?.message == "Heads up")
-        #expect(wait.waitEvidence?.outcome == .matched)
+        #expect(wait.waitExpectation?.met == true)
         #expect(conditional.abortedAtChildPath == failed.path)
         #expect(iteration.abortedAtChildPath == failed.path)
         #expect(HeistResultFixture.result(steps: [failed]).abortedAtPath == failed.path)

@@ -50,21 +50,10 @@ extension TheBrainsScrollTests {
             scrollView: scrollView
         )
         await brains.vault.installObservationForTesting(initialScreen)
-        guard let committed = brains.vault.interfaceElement(heistId: targetId) else {
-            return XCTFail("Expected placement target in committed semantic state")
-        }
-        switch brains.vault.resolveLiveActionTarget(for: committed) {
-        case .resolved:
-            break
-        case .objectUnavailable:
-            return XCTFail("Expected placement target to have a live object")
-        case .geometryUnavailable:
-            return XCTFail(
-                "Expected placement target to have fresh live geometry: "
-                    + String(describing: brains.vault.liveInterfaceElement(heistId: targetId)?.element.shape)
-            )
-        }
-        XCTAssertTrue(brains.vault.liveScrollView(for: committed) === scrollView)
+        guard assertPlacementTargetIsLiveAndScrollable(
+            heistId: targetId,
+            in: scrollView
+        ) else { return }
 
         let placedFrame = CGRect(
             x: ElementInflation.interactionComfortZone.midX - 100,
@@ -97,12 +86,13 @@ extension TheBrainsScrollTests {
             object.accessibilityFrame = placedFrame
             object.accessibilityActivationPoint = placedActivationPoint
             self.visibleObservationSource.observation = placedScreen
-            let event = await self.brains.vault.semanticObservationStream
+            let current = await self.brains.vault.semanticObservationStream
                 .commitDiscoveryObservationAfterViewportMovementForTesting(placedScreen)
+                .current
             return Navigation.ViewportTransition(
                 outcome: .moved,
                 previousVisibleIds: [targetId],
-                event: event
+                current: current
             )
         }
         defer {
@@ -124,6 +114,31 @@ extension TheBrainsScrollTests {
         )
     }
 
+    private func assertPlacementTargetIsLiveAndScrollable(
+        heistId: HeistId,
+        in expectedScrollView: UIScrollView
+    ) -> Bool {
+        guard let committed = brains.vault.interfaceElement(heistId: heistId) else {
+            XCTFail("Expected placement target in committed semantic state")
+            return false
+        }
+        switch brains.vault.resolveLiveActionTarget(for: committed) {
+        case .resolved:
+            break
+        case .objectUnavailable:
+            XCTFail("Expected placement target to have a live object")
+            return false
+        case .geometryUnavailable:
+            XCTFail(
+                "Expected placement target to have fresh live geometry: "
+                    + String(describing: brains.vault.liveInterfaceElement(heistId: heistId)?.element.shape)
+            )
+            return false
+        }
+        XCTAssertTrue(brains.vault.liveScrollView(for: committed) === expectedScrollView)
+        return true
+    }
+
     func testOffViewportTargetWithoutLiveScrollParentFailsNoRevealPath() async throws {
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
@@ -134,7 +149,7 @@ extension TheBrainsScrollTests {
             offscreen: OffViewportScrollTarget(
                 offscreen,
                 heistId: "offscreen_button",
-                contentActivationPoint: CGPoint(x: 0, y: 1_200),
+                viewActivationPoint: CGPoint(x: 0, y: 1_200),
                 scrollView: scrollView
             ),
             includeLiveScrollAncestor: false
@@ -176,7 +191,13 @@ extension TheBrainsScrollTests {
         )
         let entry = InterfaceTree.Element(
             heistId: "escaped_button",
+            path: TreePath([0]),
             scrollMembership: nil,
+            geometry: testGeometry(
+                for: element,
+                ownerPath: .root,
+                screen: .offscreen
+            ),
             element: element
         )
         await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
@@ -213,7 +234,13 @@ extension TheBrainsScrollTests {
         )
         let entry = InterfaceTree.Element(
             heistId: "escaped_button",
+            path: TreePath([0]),
             scrollMembership: nil,
+            geometry: testGeometry(
+                for: element,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: element)
+            ),
             element: element
         )
         await installSyntheticObservation(InterfaceObservation.makeForTests(
@@ -293,7 +320,10 @@ extension TheBrainsScrollTests {
                 subjectEvidence: ActionSubjectEvidence(
                     source: .resolvedSemanticTarget,
                     target: target,
-                    element: TheVault.WireConversion.convert(context.treeElement.element),
+                    element: TheVault.WireConversion.convert(
+                        context.treeElement.element,
+                        geometry: context.treeElement.geometry
+                    ),
                     resolution: finalResolution
                 )
             )
@@ -313,7 +343,7 @@ extension TheBrainsScrollTests {
             offscreen: OffViewportScrollTarget(
                 staleOffscreen,
                 heistId: "old_offscreen",
-                contentActivationPoint: CGPoint(x: 0, y: 1_200),
+                viewActivationPoint: CGPoint(x: 0, y: 1_200),
                 scrollView: staleScrollView
             )
         )

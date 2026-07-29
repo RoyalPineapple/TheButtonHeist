@@ -16,21 +16,31 @@ extension WireConverterTests {
             .init(label: "Type", value: "PDF", isImportant: true),
         ]
         let element = makeElement(label: "Report", customContent: content)
-        let wire = WireConversion.convert(element)
+        let geometry = testGeometry(
+            for: element,
+            ownerPath: .root,
+            screen: TheVault.onscreenSpace(for: element)
+        )
+        let wire = WireConversion.convert(element, geometry: geometry)
 
-        XCTAssertEqual(wire.customContent?.count, 2)
-        XCTAssertEqual(wire.customContent?[0].label, "Size")
-        XCTAssertEqual(wire.customContent?[0].value, "2.4 MB")
-        XCTAssertFalse(wire.customContent?[0].isImportant ?? true)
-        XCTAssertEqual(wire.customContent?[1].label, "Type")
-        XCTAssertEqual(wire.customContent?[1].value, "PDF")
-        XCTAssertTrue(wire.customContent?[1].isImportant ?? false)
+        XCTAssertEqual(wire.semantics.assertable.orderedCustomContent, [
+            HeistCustomContent(label: "Size", value: "2.4 MB", isImportant: false),
+            HeistCustomContent(label: "Type", value: "PDF", isImportant: true),
+        ])
+        XCTAssertEqual(wire.geometry, geometry)
     }
 
-    func testEmptyCustomContentConvertedToNil() throws {
+    func testEmptyCustomContentConvertedToEmptySet() throws {
         let element = makeElement(label: "Button", customContent: [])
-        let wire = WireConversion.convert(element)
-        XCTAssertNil(wire.customContent)
+        let geometry = testGeometry(
+            for: element,
+            ownerPath: .root,
+            screen: TheVault.onscreenSpace(for: element)
+        )
+        let wire = WireConversion.convert(element, geometry: geometry)
+
+        XCTAssertTrue(wire.semantics.assertable.customContent.isEmpty)
+        XCTAssertEqual(wire.geometry, geometry)
     }
 
     func testEmptyLabelAndValueCustomContentFilteredOut() throws {
@@ -39,18 +49,33 @@ extension WireConverterTests {
             .init(label: "Size", value: "2.4 MB", isImportant: false),
         ]
         let element = makeElement(label: "File", customContent: content)
-        let wire = WireConversion.convert(element)
-        XCTAssertEqual(wire.customContent?.count, 1)
-        XCTAssertEqual(wire.customContent?.first?.label, "Size")
+        let geometry = testGeometry(
+            for: element,
+            ownerPath: .root,
+            screen: TheVault.onscreenSpace(for: element)
+        )
+        let wire = WireConversion.convert(element, geometry: geometry)
+
+        XCTAssertEqual(wire.semantics.assertable.customContent, [
+            HeistCustomContent(label: "Size", value: "2.4 MB", isImportant: false),
+        ])
+        XCTAssertEqual(wire.geometry, geometry)
     }
 
-    func testAllEmptyCustomContentConvertedToNil() throws {
+    func testAllEmptyCustomContentConvertedToEmptySet() throws {
         let content: [AccessibilityElement.CustomContent] = [
             .init(label: "", value: "", isImportant: false),
         ]
         let element = makeElement(label: "File", customContent: content)
-        let wire = WireConversion.convert(element)
-        XCTAssertNil(wire.customContent)
+        let geometry = testGeometry(
+            for: element,
+            ownerPath: .root,
+            screen: TheVault.onscreenSpace(for: element)
+        )
+        let wire = WireConversion.convert(element, geometry: geometry)
+
+        XCTAssertTrue(wire.semantics.assertable.customContent.isEmpty)
+        XCTAssertEqual(wire.geometry, geometry)
     }
 
     // MARK: - Custom Rotor Conversion
@@ -64,12 +89,18 @@ extension WireConverterTests {
             ]
         )
 
-        let wire = WireConversion.convert(element)
+        let geometry = testGeometry(
+            for: element,
+            ownerPath: .root,
+            screen: TheVault.onscreenSpace(for: element)
+        )
+        let wire = WireConversion.convert(element, geometry: geometry)
 
-        XCTAssertEqual(wire.rotors, [
+        XCTAssertEqual(wire.semantics.assertable.orderedRotors, [
             HeistRotor(name: "Errors"),
             HeistRotor(name: "Warnings"),
         ])
+        XCTAssertEqual(wire.geometry, geometry)
     }
 
     func testEmptyCustomRotorNamesFilteredOut() throws {
@@ -81,15 +112,28 @@ extension WireConverterTests {
             ]
         )
 
-        let wire = WireConversion.convert(element)
+        let geometry = testGeometry(
+            for: element,
+            ownerPath: .root,
+            screen: TheVault.onscreenSpace(for: element)
+        )
+        let wire = WireConversion.convert(element, geometry: geometry)
 
-        XCTAssertEqual(wire.rotors, [HeistRotor(name: "Errors")])
+        XCTAssertEqual(wire.semantics.assertable.rotors, [HeistRotor(name: "Errors")])
+        XCTAssertEqual(wire.geometry, geometry)
     }
 
-    func testNoCustomRotorsConvertedToNil() throws {
+    func testNoCustomRotorsConvertedToEmptySet() throws {
         let element = makeElement(label: "Validation Results")
-        let wire = WireConversion.convert(element)
-        XCTAssertNil(wire.rotors)
+        let geometry = testGeometry(
+            for: element,
+            ownerPath: .root,
+            screen: TheVault.onscreenSpace(for: element)
+        )
+        let wire = WireConversion.convert(element, geometry: geometry)
+
+        XCTAssertTrue(wire.semantics.assertable.rotors.isEmpty)
+        XCTAssertEqual(wire.geometry, geometry)
     }
 
     func testCustomRotorChangeProducesUpdate() throws {
@@ -197,12 +241,19 @@ extension WireConverterTests {
             .init(label: "Color", value: "Black", isImportant: false),
         ]
         let element = makeElement(label: "Headphones", customContent: content)
-        let wire = WireConversion.convert(element)
+        let geometry = testGeometry(
+            for: element,
+            ownerPath: .root,
+            screen: TheVault.onscreenSpace(for: element)
+        )
+        let wire = WireConversion.convert(element, geometry: geometry)
 
-        XCTAssertEqual(wire.customContent?.count, 3)
-        XCTAssertTrue(wire.customContent?[0].isImportant ?? false)
-        XCTAssertFalse(wire.customContent?[1].isImportant ?? true)
-        XCTAssertFalse(wire.customContent?[2].isImportant ?? true)
+        XCTAssertEqual(wire.semantics.assertable.customContent, [
+            HeistCustomContent(label: "Price", value: "$79.99", isImportant: true),
+            HeistCustomContent(label: "Rating", value: "4.5", isImportant: false),
+            HeistCustomContent(label: "Color", value: "Black", isImportant: false),
+        ])
+        XCTAssertEqual(wire.geometry, geometry)
     }
 
     // MARK: - Custom Content: Partial Label/Value
@@ -212,10 +263,17 @@ extension WireConverterTests {
             .init(label: "Featured", value: "", isImportant: true),
         ]
         let element = makeElement(label: "Item", customContent: content)
-        let wire = WireConversion.convert(element)
-        XCTAssertEqual(wire.customContent?.count, 1)
-        XCTAssertEqual(wire.customContent?.first?.label, "Featured")
-        XCTAssertEqual(wire.customContent?.first?.value, "")
+        let geometry = testGeometry(
+            for: element,
+            ownerPath: .root,
+            screen: TheVault.onscreenSpace(for: element)
+        )
+        let wire = WireConversion.convert(element, geometry: geometry)
+
+        XCTAssertEqual(wire.semantics.assertable.customContent, [
+            HeistCustomContent(label: "Featured", value: "", isImportant: true),
+        ])
+        XCTAssertEqual(wire.geometry, geometry)
     }
 
     func testValueOnlyCustomContentPreserved() throws {
@@ -223,15 +281,22 @@ extension WireConverterTests {
             .init(label: "", value: "Available", isImportant: false),
         ]
         let element = makeElement(label: "Item", customContent: content)
-        let wire = WireConversion.convert(element)
-        XCTAssertEqual(wire.customContent?.count, 1)
-        XCTAssertEqual(wire.customContent?.first?.label, "")
-        XCTAssertEqual(wire.customContent?.first?.value, "Available")
+        let geometry = testGeometry(
+            for: element,
+            ownerPath: .root,
+            screen: TheVault.onscreenSpace(for: element)
+        )
+        let wire = WireConversion.convert(element, geometry: geometry)
+
+        XCTAssertEqual(wire.semantics.assertable.customContent, [
+            HeistCustomContent(label: "", value: "Available", isImportant: false),
+        ])
+        XCTAssertEqual(wire.geometry, geometry)
     }
 
-    // MARK: - Custom Content: Order Preserved
+    // MARK: - Custom Content: Parser Order
 
-    func testCustomContentOrderPreserved() throws {
+    func testCustomContentPreservesParserOrder() throws {
         let content: [AccessibilityElement.CustomContent] = [
             .init(label: "Author", value: "Jordan", isImportant: false),
             .init(label: "Type", value: "PDF", isImportant: true),
@@ -239,13 +304,20 @@ extension WireConverterTests {
             .init(label: "Modified", value: "March 15", isImportant: false),
         ]
         let element = makeElement(label: "Report", customContent: content)
-        let wire = WireConversion.convert(element)
+        let geometry = testGeometry(
+            for: element,
+            ownerPath: .root,
+            screen: TheVault.onscreenSpace(for: element)
+        )
+        let wire = WireConversion.convert(element, geometry: geometry)
 
-        XCTAssertEqual(wire.customContent?.count, 4)
-        XCTAssertEqual(wire.customContent?[0].label, "Author")
-        XCTAssertEqual(wire.customContent?[1].label, "Type")
-        XCTAssertEqual(wire.customContent?[2].label, "Size")
-        XCTAssertEqual(wire.customContent?[3].label, "Modified")
+        XCTAssertEqual(wire.semantics.assertable.orderedCustomContent, [
+            HeistCustomContent(label: "Author", value: "Jordan", isImportant: false),
+            HeistCustomContent(label: "Type", value: "PDF", isImportant: true),
+            HeistCustomContent(label: "Size", value: "2.4 MB", isImportant: false),
+            HeistCustomContent(label: "Modified", value: "March 15", isImportant: false),
+        ])
+        XCTAssertEqual(wire.geometry, geometry)
     }
 
     // MARK: - Custom Content: Mixed Filter
@@ -258,12 +330,18 @@ extension WireConverterTests {
             .init(label: "Color", value: "Red", isImportant: false),
         ]
         let element = makeElement(label: "Product", customContent: content)
-        let wire = WireConversion.convert(element)
-        XCTAssertEqual(wire.customContent?.count, 2)
-        XCTAssertEqual(wire.customContent?[0].label, "Price")
-        XCTAssertTrue(wire.customContent?[0].isImportant ?? false)
-        XCTAssertEqual(wire.customContent?[1].label, "Color")
-        XCTAssertFalse(wire.customContent?[1].isImportant ?? true)
+        let geometry = testGeometry(
+            for: element,
+            ownerPath: .root,
+            screen: TheVault.onscreenSpace(for: element)
+        )
+        let wire = WireConversion.convert(element, geometry: geometry)
+
+        XCTAssertEqual(wire.semantics.assertable.customContent, [
+            HeistCustomContent(label: "Price", value: "$9.99", isImportant: true),
+            HeistCustomContent(label: "Color", value: "Red", isImportant: false),
+        ])
+        XCTAssertEqual(wire.geometry, geometry)
     }
 
     // MARK: - Delta: Custom Content Unchanged

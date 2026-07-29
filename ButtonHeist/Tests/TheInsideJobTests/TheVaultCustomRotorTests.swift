@@ -94,7 +94,8 @@ final class TheVaultCustomRotorTests: ButtonHeistTestCase {
         let outcome = vault.performRotor(
             selection: .named("Errors"),
             direction: .next,
-            on: liveHost
+            on: liveHost,
+            history: await vault.admitRotorHistory()
         )
 
         guard case .succeeded(let hit) = outcome else {
@@ -154,7 +155,8 @@ final class TheVaultCustomRotorTests: ButtonHeistTestCase {
         let outcome = vault.performRotor(
             selection: .named("Links"),
             direction: .next,
-            on: liveHost
+            on: liveHost,
+            history: await vault.admitRotorHistory()
         )
 
         guard case .succeeded(let hit) = outcome else {
@@ -199,15 +201,21 @@ final class TheVaultCustomRotorTests: ButtonHeistTestCase {
 
         let cachedHeistId = HeistId(rawValue: "cached_virtual_result")
         var elements = observation.tree.elements
+        let cachedElement = AccessibilityElement.make(
+            label: "Cached virtual result",
+            identifier: cachedHeistId.rawValue,
+            traits: .button,
+            frame: CGRect(x: 20, y: 120, width: 280, height: 44)
+        )
         elements[cachedHeistId] = InterfaceTree.Element(
             heistId: cachedHeistId,
             scrollMembership: nil,
-            element: AccessibilityElement.make(
-                label: "Cached virtual result",
-                identifier: cachedHeistId.rawValue,
-                traits: .button,
-                frame: CGRect(x: 20, y: 120, width: 280, height: 44)
-            )
+            geometry: testGeometry(
+                for: cachedElement,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: cachedElement)
+            ),
+            element: cachedElement
         )
         await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             tree: InterfaceTree(elements: elements, containers: observation.tree.containers),
@@ -246,6 +254,11 @@ final class TheVaultCustomRotorTests: ButtonHeistTestCase {
         let treeElement = InterfaceTree.Element(
             heistId: "rotor_host",
             scrollMembership: nil,
+            geometry: testGeometry(
+                for: element,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: element)
+            ),
             element: element
         )
         host.accessibilityCustomRotors = [
@@ -264,7 +277,8 @@ final class TheVaultCustomRotorTests: ButtonHeistTestCase {
         let outcome = vault.performRotor(
             selection: .named("Errors"),
             direction: .next,
-            on: try XCTUnwrap(liveTarget(for: treeElement))
+            on: try XCTUnwrap(liveTarget(for: treeElement)),
+            history: await vault.admitRotorHistory()
         )
 
         guard case .noSuchRotor(let available) = outcome else {

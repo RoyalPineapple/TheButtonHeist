@@ -16,16 +16,6 @@ typealias AccessibilityNotificationCallback = @MainActor (
 enum AccessibilityNotificationObserverLifecycleState: Equatable {
     case unsubscribed
     case subscribed(callbackInstalled: Bool, unitTestModeArmed: Bool)
-
-    /// Wire projection of observer health for `get_announcements`.
-    var captureState: AccessibilityNotificationCaptureState {
-        switch self {
-        case .unsubscribed:
-            return .unsubscribed
-        case .subscribed(let callbackInstalled, let unitTestModeArmed):
-            return callbackInstalled ? .capturing(armed: unitTestModeArmed) : .installationUnavailable
-        }
-    }
 }
 
 private struct WeakAccessibilityNotificationSubscriber {

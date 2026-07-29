@@ -9,7 +9,7 @@ import XCTest
 
 @MainActor
 final class RawParserEvidenceAdmissionTests: XCTestCase {
-    func testRawParserAndDiagnosticEvidenceCannotMutateCommittedInterfaceTree() async {
+    func testRawParserEvidenceCannotMutateCommittedInterfaceTree() async throws {
         let visibleObservationSource = VisibleObservationSourceFixture()
         let brains = TheBrains(
             tripwire: TheTripwire(),
@@ -17,7 +17,7 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
         )
         let stream = brains.vault.semanticObservationStream
         let committed = observation(label: "Committed", heistId: "committed")
-        let committedEvent = await stream.commitVisibleObservationForTesting(committed)
+        let committedPublication = await stream.commitVisibleObservationForTesting(committed)
         let committedHash = brains.vault.interfaceTree.interfaceHash
 
         let raw = observation(label: "Raw", heistId: "raw")
@@ -29,24 +29,15 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
         XCTAssertEqual(brains.vault.interfaceTree.interfaceHash, committedHash)
         XCTAssertNotNil(brains.vault.interfaceTree.findElement(heistId: "committed"))
         XCTAssertNil(brains.vault.interfaceTree.findElement(heistId: "raw"))
-        let retainedAfterRefresh = await stream.latestReadEvent()
-        XCTAssertEqual(retainedAfterRefresh, committedEvent)
-
-        let diagnostic = observation(label: "Diagnostic", heistId: "diagnostic")
-        await brains.vault.recordFailedSettleDiagnosticEvidence(diagnostic)
-
-        XCTAssertEqual(
-            brains.vault.latestFailedSettleDiagnosticEvidence?.tree.interfaceHash,
-            diagnostic.tree.interfaceHash
-        )
-        XCTAssertEqual(brains.vault.interfaceTree.interfaceHash, committedHash)
-        XCTAssertNotNil(brains.vault.interfaceTree.findElement(heistId: "committed"))
-        XCTAssertNil(brains.vault.interfaceTree.findElement(heistId: "diagnostic"))
-        let retainedAfterDiagnostic = await stream.latestReadEvent()
-        XCTAssertEqual(retainedAfterDiagnostic, committedEvent)
+        let retainedAfterRefresh = try await stream.stateOwner
+            .events(after: committedPublication.historyRange.upperBound)
+            .get()
+        let currentAfterRefresh = await stream.stateOwner.current()
+        XCTAssertTrue(retainedAfterRefresh.isEmpty)
+        XCTAssertEqual(currentAfterRefresh, committedPublication.current)
     }
 
-    func testCommittedObservationAdmitsPreviouslyRawEvidenceToInterfaceTree() async {
+    func testCommittedObservationAdmitsPreviouslyRawEvidenceToInterfaceTree() async throws {
         let visibleObservationSource = VisibleObservationSourceFixture()
         let brains = TheBrains(
             tripwire: TheTripwire(),
@@ -59,12 +50,19 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
 
         XCTAssertTrue(brains.vault.interfaceTree.orderedElements.isEmpty)
 
-        let event = await stream.commitVisibleObservationForTesting(raw)
+        let boundary = await stream.stateOwner.historyEndIndex()
+        let publication = await stream.commitVisibleObservationForTesting(raw)
 
-        XCTAssertNotNil(event.moment)
+        XCTAssertEqual(publication.historyRange.lowerBound, boundary)
         XCTAssertNotNil(brains.vault.interfaceTree.findElement(heistId: "raw"))
-        let committedEvent = await stream.latestReadEvent()
-        XCTAssertEqual(committedEvent, event)
+        let retained = try await stream.stateOwner.events(after: boundary).get()
+        let current = await stream.stateOwner.current()
+        XCTAssertEqual(retained, publication.events)
+        XCTAssertEqual(current, publication.current)
+        XCTAssertEqual(
+            publication.events.compactMap(\.snapshot),
+            [publication.current.snapshot]
+        )
     }
 
     private func observation(label: String, heistId: HeistId) -> InterfaceObservation {

@@ -22,9 +22,8 @@ extension HeistCanonicalSwiftDSLRenderer {
         switch value {
         case .presence(let presence):
             return try render(presence: presence, environment: environment)
-        case .announcement(let announcement):
-            guard let match = announcement.match else { return ".announcement" }
-            return try ".announcement(\(renderStringArgument(match, environment: environment)))"
+        case .notification(let notification):
+            return try render(notification: notification, environment: environment)
         case .screenChanged(let predicate):
             guard let match = predicate.match else { return ".screenChanged" }
             return try ".screenChanged(\(renderStringArgument(match, environment: environment)))"
@@ -34,6 +33,24 @@ extension HeistCanonicalSwiftDSLRenderer {
                 try render(elementAssertion: $0, environment: environment)
             }
             return ".elementsChanged([\(rendered.joined(separator: ", "))])"
+        }
+    }
+
+    private func render(
+        notification: NotificationPredicate,
+        environment: RenderEnvironment
+    ) throws -> String {
+        switch (notification.text, notification.element) {
+        case (nil, nil):
+            return ".notification"
+        case (.some(let text), nil):
+            return try ".notification(\(renderStringArgument(text, environment: environment)))"
+        case (nil, .some(let element)):
+            return try ".notification(element: \(render(predicate: element, environment: environment)))"
+        case (.some(let text), .some(let element)):
+            return try ".notification("
+                + "text: \(renderStringArgument(text, environment: environment)), "
+                + "element: \(render(predicate: element, environment: environment)))"
         }
     }
 

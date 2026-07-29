@@ -27,11 +27,11 @@ final class DogfoodFeatureFlowTests: XCTestCase {
             matching: TransientFlowScreen.lifecycle,
             in: heist.result
         )
-        let trace = try XCTUnwrap(evidence.result?.accessibilityTrace)
+        let observationEvidence = try XCTUnwrap(evidence.result?.observationEvidence)
 
         XCTAssertEqual(evidence.expectation?.met, true)
-        XCTAssertTrue(trace.appearedLabels.contains("Processing"))
-        XCTAssertTrue(trace.disappearedLabels.contains("Submit"))
+        XCTAssertTrue(observationEvidence.addedLabels.contains("Processing"))
+        XCTAssertTrue(observationEvidence.removedLabels.contains("Submit"))
 
         let failure = try await expectHeistFailure("DogfoodStandaloneCannotReuseLifecycleEvidence") {
             WaitFor(TransientFlowScreen.lifecycle, timeout: 0.25)
@@ -58,17 +58,15 @@ final class DogfoodFeatureFlowTests: XCTestCase {
             WaitFor(TransientFlowScreen.exactToastText, timeout: 0.5)
         }
         let exactReport = HeistReport.project(result: exactFailure.result)
-        let failureMessage = try XCTUnwrap(exactReport.failure?.message)
+        let exactObservation = try XCTUnwrap(
+            exactFailure.result.outputNodes.lazy.compactMap(\.waitObservation).last
+        )
+        let currentLabels = try XCTUnwrap(exactObservation.current)
+            .interface.projectedElements.compactMap(\.semantics.assertable.label)
 
         XCTAssertEqual(exactReport.failure?.actionKind, .timeout)
-        XCTAssertTrue(
-            failureMessage.contains(#"observed accessibility candidate label="Ticket saved., Dismiss""#),
-            failureMessage
-        )
-        XCTAssertFalse(
-            failureMessage.contains(#"observed accessibility candidate label="Ticket saved." traits="#),
-            failureMessage
-        )
+        XCTAssertTrue(currentLabels.contains("Ticket saved., Dismiss"))
+        XCTAssertFalse(currentLabels.contains("Ticket saved."))
 
         let standaloneFailure = try await expectHeistFailure(
             "DogfoodStandaloneCannotReuseAnnouncementEvidence"
@@ -94,26 +92,23 @@ final class DogfoodFeatureFlowTests: XCTestCase {
     }
 }
 
-private extension AccessibilityTrace {
-    var appearedLabels: [String] {
-        changeFacts.flatMap { fact -> [String] in
-            guard case .elementsChanged(let elements) = fact else { return [] }
-            return elements.appeared.compactMap(\.elementLabel)
-        }
+private extension Observation.Evidence {
+    var addedLabels: [String] {
+        elementEdits.flatMap(\.added).compactMap(\.semantics.assertable.label)
     }
 
-    var disappearedLabels: [String] {
-        changeFacts.flatMap { fact -> [String] in
-            guard case .elementsChanged(let elements) = fact else { return [] }
-            return elements.disappeared.compactMap(\.elementLabel)
-        }
+    var removedLabels: [String] {
+        elementEdits.flatMap(\.removed).compactMap(\.semantics.assertable.label)
     }
-}
 
-private extension AccessibilityTrace.InterfaceChangeNode {
-    var elementLabel: String? {
-        guard case .element(let element, _) = node else { return nil }
-        return element.label
+    private var elementEdits: [ElementEdits] {
+        var previous = baseline?.interface
+        return events.compactMap { event in
+            guard case .elementsChanged(let snapshot) = event else { return nil }
+            defer { previous = snapshot.interface }
+            guard let previous else { return nil }
+            return ElementEdits.between(previous, snapshot.interface)
+        }
     }
 }
 #endif // canImport(UIKit)

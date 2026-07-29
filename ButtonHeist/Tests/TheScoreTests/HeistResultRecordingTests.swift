@@ -137,14 +137,14 @@ import Testing
 
     private func failedResult() -> HeistResult {
         HeistResultFixture.result(
-            steps: [HeistResultFixture.explicitFailure(path: "$.body[0]", message: "boom", durationMs: 3)],
+            steps: [HeistResultFixture.explicitFailure(path: "$.body[0]", message: "boom")],
             durationMs: 3
         )
     }
 
     private func passedResult() -> HeistResult {
         HeistResultFixture.result(
-            steps: [HeistResultFixture.warning(path: "$.body[0]", message: "record result", durationMs: 2)],
+            steps: [HeistResultFixture.warning(path: "$.body[0]", message: "record result")],
             durationMs: 2
         )
     }

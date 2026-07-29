@@ -9,9 +9,16 @@ extension HeistPlanRuntimeSafetyValidator {
         switch predicate.core {
         case .presence(let presence):
             validatePresence(presence, path: path, scope: scope)
-        case .announcement(let announcement):
-            if let match = announcement.match {
-                validateString(match, path: path.child(.match), scope: scope)
+        case .notification(let notification):
+            if let text = notification.text {
+                validateString(text, path: path.child(.text), scope: scope)
+            }
+            if let element = notification.element {
+                validateElementPredicate(
+                    element,
+                    path: path.child(.element),
+                    scope: scope
+                )
             }
         case .screenChanged(let screen):
             // A screen predicate names no elements: there is no child list to
@@ -74,7 +81,7 @@ extension HeistPlanRuntimeSafetyValidator {
         case .exists(let target), .missing(let target), .appeared(let target), .disappeared(let target):
             validateTarget(target, path: path.child(.target), scope: scope)
         case .updated(let target, let change):
-            validateTarget(target, path: path.child(.target), scope: scope)
+            validateTarget(target.accessibilityTarget, path: path.child(.target), scope: scope)
             validatePropertyChange(change, path: path.child(.change), scope: scope)
         }
     }

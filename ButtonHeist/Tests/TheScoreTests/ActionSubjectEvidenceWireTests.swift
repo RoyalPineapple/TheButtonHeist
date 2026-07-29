@@ -39,8 +39,7 @@ final class ActionSubjectEvidenceWireTests: XCTestCase {
             resolution: ActionSubjectResolution(
                 origin: .known,
                 adjustments: [.semanticReveal, .objectDeallocationRefresh]
-            ),
-            settledObservationSequence: 12
+            )
         )
         let result = ActionResult.success(
             payload: .activate,
@@ -54,7 +53,6 @@ final class ActionSubjectEvidenceWireTests: XCTestCase {
         let subjectEvidence = try json.object("evidence").object("subjectEvidence")
         XCTAssertEqual(try subjectEvidence.string("source"), "resolvedSemanticTarget")
         XCTAssertEqual(try subjectEvidence.string("phase"), "resolvedBeforeDispatch")
-        XCTAssertEqual(try subjectEvidence.int("settledObservationSequence"), 12)
         let resolution = try subjectEvidence.object("resolution")
         XCTAssertEqual(try resolution.string("origin"), "known")
         XCTAssertEqual(

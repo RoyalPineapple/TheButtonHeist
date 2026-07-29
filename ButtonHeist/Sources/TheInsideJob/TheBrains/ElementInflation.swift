@@ -91,19 +91,7 @@ internal final class ElementInflation {
         internal let target: AdmittedSemanticTarget
         internal let revealRootScrollViewID: ObjectIdentifier
         internal let deadline: SemanticObservationDeadline
-        internal let observedScrollContentActivationPoint: InterfaceTree.ObservedScrollContentActivationPoint?
-
-        internal init(
-            target: AdmittedSemanticTarget,
-            revealRootScrollViewID: ObjectIdentifier,
-            deadline: SemanticObservationDeadline,
-            observedScrollContentActivationPoint: InterfaceTree.ObservedScrollContentActivationPoint? = nil
-        ) {
-            self.target = target
-            self.revealRootScrollViewID = revealRootScrollViewID
-            self.deadline = deadline
-            self.observedScrollContentActivationPoint = observedScrollContentActivationPoint
-        }
+        internal let viewSpace: HeistElement.Geometry.ViewSpace
     }
 
     internal typealias MoveViewport = @MainActor (

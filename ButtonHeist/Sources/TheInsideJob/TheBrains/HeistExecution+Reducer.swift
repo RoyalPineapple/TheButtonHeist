@@ -1,229 +1,159 @@
 #if canImport(UIKit)
 #if DEBUG
-import TheScore
+import ThePlans
+@_spi(ButtonHeistInternals) import TheScore
 
 extension HeistExecution {
-    private enum DispatchProgress {
-        case notRequired
-        case pending
-        case completed(TheSafecracker.ActionDispatchResult)
-
-        var result: TheSafecracker.ActionDispatchResult? {
-            guard case .completed(let result) = self else { return nil }
-            return result
-        }
-
-        var permitsCompletion: Bool {
-            switch self {
-            case .notRequired, .completed:
-                true
-            case .pending:
-                false
-            }
-        }
-    }
-
-    private enum MachineProgress {
-        case active
-        case finalizing(Outcome)
-        case complete(Completion)
-    }
-
     internal struct Machine {
-        private let admission: Admission
-        private let deadline: SemanticObservationDeadline
-        private var expectation: Expectation
-        private var verdict: Expectation.Result
-        private var dispatch: DispatchProgress
-        private var explorationStarted = false
-        private var progress = MachineProgress.active
+        private enum Progress {
+            case ready
+            case running
+            case awaitingFailureScreenshot(PendingFailureScreenshot)
+            case complete(Completion)
+        }
 
-        internal init(_ admission: Admission) {
-            guard let timeout = admission.command.timeout else {
-                preconditionFailure("A machine requires a bounded command")
-            }
-            self.admission = admission
-            deadline = SemanticObservationDeadline(
-                start: admission.startedAt,
-                timeout: timeout
+        internal let plan: HeistPlan
+        internal let argument: HeistArgument
+        internal let rootEnvironment: HeistExecutionEnvironment
+        internal let failureCaptureMode: ScreenCaptureMode?
+        internal var continuations: [Continuation]
+        internal var activeLeaf: ActiveLeaf?
+        internal var rootChildren = HeistExecutedChildren.empty
+        internal var nextRequestID: UInt64 = 0
+        private var progress = Progress.ready
+
+        internal init(
+            plan: HeistPlan,
+            argument: HeistArgument = .none,
+            failureCaptureMode: ScreenCaptureMode? = nil
+        ) throws {
+            self.plan = plan
+            self.argument = argument
+            self.failureCaptureMode = failureCaptureMode
+            rootEnvironment = try HeistExecutionEnvironment.empty.binding(
+                argument: argument,
+                to: plan.parameter
             )
-            let predicates = admission.command.predicate.map {
-                [$0.resolved, .noChange]
-            } ?? [.noChange]
-            let expectation = Expectation(
-                predicates,
-                baseline: admission.baseline
-            )
-            self.expectation = expectation
-            verdict = expectation.result
-            switch admission.command {
-            case .action:
-                dispatch = .pending
-            case .wait:
-                dispatch = .notRequired
-            case .currentState:
-                preconditionFailure("Current state does not require a machine")
-            }
+            continuations = [
+                .sequence(SequenceContinuation(
+                    steps: plan.body,
+                    context: StepContext(
+                        path: .body,
+                        environment: rootEnvironment,
+                        scope: Scope(plan: plan)
+                    ),
+                    nextIndex: 0,
+                    children: .empty
+                )),
+            ]
         }
 
         internal mutating func start() -> State {
-            guard case .active = progress else {
-                return state
-            }
-            switch admission.command {
-            case .action(let action):
-                return .pending(.perform([
-                    .dispatch(admission.id, action.command)
-                ]))
-            case .wait(let predicate, _):
-                explorationStarted = !predicate.isNotification
-                guard explorationStarted else {
-                    return .pending(.wait)
-                }
-                return .pending(.perform([
-                    .explore(admission.id, predicate, deadline)
-                ]))
-            case .currentState:
-                preconditionFailure("Current state does not require a machine")
-            }
+            guard case .ready = progress else { return state }
+            progress = .running
+            return advanceExecution()
         }
 
         internal mutating func advance(_ input: Input) -> State {
             switch progress {
-            case .complete:
+            case .running:
+                if activeLeaf != nil {
+                    return advanceActiveLeaf(input)
+                }
+                return advanceControlFlow(input)
+            case .awaitingFailureScreenshot(let pending):
+                guard case .failureScreenshotCaptured(let id, let screenshot) = input,
+                      id == pending.id else {
+                    return state
+                }
+                var steps = pending.children.values
+                if let screenshot {
+                    steps.append(screenshot)
+                }
+                return complete(
+                    steps: steps,
+                    abortedAtPath: pending.children.abortedAtPath
+                )
+            case .ready, .complete:
                 return state
-            case .finalizing:
-                return finish(input)
-            case .active:
-                return advanceActive(input)
             }
         }
 
         internal var state: State {
             switch progress {
-            case .active:
-                return .pending(.wait)
-            case .finalizing:
-                return .pending(.wait)
+            case .ready, .running, .awaitingFailureScreenshot:
+                .pending(.wait)
             case .complete(let completion):
-                return .complete(completion)
+                .complete(completion)
             }
         }
 
-        internal func externalCompletion(_ outcome: Outcome) -> Completion {
-            completion(outcome)
+        internal mutating func nextID() -> RequestID {
+            nextRequestID += 1
+            return RequestID(rawValue: nextRequestID)
         }
 
-        internal var requiresFinalDiscovery: Bool {
-            guard case .active = progress,
-                  admission.command.observationScope == .discovery,
-                  admission.command.predicate?.isNotification == false else {
-                return false
+        internal mutating func finish(
+            children: HeistExecutedChildren
+        ) -> State {
+            rootChildren = children
+            guard let failedPath = children.abortedAtPath,
+                  let failureCaptureMode else {
+                return complete(
+                    steps: children.values,
+                    abortedAtPath: children.abortedAtPath
+                )
             }
-            return true
-        }
-
-        internal var operationID: OperationID {
-            admission.id
-        }
-    }
-}
-
-private extension HeistExecution.Machine {
-    mutating func advanceActive(_ input: HeistExecution.Input) -> HeistExecution.State {
-        switch input {
-        case .event(let event):
-            if case .pending = dispatch,
-               case .noChange = event {
-                return .pending(.wait)
-            }
-            verdict = expectation.evaluate(event)
-            return completeIfPossible()
-
-        case .dispatchCompleted(let id, let result):
-            guard id == admission.id,
-                  case .pending = dispatch else {
-                return .pending(.wait)
-            }
-            dispatch = .completed(result)
-            guard result.success else {
-                return finalize(as: .completed)
-            }
-            guard verdict != .satisfied else {
-                return finalize(as: .completed)
-            }
-            guard !explorationStarted,
-                  let predicate = admission.command.predicate,
-                  !predicate.isNotification else {
-                return .pending(.wait)
-            }
-            explorationStarted = true
+            let id = nextID()
+            progress = .awaitingFailureScreenshot(.init(
+                id: id,
+                children: children
+            ))
             return .pending(.perform([
-                .explore(admission.id, predicate, deadline)
+                .captureFailureScreenshot(
+                    id,
+                    failedPath: failedPath,
+                    mode: failureCaptureMode
+                ),
             ]))
-
-        case .viewportExited:
-            preconditionFailure("A viewport cannot finish before finalization")
         }
-    }
 
-    mutating func completeIfPossible() -> HeistExecution.State {
-        guard dispatch.permitsCompletion,
-              verdict == .satisfied else {
-            return .pending(.wait)
+        private mutating func complete(
+            steps: [HeistExecutionStepResult],
+            abortedAtPath: HeistExecutionPath?
+        ) -> State {
+            let completion = Completion(
+                steps: steps,
+                abortedAtPath: abortedAtPath
+            )
+            progress = .complete(completion)
+            return .complete(completion)
         }
-        return finalize(as: .completed)
-    }
 
-    mutating func finalize(
-        as outcome: HeistExecution.Outcome
-    ) -> HeistExecution.State {
-        progress = .finalizing(outcome)
-        return .pending(.perform([
-            .finishExploration(admission.id)
-        ]))
-    }
-
-    mutating func finish(_ input: HeistExecution.Input) -> HeistExecution.State {
-        guard case .finalizing(let intendedOutcome) = progress else {
-            preconditionFailure("Only finalizing work can finish")
+        internal mutating func finishWithoutFailureScreenshot() -> State {
+            guard case .awaitingFailureScreenshot(let pending) = progress else {
+                return state
+            }
+            return complete(
+                steps: pending.children.values,
+                abortedAtPath: pending.children.abortedAtPath
+            )
         }
-        guard case .viewportExited(let id, let viewport) = input,
-              id == admission.id else {
-            return .pending(.wait)
-        }
-        let outcome: HeistExecution.Outcome
-        switch viewport {
-        case .failed(let failure):
-            outcome = .viewportExitFailed(failure)
-        case .restored, .retained, .superseded:
-            outcome = intendedOutcome
-        }
-        let completion = completion(outcome)
-        progress = .complete(completion)
-        return .complete(completion)
-    }
-
-    func completion(
-        _ outcome: HeistExecution.Outcome
-    ) -> HeistExecution.Completion {
-        HeistExecution.Completion(
-            id: admission.id,
-            command: admission.command,
-            baseline: admission.baseline,
-            historyStartIndex: admission.historyStartIndex,
-            startedAt: admission.startedAt,
-            outcome: outcome,
-            outstandingDescription: verdict.outstandingDescription,
-            dispatch: dispatch.result
-        )
     }
 }
 
-private extension HeistExecution.Predicate {
-    var isNotification: Bool {
-        if case .notification = resolved { return true }
-        return false
+extension HeistExecution.Machine {
+    /// Runs pure control flow until the host must perform an effect or the
+    /// complete heist result is available.
+    ///
+    /// Leaf and control-flow extensions implement the exhaustive frame
+    /// transitions. This root owns the loop and therefore prevents another
+    /// executor from becoming a competing source of heist progress.
+    internal mutating func advanceExecution() -> HeistExecution.State {
+        guard !continuations.isEmpty else {
+            return finish(children: rootChildren)
+        }
+        return advanceTopContinuation()
     }
 }
 

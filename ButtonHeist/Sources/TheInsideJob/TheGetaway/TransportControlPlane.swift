@@ -265,7 +265,7 @@ actor TransportControlPlane {
         case .status,
              .requestInterface,
              .getPasteboard,
-             .getAnnouncements,
+             .getNotifications,
              .requestScreen,
              .runtimeAction,
              .heistPlan:

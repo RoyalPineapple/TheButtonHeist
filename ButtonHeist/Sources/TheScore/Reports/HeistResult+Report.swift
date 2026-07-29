@@ -41,11 +41,9 @@ public struct HeistReport: Sendable, Equatable {
         public let target: AccessibilityTarget?
         public let status: HeistExecutionStepStatus
         public let message: String?
-        public let durationMs: Int
         public let failure: Failure?
         public let abortedAtChildPath: HeistExecutionPath?
         public let expectation: ExpectationResult?
-        public let settlement: ActionSettlementEvidence?
         public let activationTrace: ActivationTrace?
         public let children: [Node]
         package let evidence: Evidence?
@@ -65,7 +63,6 @@ public struct HeistReport: Sendable, Equatable {
             target = step.reportTarget
             status = step.status
             message = step.reportMessage
-            durationMs = step.durationMs.milliseconds
             failure = step.failure.map {
                 Failure(
                     detail: $0,
@@ -77,7 +74,6 @@ public struct HeistReport: Sendable, Equatable {
             }
             abortedAtChildPath = step.abortedAtChildPath
             expectation = step.reportExpectation
-            settlement = actionResult?.evidence.settlement
             activationTrace = actionResult?.activationTrace
             self.children = children
             evidence = Evidence(step: step)
@@ -86,7 +82,7 @@ public struct HeistReport: Sendable, Equatable {
 
     package enum Evidence: Sendable, Equatable {
         case action(command: HeistActionCommand, evidence: HeistActionEvidence)
-        case wait(HeistSettlementEvidence)
+        case wait(WaitEvidence)
         case caseSelection(HeistCaseSelectionEvidence)
         case forEachString(declaration: HeistForEachStringDeclaration, evidence: HeistForEachStringEvidence)
         case forEachElement(declaration: HeistForEachElementDeclaration, evidence: HeistForEachElementEvidence)
@@ -100,7 +96,7 @@ public struct HeistReport: Sendable, Equatable {
                 guard let evidence = step.actionEvidence else { return nil }
                 self = .action(command: command, evidence: evidence)
             case .wait:
-                guard let evidence = step.waitEvidence else { return nil }
+                guard let evidence = WaitEvidence(step: step) else { return nil }
                 self = .wait(evidence)
             case .conditional:
                 guard let evidence = step.caseSelectionEvidence else { return nil }
@@ -129,6 +125,68 @@ public struct HeistReport: Sendable, Equatable {
         }
     }
 
+    package enum WaitEvidence: Sendable, Equatable {
+        case matched(HeistWaitMatchedEvidence)
+        case handledElse(HeistWaitUnmatchedEvidence)
+        case unmatched(HeistWaitUnmatchedEvidence)
+
+        package var observation: Observation.Evidence {
+            switch self {
+            case .matched(let evidence):
+                evidence.observation
+            case .handledElse(let evidence), .unmatched(let evidence):
+                evidence.observation
+            }
+        }
+
+        package var expectation: ExpectationResult {
+            switch self {
+            case .matched(let evidence):
+                evidence.expectation.result
+            case .handledElse(let evidence), .unmatched(let evidence):
+                evidence.expectation.result
+            }
+        }
+
+        package var outcome: HeistPredicateEvidenceOutcome {
+            switch self {
+            case .matched:
+                .matched
+            case .handledElse:
+                .handledElse
+            case .unmatched:
+                .failed
+            }
+        }
+
+        package var baselineSummary: String? {
+            Self.summary(observation.baseline)
+        }
+
+        package var finalSummary: String? {
+            Self.summary(observation.current)
+        }
+
+        package init?(step: HeistExecutionStepResult) {
+            if let passed = step.passedWaitEvidence {
+                switch passed {
+                case .matched(let evidence):
+                    self = .matched(evidence)
+                case .handledElse(let evidence):
+                    self = .handledElse(evidence)
+                }
+            } else if let unmatched = step.unmatchedWaitEvidence {
+                self = .unmatched(unmatched)
+            } else {
+                return nil
+            }
+        }
+
+        private static func summary(_ snapshot: Observation.Snapshot?) -> String? {
+            snapshot?.summary
+        }
+    }
+
     public struct Diagnostics: Sendable, Equatable {
         public let failureScreenshotSummary: String?
         package let failureInterface: Interface?
@@ -144,7 +202,7 @@ public struct HeistReport: Sendable, Equatable {
         case notApplicable
         case incomplete
         case unchanged
-        case changed(AccessibilityTrace)
+        case changed(Observation.Evidence)
     }
 
     public struct Metrics: Codable, Sendable, Equatable {
@@ -156,15 +214,9 @@ public struct HeistReport: Sendable, Equatable {
         case heistDurationMs
         case actionPipelineTargetResolutionMs = "actionPipeline.targetResolutionMs"
         case actionPipelineActionDispatchMs = "actionPipeline.actionDispatchMs"
-        case actionPipelineSettleMs = "actionPipeline.settleMs"
-        case actionPipelineBeforeObservationMs = "actionPipeline.beforeObservationMs"
-        case actionPipelineFinalSemanticEvidenceMs = "actionPipeline.finalSemanticEvidenceMs"
         case actionPipelineTotalMs = "actionPipeline.totalMs"
         case waitPipelineTargetResolutionMs = "waitPipeline.targetResolutionMs"
         case waitPipelineActionDispatchMs = "waitPipeline.actionDispatchMs"
-        case waitPipelineSettleMs = "waitPipeline.settleMs"
-        case waitPipelineBeforeObservationMs = "waitPipeline.beforeObservationMs"
-        case waitPipelineFinalSemanticEvidenceMs = "waitPipeline.finalSemanticEvidenceMs"
         case waitPipelineTotalMs = "waitPipeline.totalMs"
         case expectationWaitMs
     }
@@ -272,7 +324,11 @@ private extension HeistReport {
             outputNodes.append(nil)
             executedNodeCount += step.status == .skipped ? 0 : 1
             metricAccumulator.appendMetrics(for: step)
-            if let screenId = step.reportActionResult?.accessibilityTrace?.endpointScreenId {
+            if let screenId = step.reportActionResult?
+                .observationEvidence?
+                .current?
+                .context
+                .screenId {
                 finalScreenId = screenId
             }
             if let expectation = step.reportExpectation {
@@ -342,23 +398,50 @@ private extension HeistReport.AccessibilityChange {
             self = .notApplicable
             return
         }
-        guard actionResults.allSatisfy({ $0.traceEvidence?.isComplete == true }) else {
+        guard actionResults.allSatisfy({
+            $0.observationEvidence?.completeness == .complete
+        }) else {
             self = .incomplete
             return
         }
 
-        let traceResults = result.steps.compactMapInResultOrder(\.reportActionResult)
-        guard traceResults.allSatisfy({ $0.traceEvidence?.isComplete == true }) else {
+        let observedResults = result.steps.compactMapInResultOrder(\.reportActionResult)
+        guard observedResults.allSatisfy({
+            $0.observationEvidence?.completeness == .complete
+        }) else {
             self = .incomplete
             return
         }
-        guard let trace = AccessibilityTrace.combinedTrace(
-            from: traceResults.compactMap(\.accessibilityTrace)
-        ) else {
+        let evidence = Self.combinedEvidence(
+            observedResults.compactMap(\.observationEvidence)
+        )
+        guard evidence.events.contains(where: \.recordsInterfaceChange) else {
             self = .unchanged
             return
         }
-        self = .changed(trace)
+        self = .changed(evidence)
+    }
+
+    private static func combinedEvidence(
+        _ evidence: [Observation.Evidence]
+    ) -> Observation.Evidence {
+        Observation.Evidence(
+            baseline: evidence.lazy.compactMap(\.baseline).first,
+            current: evidence.lazy.compactMap(\.current).last,
+            events: evidence.flatMap(\.events),
+            completeness: .complete
+        )
+    }
+}
+
+private extension Observation.Event {
+    var recordsInterfaceChange: Bool {
+        switch self {
+        case .elementsChanged, .screenChanged:
+            true
+        case .notification, .noChange:
+            false
+        }
     }
 }
 
@@ -371,27 +454,20 @@ private struct MetricAccumulator {
         case .action:
             guard let evidence = step.actionEvidence else { return }
             appendActionTiming(evidence.result, step: step)
-        case .wait(_, let timeout, _):
-            guard let evidence = step.waitEvidence else { return }
-            appendWaitTiming(evidence.actionResult, step: step)
-            appendCeiling(
-                .intentWaitTimeout,
-                budgetMs: Self.milliseconds(seconds: timeout.seconds),
-                elapsedMs: evidence.actionResult.timing?.totalMs ?? step.durationMs,
-                step: step
-            )
+        case .wait:
+            break
         case .repeatUntil(let declaration, _), .repeatUntilIteration(let declaration, _):
             guard let evidence = step.repeatUntilEvidence else { return }
             appendWaitTiming(evidence.actionResult, step: step)
             appendCeiling(
                 .repeatUntilTimeout,
                 budgetMs: Self.milliseconds(seconds: declaration.timeout.seconds),
-                elapsedMs: step.durationMs,
+                elapsedMs: evidence.actionResult?.timing?.totalMs,
                 step: step
             )
         case .invocation:
             guard let evidence = step.invocationEvidence else { return }
-            let expectationResult = evidence.waitEvidence?.actionResult ?? evidence.expectationActionResult
+            let expectationResult = evidence.expectationActionResult
             appendWaitTiming(expectationResult, step: step)
             append(.expectationWaitMs, valueMs: expectationResult?.timing?.totalMs, step: step)
         case .conditional:
@@ -432,9 +508,6 @@ private struct MetricAccumulator {
         guard let result else { return }
         append(.actionPipelineTargetResolutionMs, valueMs: result.timing?.targetResolutionMs, step: step)
         append(.actionPipelineActionDispatchMs, valueMs: result.timing?.actionDispatchMs, step: step)
-        append(.actionPipelineSettleMs, valueMs: result.settleTimeMs, step: step)
-        append(.actionPipelineBeforeObservationMs, valueMs: result.timing?.beforeObservationMs, step: step)
-        append(.actionPipelineFinalSemanticEvidenceMs, valueMs: result.timing?.finalSemanticEvidenceMs, step: step)
         append(.actionPipelineTotalMs, valueMs: result.timing?.totalMs, step: step)
     }
 
@@ -442,19 +515,16 @@ private struct MetricAccumulator {
         guard let result else { return }
         append(.waitPipelineTargetResolutionMs, valueMs: result.timing?.targetResolutionMs, step: step)
         append(.waitPipelineActionDispatchMs, valueMs: result.timing?.actionDispatchMs, step: step)
-        append(.waitPipelineSettleMs, valueMs: result.settleTimeMs, step: step)
-        append(.waitPipelineBeforeObservationMs, valueMs: result.timing?.beforeObservationMs, step: step)
-        append(.waitPipelineFinalSemanticEvidenceMs, valueMs: result.timing?.finalSemanticEvidenceMs, step: step)
         append(.waitPipelineTotalMs, valueMs: result.timing?.totalMs, step: step)
     }
 
     private mutating func appendCeiling(
         _ source: HeistReport.CeilingMetricSource,
         budgetMs: ElapsedMilliseconds?,
-        elapsedMs: ElapsedMilliseconds,
+        elapsedMs: ElapsedMilliseconds?,
         step: HeistExecutionStepResult
     ) {
-        guard let budgetMs else { return }
+        guard let budgetMs, let elapsedMs else { return }
         ceilings.append(HeistReport.CeilingMetric(
             source: source,
             budgetMs: budgetMs,

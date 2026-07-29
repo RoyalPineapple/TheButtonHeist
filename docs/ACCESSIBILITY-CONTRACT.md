@@ -1,30 +1,23 @@
-# Accessibility contract runtime
+# Accessibility Contract Runtime
 
-The Button Heist lets callers write programs against an app's accessibility
-contract.
+Button Heist executes programs against the semantic interface an app exposes to
+assistive technologies: labels, identifiers, roles, values, states, geometry,
+and actions. Live UIKit objects are boundary evidence. Durable execution uses
+typed targets, snapshots, events, plans, and results.
 
-The accessibility contract is the semantic interface the app exposes to
-assistive technologies: labels, identifiers, roles, values, states, and
-actions. The Button Heist makes that contract executable for agents, tests, and
-replay.
+## Executable Step
 
-## Executable step
-
-Most UI automation treats interaction as an input event. The Button Heist treats
-interaction as an asserted transition in the accessibility contract. The event
-is not the interesting part. The settled change is.
-
-One action crosses the same checkpoint every time:
+An action is an asserted accessibility transition, not merely an input event:
 
 ```text
-parse and resolve typed action and predicate
--> capture and commit an Observation.Moment baseline
--> arm observation, announcement, readiness, and deadline delivery
--> dispatch the declared action exactly once
--> capture, admit, commit, publish, and evaluate observations
--> require predicate, readiness, and post-readiness handoff evidence
--> assert evidence
--> fold public result summary
+resolve typed action and predicate
+-> open a Vault history boundary
+-> establish fresh readiness
+-> dispatch the declared action once
+-> capture and admit snapshots and notifications
+-> fold ordered events through the predicate
+-> prove noChange after the predicate is satisfied
+-> form immutable evidence and a typed step result
 ```
 
 For example:
@@ -34,149 +27,108 @@ Activate(.label("Pay"))
     .expect(.elementsChanged([.appeared(.label("Payment Complete"))]))
 ```
 
-This step resolves the control declared as `Pay`, performs the activation
-exposed through the accessibility interface, waits for settlement, then proves
-that `Payment Complete` appeared. The important question is not whether an
-event was delivered. It is whether the interface contract was fulfilled.
+The runtime finds the accessible control named `Pay`, reveals it when needed,
+performs its accessibility action, and proves that `Payment Complete` appeared.
+The contract is fulfilled by observed semantic evidence, not by successful tap
+delivery.
 
 ## Runtime
 
-Semantic intent enters the runtime. The Button Heist owns target resolution, reveal,
-element inflation, action execution, settling, and evidence. The result is
-settled semantic evidence, not a touch playback log.
-
 ```mermaid
 flowchart LR
-    Contract["Accessibility contract<br/>what exists, what can act"]
-    Before["Observation.Moment<br/>snapshot + private Log index"]
-    Action["Declared action<br/>activate, type, rotor, wait"]
-    After["Observation.Log<br/>ordered post-baseline events"]
-    Evidence["Predicate evidence<br/>handoff state or latched event"]
-    Result["Result<br/>trace plus folded public delta"]
-    Next["Next step"]
+    Input["Snapshot or notification payload"]
+    Vault["TheVault<br/>current Snapshot + Observation.History"]
+    Machine["HeistExecution.Machine"]
+    Effect["MainActor host effect"]
+    Result["HeistResult<br/>step-local Observation.Evidence"]
+    Report["HeistReport"]
+    Render["JSON / compact / human / JUnit"]
 
-    Contract --> Before
-    Before --> Action
-    Action --> After
-    Before --> After
-    After --> Evidence
-    Evidence --> Result
-    Result --> Next
-    Next --> Before
+    Input --> Vault
+    Vault --> Machine
+    Machine -->|"pending(.perform)"| Effect
+    Effect --> Input
+    Machine -->|"pending(.wait)"| Vault
+    Machine -->|"complete"| Result
+    Result --> Report
+    Report --> Render
 ```
 
-What "settled" means — the tripwire, the fingerprint cycles, and the hard
-timeout — is drawn in the [settle loop diagram](diagrams/settle-loop.md). The
-activation decision tree, including the warn-but-proceed path and the
-`ActivationTrace` result fields, is drawn in the
-[activation policy diagram](diagrams/activation-policy.md).
+The Vault owns current accessibility truth and one ordered event history. It
+records every event before delivery. One pure `HeistExecution.Machine` owns the
+entire plan's control flow, active leaf, expectation progress, and accumulated
+step results. The MainActor host performs only the typed effects requested by
+that machine.
 
-## Results
+The host owns the active leaf deadline, the whole-heist deadline, and one task
+scheduled for the earlier absolute value. Expiry cancels the interaction in
+flight and admits its terminal outcome. A leaf timeout may enter an authored
+wait `else`; a whole-heist timeout permits no further authored interaction.
+Deadlines never become accessibility events.
 
-A result is plain evidence about what happened. It names the step, the status,
-the observed trace, and the facts that satisfied or broke the contract. Public
-formatters may squash those ordered facts into a compact delta.
-
-Results are not live handles, replay objects, or private runtime state. They
-are reportable facts that callers can assert against, print, store, or use to
-compose the next heist.
+The complete execution state machine is drawn in the
+[heist execution diagram](diagrams/heist-execution.md). The accessibility input
+path is drawn in the
+[observation pipeline diagram](diagrams/observation-pipeline.md).
 
 ## Boundaries
 
 | Boundary | Owns | Refuses to own |
 |----------|------|----------------|
-| `AccessibilityTarget` | One node-target language for actions, waits, expectations, CLI/MCP, and subtree queries | Live UIKit identity, geometry authority, alternate query projections |
-| `AccessibilityPredicate` and `ChangeDeclaration` | Concrete conditions for waits, expectations, and control-flow cases | Target resolution, viewport movement, command execution |
-| `Observation.Store` and `Observation.Log` | Current semantic tree, ordered retained events, lineage, and admitted-read state committed together | Predicate-owned history, destructive reads, report formatting |
-| `Observation.Moment` | Immutable snapshot and private Log position used by `events(since:)` | Public index manipulation or independent capture ownership |
-| `AccessibilityTrace` | Durable result evidence and derived ordered `ChangeFact` values | A second runtime observation pipeline |
-| `Settlement` | One reducer lifecycle for action/observation trigger, predicate, readiness, handoff, and deadline evidence | Fake no-op actions, post-action waits, or parallel result shapes |
-| `ActionResult.Payload` | One semantic action payload whose cases determine method and legal command data | A wire-only payload model or method/payload repair path |
-| `HeistReport` | One interpretation of `HeistResult`: nodes, summary, metrics, failures, warnings, and diagnostics | Execution ownership or formatter-specific traversal |
-| `ElementInflation` | Semantic target to inflated live target | Public viewport instructions, predicate evaluation, durable selector choice |
-| `HeistPlan` | Durable semantic program AST | Arbitrary Swift source, native loop preservation, runtime state |
-| `EvidenceMinimumMatcher` | Offline matcher suggestions from settled result evidence | Runtime execution, storage, or hidden test generation |
+| `AccessibilityTarget` | One target language for actions, waits, expectations, CLI/MCP, and subtree queries | Live UIKit identity or alternate query projections |
+| `AccessibilityPredicate` | Current-state and temporal declarations resolved into event predicates | Viewport movement, capture, or command execution |
+| `Observation.Snapshot` | Immutable semantic and geometry truth at one capture | History position or mutable UIKit identity |
+| `Observation.Event` | One ordered admitted fact: elements changed, screen changed, notification, or no change | Generation fields, cursors, or report interpretation |
+| `Observation.History` | The Vault-owned retained event array and its bounded read operations | Predicate-specific logs or destructive consumption |
+| `Observation.Evidence` | A result's baseline, current snapshot, ordered events, and completeness | Live runtime ownership or a second trace |
+| `HeistExecution.Machine` | One complete plan's deterministic progress and result accumulation | UIKit, clocks, subscriptions, or async tasks |
+| `HeistExecution.Host` | MainActor effects, subscriptions, cancellation, and both deadline policies | Predicate truth or parallel execution state |
+| `HeistResult` | One admitted durable execution tree | Presentation-specific models |
+| `HeistReport` | One interpretation of execution truth | Runtime decisions or formatter-specific traversal |
 
-Adapters format product results for CLI, MCP, JSON, compact text, or JUnit. They
-do not decide what a semantic action means or whether a predicate is true.
+Adapters render results for CLI, MCP, JSON, compact text, human text, or JUnit.
+They do not decide what an action means or whether a predicate is true.
 
-The ownership rules for the remaining evidence boundaries are explicit:
+## Canonical Pipeline
 
-- `Settlement.Reducer` is the one operation reducer and `Settlement.Executor`
-  is its one effect runner. UIKit capture and action dispatch remain boundary
-  effects; observation ownership and predicate truth remain typed values.
-- `HeistResult` is the one admitted heist execution tree.
-  `HeistReport.project(result:)` interprets it once; JSON, compact, human,
-  JUnit, doctor, and metric adapters render the resulting report instead of
-  independently traversing execution truth.
-- `ActionDispatchResult` is the one app-side dispatch result.
-  `Settlement.ResultProjector` combines it with canonical predicate, readiness,
-  handoff, and deadline evidence to construct `ActionResult`, whose success and
-  failure cases permit only their valid evidence.
-  `ActionResult.Payload` is the only semantic payload, and custom `Codable`
-  projects its method and optional command data directly to the wire.
-- `AccessibilityNotificationBus` retains one bounded ingress log. Cursors and
-  checkpoints select evidence without clearing or stealing it from another
-  consumer.
-- UIKit/ObjC `@unchecked Sendable` is confined to the TheInsideJob platform
-  boundary, where each declaration documents its synchronization guarantee. Typed
-  core and wire values remain checked `Sendable` values.
+1. Boundary syntax is parsed into one typed `HeistPlan`.
+2. The app creates one machine and one host for the complete plan.
+3. The machine resolves the next authored step and requests any MainActor
+   effects it needs.
+4. Capture and notification inputs enter the Vault's canonical admission path.
+5. The Vault updates current truth, records ordered events, then delivers them.
+6. The machine evaluates all graph predicates with one graph evaluator and all
+   temporal predicates with one ordered event fold.
+7. A matching predicate still waits for a fresh `noChange` event before the
+   leaf completes.
+8. The result retains immutable observation evidence; report and rendering
+   layers only project it.
 
-## Pipeline
+Screen replacement is normalized as old-tree departures, one screen marker,
+then new-tree arrivals. Appeared and disappeared may cross that boundary.
+Updated requires two matching semantic readings in the same screen generation.
+The generation is derived from history, not stored on each event.
 
-All public executable routes enter the same machine:
+Every viewport movement captures and admits the resulting viewport. Discovery
+is one pass through each reachable scroll boundary and restores its origin.
+Inflation uses the same movement/capture machinery but may stop at the first
+matching target and retain that viewport.
 
-1. A supported typed CLI/MCP command, ButtonHeist DSL source, trusted local
-   Swift DSL authoring input, or generated `.heist` artifact produces either a
-   single command or a `HeistPlan`.
-2. The runtime resolves the action and optional predicate into one
-   `Settlement.Command`.
-3. Settlement commits a baseline Moment and arms all evidence channels before
-   an action dispatch; observation-only waits skip dispatch structurally.
-4. Each capture is admitted, committed to the Store and Log, published, and
-   evaluated once.
-5. Current-state predicates evaluate the eligible handoff snapshot. Temporal
-   predicates evaluate post-baseline Log events; screen boundaries become
-   old-tree departures, a screen marker, then new-tree arrivals.
-6. The reducer completes when trigger, optional predicate, readiness, and
-   post-readiness handoff evidence agree, or returns the independent evidence
-   axes at the absolute deadline.
-7. Reports, JSON, compact output, and later repair artifacts project from the
-   resulting trace and execution result. Public delta is a one-way lossy fold,
-   never evaluator input.
+## Conformance
 
-Raw generated JSON plan IR is internal/runtime tooling data. It is not a public
-user-authored execution route.
+The contract is healthy when:
 
-No public route asks callers to manage ordinary viewport mechanics for semantic
-commands. Viewport and spatial gesture commands are explicit when viewport state
-or the physical gesture itself is the intent. Viewport/debug commands are
-directly executable for inspection, but they are not durable heist primitives.
-
-## Conformance cases
-
-The product contract is healthy when these cases hold:
-
-- A semantic activation can act on an offscreen accessible target without a
-  caller-authored scroll step, for content the app has realized in the
-  accessibility tree. Lazily instantiated content (collection view
-  virtualization, lazy stacks) has no elements until it is realized; scroll
-  exploration can realize it, but "offscreen" means realized and out of the
-  viewport, not hypothetical. See [Scope and limits](SCOPE-AND-LIMITS.md).
-- Duplicate labels produce the minimum matcher that disambiguates semantic
-  intent.
-- `wait` and action expectations use the same concrete
-  `AccessibilityPredicate` evaluator.
-- Actions, predicates, and `get_interface` subtree queries use the same
-  `AccessibilityTarget` resolver over the delivered tree, including identifier-
-  bearing containers of every parser type.
-- `exists` and `missing` are current-tree checks in every valid predicate
-  context; lifecycle and update checks require ordered facts.
-- Screen, layout, value, and announcement notifications are edge evidence; a
-  screen notification begins a new observation generation.
-- Unknown JSON keys fail at the contract boundary.
-- Timeout diagnostics say which contract was not satisfied and what command or
-  target shape is valid next.
-- One retained cursor-backed observation log is runtime temporal truth;
-  `AccessibilityTrace` is its durable evidence form and public deltas are lossy
-  output folds.
+- Actions, predicates, and `get_interface` resolve the same
+  `AccessibilityTarget` language over the same delivered tree.
+- Identifier-bearing containers are queryable in every valid target context.
+- `exists` and `missing` use the current admitted snapshot; temporal declarations use
+  ordered events.
+- One event cannot satisfy both sides of an appeared, disappeared, or updated
+  predicate.
+- `noChange` means complete observed equality, including coarse geometry.
+- UIKit value notifications trigger a recapture; the accessibility value diff,
+  not the notification code alone, proves change.
+- Unknown JSON keys and invalid typed relationships fail at admission.
+- Timeout diagnostics identify the unfinished contract and retain the complete
+  execution receipt.
+- Public deltas remain lossy result projections and are never evaluator input.

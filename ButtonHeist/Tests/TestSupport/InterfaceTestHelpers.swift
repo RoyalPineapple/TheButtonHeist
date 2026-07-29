@@ -251,7 +251,7 @@ package func makeTestHeistElement(
                 identifier: identifier,
                 hint: hint,
                 traits: Set(traits),
-                customContent: Set(customContent ?? []),
+                customContent: customContent ?? [],
                 rotors: Set(rotors ?? []),
                 actions: Set(actions ?? (traits.contains(.button) ? [.activate] : []))
             ),

@@ -50,6 +50,11 @@ struct LiveCaptureBoundaryAdversarialTests {
             heistId: heistId,
             path: path,
             scrollMembership: nil,
+            geometry: testGeometry(
+                for: element,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: element)
+            ),
             element: element
         )
         let snapshot = LiveCapture.Snapshot(

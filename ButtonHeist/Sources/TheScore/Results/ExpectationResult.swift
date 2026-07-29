@@ -17,58 +17,10 @@ public struct PredicateEvaluationResult: Sendable, Equatable {
     }
 }
 
-/// One observed accessibility trace paired with evidence of whether its
-/// observation history is complete.
-public struct AccessibilityTraceEvidence: Codable, Sendable, Equatable {
-    public enum Completeness: String, Codable, Sendable {
-        case complete
-        case incomplete
-    }
-
-    public let trace: AccessibilityTrace
-    public let completeness: Completeness
-
-    private enum CodingKeys: String, CodingKey, CaseIterable {
-        case accessibilityTrace
-        case completeness
-    }
-
-    public init?(trace: AccessibilityTrace, completeness: Completeness) {
-        guard trace.captures.last != nil else { return nil }
-        self.trace = trace
-        self.completeness = completeness
-    }
-
-    public var isComplete: Bool {
-        completeness == .complete
-    }
-
-    public init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "AccessibilityTraceEvidence")
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let trace = try container.decode(AccessibilityTrace.self, forKey: .accessibilityTrace)
-        let completeness = try container.decode(Completeness.self, forKey: .completeness)
-        guard let evidence = Self(trace: trace, completeness: completeness) else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .accessibilityTrace,
-                in: container,
-                debugDescription: "accessibility trace evidence requires a current capture"
-            )
-        }
-        self = evidence
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(trace, forKey: .accessibilityTrace)
-        try container.encode(completeness, forKey: .completeness)
-    }
-}
-
 /// The result of checking an `AccessibilityPredicate`, including the predicate
 /// and observed evidence.
 public enum ExpectationResult: Codable, Sendable, Equatable {
-    public struct Met: Sendable, Equatable {
+    public struct Met: Codable, Sendable, Equatable {
         public let predicate: AccessibilityPredicate?
         public let actual: String?
 
@@ -85,7 +37,7 @@ public enum ExpectationResult: Codable, Sendable, Equatable {
         public var result: ExpectationResult { .met(self) }
     }
 
-    public struct Unmet: Sendable, Equatable {
+    public struct Unmet: Codable, Sendable, Equatable {
         public let predicate: AccessibilityPredicate?
         public let actual: String?
 
@@ -143,7 +95,7 @@ public enum ExpectationResult: Codable, Sendable, Equatable {
     package var matchedAnnouncement: String? {
         guard met,
               let predicate,
-              case .announcement = predicate.core else { return nil }
+              case .notification = predicate.core else { return nil }
         return actual
     }
 

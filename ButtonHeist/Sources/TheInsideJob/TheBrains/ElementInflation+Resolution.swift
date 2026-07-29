@@ -167,6 +167,13 @@ extension ElementInflation {
     internal func findTargetInTree(
         _ target: ResolvedAccessibilityTarget,
     ) async -> Result<TreeTargetMatch, ElementInflationFailure> {
+        guard await vault.semanticObservationStream.admittedVisibleObservation(
+            timeout: SemanticObservationTiming.defaultTimeout / .seconds(1)
+        ) != nil else {
+            return .failure(.notFound(
+                "no admitted visible accessibility observation was available for target resolution"
+            ))
+        }
         switch visibleTargetResolution(target) {
         case .success(let visible):
             return .success(.visible(visible, ActionSubjectResolution(origin: .visible)))

@@ -23,7 +23,13 @@ final class AdversarialMutationTests: XCTestCase {
         XCTAssertEqual(notificationEvidence.result?.method, .activate)
         XCTAssertEqual(notificationEvidence.expectation?.predicate, destination)
         XCTAssertEqual(notificationEvidence.expectation?.met, true)
-        XCTAssertTrue(notificationEvidence.notificationKinds.contains(.screenChanged))
+        let notifications = try XCTUnwrap(notificationEvidence.result?.observationEvidence)
+            .events
+            .compactMap { event -> Observation.Notification? in
+                guard case .notification(let notification) = event else { return nil }
+                return notification
+            }
+        XCTAssertEqual(notifications.compactMap(\.text), ["Delayed code: 7429"])
 
         let silentCommand = HeistActionCommand.activate(.label("Reveal silently"))
         try await openScenario(.asyncReveal, readyHeistPath: "AdversarialAsyncRevealSilentReady")
@@ -36,9 +42,15 @@ final class AdversarialMutationTests: XCTestCase {
         XCTAssertEqual(silentEvidence.result?.method, .activate)
         XCTAssertEqual(silentEvidence.expectation?.predicate, destination)
         XCTAssertEqual(silentEvidence.expectation?.met, true)
-        XCTAssertFalse(
-            silentEvidence.notificationKinds.contains(.screenChanged),
-            "Silent trace notifications: \(silentEvidence.notificationEvents)"
+        let silentNotifications = try XCTUnwrap(silentEvidence.result?.observationEvidence)
+            .events
+            .compactMap { event -> Observation.Notification? in
+                guard case .notification(let notification) = event else { return nil }
+                return notification
+            }
+        XCTAssertTrue(
+            silentNotifications.compactMap(\.text).isEmpty,
+            "Unexpected notifications: \(silentNotifications)"
         )
     }
 
@@ -64,13 +76,18 @@ final class AdversarialMutationTests: XCTestCase {
         XCTAssertEqual(result.outcome, .success)
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(subject.source, .resolvedSemanticTarget)
-        XCTAssertEqual(subject.element.label, "Submit Order")
-        XCTAssertEqual(subject.element.value, beforeValue)
+        XCTAssertEqual(subject.element.semantics.assertable.label, "Submit Order")
+        XCTAssertEqual(subject.element.semantics.assertable.value, beforeValue)
 
         let finalElements = try XCTUnwrap(
-            result.accessibilityTrace?.captures.last?.interface.projectedElements
+            result.observationEvidence?.current?.interface.projectedElements
         )
-        XCTAssertEqual(finalElements.first { $0.label == "Submit Order" }?.value, finalValue)
+        XCTAssertEqual(
+            finalElements.first {
+                $0.semantics.assertable.label == "Submit Order"
+            }?.semantics.assertable.value,
+            finalValue
+        )
     }
 
     private func openScenario(
@@ -98,18 +115,6 @@ final class AdversarialMutationTests: XCTestCase {
         )
     }
 
-}
-
-private extension HeistActionEvidence {
-    var notificationEvents: [AccessibilityNotificationEvidence] {
-        result?.accessibilityTrace?.captures
-            .flatMap(\.transition.accessibilityNotifications)
-            ?? []
-    }
-
-    var notificationKinds: [AccessibilityNotificationKind] {
-        notificationEvents.map(\.kind)
-    }
 }
 
 #endif // canImport(UIKit)

@@ -80,7 +80,12 @@ extension Observation.Stream {
                 timeoutSeconds: $0
             )
         }
-        var cursor = historyIndex ?? (await stateOwner.historyEndIndex())
+        var cursor: Int
+        if let historyIndex {
+            cursor = historyIndex
+        } else {
+            cursor = await stateOwner.historyEndIndex()
+        }
         while true {
             switch await waitForObservation(
                 after: cursor,

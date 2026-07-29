@@ -51,9 +51,6 @@ extension FenceResponse {
         if let announcement = projection.announcement {
             text += "\nannouncement: \"\(announcement)\""
         }
-        if let settlement = projection.incompleteSettlement {
-            text += "\nsettlement: \(Self.incompleteSettlementSummary(settlement))"
-        }
         if let activationTrace = projection.activationTrace {
             text += "\nactivate: \(Self.compactActivationTrace(activationTrace))"
         }
@@ -79,10 +76,9 @@ extension FenceResponse {
         guard case .unmet = expectation,
               let result,
               result.outcome.isSuccess,
-              let traceEvidence = result.traceEvidence,
+              let observationEvidence = result.observationEvidence,
               let changeKind = DeltaProjection(
-                  trace: traceEvidence.trace,
-                  isComplete: traceEvidence.isComplete,
+                  evidence: observationEvidence,
                   profile: .summary
               )?.kind
         else { return nil }
@@ -113,7 +109,7 @@ extension FenceResponse {
         else { return false }
         switch predicate.core {
         case .screenChanged, .elementsChanged: return true
-        case .presence, .announcement: return false
+        case .presence, .notification: return false
         }
     }
 
@@ -136,7 +132,9 @@ extension FenceResponse {
     private static func compactRotor(_ search: RotorResult) -> String {
         var text = "rotor \(search.direction.rawValue): \(search.rotor)"
         if let foundElement = search.foundElement {
-            text += "\n  found=\(foundElement.label ?? foundElement.description)"
+            let description = foundElement.semantics.assertable.label
+                ?? foundElement.semantics.spokenDescription
+            text += "\n  found=\(description)"
         }
         if let range = search.textRange {
             text += "\n  textRange=\(range.rangeDescription)"

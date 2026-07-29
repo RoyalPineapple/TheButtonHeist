@@ -15,7 +15,8 @@ public struct HeistRepairEvidence: Codable, Sendable, Equatable {
     public let command: HeistActionCommand
     public let target: AccessibilityTarget
     public let beforeSnapshot: Interface
-    public let changeFacts: [AccessibilityTrace.ChangeFact]
+    public let observedChanges: [RepairChangeFactObservation]
+    public let semanticEvidence: [String]
     public let method: ActionMethod?
     public let expectation: ExpectationResult?
     public let outcome: HeistRepairEvidenceOutcome
@@ -26,7 +27,8 @@ public struct HeistRepairEvidence: Codable, Sendable, Equatable {
         command: HeistActionCommand,
         target: AccessibilityTarget,
         beforeSnapshot: Interface,
-        changeFacts: [AccessibilityTrace.ChangeFact] = [],
+        observedChanges: [RepairChangeFactObservation] = [],
+        semanticEvidence: [String] = [],
         method: ActionMethod? = nil,
         expectation: ExpectationResult? = nil,
         outcome: HeistRepairEvidenceOutcome
@@ -36,7 +38,8 @@ public struct HeistRepairEvidence: Codable, Sendable, Equatable {
         self.command = command
         self.target = target
         self.beforeSnapshot = beforeSnapshot
-        self.changeFacts = changeFacts
+        self.observedChanges = observedChanges
+        self.semanticEvidence = semanticEvidence
         self.method = method
         self.expectation = expectation
         self.outcome = outcome

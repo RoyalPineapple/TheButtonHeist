@@ -1,79 +1,91 @@
 import XCTest
+import ThePlans
 @testable import TheScore
 
 final class AccessibilityNotificationIdentityTests: XCTestCase {
-    func testRawUIKitCodesNormalizeToSemanticIdentity() {
-        XCTAssertEqual(AccessibilityNotificationKind(rawCode: 1000), .screenChanged)
-        XCTAssertEqual(AccessibilityNotificationKind(rawCode: 1001), .elementChanged(.layout))
-        XCTAssertEqual(AccessibilityNotificationKind(rawCode: 1005), .elementChanged(.value))
-        XCTAssertEqual(AccessibilityNotificationKind(rawCode: 1008), .announcement)
-        XCTAssertEqual(AccessibilityNotificationKind(rawCode: 4002), .unknown(4002))
-    }
-
-    func testNotificationIdentityUsesOneCanonicalTaggedJSONShape() throws {
-        let expectations: [(AccessibilityNotificationKind, [String: Any])] = [
-            (.screenChanged, ["type": "screenChanged"]),
-            (.elementChanged(.layout), ["type": "elementChanged", "notification": "layout"]),
-            (.elementChanged(.value), ["type": "elementChanged", "notification": "value"]),
-            (.announcement, ["type": "announcement"]),
-            (.unknown(4002), ["type": "unknown", "rawCode": 4002]),
+    func testNotificationIdentityIsItsCanonicalContent() throws {
+        let semantics = elementSemantics(label: "Save")
+        let notifications = [
+            try XCTUnwrap(Observation.Notification(text: "Saved", element: nil)),
+            try XCTUnwrap(Observation.Notification(text: nil, element: semantics)),
+            try XCTUnwrap(Observation.Notification(text: "Saved", element: semantics)),
         ]
 
-        for (kind, expectedObject) in expectations {
-            let data = try JSONEncoder().encode(kind)
-            let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-
-            XCTAssertEqual(object as NSDictionary, expectedObject as NSDictionary)
-            XCTAssertEqual(try JSONDecoder().decode(AccessibilityNotificationKind.self, from: data), kind)
-        }
-    }
-
-    func testNotificationIdentityRejectsFieldsFromOtherCases() {
-        let json = #"{"type":"announcement","rawCode":1008}"#
-
-        XCTAssertThrowsError(
-            try JSONDecoder().decode(AccessibilityNotificationKind.self, from: Data(json.utf8))
+        XCTAssertNotEqual(notifications[0], notifications[1])
+        XCTAssertNotEqual(notifications[1], notifications[2])
+        XCTAssertNotEqual(notifications[0], notifications[2])
+        XCTAssertEqual(
+            try JSONDecoder().decode(
+                [Observation.Notification].self,
+                from: JSONEncoder().encode(notifications)
+            ),
+            notifications
         )
     }
 
-    func testEvidenceRejectsLegacyScalarKindBags() {
-        let legacyKinds = [
-            #""kind": "screenChanged""#,
-            #""kind": "unknown", "rawCode": 4002"#,
-        ]
+    func testNotificationRequiresTextOrElementSemantics() {
+        XCTAssertNil(Observation.Notification(text: nil, element: nil))
 
-        for legacyKind in legacyKinds {
-            let json = """
-            {
-              "sequence": 1,
-              \(legacyKind),
-              "timestamp": 0,
-              "notificationData": {"type": "none"},
-              "associatedElement": {"type": "none"}
-            }
-            """
-
-            XCTAssertThrowsError(
-                try JSONDecoder().decode(AccessibilityNotificationEvidence.self, from: Data(json.utf8))
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(
+                Observation.Notification.self,
+                from: Data("{}".utf8)
             )
-        }
-    }
-
-    func testCapturedAnnouncementRejectsLegacyKindAndRawCodeBag() {
-        let json = """
-        {
-          "sequence": 1,
-          "text": "Done",
-          "timestamp": 0,
-          "kind": "unknown",
-          "rawCode": 4002,
-          "associatedElement": {"type": "none"}
-        }
-        """
-
-        XCTAssertThrowsError(
-            try JSONDecoder().decode(CapturedAnnouncement.self, from: Data(json.utf8))
         )
     }
 
+    func testNotificationRejectsUnknownFields() {
+        let json = #"{"text":"Saved","sequence":1}"#
+
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(
+                Observation.Notification.self,
+                from: Data(json.utf8)
+            )
+        ) { error in
+            XCTAssertTrue("\(error)".contains("sequence"), "\(error)")
+        }
+    }
+
+    func testServerMessageProjectsNotificationsAsItsDirectPayload() throws {
+        let notifications = [
+            try XCTUnwrap(Observation.Notification(text: "Saved", element: nil)),
+            try XCTUnwrap(
+                Observation.Notification(
+                    text: nil,
+                    element: elementSemantics(label: "Save")
+                )
+            ),
+        ]
+
+        let data = try JSONEncoder().encode(ServerMessage.notifications(notifications))
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+
+        XCTAssertEqual(object["type"] as? String, "notifications")
+        XCTAssertEqual((object["payload"] as? [[String: Any]])?.count, 2)
+
+        guard case .notifications(let decoded) = try JSONDecoder().decode(
+            ServerMessage.self,
+            from: data
+        ) else {
+            return XCTFail("Expected notifications response")
+        }
+        XCTAssertEqual(decoded, notifications)
+    }
+
+    private func elementSemantics(label: String) -> HeistElement.Semantics {
+        HeistElement.Semantics(
+            spokenDescription: label,
+            assertable: HeistElement.Semantics.AssertableProperties(
+                label: label,
+                value: nil,
+                identifier: nil,
+                traits: [.button],
+                actions: [.activate]
+            ),
+            respondsToUserInteraction: true
+        )
+    }
 }

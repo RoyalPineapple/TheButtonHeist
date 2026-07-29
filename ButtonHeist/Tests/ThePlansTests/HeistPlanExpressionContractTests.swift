@@ -2,6 +2,56 @@ import Foundation
 import Testing
 import ThePlans
 
+@Test func `notification resolves text and element constraints together`() throws {
+    let textReference: HeistReferenceName = "message"
+    let labelReference: HeistReferenceName = "subject"
+    let predicate = AccessibilityPredicate.notification(
+        text: .contains(textReference),
+        element: .label(.exact(labelReference))
+    )
+    let environment = HeistExecutionEnvironment(strings: [
+        textReference: "saved",
+        labelReference: "Receipt",
+    ])
+
+    guard case .notification(let resolved) = try predicate.resolve(in: environment) else {
+        Issue.record("Expected a resolved notification predicate")
+        return
+    }
+    #expect(resolved.text?.mode == .contains)
+    #expect(resolved.text?.value == "saved")
+    #expect(resolved.element == .label("Receipt"))
+}
+
+@Test func `accessibility predicates resolve canonical element assertions`() throws {
+    let target = try AccessibilityTarget.label("Status").resolve(in: .empty)
+
+    #expect(
+        try AccessibilityPredicate.exists(.label("Status")).resolve(in: .empty)
+            == .elementsChanged([.exists(target)])
+    )
+    #expect(
+        try AccessibilityPredicate.missing(.label("Status")).resolve(in: .empty)
+            == .elementsChanged([.missing(target)])
+    )
+    #expect(
+        try AccessibilityPredicate.elementsChanged.resolve(in: .empty)
+            == .elementsChanged([])
+    )
+    #expect(
+        try AccessibilityPredicate.elementsChanged([
+            .appeared(.label("Status")),
+        ]).resolve(in: .empty)
+            == .elementsChanged([.appeared(target)])
+    )
+    #expect(
+        try AccessibilityPredicate.elementsChanged([
+            .disappeared(.label("Status")),
+        ]).resolve(in: .empty)
+            == .elementsChanged([.disappeared(target)])
+    )
+}
+
 @Test func `typed references resolve through canonical public predicates`() throws {
     let title = try HeistReferenceName(validating: "title")
     #expect(title.rawValue == "title")
@@ -18,6 +68,66 @@ import ThePlans
     expectExpressionError(.unresolvedTargetReference("cta")) {
         try AccessibilityTarget(ref: targetReference).resolve(in: .empty)
     }
+}
+
+@Test func `updated target references must resolve to elements`() throws {
+    let elementReference: HeistReferenceName = "element"
+    let containerReference: HeistReferenceName = "container"
+    let element = try AccessibilityTarget
+        .within(container: .identifier("Checkout"), .identifier("count"))
+        .resolve(in: .empty)
+    let container = try AccessibilityTarget
+        .container(.identifier("Checkout"))
+        .resolve(in: .empty)
+    let environment = HeistExecutionEnvironment(targets: [
+        elementReference: element,
+        containerReference: container,
+    ])
+
+    let predicate = AccessibilityPredicate.elementsChanged([
+        .updated(.ref(elementReference), .value(after: "2")),
+    ])
+    guard case .elementsChanged(let assertions) = try predicate.resolve(in: environment),
+          case .updated(let target, let change) = assertions.first
+    else {
+        Issue.record("Expected a resolved updated assertion")
+        return
+    }
+    let resolvedElementTarget = try ResolvedAccessibilityElementTarget(admitting: element)
+    let expectedChange = try ElementPropertyChange.value(after: "2").resolve(in: .empty)
+    #expect(target == resolvedElementTarget)
+    #expect(change == expectedChange)
+
+    let invalid = AccessibilityPredicate.elementsChanged([
+        .updated(.ref(containerReference), .value(after: "2")),
+    ])
+    #expect(throws: AccessibilityTargetGrammarError.elementTargetRequired) {
+        try invalid.resolve(in: environment)
+    }
+}
+
+@Test func `resolved element target composition preserves scope and ordinal`() throws {
+    let target = try AccessibilityElementTarget
+        .within(
+            container: .identifier("Checkout"),
+            .target(.identifier("count"), ordinal: 2)
+        )
+        .resolve(in: .empty)
+    let valueChecks = try ElementPredicate
+        .value("2")
+        .resolve(in: .empty)
+        .checks
+    let expected = try AccessibilityElementTarget
+        .within(
+            container: .identifier("Checkout"),
+            .target(
+                ElementPredicate([.identifier("count"), .value("2")]),
+                ordinal: 2
+            )
+        )
+        .resolve(in: .empty)
+
+    #expect(target.and(valueChecks) == expected)
 }
 
 @Test func `identifier roles share exact admission at construction and decoding`() throws {

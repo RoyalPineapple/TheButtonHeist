@@ -1859,7 +1859,7 @@ private extension HeistExecution.Machine {
         return ExpectationResult(
             met: expectation.result == .satisfied,
             predicate: expression,
-            actual: expectation.result.outstandingDescription
+            actual: expectation.result.outstandingDescription ?? snapshot.summary
         )
     }
 

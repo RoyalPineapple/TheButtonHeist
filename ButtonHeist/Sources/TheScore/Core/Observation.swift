@@ -74,6 +74,37 @@ public extension Observation {
             self.text = text
             self.element = element
         }
+
+        private enum CodingKeys: String, CodingKey, CaseIterable {
+            case text
+            case element
+        }
+
+        public init(from decoder: Decoder) throws {
+            try decoder.rejectUnknownKeys(
+                allowed: CodingKeys.self,
+                typeName: "accessibility notification"
+            )
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            let text = try container.decodeIfPresent(String.self, forKey: .text)
+            let element = try container.decodeIfPresent(
+                HeistElement.Semantics.self,
+                forKey: .element
+            )
+            guard let notification = Self(text: text, element: element) else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: decoder.codingPath,
+                    debugDescription: "Accessibility notification must contain text or element semantics"
+                ))
+            }
+            self = notification
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encodeIfPresent(text, forKey: .text)
+            try container.encodeIfPresent(element, forKey: .element)
+        }
     }
 
     /// One semantic event admitted by the Vault.
@@ -125,5 +156,14 @@ public extension Observation {
                 return notification.text
             }
         }
+    }
+}
+
+package extension Observation.Snapshot {
+    var summary: String {
+        let interfaceSummary = "interface: \(interface.projectedElements.count) elements"
+        let screen = context.screenId ?? InterfaceSummary.screenName(for: interface)
+        guard let screen else { return interfaceSummary }
+        return "screen: \(screen); \(interfaceSummary)"
     }
 }

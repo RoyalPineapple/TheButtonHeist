@@ -34,7 +34,7 @@ extension Observation.Stream {
     /// caller opened its notification or animation wait scopes.
     internal func refreshedVisibleObservation(
         timeout: Double?
-    ) async -> TheVault.State.Current? {
+    ) async -> VisibleObservationOutcome {
         let subscription = subscribe(scope: .visible)
         defer { _ = subscription }
 
@@ -42,13 +42,18 @@ extension Observation.Stream {
             start: RuntimeElapsed.now,
             timeoutMs: Self.timeoutMilliseconds(from: timeout)
         )
+        var outcome = await refreshVisibleObservation()
         while deadline.hasTimeRemaining(at: RuntimeElapsed.now) {
-            let outcome = await refreshVisibleObservation()
-            if case .committed(let current) = outcome {
-                return current
+            switch outcome {
+            case .committed,
+                 .unavailable(.runtimeUnavailable),
+                 .unavailable(.cancelled):
+                return outcome
+            case .unavailable:
+                outcome = await refreshVisibleObservation()
             }
         }
-        return nil
+        return outcome
     }
 
     internal func admittedObservation(
@@ -56,7 +61,7 @@ extension Observation.Stream {
         after historyIndex: Int?
     ) async -> TheVault.State.Current? {
         await discardIfScreenChangedSinceRead()
-        await discardIfSignalChanged(to: currentTripwireSignal())
+        await invalidateAdmissionIfSignalChanged(to: currentTripwireSignal())
         guard case .success(let current) = await stateOwner.admittedObservation(
             scope: scope,
             after: historyIndex
@@ -65,7 +70,7 @@ extension Observation.Stream {
     }
 
     @discardableResult
-    internal func commitSettledVisibleObservation(
+    internal func commitVisibleObservation(
         _ committableObservation: CommittableInterfaceObservation,
         notificationBatch: AccessibilityNotificationBatch? = nil
     ) async -> Observation.Publication {
@@ -77,7 +82,7 @@ extension Observation.Stream {
     }
 
     @discardableResult
-    internal func commitSettledDiscoveryObservation(
+    internal func commitDiscoveryObservation(
         _ committableObservation: CommittableInterfaceObservation,
         notificationBatch: AccessibilityNotificationBatch? = nil
     ) async -> Observation.Publication {
@@ -89,24 +94,28 @@ extension Observation.Stream {
     }
 
     @discardableResult
-    internal func commitSettledDiscoveryObservation(
+    internal func commitDiscoveryObservation(
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy,
-        afterViewportMovement: Bool,
         notificationBatch: AccessibilityNotificationBatch? = nil
     ) async -> Observation.Publication? {
         guard let vault else {
             preconditionFailure("Observation.Stream cannot admit after TheVault is released")
         }
-        guard let committableObservation = await admitCurrentObservation(
+        let admission = await admitCurrentObservation(
             vault: vault,
             tripwireSignal: currentTripwireSignal(),
             discoveryCommitPolicy: discoveryCommitPolicy,
-            lineage: afterViewportMovement ? .viewportMovement : .resting
-        ) else { return nil }
-        return await commitSettledDiscoveryObservation(
-            committableObservation,
-            notificationBatch: notificationBatch
+            lineage: captureLineage
         )
+        switch admission {
+        case .success(let committableObservation):
+            return await commitDiscoveryObservation(
+                committableObservation,
+                notificationBatch: notificationBatch
+            )
+        case .failure:
+            return nil
+        }
     }
 
     @discardableResult
@@ -146,7 +155,7 @@ extension Observation.Stream {
             viewportFrames: sourceObservation.tree.viewportFrames,
             geometryTolerance: CoarseFrameComparison.currentGeometryTolerance
         )
-        let publication = await stateOwner.readAdmission(admission)
+        let publication = await stateOwner.commitAdmission(admission)
         if let reattached = try? sourceObservation.replacingTreeWithCurrentCapture(
             stateOwner.interfaceTree
         ) {
@@ -163,6 +172,9 @@ extension Observation.Stream {
     internal func refreshVisibleObservation(
         baselineTripwireSignal: TheTripwire.TripwireSignal? = nil
     ) async -> VisibleObservationOutcome {
+        guard !Task.isCancelled else {
+            return .unavailable(.cancelled)
+        }
         if let refresh = visibleRefreshPhase.task {
             return await finishVisibleRefresh(refresh)
         }
@@ -191,7 +203,7 @@ extension Observation.Stream {
     private func startVisibleRefresh(
         tripwireSignal: TheTripwire.TripwireSignal
     ) async -> VisibleObservationOutcome {
-        await discardIfSignalChanged(to: tripwireSignal)
+        await invalidateAdmissionIfSignalChanged(to: tripwireSignal)
         let task = Task { @MainActor in
             await self.captureVisibleObservation(tripwireSignal: tripwireSignal)
         }
@@ -209,6 +221,9 @@ extension Observation.Stream {
         let completion = await refresh.task.value
         if visibleRefreshPhase.task?.token == refresh.token {
             visibleRefreshPhase = .idle
+        }
+        guard !Task.isCancelled else {
+            return .unavailable(.cancelled)
         }
         return completion
     }
@@ -228,30 +243,36 @@ extension Observation.Stream {
         tripwireSignal: TheTripwire.TripwireSignal
     ) async -> VisibleObservationOutcome {
         await beforeVisibleReading()
-        guard let vault, !Task.isCancelled else {
-            return .unavailable
+        guard !Task.isCancelled else {
+            return .unavailable(.cancelled)
+        }
+        guard let vault else {
+            return .unavailable(.runtimeUnavailable)
         }
         guard let captured = vault.captureVisibleObservation() else {
-            await recordFailedCapture(
-                "the accessibility tree could not be read",
-                observation: nil,
-                vault: vault
-            )
-            return .unavailable
+            return .unavailable(.sourceTreeUnavailable)
         }
-        guard let committableObservation = await admitCurrentObservation(
+        let admission = await admitCurrentObservation(
             captured,
             vault: vault,
             tripwireSignal: tripwireSignal,
-            lineage: isMovingViewport ? .viewportMovement : .resting
-        ) else {
-            return .unavailable
+            lineage: captureLineage
+        )
+        let committableObservation: CommittableInterfaceObservation
+        switch admission {
+        case .success(let admitted):
+            committableObservation = admitted
+        case .failure(let failure):
+            return .unavailable(failure)
         }
         let notificationIndex = await stateOwner.notificationIndex()
         let notificationBatch = vault.accessibilityNotifications.checkpoint(
             after: notificationIndex
         )
-        let publication = await commitSettledVisibleObservation(
+        guard !Task.isCancelled else {
+            return .unavailable(.cancelled)
+        }
+        let publication = await commitVisibleObservation(
             committableObservation,
             notificationBatch: notificationBatch
         )
@@ -292,31 +313,17 @@ extension Observation.Stream {
         tripwireSignal: TheTripwire.TripwireSignal,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
         lineage: ScreenLineage
-    ) async -> CommittableInterfaceObservation? {
+    ) async -> Result<CommittableInterfaceObservation, Observation.CaptureFailure> {
         let reading = observation ?? vault.latestObservation
         guard currentTripwireSignal().hierarchy == tripwireSignal.hierarchy else {
-            await recordFailedCapture(
-                "the view hierarchy moved while the reading was taken",
-                observation: reading,
-                vault: vault
-            )
-            return nil
+            return .failure(.hierarchyChangedDuringCapture)
         }
-        return CommittableInterfaceObservation.admitCaptured(
+        return .success(CommittableInterfaceObservation.admitCaptured(
             reading,
             tripwireSignal: tripwireSignal,
             discoveryCommitPolicy: discoveryCommitPolicy,
             lineage: lineage
-        )
-    }
-
-    private func recordFailedCapture(
-        _ diagnostic: String?,
-        observation: InterfaceObservation?,
-        vault: TheVault
-    ) async {
-        await stateOwner.recordSettleFailure(diagnostic)
-        await vault.recordFailedSettleDiagnosticEvidence(observation)
+        ))
     }
 
 }

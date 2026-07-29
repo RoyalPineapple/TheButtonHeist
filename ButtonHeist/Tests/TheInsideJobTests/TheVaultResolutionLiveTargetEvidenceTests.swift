@@ -10,9 +10,15 @@ extension TheVaultResolutionTests {
 
     func testContainerTargetResolutionUsesCommittedSemanticContainers() async throws {
         let path = TreePath([0, 1])
+        let frame = CGRect(x: 0, y: 900, width: 240, height: 80)
+        let viewSpace = HeistElement.Geometry.ViewSpace(
+            ownerPath: .root,
+            frame: try ViewRect(validating: frame),
+            activationPoint: nil
+        )
         let container = AccessibilityContainer(
             type: .semanticGroup(label: "Actions", value: nil), identifier: "actions",
-            frame: AccessibilityRect(CGRect(x: 0, y: 900, width: 240, height: 80)),
+            frame: AccessibilityRect(frame),
             customActions: [.init(name: "Archive")]
         )
         await vault.installObservationForTesting(InterfaceObservation.makeForTests(
@@ -23,7 +29,7 @@ extension TheVaultResolutionTests {
                         container: container,
                         path: path,
                         containerName: "semantic_actions__actions",
-                        contentFrame: CGRect(x: 0, y: 900, width: 240, height: 80)
+                        viewSpace: viewSpace
                     ),
                 ]
             ),
@@ -37,7 +43,7 @@ extension TheVaultResolutionTests {
         case .resolved(.container(let resolved)):
             XCTAssertEqual(resolved.path, path)
             XCTAssertEqual(resolved.containerName, "semantic_actions__actions")
-            XCTAssertEqual(resolved.contentFrame?.origin.y, 900)
+            XCTAssertEqual(resolved.viewSpace, viewSpace)
         case .resolved(.element), .notFound, .ambiguous:
             XCTFail("Expected semantic container resolution, got \(result.diagnostics)")
         }
@@ -46,6 +52,8 @@ extension TheVaultResolutionTests {
     func testContainerTargetResolutionReportsStructuredFacts() async throws {
         let primaryPath = TreePath([0, 1])
         let secondaryPath = TreePath([0, 2])
+        let primaryFrame = CGRect(x: 0, y: 120, width: 240, height: 80)
+        let secondaryFrame = CGRect(x: 0, y: 240, width: 240, height: 80)
         await vault.installObservationForTesting(InterfaceObservation.makeForTests(
             tree: InterfaceTree(
                 elements: [:],
@@ -53,20 +61,28 @@ extension TheVaultResolutionTests {
                     primaryPath: .init(
                         container: AccessibilityContainer(
                             type: .semanticGroup(label: "Actions", value: nil), identifier: "primary",
-                            frame: AccessibilityRect(CGRect(x: 0, y: 120, width: 240, height: 80))
+                            frame: AccessibilityRect(primaryFrame)
                         ),
                         path: primaryPath,
                         containerName: "actions_primary",
-                        contentFrame: CGRect(x: 0, y: 120, width: 240, height: 80)
+                        viewSpace: HeistElement.Geometry.ViewSpace(
+                            ownerPath: .root,
+                            frame: try ViewRect(validating: primaryFrame),
+                            activationPoint: nil
+                        )
                     ),
                     secondaryPath: .init(
                         container: AccessibilityContainer(
                             type: .semanticGroup(label: "Actions", value: nil), identifier: "secondary",
-                            frame: AccessibilityRect(CGRect(x: 0, y: 240, width: 240, height: 80))
+                            frame: AccessibilityRect(secondaryFrame)
                         ),
                         path: secondaryPath,
                         containerName: "actions_secondary",
-                        contentFrame: CGRect(x: 0, y: 240, width: 240, height: 80)
+                        viewSpace: HeistElement.Geometry.ViewSpace(
+                            ownerPath: .root,
+                            frame: try ViewRect(validating: secondaryFrame),
+                            activationPoint: nil
+                        )
                     ),
                 ]
             ),
@@ -166,6 +182,10 @@ extension TheVaultResolutionTests {
             return
         }
         XCTAssertEqual(resolved.heistId, "quantity_1")
+        XCTAssertEqual(resolved.geometry.screen, TheVault.onscreenSpace(for: currentElement))
+        XCTAssertEqual(resolved.geometry.view.ownerPath, .root)
+        XCTAssertEqual(resolved.geometry.view.frame?.cgRect, freshFrame)
+        XCTAssertEqual(resolved.geometry.view.activationPoint?.cgPoint, freshPoint)
 
         guard case .resolved(let liveTarget) = vault.resolveLiveActionTarget(for: resolved) else {
             XCTFail("Expected current accessibility capture to provide action geometry")
@@ -215,12 +235,13 @@ extension TheVaultResolutionTests {
 
         let target = literalTarget(ResolvedElementPredicate.identifier("rotor_host"))
         let settled = try XCTUnwrap(vault.resolveTarget(target).resolvedElement)
-        XCTAssertEqual(settled.element.shape.frame, staleFrame)
-        XCTAssertEqual(settled.element.bhResolvedActivationPoint, stalePoint)
+        XCTAssertEqual(settled.geometry.screen, TheVault.onscreenSpace(for: settledElement))
+        XCTAssertEqual(settled.geometry.view.ownerPath, .root)
+        XCTAssertEqual(settled.geometry.view.frame?.cgRect, staleFrame)
+        XCTAssertEqual(settled.geometry.view.activationPoint?.cgPoint, stalePoint)
 
         let visible = try XCTUnwrap(vault.resolveVisibleTarget(target).resolvedElement)
-        XCTAssertEqual(visible.element.shape.frame, staleFrame)
-        XCTAssertEqual(visible.element.bhResolvedActivationPoint, stalePoint)
+        XCTAssertEqual(visible.geometry, settled.geometry)
 
         guard case .resolved(let liveTarget) = vault.resolveLiveActionTarget(for: settled) else {
             return XCTFail("Expected fresh live action target")
@@ -306,6 +327,16 @@ extension TheVaultResolutionTests {
             type: .semanticGroup(label: "Actions", value: nil), identifier: "actions",
             frame: AccessibilityRect(freshFrame)
         )
+        let staleViewSpace = HeistElement.Geometry.ViewSpace(
+            ownerPath: .root,
+            frame: try ViewRect(validating: staleFrame),
+            activationPoint: nil
+        )
+        let freshViewSpace = HeistElement.Geometry.ViewSpace(
+            ownerPath: .root,
+            frame: try ViewRect(validating: freshFrame),
+            activationPoint: nil
+        )
         let liveObject = NSObject()
         let settledObservationScreen = InterfaceObservation.makeForTests(
             tree: InterfaceTree(
@@ -315,7 +346,7 @@ extension TheVaultResolutionTests {
                         container: staleContainer,
                         path: path,
                         containerName: "actions",
-                        contentFrame: staleFrame
+                        viewSpace: staleViewSpace
                     ),
                 ]
             ),
@@ -324,7 +355,9 @@ extension TheVaultResolutionTests {
                 containerNamesByPath: [path: "actions"],
                 elementRefs: [:],
                 containerRefsByPath: [:],
-                containerContentFramesByPath: [path: try ContentRect(validating: staleFrame)],
+                containerViewSpacesByPath: [
+                    path: staleViewSpace,
+                ],
                 firstResponderHeistId: nil,
             )
         )
@@ -337,7 +370,7 @@ extension TheVaultResolutionTests {
                         container: freshContainer,
                         path: path,
                         containerName: "actions",
-                        contentFrame: freshFrame
+                        viewSpace: freshViewSpace
                     ),
                 ]
             ),
@@ -346,7 +379,9 @@ extension TheVaultResolutionTests {
                 containerNamesByPath: [path: "actions"],
                 elementRefs: [:],
                 containerRefsByPath: [path: .init(object: liveObject)],
-                containerContentFramesByPath: [path: try ContentRect(validating: freshFrame)],
+                containerViewSpacesByPath: [
+                    path: freshViewSpace,
+                ],
                 firstResponderHeistId: nil,
             )
         )
@@ -364,6 +399,7 @@ extension TheVaultResolutionTests {
 
         XCTAssertTrue(liveTarget.object === liveObject)
         XCTAssertEqual(liveTarget.containerTarget.container.frame.cgRect, staleFrame)
+        XCTAssertEqual(liveTarget.containerTarget.viewSpace, staleViewSpace)
         XCTAssertEqual(liveTarget.frame, freshFrame)
         XCTAssertEqual(liveTarget.activationPoint, CGPoint(x: freshFrame.midX, y: freshFrame.midY))
     }

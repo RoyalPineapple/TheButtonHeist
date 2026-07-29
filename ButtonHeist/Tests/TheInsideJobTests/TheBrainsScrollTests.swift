@@ -77,17 +77,15 @@ final class TheBrainsScrollTests: XCTestCase {
         try resolvedTarget(target.target)
     }
 
-    func observedContentActivationPoint(
-        _ point: CGPoint,
+    func viewSpace(
+        _ activationPoint: ViewPoint,
         ownerPath: TreePath
-    ) -> InterfaceTree.ObservedScrollContentActivationPoint {
-        guard let observedPoint = InterfaceTree.ObservedScrollContentActivationPoint(
-            point,
-            ownerPath: ownerPath
-        ) else {
-            preconditionFailure("Test content activation point must be finite")
-        }
-        return observedPoint
+    ) -> HeistElement.Geometry.ViewSpace {
+        HeistElement.Geometry.ViewSpace(
+            ownerPath: ownerPath,
+            frame: nil,
+            activationPoint: activationPoint
+        )
     }
 
     func semanticRevealDeadline() -> SemanticObservationDeadline {
@@ -160,7 +158,8 @@ final class TheBrainsScrollTests: XCTestCase {
             await brains.navigation.scanForSemanticTarget(.init(
                 target: target,
                 revealRootScrollViewID: ObjectIdentifier(scrollView),
-                deadline: deadline
+                deadline: deadline,
+                viewSpace: selected.geometry.view
             ))
         }
         scanTask.cancel()
@@ -194,7 +193,8 @@ final class TheBrainsScrollTests: XCTestCase {
         let result = await brains.navigation.scanForSemanticTarget(.init(
             target: target,
             revealRootScrollViewID: ObjectIdentifier(UIScrollView()),
-            deadline: deadline
+            deadline: deadline,
+            viewSpace: selected.geometry.view
         ))
 
         guard case .unavailable = result else {
@@ -306,8 +306,8 @@ final class TheBrainsScrollTests: XCTestCase {
             XCTAssertEqual(Optional(scrollView.contentOffset), unsafeOffsets[ObjectIdentifier(scrollView)])
         }
         XCTAssertTrue(
-            exploration.event.snapshot.observation.tree.elements.values.contains {
-                $0.element.label == "Page One Visible Label"
+            exploration.current.snapshot.interface.projectedElements.contains {
+                $0.semantics.assertable.label == "Page One Visible Label"
             },
             "Visible page content should remain discoverable without scrolling the private queuing scroll view"
         )
@@ -341,20 +341,38 @@ final class TheBrainsScrollTests: XCTestCase {
     // MARK: - Scroll Target Description
 
     func testScrollTargetDescriptionUsesNamedPriority() async {
+        let labeledElement = AccessibilityElement.make(label: "Labeled", identifier: "labeled_id")
         let labeled = InterfaceTree.Element(
             heistId: "labeled_item",
             scrollMembership: nil,
-            element: AccessibilityElement.make(label: "Labeled", identifier: "labeled_id")
+            geometry: testGeometry(
+                for: labeledElement,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: labeledElement)
+            ),
+            element: labeledElement
         )
+        let identifiedElement = AccessibilityElement.make(identifier: "identified_id")
         let identified = InterfaceTree.Element(
             heistId: "identified_item",
             scrollMembership: nil,
-            element: AccessibilityElement.make(identifier: "identified_id")
+            geometry: testGeometry(
+                for: identifiedElement,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: identifiedElement)
+            ),
+            element: identifiedElement
         )
+        let anonymousElement = AccessibilityElement.make()
         let anonymous = InterfaceTree.Element(
             heistId: "anonymous_item",
             scrollMembership: nil,
-            element: AccessibilityElement.make()
+            geometry: testGeometry(
+                for: anonymousElement,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: anonymousElement)
+            ),
+            element: anonymousElement
         )
 
         XCTAssertEqual(
@@ -416,11 +434,21 @@ final class TheBrainsScrollTests: XCTestCase {
         let firstEntry = InterfaceTree.Element(
             heistId: "duplicate_button_1",
             scrollMembership: nil,
+            geometry: testGeometry(
+                for: duplicate,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: duplicate)
+            ),
             element: duplicate
         )
         let secondEntry = InterfaceTree.Element(
             heistId: "duplicate_button_2",
             scrollMembership: nil,
+            geometry: testGeometry(
+                for: duplicate,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: duplicate)
+            ),
             element: duplicate
         )
 
@@ -455,6 +483,11 @@ final class TheBrainsScrollTests: XCTestCase {
         let entry = InterfaceTree.Element(
             heistId: "detached_button",
             scrollMembership: nil,
+            geometry: testGeometry(
+                for: element,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: element)
+            ),
             element: element
         )
         var object: NSObject? = NSObject()
@@ -506,21 +539,21 @@ final class TheBrainsScrollTests: XCTestCase {
     struct OffViewportScrollTarget {
         let element: AccessibilityElement
         let heistId: HeistId
-        let contentActivationPoint: ScrollContentPoint
+        let viewActivationPoint: ViewPoint
         let scrollView: UIScrollView
 
         init(
             _ element: AccessibilityElement,
             heistId: HeistId,
-            contentActivationPoint: CGPoint,
+            viewActivationPoint: CGPoint,
             scrollView: UIScrollView
         ) {
-            guard let contentActivationPoint = try? ScrollContentPoint(validating: contentActivationPoint) else {
+            guard let viewActivationPoint = try? ViewPoint(validating: viewActivationPoint) else {
                 preconditionFailure("Test content activation point must be finite")
             }
             self.element = element
             self.heistId = heistId
-            self.contentActivationPoint = contentActivationPoint
+            self.viewActivationPoint = viewActivationPoint
             self.scrollView = scrollView
         }
     }
@@ -532,9 +565,18 @@ final class TheBrainsScrollTests: XCTestCase {
         revealsTargetOnRefresh: Bool = false
     ) async {
         let scrollContainerPath = TreePath([0])
+        let scrollMembership = InterfaceTree.ScrollMembership(
+            containerPath: scrollContainerPath,
+            index: nil
+        )
         let visibleEntry = InterfaceTree.Element(
             heistId: visible.heistId,
-            scrollMembership: nil,
+            scrollMembership: scrollMembership,
+            geometry: testGeometry(
+                for: visible.element,
+                ownerPath: scrollContainerPath,
+                screen: TheVault.onscreenSpace(for: visible.element)
+            ),
             element: visible.element
         )
         let scrollContainer = makeScrollableContainer(
@@ -544,10 +586,13 @@ final class TheBrainsScrollTests: XCTestCase {
         let containerName: ContainerName = "known_offscreen_scroll"
         let offscreenEntry = InterfaceTree.Element(
             heistId: offscreen.heistId,
-            scrollMembership: InterfaceTree.ScrollMembership(containerPath: scrollContainerPath, index: nil),
-            observedScrollContentActivationPoint: InterfaceTree.ObservedScrollContentActivationPoint(
-                offscreen.contentActivationPoint,
-                ownerPath: scrollContainerPath
+            scrollMembership: scrollMembership,
+            geometry: HeistElement.Geometry(
+                screen: .offscreen,
+                view: viewSpace(
+                    offscreen.viewActivationPoint,
+                    ownerPath: scrollContainerPath
+                )
             ),
             element: offscreen.element
         )
@@ -573,8 +618,18 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         await installSyntheticObservation(observation)
         if revealsTargetOnRefresh {
+            let revealedEntry = InterfaceTree.Element(
+                heistId: offscreen.heistId,
+                scrollMembership: scrollMembership,
+                geometry: testGeometry(
+                    for: offscreen.element,
+                    ownerPath: scrollContainerPath,
+                    screen: TheVault.onscreenSpace(for: offscreen.element)
+                ),
+                element: offscreen.element
+            )
             visibleObservationSource.observation = InterfaceObservation.makeForTests(
-                elements: [offscreenEntry.heistId: offscreenEntry],
+                elements: [revealedEntry.heistId: revealedEntry],
                 hierarchy: [
                     .container(scrollContainer, children: [
                         .element(offscreen.element, traversalIndex: 0),
@@ -615,6 +670,11 @@ final class TheBrainsScrollTests: XCTestCase {
         let treeElement = InterfaceTree.Element(
             heistId: targetId,
             scrollMembership: scrollMembership,
+            geometry: testGeometry(
+                for: element,
+                ownerPath: containerPath,
+                screen: TheVault.onscreenSpace(for: element)
+            ),
             element: element
         )
         let container = makeScrollableContainer(

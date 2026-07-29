@@ -5,36 +5,17 @@ import ThePlans
 
 extension ResolvedPresenceCondition {
     var observationScope: SemanticObservationScope {
-        switch self {
-        case .exists(let target), .missing(let target):
-            return target.observationScope
-        }
+        rootPredicate.observationScope
     }
 }
 
-extension ResolvedAccessibilityPredicate {
+extension ObservationPredicate {
     var observationScope: SemanticObservationScope {
         switch self {
-        case .exists(let target), .missing(let target):
-            return target.observationScope
-        // A screen boundary names no element, so it widens no scope. Neither
-        // does the settlement gate.
-        case .screenChanged, .noChange:
-            return .visible
         case .elementsChanged(let assertions):
-            return assertions.map(\.observationScope).max() ?? .visible
-        case .announcement:
+            return assertions.map(\.target.observationScope).max() ?? .visible
+        case .notification, .noChange, .screenChanged:
             return .visible
-        }
-    }
-}
-
-private extension ResolvedElementAssertion {
-    var observationScope: SemanticObservationScope {
-        switch self {
-        case .exists(let target), .missing(let target), .appeared(let target),
-             .disappeared(let target), .updated(let target, _):
-            return target.observationScope
         }
     }
 }

@@ -25,7 +25,6 @@ private enum PublicActionResultCodingKey: String, CodingKey {
     case retryable
     case hint
     case expectation
-    case settlement
     case activationTrace
     case timing
     case omitted
@@ -92,7 +91,6 @@ extension ActionProjection: Encodable {
         try container.encodeIfPresent(screenId, forKey: .screenId)
         try encodeFailure(to: &container)
         try container.encodeIfPresent(expectation, forKey: .expectation)
-        try container.encodeIfPresent(incompleteSettlement, forKey: .settlement)
         try container.encodeIfPresent(activationTrace, forKey: .activationTrace)
         try container.encodeIfPresent(timing, forKey: .timing)
         if publicContext.includesOmissions {
@@ -221,9 +219,6 @@ struct PublicDelta: Encodable {
     private enum CodingKeys: String, CodingKey {
         case kind
         case elementCount
-        case captureEdge
-        case interactionDigest
-        case accessibilityNotifications
         case edits
         case newInterface
         case screen
@@ -261,11 +256,6 @@ struct PublicDelta: Encodable {
     ) throws {
         try container.encode(kind.rawValue, forKey: .kind)
         try container.encode(metadata.elementCount, forKey: .elementCount)
-        try container.encodeIfPresent(metadata.captureEdge, forKey: .captureEdge)
-        try container.encodeIfPresent(metadata.interactionDigest, forKey: .interactionDigest)
-        if !metadata.accessibilityNotifications.isEmpty {
-            try container.encode(metadata.accessibilityNotifications, forKey: .accessibilityNotifications)
-        }
     }
 }
 

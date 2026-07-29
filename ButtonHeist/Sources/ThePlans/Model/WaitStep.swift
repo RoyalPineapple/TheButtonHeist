@@ -41,10 +41,10 @@ public struct WaitStep: Codable, Sendable, Equatable {
 }
 
 package struct ResolvedWaitStep: Sendable, Equatable {
-    package let predicate: ResolvedAccessibilityPredicate
+    package let predicate: ObservationPredicate
     package let timeout: WaitTimeout
 
-    package init(predicate: ResolvedAccessibilityPredicate, timeout: WaitTimeout = defaultWaitTimeout) {
+    package init(predicate: ObservationPredicate, timeout: WaitTimeout = defaultWaitTimeout) {
         self.predicate = predicate
         self.timeout = timeout
     }

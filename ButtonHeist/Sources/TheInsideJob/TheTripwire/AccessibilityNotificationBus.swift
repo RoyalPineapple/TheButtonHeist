@@ -3,8 +3,6 @@
 import Foundation
 import UIKit
 
-import ButtonHeistSupport
-import ThePlans
 import TheScore
 
 /// `@unchecked Sendable` justification: all mutable state is protected by
@@ -17,9 +15,9 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
 
         /// Set when the owner lease ends while child leases are still open.
         ///
-        /// Owner and child leases end on independent tasks: settlement owns
+        /// Owner and child leases end on independent tasks: active action observation owns
         /// the window, while a viewport transition or screen capture
-        /// dispatched during that settlement holds a child lease, so the
+        /// dispatched during that observation holds a child lease, so the
         /// owner can finish first. Ingress attributes events to the single
         /// active window, so the window must stay active - still claiming
         /// events and still absorbing new `beginActionWindow` callers as
@@ -144,22 +142,11 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
         }
     }
 
-    private struct AnnouncementWaiter {
-        let afterSequence: UInt64
-        let predicate: ResolvedAnnouncementPredicate
-        let continuation: TimedOneShot<AccessibilityAnnouncementWaitOutcome>
-    }
-
-    private struct NotificationResumptions {
-        let announcementWaiters: [(AnnouncementWaiter, CapturedAnnouncement)]
-    }
-
     private let lock = NSLock()
     private var ingressLog = IngressLog(retentionLimit: 64)
     private var activeScopeLeases = 0
     private var nextActionWindowID: UInt64 = 0
     private var activeActionWindow: ActiveActionWindow?
-    private var announcementWaiters = WaiterStore<UInt64, AnnouncementWaiter>()
 
     var latestSequence: UInt64 {
         lock.lock()
@@ -181,100 +168,14 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
         return AccessibilityNotificationCursor(sequence: ingressLog.latestSequence)
     }
 
-    func announcements(after cursor: AccessibilityNotificationCursor = .origin) -> [CapturedAnnouncement] {
-        lock.lock()
-        defer { lock.unlock() }
-        return ingressLog.checkpoint(after: cursor, selection: .all).events.compactMap(\.capturedAnnouncement)
-    }
-
     /// The full retained notification stream, including events whose payload
-    /// carries no spoken text. `announcements(after:)` is the string-only
-    /// projection of this same window.
+    /// carries no spoken text.
     func notifications(
         after cursor: AccessibilityNotificationCursor = .origin
     ) -> [PendingAccessibilityNotificationEvent] {
         lock.lock()
         defer { lock.unlock() }
         return ingressLog.checkpoint(after: cursor, selection: .all).events
-    }
-
-    var announcementWaiterCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return announcementWaiters.count
-    }
-
-    func waitForAnnouncement(
-        after cursor: AccessibilityNotificationCursor,
-        matching predicate: ResolvedAnnouncementPredicate
-    ) async -> AccessibilityAnnouncementWaitOutcome {
-        let waiterId = reserveAnnouncementWaiterIdentifier()
-        let continuationBox = TimedOneShot<AccessibilityAnnouncementWaitOutcome>()
-
-        let outcome: AccessibilityAnnouncementWaitOutcome = await withTaskCancellationHandler {
-            await withCheckedContinuation { continuation in
-                if Task.isCancelled {
-                    continuation.resume(returning: .cancelled)
-                    return
-                }
-                guard continuationBox.register(continuation) else {
-                    continuation.resume(returning: .cancelled)
-                    return
-                }
-
-                lock.lock()
-                switch announcementOutcomeLocked(after: cursor, matching: predicate) {
-                case .matched(let announcement)?:
-                    lock.unlock()
-                    continuationBox.resolve(returning: .matched(announcement))
-                    return
-                case .historyUnavailable(let gap)?:
-                    lock.unlock()
-                    continuationBox.resolve(returning: .historyUnavailable(gap))
-                    return
-                case .cancelled?:
-                    preconditionFailure("Announcement history cannot produce cancellation")
-                case nil:
-                    break
-                }
-                announcementWaiters.insert(AnnouncementWaiter(
-                    afterSequence: cursor.sequence,
-                    predicate: predicate,
-                    continuation: continuationBox
-                ), id: waiterId)
-                lock.unlock()
-            }
-        } onCancel: {
-            continuationBox.resolve(returning: .cancelled)
-        }
-        completeAnnouncementWaiter(waiterId, returning: .cancelled)
-        return outcome
-    }
-
-    private func recordAnnouncementEventLocked(_ event: PendingAccessibilityNotificationEvent) -> [(AnnouncementWaiter, CapturedAnnouncement)] {
-        guard let announcement = event.capturedAnnouncement else { return [] }
-        let waiters = announcementWaiters.removeAll { waiter in
-            waiter.afterSequence < event.sequence && waiter.predicate.matches(announcement.text)
-        }
-        return waiters.map { ($0, announcement) }
-    }
-
-    private func reserveAnnouncementWaiterIdentifier() -> UInt64 {
-        lock.lock()
-        defer { lock.unlock() }
-
-        return announcementWaiters.reserveID()
-    }
-
-    private func completeAnnouncementWaiter(
-        _ waiterId: UInt64,
-        returning outcome: AccessibilityAnnouncementWaitOutcome
-    ) {
-        lock.lock()
-        let waiter = announcementWaiters.remove(id: waiterId)
-        lock.unlock()
-
-        waiter?.continuation.resolve(returning: outcome)
     }
 
     /// Opens the outer correlation window for a running heist.
@@ -341,40 +242,8 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
             provenance: provenanceLocked,
             actionWindowID: activeActionWindow?.id
         )
-        let resumptions = recordLocked(event)
-        lock.unlock()
-
-        resume(resumptions)
-    }
-
-    private func recordLocked(_ event: PendingAccessibilityNotificationEvent) -> NotificationResumptions {
         ingressLog.append(event)
-        return NotificationResumptions(
-            announcementWaiters: recordAnnouncementEventLocked(event)
-        )
-    }
-
-    private func resume(_ resumptions: NotificationResumptions) {
-        for (waiter, announcement) in resumptions.announcementWaiters {
-            waiter.continuation.resolve(returning: .matched(announcement))
-        }
-    }
-
-    private func announcementOutcomeLocked(
-        after cursor: AccessibilityNotificationCursor,
-        matching predicate: ResolvedAnnouncementPredicate
-    ) -> AccessibilityAnnouncementWaitOutcome? {
-        let batch = ingressLog.checkpoint(after: cursor, selection: .all)
-        for event in batch.events {
-            guard let announcement = event.capturedAnnouncement,
-                  predicate.matches(announcement.text)
-            else { continue }
-            return .matched(announcement)
-        }
-        if let gap = batch.gap {
-            return .historyUnavailable(gap)
-        }
-        return nil
+        lock.unlock()
     }
 
     fileprivate static func stringPayload(_ value: AnyObject?) -> String? {
@@ -523,12 +392,6 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
     }
 }
 
-enum AccessibilityAnnouncementWaitOutcome: Sendable, Equatable {
-    case matched(CapturedAnnouncement)
-    case cancelled
-    case historyUnavailable(AccessibilityNotificationGap)
-}
-
 struct AccessibilityNotificationCursor: Sendable, Equatable {
     static let origin = AccessibilityNotificationCursor(sequence: 0)
 
@@ -654,7 +517,10 @@ struct PendingAccessibilityNotificationEvent {
     let sequence: UInt64
     let kind: AccessibilityNotificationKind
     let timestamp: Date
+    /// The argument posted with the accessibility notification.
     let notificationData: PendingAccessibilityNotificationPayload
+    /// UIKit's correlation subject. It is notification content only for
+    /// element-change notifications.
     let associatedElement: PendingAccessibilityNotificationPayload
     let provenance: AccessibilityNotificationProvenance
     var actionWindowID: AccessibilityNotificationActionWindowID?
@@ -697,37 +563,12 @@ struct PendingAccessibilityNotificationEvent {
         )
     }
 
-    var capturedAnnouncement: CapturedAnnouncement? {
-        guard case .string(let text) = notificationData else { return nil }
-        return CapturedAnnouncement(
-            sequence: sequence,
-            text: text,
-            timestamp: timestamp,
-            kind: kind,
-            associatedElement: associatedElement.publicPayload
-        )
-    }
-
 }
 
 enum PendingAccessibilityNotificationPayload {
     case none
     case string(String)
     case object(AccessibilityNotificationObjectIdentity)
-
-    var publicPayload: AccessibilityNotificationPayload {
-        switch self {
-        case .none:
-            return .none
-        case .string(let value):
-            return .string(value)
-        case .object(let identity):
-            return .unresolvedObject(AccessibilityNotificationObjectPayload(
-                className: identity.className,
-                summary: identity.summary
-            ))
-        }
-    }
 }
 
 struct CapturedAccessibilityNotificationPayload {

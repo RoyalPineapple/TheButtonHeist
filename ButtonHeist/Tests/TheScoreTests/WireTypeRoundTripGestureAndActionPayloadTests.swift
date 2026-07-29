@@ -9,22 +9,13 @@ extension WireTypeRoundTripTests {
 
     func testActionPerformanceTimingRoundTrip() throws {
         let timing = ActionPerformanceTiming(
-            beforeObservationMs: 5,
             targetResolutionMs: 0,
             actionDispatchMs: 2,
             interactionMs: 12,
-            finalSemanticEvidenceMs: 23,
-            resultAssemblyMs: 0,
             totalMs: 116
         )
 
         _ = try assertRoundTrip(timing, encoder: encoder, decoder: decoder)
-    }
-
-    func testActionPerformanceTimingRejectsFormerSettlementField() {
-        let json = #"{"settleMs":74}"#
-
-        XCTAssertThrowsError(try decoder.decode(ActionPerformanceTiming.self, from: Data(json.utf8)))
     }
 
     func testActivationTraceRejectsMismatchedTapFields() throws {
@@ -68,25 +59,19 @@ extension WireTypeRoundTripTests {
 
     func testActionResultRoundTripPreservesTiming() throws {
         let timing = ActionPerformanceTiming(
-            beforeObservationMs: 5,
             targetResolutionMs: 0,
             actionDispatchMs: 2,
             interactionMs: 12,
-            finalSemanticEvidenceMs: 23,
-            resultAssemblyMs: 0,
             totalMs: 116
         )
         let result = ActionResult.success(
             payload: .activate,
             message: "activated",
-            observation: .settled(
-                makeTestObservationEvidence(
-                    current: makeTestObservationSnapshot(elements: []),
-                    events: [.noChange],
-                    completeness: .incomplete
-                ),
-                .settled(duration: 74)
-            ),
+            observation: .observed(makeTestObservationEvidence(
+                current: makeTestObservationSnapshot(elements: []),
+                events: [.noChange],
+                completeness: .incomplete
+            )),
             timing: timing
         )
 

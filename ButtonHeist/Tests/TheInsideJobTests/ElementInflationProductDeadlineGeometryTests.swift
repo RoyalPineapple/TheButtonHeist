@@ -14,15 +14,23 @@ extension ElementInflationProductTests {
     func testHandoffTickCountFollowsNestedScrollMembershipGraph() async {
         let outerPath = TreePath([0])
         let innerPath = TreePath([0, 0])
+        let nestedTarget = AccessibilityElement.make(label: "Nested Target", traits: .button)
         let element = InterfaceTree.Element(
             heistId: "nested_target",
+            path: innerPath.appending(0),
             scrollMembership: .init(containerPath: innerPath, index: nil),
-            element: AccessibilityElement.make(label: "Nested Target", traits: .button)
+            geometry: testGeometry(
+                for: nestedTarget,
+                ownerPath: innerPath,
+                screen: .offscreen
+            ),
+            element: nestedTarget
         )
         let container = AccessibilityContainer(
             type: .none,
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 640))
         )
+        let containerFrame = try? ViewRect(validating: container.frame.cgRect)
         let tree = InterfaceTree(
             elements: [element.heistId: element],
             containers: [
@@ -30,24 +38,38 @@ extension ElementInflationProductTests {
                     container: container,
                     path: outerPath,
                     containerName: nil,
-                    contentFrame: nil
+                    viewSpace: HeistElement.Geometry.ViewSpace(
+                        ownerPath: .root,
+                        frame: containerFrame,
+                        activationPoint: nil
+                    )
                 ),
                 innerPath: .init(
                     container: container,
                     path: innerPath,
                     containerName: nil,
-                    contentFrame: nil,
+                    viewSpace: HeistElement.Geometry.ViewSpace(
+                        ownerPath: outerPath,
+                        frame: containerFrame,
+                        activationPoint: nil
+                    ),
                     scrollMembership: .init(containerPath: outerPath, index: nil)
                 ),
             ]
         )
 
+        let visibleTarget = AccessibilityElement.make(label: "Visible Target", traits: .button)
         XCTAssertEqual(
             ElementInflation.handoffTickCount(
                 for: InterfaceTree.Element(
                     heistId: "visible_target",
                     scrollMembership: nil,
-                    element: AccessibilityElement.make(label: "Visible Target", traits: .button)
+                    geometry: testGeometry(
+                        for: visibleTarget,
+                        ownerPath: .root,
+                        screen: TheVault.onscreenSpace(for: visibleTarget)
+                    ),
+                    element: visibleTarget
                 ),
                 in: .empty
             ),

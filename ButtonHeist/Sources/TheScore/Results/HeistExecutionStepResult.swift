@@ -67,11 +67,44 @@ package enum HeistGroupCompletion: Sendable, Equatable {
     case skipped(children: HeistSkippedChildren = .empty)
 }
 
+package enum HeistWaitCompletion: Sendable, Equatable {
+    case passed(
+        evidence: HeistPassedWaitEvidence,
+        children: HeistPassingChildren = .empty
+    )
+    case failed(
+        evidence: HeistWaitUnmatchedEvidence,
+        failure: HeistFailureDetail,
+        children: HeistPassingChildren = .empty
+    )
+    case childAborted(
+        evidence: HeistWaitUnmatchedEvidence,
+        failure: HeistFailureDetail,
+        children: HeistAbortedChildren
+    )
+    case skipped(children: HeistSkippedChildren = .empty)
+
+    var facts: HeistStepFacts {
+        switch self {
+        case .passed(_, let children):
+            .init(status: .passed, failure: nil, children: children.values, abortedAtChildPath: nil)
+        case .failed(_, let failure, let children):
+            .init(status: .failed, failure: failure, children: children.values, abortedAtChildPath: nil)
+        case .childAborted(_, let failure, let children):
+            .init(
+                status: .failed,
+                failure: failure,
+                children: children.values,
+                abortedAtChildPath: children.abortedAtPath
+            )
+        case .skipped(let children):
+            .init(status: .skipped, failure: nil, children: children.values, abortedAtChildPath: nil)
+        }
+    }
+}
+
 package typealias HeistActionCompletion = HeistExecutionCompletion<
     HeistPassedActionEvidence, HeistFailedActionEvidence, HeistPassedActionEvidence
->
-package typealias HeistWaitCompletion = HeistExecutionCompletion<
-    HeistPassedWaitEvidence, HeistEvidenceAvailability<HeistFailedWaitEvidence>, HeistPassedWaitEvidence
 >
 package typealias HeistCaseSelectionCompletion = HeistExecutionCompletion<
     HeistCaseSelectionEvidence, HeistEvidenceAvailability<HeistCaseSelectionEvidence>, HeistCaseSelectionEvidence
@@ -158,9 +191,6 @@ package struct HeistRepeatUntilDeclaration: Sendable, Equatable {
 /// One semantic node in a heist execution result tree.
 public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
     public let path: HeistExecutionPath
-    /// Wall-clock observation for this step. Parent and child intervals can
-    /// overlap, so this value is not the sum of child durations.
-    public let durationMs: ElapsedMilliseconds
     let node: HeistExecutionStepNode
 
     public var kind: HeistExecutionStepKind {
@@ -197,7 +227,6 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case path
-        case durationMs
         case node
     }
 
@@ -215,15 +244,13 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist execution step result")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let path = try container.decode(HeistExecutionPath.self, forKey: .path)
-        let durationMs = try container.decode(ElapsedMilliseconds.self, forKey: .durationMs)
         let node = try container.decode(HeistExecutionStepNode.self, forKey: .node)
-        self = try Self.admitDecodedNode(path: path, durationMs: durationMs, node: node, from: decoder)
+        self = try Self.admitDecodedNode(path: path, node: node, from: decoder)
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(path, forKey: .path)
-        try container.encode(durationMs, forKey: .durationMs)
         try container.encode(node, forKey: .node)
     }
 
@@ -272,12 +299,44 @@ public extension HeistExecutionStepResult {
         }
     }
 
-    var waitEvidence: HeistSettlementEvidence? {
+    var passedWaitEvidence: HeistPassedWaitEvidence? {
         guard case .wait(_, _, let completion) = node else { return nil }
         switch completion {
-        case .passed(let evidence, _), .childAborted(let evidence, _, _): return evidence.value
-        case .failed(let evidence, _, _): return evidence.value?.value
+        case .passed(let evidence, _): return evidence
+        case .failed, .childAborted, .skipped: return nil
+        }
+    }
+
+    var unmatchedWaitEvidence: HeistWaitUnmatchedEvidence? {
+        guard case .wait(_, _, let completion) = node else { return nil }
+        switch completion {
+        case .failed(let evidence, _, _), .childAborted(let evidence, _, _):
+            return evidence
+        case .passed, .skipped:
+            return nil
+        }
+    }
+
+    var waitObservation: Observation.Evidence? {
+        guard case .wait(_, _, let completion) = node else { return nil }
+        switch completion {
+        case .passed(let evidence, _):
+            return evidence.observation
+        case .failed(let evidence, _, _), .childAborted(let evidence, _, _):
+            return evidence.observation
         case .skipped: return nil
+        }
+    }
+
+    var waitExpectation: ExpectationResult? {
+        guard case .wait(_, _, let completion) = node else { return nil }
+        switch completion {
+        case .passed(let evidence, _):
+            return evidence.expectation
+        case .failed(let evidence, _, _), .childAborted(let evidence, _, _):
+            return evidence.expectation.result
+        case .skipped:
+            return nil
         }
     }
 

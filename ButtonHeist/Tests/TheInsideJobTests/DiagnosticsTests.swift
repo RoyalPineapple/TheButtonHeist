@@ -48,6 +48,11 @@ final class DiagnosticsTests: XCTestCase {
         let treeElement = InterfaceTree.Element(
             heistId: "hello",
             scrollMembership: nil,
+            geometry: testGeometry(
+                for: element,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: element)
+            ),
             element: element
         )
 
@@ -64,14 +69,20 @@ final class DiagnosticsTests: XCTestCase {
     // MARK: - failureInterfaceSuggestion
 
     func testFailureInterfaceSuggestionUsesCapturedElementsForContainsSearch() throws {
-        let element = HeistElement(
-            description: "Save Draft",
+        let accessibilityElement = AccessibilityElement.make(
             label: "Save Draft",
             value: "ready",
             identifier: "save_draft_button",
             traits: [.button],
-            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
-            actions: []
+            frame: CGRect(x: 0, y: 0, width: 100, height: 44)
+        )
+        let element = HeistElement(
+            accessibilityElement: accessibilityElement,
+            geometry: testGeometry(
+                for: accessibilityElement,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: accessibilityElement)
+            )
         )
 
         let suggestion = Diagnostics.failureInterfaceSuggestion(
@@ -86,14 +97,18 @@ final class DiagnosticsTests: XCTestCase {
     }
 
     func testFailureInterfaceSuggestionDoesNotRewriteAlreadyExplicitContainsPredicate() throws {
-        let element = HeistElement(
-            description: "Save Draft",
+        let accessibilityElement = AccessibilityElement.make(
             label: "Save Draft",
-            value: nil,
-            identifier: nil,
             traits: [.button],
-            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
-            actions: []
+            frame: CGRect(x: 0, y: 0, width: 100, height: 44)
+        )
+        let element = HeistElement(
+            accessibilityElement: accessibilityElement,
+            geometry: testGeometry(
+                for: accessibilityElement,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: accessibilityElement)
+            )
         )
 
         let suggestion = Diagnostics.failureInterfaceSuggestion(

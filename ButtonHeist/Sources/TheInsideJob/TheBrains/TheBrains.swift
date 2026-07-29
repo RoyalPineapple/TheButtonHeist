@@ -29,17 +29,8 @@ final class TheBrains {
         vault.semanticObservationStream.isActive
     }
 
-    func capturedAnnouncements() -> AnnouncementListPayload {
-        let notifications = vault.accessibilityNotifications.notifications()
-        let evidence = vault.resolveAccessibilityNotificationEvidence(
-            notifications,
-            in: vault.latestObservation
-        )
-        return AnnouncementListPayload(
-            announcements: evidence.compactMap(\.capturedAnnouncement),
-            notifications: evidence,
-            captureState: AccessibilityNotificationObserver.shared.lifecycleState.captureState
-        )
+    func notifications() -> [Observation.Notification] {
+        vault.semanticObservationStream.stateOwner.notifications()
     }
 
     enum InterfaceQueryResult {
@@ -110,14 +101,14 @@ final class TheBrains {
         self.interactionCoordinator = InteractionCoordinator(vault: vault)
     }
 
-    func treeUnavailableResult(payload: ActionResult.Payload) async -> ActionResult {
-        let message = await vault.semanticObservationStream.latestSettleFailureDiagnostic()
-            .map { "Could not observe accessibility tree; \($0)" }
-            ?? TheBrains.treeUnavailableMessage
+    func treeUnavailableResult(
+        payload: ActionResult.Payload,
+        failure: Observation.CaptureFailure
+    ) -> ActionResult {
         return .failure(
             payload: payload,
             failureKind: .accessibilityTreeUnavailable,
-            message: message
+            message: "Could not observe accessibility tree; \(failure.diagnostic)"
         )
     }
 
@@ -137,8 +128,7 @@ final class TheBrains {
         guard semanticObservationIsActive else {
             return .failure(.inactiveRuntime)
         }
-        // Wait for a visible settle before exploring; the observation itself
-        // is not needed, because exploration starts fresh from the screen.
+        // Require visible semantic truth before exploration starts fresh.
         guard await vault.semanticObservationStream.admittedVisibleObservation(timeout: 2.0) != nil,
               let exploration = await navigation.fullGraph(
                 maxScrollsPerContainer: query.maxScrollsPerContainer?.value,

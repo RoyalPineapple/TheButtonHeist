@@ -52,11 +52,21 @@ class SemanticObservationStreamTestCase: XCTestCase {
                 headerId: InterfaceTree.Element(
                     heistId: headerId,
                     scrollMembership: membership,
+                    geometry: testGeometry(
+                        for: header,
+                        ownerPath: containerPath,
+                        screen: TheVault.onscreenSpace(for: header)
+                    ),
                     element: header
                 ),
                 rowId: InterfaceTree.Element(
                     heistId: rowId,
                     scrollMembership: membership,
+                    geometry: testGeometry(
+                        for: row,
+                        ownerPath: containerPath,
+                        screen: TheVault.onscreenSpace(for: row)
+                    ),
                     element: row
                 ),
             ],
@@ -103,66 +113,11 @@ class SemanticObservationStreamTestCase: XCTestCase {
         )
     }
 
-    /// Counts visible readings and makes the tree stable, so a test can ask
-    /// whether a second consumer started its own reading or joined the first.
-    func installSettler(
-        signal: @escaping @MainActor () -> TheTripwire.TripwireSignal,
-        beforeSettle: @escaping @MainActor () async -> Void = {}
-    ) -> @MainActor () -> Int {
-        var count = 0
-        vault.semanticObservationStream.readTripwireSignal = signal
-        vault.semanticObservationStream.beforeVisibleReading = { [self] in
-            count += 1
-            await beforeSettle()
-            vault.observeInterface(observation(label: "Stable", heistId: "stable"))
-        }
-        return { count }
-    }
-
-    /// A tree that moved and then stopped, as the two recorded events that say so.
-    struct Reading {
-        let changed: TheVault.State.ReadObservation
-        let settled: TheVault.State.ReadObservation
-    }
-
-    /// A reading of a tree holding one header, that moved and then went quiet.
-    func commitSettling(label: String) async -> Reading {
-        await commitSettling(
-            observation(label: label, heistId: HeistId(rawValue: label.lowercased()))
+    func retainedEvents(after historyIndex: Int) async throws -> [Observation.Event] {
+        let result = await vault.semanticObservationStream.stateOwner.events(
+            after: historyIndex
         )
-    }
-
-    /// A reading of `observation`, then the quiet reading that follows it.
-    ///
-    /// Two commits of the same tree: the second finds nothing changed, which is
-    /// the only proof of stillness there is. A run needs it to settle, so the
-    /// pair is what "the tree moved and then stopped" looks like as events.
-    func commitSettling(_ observation: InterfaceObservation) async -> Reading {
-        let changed = await vault.semanticObservationStream
-            .commitVisibleObservationForTesting(observation)
-        let settled = await vault.semanticObservationStream
-            .commitVisibleObservationForTesting(observation)
-        precondition(
-            changed.current.isChange && !settled.current.isChange,
-            "Second reading must be quiet"
-        )
-        return Reading(changed: changed, settled: settled)
-    }
-
-    func admittedVisibleObservation() async throws -> TheVault.State.AdmittedObservation {
-        let evidence = await vault.semanticObservationStream.admittedVisibleObservation(timeout: 1)
-        return try XCTUnwrap(evidence)
-    }
-
-    func waitForSettleCount(
-        _ expectedCount: Int,
-        current: @escaping () -> Int
-    ) async {
-        for _ in 0..<1_000 {
-            guard current() != expectedCount else { return }
-            await Task.yield()
-        }
-        XCTFail("Timed out waiting for \(expectedCount) settle sessions")
+        return try result.get()
     }
 
     func waitForObservationWaiterCount(_ expectedCount: Int) async {

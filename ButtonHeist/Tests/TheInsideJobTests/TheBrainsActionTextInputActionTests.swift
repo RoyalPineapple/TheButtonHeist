@@ -117,9 +117,12 @@ extension TheBrainsActionTests {
         await invalidation.wait()
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "type_text failed")
-        XCTAssertEqual(result.settled, true)
+        XCTAssertNotNil(result.observationEvidence?.current)
         XCTAssertEqual(result.method, .typeText)
-        XCTAssertEqual(result.subjectEvidence?.element.identifier, heistId.rawValue)
+        XCTAssertEqual(
+            result.subjectEvidence?.element.semantics.assertable.identifier,
+            heistId.rawValue
+        )
         XCTAssertEqual(staleTextField.activationCount, 0)
         XCTAssertEqual(textField.activationCount, 1)
         XCTAssertTrue(textField.isFirstResponder)
@@ -247,7 +250,10 @@ extension TheBrainsActionTests {
         XCTAssertEqual(result.method, .typeText)
         let subjectEvidence = try XCTUnwrap(result.subjectEvidence)
         XCTAssertEqual(subjectEvidence.source, .textInputTarget)
-        XCTAssertEqual(subjectEvidence.element.identifier, "message_field")
+        XCTAssertEqual(
+            subjectEvidence.element.semantics.assertable.identifier,
+            "message_field"
+        )
         XCTAssertEqual(textField.text, "hello")
         guard case .typeText(let value?) = result.payload else {
             XCTFail("Expected final text value payload, got \(String(describing: result.payload))")
@@ -296,7 +302,10 @@ extension TheBrainsActionTests {
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "type_text replacement failed")
         XCTAssertEqual(result.method, .typeText)
-        XCTAssertEqual(result.subjectEvidence?.element.identifier, "message_field")
+        XCTAssertEqual(
+            result.subjectEvidence?.element.semantics.assertable.identifier,
+            "message_field"
+        )
         XCTAssertEqual(textField.text, "b")
         guard case .typeText(let value?) = result.payload else {
             XCTFail("Expected final text value payload, got \(String(describing: result.payload))")
@@ -345,7 +354,10 @@ extension TheBrainsActionTests {
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "type_text clear failed")
         XCTAssertEqual(result.method, .typeText)
-        XCTAssertEqual(result.subjectEvidence?.element.identifier, "message_field")
+        XCTAssertEqual(
+            result.subjectEvidence?.element.semantics.assertable.identifier,
+            "message_field"
+        )
         XCTAssertEqual(textField.text, "")
         guard case .typeText(let value?) = result.payload else {
             XCTFail("Expected final text value payload, got \(String(describing: result.payload))")

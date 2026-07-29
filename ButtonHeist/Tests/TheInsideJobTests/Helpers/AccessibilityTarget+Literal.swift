@@ -22,7 +22,7 @@ extension TheVault.TargetResolution {
 func resolvedPredicate(
     _ authored: AccessibilityPredicate,
     in environment: HeistExecutionEnvironment = .empty
-) throws -> ResolvedAccessibilityPredicate {
+) throws -> ObservationPredicate {
     try authored.resolve(in: environment)
 }
 

@@ -185,7 +185,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         await harness.job.stop()
     }
 
-    func testFailedResumeReturnsToSuspendedAndPreservesLifecycleDiagnostic() async throws {
+    func testFailedResumeReturnsToSuspended() async throws {
         let resumeStartGate = RuntimeStartGate()
         let harness = try makeRuntimeHarness(listenerPort: { invocation in
             guard invocation > 1 else { return 23456 }
@@ -194,8 +194,6 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         })
         try await harness.job.start()
         await harness.job.suspend()
-        let diagnostic = await recordSettleFailureDiagnostic(on: harness.job)
-
         await harness.job.resume()
         await resumeStartGate.waitUntilEntered()
         guard case .resuming(let attempt) = harness.job.serverPhase else {
@@ -206,12 +204,6 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         await attempt.task.value
 
         assertSuspendedPreservingLifecycleObservation(harness.job)
-        let latestDiagnostic = await harness.job.brains.vault.semanticObservationStream
-            .latestSettleFailureDiagnostic()
-        XCTAssertEqual(
-            latestDiagnostic,
-            diagnostic
-        )
         XCTAssertFalse(harness.job.brains.semanticObservationIsActive)
         XCTAssertFalse(harness.job.brains.vault.semanticObservationStream.isActive)
         XCTAssertFalse(harness.job.tripwire.isPulseRunning)
@@ -343,24 +335,6 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         XCTAssertFalse(job.brains.vault.semanticObservationStream.isActive, file: file, line: line)
         XCTAssertFalse(job.tripwire.isPulseRunning, file: file, line: line)
         XCTAssertNil(job.retainedIdleTimerBaseline, file: file, line: line)
-    }
-
-    /// Drives the one thing that records a settle diagnostic: a reading whose
-    /// tripwire signal no longer matches the screen it was taken under.
-    /// `.empty` can never match a live signal, so this always fails that check.
-    private func recordSettleFailureDiagnostic(on job: TheInsideJob) async -> String {
-        let stream = job.brains.vault.semanticObservationStream
-        _ = await stream.admitCurrentObservation(
-            vault: job.brains.vault,
-            tripwireSignal: .empty,
-            lineage: .resting
-        )
-        guard let diagnostic = await stream.latestSettleFailureDiagnostic() else {
-            XCTFail("Expected settle failure diagnostic")
-            return ""
-        }
-        XCTAssertTrue(diagnostic.contains("the view hierarchy moved"), diagnostic)
-        return diagnostic
     }
 
     private enum RuntimeStartFailure: Error {

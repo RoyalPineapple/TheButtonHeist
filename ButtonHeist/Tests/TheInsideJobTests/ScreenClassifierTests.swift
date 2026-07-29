@@ -638,7 +638,13 @@ final class ScreenClassifierTests: XCTestCase {
                     heistId,
                     InterfaceTree.Element(
                         heistId: heistId,
+                        path: item.path,
                         scrollMembership: nil,
+                        geometry: testGeometry(
+                            for: item.element,
+                            ownerPath: .root,
+                            screen: TheVault.onscreenSpace(for: item.element)
+                        ),
                         element: item.element
                     )
                 )

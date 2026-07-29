@@ -29,18 +29,25 @@ sequenceDiagram
     participant Sync as runHeistSync
     participant RL as main RunLoop
     participant Task as main-actor Task
+    participant Host as HeistExecution.Host
 
     Test->>Sync: runHeistSync(name, timeout) { steps }
     Sync->>Task: spawn async run, retain in HeistSyncState
-    loop while state is running and before deadline
+    Task->>Host: execute plan with HeistTimeout
+    loop while state is running and before delivery deadline
         Sync->>RL: RunLoop.current.run(mode .default, 0.05 s slices)
         Note over RL: run loop keeps turning —<br/>timers and callbacks still fire
     end
-    alt task completes
+    alt Host completes before the semantic deadline
+        Host-->>Task: HeistResult
         Task-->>Sync: completed(result), task released
-    else deadline expires
+    else Host reaches the semantic deadline
+        Host->>Host: cancel interaction and collect terminal evidence
+        Host-->>Task: timed-out HeistResult
+        Task-->>Sync: completed(result), task released
+    else result delivery exceeds deadline plus headroom
         Sync->>Task: cancel and release task
-        Sync->>Sync: record dedicated XCTest timeout failure
+        Sync->>Sync: record delivery timeout failure
     end
     Sync-->>Test: Heist? — control returns to the test
 ```
@@ -85,7 +92,11 @@ sequenceDiagram
 Notes:
 
 - `runHeist` and `runHeistSync` run the plan in-process; `joinHeist` and `withJoinedHeistSession` start a `TheInsideJob` server inside the test host so an **external** agent can connect (observation and control come from outside, over the same wire as any other client).
-- `runHeistSync` exists so the test method itself can stay synchronous: it polls the explicit `HeistSyncState` in run-loop slices until the task publishes a result or the configurable deadline expires. Completion and timeout are terminal states, and either transition releases the owned task.
+- `runHeistSync` exists so the test method itself can stay synchronous. The
+  Host owns the typed semantic deadline; the synchronous facade pumps the run
+  loop until the Host returns, with delivery headroom so terminal evidence can
+  finish after timeout. Completion and delivery timeout are terminal sync
+  states, and either transition releases the owned task.
 - Every XCTest-facing synchronous failure preserves the public caller location and routes through `recordHeistXCTestIssue`, the single `XCTFail` emission path.
 - Bare `joinHeist` never returns — it is for interactive sessions only. Under CI, test watchdogs will kill a parked test; use `withJoinedHeistSession` when the join must end.
 - Results can be recorded per run via `HeistTestResultRecording` (`.environment`, `.failures`, `.always`).

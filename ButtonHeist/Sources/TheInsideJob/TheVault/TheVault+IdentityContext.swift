@@ -14,7 +14,7 @@ extension TheVault {
     struct ContainerIdentity {
         let path: TreePath
         let container: AccessibilityContainer
-        let contentFrame: ContentRect?
+        let viewSpace: HeistElement.Geometry.ViewSpace
         let scrollMembership: InterfaceTree.ScrollMembership?
     }
 
@@ -22,6 +22,7 @@ extension TheVault {
         let path: TreePath
         let element: AccessibilityElement
         let traversalIndex: Int
+        let viewSpace: HeistElement.Geometry.ViewSpace
         let scrollMembership: InterfaceTree.ScrollMembership?
     }
 
@@ -44,9 +45,9 @@ extension TheVault {
         let containers: [ContainerIdentity]
         let elements: [ElementIdentity]
 
-        var contentFramesByPath: [TreePath: ContentRect] {
-            Dictionary(uniqueKeysWithValues: containers.compactMap { identity in
-                identity.contentFrame.map { (identity.path, $0) }
+        var viewSpacesByPath: [TreePath: HeistElement.Geometry.ViewSpace] {
+            Dictionary(uniqueKeysWithValues: containers.map { identity in
+                (identity.path, identity.viewSpace)
             })
         }
 
@@ -65,8 +66,16 @@ extension TheVault {
 
     static func buildIdentityContext(
         hierarchy: [AccessibilityHierarchy],
+        viewHierarchy: [AccessibilityHierarchy]? = nil,
         scrollableContainerPaths: Set<TreePath> = []
     ) -> IdentityContext {
+        let viewHierarchy = viewHierarchy ?? hierarchy
+        let viewElementsByPath = Dictionary(
+            uniqueKeysWithValues: viewHierarchy.pathIndexedElements.map { ($0.path, $0.element) }
+        )
+        let viewContainersByPath = Dictionary(
+            uniqueKeysWithValues: viewHierarchy.pathIndexedContainers.map { ($0.path, $0.container) }
+        )
         var accumulator = IdentityAccumulator()
         for (rootIndex, root) in hierarchy.enumerated() {
             root.foldedPreorder(
@@ -76,11 +85,13 @@ extension TheVault {
                 ),
                 into: &accumulator,
                 onElement: { element, traversalIndex, context, accumulator in
+                    let viewElement = viewElementsByPath[context.path] ?? element
                     accumulator.elements.append(
                         ElementIdentity(
                             path: context.path,
                             element: element,
                             traversalIndex: traversalIndex,
+                            viewSpace: rootViewSpace(for: viewElement),
                             scrollMembership: context.parentScrollContainerPath.map {
                                 InterfaceTree.ScrollMembership(containerPath: $0, index: nil)
                             }
@@ -92,15 +103,12 @@ extension TheVault {
                     let membership = context.parentScrollContainerPath.map {
                         InterfaceTree.ScrollMembership(containerPath: $0, index: nil)
                     }
-                    let frame = container.frame.cgRect
-                    let contentFrame = try? ContentRect(validating: membership == nil
-                        ? frame
-                        : CGRect(origin: .zero, size: frame.size))
+                    let viewContainer = viewContainersByPath[context.path] ?? container
                     accumulator.containers.append(
                         ContainerIdentity(
                             path: context.path,
                             container: container,
-                            contentFrame: contentFrame,
+                            viewSpace: rootViewSpace(for: viewContainer),
                             scrollMembership: membership
                         )
                     )
@@ -130,6 +138,27 @@ extension TheVault {
                 }
                 return lhs.path < rhs.path
             }
+        )
+    }
+
+    private static func rootViewSpace(
+        for element: AccessibilityElement
+    ) -> HeistElement.Geometry.ViewSpace {
+        HeistElement.Geometry.ViewSpace(
+            ownerPath: .root,
+            frame: try? ViewRect(validating: element.bhFrame),
+            activationPoint: try? ViewPoint(validating: element.bhResolvedActivationPoint)
+        )
+    }
+
+    private static func rootViewSpace(
+        for container: AccessibilityContainer
+    ) -> HeistElement.Geometry.ViewSpace {
+        let frame = container.frame.cgRect
+        return HeistElement.Geometry.ViewSpace(
+            ownerPath: .root,
+            frame: try? ViewRect(validating: frame),
+            activationPoint: try? ViewPoint(validating: CGPoint(x: frame.midX, y: frame.midY))
         )
     }
 

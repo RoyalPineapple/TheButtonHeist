@@ -92,7 +92,6 @@ extension WireTypeRoundTripTests {
                 observation: .none,
                 activationTrace: activationTrace
             ),
-            durationMs: 0,
             failure: failure
         )
         let result = HeistResultFixture.result(steps: [step])
@@ -119,18 +118,19 @@ extension WireTypeRoundTripTests {
 
     func testInvocationExpectationDerivesSummaryFromWaitEvidence() throws {
         let predicate = AccessibilityPredicate.exists(.label("Done"))
-        let actionResult = ActionResult.success(payload: .wait)
         let expectation = ExpectationResult.Met(predicate: predicate)
-        let check = try XCTUnwrap(HeistSettlementEvidence.MatchedCheck(
-            actionResult: actionResult,
+        let waitEvidence = HeistPassedWaitEvidence.matched(HeistWaitMatchedEvidence(
+            observation: makeTestObservationEvidence(
+                events: [.noChange],
+                completeness: .complete
+            ),
             expectation: expectation
         ))
-        let waitEvidence = HeistSettlementEvidence.matched(check)
-        let evidence = HeistInvocationEvidence.InvocationExpectationEvidence.wait(waitEvidence)
+        let evidence = HeistInvocationEvidence.InvocationExpectationEvidence.waitPassed(waitEvidence)
 
-        XCTAssertEqual(evidence.actionResult, waitEvidence.actionResult)
+        XCTAssertNil(evidence.actionResult)
         XCTAssertEqual(evidence.expectation, waitEvidence.expectation)
-        XCTAssertEqual(evidence.waitEvidence, waitEvidence)
+        XCTAssertEqual(evidence.waitObservation, waitEvidence.observation)
     }
 
     func testHeistCaseSelectionOutcomeRequiresUnsignedIndex() {

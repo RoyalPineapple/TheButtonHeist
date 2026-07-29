@@ -124,22 +124,16 @@ final class PublicHeistExecutionJSONContractTests: XCTestCase {
             result.object("omitted"),
             equals: PublicHeistActionJSONFixture.omissions
         )
-        try result.assertMissing("accessibilityTrace")
         try result.assertMissing("subjectEvidence")
     }
 
     func testNetDeltaContract() throws {
         let fixture = PublicHeistExecutionJSONContractFixture.netDelta()
         let report = try publicHeistExecutionJSON(step: fixture.step).object("report")
-        let before = try XCTUnwrap(fixture.trace.captures.first)
-        let after = try XCTUnwrap(fixture.trace.captures.last)
 
         try assertPublicHeistJSONContract(
             report.object("netDelta"),
-            equals: PublicHeistActionJSONFixture.netDelta(
-                beforeHash: before.hash,
-                afterHash: after.hash
-            )
+            equals: PublicHeistActionJSONFixture.netDelta
         )
     }
 

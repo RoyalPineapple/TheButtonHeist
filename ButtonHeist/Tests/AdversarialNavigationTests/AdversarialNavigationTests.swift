@@ -93,11 +93,17 @@ final class AdversarialNavigationTests: XCTestCase {
         let actionResult = try XCTUnwrap(
             heist.result.outputNodes.lazy
                 .compactMap { $0.actionEvidence?.result }
-                .first { $0.subjectEvidence?.element.label == "Verified by The Vibe Check" }
+                .first {
+                    $0.subjectEvidence?.element.semantics.assertable.label
+                        == "Verified by The Vibe Check"
+                }
         )
         let subject = try XCTUnwrap(actionResult.subjectEvidence)
         XCTAssertEqual(subject.source, .resolvedSemanticTarget)
-        XCTAssertEqual(subject.element.label, "Verified by The Vibe Check")
+        XCTAssertEqual(
+            subject.element.semantics.assertable.label,
+            "Verified by The Vibe Check"
+        )
         XCTAssertEqual(subject.resolution.origin, .discovered)
         XCTAssertTrue(subject.resolution.adjustments.contains(.semanticReveal))
         let activationTrace = try XCTUnwrap(actionResult.activationTrace)
@@ -158,9 +164,9 @@ final class AdversarialNavigationTests: XCTestCase {
             .compactMap { $0.actionEvidence?.result }
             .filter { result in
                 guard let subject = result.subjectEvidence,
-                      subject.element.label == "Review PR"
+                      subject.element.semantics.assertable.label == "Review PR"
                 else { return false }
-                let customContent = subject.element.customContent ?? []
+                let customContent = subject.element.semantics.assertable.orderedCustomContent
                 return customContent.contains {
                     $0.label == "Category" && $0.value == "Home"
                 } && customContent.contains {
@@ -187,13 +193,15 @@ final class AdversarialNavigationTests: XCTestCase {
         line: UInt = #line
     ) throws -> Int {
         let interface = try XCTUnwrap(
-            result.accessibilityTrace?.captures.last?.interface,
+            result.observationEvidence?.current?.interface,
             "Missing final interface for \(label)",
             file: file,
             line: line
         )
         let value = try XCTUnwrap(
-            interface.projectedElements.first { $0.label == label }?.value,
+            interface.projectedElements.first {
+                $0.semantics.assertable.label == label
+            }?.semantics.assertable.value,
             "Missing accessibility value for \(label)",
             file: file,
             line: line

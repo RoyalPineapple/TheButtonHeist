@@ -10,8 +10,7 @@ import AccessibilitySnapshotParser
 /// Main-actor owner of Button Heist's current accessibility interface.
 ///
 /// The interface tree is the only target-resolution authority. The latest
-/// observation carries disposable UIKit evidence for actionability, while a
-/// failed observation may be retained only for diagnostics.
+/// observation carries disposable UIKit evidence for actionability.
 @MainActor
 final class TheVault {
 
@@ -52,7 +51,6 @@ final class TheVault {
         semanticObservationStream.stateOwner.interfaceTree
     }
     var latestObservation: InterfaceObservation = .empty
-    var latestFailedSettleDiagnosticEvidence: InterfaceObservation?
 
     var currentLiveCapture: LiveCapture {
         latestObservation.liveCapture

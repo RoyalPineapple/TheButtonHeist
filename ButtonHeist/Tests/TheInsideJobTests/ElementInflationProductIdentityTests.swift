@@ -218,10 +218,16 @@ extension ElementInflationProductTests {
         heistId: HeistId
     ) async {
         let tree = brains.vault.interfaceTree
+        let unreachableElement = makeElement(label: label, identifier: identifier)
         let entry = InterfaceTree.Element(
             heistId: heistId,
             scrollMembership: nil,
-            element: makeElement(label: label, identifier: identifier)
+            geometry: testGeometry(
+                for: unreachableElement,
+                ownerPath: .root,
+                screen: .offscreen
+            ),
+            element: unreachableElement
         )
         var elements = tree.elements
         elements[heistId] = entry

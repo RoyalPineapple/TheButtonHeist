@@ -333,7 +333,6 @@ import ThePlans
         )
         let root = HeistExecutionStepResult.failure(
             path: "$.body[0]",
-            durationMs: 1,
             message: "stop",
             completion: .failed(
                 failure: failureDetail(observed: "stop"),
@@ -356,7 +355,6 @@ import ThePlans
         let children = try #require(HeistPassingChildren([child]))
         let root = HeistExecutionStepResult.forEachString(
             path: "$.body[0]",
-            durationMs: 1,
             declaration: declaration,
             completion: .passed(
                 evidence: try #require(HeistPassedForEachStringEvidence(evidence)),
@@ -432,7 +430,6 @@ import ThePlans
         )
         let root = HeistExecutionStepResult.forEachString(
             path: "$.body[0]",
-            durationMs: 1,
             declaration: declaration,
             completion: .passed(
                 evidence: try #require(HeistPassedForEachStringEvidence(evidence)),
@@ -458,14 +455,12 @@ import ThePlans
         {
           "steps": [{
             "path": "$.body[0]",
-            "durationMs": 1,
             "node": {
               "type": "warning",
               "outcome": "passed",
               "message": "root",
               "children": [{
                 "path": "$.body[0].heist.body[0]",
-                "durationMs": 100,
                 "node": {
                   "type": "warning",
                   "outcome": "passed",
@@ -487,14 +482,11 @@ import ThePlans
         )
     }
 
-    @Test func `aggregate and parent durations are independent wall clock observations`() throws {
+    @Test func `aggregate duration is the sole wall clock observation`() throws {
         let result = try HeistResultCodec.decode(nestedResultData())
-        let root = try #require(result.steps.first)
-        let child = try #require(root.children.first)
 
         #expect(result.durationMs == 5)
-        #expect(root.durationMs == 1)
-        #expect(child.durationMs == 100)
+        #expect(result.steps.first?.children.count == 1)
     }
 
     private func sampleResult(message: String) -> HeistResult {
@@ -509,13 +501,11 @@ import ThePlans
         {
           "steps": [{
             "path": "$.body[0]",
-            "durationMs": 1,
             "node": {
               "type": "heist",
               "outcome": "passed",
               "children": [{
                 "path": "$.body[0].heist.body[0]",
-                "durationMs": 100,
                 "node": {
                   "type": "warning",
                   "outcome": "passed",
@@ -673,7 +663,6 @@ import ThePlans
     private func skippedWarning(path: String) -> HeistExecutionStepResult {
         .warning(
             path: executionPath(path),
-            durationMs: 0,
             message: "skipped",
             completion: .skipped()
         )

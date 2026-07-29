@@ -17,9 +17,9 @@ extension WireConverterTests {
         )
         XCTAssertTrue(delta.edits.isEmpty)
         XCTAssertEqual(delta.after.projectedElements.count, 1)
-        XCTAssertNil(delta.edits.addedOptional)
-        XCTAssertNil(delta.edits.removedOptional)
-        XCTAssertNil(delta.edits.updatedOptional)
+        XCTAssertTrue(delta.edits.added.isEmpty)
+        XCTAssertTrue(delta.edits.removed.isEmpty)
+        XCTAssertTrue(delta.edits.updated.isEmpty)
     }
 
     func testEmptySnapshotsReturnNoChange() throws {
@@ -42,9 +42,9 @@ extension WireConverterTests {
             before: before, after: after, afterTree: []
         )
         XCTAssertFalse(delta.edits.isEmpty)
-        XCTAssertEqual(delta.edits.addedOptional?.count, 1)
-        XCTAssertEqual(delta.edits.addedOptional?.first?.label, "Cancel")
-        XCTAssertNil(delta.edits.removedOptional)
+        XCTAssertEqual(delta.edits.added.count, 1)
+        XCTAssertEqual(delta.edits.added.first?.semantics.assertable.label, "Cancel")
+        XCTAssertTrue(delta.edits.removed.isEmpty)
     }
 
     // MARK: - Delta: Element Removed
@@ -60,8 +60,9 @@ extension WireConverterTests {
             before: before, after: after, afterTree: []
         )
         XCTAssertFalse(delta.edits.isEmpty)
-        XCTAssertEqual(delta.edits.removedOptional, ["Cancel"])
-        XCTAssertNil(delta.edits.addedOptional)
+        XCTAssertEqual(delta.edits.removed.count, 1)
+        XCTAssertEqual(delta.edits.removed.first?.semantics.assertable.label, "Cancel")
+        XCTAssertTrue(delta.edits.added.isEmpty)
     }
 
     // MARK: - Delta: Property Changes
@@ -74,11 +75,12 @@ extension WireConverterTests {
             before: before, after: after, afterTree: []
         )
         XCTAssertFalse(delta.edits.isEmpty)
-        XCTAssertEqual(delta.edits.updatedOptional?.count, 1)
-        let change = delta.edits.updatedOptional?.first?.changes.first
+        XCTAssertEqual(delta.edits.updated.count, 1)
+        let update = delta.edits.updated.first
+        let change = update?.changes.first
         XCTAssertEqual(change?.property, .value)
-        XCTAssertEqual(change?.oldDisplayText, "50%")
-        XCTAssertEqual(change?.newDisplayText, "75%")
+        XCTAssertEqual(update?.before.semantics.assertable.value, "50%")
+        XCTAssertEqual(update?.after.semantics.assertable.value, "75%")
     }
 
     func testTraitsChangeProducesUpdate() throws {
@@ -89,10 +91,11 @@ extension WireConverterTests {
             before: before, after: after, afterTree: []
         )
         XCTAssertFalse(delta.edits.isEmpty)
-        let change = delta.edits.updatedOptional?.first?.changes.first
+        let update = delta.edits.updated.first
+        let change = update?.changes.first
         XCTAssertEqual(change?.property, .traits)
-        XCTAssertEqual(change?.oldDisplayText, "button")
-        XCTAssertEqual(change?.newDisplayText, "button, selected")
+        XCTAssertEqual(update?.before.semantics.assertable.traits, [.button])
+        XCTAssertEqual(update?.after.semantics.assertable.traits, [.button, .selected])
     }
 
     func testHintChangeProducesUpdate() throws {
@@ -103,10 +106,11 @@ extension WireConverterTests {
             before: before, after: after, afterTree: []
         )
         XCTAssertFalse(delta.edits.isEmpty)
-        let change = delta.edits.updatedOptional?.first?.changes.first
+        let update = delta.edits.updated.first
+        let change = update?.changes.first
         XCTAssertEqual(change?.property, .hint)
-        XCTAssertEqual(change?.oldDisplayText, "Tap to continue")
-        XCTAssertEqual(change?.newDisplayText, "Tap to go back")
+        XCTAssertEqual(update?.before.semantics.assertable.hint, "Tap to continue")
+        XCTAssertEqual(update?.after.semantics.assertable.hint, "Tap to go back")
     }
 
     func testActionsChangeProducesUpdate() throws {
@@ -120,9 +124,11 @@ extension WireConverterTests {
             before: before, after: after, afterTree: []
         )
         XCTAssertFalse(delta.edits.isEmpty)
-        XCTAssertNotNil(delta.edits.updatedOptional)
-        let change = delta.edits.updatedOptional?.first?.changes.first
+        let update = delta.edits.updated.first
+        let change = update?.changes.first
         XCTAssertEqual(change?.property, .actions)
+        XCTAssertEqual(update?.before.semantics.assertable.actions, [.activate])
+        XCTAssertEqual(update?.after.semantics.assertable.actions, [])
     }
 
     func testFrameChangeProducesUpdate() throws {
@@ -133,10 +139,11 @@ extension WireConverterTests {
             before: before, after: after, afterTree: []
         )
         XCTAssertFalse(delta.edits.isEmpty)
-        let change = delta.edits.updatedOptional?.first?.changes.first
+        let update = delta.edits.updated.first
+        let change = update?.changes.first
         XCTAssertEqual(change?.property, .frame)
-        XCTAssertEqual(change?.oldDisplayText, "0,0,100,50")
-        XCTAssertEqual(change?.newDisplayText, "10,20,100,50")
+        XCTAssertEqual(update?.before.geometry.screen, TheVault.onscreenSpace(for: before[0].element))
+        XCTAssertEqual(update?.after.geometry.screen, TheVault.onscreenSpace(for: after[0].element))
     }
 
     func testActivationPointChangeProducesUpdate() throws {
@@ -147,10 +154,11 @@ extension WireConverterTests {
             before: before, after: after, afterTree: []
         )
         XCTAssertFalse(delta.edits.isEmpty)
-        let change = delta.edits.updatedOptional?.first?.changes.first
+        let update = delta.edits.updated.first
+        let change = update?.changes.first
         XCTAssertEqual(change?.property, .activationPoint)
-        XCTAssertEqual(change?.oldDisplayText, "50,25")
-        XCTAssertEqual(change?.newDisplayText, "75,40")
+        XCTAssertEqual(update?.before.geometry.screen, TheVault.onscreenSpace(for: before[0].element))
+        XCTAssertEqual(update?.after.geometry.screen, TheVault.onscreenSpace(for: after[0].element))
     }
 
     func testMultiplePropertyChangesOnSameElement() throws {
@@ -160,10 +168,14 @@ extension WireConverterTests {
         let delta = compareInterfaces(
             before: before, after: after, afterTree: []
         )
-        XCTAssertEqual(delta.edits.updatedOptional?.first?.changes.count, 2)
-        let properties = delta.edits.updatedOptional?.first?.changes.map(\.property)
-        XCTAssertTrue(properties?.contains(.value) == true)
-        XCTAssertTrue(properties?.contains(.hint) == true)
+        let update = delta.edits.updated.first
+        XCTAssertEqual(update?.changes.count, 2)
+        XCTAssertEqual(update?.before.semantics.assertable.value, "50%")
+        XCTAssertEqual(update?.after.semantics.assertable.value, "75%")
+        XCTAssertEqual(update?.before.semantics.assertable.hint, "Volume")
+        XCTAssertEqual(update?.after.semantics.assertable.hint, "Music Volume")
+        XCTAssertTrue(update?.changes.contains { $0.property == .value } == true)
+        XCTAssertTrue(update?.changes.contains { $0.property == .hint } == true)
     }
 
     // MARK: - Delta: Label Change = Add + Remove
@@ -176,9 +188,9 @@ extension WireConverterTests {
             before: before, after: after, afterTree: []
         )
         XCTAssertFalse(delta.edits.isEmpty)
-        XCTAssertEqual(delta.edits.removedOptional, ["OK"])
-        XCTAssertEqual(delta.edits.addedOptional?.first?.label, "Done")
-        XCTAssertNil(delta.edits.updatedOptional)
+        XCTAssertEqual(delta.edits.removed.first?.semantics.assertable.label, "OK")
+        XCTAssertEqual(delta.edits.added.first?.semantics.assertable.label, "Done")
+        XCTAssertTrue(delta.edits.updated.isEmpty)
     }
 
     func testTreeReorderDoesNotProduceExistenceOrUpdateFacts() throws {
@@ -239,11 +251,14 @@ extension WireConverterTests {
             afterTree: afterTree
         )
         XCTAssertFalse(delta.edits.isEmpty)
-        XCTAssertNil(delta.edits.addedOptional)
-        XCTAssertNil(delta.edits.removedOptional)
-        XCTAssertEqual(delta.edits.updatedOptional?.count, 1)
-        let update = delta.edits.updatedOptional?.first
-        XCTAssertEqual(update?.after.label, "Telescope, Far Light, 3:32")
+        XCTAssertTrue(delta.edits.added.isEmpty)
+        XCTAssertTrue(delta.edits.removed.isEmpty)
+        XCTAssertEqual(delta.edits.updated.count, 1)
+        let update = delta.edits.updated.first
+        XCTAssertEqual(update?.after.semantics.assertable.label, "Telescope, Far Light, 3:32")
+        XCTAssertEqual(update?.before.geometry.screen, TheVault.onscreenSpace(for: beforeElement.element))
+        XCTAssertEqual(update?.after.geometry.screen, TheVault.onscreenSpace(for: afterElement.element))
+        XCTAssertEqual(update?.before.semantics.semanticHash, update?.after.semantics.semanticHash)
         XCTAssertTrue(update?.changes.contains { $0.property == .frame } == true)
     }
 
@@ -281,11 +296,20 @@ extension WireConverterTests {
             afterTree: afterTree
         )
         XCTAssertFalse(delta.edits.isEmpty)
-        XCTAssertNil(delta.edits.addedOptional)
-        XCTAssertNil(delta.edits.removedOptional)
-        let update = delta.edits.updatedOptional?.first { $0.after.label == "Favorite" }
+        XCTAssertTrue(delta.edits.added.isEmpty)
+        XCTAssertTrue(delta.edits.removed.isEmpty)
+        let update = delta.edits.updated.first {
+            $0.after.semantics.assertable.label == "Favorite"
+        }
         XCTAssertNotNil(update)
-        XCTAssertTrue(update?.changes.contains { $0.property == .value && $0.oldDisplayText == "0" && $0.newDisplayText == "1" } == true)
+        XCTAssertEqual(update?.before.semantics.assertable.value, "0")
+        XCTAssertEqual(update?.after.semantics.assertable.value, "1")
+        XCTAssertEqual(update?.before.semantics.assertable.traits, [.button])
+        XCTAssertEqual(update?.after.semantics.assertable.traits, [.button, .selected])
+        XCTAssertEqual(update?.before.geometry.screen, TheVault.onscreenSpace(for: beforeElement.element))
+        XCTAssertEqual(update?.after.geometry.screen, TheVault.onscreenSpace(for: afterElement.element))
+        XCTAssertNotEqual(update?.before.semantics.semanticHash, update?.after.semantics.semanticHash)
+        XCTAssertTrue(update?.changes.contains { $0.property == .value } == true)
         XCTAssertTrue(update?.changes.contains { $0.property == .traits } == true)
     }
 
@@ -317,11 +341,14 @@ extension WireConverterTests {
             afterTree: afterTree
         )
         XCTAssertFalse(delta.edits.isEmpty)
-        XCTAssertNil(delta.edits.addedOptional)
-        XCTAssertNil(delta.edits.removedOptional)
-        XCTAssertEqual(delta.edits.updatedOptional?.count, 1)
-        let update = delta.edits.updatedOptional?.first
-        XCTAssertEqual(update?.after.label, "Telescope, Far Light, 3:32")
+        XCTAssertTrue(delta.edits.added.isEmpty)
+        XCTAssertTrue(delta.edits.removed.isEmpty)
+        XCTAssertEqual(delta.edits.updated.count, 1)
+        let update = delta.edits.updated.first
+        XCTAssertEqual(update?.after.semantics.assertable.label, "Telescope, Far Light, 3:32")
+        XCTAssertEqual(update?.before.geometry.screen, TheVault.onscreenSpace(for: beforeElement.element))
+        XCTAssertEqual(update?.after.geometry.screen, TheVault.onscreenSpace(for: afterElement.element))
+        XCTAssertEqual(update?.before.semantics.semanticHash, update?.after.semantics.semanticHash)
         XCTAssertTrue(update?.changes.contains { $0.property == .frame } == true)
     }
 
@@ -341,7 +368,8 @@ extension WireConverterTests {
             afterTree: afterTree
         )
         XCTAssertFalse(delta.edits.isEmpty)
-        XCTAssertEqual(delta.edits.removedOptional, ["Second"])
+        XCTAssertEqual(delta.edits.removed.count, 1)
+        XCTAssertEqual(delta.edits.removed.first?.semantics.assertable.label, "Second")
     }
 
     // MARK: - Delta: Duplicate heistId Pairing
@@ -360,9 +388,11 @@ extension WireConverterTests {
             before: before, after: after, afterTree: []
         )
         XCTAssertFalse(delta.edits.isEmpty)
-        XCTAssertEqual(delta.edits.updatedOptional?.count, 2)
-        XCTAssertNil(delta.edits.addedOptional)
-        XCTAssertNil(delta.edits.removedOptional)
+        XCTAssertEqual(delta.edits.updated.count, 2)
+        XCTAssertEqual(delta.edits.updated.map(\.before.semantics.assertable.value), ["A", "B"])
+        XCTAssertEqual(delta.edits.updated.map(\.after.semantics.assertable.value), ["X", "Y"])
+        XCTAssertTrue(delta.edits.added.isEmpty)
+        XCTAssertTrue(delta.edits.removed.isEmpty)
     }
 
     func testDuplicateHeistIdExcessGoesToAddedRemoved() throws {
@@ -379,8 +409,10 @@ extension WireConverterTests {
             before: before, after: after, afterTree: []
         )
         XCTAssertFalse(delta.edits.isEmpty)
-        XCTAssertEqual(delta.edits.updatedOptional?.count, 1)
-        XCTAssertEqual(delta.edits.removedOptional?.count, 2)
+        XCTAssertEqual(delta.edits.updated.count, 1)
+        XCTAssertEqual(delta.edits.updated.first?.before.semantics.assertable.value, "A")
+        XCTAssertEqual(delta.edits.updated.first?.after.semantics.assertable.value, "X")
+        XCTAssertEqual(delta.edits.removed.map(\.semantics.assertable.value), ["B", "C"])
     }
 
     // MARK: - Delta: Empty Diff Coerced to noChange

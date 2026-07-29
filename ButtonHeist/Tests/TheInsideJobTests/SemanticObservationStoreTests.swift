@@ -4,6 +4,7 @@ import Foundation
 import XCTest
 
 @testable import TheInsideJob
+@testable import ThePlans
 @testable import TheScore
 
 @MainActor
@@ -28,7 +29,7 @@ final class SemanticObservationStoreTests: XCTestCase {
 
     func testPruningRetainsDerivedScreenGeneration() {
         var history = Observation.History(retentionLimit: 2)
-        history.record([
+        _ = history.record([
             .screenChanged(ScreenFacts(idAfter: "Checkout")),
             .noChange,
             .noChange,
@@ -42,13 +43,13 @@ final class SemanticObservationStoreTests: XCTestCase {
 
     func testProtectedBoundaryPreventsEvictionUntilReleased() throws {
         var state = TheVault.State(retentionLimit: 2)
-        _ = state.readObservation(admission())
+        _ = state.commitObservation(admission())
         let boundary = state.history.endIndex
         state.protectHistory(from: boundary)
 
-        _ = state.readObservation(admission())
-        _ = state.readObservation(admission())
-        _ = state.readObservation(admission())
+        _ = state.commitObservation(admission())
+        _ = state.commitObservation(admission())
+        _ = state.commitObservation(admission())
 
         XCTAssertEqual(state.history.startIndex, boundary)
         XCTAssertEqual(
@@ -66,8 +67,8 @@ final class SemanticObservationStoreTests: XCTestCase {
 
     func testEvictedRangeProducesIncompleteEvidence() {
         var history = Observation.History(retentionLimit: 1)
-        history.record([.noChange], protectedBy: nil)
-        history.record([.noChange], protectedBy: nil)
+        _ = history.record([.noChange], protectedBy: nil)
+        _ = history.record([.noChange], protectedBy: nil)
 
         let evidence = history.evidence(
             in: 0..<history.endIndex,
@@ -81,8 +82,8 @@ final class SemanticObservationStoreTests: XCTestCase {
 
     func testEqualSettledStateRecordsNoChange() {
         var state = TheVault.State()
-        let first = state.readObservation(admission())
-        let second = state.readObservation(admission())
+        let first = state.commitObservation(admission())
+        let second = state.commitObservation(admission())
 
         guard case .elementsChanged(let initial) = first.events.last else {
             return XCTFail("The first parse must establish element truth")
@@ -95,11 +96,11 @@ final class SemanticObservationStoreTests: XCTestCase {
 
     func testDiscardRecordsScreenReplacementSandwich() {
         var state = TheVault.State()
-        _ = state.readObservation(admission())
+        _ = state.commitObservation(admission())
         let boundary = state.history.endIndex
 
         state.discardCurrentObservation()
-        let replacement = state.readObservation(admission())
+        let replacement = state.commitObservation(admission())
 
         XCTAssertEqual(replacement.events.count, 3)
         guard case .elementsChanged(let departure) = replacement.events[0],
@@ -116,7 +117,7 @@ final class SemanticObservationStoreTests: XCTestCase {
 
     func testNotificationPrecedesForcedElementChange() throws {
         var state = TheVault.State()
-        _ = state.readObservation(admission())
+        _ = state.commitObservation(admission())
         let notification = Observation.AdmittedNotification(
             sequence: 1,
             kind: .elementChanged(.layout),
@@ -124,24 +125,24 @@ final class SemanticObservationStoreTests: XCTestCase {
             element: nil
         )
 
-        let read = state.readObservation(admission(notifications: [notification]))
+        let publication = state.commitObservation(admission(notifications: [notification]))
 
         XCTAssertEqual(
-            read.events.first,
+            publication.events.first,
             .notification(try XCTUnwrap(Observation.Notification(
                 text: "Updated",
                 element: nil
             )))
         )
-        guard case .elementsChanged(let snapshot) = read.events.last else {
+        guard case .elementsChanged(let snapshot) = publication.events.last else {
             return XCTFail("Layout notification must force an element-change event")
         }
-        XCTAssertEqual(snapshot, read.current.snapshot)
+        XCTAssertEqual(snapshot, publication.current.snapshot)
     }
 
     func testCurrentAfterBoundaryUsesHistoryAvailability() {
         var state = TheVault.State(retentionLimit: 1)
-        _ = state.readObservation(admission())
+        _ = state.commitObservation(admission())
         let boundary = state.history.endIndex
 
         XCTAssertEqual(
@@ -149,7 +150,7 @@ final class SemanticObservationStoreTests: XCTestCase {
             nil
         )
 
-        let current = state.readObservation(admission()).current
+        let current = state.commitObservation(admission()).current
 
         XCTAssertEqual(
             try state.current(after: boundary, scope: .visible).get(),
@@ -165,22 +166,19 @@ final class SemanticObservationStoreTests: XCTestCase {
         let through = notifications.map(\.sequence).max() ?? 0
         return Observation.Admission(
             tree: observation.tree,
-            captureID: observation.captureID,
             tripwireSignal: .empty,
             discoveryCommitPolicy: .mergeIntoInterface,
             lineage: .resting,
             scope: scope,
             notificationAdmission: .action(.init(
-                evidence: [],
                 admittedNotifications: notifications,
                 through: AccessibilityNotificationCursor(sequence: through),
-                scopedScreenChangedThrough: 0,
-                gap: nil
+                scopedScreenChangedThrough: 0
             )),
             keyboardVisible: nil,
             timestamp: Date(timeIntervalSince1970: 0),
             viewportFrames: observation.tree.viewportFrames,
-            geometryTolerance: CoarseFrameComparison.currentTolerance
+            geometryTolerance: CoarseFrameComparison.currentGeometryTolerance
         )
     }
 

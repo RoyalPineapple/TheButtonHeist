@@ -104,7 +104,10 @@ final class ActivationPolicyTests: XCTestCase {
                 adjustments: [.semanticReveal, .staleTargetRefresh]
             )
         )
-        XCTAssertEqual(result.subjectEvidence?.element.label, "Refreshed Target")
+        XCTAssertEqual(
+            result.subjectEvidence?.element.semantics.assertable.label,
+            "Refreshed Target"
+        )
     }
 
     func testRefreshReresolveFailureReturnsWithoutActivationAttemptOrDispatch() async {
@@ -305,7 +308,10 @@ final class ActivationPolicyTests: XCTestCase {
                 adjustments: [.objectDeallocationRefresh]
             )
         )
-        XCTAssertEqual(result.subjectEvidence?.element.label, "Refreshed Button")
+        XCTAssertEqual(
+            result.subjectEvidence?.element.semantics.assertable.label,
+            "Refreshed Button"
+        )
         XCTAssertEqual(activateCount, 1)
         XCTAssertEqual(dispatchedPoints, [CGPoint(x: 52, y: 52)])
         XCTAssertEqual(result.activationTrace, ActivationTrace(.activationPointFallback(
@@ -378,6 +384,11 @@ final class ActivationPolicyTests: XCTestCase {
         let treeElement = InterfaceTree.Element(
             heistId: heistId,
             scrollMembership: nil,
+            geometry: testGeometry(
+                for: element,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: element)
+            ),
             element: element
         )
         object.accessibilityFrame = frame

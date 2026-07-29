@@ -10,15 +10,9 @@ import TheScore
             "heistDurationMs",
             "actionPipeline.targetResolutionMs",
             "actionPipeline.actionDispatchMs",
-            "actionPipeline.settleMs",
-            "actionPipeline.beforeObservationMs",
-            "actionPipeline.finalSemanticEvidenceMs",
             "actionPipeline.totalMs",
             "waitPipeline.targetResolutionMs",
             "waitPipeline.actionDispatchMs",
-            "waitPipeline.settleMs",
-            "waitPipeline.beforeObservationMs",
-            "waitPipeline.finalSemanticEvidenceMs",
             "waitPipeline.totalMs",
             "expectationWaitMs",
         ])
@@ -37,21 +31,13 @@ import TheScore
         #expect(values(in: metrics, named: .heistDurationMs) == [1234])
         #expect(values(in: metrics, named: .actionPipelineTargetResolutionMs) == [1])
         #expect(values(in: metrics, named: .actionPipelineTotalMs) == [15])
-        #expect(values(in: metrics, named: .waitPipelineTargetResolutionMs) == [11, 21, 21])
-        #expect(values(in: metrics, named: .waitPipelineTotalMs) == [95, 60, 60])
+        #expect(values(in: metrics, named: .waitPipelineTargetResolutionMs) == [21, 21])
+        #expect(values(in: metrics, named: .waitPipelineTotalMs) == [60, 60])
         #expect(values(in: metrics, named: .expectationWaitMs).isEmpty)
         #expect(metrics.measurements.filter { $0.path?.description == "$.body[0]" }.allSatisfy {
             $0.kind == .action && $0.status == .passed
         })
         #expect(metrics.ceilings == [
-            HeistReport.CeilingMetric(
-                source: .intentWaitTimeout,
-                budgetMs: 100,
-                elapsedMs: 95,
-                path: "$.body[1]",
-                kind: .wait,
-                status: .passed
-            ),
             HeistReport.CeilingMetric(
                 source: .repeatUntilTimeout,
                 budgetMs: 50,
@@ -172,29 +158,23 @@ import TheScore
             command: command,
             result: .success(
                 payload: .activate,
-                observation: settledObservation(duration: 3, completeness: .incomplete),
+                observation: observedActionEvidence(completeness: .incomplete),
                 timing: actionTiming
             ),
-            expectation: ExpectationResult(met: true, predicate: predicate),
-            durationMs: 15
+            expectation: ExpectationResult(met: true, predicate: predicate)
         )
     }
 
     private func waitStep(predicate: AccessibilityPredicate) throws -> HeistExecutionStepResult {
-        let check = try #require(HeistSettlementEvidence.MatchedCheck(
-            actionResult: .success(
-                payload: .wait,
-                observation: settledObservation(duration: 13, completeness: .complete),
-                timing: waitTiming
-            ),
+        let evidence = HeistWaitMatchedEvidence(
+            observation: observationEvidence(completeness: .complete),
             expectation: ExpectationResult.Met(predicate: predicate)
-        ))
+        )
         return .wait(
             path: try HeistExecutionPath(validating: "$.body[1]"),
-            durationMs: 100,
             predicate: predicate,
             timeout: 0.1,
-            completion: .passed(evidence: try #require(HeistPassedWaitEvidence(.matched(check))))
+            completion: .passed(evidence: .matched(evidence))
         )
     }
 
@@ -204,14 +184,13 @@ import TheScore
             expectation: ExpectationResult.Met(predicate: predicate),
             actionResult: .success(
                 payload: .wait,
-                observation: settledObservation(duration: 23, completeness: .complete),
+                observation: observedActionEvidence(completeness: .complete),
                 timing: repeatTiming
             )
         ))
         let declaration = HeistRepeatUntilDeclaration(predicate: predicate, timeout: 0.05)
         let iteration = HeistExecutionStepResult.repeatUntilIteration(
             path: try HeistExecutionPath(validating: "$.body[2].repeat_until.iterations[0]"),
-            durationMs: 60,
             declaration: declaration,
             completion: .passed(evidence: try #require(HeistPassedRepeatUntilIterationEvidence(evidence)))
         )
@@ -221,7 +200,6 @@ import TheScore
         )
         return HeistExecutionStepResult.repeatUntil(
             path: try HeistExecutionPath(validating: "$.body[2]"),
-            durationMs: 60,
             declaration: declaration,
             completion: completion
         )
@@ -230,7 +208,6 @@ import TheScore
     private func caseSelectionStep() throws -> HeistExecutionStepResult {
         .conditional(
             path: try HeistExecutionPath(validating: "$.body[3]"),
-            durationMs: 490,
             completion: .passed(evidence: HeistCaseSelectionEvidence(selection: .selectingFirstMatch(
                 cases: [],
                 ifNone: .timedOut,
@@ -242,46 +219,36 @@ import TheScore
 
     private var actionTiming: ActionPerformanceTiming {
         ActionPerformanceTiming(
-            beforeObservationMs: 4,
             targetResolutionMs: 1,
             actionDispatchMs: 2,
-            finalSemanticEvidenceMs: 5,
             totalMs: 15
-        )
-    }
-
-    private var waitTiming: ActionPerformanceTiming {
-        ActionPerformanceTiming(
-            beforeObservationMs: 14,
-            targetResolutionMs: 11,
-            actionDispatchMs: 12,
-            finalSemanticEvidenceMs: 15,
-            totalMs: 95
         )
     }
 
     private var repeatTiming: ActionPerformanceTiming {
         ActionPerformanceTiming(
-            beforeObservationMs: 24,
             targetResolutionMs: 21,
             actionDispatchMs: 22,
-            finalSemanticEvidenceMs: 25,
             totalMs: 60
         )
     }
 
-    private func settledObservation(
-        duration: ElapsedMilliseconds,
+    private func observedActionEvidence(
         completeness: Observation.Evidence.Completeness
     ) -> ActionResultObservationEvidence {
+        .observed(observationEvidence(completeness: completeness))
+    }
+
+    private func observationEvidence(
+        completeness: Observation.Evidence.Completeness
+    ) -> Observation.Evidence {
         let snapshot = makeTestObservationSnapshot(elements: [])
-        let evidence = makeTestObservationEvidence(
+        return makeTestObservationEvidence(
             baseline: snapshot,
             current: snapshot,
             events: [.noChange],
             completeness: completeness
         )
-        return .settled(evidence, .settled(duration: duration))
     }
 
     private func values(
