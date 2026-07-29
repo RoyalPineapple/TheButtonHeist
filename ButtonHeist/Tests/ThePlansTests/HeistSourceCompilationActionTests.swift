@@ -11,7 +11,9 @@ import Testing
     let expected = try HeistPlan(body: [
         .action(ActionStep(
             command: .dismiss,
-            expectationPolicy: .expect(ActionExpectation(predicate: .screenChanged, timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(
+                predicate: .screenChanged
+            )))),
         .action(ActionStep(
             command: .magicTap,
             expectationPolicy: .waived("Magic tap toggles process-local playback state"))),
@@ -75,7 +77,9 @@ import Testing
     let expected = try HeistPlan(body: [
         .action(ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .screenChanged, timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(
+                predicate: .screenChanged
+            )))),
     ])
 
     #expect(plan == expected)
@@ -131,7 +135,7 @@ import Testing
                 argument: .string("Milk"),
                 expectation: WaitStep(
                     predicate: .elementsChanged([.appeared(.label("subtotal"))]),
-                    timeout: defaultActionExpectationTimeout
+                    timeout: ActionExpectationTimeoutPolicy.default.standard
                 )
             )),
             .invoke(HeistInvocationStep(
@@ -141,21 +145,21 @@ import Testing
                     predicate: .elementsChanged([
                         .updated(.label("subtotal"), .value(after: .contains("2 items"))),
                     ]),
-                    timeout: defaultActionExpectationTimeout
+                    timeout: ActionExpectationTimeoutPolicy.default.standard
                 )
             )),
             .invoke(HeistInvocationStep(
                 path: "Checkout.pay",
                 expectation: WaitStep(
                     predicate: .exists(.label("Payment Complete")),
-                    timeout: defaultActionExpectationTimeout
+                    timeout: ActionExpectationTimeoutPolicy.default.standard
                 )
             )),
             .invoke(HeistInvocationStep(
                 path: "Checkout.pay",
                 expectation: WaitStep(
                     predicate: .screenChanged("Receipt"),
-                    timeout: defaultActionExpectationTimeout
+                    timeout: ActionExpectationTimeoutPolicy.default.screenTransition
                 )
             )),
         ]

@@ -100,7 +100,9 @@ import Testing
     #expect(plan.body == [
         .action(ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .screenChanged, timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(
+                predicate: .screenChanged
+            )))),
         .wait(WaitStep(
             predicate: .exists(.label("Receipt")),
             timeout: 5,

@@ -1,5 +1,3 @@
-public let defaultActionExpectationTimeout: WaitTimeout = 1
-
 public struct Action {
     let command: HeistActionCommand
     let expectation: AuthoredActionExpectation
@@ -84,19 +82,20 @@ public struct Action {
 enum AuthoredActionExpectation: Sendable, Equatable {
     case `default`
     case expect(
-        WaitStep,
-        explicitTimeout: WaitTimeout?,
+        ActionExpectation,
         diagnostics: [HeistBuildDiagnostic]
     )
     case waived(ActionExpectationWaiver)
 
     var waitStep: WaitStep? {
-        guard case .expect(let step, _, _) = self else { return nil }
-        return step
+        guard case .expect(let expectation, _) = self else { return nil }
+        return expectation
+            .resolvingTimeout(using: .default)
+            .resolvedStep
     }
 
     var diagnostics: [HeistBuildDiagnostic] {
-        guard case .expect(_, _, let diagnostics) = self else { return [] }
+        guard case .expect(_, let diagnostics) = self else { return [] }
         return diagnostics
     }
 
@@ -104,8 +103,8 @@ enum AuthoredActionExpectation: Sendable, Equatable {
         switch self {
         case .default:
             return .default
-        case .expect(let step, _, _):
-            return .expect(ActionExpectation(predicate: step.predicate, timeout: step.timeout))
+        case .expect(let expectation, _):
+            return .expect(expectation)
         case .waived(let waiver):
             return .waived(waiver)
         }
@@ -115,13 +114,12 @@ enum AuthoredActionExpectation: Sendable, Equatable {
         _ nextPredicate: AccessibilityPredicate,
         timeout nextExplicitTimeout: WaitTimeout?
     ) -> Self {
-        guard case .expect(let existingStep, let existingExplicitTimeout, var diagnostics) = self else {
+        guard case .expect(let existingExpectation, var diagnostics) = self else {
             return .expect(
-                WaitStep(
+                ActionExpectation(
                     predicate: nextPredicate,
-                    timeout: nextExplicitTimeout ?? defaultActionExpectationTimeout
+                    timeout: nextExplicitTimeout
                 ),
-                explicitTimeout: nextExplicitTimeout,
                 diagnostics: []
             )
         }
@@ -130,43 +128,36 @@ enum AuthoredActionExpectation: Sendable, Equatable {
         // They are siblings in authored order — a list — and that is a change
         // to `ActionExpectation`, not something to fake by folding one
         // predicate inside another.
-        let predicate = existingStep.predicate
+        let predicate = existingExpectation.predicate
         diagnostics.append(.dslBuild(
             code: .dslInvalidActionExpectation,
-            message: "unsupported expectation composition: \(existingStep.predicate) + \(nextPredicate)",
+            message: "unsupported expectation composition: \(predicate) + \(nextPredicate)",
             hint: "Use one predicate per expectation, or follow the action with a WaitFor."
         ))
 
-        let timeout: WaitTimeout
-        let explicitTimeout: WaitTimeout?
-        switch (existingExplicitTimeout, nextExplicitTimeout) {
-        case (nil, nil):
-            timeout = existingStep.timeout
-            explicitTimeout = nil
-        case (nil, .some(let requestedTimeout)):
-            timeout = requestedTimeout
-            explicitTimeout = requestedTimeout
-        case (.some(let requestedTimeout), nil):
-            timeout = existingStep.timeout
-            explicitTimeout = requestedTimeout
-        case (.some(let existingTimeout), .some(let nextTimeout)):
-            if existingTimeout == nextTimeout {
-                timeout = nextTimeout
-                explicitTimeout = nextTimeout
-            } else {
-                timeout = existingStep.timeout
-                explicitTimeout = existingTimeout
-                diagnostics.append(.dslBuild(
-                    code: .dslInvalidActionExpectation,
-                    message: "multiple explicit expectation timeouts in one chain: \(existingTimeout) and \(nextTimeout)",
-                    hint: "Use one explicit timeout for the composed expectation."
-                ))
-            }
+        if case .explicit(let existingTimeout) = existingExpectation.timeout,
+           let nextExplicitTimeout,
+           existingTimeout != nextExplicitTimeout {
+            diagnostics.append(.dslBuild(
+                code: .dslInvalidActionExpectation,
+                message: "multiple explicit expectation timeouts in one chain: \(existingTimeout) and \(nextExplicitTimeout)",
+                hint: "Use one explicit timeout for the composed expectation."
+            ))
+        }
+
+        let expectation: ActionExpectation
+        if case .sessionDefault = existingExpectation.timeout,
+           let nextExplicitTimeout {
+            expectation = ActionExpectation(
+                predicate: predicate,
+                timeout: nextExplicitTimeout
+            )
+        } else {
+            expectation = existingExpectation
         }
 
         return .expect(
-            WaitStep(predicate: predicate, timeout: timeout),
-            explicitTimeout: explicitTimeout,
+            expectation,
             diagnostics: diagnostics
         )
     }

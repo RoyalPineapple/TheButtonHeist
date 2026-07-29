@@ -191,7 +191,9 @@ extension TheFenceHandlerTests {
         XCTAssertEqual(request.plan.body, [
             .action(ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectationPolicy: .expect(ActionExpectation(predicate: .screenChanged, timeout: 1)))),
+                expectationPolicy: .expect(ActionExpectation(
+                    predicate: .screenChanged
+                )))),
         ])
     }
 

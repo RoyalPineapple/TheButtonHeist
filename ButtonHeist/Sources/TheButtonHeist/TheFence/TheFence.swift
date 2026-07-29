@@ -1,5 +1,6 @@
 import Foundation
 
+import ThePlans
 import TheScore
 
 /// Centralized command dispatch layer. Both the CLI and MCP server are thin wrappers over TheFence.
@@ -24,6 +25,8 @@ public final class TheFence {
         var directDevice: DiscoveredDevice?
         /// Test/config override for screenshot artifact storage root.
         var artifactBaseDirectory: URL?
+        /// Session-owned defaults for action expectation budgets.
+        public var actionExpectationTimeoutPolicy: ActionExpectationTimeoutPolicy
         /// Extra client-side headroom beyond a server-owned wait timeout.
         var postActionExpectationTimeoutBuffer: TimeInterval
 
@@ -36,6 +39,7 @@ public final class TheFence {
             fileConfig: ButtonHeistFileConfig? = nil,
             directDevice: DiscoveredDevice? = nil,
             artifactBaseDirectory: URL? = nil,
+            actionExpectationTimeoutPolicy: ActionExpectationTimeoutPolicy = .default,
             postActionExpectationTimeoutBuffer: TimeInterval = 5
         ) {
             self.deviceFilter = deviceFilter
@@ -46,6 +50,7 @@ public final class TheFence {
             self.fileConfig = fileConfig
             self.directDevice = directDevice
             self.artifactBaseDirectory = artifactBaseDirectory
+            self.actionExpectationTimeoutPolicy = actionExpectationTimeoutPolicy
             self.postActionExpectationTimeoutBuffer = postActionExpectationTimeoutBuffer
         }
     }

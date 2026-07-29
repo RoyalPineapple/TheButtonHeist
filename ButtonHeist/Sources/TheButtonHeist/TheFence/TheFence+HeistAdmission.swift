@@ -13,7 +13,6 @@ extension TheFence {
 
     struct PerformRequest {
         let plan: HeistPlan
-        let step: PerformableHeistStep
     }
 
     struct ListHeistsRequest {
@@ -78,8 +77,8 @@ extension TheFence {
         try CommandArgumentEnvelopeLimits.validateHeistPlanSource(arguments, field: Command.perform.rawValue)
         let source = try arguments.requiredValue(FenceParameters.performStep)
         let plan = try loadInlinePerformStepSource(source)
-        let step = try performableStep(in: plan)
-        return PerformRequest(plan: plan, step: step)
+        _ = try performableStep(in: plan)
+        return PerformRequest(plan: plan)
     }
 
     func decodeRunHeistRequest(_ arguments: CommandArgumentEnvelope) throws -> RunHeistRequest {

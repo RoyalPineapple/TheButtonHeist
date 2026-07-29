@@ -25,6 +25,36 @@ func `all heist step kinds round trip through canonical JSON bytes`() throws {
 }
 
 @Test
+func `action expectation wire preserves omitted and explicit timeout authorship`() throws {
+    let omitted = try HeistPlan(body: [
+        .action(ActionStep(
+            command: .activate(.predicate(.label("Pay"))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .screenChanged))
+        )),
+    ])
+    let explicit = try HeistPlan(body: [
+        .action(ActionStep(
+            command: .activate(.predicate(.label("Pay"))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .screenChanged, timeout: 10))
+        )),
+    ])
+
+    let omittedExpectation = try actionExpectationJSONObject(in: omitted)
+    let explicitExpectation = try actionExpectationJSONObject(in: explicit)
+
+    #expect(omittedExpectation["timeout"] == nil)
+    #expect(explicitExpectation["timeout"] as? Double == 10)
+    #expect(try JSONDecoder().decode(
+        HeistPlan.self,
+        from: omitted.canonicalHeistJSONData()
+    ) == omitted)
+    #expect(try JSONDecoder().decode(
+        HeistPlan.self,
+        from: explicit.canonicalHeistJSONData()
+    ) == explicit)
+}
+
+@Test
 func `checked in heist fixtures use canonical JSON contracts`() throws {
     let fixtureURLs = try heistArtifactFixtureURLs()
     if fixtureURLs.isEmpty {
@@ -42,6 +72,18 @@ func `checked in heist fixtures use canonical JSON contracts`() throws {
             expectedData: artifact.plan.canonicalHeistJSONData()
         )
     }
+}
+
+private func actionExpectationJSONObject(in plan: HeistPlan) throws -> [String: Any] {
+    let object = try JSONSerialization.jsonObject(with: plan.canonicalHeistJSONData())
+    guard let root = object as? [String: Any],
+          let body = root["body"] as? [[String: Any]],
+          let action = body.first?["action"] as? [String: Any],
+          let expectation = action["expectation"] as? [String: Any]
+    else {
+        throw CocoaError(.coderInvalidValue)
+    }
+    return expectation
 }
 
 private func heistArtifactFixtureURLs() throws -> [URL] {

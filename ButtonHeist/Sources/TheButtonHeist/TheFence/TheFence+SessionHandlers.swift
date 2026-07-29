@@ -73,7 +73,9 @@ extension TheFence {
             autoReconnect: config.autoReconnect,
             fileConfig: config.fileConfig,
             directDevice: resolvedDirectDevice,
-            artifactBaseDirectory: config.artifactBaseDirectory
+            artifactBaseDirectory: config.artifactBaseDirectory,
+            actionExpectationTimeoutPolicy: config.actionExpectationTimeoutPolicy,
+            postActionExpectationTimeoutBuffer: config.postActionExpectationTimeoutBuffer
         )
         config = newConfig
 

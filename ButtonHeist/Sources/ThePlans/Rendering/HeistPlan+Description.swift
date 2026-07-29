@@ -30,7 +30,7 @@ extension ActionStep: CustomStringConvertible {
     public var description: String {
         CanonicalValueDescription.call("action", [
             "command=\(command.wireType.rawValue)",
-            expectationPolicy.expectedStep.map { "expect=\($0)" },
+            expectationPolicy.expectedExpectation.map { "expect=\($0.predicate)" },
             expectationPolicy.waiver.map { "withoutExpectation=\($0.reason)" },
         ].compactMap { $0 })
     }

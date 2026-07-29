@@ -403,6 +403,22 @@ func spatialGestureVerbsBuildExplicitEscapeHatches() throws {
 }
 
 @Test
+func actionExpectationPreservesDefaultAndExplicitAuthorship() {
+    #expect(
+        ActionExpectation(predicate: .exists(.label("Saved"))).timeout
+            == .sessionDefault
+    )
+    #expect(
+        ActionExpectation(predicate: .screenChanged).timeout
+            == .sessionDefault
+    )
+    #expect(
+        ActionExpectation(predicate: .screenChanged, timeout: 20).timeout
+            == .explicit(20)
+    )
+}
+
+@Test
 func screenActionsNamespaceBuildsActions() throws {
     let heist = try HeistPlan {
         ScreenActions.Dismiss()
@@ -414,7 +430,9 @@ func screenActionsNamespaceBuildsActions() throws {
     #expect(heist.body == [
         .action(ActionStep(
             command: .dismiss,
-            expectationPolicy: .expect(ActionExpectation(predicate: .screenChanged, timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(
+                predicate: .screenChanged
+            )))),
         .action(ActionStep(
             command: .magicTap,
             expectationPolicy: .waived("Magic tap toggles process-local playback state"))),

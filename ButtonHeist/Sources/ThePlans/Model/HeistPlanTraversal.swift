@@ -472,12 +472,6 @@ struct HeistPlanTraversal {
         case .action(let action):
             let actionContext = context.child(path: context.path.child(.action))
             try observe(.action(action, context: actionContext))
-            if let expectation = action.expectationPolicy.expectedStep {
-                try observe(.wait(
-                    expectation,
-                    context: actionContext.child(path: actionContext.path.child(.expectation))
-                ))
-            }
         case .wait(let wait):
             try walk(wait, context: context, observe: observe)
         case .conditional(let conditional):

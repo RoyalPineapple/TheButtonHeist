@@ -701,7 +701,9 @@ private extension HeistPlan {
         case .wait(let step):
             return step
         case .action(let step):
-            return step.expectationPolicy.expectedStep
+            return step.expectationPolicy.expectedExpectation?
+                .resolvingTimeout(using: .default)
+                .resolvedStep
         case .conditional, .forEachElement, .forEachString, .repeatUntil, .warn, .fail, .heist, .invoke:
             return nil
         }
