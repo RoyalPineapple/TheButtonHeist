@@ -247,7 +247,6 @@ extension TheVault {
             if continuity.isReplacement {
                 currentEvent = .elementsChanged(snapshot)
                 events = notificationEvents + [
-                    .elementsChanged(.empty(timestamp: snapshot.interface.timestamp)),
                     .screenChanged(ScreenFacts(
                         idAfter: InterfaceSummary.screenName(for: snapshot.interface)
                     )),
@@ -267,8 +266,10 @@ extension TheVault {
             }
 
             var next = self
-            let historyRange = next.history.record(
+            let historyRecord = next.history.record(
                 events,
+                notificationGap: notifications.gap,
+                afterNotificationSequence: notifications.afterNotificationSequence,
                 protectedBy: next.protectedHistoryIndex
             )
             let current = Current(
@@ -289,8 +290,9 @@ extension TheVault {
             self = next
             return Observation.Publication(
                 current: current,
-                historyRange: historyRange,
-                events: events
+                historyRange: historyRecord.range,
+                events: events,
+                coverage: historyRecord.coverage
             )
         }
 

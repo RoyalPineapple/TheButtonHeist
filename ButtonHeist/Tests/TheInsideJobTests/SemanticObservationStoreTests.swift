@@ -19,7 +19,8 @@ final class SemanticObservationStoreTests: XCTestCase {
 
         let recorded = history.record(events, protectedBy: nil)
 
-        XCTAssertEqual(recorded, 0..<3)
+        XCTAssertEqual(recorded.range, 0..<3)
+        XCTAssertEqual(recorded.coverage, .complete)
         XCTAssertEqual(Array(history), events)
         XCTAssertEqual(history.screenGeneration(at: 0), 0)
         XCTAssertEqual(history.screenGeneration(at: 1), 0)
@@ -76,8 +77,56 @@ final class SemanticObservationStoreTests: XCTestCase {
             current: snapshot()
         )
 
-        XCTAssertEqual(evidence.completeness, .incomplete)
+        XCTAssertEqual(evidence.coverage, .incomplete(.historyUnavailable))
         XCTAssertTrue(evidence.events.isEmpty)
+    }
+
+    func testHistoryPreservesExactNotificationGapCoverage() {
+        var history = Observation.History(retentionLimit: 2)
+        let firstRecord = history.record(
+            [.noChange],
+            notificationGap: AccessibilityNotificationGap(
+                droppedThroughSequence: 7
+            ),
+            afterNotificationSequence: 4,
+            protectedBy: nil
+        )
+        let expected = Observation.Coverage.incomplete(.notificationIngress(
+            .init(afterSequence: 4, throughSequence: 7),
+            additional: []
+        ))
+
+        XCTAssertEqual(firstRecord.coverage, expected)
+        XCTAssertEqual(
+            history.evidence(
+                in: firstRecord.range,
+                baseline: nil,
+                current: nil
+            ).coverage,
+            expected
+        )
+
+        let secondRecord = history.record(
+            [.noChange],
+            notificationGap: AccessibilityNotificationGap(
+                droppedThroughSequence: 13
+            ),
+            afterNotificationSequence: 11,
+            protectedBy: nil
+        )
+        XCTAssertEqual(
+            history.evidence(
+                in: firstRecord.range.lowerBound..<secondRecord.range.upperBound,
+                baseline: nil,
+                current: nil
+            ).coverage,
+            .incomplete(.notificationIngress(
+                .init(afterSequence: 4, throughSequence: 7),
+                additional: [
+                    .init(afterSequence: 11, throughSequence: 13),
+                ]
+            ))
+        )
     }
 
     func testEqualSettledStateRecordsNoChange() {
@@ -94,7 +143,7 @@ final class SemanticObservationStoreTests: XCTestCase {
         XCTAssertEqual(state.current, second.current)
     }
 
-    func testDiscardRecordsScreenReplacementSandwich() {
+    func testDiscardRecordsScreenBoundaryAndActualReplacement() {
         var state = TheVault.State()
         _ = state.commitObservation(admission())
         let boundary = state.history.endIndex
@@ -102,16 +151,15 @@ final class SemanticObservationStoreTests: XCTestCase {
         state.discardCurrentObservation()
         let replacement = state.commitObservation(admission())
 
-        XCTAssertEqual(replacement.events.count, 3)
-        guard case .elementsChanged(let departure) = replacement.events[0],
-              case .screenChanged = replacement.events[1],
-              case .elementsChanged(let arrival) = replacement.events[2]
+        XCTAssertEqual(replacement.events.count, 2)
+        guard case .screenChanged = replacement.events[0],
+              case .elementsChanged(let arrival) = replacement.events[1]
         else {
-            return XCTFail("Expected departure, screen boundary, and arrival")
+            return XCTFail("Expected screen boundary and actual replacement")
         }
-        XCTAssertTrue(departure.interface.projectedElements.isEmpty)
         XCTAssertEqual(arrival, replacement.current.snapshot)
-        XCTAssertEqual(state.history.screenGeneration(at: boundary + 1), 0)
+        XCTAssertEqual(state.history.screenGeneration(at: boundary), 0)
+        XCTAssertEqual(state.history.screenGeneration(at: boundary + 1), 1)
         XCTAssertEqual(state.history.screenGeneration(at: boundary + 2), 1)
     }
 

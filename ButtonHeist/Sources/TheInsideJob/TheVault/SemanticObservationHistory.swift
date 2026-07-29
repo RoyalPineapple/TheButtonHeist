@@ -2,6 +2,11 @@
 #if DEBUG
 import TheScore
 
+private struct ObservationHistoryEntry: Sendable, Equatable {
+    let event: Observation.Event
+    let notificationGap: Observation.NotificationSequenceGap?
+}
+
 extension Observation {
     /// The Vault-owned ordered event array.
     ///
@@ -16,7 +21,7 @@ extension Observation {
         }
 
         internal let retentionLimit: Int
-        private var storage: [Observation.Event] = []
+        private var storage: [ObservationHistoryEntry] = []
         private var firstRetainedIndex = 0
         private var screenChangesBeforeStorage = 0
 
@@ -29,7 +34,7 @@ extension Observation {
         internal var endIndex: Int { firstRetainedIndex + storage.count }
 
         internal subscript(index: Int) -> Observation.Event {
-            storage[index - firstRetainedIndex]
+            storage[index - firstRetainedIndex].event
         }
 
         internal func index(after index: Int) -> Int {
@@ -42,24 +47,33 @@ extension Observation {
 
         internal mutating func record(
             _ events: [Observation.Event],
+            notificationGap: AccessibilityNotificationGap? = nil,
+            afterNotificationSequence: UInt64 = 0,
             protectedBy protectedIndex: Int?
-        ) -> Range<Int> {
+        ) -> Result {
             precondition(!events.isEmpty, "An observation must publish at least one event")
             let range = endIndex..<(endIndex + events.count)
-            storage.append(contentsOf: events)
+            let gap = notificationGap.map {
+                Observation.NotificationSequenceGap(
+                    afterSequence: afterNotificationSequence,
+                    throughSequence: $0.droppedThroughSequence
+                )
+            }
+            storage.append(contentsOf: events.enumerated().map { index, event in
+                ObservationHistoryEntry(
+                    event: event,
+                    notificationGap: index == 0 ? gap : nil
+                )
+            })
             prune(protectedBy: protectedIndex)
-            return range
+            return Result(
+                range: range,
+                coverage: Self.coverage(for: gap.map { [$0] } ?? [])
+            )
         }
 
         internal func events(in range: Range<Int>) throws(ReadError) -> ArraySlice<Observation.Event> {
-            guard range.lowerBound >= startIndex,
-                  range.upperBound <= endIndex
-            else {
-                throw .rangeUnavailable
-            }
-            let lowerBound = range.lowerBound - firstRetainedIndex
-            let upperBound = range.upperBound - firstRetainedIndex
-            return storage[lowerBound..<upperBound]
+            ArraySlice(try entries(in: range).map(\.event))
         }
 
         internal func events(after index: Int) throws(ReadError) -> ArraySlice<Observation.Event> {
@@ -78,8 +92,8 @@ extension Observation {
             )
             return screenChangesBeforeStorage + storage
                 .prefix(index - firstRetainedIndex)
-                .reduce(into: 0) { count, event in
-                    if case .screenChanged = event {
+                .reduce(into: 0) { count, entry in
+                    if case .screenChanged = entry.event {
                         count += 1
                     }
                 }
@@ -91,18 +105,20 @@ extension Observation {
             current: Observation.Snapshot?
         ) -> Observation.Evidence {
             do {
+                let entries = try entries(in: range)
+                let gaps = entries.compactMap(\.notificationGap)
                 return Observation.Evidence(
                     baseline: baseline,
+                    events: entries.map(\.event),
                     current: current,
-                    events: Array(try events(in: range)),
-                    completeness: .complete
+                    coverage: Self.coverage(for: gaps)
                 )
             } catch {
                 return Observation.Evidence(
                     baseline: baseline,
-                    current: current,
                     events: [],
-                    completeness: .incomplete
+                    current: current,
+                    coverage: .incomplete(.historyUnavailable)
                 )
             }
         }
@@ -114,13 +130,41 @@ extension Observation {
                 Swift.min(overflow, Swift.max(0, $0 - firstRetainedIndex))
             } ?? overflow
             guard removableCount > 0 else { return }
-            screenChangesBeforeStorage += storage.prefix(removableCount).reduce(into: 0) { count, event in
-                if case .screenChanged = event {
+            screenChangesBeforeStorage += storage.prefix(removableCount).reduce(into: 0) { count, entry in
+                if case .screenChanged = entry.event {
                     count += 1
                 }
             }
             storage.removeFirst(removableCount)
             firstRetainedIndex += removableCount
+        }
+
+        private func entries(
+            in range: Range<Int>
+        ) throws(ReadError) -> ArraySlice<ObservationHistoryEntry> {
+            guard range.lowerBound >= startIndex,
+                  range.upperBound <= endIndex
+            else {
+                throw .rangeUnavailable
+            }
+            let lowerBound = range.lowerBound - firstRetainedIndex
+            let upperBound = range.upperBound - firstRetainedIndex
+            return storage[lowerBound..<upperBound]
+        }
+
+        private static func coverage(
+            for gaps: [Observation.NotificationSequenceGap]
+        ) -> Observation.Coverage {
+            guard let first = gaps.first else { return .complete }
+            return .incomplete(.notificationIngress(
+                first,
+                additional: Array(gaps.dropFirst())
+            ))
+        }
+
+        internal struct Result: Sendable, Equatable {
+            internal let range: Range<Int>
+            internal let coverage: Observation.Coverage
         }
     }
 }

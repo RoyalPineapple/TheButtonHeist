@@ -10,8 +10,8 @@ import UIKit
 @MainActor
 extension TheBrainsPipelineTests {
 
-    func testScopedScreenChangedPublishesBoundaryThenNoChange() async {
-        let oldScreen = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+    func testScopedScreenChangedPublishesBoundaryThenActualState() async {
+        _ = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Checkout", .header, "checkout_header")])
         )
         let boundary = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
@@ -21,26 +21,14 @@ extension TheBrainsPipelineTests {
 
         XCTAssertEqual(
             boundary.events.map(\.testKind),
-            [.elementsChanged, .screenChanged, .elementsChanged]
+            [.screenChanged, .elementsChanged]
         )
-        guard case .elementsChanged(let departure) = boundary.events[0],
-              case .screenChanged(let screen) = boundary.events[1],
-              case .elementsChanged(let arrival) = boundary.events[2] else {
-            return XCTFail("Expected departure, screen boundary, and arrival")
+        guard case .screenChanged(let screen) = boundary.events[0],
+              case .elementsChanged(let arrival) = boundary.events[1] else {
+            return XCTFail("Expected screen boundary and actual state")
         }
-        XCTAssertTrue(departure.interface.projectedElements.isEmpty)
         XCTAssertEqual(screen.idAfter, "Checkout")
         XCTAssertEqual(arrival, boundary.current.snapshot)
-        XCTAssertEqual(
-            ElementEdits.between(oldScreen.current.snapshot.interface, departure.interface)
-                .removed.compactMap(\.semantics.assertable.label),
-            ["Checkout"]
-        )
-        XCTAssertEqual(
-            ElementEdits.between(departure.interface, arrival.interface)
-                .added.compactMap(\.semantics.assertable.label),
-            ["Checkout"]
-        )
 
         let next = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Checkout", .header, "checkout_header")])
@@ -64,7 +52,7 @@ extension TheBrainsPipelineTests {
 
         XCTAssertEqual(
             after.events.map(\.testKind),
-            [.elementsChanged, .screenChanged, .elementsChanged]
+            [.screenChanged, .elementsChanged]
         )
     }
 
@@ -97,7 +85,7 @@ extension TheBrainsPipelineTests {
 
         XCTAssertEqual(
             after.events.map(\.testKind),
-            [.elementsChanged, .screenChanged, .elementsChanged]
+            [.screenChanged, .elementsChanged]
         )
     }
 
@@ -105,6 +93,8 @@ extension TheBrainsPipelineTests {
         _ = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Menu", .header, "menu_header")])
         )
+        let boundary = await brains.vault.semanticObservationStream.stateOwner
+            .observationBoundary(scope: .discovery)
         let after = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Checkout", .header, "checkout_header")]),
             notificationBatch: notificationBatch(
@@ -115,8 +105,18 @@ extension TheBrainsPipelineTests {
 
         XCTAssertEqual(
             after.events.map(\.testKind),
-            [.elementsChanged, .screenChanged, .elementsChanged]
+            [.screenChanged, .elementsChanged]
         )
+        let expectedCoverage = Observation.Coverage.incomplete(
+            .notificationIngress(
+                .init(afterSequence: 0, throughSequence: 1),
+                additional: []
+            )
+        )
+        let evidence = await brains.vault.semanticObservationStream.stateOwner
+            .evidence(after: boundary)
+        XCTAssertEqual(after.coverage, expectedCoverage)
+        XCTAssertEqual(evidence.coverage, expectedCoverage)
     }
 
     func testScreenChangedReplacesDiscoveryOnlyTargetableTruthBeforePublication() async {
@@ -194,7 +194,7 @@ extension TheBrainsPipelineTests {
 
         XCTAssertEqual(
             after.events.map(\.testKind),
-            [.elementsChanged, .screenChanged, .elementsChanged]
+            [.screenChanged, .elementsChanged]
         )
     }
 

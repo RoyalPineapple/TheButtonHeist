@@ -138,7 +138,8 @@ extension Observation.Stream {
                 resolvedNotificationBatch.events
             ),
             through: resolvedNotificationBatch.through,
-            scopedScreenChangedThrough: resolvedNotificationBatch.scopedScreenChangedThrough
+            scopedScreenChangedThrough: resolvedNotificationBatch.scopedScreenChangedThrough,
+            gap: resolvedNotificationBatch.gap
         )
         let notificationAdmission: Observation.NotificationAdmission = notificationBatch == nil
             ? .passive(notificationSnapshot)

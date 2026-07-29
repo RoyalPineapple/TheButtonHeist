@@ -68,9 +68,9 @@ final class AccessibilityPredicateTests: XCTestCase {
         let baseline = observationSnapshot(elements: [element(label: "Ready")])
         let evidence = Observation.Evidence(
             baseline: baseline,
-            current: baseline,
             events: [],
-            completeness: .complete
+            current: baseline,
+            coverage: .complete
         )
 
         XCTAssertTrue(
@@ -231,14 +231,86 @@ final class AccessibilityPredicateTests: XCTestCase {
         let snapshot = observationSnapshot(elements: [element(label: "Ready")])
         let evidence = Observation.Evidence(
             baseline: nil,
-            current: snapshot,
             events: [.elementsChanged(snapshot)],
-            completeness: .complete
+            current: snapshot,
+            coverage: .complete
         )
         let result = try resolved(.exists(.label("Ready"))).evaluate(in: evidence)
 
         XCTAssertTrue(result.met)
         XCTAssertNil(result.actual)
+    }
+
+    func testIncompleteEvidenceRejectsUnobservedMatchWithExactGap() throws {
+        let gap = Observation.Gap.notificationIngress(
+            .init(afterSequence: 4, throughSequence: 7),
+            additional: []
+        )
+        let snapshot = observationSnapshot(elements: [element(label: "Ready")])
+        let evidence = Observation.Evidence(
+            baseline: snapshot,
+            events: [],
+            current: snapshot,
+            coverage: .incomplete(gap)
+        )
+        let predicate = try resolved(.notification("Saved"))
+
+        XCTAssertNotEqual(Expectation([predicate]).result, .satisfied)
+        XCTAssertThrowsError(try predicate.evaluate(in: evidence)) { error in
+            XCTAssertEqual(error as? Observation.Gap, gap)
+        }
+    }
+
+    func testObservedPositiveMatchSurvivesIncompleteSurroundingCoverage() throws {
+        let gap = Observation.Gap.notificationIngress(
+            .init(afterSequence: 4, throughSequence: 7),
+            additional: []
+        )
+        let notification = try XCTUnwrap(Observation.Notification(
+            text: "Saved",
+            element: nil
+        ))
+        let evidence = Observation.Evidence(
+            baseline: nil,
+            events: [.notification(notification)],
+            current: nil,
+            coverage: .incomplete(gap)
+        )
+
+        XCTAssertTrue(try resolved(.notification("Saved")).evaluate(in: evidence).met)
+    }
+
+    func testObservationCoverageRoundTripsExactGapExtent() throws {
+        let evidence = Observation.Evidence(
+            baseline: nil,
+            events: [],
+            current: nil,
+            coverage: .incomplete(.notificationIngress(
+                .init(afterSequence: 4, throughSequence: 7),
+                additional: [
+                    .init(afterSequence: 11, throughSequence: 13),
+                ]
+            ))
+        )
+
+        XCTAssertEqual(
+            try JSONDecoder().decode(
+                Observation.Evidence.self,
+                from: JSONEncoder().encode(evidence)
+            ),
+            evidence
+        )
+    }
+
+    func testNotificationGapRejectsEmptyDecodedRange() {
+        let data = Data(#"{"afterSequence":7,"throughSequence":7}"#.utf8)
+
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(
+                Observation.NotificationSequenceGap.self,
+                from: data
+            )
+        )
     }
 
     func testExpectationResultRoundTrips() throws {

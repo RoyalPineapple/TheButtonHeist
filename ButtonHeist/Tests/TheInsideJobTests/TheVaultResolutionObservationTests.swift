@@ -141,7 +141,7 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(evidence.baseline, baseline.current.snapshot)
         XCTAssertEqual(evidence.current, publication.current.snapshot)
         XCTAssertEqual(evidence.notificationTexts, ["Saved"])
-        XCTAssertEqual(evidence.completeness, .complete)
+        XCTAssertEqual(evidence.coverage, .complete)
     }
 
     func testNotificationProjectionReadsOrderedCanonicalHistory() async throws {
@@ -237,7 +237,7 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(publication.current.snapshot, snapshot)
     }
 
-    func testScreenChangedPublishesDepartureBoundaryAndArrival() async throws {
+    func testScreenChangedPublishesBoundaryAndActualArrival() async throws {
         let first = InterfaceObservation.makeForTests(elements: [
             (element(label: "Menu", traits: .header), "menu"),
         ])
@@ -255,24 +255,22 @@ extension TheVaultResolutionTests {
         let replacement = await publishVisible(second, notificationBatch: batch)
         action.cancel()
 
-        XCTAssertEqual(replacement.events.count, 3)
-        guard case .elementsChanged(let departure) = replacement.events[0],
-              case .screenChanged(let screen) = replacement.events[1],
-              case .elementsChanged(let arrival) = replacement.events[2] else {
-            return XCTFail("Expected departure, screen boundary, and arrival")
+        XCTAssertEqual(replacement.events.count, 2)
+        guard case .screenChanged(let screen) = replacement.events[0],
+              case .elementsChanged(let arrival) = replacement.events[1] else {
+            return XCTFail("Expected screen boundary and actual arrival")
         }
-        XCTAssertTrue(departure.interface.projectedElements.isEmpty)
         XCTAssertEqual(screen.idAfter, "Checkout")
         XCTAssertEqual(arrival, replacement.current.snapshot)
 
         var history = Observation.History(retentionLimit: 8)
         _ = history.record(baseline.events, protectedBy: nil)
-        let replacementRange = history.record(replacement.events, protectedBy: nil)
-        XCTAssertEqual(history.screenGeneration(at: replacementRange.lowerBound), 0)
-        XCTAssertEqual(history.screenGeneration(at: replacementRange.upperBound), 1)
+        let replacementRecord = history.record(replacement.events, protectedBy: nil)
+        XCTAssertEqual(history.screenGeneration(at: replacementRecord.range.lowerBound), 0)
+        XCTAssertEqual(history.screenGeneration(at: replacementRecord.range.upperBound), 1)
         XCTAssertEqual(
             history.evidence(
-                in: replacementRange,
+                in: replacementRecord.range,
                 baseline: baseline.current.snapshot,
                 current: replacement.current.snapshot
             ).events,

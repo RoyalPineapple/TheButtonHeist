@@ -4,7 +4,7 @@ import ThePlans
 @testable import TheScore
 
 @Suite struct ExpectationScopeTests {
-    @Test func `graph semantic hash ignores geometry`() throws {
+    @Test func `graph semantic projection ignores geometry`() throws {
         let expectation = Expectation([
             try resolved(.elementsChanged),
         ])
@@ -27,7 +27,7 @@ import ThePlans
         ) != .satisfied)
     }
 
-    @Test func `graph semantic hash preserves duplicate cardinality`() throws {
+    @Test func `graph semantic projection preserves duplicate cardinality`() throws {
         let expectation = Expectation([
             try resolved(.elementsChanged),
         ])
@@ -40,7 +40,7 @@ import ThePlans
         #expect(evaluateExpectation(expectation, events: events) == .satisfied)
     }
 
-    @Test func `graph semantic hash includes complete element semantics`() throws {
+    @Test func `graph semantic projection compares exact element values`() throws {
         let expectation = Expectation([
             try resolved(.elementsChanged),
         ])
@@ -67,6 +67,25 @@ import ThePlans
             expectation,
             events: [.elementsChanged(before), .elementsChanged(after)]
         ) == .satisfied)
+    }
+
+    @Test func `graph semantic projection is permutation invariant`() throws {
+        let expectation = Expectation([
+            try resolved(.elementsChanged),
+        ])
+        let before = snapshot([
+            makeTestHeistElement(label: "Ready"),
+            makeTestHeistElement(label: "Pay"),
+        ])
+        let after = snapshot([
+            makeTestHeistElement(label: "Pay"),
+            makeTestHeistElement(label: "Ready"),
+        ])
+
+        #expect(evaluateExpectation(
+            expectation,
+            events: [.elementsChanged(before), .elementsChanged(after)]
+        ) != .satisfied)
     }
 
     @Test func `target scope ignores changes outside the matched target`() throws {

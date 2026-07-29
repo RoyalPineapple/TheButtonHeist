@@ -406,17 +406,18 @@ final class TheBrainsPipelineTests: XCTestCase {
         kind: AccessibilityNotificationKind,
         gap: AccessibilityNotificationGap? = nil
     ) -> AccessibilityNotificationBatch {
-        AccessibilityNotificationBatch(
+        let sequence = (gap?.droppedThroughSequence ?? 0) + 1
+        return AccessibilityNotificationBatch(
             events: [PendingAccessibilityNotificationEvent(
-                sequence: 1,
+                sequence: sequence,
                 kind: kind,
                 timestamp: Date(timeIntervalSince1970: 0),
                 notificationData: .none,
                 associatedElement: .none,
                 provenance: .scoped
             )],
-            through: AccessibilityNotificationCursor(sequence: 1),
-            scopedScreenChangedThrough: kind == .screenChanged ? 1 : 0,
+            through: AccessibilityNotificationCursor(sequence: sequence),
+            scopedScreenChangedThrough: kind == .screenChanged ? sequence : 0,
             gap: gap
         )
     }

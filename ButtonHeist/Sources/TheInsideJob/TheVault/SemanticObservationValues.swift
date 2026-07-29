@@ -46,6 +46,7 @@ extension Observation {
         internal let current: TheVault.State.Current
         internal let historyRange: Range<Int>
         internal let events: [Event]
+        internal let coverage: Coverage
 
         internal func events(after historyIndex: Int) -> ArraySlice<Event> {
             events.dropFirst(Swift.max(0, historyIndex - historyRange.lowerBound))
@@ -78,6 +79,19 @@ extension Observation {
         internal let admittedNotifications: [AdmittedNotification]
         internal let through: AccessibilityNotificationCursor
         internal let scopedScreenChangedThrough: UInt64
+        internal let gap: AccessibilityNotificationGap?
+
+        internal init(
+            admittedNotifications: [AdmittedNotification],
+            through: AccessibilityNotificationCursor,
+            scopedScreenChangedThrough: UInt64,
+            gap: AccessibilityNotificationGap? = nil
+        ) {
+            self.admittedNotifications = admittedNotifications
+            self.through = through
+            self.scopedScreenChangedThrough = scopedScreenChangedThrough
+            self.gap = gap
+        }
 
         internal func notifications(
             after cursor: AccessibilityNotificationCursor,
@@ -94,7 +108,11 @@ extension Observation {
                 scopedScreenChangedThrough: max(
                     scopedScreenChangedCursor,
                     scopedScreenChangedThrough
-                )
+                ),
+                afterNotificationSequence: cursor.sequence,
+                gap: gap.flatMap {
+                    $0.droppedThroughSequence > cursor.sequence ? $0 : nil
+                }
             )
         }
     }
@@ -103,6 +121,8 @@ extension Observation {
         internal let admittedNotifications: [AdmittedNotification]
         internal let through: AccessibilityNotificationCursor
         internal let scopedScreenChangedThrough: UInt64
+        internal let afterNotificationSequence: UInt64
+        internal let gap: AccessibilityNotificationGap?
     }
 
     internal struct AdmittedNotification: Sendable, Equatable {

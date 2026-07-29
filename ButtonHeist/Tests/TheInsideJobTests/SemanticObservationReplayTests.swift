@@ -81,7 +81,7 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
         XCTAssertEqual(evidence.baseline, first.current.snapshot)
         XCTAssertEqual(evidence.current, second.current.snapshot)
         XCTAssertEqual(evidence.events, second.events)
-        XCTAssertEqual(evidence.completeness, .complete)
+        XCTAssertEqual(evidence.coverage, .complete)
     }
 
     func testCommitCompletesEveryObservationWaiterWithCurrentState() async {
