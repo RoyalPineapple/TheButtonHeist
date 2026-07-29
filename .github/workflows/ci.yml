@@ -44,6 +44,7 @@ jobs:
           scripts/tests/require-successful-ci-for-commit-test.sh
           python3 scripts/tests/select-ci-change-scopes-test.py
           python3 scripts/tests/select-ios-ci-simulator-test.py
+          python3 scripts/tests/test-topology-contract-test.py
           python3 scripts/tests/test-runner-test.py
 
       - name: Report portable contract timing
@@ -150,15 +151,15 @@ jobs:
           echo "Consolidated macOS validation: $((MAC_VALIDATION_END - MAC_VALIDATION_START))s" \
             >> "$GITHUB_STEP_SUMMARY"
 
-  ios-tests:
-    name: ios-tests
+  ios-logic:
+    name: ios-logic
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: macos-15
     timeout-minutes: 80
     env:
       BUTTONHEIST_RESULTS_MODE: failures
       BUTTONHEIST_TEST_ARTIFACTS_DIR: ${{ github.workspace }}/ci-artifacts/test-runs
-      BUTTONHEIST_TEST_SIMULATOR_NAME: buttonheist-ci-core-demo-${{ github.run_id }}-${{ github.run_attempt }}
+      BUTTONHEIST_TEST_SIMULATOR_NAME: buttonheist-ci-logic-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
       - name: Checkout repository
@@ -178,23 +179,101 @@ jobs:
           tuist install
           ./scripts/generate-project.sh --skip-install --no-binary-cache
 
-      - name: Build core tests and BH Demo once
+      - name: Build deterministic iOS logic
         timeout-minutes: 20
         run: |
-          echo "IOS_CORE_BUILD_START=$(date +%s)" >> "$GITHUB_ENV"
-          scripts/test-runner.py build-for-testing TheInsideJobTests --retain-simulator
-          echo "IOS_CORE_BUILD_END=$(date +%s)" >> "$GITHUB_ENV"
+          echo "IOS_LOGIC_BUILD_START=$(date +%s)" >> "$GITHUB_ENV"
+          scripts/test-runner.py build-for-testing TheInsideJobLogicTests --retain-simulator
+          echo "IOS_LOGIC_BUILD_END=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Run deterministic iOS logic
+        timeout-minutes: 18
+        run: |
+          echo "IOS_LOGIC_RUN_START=$(date +%s)" >> "$GITHUB_ENV"
+          scripts/test-runner.py test-without-building TheInsideJobLogicTests --retain-simulator
+          echo "IOS_LOGIC_RUN_END=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Collect logic failure evidence
+        if: failure()
+        run: scripts/test-runner.py collect TheInsideJobLogicTests
+
+      - name: Delete dedicated iOS simulator
+        if: always()
+        run: scripts/test-runner.py cleanup
+
+      - name: Upload iOS failure results
+        if: failure()
+        uses: ./.github/actions/finalize-heist-results
+        with:
+          result-directory: ${{ env.BUTTONHEIST_TEST_RESULTS_DIR }}
+          job-label: ios-logic
+          artifact-name: buttonheist-results-ios-logic-${{ github.run_attempt }}
+          retention-days: 14
+
+      - name: Upload iOS failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: buttonheist-ios-logic-diagnostics-${{ github.run_attempt }}
+          path: |
+            ${{ env.BUTTONHEIST_TEST_RESULT_BUNDLE }}
+            ${{ env.BUTTONHEIST_TEST_DIAGNOSTICS_DIR }}
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Report iOS logic timings
+        if: success()
+        run: |
+          {
+            echo "## iOS Logic Timings"
+            echo "- Build: $((IOS_LOGIC_BUILD_END - IOS_LOGIC_BUILD_START))s"
+            echo "- Run: $((IOS_LOGIC_RUN_END - IOS_LOGIC_RUN_START))s"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  ios-hosted:
+    name: ios-hosted
+    needs: ios-logic
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: macos-15
+    timeout-minutes: 80
+    env:
+      BUTTONHEIST_RESULTS_MODE: failures
+      BUTTONHEIST_TEST_ARTIFACTS_DIR: ${{ github.workspace }}/ci-artifacts/test-runs
+      BUTTONHEIST_TEST_SIMULATOR_NAME: buttonheist-ci-hosted-${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Select Xcode 26.3
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+
+      - name: Install Tuist
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
+
+      - name: Install dependencies and generate project
+        timeout-minutes: 12
+        run: |
+          tuist install
+          ./scripts/generate-project.sh --skip-install --no-binary-cache
+
+      - name: Build BH Demo and hosted tests once
+        timeout-minutes: 20
+        run: |
+          echo "HOSTED_BUILD_START=$(date +%s)" >> "$GITHUB_ENV"
+          scripts/test-runner.py build-for-testing --group ios-hosted --retain-simulator
+          echo "HOSTED_BUILD_END=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Run window and hosted behavior boundaries
+        timeout-minutes: 25
+        run: |
+          scripts/test-runner.py test-without-building --group ios-hosted --retain-simulator
 
       - name: Build ButtonHeist CLI
         timeout-minutes: 8
         run: swift build --package-path ButtonHeistCLI
-
-      - name: Run deterministic iOS core
-        timeout-minutes: 18
-        run: |
-          echo "IOS_CORE_RUN_START=$(date +%s)" >> "$GITHUB_ENV"
-          scripts/test-runner.py test-without-building TheInsideJobTests --retain-simulator
-          echo "IOS_CORE_RUN_END=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Run trimmed BH Demo smoke
         timeout-minutes: 10
@@ -211,90 +290,9 @@ jobs:
             --app "$APP"
           echo "IOS_DEMO_RUN_END=$(date +%s)" >> "$GITHUB_ENV"
 
-      - name: Collect iOS failure evidence
-        if: failure()
-        run: scripts/test-runner.py collect TheInsideJobTests
-
-      - name: Delete dedicated iOS simulator
-        if: always()
-        run: scripts/test-runner.py cleanup
-
-      - name: Upload iOS failure results
-        if: failure()
-        uses: ./.github/actions/finalize-heist-results
-        with:
-          result-directory: ${{ env.BUTTONHEIST_TEST_RESULTS_DIR }}
-          job-label: ios-tests
-          artifact-name: buttonheist-results-ios-tests-${{ github.run_attempt }}
-          retention-days: 14
-
-      - name: Upload iOS failure diagnostics
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
-        with:
-          name: buttonheist-ios-test-diagnostics-core-${{ github.run_attempt }}
-          path: |
-            ${{ env.BUTTONHEIST_TEST_RESULT_BUNDLE }}
-            ${{ env.BUTTONHEIST_TEST_DIAGNOSTICS_DIR }}
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: Report iOS core and demo timings
-        if: success()
-        run: |
-          duration() { echo $(( $2 - $1 )); }
-          {
-            echo "## iOS Core and Demo Timings"
-            echo "- Build: $(duration "$IOS_CORE_BUILD_START" "$IOS_CORE_BUILD_END")s"
-            echo "- Core: $(duration "$IOS_CORE_RUN_START" "$IOS_CORE_RUN_END")s"
-            echo "- Demo smoke: $(duration "$IOS_DEMO_RUN_START" "$IOS_DEMO_RUN_END")s"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  ios-demo-gates:
-    name: ios-demo-gates
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
-    runs-on: macos-15
-    timeout-minutes: 60
-    env:
-      BUTTONHEIST_RESULTS_MODE: failures
-      BUTTONHEIST_TEST_ARTIFACTS_DIR: ${{ github.workspace }}/ci-artifacts/test-runs
-      BUTTONHEIST_TEST_SIMULATOR_NAME: buttonheist-ci-hosted-canaries-${{ github.run_id }}-${{ github.run_attempt }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-
-      - name: Select Xcode 26.3
-        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
-
-      - name: Install Tuist
-        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
-
-      - name: Install dependencies and generate project
-        timeout-minutes: 12
-        run: |
-          tuist install
-          ./scripts/generate-project.sh --skip-install --no-binary-cache
-
-      - name: Build hosted behavior once
-        timeout-minutes: 20
-        run: |
-          echo "HOSTED_BUILD_START=$(date +%s)" >> "$GITHUB_ENV"
-          scripts/test-runner.py build-for-testing HostedBehaviorTests --retain-simulator
-          echo "HOSTED_BUILD_END=$(date +%s)" >> "$GITHUB_ENV"
-
-      - name: Run representative hosted canaries
-        timeout-minutes: 15
-        run: |
-          echo "HOSTED_RUN_START=$(date +%s)" >> "$GITHUB_ENV"
-          scripts/test-runner.py test-without-building HostedBehaviorTests --retain-simulator
-          echo "HOSTED_RUN_END=$(date +%s)" >> "$GITHUB_ENV"
-
       - name: Collect hosted failure evidence
         if: failure()
-        run: scripts/test-runner.py collect HostedBehaviorTests
+        run: scripts/test-runner.py collect --group ios-hosted
 
       - name: Delete dedicated iOS simulator
         if: always()
@@ -304,47 +302,89 @@ jobs:
         if: failure()
         uses: ./.github/actions/finalize-heist-results
         with:
-          result-directory: ${{ env.BUTTONHEIST_TEST_RESULTS_DIR }}
-          job-label: ios-demo-gates
-          artifact-name: buttonheist-results-hosted-canaries-${{ github.run_attempt }}
+          result-directory: ${{ env.BUTTONHEIST_TEST_ARTIFACTS_DIR }}
+          job-label: ios-hosted
+          artifact-name: buttonheist-results-ios-hosted-${{ github.run_attempt }}
           retention-days: 14
 
       - name: Upload hosted failure diagnostics
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
-          name: buttonheist-hosted-canary-diagnostics-${{ github.run_attempt }}
+          name: buttonheist-ios-hosted-diagnostics-${{ github.run_attempt }}
           path: |
-            ${{ env.BUTTONHEIST_TEST_RESULT_BUNDLE }}
-            ${{ env.BUTTONHEIST_TEST_DIAGNOSTICS_DIR }}
+            ${{ env.BUTTONHEIST_TEST_ARTIFACTS_DIR }}/TheInsideJobWindowTests/result-bundles
+            ${{ env.BUTTONHEIST_TEST_ARTIFACTS_DIR }}/TheInsideJobWindowTests/diagnostics
+            ${{ env.BUTTONHEIST_TEST_ARTIFACTS_DIR }}/HostedBehaviorTests/result-bundles
+            ${{ env.BUTTONHEIST_TEST_ARTIFACTS_DIR }}/HostedBehaviorTests/diagnostics
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Report hosted canary timings
+      - name: Report hosted boundary timings
         if: success()
         run: |
+          WINDOW_RUN="$BUTTONHEIST_TEST_ARTIFACTS_DIR/TheInsideJobWindowTests/run.json"
+          BEHAVIOR_RUN="$BUTTONHEIST_TEST_ARTIFACTS_DIR/HostedBehaviorTests/run.json"
           {
-            echo "## Hosted Canary Timings"
-            echo "- Build: $((HOSTED_BUILD_END - HOSTED_BUILD_START))s"
-            echo "- Run: $((HOSTED_RUN_END - HOSTED_RUN_START))s"
+            echo "## iOS Hosted Timings"
+            echo "- Shared BH Demo build: $((HOSTED_BUILD_END - HOSTED_BUILD_START))s"
+            echo "- Window: $(jq -r .durationSeconds "$WINDOW_RUN")s"
+            echo "- Hosted behavior: $(jq -r .durationSeconds "$BEHAVIOR_RUN")s"
+            echo "- Demo smoke: $((IOS_DEMO_RUN_END - IOS_DEMO_RUN_START))s"
           } >> "$GITHUB_STEP_SUMMARY"
 
-  main-integration:
-    name: main-integration
-    needs: ios-tests
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: macos-15
-    timeout-minutes: 65
-    env:
-      BUTTONHEIST_RESULTS_MODE: failures
-      BUTTONHEIST_TEST_ARTIFACTS_DIR: ${{ github.workspace }}/ci-artifacts/test-runs
-      BUTTONHEIST_TEST_SIMULATOR_NAME: buttonheist-ci-main-integration-${{ github.run_id }}-${{ github.run_attempt }}
+  ios-integration-scope:
+    name: ios-integration-scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.paths.outputs.run }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Select main or integration-affecting pull requests
+        id: paths
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          if git diff --name-only --no-renames "$BASE_SHA" "$HEAD_SHA" \
+            | grep -Eq \
+              -e '^(\.github/workflows/ci\.yml|Project\.swift|Tuist/Package\.swift|Workspace\.swift|scripts/test-runner\.py)$' \
+              -e '^ButtonHeist/Sources/(ButtonHeistTesting|TheInsideJob|TheScore)/' \
+              -e '^ButtonHeist/Tests/TheInsideJobTests/(Helpers/ButtonHeistNetworkTestClient|ServerTransportTests)\.swift$' \
+              -e '^ButtonHeist/Tests/TheInsideJobTests/(SimpleSocketServerIntegrationTests|TLSIntegrationTests)\.swift$' \
+              -e '^TestApp/'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  ios-integration:
+    name: ios-integration
+    needs: [ios-logic, ios-integration-scope]
+    if: needs.ios-logic.result == 'success' && needs.ios-integration-scope.outputs.run == 'true'
+    runs-on: macos-15
+    timeout-minutes: 65
+    env:
+      BUTTONHEIST_RESULTS_MODE: failures
+      BUTTONHEIST_TEST_ARTIFACTS_DIR: ${{ github.workspace }}/ci-artifacts/test-runs
+      BUTTONHEIST_TEST_SIMULATOR_NAME: buttonheist-ci-integration-${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Select Xcode 26.3
         run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
@@ -385,15 +425,15 @@ jobs:
         uses: ./.github/actions/finalize-heist-results
         with:
           result-directory: ${{ env.BUTTONHEIST_TEST_RESULTS_DIR }}
-          job-label: main-integration
-          artifact-name: buttonheist-results-main-integration-${{ github.run_attempt }}
+          job-label: ios-integration
+          artifact-name: buttonheist-results-ios-integration-${{ github.run_attempt }}
           retention-days: 14
 
       - name: Upload integration failure diagnostics
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
-          name: buttonheist-main-integration-diagnostics-${{ github.run_attempt }}
+          name: buttonheist-ios-integration-diagnostics-${{ github.run_attempt }}
           path: |
             ${{ env.BUTTONHEIST_TEST_RESULT_BUNDLE }}
             ${{ env.BUTTONHEIST_TEST_DIAGNOSTICS_DIR }}
@@ -404,14 +444,14 @@ jobs:
         if: success()
         run: |
           {
-            echo "## Main Integration Timings"
+            echo "## iOS Integration Timings"
             echo "- Build: $((INTEGRATION_BUILD_END - INTEGRATION_BUILD_START))s"
             echo "- Run: $((INTEGRATION_RUN_END - INTEGRATION_RUN_START))s"
           } >> "$GITHUB_STEP_SUMMARY"
 
   exact-sha-suite:
     name: exact-sha-suite
-    needs: [release-contract, macos-tests, ios-tests, ios-demo-gates, main-integration]
+    needs: [release-contract, macos-tests, ios-logic, ios-hosted, ios-integration]
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -431,9 +471,9 @@ jobs:
           RUN_ATTEMPT: ${{ github.run_attempt }}
           RELEASE_CONTRACT: ${{ needs.release-contract.result }}
           MACOS_TESTS: ${{ needs.macos-tests.result }}
-          IOS_TESTS: ${{ needs.ios-tests.result }}
-          IOS_DEMO_GATES: ${{ needs.ios-demo-gates.result }}
-          MAIN_INTEGRATION: ${{ needs.main-integration.result }}
+          IOS_LOGIC: ${{ needs.ios-logic.result }}
+          IOS_HOSTED: ${{ needs.ios-hosted.result }}
+          IOS_INTEGRATION: ${{ needs.ios-integration.result }}
         run: |
           jq -n \
             --arg commit "$COMMIT_SHA" \
@@ -443,9 +483,9 @@ jobs:
             --arg runAttempt "$RUN_ATTEMPT" \
             --arg releaseContract "$RELEASE_CONTRACT" \
             --arg macosTests "$MACOS_TESTS" \
-            --arg iosTests "$IOS_TESTS" \
-            --arg iosDemoGates "$IOS_DEMO_GATES" \
-            --arg mainIntegration "$MAIN_INTEGRATION" \
+            --arg iosLogic "$IOS_LOGIC" \
+            --arg iosHosted "$IOS_HOSTED" \
+            --arg iosIntegration "$IOS_INTEGRATION" \
             '{
               schemaVersion: 1,
               commit: $commit,
@@ -458,9 +498,9 @@ jobs:
               suites: [
                 {name: "release-contract", conclusion: $releaseContract},
                 {name: "macos-tests", conclusion: $macosTests},
-                {name: "ios-tests", conclusion: $iosTests},
-                {name: "ios-demo-gates", conclusion: $iosDemoGates},
-                {name: "main-integration", conclusion: $mainIntegration}
+                {name: "ios-tests", conclusion: $iosLogic},
+                {name: "ios-demo-gates", conclusion: $iosHosted},
+                {name: "main-integration", conclusion: $iosIntegration}
               ]
             }' > exact-sha-suite.json
 

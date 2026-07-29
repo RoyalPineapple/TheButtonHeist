@@ -11,6 +11,7 @@ from unittest import mock
 RUNNER = runpy.run_path(str(Path(__file__).resolve().parents[1] / "test-runner.py"))
 SUITES = RUNNER["SUITES"]
 FOCUSES = RUNNER["FOCUSES"]
+GROUPS = RUNNER["GROUPS"]
 SIMULATOR = {
     "udid": "TEST-UDID",
     "name": "test-simulator",
@@ -47,10 +48,22 @@ class TestRunnerTests(unittest.TestCase):
             {
                 "TheScoreTests",
                 "ButtonHeistTests",
-                "TheInsideJobTests",
+                "TheInsideJobLogicTests",
+                "TheInsideJobWindowTests",
                 "TheInsideJobIntegrationTests",
                 "HostedBehaviorTests",
                 "MacFrameworkTests",
+            },
+        )
+
+    def test_group_catalog_owns_hosted_suite_composition(self) -> None:
+        self.assertEqual(
+            GROUPS,
+            {
+                "ios-hosted": (
+                    "TheInsideJobWindowTests",
+                    "HostedBehaviorTests",
+                ),
             },
         )
 
@@ -85,6 +98,16 @@ class TestRunnerTests(unittest.TestCase):
         self.assertEqual(args.suites, [])
         self.assertEqual(args.focus, ["contract-actions", "contract-results"])
 
+    def test_arguments_accept_canonical_group_instead_of_suites(self) -> None:
+        args = RUNNER["parse_args"]([
+            "test-without-building",
+            "--group",
+            "ios-hosted",
+        ])
+
+        self.assertEqual(args.suites, [])
+        self.assertEqual(args.group, "ios-hosted")
+
     def test_arguments_reject_mixed_or_missing_selection(self) -> None:
         with self.assertRaises(ValueError):
             RUNNER["parse_args"]([
@@ -95,11 +118,18 @@ class TestRunnerTests(unittest.TestCase):
             ])
         with self.assertRaises(ValueError):
             RUNNER["parse_args"](["run"])
+        with self.assertRaises(ValueError):
+            RUNNER["parse_args"]([
+                "run",
+                "TheInsideJobWindowTests",
+                "--group",
+                "ios-hosted",
+            ])
 
     def test_retain_simulator_is_limited_to_simulator_using_test_modes(self) -> None:
         args = RUNNER["parse_args"]([
             "build-for-testing",
-            "TheInsideJobTests",
+            "TheInsideJobLogicTests",
             "--retain-simulator",
         ])
         self.assertTrue(args.retain_simulator)
@@ -149,7 +179,12 @@ class TestRunnerTests(unittest.TestCase):
                 Path(f"/artifacts/{name}/heist-results"),
             )
             self.assertEqual(paths["diagnostics"], Path(f"/artifacts/{name}/diagnostics"))
-            self.assertEqual(paths["derived"], Path(f"/derived/{name}"))
+            derived = (
+                "iOSHostedTests"
+                if name in ("TheInsideJobWindowTests", "HostedBehaviorTests")
+                else name
+            )
+            self.assertEqual(paths["derived"], Path(f"/derived/{derived}"))
             self.assertEqual(paths["record"], Path(f"/artifacts/{name}/run.json"))
 
     def test_local_run_owns_full_and_selective_flags(self) -> None:
@@ -195,6 +230,7 @@ class TestRunnerTests(unittest.TestCase):
 
         self.assertEqual(list(manifest["suites"]), list(SUITES))
         self.assertEqual(list(manifest["focuses"]), list(FOCUSES))
+        self.assertEqual(manifest["groups"], {"ios-hosted": list(GROUPS["ios-hosted"])})
         self.assertEqual(
             manifest["focuses"]["contract-predicates"],
             {"TheScoreTests": ["TheScoreTests/AccessibilityPredicateTests"]},
@@ -258,31 +294,65 @@ class TestRunnerTests(unittest.TestCase):
         self.assertIn("--ios-sandbox", test)
         self.assertIn(str(paths["result_bundle"]), test)
 
-    def test_runner_disables_ambient_animations_for_every_hosted_suite(self) -> None:
-        unit_suite = SUITES["TheInsideJobTests"]
-        unit_paths = RUNNER["suite_paths"]("TheInsideJobTests")
-        unit_command = RUNNER["test_command"](
-            "run", "TheInsideJobTests", unit_suite, unit_paths, SIMULATOR, "full"
-        )
-        integration_suite = SUITES["TheInsideJobIntegrationTests"]
-        integration_paths = RUNNER["suite_paths"]("TheInsideJobIntegrationTests")
-        integration_command = RUNNER["test_command"](
-            "run",
-            "TheInsideJobIntegrationTests",
-            integration_suite,
-            integration_paths,
+    def test_runner_disables_ambient_animations_for_every_ios_suite(self) -> None:
+        for name, suite in SUITES.items():
+            if suite["platform"] != "ios":
+                continue
+            with self.subTest(suite=name):
+                command = RUNNER["test_command"](
+                    "run",
+                    name,
+                    suite,
+                    RUNNER["suite_paths"](name),
+                    SIMULATOR,
+                    "full",
+                )
+                self.assertIn("BUTTONHEIST_TEST_DISABLE_ANIMATIONS=1", command)
+
+    def test_hosted_boundaries_share_one_scheme_and_build_root(self) -> None:
+        window = SUITES["TheInsideJobWindowTests"]
+        behavior = SUITES["HostedBehaviorTests"]
+        window_paths = RUNNER["suite_paths"]("TheInsideJobWindowTests")
+        behavior_paths = RUNNER["suite_paths"]("HostedBehaviorTests")
+
+        window_command = RUNNER["test_command"](
+            "test-without-building",
+            "TheInsideJobWindowTests",
+            window,
+            window_paths,
             SIMULATOR,
             "full",
         )
-        hosted_suite = SUITES["HostedBehaviorTests"]
-        hosted_paths = RUNNER["suite_paths"]("HostedBehaviorTests")
-        hosted_command = RUNNER["test_command"](
-            "run", "HostedBehaviorTests", hosted_suite, hosted_paths, SIMULATOR, "full"
+        behavior_command = RUNNER["test_command"](
+            "test-without-building",
+            "HostedBehaviorTests",
+            behavior,
+            behavior_paths,
+            SIMULATOR,
+            "full",
         )
 
-        self.assertIn("BUTTONHEIST_TEST_DISABLE_ANIMATIONS=1", unit_command)
-        self.assertIn("BUTTONHEIST_TEST_DISABLE_ANIMATIONS=1", integration_command)
-        self.assertIn("BUTTONHEIST_TEST_DISABLE_ANIMATIONS=1", hosted_command)
+        self.assertEqual(window_paths["derived"], behavior_paths["derived"])
+        self.assertIn("iOSHostedTests", window_command)
+        self.assertIn("iOSHostedTests", behavior_command)
+        self.assertIn("-only-testing:TheInsideJobWindowTests", window_command)
+        self.assertIn("-skip-testing:TheInsideJobWindowTests", behavior_command)
+
+    def test_hosted_group_builds_shared_scheme_once(self) -> None:
+        runs = RUNNER["unique_build_runs"](RUNNER["group_runs"]("ios-hosted"))
+
+        self.assertEqual(runs, {"TheInsideJobWindowTests": ()})
+        suite = SUITES["TheInsideJobWindowTests"]
+        command = RUNNER["test_command"](
+            "build-for-testing",
+            "TheInsideJobWindowTests",
+            suite,
+            RUNNER["suite_paths"]("TheInsideJobWindowTests"),
+            SIMULATOR,
+            "full",
+        )
+        self.assertIn("iOSHostedTests", command)
+        self.assertNotIn("-only-testing:TheInsideJobWindowTests", command)
 
     def test_macos_supports_prebuilt_focused_feedback(self) -> None:
         suite = SUITES["TheScoreTests"]
@@ -398,7 +468,7 @@ class TestRunnerTests(unittest.TestCase):
                     "delete_simulators": mock.Mock(return_value=True),
                 },
             ):
-                status = RUNNER["main"]([mode, "TheInsideJobTests"])
+                status = RUNNER["main"]([mode, "TheInsideJobLogicTests"])
                 delete = RUNNER["main"].__globals__["delete_simulators"]
 
                 self.assertEqual(status, 0)
@@ -414,7 +484,7 @@ class TestRunnerTests(unittest.TestCase):
         ):
             status = RUNNER["main"]([
                 "run",
-                "TheInsideJobTests",
+                "TheInsideJobLogicTests",
                 "--retain-simulator",
             ])
             delete = RUNNER["main"].__globals__["delete_simulators"]

@@ -29,8 +29,15 @@ IOS_DEVICE = "iPhone 16 Pro"
 SUITES = {
     "TheScoreTests": {"platform": "macos"},
     "ButtonHeistTests": {"platform": "macos"},
-    "TheInsideJobTests": {
+    "TheInsideJobLogicTests": {
         "platform": "ios",
+        "disable_animations": True,
+    },
+    "TheInsideJobWindowTests": {
+        "platform": "ios",
+        "scheme": "iOSHostedTests",
+        "derived_data": "iOSHostedTests",
+        "only_testing": ("TheInsideJobWindowTests",),
         "disable_animations": True,
     },
     "TheInsideJobIntegrationTests": {
@@ -39,10 +46,20 @@ SUITES = {
     },
     "HostedBehaviorTests": {
         "platform": "ios",
+        "scheme": "iOSHostedTests",
+        "derived_data": "iOSHostedTests",
+        "skip_testing": ("TheInsideJobWindowTests",),
         "serial": True,
         "disable_animations": True,
     },
     "MacFrameworkTests": {"platform": "macos"},
+}
+
+GROUPS = {
+    "ios-hosted": (
+        "TheInsideJobWindowTests",
+        "HostedBehaviorTests",
+    ),
 }
 
 # Named focused projections onto the canonical suite catalog. Test identifiers
@@ -65,11 +82,15 @@ FOCUSES = {
             "TheScoreTests/ServerInfoTests",
             "TheScoreTests/AuthMessageTests",
         ),
-        "TheInsideJobTests": ("TheInsideJobTests/WireConversionTests",),
+        "TheInsideJobLogicTests": (
+            "TheInsideJobLogicTests/WireConverterTests",
+        ),
     },
     "contract-targets": {
         "MacFrameworkTests": ("ThePlansTests",),
-        "TheInsideJobTests": ("TheInsideJobTests/TheVaultResolutionTests",),
+        "TheInsideJobLogicTests": (
+            "TheInsideJobLogicTests/TheVaultResolutionTests",
+        ),
     },
 }
 
@@ -101,6 +122,25 @@ def focus_runs(names: Sequence[str]) -> dict[str, tuple[str, ...]]:
     }
 
 
+def group_runs(name: str) -> dict[str, tuple[str, ...]]:
+    return {suite: () for suite in GROUPS[name]}
+
+
+def unique_build_runs(
+    runs: dict[str, tuple[str, ...]],
+) -> dict[str, tuple[str, ...]]:
+    selected: dict[str, tuple[str, ...]] = {}
+    build_roots: set[tuple[str, Path]] = set()
+    for name, only_tests in runs.items():
+        suite = SUITES[name]
+        key = (str(suite.get("scheme", name)), suite_paths(name)["derived"])
+        if key in build_roots:
+            continue
+        build_roots.add(key)
+        selected[name] = only_tests
+    return selected
+
+
 def catalog_manifest() -> dict[str, object]:
     return {
         "suites": {
@@ -114,6 +154,10 @@ def catalog_manifest() -> dict[str, object]:
             }
             for name, selection in FOCUSES.items()
         },
+        "groups": {
+            name: list(suites)
+            for name, suites in GROUPS.items()
+        },
     }
 
 
@@ -125,11 +169,12 @@ def suite_paths(name: str) -> dict[str, Path]:
         "BUTTONHEIST_TEST_DERIVED_DATA_ROOT", ROOT / ".build/test-derived-data"
     )).expanduser().resolve()
     root = artifacts / name
+    derived_name = str(SUITES[name].get("derived_data", name))
     return {
         "result_bundle": root / "result-bundles" / f"{name}.xcresult",
         "heist_results": root / "heist-results",
         "diagnostics": root / "diagnostics",
-        "derived": derived / name,
+        "derived": derived / derived_name,
         "record": root / "run.json",
     }
 
@@ -261,7 +306,21 @@ def test_command(
         test_destination = f"platform=iOS Simulator,id={simulator['udid']},arch=arm64"
     else:
         test_destination = "platform=macOS"
-    only_testing = [f"-only-testing:{identifier}" for identifier in only_tests]
+    scheme = str(suite.get("scheme", name))
+    configured_only = tuple(suite.get("only_testing", ()))
+    configured_skip = tuple(suite.get("skip_testing", ()))
+    if mode == "build-for-testing":
+        only_testing: list[str] = []
+        skip_testing: list[str] = []
+    else:
+        only_testing = [
+            f"-only-testing:{identifier}"
+            for identifier in (*configured_only, *only_tests)
+        ]
+        skip_testing = [
+            f"-skip-testing:{identifier}"
+            for identifier in configured_skip
+        ]
     disable_animations = suite.get("disable_animations", False)
     test_host_settings = (
         ["BUTTONHEIST_TEST_DISABLE_ANIMATIONS=1"]
@@ -275,13 +334,14 @@ def test_command(
             "-workspace",
             str(WORKSPACE),
             "-scheme",
-            name,
+            scheme,
             "-destination",
             test_destination,
             "-derivedDataPath",
             str(paths["derived"]),
             *test_host_settings,
             *only_testing,
+            *skip_testing,
         ]
 
     test_options = ["-collect-test-diagnostics", "never"]
@@ -291,7 +351,7 @@ def test_command(
         command = [
             "tuist",
             "test",
-            name,
+            scheme,
             "--selective-testing" if selection == "selective" else "--no-selective-testing",
             "--result-bundle-path",
             str(paths["result_bundle"]),
@@ -303,6 +363,7 @@ def test_command(
             *test_host_settings,
             *test_options,
             *only_testing,
+            *skip_testing,
         ]
     else:
         command = [
@@ -311,7 +372,7 @@ def test_command(
             "-workspace",
             str(WORKSPACE),
             "-scheme",
-            name,
+            scheme,
             "-destination",
             test_destination,
             "-derivedDataPath",
@@ -321,6 +382,7 @@ def test_command(
             *test_host_settings,
             *test_options,
             *only_testing,
+            *skip_testing,
         ]
     wrapper = [str(WRAPPER)]
     if suite["platform"] == "ios":
@@ -573,6 +635,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("suites", nargs="*", choices=tuple(SUITES))
     parser.add_argument("--focus", action="append", choices=tuple(FOCUSES), default=[])
+    parser.add_argument("--group", choices=tuple(GROUPS))
     parser.add_argument("--selection", choices=("selective", "full"), default="selective")
     parser.add_argument("--simulator-name")
     parser.add_argument("--retain-simulator", action="store_true")
@@ -580,23 +643,27 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--install-dependencies", action="store_true")
     args = parser.parse_args(argv)
     if args.mode == "catalog":
-        if args.suites or args.focus:
-            raise ValueError("catalog does not accept suites or focuses")
+        if args.suites or args.focus or args.group:
+            raise ValueError("catalog does not accept suites, focuses, or groups")
         return args
     if args.mode == "cleanup":
-        if args.suites or args.focus:
-            raise ValueError("cleanup does not accept suites or focuses")
+        if args.suites or args.focus or args.group:
+            raise ValueError("cleanup does not accept suites, focuses, or groups")
         if args.retain_simulator:
             raise ValueError("cleanup does not accept --retain-simulator")
         return args
-    if bool(args.suites) == bool(args.focus):
-        raise ValueError("select suites or focuses, but not both")
+    if sum(map(bool, (args.suites, args.focus, args.group))) != 1:
+        raise ValueError("select suites, focuses, or one group")
     simulator_modes = ("run", "build-for-testing", "test-without-building")
     if args.retain_simulator and args.mode not in simulator_modes:
         raise ValueError(
             "--retain-simulator requires a simulator-using test mode"
         )
-    selected_suites = args.suites or tuple(focus_runs(args.focus))
+    selected_suites = (
+        args.suites
+        or tuple(focus_runs(args.focus))
+        or GROUPS[args.group]
+    )
     if args.retain_simulator and not any(
         SUITES[name]["platform"] == "ios"
         for name in selected_suites
@@ -627,9 +694,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise ValueError("--install-dependencies requires run mode")
     if args.install_dependencies:
         subprocess.run(["tuist", "install"], check=True)
-    runs = focus_runs(args.focus) if args.focus else {
-        name: () for name in args.suites
-    }
+    if args.focus:
+        runs = focus_runs(args.focus)
+    elif args.group:
+        runs = group_runs(args.group)
+    else:
+        runs = {name: () for name in args.suites}
+    if args.mode == "build-for-testing":
+        runs = unique_build_runs(runs)
     selected_simulators: list[dict[str, str]] = []
     status = 0
     cleanup_succeeded = True

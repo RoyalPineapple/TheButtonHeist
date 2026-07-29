@@ -10,6 +10,40 @@ func frameworkScheme(name: String) -> Scheme {
     )
 }
 
+func combinedSources(_ lists: SourceFilesList...) -> SourceFilesList {
+    .sourceFilesList(globs: lists.flatMap(\.globs))
+}
+
+func unhostedInsideJobTestTarget(
+    name: String,
+    bundleId: String,
+    sources: SourceFilesList
+) -> Target {
+    .target(
+        name: name,
+        destinations: [.iPhone, .iPad],
+        product: .unitTests,
+        bundleId: bundleId,
+        deploymentTargets: .iOS("16.0"),
+        infoPlist: .default,
+        sources: sources,
+        dependencies: [
+            .target(name: "ButtonHeistSupport"),
+            .target(name: "ButtonHeistTestSupport"),
+            .target(name: "ButtonHeistTesting"),
+            .target(name: "TheInsideJob"),
+            .target(name: "ThePlans"),
+            .target(name: "TheScore"),
+            .external(name: "AccessibilitySnapshotModel"),
+        ],
+        settings: .settings(base: [
+            "SWIFT_STRICT_CONCURRENCY": "complete",
+            "SWIFT_TREAT_WARNINGS_AS_ERRORS": "YES",
+            "SWIFT_VERSION": "6",
+        ])
+    )
+}
+
 func hostedTestTarget(
     name: String,
     bundleId: String,
@@ -89,27 +123,206 @@ struct HostedTestDescriptor {
     }
 }
 
+let insideJobSharedLogicWindowTestSources: SourceFilesList = [
+    "ButtonHeist/Tests/TheInsideJobTests/AccessibilityNotificationBus+Testing.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/ActionEvidenceProjector+Testing.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/Helpers/AccessibilityElement+Construction.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/Helpers/AccessibilityTarget+Literal.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/Helpers/InterfaceObservationFactory.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/Helpers/SemanticObservationTestSupport.swift",
+]
+
+let insideJobSharedSocketTestSources: SourceFilesList = [
+    "ButtonHeist/Tests/TheInsideJobTests/SocketServerTestSupport.swift",
+]
+
+let insideJobLogicOnlyTestSources: SourceFilesList = [
+    "ButtonHeist/Tests/TheInsideJobTests/AXMethodOverridesTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/AccessibilityArmingTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/AccessibilityHierarchyFilterTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/AccessibilityHierarchyReconciliationTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/AccessibilityNotificationCallbackLifecycleTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/AccessibilityNotificationIdentityTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/AccessibilityPolicyBitmaskTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/AccessibilityPrimitiveTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/ActionTimingTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/ActivationPolicyTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/AnimationIdleCounterTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/ClientRequestPipelineTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/ConnectionScopeClassifyTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/ContainerFingerprintTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/DiagnosticsTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/ElementMatcherTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/ExploreOffFoldGateTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/FirstResponderEvidenceInvariantTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/HeistResultTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/HeistSyncOperationTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/IdAssignmentTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/InsideJobLifecycleReducerTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/InteractivityTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/InterfaceExplorationProgressTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/InterfaceTreeCaptureGeometryTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/InterfaceTreeMergingTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/InterfaceTreeSemanticIdentityTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/InterfaceTreeTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/InterfaceTreeViewportUpdateTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/LiveActionTargetFreshnessTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/LiveCaptureBoundaryAdversarialTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/LiveCaptureTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/MessageRateLimiterTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/ObjCRuntimeSwizzlingTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/RawParserEvidenceAdmissionTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/ResolvedPredicateRuntimeInputsTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/RotorCursorTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/ScreenCaptureFailureTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/ScreenClassifierTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/ScreenGenerationTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/SemanticObservationActionAdmissionTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/SemanticObservationDiscoveryTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/SemanticObservationLifecycleTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/SemanticObservationPublicationTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/SemanticObservationReplayTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/SemanticObservationStoreTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/SemanticObservationStreamTestSupport.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/ServerExposureTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/SettleSessionCancellationUpdatesTransientTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/SettleSessionStableSettleTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/SettleSessionTestSupport.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/SettleSessionTimeoutChangeBaselineTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/SettleSessionTimingMachineTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/SettlementDiagnosisTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/SettlementExecutionTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/SettlementReducerTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/SettlementResultProjectionTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/SimpleSocketServerDeliveryTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/SocketClientRegistryTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/SocketListenerRuntimeLifecycleTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/SocketReceiveBufferPolicyTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/SocketSendBufferTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/StartupConfigurationTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/SynthesisDeterminismTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TargetResolutionAlgebraTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TaskTrackerTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TestSentinelTask.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsObservationStateTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsPipelineFailureResultTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsPipelineObservationReductionTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsPipelineSuccessResultTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsPipelineTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsPipelineWaitEvidenceTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheFingerprintsTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheGetawayTransportWiringTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheMuscleAuthenticationTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheMuscleSecurityAndDeliveryTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheMuscleSessionLifecycleTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheMuscleStateMachineTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheMuscleTestSupport.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheMuscleWireAndAdmissionTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheSafecrackerScrollTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheSafecrackerTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheTripwirePolicyTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheVaultIdentityContextTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheVaultResolutionInterfaceStateTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheVaultResolutionLiveTargetEvidenceTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheVaultResolutionMatcherTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheVaultResolutionSettlementTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheVaultResolutionTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheVaultResolutionWaiterTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/WireConversionCustomContentRotorTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/WireConversionElementDeltaTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/WireConversionInterfaceTreeTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/WireConversionTraitActionTests.swift",
+]
+
+let insideJobWindowOnlyTestSources: SourceFilesList = [
+    "ButtonHeist/Tests/TheInsideJobTests/AccessibilityNotificationObserverTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/ElementInflationProductActionViewportTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/ElementInflationProductDeadlineGeometryTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/ElementInflationProductIdentityTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/ElementInflationProductRevealScrollingTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/ElementInflationProductTestSupport.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/HeistIdDisambiguationTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/InsideJobRuntimeLifecycleTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/KeyboardWindowTestHelpers.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/LiveTargetReuseIntegrationTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/PresentationObscuringTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/RuntimeResourceObservationTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsActionDirectActionTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsActionGestureActionTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsActionHeistControlFlowTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsActionHeistExpectationTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsActionHeistForEachTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsActionHeistInvocationTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsActionHeistStepExecutionTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsActionTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsActionTextInputActionTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsScrollContainerSelectionTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsScrollDiscoveryCommandTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsScrollElementTargetGeometryTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsScrollInflationActionabilityTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsScrollInflationProgressTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsScrollInflationRefreshTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsScrollRevealInflationTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsScrollTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheBrainsScrollVisibleTargetIdentityTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheSafecrackerIntegrationTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheTripwireWindowTraversalTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheVaultCaptureTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheVaultCustomRotorTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheVaultObservationBuildingTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TripwireIntegrationTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/UIKitIdleTrackerIntegrationTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/WaitForIntegrationTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/Helpers/HostedTestAssertions.swift",
+]
+
+let insideJobIntegrationTestSources: SourceFilesList = [
+    "ButtonHeist/Tests/TheInsideJobTests/ServerTransportTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/SimpleSocketServerIntegrationTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TLSIntegrationTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/Helpers/ButtonHeistNetworkTestClient.swift",
+]
+
+let insideJobHostedBehaviorTestSources: SourceFilesList = [
+    "ButtonHeist/Tests/TheInsideJobTests/MenuOrderDogfoodHeistTests.swift",
+    "ButtonHeist/Tests/TheInsideJobTests/TheTripwireHostedBehaviorTests.swift",
+]
+
+let insideJobLogicTestTarget = unhostedInsideJobTestTarget(
+    name: "TheInsideJobLogicTests",
+    bundleId: "com.buttonheist.theinsidejob.logic.tests",
+    sources: combinedSources(
+        insideJobLogicOnlyTestSources,
+        insideJobSharedLogicWindowTestSources,
+        insideJobSharedSocketTestSources
+    )
+)
+
 let hostedTestDescriptors = [
     HostedTestDescriptor(
-        name: "TheInsideJobTests",
-        bundleId: "com.buttonheist.theinsidejob.tests",
-        sources: .sourceFilesList(globs: [
-            .glob(
-                "ButtonHeist/Tests/TheInsideJobTests/**",
-                excluding: ["ButtonHeist/Tests/TheInsideJobTests/**/*IntegrationTests.swift"]
-            ),
-        ]),
+        name: "TheInsideJobWindowTests",
+        bundleId: "com.buttonheist.theinsidejob.window.tests",
+        sources: combinedSources(
+            insideJobWindowOnlyTestSources,
+            insideJobSharedLogicWindowTestSources,
+            insideJobSharedSocketTestSources
+        ),
         runsInBehaviorSuite: false
     ),
     HostedTestDescriptor(
         name: "TheInsideJobIntegrationTests",
         bundleId: "com.buttonheist.theinsidejob.integration.tests",
-        sources: [
-            "ButtonHeist/Tests/TheInsideJobTests/**/*IntegrationTests.swift",
-            "ButtonHeist/Tests/TheInsideJobTests/Helpers/**",
-            "ButtonHeist/Tests/TheInsideJobTests/KeyboardWindowTestHelpers.swift",
-        ],
+        sources: combinedSources(
+            insideJobIntegrationTestSources,
+            insideJobSharedSocketTestSources
+        ),
         runsInBehaviorSuite: false
+    ),
+    HostedTestDescriptor(
+        name: "TheInsideJobHostedBehaviorTests",
+        bundleId: "com.buttonheist.theinsidejob.hosted.behavior.tests",
+        sources: insideJobHostedBehaviorTestSources,
+        runsInBehaviorSuite: true
     ),
     HostedTestDescriptor(
         name: "DogfoodFeatureFlowTests",
@@ -138,6 +351,9 @@ let hostedTestDescriptors = [
 ]
 
 let behaviorTestDescriptors = hostedTestDescriptors.filter(\.runsInBehaviorSuite)
+let iosHostedTestDescriptors = hostedTestDescriptors.filter {
+    $0.name == "TheInsideJobWindowTests" || $0.runsInBehaviorSuite
+}
 
 let macFrameworkTestTargetNames = [
     "ButtonHeistSupportTests",
@@ -407,7 +623,7 @@ let project = Project(
             ]
         ),
 
-    ] + hostedTestDescriptors.map(\.target),
+    ] + [insideJobLogicTestTarget] + hostedTestDescriptors.map(\.target),
     schemes: [
         frameworkScheme(name: "ThePlans"),
         frameworkScheme(name: "TheScore"),
@@ -432,6 +648,7 @@ let project = Project(
         ),
         testScheme(name: "TheScoreTests"),
         testScheme(name: "ButtonHeistTests"),
+        testScheme(name: "TheInsideJobLogicTests"),
         .scheme(
             name: "MacFrameworkTests",
             buildAction: .buildAction(
@@ -448,6 +665,19 @@ let project = Project(
             )
         ),
     ] + hostedTestDescriptors.map(\.scheme) + [
+        .scheme(
+            name: "iOSHostedTests",
+            buildAction: .buildAction(targets: iosHostedTestDescriptors.map { .target($0.name) }),
+            testAction: .targets(
+                iosHostedTestDescriptors.map {
+                    .testableTarget(target: .target($0.name), parallelization: .disabled)
+                },
+                arguments: .arguments(environmentVariables: [
+                    "BUTTONHEIST_TEST_ANIMATION_SPEED": "$(BUTTONHEIST_TEST_ANIMATION_SPEED)",
+                ]),
+                expandVariableFromTarget: .target("TheInsideJobWindowTests")
+            )
+        ),
         .scheme(
             name: "HostedBehaviorTests",
             buildAction: .buildAction(targets: behaviorTestDescriptors.map { .target($0.name) }),
