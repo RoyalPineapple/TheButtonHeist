@@ -202,15 +202,26 @@ extension HeistExecutionStepResult {
             return stringRelationshipMatches(declaration, completion: completion, iteration: false)
         case .forEachStringIteration(let declaration, let completion):
             return stringRelationshipMatches(declaration, completion: completion, iteration: true)
-        case .repeatUntil(let declaration, let completion):
+        case .repeatUntil(_, let completion):
             return repeatRelationshipMatches(
-                declaration, completion: completion, iteration: false, passedEvidence: { $0.value }
+                completion: completion, iteration: false, passedEvidence: { $0.value }
             )
-        case .repeatUntilIteration(let declaration, let completion):
+        case .repeatUntilIteration(_, let completion):
             return repeatRelationshipMatches(
-                declaration, completion: completion, iteration: true, passedEvidence: { $0.value }
+                completion: completion, iteration: true, passedEvidence: { $0.value }
             )
-        case .wait, .conditional, .warning, .failure, .heist, .invocation:
+        case .wait(let predicate, _, let completion):
+            let evidence: HeistExpectationEvidence?
+            switch completion {
+            case .passed(let value, _), .childAborted(let value, _, _):
+                evidence = value
+            case .failed(let value, _, _):
+                evidence = value.value
+            case .skipped:
+                evidence = nil
+            }
+            return evidence?.predicate == predicate || evidence == nil
+        case .conditional, .warning, .failure, .heist, .invocation:
             return true
         }
     }
@@ -262,7 +273,6 @@ extension HeistExecutionStepResult {
     }
 
     private static func repeatRelationshipMatches<Passed>(
-        _ declaration: HeistRepeatUntilDeclaration,
         completion: HeistExecutionCompletion<
             Passed, HeistEvidenceAvailability<HeistFailedRepeatUntilEvidence>, HeistFailedRepeatUntilEvidence
         >,
@@ -277,7 +287,6 @@ extension HeistExecutionStepResult {
         case .skipped: evidence = nil
         }
         guard let evidence else { return true }
-        return (evidence.expectation.predicate.map { $0 == declaration.predicate } ?? true)
-            && (evidence.iterationOrdinal != nil) == iteration
+        return (evidence.iterationOrdinal != nil) == iteration
     }
 }

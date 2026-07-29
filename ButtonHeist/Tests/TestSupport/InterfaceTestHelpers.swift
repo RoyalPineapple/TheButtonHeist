@@ -87,13 +87,13 @@ package func makeTestObservationEvidence(
     baseline: Observation.Snapshot? = nil,
     current: Observation.Snapshot? = nil,
     events: [Observation.Event] = [],
-    completeness: Observation.Evidence.Completeness = .complete
+    coverage: Observation.Coverage = .complete
 ) -> Observation.Evidence {
     Observation.Evidence(
         baseline: baseline,
-        current: current,
         events: events,
-        completeness: completeness
+        current: current,
+        coverage: coverage
     )
 }
 

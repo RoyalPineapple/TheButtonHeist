@@ -9,7 +9,7 @@ private enum PublicHeistExecutionResponseKey: String, CodingKey {
 }
 
 private enum PublicHeistReportCodingKey: String, CodingKey {
-    case summary, metrics, nodes, netDelta
+    case summary, metrics, nodes
 }
 
 private enum PublicHeistReportSummaryCodingKey: String, CodingKey {
@@ -53,16 +53,6 @@ struct PublicHeistExecutionResponse: Encodable {
         for node in report.nodes {
             try encode(node, to: nodes.superEncoder())
         }
-        guard case .changed(let evidence) = report.accessibilityChange,
-              let delta = DeltaProjection(
-                  evidence: evidence,
-                  profile: profile,
-                  includeScreenInterface: true
-              ) else { return }
-        try container.encode(
-            PublicDelta(projection: delta, screenPolicy: .screenSummary),
-            forKey: .netDelta
-        )
     }
 
     private func encode(_ summary: HeistReport.Summary, to encoder: Encoder) throws {

@@ -312,7 +312,7 @@ extension HeistExecutionStepNode {
                 typeName: "passed \(typeName) result node"
             )
             return .passed(
-                evidence: try container.decode(HeistPassedWaitEvidence.self, forKey: .evidence),
+                evidence: try container.decode(HeistExpectationEvidence.self, forKey: .evidence),
                 children: try container.decode(HeistPassingChildren.self, forKey: .children)
             )
         case .failed:
@@ -321,7 +321,10 @@ extension HeistExecutionStepNode {
                 typeName: "failed \(typeName) result node"
             )
             return .failed(
-                evidence: try container.decode(HeistWaitUnmatchedEvidence.self, forKey: .evidence),
+                evidence: try container.decode(
+                    HeistEvidenceAvailability<HeistExpectationEvidence>.self,
+                    forKey: .evidence
+                ),
                 failure: try container.decode(HeistFailureDetail.self, forKey: .failure),
                 children: try container.decode(HeistPassingChildren.self, forKey: .children)
             )
@@ -331,7 +334,7 @@ extension HeistExecutionStepNode {
                 typeName: "child-aborted \(typeName) result node"
             )
             return .childAborted(
-                evidence: try container.decode(HeistWaitUnmatchedEvidence.self, forKey: .evidence),
+                evidence: try container.decode(HeistExpectationEvidence.self, forKey: .evidence),
                 failure: try container.decode(HeistFailureDetail.self, forKey: .failure),
                 children: try container.decode(HeistAbortedChildren.self, forKey: .children)
             )

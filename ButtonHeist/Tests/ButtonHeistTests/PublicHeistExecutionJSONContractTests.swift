@@ -127,16 +127,6 @@ final class PublicHeistExecutionJSONContractTests: XCTestCase {
         try result.assertMissing("subjectEvidence")
     }
 
-    func testNetDeltaContract() throws {
-        let fixture = PublicHeistExecutionJSONContractFixture.netDelta()
-        let report = try publicHeistExecutionJSON(step: fixture.step).object("report")
-
-        try assertPublicHeistJSONContract(
-            report.object("netDelta"),
-            equals: PublicHeistActionJSONFixture.netDelta
-        )
-    }
-
     private func evidence(
         for step: HeistExecutionStepResult,
         profile: ProjectionProfile = .summary

@@ -185,7 +185,7 @@ final class PublicActionResultJSONTests: XCTestCase {
             message: "Delete not found")
         let response = FenceResponse.heistExecution(
             plan: try minimalPlan(),
-            report: HeistReport.project(result: try HeistResult(
+            report: try HeistReport.project(result: try HeistResult(
                 steps: [
                     HeistResultFixture.action(
                         path: "$.body[0]",
@@ -238,7 +238,7 @@ final class PublicActionResultJSONTests: XCTestCase {
         )
         let response = FenceResponse.heistExecution(
             plan: try minimalPlan(),
-            report: HeistReport.project(result: try HeistResult(
+            report: try HeistReport.project(result: try HeistResult(
                 steps: [
                     HeistResultFixture.action(
                         path: "$.body[0]",
@@ -414,7 +414,7 @@ final class PublicActionResultJSONTests: XCTestCase {
         let heistResult = try HeistResult(steps: [step], durationMs: 7)
         let response = FenceResponse.heistExecution(
             plan: try minimalPlan(),
-            report: HeistReport.project(result: heistResult)
+            report: try HeistReport.project(result: heistResult)
         )
         let report = try publicHeistReportJSON(response)
         let node = try XCTUnwrap(try report.array("nodes").first)

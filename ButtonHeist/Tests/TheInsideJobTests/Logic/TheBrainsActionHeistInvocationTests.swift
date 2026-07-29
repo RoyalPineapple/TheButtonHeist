@@ -92,10 +92,12 @@ final class HeistMachineInvocationTests: XCTestCase {
 
         let completion = try driver.run()
         let invocation = try XCTUnwrap(completion.steps.first)
+        let expectation = try XCTUnwrap(invocation.children.last)
 
         XCTAssertEqual(invocation.status, .passed)
-        XCTAssertEqual(invocation.invocationEvidence?.expectation?.met, true)
-        XCTAssertEqual(invocation.children.map(\.kind), [.warn])
+        XCTAssertEqual(expectation.kind, .wait)
+        XCTAssertEqual(try expectation.replayExpectation()?.met, true)
+        XCTAssertEqual(invocation.children.map(\.kind), [.warn, .wait])
         XCTAssertEqual(
             driver.requests.compactMap(\.observationScope),
             [.visible]

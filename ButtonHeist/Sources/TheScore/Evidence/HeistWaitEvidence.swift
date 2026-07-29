@@ -1,90 +1,71 @@
 import Foundation
+import ThePlans
 
-public struct HeistWaitMatchedEvidence: Codable, Sendable, Equatable {
+/// Replayable facts supporting one authored expectation.
+///
+/// This value stores no verdict. Live and decoded results both derive their
+/// `ExpectationResult` by evaluating the resolved predicate over `observation`.
+public struct HeistExpectationEvidence: Codable, Sendable, Equatable {
+    public enum TerminalCause: String, Codable, Sendable, Equatable {
+        case observed
+        case deadline
+        case cancelled
+        case unavailable
+        case viewportFailure = "viewport_failure"
+    }
+
+    public let predicate: AccessibilityPredicate
     public let observation: Observation.Evidence
-    public let expectation: ExpectationResult.Met
+    public let terminalCause: TerminalCause
+    package let resolvedPredicate: ObservationPredicate
 
-    public init(
+    package init(
+        predicate: AccessibilityPredicate,
+        resolvedPredicate: ObservationPredicate,
         observation: Observation.Evidence,
-        expectation: ExpectationResult.Met
+        terminalCause: TerminalCause
     ) {
+        self.predicate = predicate
+        self.resolvedPredicate = resolvedPredicate
         self.observation = observation
-        self.expectation = expectation
-    }
-}
-
-public struct HeistWaitUnmatchedEvidence: Codable, Sendable, Equatable {
-    public let observation: Observation.Evidence
-    public let expectation: ExpectationResult.Unmet
-
-    public init(
-        observation: Observation.Evidence,
-        expectation: ExpectationResult.Unmet
-    ) {
-        self.observation = observation
-        self.expectation = expectation
-    }
-}
-
-public enum HeistPassedWaitEvidence: Codable, Sendable, Equatable {
-    case matched(HeistWaitMatchedEvidence)
-    case handledElse(HeistWaitUnmatchedEvidence)
-
-    private enum Kind: String, Codable {
-        case matched
-        case handledElse = "handled_else"
+        self.terminalCause = terminalCause
     }
 
-    private enum CodingKeys: String, CodingKey, CaseIterable {
-        case type
-        case evidence
-    }
-
-    public init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(
-            allowed: CodingKeys.self,
-            typeName: "passed wait evidence"
+    package func replay() throws(Observation.Gap) -> ExpectationResult {
+        let evaluation = try resolvedPredicate.evaluate(in: observation)
+        let met = evaluation.met && terminalCause.admitsMatch
+        let actual = terminalCause.unmetDescription
+            ?? evaluation.actual
+            ?? matchingNotificationText(met: met)
+        return ExpectationResult(
+            met: met,
+            predicate: predicate,
+            actual: actual
         )
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        switch try container.decode(Kind.self, forKey: .type) {
-        case .matched:
-            self = .matched(
-                try container.decode(HeistWaitMatchedEvidence.self, forKey: .evidence)
-            )
-        case .handledElse:
-            self = .handledElse(
-                try container.decode(HeistWaitUnmatchedEvidence.self, forKey: .evidence)
-            )
+    }
+
+    private func matchingNotificationText(met: Bool) -> String? {
+        guard met, case .notification(let predicate) = resolvedPredicate else { return nil }
+        return observation.events.lazy.compactMap { event -> Observation.Notification? in
+            guard case .notification(let notification) = event else { return nil }
+            return notification
+        }
+        .first(where: predicate.matches)?
+        .text
+    }
+}
+
+private extension HeistExpectationEvidence.TerminalCause {
+    var admitsMatch: Bool {
+        switch self {
+        case .observed, .deadline:
+            true
+        case .cancelled, .unavailable, .viewportFailure:
+            false
         }
     }
 
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        switch self {
-        case .matched(let evidence):
-            try container.encode(Kind.matched, forKey: .type)
-            try container.encode(evidence, forKey: .evidence)
-        case .handledElse(let evidence):
-            try container.encode(Kind.handledElse, forKey: .type)
-            try container.encode(evidence, forKey: .evidence)
-        }
-    }
-
-    public var observation: Observation.Evidence {
-        switch self {
-        case .matched(let evidence):
-            evidence.observation
-        case .handledElse(let evidence):
-            evidence.observation
-        }
-    }
-
-    public var expectation: ExpectationResult {
-        switch self {
-        case .matched(let evidence):
-            evidence.expectation.result
-        case .handledElse(let evidence):
-            evidence.expectation.result
-        }
+    var unmetDescription: String? {
+        admitsMatch ? nil : "terminal cause: \(rawValue)"
     }
 }

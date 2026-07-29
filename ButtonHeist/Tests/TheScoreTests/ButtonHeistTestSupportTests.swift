@@ -132,7 +132,7 @@ import ThePlans
         #expect(unavailable.activationPoint == AccessibilityPoint(x: 50, y: 22))
     }
 
-    @Test func `result fixture constructs terminal and child aborted nodes`() {
+    @Test func `result fixture constructs terminal and child aborted nodes`() throws {
         let passed = HeistResultFixture.action(
             command: .dismiss,
             result: .success(payload: .dismiss)
@@ -172,7 +172,7 @@ import ThePlans
         #expect(passed.status == .passed)
         #expect(failed.status == .failed)
         #expect(warning.warningEvidence?.message == "Heads up")
-        #expect(wait.waitExpectation?.met == true)
+        #expect(try wait.replayExpectation()?.met == true)
         #expect(conditional.abortedAtChildPath == failed.path)
         #expect(iteration.abortedAtChildPath == failed.path)
         #expect(HeistResultFixture.result(steps: [failed]).abortedAtPath == failed.path)

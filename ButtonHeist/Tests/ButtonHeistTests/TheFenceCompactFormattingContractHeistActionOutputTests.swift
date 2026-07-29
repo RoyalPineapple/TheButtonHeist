@@ -36,7 +36,7 @@ extension TheFenceCompactFormattingContractTests {
             ],
             durationMs: 8
         )
-        let response = FenceResponse.heistExecution(plan: plan, report: HeistReport.project(result: result))
+        let response = FenceResponse.heistExecution(plan: plan, report: try HeistReport.project(result: result))
 
         let compact = response.compactFormatted()
         let report = try publicHeistReportJSON(response)
@@ -95,7 +95,7 @@ extension TheFenceCompactFormattingContractTests {
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let response = FenceResponse.heistExecution(
             plan: plan,
-            report: HeistReport.project(result: try HeistResult(
+            report: try HeistReport.project(result: try HeistResult(
                 steps: [
                     HeistResultFixture.action(
                         command: command,
@@ -162,7 +162,7 @@ extension TheFenceCompactFormattingContractTests {
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let response = FenceResponse.heistExecution(
             plan: plan,
-            report: HeistReport.project(result: try HeistResult(
+            report: try HeistReport.project(result: try HeistResult(
                 steps: [
                     HeistResultFixture.action(
                         command: command,
@@ -241,7 +241,7 @@ extension TheFenceCompactFormattingContractTests {
             durationMs: 8
         )
 
-        let compact = FenceResponse.heistExecution(plan: plan, report: HeistReport.project(result: result)).compactFormatted()
+        let compact = FenceResponse.heistExecution(plan: plan, report: try HeistReport.project(result: result)).compactFormatted()
 
         XCTAssertTrue(compact.contains("-> error: target stopped responding"), compact)
         XCTAssertTrue(compact.contains("evidence: elements changed"), compact)
@@ -258,7 +258,7 @@ extension TheFenceCompactFormattingContractTests {
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let response = FenceResponse.heistExecution(
             plan: plan,
-            report: HeistReport.project(result: try HeistResult(
+            report: try HeistReport.project(result: try HeistResult(
                 steps: [
                     HeistResultFixture.action(
                         command: command,

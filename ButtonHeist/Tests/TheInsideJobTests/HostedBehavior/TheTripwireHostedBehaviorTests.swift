@@ -103,7 +103,7 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
         let result = try XCTUnwrap(evidence.result)
         let observation = try XCTUnwrap(result.observationEvidence)
 
-        XCTAssertEqual(evidence.expectation?.met, true)
+        XCTAssertEqual(try evidence.replayExpectation()?.met, true)
         XCTAssertTrue(
             observation.hostedElementEdits.added.contains {
                 $0.semantics.assertable.label == "Processing"
@@ -131,8 +131,8 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
         let result = try XCTUnwrap(evidence.result)
         let observation = try XCTUnwrap(result.observationEvidence)
 
-        XCTAssertEqual(evidence.expectation?.met, true)
-        XCTAssertEqual(evidence.announcement, "Ticket saved.")
+        XCTAssertEqual(try evidence.replayExpectation()?.met, true)
+        XCTAssertEqual(try evidence.announcement, "Ticket saved.")
         XCTAssertEqual(observation.completeness, .complete)
     }
 
@@ -144,7 +144,7 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
     ) throws -> HeistActionEvidence {
         try XCTUnwrap(
             result.outputNodes.lazy.compactMap(\.actionEvidence)
-                .first { $0.expectation?.predicate == predicate },
+                .first { try $0.replayExpectation()?.predicate == predicate },
             "Missing action evidence for \(predicate)",
             file: file,
             line: line

@@ -18,8 +18,14 @@ private extension HeistReport.Evidence {
     func encode(to encoder: Encoder, profile: ProjectionProfile) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
-        case .action(let command, let evidence):
-            try encode(command, evidence: evidence, to: container.superEncoder(forKey: .action), profile: profile)
+        case .action(let command, let evidence, let expectation):
+            try encode(
+                command,
+                evidence: evidence,
+                expectation: expectation,
+                to: container.superEncoder(forKey: .action),
+                profile: profile
+            )
         case .wait(let evidence):
             try encode(evidence, to: container.superEncoder(forKey: .wait), profile: profile)
         case .caseSelection(let evidence):
@@ -32,15 +38,13 @@ private extension HeistReport.Evidence {
             try encode(
                 declaration,
                 evidence: evidence,
-                to: container.superEncoder(forKey: .repeatUntil),
-                profile: profile
+                to: container.superEncoder(forKey: .repeatUntil)
             )
         case .invocation(let invocation, let evidence):
             try encode(
                 invocation,
                 evidence: evidence,
-                to: container.superEncoder(forKey: .invocation),
-                profile: profile
+                to: container.superEncoder(forKey: .invocation)
             )
         case .warning(let warning):
             try container.encode(warning, forKey: .warning)
@@ -54,6 +58,7 @@ private extension HeistReport.Evidence {
     private func encode(
         _ command: HeistActionCommand,
         evidence: HeistActionEvidence,
+        expectation: ExpectationResult?,
         to encoder: Encoder,
         profile: ProjectionProfile
     ) throws {
@@ -63,7 +68,7 @@ private extension HeistReport.Evidence {
         switch evidence {
         case .commandResolutionFailure:
             break
-        case .completed(let result, let expectation):
+        case .completed(let result, _):
             try container.encode(
                 PublicHeistOutput.action(
                     result,
@@ -91,7 +96,10 @@ private extension HeistReport.Evidence {
     ) throws {
         var container = encoder.container(keyedBy: WaitCodingKeys.self)
         try container.encode(evidence.outcome, forKey: .outcome)
-        try container.encode(PublicHeistOutput.expectation(evidence.expectation), forKey: .expectation)
+        try container.encodeIfPresent(
+            PublicHeistOutput.expectation(evidence.expectation),
+            forKey: .expectation
+        )
         try container.encodeIfPresent(evidence.baselineSummary, forKey: .baselineSummary)
         try container.encodeIfPresent(evidence.finalSummary, forKey: .finalSummary)
         if let delta = DeltaProjection(
@@ -130,15 +138,14 @@ private extension HeistReport.Evidence {
     }
 
     private enum RepeatUntilCodingKeys: String, CodingKey {
-        case outcome, predicate, timeout, iterationCount, iterationOrdinal, expectation
-        case result, lastObservedSummary, failureReason
+        case outcome, predicate, timeout, iterationCount, iterationOrdinal
+        case lastObservedSummary, failureReason
     }
 
     private func encode(
         _ declaration: HeistRepeatUntilDeclaration,
         evidence: HeistRepeatUntilEvidence,
-        to encoder: Encoder,
-        profile: ProjectionProfile
+        to encoder: Encoder
     ) throws {
         var container = encoder.container(keyedBy: RepeatUntilCodingKeys.self)
         try container.encode(evidence.outcome, forKey: .outcome)
@@ -146,15 +153,6 @@ private extension HeistReport.Evidence {
         try container.encode(declaration.timeout.seconds, forKey: .timeout)
         try container.encode(evidence.iterationCount, forKey: .iterationCount)
         try container.encodeIfPresent(evidence.iterationOrdinal, forKey: .iterationOrdinal)
-        try container.encode(PublicHeistOutput.expectation(evidence.expectation), forKey: .expectation)
-        try container.encodeIfPresent(
-            PublicHeistOutput.actionResult(
-                evidence.actionResult,
-                expectation: evidence.expectation,
-                profile: profile
-            ),
-            forKey: .result
-        )
         try container.encodeIfPresent(evidence.lastObservedSummary, forKey: .lastObservedSummary)
         try container.encodeIfPresent(evidence.failureReason, forKey: .failureReason)
     }
@@ -200,14 +198,13 @@ private extension HeistReport.Evidence {
     }
 
     private enum InvocationCodingKeys: String, CodingKey {
-        case capability, argument, childFailedPath, expectationResult, expectation, expectationEvidence
+        case capability, argument, childFailedPath
     }
 
     private func encode(
         _ invocation: HeistInvocationStep,
         evidence: HeistInvocationEvidence,
-        to encoder: Encoder,
-        profile: ProjectionProfile
+        to encoder: Encoder
     ) throws {
         var container = encoder.container(keyedBy: InvocationCodingKeys.self)
         try container.encode(invocation.path.description, forKey: .capability)
@@ -216,38 +213,6 @@ private extension HeistReport.Evidence {
             forKey: .argument
         )
         try container.encodeIfPresent(evidence.childFailedPath?.description, forKey: .childFailedPath)
-        try container.encodeIfPresent(
-            PublicHeistOutput.actionResult(
-                evidence.expectationActionResult,
-                expectation: evidence.expectation,
-                profile: profile
-            ),
-            forKey: .expectationResult
-        )
-        try container.encodeIfPresent(
-            PublicHeistOutput.expectation(evidence.expectation),
-            forKey: .expectation
-        )
-        if let passed = evidence.passedWaitEvidence {
-            let waitEvidence: HeistReport.WaitEvidence
-            switch passed {
-            case .matched(let matched):
-                waitEvidence = .matched(matched)
-            case .handledElse(let unmatched):
-                waitEvidence = .handledElse(unmatched)
-            }
-            try encode(
-                waitEvidence,
-                to: container.superEncoder(forKey: .expectationEvidence),
-                profile: profile
-            )
-        } else if let unmatched = evidence.unmatchedWaitEvidence {
-            try encode(
-                .unmatched(unmatched),
-                to: container.superEncoder(forKey: .expectationEvidence),
-                profile: profile
-            )
-        }
     }
 }
 

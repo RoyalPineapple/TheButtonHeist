@@ -47,7 +47,7 @@ extension TheFence {
         HeistResultRecording.recordIfEnabled(result, plan: plan)
         return .heistExecution(
             plan: plan,
-            report: HeistReport.project(result: result)
+            report: try HeistReport.project(result: result)
         )
     }
 

@@ -16,14 +16,6 @@ extension FenceResponse {
         if let expectations = report.summary.expectations {
             text += " [expectations: \(expectations.met)/\(expectations.checked)]"
         }
-        if case .changed(let evidence) = report.accessibilityChange,
-           let netDelta = DeltaProjection(
-                evidence: evidence,
-                profile: profile,
-                includeScreenInterface: true
-           ) {
-            text += " [net: \(netDelta.kind.rawValue)]"
-        }
         if let lastScreenId = report.summary.finalScreenId {
             text = "\(lastScreenId) | \(text)"
         }
@@ -73,7 +65,7 @@ extension FenceResponse {
 private extension HeistReport.Evidence {
     func observationDelta(profile: ProjectionProfile) -> DeltaProjection? {
         switch self {
-        case .action(_, let evidence):
+        case .action(_, let evidence, _):
             return evidence.result?.observationEvidence.flatMap {
                 DeltaProjection(
                     evidence: $0,
@@ -87,24 +79,12 @@ private extension HeistReport.Evidence {
                 profile: profile,
                 includeScreenInterface: true
             )
-        case .repeatUntil(_, let evidence):
-            return evidence.actionResult?.observationEvidence.flatMap {
-                DeltaProjection(
-                    evidence: $0,
-                    profile: profile,
-                    includeScreenInterface: true
-                )
-            }
-        case .invocation(_, let evidence):
-            return (evidence.waitObservation
-                ?? evidence.expectationActionResult?.observationEvidence).flatMap {
-                    DeltaProjection(
-                        evidence: $0,
-                        profile: profile,
-                        includeScreenInterface: true
-                    )
-                }
-        case .caseSelection, .forEachString, .forEachElement, .warning:
+        case .caseSelection,
+             .forEachString,
+             .forEachElement,
+             .repeatUntil,
+             .invocation,
+             .warning:
             return nil
         }
     }

@@ -374,216 +374,136 @@ public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
 
 public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     public let iterationCount: Int
+    public let iterationOrdinal: Int?
     public let lastObservedSummary: String?
-    private let storage: Storage
-
-    private enum Storage: Sendable, Equatable {
-        case matched(
-            iterationOrdinal: Int?,
-            expectation: ExpectationResult.Met,
-            actionResult: ActionResult?
-        )
-        case continued(
-            iterationOrdinal: Int,
-            expectation: ExpectationResult.Unmet,
-            actionResult: ActionResult?
-        )
-        case failed(
-            iterationOrdinal: Int?,
-            expectation: ExpectationResult.Unmet,
-            failureReason: String
-        )
-    }
-
-    public var outcome: HeistPredicateEvidenceOutcome {
-        switch storage {
-        case .matched:
-            return .matched
-        case .continued:
-            return .continued
-        case .failed:
-            return .failed
-        }
-    }
-
-    public var iterationOrdinal: Int? {
-        switch storage {
-        case .matched(let iterationOrdinal, _, _),
-             .failed(let iterationOrdinal, _, _):
-            return iterationOrdinal
-        case .continued(let iterationOrdinal, _, _):
-            return iterationOrdinal
-        }
-    }
-
-    public var expectation: ExpectationResult {
-        switch storage {
-        case .matched(_, let expectation, _):
-            return expectation.result
-        case .continued(_, let expectation, _),
-             .failed(_, let expectation, _):
-            return expectation.result
-        }
-    }
-
-    public var actionResult: ActionResult? {
-        switch storage {
-        case .matched(_, _, let actionResult),
-             .continued(_, _, let actionResult):
-            return actionResult
-        case .failed:
-            return nil
-        }
-    }
-
-    public var failureReason: String? {
-        switch storage {
-        case .failed(_, _, let failureReason):
-            return failureReason
-        case .matched, .continued:
-            return nil
-        }
-    }
+    public let outcome: HeistPredicateEvidenceOutcome
+    public let failureReason: String?
 
     private init?(
         iterationCount: Int = 0,
+        iterationOrdinal: Int?,
         lastObservedSummary: String?,
-        storage: Storage
+        outcome: HeistPredicateEvidenceOutcome,
+        failureReason: String?
     ) {
         guard iterationCount >= 0 else { return nil }
-        let ordinal: Int?
-        switch storage {
-        case .matched(let value, _, _), .failed(let value, _, _): ordinal = value
-        case .continued(let value, _, _): ordinal = value
-        }
-        guard ordinal.map({ $0 >= 0 && $0 < iterationCount }) ?? true else { return nil }
+        guard iterationOrdinal.map({ $0 >= 0 && $0 < iterationCount }) ?? true else { return nil }
+        guard Self.fieldsMatch(
+            outcome: outcome,
+            iterationOrdinal: iterationOrdinal,
+            failureReason: failureReason
+        ) else { return nil }
         self.iterationCount = iterationCount
+        self.iterationOrdinal = iterationOrdinal
         self.lastObservedSummary = lastObservedSummary
-        self.storage = storage
+        self.outcome = outcome
+        self.failureReason = failureReason
     }
 
     private init(
         executedIterationCount iterationCount: Int,
+        iterationOrdinal: Int?,
         lastObservedSummary: String?,
-        storage: Storage
+        outcome: HeistPredicateEvidenceOutcome,
+        failureReason: String?
     ) {
-        precondition(iterationCount >= 0)
-        let ordinal: Int?
-        switch storage {
-        case .matched(let value, _, _), .failed(let value, _, _): ordinal = value
-        case .continued(let value, _, _): ordinal = value
+        self = requireValidLiteralPayload {
+            guard let evidence = Self(
+                iterationCount: iterationCount,
+                iterationOrdinal: iterationOrdinal,
+                lastObservedSummary: lastObservedSummary,
+                outcome: outcome,
+                failureReason: failureReason
+            ) else {
+                throw ReportAdmissionError(description: "invalid executed repeat_until evidence")
+            }
+            return evidence
         }
-        precondition(ordinal.map { $0 >= 0 && $0 < iterationCount } ?? true)
-        self.iterationCount = iterationCount
-        self.lastObservedSummary = lastObservedSummary
-        self.storage = storage
     }
 
     package static func executedMatched(
         iterationCount: Int,
         iterationOrdinal: Int? = nil,
-        expectation: ExpectationResult.Met,
-        actionResult: ActionResult? = nil,
         lastObservedSummary: String? = nil
     ) -> HeistRepeatUntilEvidence {
         HeistRepeatUntilEvidence(
             executedIterationCount: iterationCount,
+            iterationOrdinal: iterationOrdinal,
             lastObservedSummary: lastObservedSummary,
-            storage: .matched(
-                iterationOrdinal: iterationOrdinal,
-                expectation: expectation,
-                actionResult: actionResult
-            )
+            outcome: .matched,
+            failureReason: nil
         )
     }
 
     package static func executedContinued(
         iterationCount: Int,
         iterationOrdinal: Int,
-        expectation: ExpectationResult.Unmet,
-        actionResult: ActionResult? = nil,
         lastObservedSummary: String? = nil
     ) -> HeistRepeatUntilEvidence {
         HeistRepeatUntilEvidence(
             executedIterationCount: iterationCount,
+            iterationOrdinal: iterationOrdinal,
             lastObservedSummary: lastObservedSummary,
-            storage: .continued(
-                iterationOrdinal: iterationOrdinal,
-                expectation: expectation,
-                actionResult: actionResult
-            )
+            outcome: .continued,
+            failureReason: nil
         )
     }
 
     package static func executedFailed(
         iterationCount: Int,
         iterationOrdinal: Int? = nil,
-        expectation: ExpectationResult.Unmet,
         lastObservedSummary: String?,
         failureReason: String
     ) -> HeistRepeatUntilEvidence {
         HeistRepeatUntilEvidence(
             executedIterationCount: iterationCount,
+            iterationOrdinal: iterationOrdinal,
             lastObservedSummary: lastObservedSummary,
-            storage: .failed(
-                iterationOrdinal: iterationOrdinal,
-                expectation: expectation,
-                failureReason: failureReason
-            )
+            outcome: .failed,
+            failureReason: failureReason
         )
     }
 
     public static func matched(
         iterationCount: Int,
         iterationOrdinal: Int? = nil,
-        expectation: ExpectationResult.Met,
-        actionResult: ActionResult? = nil,
         lastObservedSummary: String? = nil
     ) -> HeistRepeatUntilEvidence? {
         HeistRepeatUntilEvidence(
             iterationCount: iterationCount,
+            iterationOrdinal: iterationOrdinal,
             lastObservedSummary: lastObservedSummary,
-            storage: .matched(
-                iterationOrdinal: iterationOrdinal,
-                expectation: expectation,
-                actionResult: actionResult
-            )
+            outcome: .matched,
+            failureReason: nil
         )
     }
 
     public static func continued(
         iterationCount: Int,
         iterationOrdinal: Int,
-        expectation: ExpectationResult.Unmet,
-        actionResult: ActionResult? = nil,
         lastObservedSummary: String? = nil
     ) -> HeistRepeatUntilEvidence? {
         HeistRepeatUntilEvidence(
             iterationCount: iterationCount,
+            iterationOrdinal: iterationOrdinal,
             lastObservedSummary: lastObservedSummary,
-            storage: .continued(
-                iterationOrdinal: iterationOrdinal,
-                expectation: expectation,
-                actionResult: actionResult
-            )
+            outcome: .continued,
+            failureReason: nil
         )
     }
 
     public static func failed(
         iterationCount: Int,
         iterationOrdinal: Int? = nil,
-        expectation: ExpectationResult.Unmet,
         lastObservedSummary: String?,
         failureReason: String
     ) -> HeistRepeatUntilEvidence? {
         HeistRepeatUntilEvidence(
             iterationCount: iterationCount,
+            iterationOrdinal: iterationOrdinal,
             lastObservedSummary: lastObservedSummary,
-            storage: .failed(
-                iterationOrdinal: iterationOrdinal,
-                expectation: expectation,
-                failureReason: failureReason
-            )
+            outcome: .failed,
+            failureReason: failureReason
         )
     }
 
@@ -591,8 +511,6 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         case outcome
         case iterationCount
         case iterationOrdinal
-        case expectation
-        case actionResult
         case lastObservedSummary
         case failureReason
     }
@@ -603,28 +521,19 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         let outcome = try container.decode(HeistPredicateEvidenceOutcome.self, forKey: .outcome)
         let iterationCount = try container.decode(Int.self, forKey: .iterationCount)
         let iterationOrdinal = try container.decodeIfPresent(Int.self, forKey: .iterationOrdinal)
-        let expectation = try container.decode(ExpectationResult.self, forKey: .expectation)
-        let actionResult = try container.decodeIfPresent(ActionResult.self, forKey: .actionResult)
         let lastObservedSummary = try container.decodeIfPresent(String.self, forKey: .lastObservedSummary)
         let failureReason = try container.decodeIfPresent(String.self, forKey: .failureReason)
-        let storage = try Self.storage(
-            outcome: outcome,
-            iterationOrdinal: iterationOrdinal,
-            expectation: expectation,
-            actionResult: actionResult,
-            failureReason: failureReason,
-            codingPath: container.codingPath
-        )
         guard let admitted = Self(
             iterationCount: iterationCount,
+            iterationOrdinal: iterationOrdinal,
             lastObservedSummary: lastObservedSummary,
-            storage: storage
+            outcome: outcome,
+            failureReason: failureReason
         ) else {
-            let key = iterationCount < 0 ? CodingKeys.iterationCount : CodingKeys.iterationOrdinal
-            let description = iterationCount < 0
-                ? "repeat_until iterationCount must be nonnegative"
-                : "repeat_until iterationOrdinal must be nonnegative and less than iterationCount"
-            throw DecodingError.dataCorruptedError(forKey: key, in: container, debugDescription: description)
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: container.codingPath,
+                debugDescription: "repeat_until outcome does not match its iteration and failure fields"
+            ))
         }
         self = admitted
     }
@@ -634,56 +543,24 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         try container.encode(outcome, forKey: .outcome)
         try container.encode(iterationCount, forKey: .iterationCount)
         try container.encodeIfPresent(iterationOrdinal, forKey: .iterationOrdinal)
-        try container.encode(expectation, forKey: .expectation)
-        try container.encodeIfPresent(actionResult, forKey: .actionResult)
         try container.encodeIfPresent(lastObservedSummary, forKey: .lastObservedSummary)
         try container.encodeIfPresent(failureReason, forKey: .failureReason)
     }
 
-    private static func storage(
+    private static func fieldsMatch(
         outcome: HeistPredicateEvidenceOutcome,
         iterationOrdinal: Int?,
-        expectation: ExpectationResult,
-        actionResult: ActionResult?,
-        failureReason: String?,
-        codingPath: [CodingKey]
-    ) throws -> Storage {
-        switch (outcome, expectation) {
-        case (.matched, .met(let expectation)) where failureReason == nil:
-            return .matched(
-                iterationOrdinal: iterationOrdinal,
-                expectation: expectation,
-                actionResult: actionResult
-            )
-        case (.continued, .unmet(let expectation)) where failureReason == nil:
-            guard let iterationOrdinal else {
-                throw DecodingError.dataCorrupted(.init(
-                    codingPath: codingPath + [CodingKeys.iterationOrdinal],
-                    debugDescription: "continued repeat_until evidence requires iterationOrdinal"
-                ))
-            }
-            return .continued(
-                iterationOrdinal: iterationOrdinal,
-                expectation: expectation,
-                actionResult: actionResult
-            )
-        case (.failed, .unmet(let expectation)) where actionResult == nil:
-            guard let failureReason else {
-                throw DecodingError.dataCorrupted(.init(
-                    codingPath: codingPath + [CodingKeys.failureReason],
-                    debugDescription: "failed repeat_until evidence requires failureReason"
-                ))
-            }
-            return .failed(
-                iterationOrdinal: iterationOrdinal,
-                expectation: expectation,
-                failureReason: failureReason
-            )
-        default:
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: codingPath + [CodingKeys.outcome],
-                debugDescription: "repeat_until evidence outcome does not match its required fields"
-            ))
+        failureReason: String?
+    ) -> Bool {
+        switch outcome {
+        case .matched:
+            failureReason == nil
+        case .continued:
+            iterationOrdinal != nil && failureReason == nil
+        case .failed:
+            failureReason != nil
+        case .handledElse:
+            false
         }
     }
 }

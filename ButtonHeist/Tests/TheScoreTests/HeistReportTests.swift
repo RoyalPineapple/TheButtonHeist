@@ -13,7 +13,7 @@ import TheScore
             execution: .skipped(command: command)
         )
 
-        let report = HeistReport.project(result: try HeistResult(steps: [step], durationMs: 0))
+        let report = try HeistReport.project(result: try HeistResult(steps: [step], durationMs: 0))
         let node = try #require(report.outputNodes.first)
 
         #expect(node.command == .activate)
@@ -36,7 +36,7 @@ import TheScore
             )
         )
 
-        let report = HeistReport.project(result: try HeistResult(steps: [step], durationMs: 1))
+        let report = try HeistReport.project(result: try HeistResult(steps: [step], durationMs: 1))
         let node = try #require(report.outputNodes.first)
 
         #expect(node.invocationDisplayName == #"RunHeist("Cart.checkout", "Milk")"#)
@@ -57,7 +57,7 @@ import TheScore
         )
         let result = try HeistResult(steps: [root], durationMs: 5)
 
-        let report = HeistReport.project(result: result)
+        let report = try HeistReport.project(result: result)
 
         #expect(result.steps == [root])
         #expect(report.outputNodes.map(\.path) == [root.path, child.path])
@@ -75,49 +75,83 @@ import TheScore
         let before = makeTestInterface(elementCount: 0)
         let after = makeTestInterface(elementCount: 1)
 
-        let notApplicable = HeistReport.project(result: try HeistResult(steps: [], durationMs: 0))
+        let notApplicable = try HeistReport.project(result: try HeistResult(steps: [], durationMs: 0))
         #expect(notApplicable.accessibilityChange == .notApplicable)
 
-        let incomplete = report(
-            evidence: evidence(before: before, after: after, completeness: .incomplete)
+        let incomplete = try report(
+            evidence: evidence(
+                before: before,
+                after: after,
+                coverage: .incomplete(.historyUnavailable)
+            )
         )
         #expect(incomplete.accessibilityChange == .incomplete)
 
-        let unchanged = report(
-            evidence: evidence(before: before, after: before, completeness: .complete)
+        let unchanged = try report(
+            evidence: evidence(before: before, after: before, coverage: .complete)
         )
         #expect(unchanged.accessibilityChange == .unchanged)
 
-        let changed = report(
-            evidence: evidence(before: before, after: after, completeness: .complete)
+        let changed = try report(
+            evidence: evidence(before: before, after: after, coverage: .complete)
         )
         guard case .changed(let evidence) = changed.accessibilityChange else {
             Issue.record("Expected a complete accessibility change")
             return
         }
-        #expect(evidence.baseline?.interface == before)
-        #expect(evidence.current?.interface == after)
+        #expect(evidence.count == 1)
+        #expect(evidence.first?.baseline?.interface == before)
+        #expect(evidence.first?.current?.interface == after)
     }
 
-    private func report(evidence: Observation.Evidence) -> HeistReport {
+    @Test func reportPreservesDistinctObservationWindows() throws {
+        let first = evidence(
+            before: makeTestInterface(elementCount: 0),
+            after: makeTestInterface(elementCount: 1),
+            coverage: .complete
+        )
+        let second = evidence(
+            before: makeTestInterface(elementCount: 1),
+            after: makeTestInterface(elementCount: 2),
+            coverage: .complete
+        )
+        let result = HeistResultFixture.result(steps: [
+            HeistResultFixture.action(
+                path: "$.body[0]",
+                result: HeistResultFixture.actionResult(observationEvidence: first)
+            ),
+            HeistResultFixture.action(
+                path: "$.body[1]",
+                result: HeistResultFixture.actionResult(observationEvidence: second)
+            ),
+        ])
+
+        guard case .changed(let windows) = try HeistReport.project(result: result).accessibilityChange else {
+            Issue.record("Expected accessibility changes")
+            return
+        }
+        #expect(windows == [first, second])
+    }
+
+    private func report(evidence: Observation.Evidence) throws -> HeistReport {
         let action = HeistResultFixture.action(
             result: HeistResultFixture.actionResult(observationEvidence: evidence)
         )
-        return HeistReport.project(result: HeistResultFixture.result(steps: [action], durationMs: 0))
+        return try HeistReport.project(result: HeistResultFixture.result(steps: [action], durationMs: 0))
     }
 
     private func evidence(
         before: Interface,
         after: Interface,
-        completeness: Observation.Evidence.Completeness
+        coverage: Observation.Coverage
     ) -> Observation.Evidence {
         let baseline = Observation.Snapshot(interface: before, context: .empty)
         let current = Observation.Snapshot(interface: after, context: .empty)
-        return makeTestObservationEvidence(
+        return Observation.Evidence(
             baseline: baseline,
-            current: current,
             events: before == after ? [.noChange] : [.elementsChanged(current)],
-            completeness: completeness
+            current: current,
+            coverage: coverage
         )
     }
 }

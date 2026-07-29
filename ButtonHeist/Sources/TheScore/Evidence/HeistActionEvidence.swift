@@ -3,14 +3,19 @@ import ThePlans
 
 public enum HeistActionEvidence: Codable, Sendable, Equatable {
     case commandResolutionFailure
-    case completed(result: ActionResult, expectation: ExpectationResult?)
+    case completed(result: ActionResult, expectation: HeistExpectationEvidence?)
 
     public var result: ActionResult? {
         guard case .completed(let result, _) = self else { return nil }
         return result
     }
 
-    public var expectation: ExpectationResult? {
+    package func replayExpectation() throws(Observation.Gap) -> ExpectationResult? {
+        guard let expectationEvidence else { return nil }
+        return try expectationEvidence.replay()
+    }
+
+    package var expectationEvidence: HeistExpectationEvidence? {
         guard case .completed(_, let expectation) = self else { return nil }
         return expectation
     }
@@ -20,13 +25,15 @@ public enum HeistActionEvidence: Codable, Sendable, Equatable {
     }
 
     public var announcement: String? {
-        expectation?.matchedAnnouncement ?? result?.announcement
+        get throws(Observation.Gap) {
+            try replayExpectation()?.matchedAnnouncement ?? result?.announcement
+        }
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case type
         case result
-        case expectation
+        case expectationEvidence
     }
 
     private enum EvidenceType: String, Codable {
@@ -46,10 +53,13 @@ public enum HeistActionEvidence: Codable, Sendable, Equatable {
         case .completed:
             self = .completed(
                 result: try container.decode(ActionResult.self, forKey: .result),
-                expectation: try container.decodeIfPresent(ExpectationResult.self, forKey: .expectation)
+                expectation: try container.decodeIfPresent(
+                    HeistExpectationEvidence.self,
+                    forKey: .expectationEvidence
+                )
             )
             try container.rejectIncompatibleFields(
-                allowing: [.type, .result, .expectation],
+                allowing: [.type, .result, .expectationEvidence],
                 typeName: typeName
             )
         }
@@ -63,7 +73,7 @@ public enum HeistActionEvidence: Codable, Sendable, Equatable {
         case .completed(let result, let expectation):
             try container.encode(EvidenceType.completed, forKey: .type)
             try container.encode(result, forKey: .result)
-            try container.encodeIfPresent(expectation, forKey: .expectation)
+            try container.encodeIfPresent(expectation, forKey: .expectationEvidence)
         }
     }
 }

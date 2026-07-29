@@ -29,14 +29,14 @@ final class DogfoodFeatureFlowTests: XCTestCase {
         )
         let observationEvidence = try XCTUnwrap(evidence.result?.observationEvidence)
 
-        XCTAssertEqual(evidence.expectation?.met, true)
+        XCTAssertEqual(try evidence.replayExpectation()?.met, true)
         XCTAssertTrue(observationEvidence.addedLabels.contains("Processing"))
         XCTAssertTrue(observationEvidence.removedLabels.contains("Submit"))
 
         let failure = try await expectHeistFailure("DogfoodStandaloneCannotReuseLifecycleEvidence") {
             WaitFor(TransientFlowScreen.lifecycle, timeout: 0.25)
         }
-        XCTAssertEqual(HeistReport.project(result: failure.result).failure?.actionKind, .timeout)
+        XCTAssertEqual(try HeistReport.project(result: failure.result).failure?.actionKind, .timeout)
     }
 
     func testActionExpectationUsesAnnouncementWhileStandaloneWaitCannotReuseIt() async throws {
@@ -51,13 +51,13 @@ final class DogfoodFeatureFlowTests: XCTestCase {
             in: heist.result
         )
 
-        XCTAssertEqual(evidence.expectation?.met, true)
-        XCTAssertEqual(evidence.announcement, "Ticket saved.")
+        XCTAssertEqual(try evidence.replayExpectation()?.met, true)
+        XCTAssertEqual(try evidence.announcement, "Ticket saved.")
 
         let exactFailure = try await expectHeistFailure("DogfoodCombinedToastExactTextFails") {
             WaitFor(TransientFlowScreen.exactToastText, timeout: 0.5)
         }
-        let exactReport = HeistReport.project(result: exactFailure.result)
+        let exactReport = try HeistReport.project(result: exactFailure.result)
         let exactObservation = try XCTUnwrap(
             exactFailure.result.outputNodes.lazy.compactMap(\.waitObservation).last
         )
@@ -73,7 +73,7 @@ final class DogfoodFeatureFlowTests: XCTestCase {
         ) {
             WaitFor(TransientFlowScreen.announcement, timeout: 0.25)
         }
-        XCTAssertEqual(HeistReport.project(result: standaloneFailure.result).failure?.actionKind, .timeout)
+        XCTAssertEqual(try HeistReport.project(result: standaloneFailure.result).failure?.actionKind, .timeout)
     }
 
     private func actionEvidence(
@@ -84,7 +84,7 @@ final class DogfoodFeatureFlowTests: XCTestCase {
     ) throws -> HeistActionEvidence {
         try XCTUnwrap(
             result.outputNodes.lazy.compactMap(\.actionEvidence)
-                .first { $0.expectation?.predicate == predicate },
+                .first { try $0.replayExpectation()?.predicate == predicate },
             "Missing action evidence for \(predicate)",
             file: file,
             line: line

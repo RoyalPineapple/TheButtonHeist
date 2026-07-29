@@ -118,7 +118,7 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
         let evidence = try XCTUnwrap(step.waitObservation)
 
         XCTAssertEqual(step.status, .passed)
-        XCTAssertEqual(step.reportExpectation?.met, true)
+        XCTAssertEqual(try step.replayExpectation()?.met, true)
         XCTAssertEqual(evidence.notificationTexts, ["Saved"])
         XCTAssertEqual(
             evidence.events.count {
@@ -159,7 +159,7 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
         let completion = try await execution.value
         let step = try XCTUnwrap(completion.steps.first)
         XCTAssertEqual(step.status, .failed)
-        XCTAssertEqual(step.reportExpectation?.met, false)
+        XCTAssertEqual(try step.replayExpectation()?.met, false)
         XCTAssertEqual(step.failure?.category, .runtimeUnavailable)
         XCTAssertEqual(step.failure?.observed, TheBrains.treeUnavailableMessage)
     }

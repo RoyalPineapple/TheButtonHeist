@@ -67,8 +67,6 @@ enum PublicHeistActionJSONFixture {
         "invocation": FixtureJSON.object([
             "capability": FixtureJSON.string("Cart.checkout"),
             "argument": FixtureJSON.string(#"RunHeist("Cart.checkout", "Milk")"#),
-            "expectation": FixtureJSON.doneExpectation,
-            "expectationEvidence": FixtureJSON.matchedWaitEvidence,
         ]),
     ])
 
@@ -78,17 +76,4 @@ enum PublicHeistActionJSONFixture {
         ]),
     ])
 
-    static let netDelta = FixtureJSON.object([
-        "kind": FixtureJSON.string("elementsChanged"),
-        "elementCount": FixtureJSON.int(1),
-        "edits": FixtureJSON.object([
-            "added": FixtureJSON.array([
-                FixtureJSON.object([
-                    "traits": FixtureJSON.array([FixtureJSON.string("staticText")]),
-                    "label": FixtureJSON.string("Pay"),
-                    "identifier": FixtureJSON.string("pay"),
-                ]),
-            ]),
-        ]),
-    ])
 }

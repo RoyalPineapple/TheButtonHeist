@@ -21,6 +21,7 @@ extension HeistDoctor {
             throw HeistDoctorError.missingObservationEvidence(path: step.path)
         }
         let projection = RepairObservationProjection(observation)
+        let expectation = try actionEvidence.replayExpectation()
 
         let outcome: HeistRepairEvidenceOutcome
         switch step.status {
@@ -29,7 +30,11 @@ extension HeistDoctor {
         case .failed:
             outcome = .failed(
                 failureKind: result.outcome.failureKind,
-                message: repairMessage(step: step, evidence: actionEvidence)
+                message: repairMessage(
+                    step: step,
+                    evidence: actionEvidence,
+                    expectation: expectation
+                )
             )
         case .skipped:
             throw HeistDoctorError.stepStatus(path: step.path, expected: .passed, actual: .skipped)
@@ -43,18 +48,19 @@ extension HeistDoctor {
             observedChanges: projection.changes,
             semanticEvidence: projection.semanticText,
             method: result.method,
-            expectation: actionEvidence.expectation,
+            expectation: expectation,
             outcome: outcome
         )
     }
 
     private static func repairMessage(
         step: HeistExecutionStepResult,
-        evidence: HeistActionEvidence
+        evidence: HeistActionEvidence,
+        expectation: ExpectationResult?
     ) -> String? {
         step.failure?.observed
             ?? evidence.result?.message
-            ?? evidence.expectation?.actual
+            ?? expectation?.actual
     }
 }
 

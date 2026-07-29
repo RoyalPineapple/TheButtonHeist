@@ -39,14 +39,9 @@ extension HeistExecution {
                 failureKind: .validationError,
                 message: observed
             )
-            let expectation = ExpectationResult(
-                met: false,
-                predicate: nil,
-                actual: observed
-            )
             let evidence = HeistActionEvidence.completed(
                 result: actionResult,
-                expectation: expectation
+                expectation: nil
             )
             return .action(
                 path: context.path,
@@ -73,10 +68,7 @@ extension HeistExecution {
                 predicate: step.predicate,
                 timeout: step.timeout,
                 completion: .failed(
-                    evidence: unmatchedWaitEvidence(
-                        predicate: step.predicate,
-                        actual: "could not resolve heist wait predicate: \(error)"
-                    ),
+                    evidence: .unavailable,
                     failure: HeistFailureDetail(
                         category: .wait,
                         contract: "wait predicate resolves before evaluation",
@@ -95,16 +87,9 @@ extension HeistExecution {
                 failureKind: .timeout,
                 message: "whole-heist deadline expired before action dispatch"
             )
-            let expectation = leaf.predicate.map {
-                ExpectationResult(
-                    met: false,
-                    predicate: $0.authored,
-                    actual: "whole-heist deadline expired before observation"
-                )
-            }
             let evidence = HeistActionEvidence.completed(
                 result: result,
-                expectation: expectation
+                expectation: nil
             )
             return .action(
                 path: leaf.context.path,
@@ -128,10 +113,7 @@ extension HeistExecution {
                 predicate: leaf.step.predicate,
                 timeout: leaf.step.timeout,
                 completion: .failed(
-                    evidence: unmatchedWaitEvidence(
-                        predicate: leaf.step.predicate,
-                        actual: "whole-heist deadline expired before wait observation"
-                    ),
+                    evidence: .unavailable,
                     failure: HeistFailureDetail(
                         category: .wait,
                         contract: "wait begins within the whole-heist deadline",
@@ -152,17 +134,13 @@ extension HeistExecution {
                 evidence: evidence,
                 outcome: outcome
             )
-            let expectation: ExpectationResult? = leaf.predicate.flatMap { predicate -> ExpectationResult? in
+            let expectation = leaf.predicate.flatMap { predicate -> HeistExpectationEvidence? in
                 guard leaf.dispatch?.success == true else { return nil }
-                return ExpectationResult(
-                    met: outcome.admitsSatisfiedExpectation
-                        && leaf.expectation.result == .satisfied,
+                return HeistExpectationEvidence(
                     predicate: predicate.authored,
-                    actual: actualResult(
-                        predicate: predicate,
-                        evidence: evidence,
-                        outstanding: leaf.expectation.result.outstandingDescription
-                    )
+                    resolvedPredicate: predicate.resolved,
+                    observation: evidence,
+                    terminalCause: outcome.expectationTerminalCause
                 )
             }
             let evidence = HeistActionEvidence.completed(
@@ -207,35 +185,21 @@ extension HeistExecution {
         ) -> HeistExecutionStepResult {
             let matched = outcome.admitsSatisfiedExpectation
                 && leaf.expectation.result == .satisfied
-            let actual = actualResult(
-                predicate: leaf.predicate,
-                evidence: evidence,
-                outstanding: leaf.expectation.result.outstandingDescription
+            let expectation = HeistExpectationEvidence(
+                predicate: leaf.predicate.authored,
+                resolvedPredicate: leaf.predicate.resolved,
+                observation: evidence,
+                terminalCause: outcome.expectationTerminalCause
             )
             let completion: HeistWaitCompletion
             if matched {
-                completion = .passed(
-                    evidence: .matched(HeistWaitMatchedEvidence(
-                        observation: evidence,
-                        expectation: ExpectationResult.Met(
-                            predicate: leaf.predicate.authored,
-                            actual: actual
-                        )
-                    ))
-                )
+                completion = .passed(evidence: expectation)
             } else {
-                let unmatched = HeistWaitUnmatchedEvidence(
-                    observation: evidence,
-                    expectation: ExpectationResult.Unmet(
-                        predicate: leaf.predicate.authored,
-                        actual: actual
-                    )
-                )
                 completion = .failed(
-                    evidence: unmatched,
+                    evidence: .observed(expectation),
                     failure: waitFailure(
                         step: leaf.step,
-                        evidence: unmatched,
+                        evidence: expectation,
                         outcome: outcome
                     )
                 )
@@ -321,25 +285,6 @@ private extension HeistExecution.ResultProjector {
         )
     }
 
-    static func actualResult(
-        predicate: HeistExecution.Predicate,
-        evidence: Observation.Evidence,
-        outstanding: String?
-    ) -> String? {
-        if let outstanding {
-            return "still waiting on: \(outstanding)"
-        }
-        guard case .notification(let notificationPredicate) = predicate.resolved else {
-            return nil
-        }
-        return evidence.events.lazy.compactMap { event -> Observation.Notification? in
-            guard case .notification(let notification) = event else { return nil }
-            return notification
-        }
-        .first(where: notificationPredicate.matches)?
-        .text
-    }
-
     static func timeoutMessage(
         predicate: HeistExecution.Predicate?,
         evidence: Observation.Evidence,
@@ -389,11 +334,17 @@ private extension HeistExecution.ResultProjector {
         evidence: HeistActionEvidence
     ) -> HeistFailureDetail {
         let result = evidence.result
+        let expectationActual: String?
+        do {
+            expectationActual = try evidence.replayExpectation()?.actual
+        } catch {
+            expectationActual = nil
+        }
         return HeistFailureDetail(
             category: .expectation,
             contract: "post-action expectation is met",
             observed: [
-                evidence.expectation?.actual,
+                expectationActual,
                 result?.message,
                 result?.outcome.failureKind.map { "failureKind=\($0.rawValue)" },
             ].compactMap { $0 }.joined(separator: "; "),
@@ -403,18 +354,24 @@ private extension HeistExecution.ResultProjector {
 
     static func waitFailure(
         step: WaitStep,
-        evidence: HeistWaitUnmatchedEvidence,
+        evidence: HeistExpectationEvidence,
         outcome: HeistExecution.LeafOutcome
     ) -> HeistFailureDetail {
+        let replay: ExpectationResult?
+        do {
+            replay = try evidence.replay()
+        } catch {
+            replay = nil
+        }
         let category: HeistFailureCategory
         let observed: String
         switch outcome {
         case .completed:
             category = .wait
-            observed = evidence.expectation.actual ?? "wait predicate was not met"
+            observed = replay?.actual ?? "wait predicate was not met"
         case .timedOut, .heistTimedOut:
             category = .timeout
-            observed = evidence.expectation.actual ?? "wait deadline expired"
+            observed = replay?.actual ?? "wait deadline expired"
         case .cancelled:
             category = .wait
             observed = "wait observation was cancelled"
@@ -430,24 +387,6 @@ private extension HeistExecution.ResultProjector {
             contract: "wait predicate is met before timeout",
             observed: observed,
             expected: step.predicate.description
-        )
-    }
-
-    static func unmatchedWaitEvidence(
-        predicate: AccessibilityPredicate,
-        actual: String
-    ) -> HeistWaitUnmatchedEvidence {
-        HeistWaitUnmatchedEvidence(
-            observation: Observation.Evidence(
-                baseline: nil,
-                current: nil,
-                events: [],
-                completeness: .incomplete
-            ),
-            expectation: ExpectationResult.Unmet(
-                predicate: predicate,
-                actual: actual
-            )
         )
     }
 }
@@ -479,6 +418,21 @@ extension ResolvedHeistActionCommand {
 }
 
 private extension HeistExecution.LeafOutcome {
+    var expectationTerminalCause: HeistExpectationEvidence.TerminalCause {
+        switch self {
+        case .completed:
+            .observed
+        case .timedOut, .heistTimedOut:
+            .deadline
+        case .cancelled:
+            .cancelled
+        case .unavailable:
+            .unavailable
+        case .viewportExitFailed:
+            .viewportFailure
+        }
+    }
+
     var admitsSatisfiedExpectation: Bool {
         switch self {
         case .completed, .timedOut, .heistTimedOut:

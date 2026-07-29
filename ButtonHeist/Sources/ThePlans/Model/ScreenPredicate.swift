@@ -55,7 +55,7 @@ public struct ScreenFacts: Codable, Sendable, Equatable {
     }
 }
 
-package struct ResolvedScreenPredicate: Sendable, Equatable {
+package struct ResolvedScreenPredicate: Codable, Sendable, Equatable {
     package let match: ResolvedStringMatch?
 
     package init(match: ResolvedStringMatch?) {

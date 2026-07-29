@@ -69,16 +69,16 @@ package enum HeistGroupCompletion: Sendable, Equatable {
 
 package enum HeistWaitCompletion: Sendable, Equatable {
     case passed(
-        evidence: HeistPassedWaitEvidence,
+        evidence: HeistExpectationEvidence,
         children: HeistPassingChildren = .empty
     )
     case failed(
-        evidence: HeistWaitUnmatchedEvidence,
+        evidence: HeistEvidenceAvailability<HeistExpectationEvidence>,
         failure: HeistFailureDetail,
         children: HeistPassingChildren = .empty
     )
     case childAborted(
-        evidence: HeistWaitUnmatchedEvidence,
+        evidence: HeistExpectationEvidence,
         failure: HeistFailureDetail,
         children: HeistAbortedChildren
     )
@@ -299,44 +299,40 @@ public extension HeistExecutionStepResult {
         }
     }
 
-    var passedWaitEvidence: HeistPassedWaitEvidence? {
+    var waitEvidence: HeistExpectationEvidence? {
         guard case .wait(_, _, let completion) = node else { return nil }
         switch completion {
-        case .passed(let evidence, _): return evidence
-        case .failed, .childAborted, .skipped: return nil
-        }
-    }
-
-    var unmatchedWaitEvidence: HeistWaitUnmatchedEvidence? {
-        guard case .wait(_, _, let completion) = node else { return nil }
-        switch completion {
-        case .failed(let evidence, _, _), .childAborted(let evidence, _, _):
+        case .passed(let evidence, _), .childAborted(let evidence, _, _):
             return evidence
-        case .passed, .skipped:
+        case .failed(let evidence, _, _):
+            return evidence.value
+        case .skipped:
             return nil
         }
     }
 
     var waitObservation: Observation.Evidence? {
-        guard case .wait(_, _, let completion) = node else { return nil }
-        switch completion {
-        case .passed(let evidence, _):
-            return evidence.observation
-        case .failed(let evidence, _, _), .childAborted(let evidence, _, _):
-            return evidence.observation
-        case .skipped: return nil
-        }
+        waitEvidence?.observation
     }
 
-    var waitExpectation: ExpectationResult? {
-        guard case .wait(_, _, let completion) = node else { return nil }
-        switch completion {
-        case .passed(let evidence, _):
-            return evidence.expectation
-        case .failed(let evidence, _, _), .childAborted(let evidence, _, _):
-            return evidence.expectation.result
-        case .skipped:
-            return nil
+    func replayExpectation() throws(Observation.Gap) -> ExpectationResult? {
+        switch node {
+        case .action:
+            try actionEvidence?.replayExpectation()
+        case .wait:
+            try waitEvidence?.replay()
+        case .conditional,
+             .forEachElement,
+             .forEachString,
+             .forEachElementIteration,
+             .forEachStringIteration,
+             .repeatUntil,
+             .repeatUntilIteration,
+             .warning,
+             .failure,
+             .heist,
+             .invocation:
+            nil
         }
     }
 

@@ -47,7 +47,7 @@ final class HeistResultTests: XCTestCase {
         }
 
         let invocation = try XCTUnwrap(heist.result.steps.first)
-        let report = HeistReport.project(result: heist.result)
+        let report = try HeistReport.project(result: heist.result)
         XCTAssertEqual(heist.result.steps.map(\.kind), [.invoke])
         XCTAssertEqual(invocation.reportDisplayName, #"RunHeist("PublicFacade.warn")"#)
         XCTAssertEqual(invocation.children.map(\.kind), [.warn])
@@ -339,7 +339,7 @@ final class HeistResultTests: XCTestCase {
             try Library.marker()
         }
 
-        let report = HeistReport.project(result: heist.result)
+        let report = try HeistReport.project(result: heist.result)
         XCTAssertEqual(report.warnings, [
             HeistExecutionWarning(path: "$.body[0].invoke.body[0]", message: "root"),
             HeistExecutionWarning(path: "$.body[0].invoke.body[1].invoke.body[0]", message: "nested"),

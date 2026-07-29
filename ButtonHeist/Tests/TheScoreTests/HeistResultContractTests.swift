@@ -71,9 +71,6 @@ import TheScore
             replacingNode(in: steps[4]) { node in
                 node["type"] = "for_each_element"
             },
-            replacingNode(in: steps[5]) { node in
-                node["predicate"] = try jsonValue(AccessibilityPredicate.exists(.label("Other")))
-            },
             replacingNode(in: steps[6]) { node in
                 node["type"] = "repeat_until"
             },
@@ -130,13 +127,11 @@ import TheScore
         let predicate = AccessibilityPredicate.exists(.label("Done"))
         let repeatDeclaration = HeistRepeatUntilDeclaration(predicate: predicate, timeout: 1)
         let repeatSummary = try #require(HeistRepeatUntilEvidence.matched(
-            iterationCount: 1,
-            expectation: ExpectationResult.Met(predicate: predicate)
+            iterationCount: 1
         ))
         let repeatIteration = try #require(HeistRepeatUntilEvidence.continued(
             iterationCount: 1,
-            iterationOrdinal: 0,
-            expectation: ExpectationResult.Unmet(predicate: predicate)
+            iterationOrdinal: 0
         ))
         let passedStringSummary = try #require(HeistPassedForEachStringEvidence(stringSummary))
         let passedElementSummary = try #require(HeistPassedForEachElementEvidence(elementSummary))

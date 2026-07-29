@@ -6,8 +6,8 @@ import ThePlans
 
 final class HeistJUnitXMLTests: XCTestCase {
     @ButtonHeistActor
-    func testJunitXMLAllPassed() async {
-        let xml = junitXML(
+    func testJunitXMLAllPassed() async throws {
+        let xml = try junitXML(
             steps: [
                 passingAction(path: "$.body[0]", label: "First"),
                 passingAction(path: "$.body[1]", label: "Second"),
@@ -26,13 +26,13 @@ final class HeistJUnitXMLTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testJunitXMLUsesCanonicalFailureDetails() async {
+    func testJunitXMLUsesCanonicalFailureDetails() async throws {
         let failed = failedAction(
             path: "$.body[1]",
             label: "Pay",
             message: "element not found"
         )
-        let xml = junitXML(
+        let xml = try junitXML(
             steps: [passingAction(path: "$.body[0]", label: "Cart"), failed],
             durationMs: 300
         )
@@ -51,7 +51,7 @@ final class HeistJUnitXMLTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testJunitXMLUsesNestedLeafFailureInsteadOfAbortedWrapper() async {
+    func testJunitXMLUsesNestedLeafFailureInsteadOfAbortedWrapper() async throws {
         let failed = failedAction(
             path: "$.body[0].conditional.cases[0].body[0]",
             label: "Pay",
@@ -71,7 +71,7 @@ final class HeistJUnitXMLTests: XCTestCase {
             ),
             children: [failed]
         )
-        let xml = junitXML(
+        let xml = try junitXML(
             steps: [wrapper],
             durationMs: 100
         )
@@ -82,8 +82,8 @@ final class HeistJUnitXMLTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testJunitXMLEmptyReport() async {
-        let xml = junitXML(steps: [], durationMs: 0)
+    func testJunitXMLEmptyReport() async throws {
+        let xml = try junitXML(steps: [], durationMs: 0)
 
         assertContains(xml, "tests=\"1\"")
         assertContains(xml, "failures=\"0\"")
@@ -100,7 +100,7 @@ final class HeistJUnitXMLTests: XCTestCase {
             path: try HeistExecutionPath(validating: "$.body[1]"),
             execution: .skipped(command: command)
         )
-        let xml = junitXML(
+        let xml = try junitXML(
             steps: [passingAction(path: "$.body[0]", label: "First"), skipped],
             durationMs: 100
         )
@@ -110,14 +110,14 @@ final class HeistJUnitXMLTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testJunitXMLEscapesAttributesAndFailureBody() async {
+    func testJunitXMLEscapesAttributesAndFailureBody() async throws {
         let message = #"Element "Save & Continue <now>" isn't available"#
         let failed = failedAction(
             path: "$.body[0]",
             label: "Save & Continue <now>",
             message: message
         )
-        let xml = junitXML(
+        let xml = try junitXML(
             steps: [failed],
             durationMs: 100
         )
@@ -133,11 +133,11 @@ final class HeistJUnitXMLTests: XCTestCase {
     private func junitXML(
         steps: [HeistExecutionStepResult],
         durationMs: ElapsedMilliseconds
-    ) -> String {
+    ) throws -> String {
         let result = HeistResultFixture.result(steps: steps, durationMs: durationMs)
         let (fence, _) = makeConnectedFence()
         return fence.junitXML(
-            for: HeistReport.project(result: result),
+            for: try HeistReport.project(result: result),
             heistName: "test-heist"
         )
     }

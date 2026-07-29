@@ -227,12 +227,14 @@ where Rule: HeistResultEvidenceRule {
 
 package enum HeistPassedActionRule: HeistResultEvidenceRule {
     package static let rejection = "passed action evidence must prove success"
-    package static func admits(_ evidence: HeistActionEvidence) -> Bool { evidence.resultSucceeded == true }
+    package static func admits(_ evidence: HeistActionEvidence) -> Bool { evidence.admitsPassedResult }
 }
 
 package enum HeistFailedActionRule: HeistResultEvidenceRule {
     package static let rejection = "failed action evidence must prove failure"
-    package static func admits(_ evidence: HeistActionEvidence) -> Bool { evidence.resultSucceeded == false }
+    package static func admits(_ evidence: HeistActionEvidence) -> Bool {
+        evidence.result?.outcome.isSuccess == false
+    }
 }
 
 package enum HeistPassedForEachElementRule: HeistResultEvidenceRule {
@@ -297,13 +299,18 @@ package typealias HeistPassedInvocationEvidence = HeistResultEvidence<HeistPasse
 package typealias HeistFailedInvocationEvidence = HeistResultEvidence<HeistFailedInvocationRule>
 
 private extension HeistActionEvidence {
-    var resultSucceeded: Bool? {
+    var admitsPassedResult: Bool {
         switch self {
         case .commandResolutionFailure:
             return false
         case .completed(let result, let expectation):
-            guard !result.outcome.isSuccess || expectation?.met != false else { return nil }
-            return result.outcome.isSuccess
+            guard result.outcome.isSuccess else { return false }
+            guard let expectation else { return true }
+            do {
+                return try expectation.replay().met
+            } catch {
+                return false
+            }
         }
     }
 }
