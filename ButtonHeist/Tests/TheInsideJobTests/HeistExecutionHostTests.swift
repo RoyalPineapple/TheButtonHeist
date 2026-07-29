@@ -11,6 +11,38 @@ import XCTest
 
 @MainActor
 final class HeistExecutionHostTests: ButtonHeistTestCase {
+    func testFreshSnapshotBecomesReplayBaselineAfterAdmissionInvalidation() async throws {
+        let observation = hostObservation(label: "Home")
+        let source = HostVisibleObservationSource(observation)
+        let brains = TheBrains(
+            tripwire: TheTripwire(),
+            failureEvidencePolicy: .hierarchy,
+            visibleObservationSource: source.capture
+        )
+        let stream = brains.vault.semanticObservationStream
+        _ = await stream.commitVisibleObservationForTesting(observation)
+        await stream.stateOwner.invalidateCurrentAdmission()
+
+        let completion = try await HeistExecution.Host(brains: brains).execute(
+            try HeistPlan(body: [
+                .wait(WaitStep(
+                    predicate: .missing(.label("Never Existed")),
+                    timeout: try .seconds(1)
+                )),
+            ]),
+            timeout: try .seconds(5)
+        )
+        let step = try XCTUnwrap(completion.steps.first)
+        let evidence = try XCTUnwrap(step.waitObservation)
+        let predicate = try AccessibilityPredicate
+            .missing(.label("Never Existed"))
+            .resolve(in: .empty)
+
+        XCTAssertEqual(step.status, .passed)
+        XCTAssertNotNil(evidence.baseline)
+        XCTAssertEqual(predicate.evaluate(in: evidence).met, true)
+    }
+
     func testEventPublishedDuringInitialCaptureIsReplayedExactlyOnce() async throws {
         let observation = hostObservation(label: "Home")
         let source = HostVisibleObservationSource(observation)
