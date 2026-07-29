@@ -58,7 +58,7 @@ private extension PendingAccessibilityNotificationEvent {
 private extension AccessibilityNotificationKind {
     var isAdmittedObservationKind: Bool {
         switch self {
-        case .announcement, .screenChanged, .elementChanged:
+        case .announcement, .screenChanged, .elementChanged, .elementUpdate:
             true
         case .unknown:
             false

@@ -235,8 +235,12 @@ extension TheVault {
                     .map(Observation.Event.notification)
             }
             let forcesElementChange = notifications.admittedNotifications.contains {
-                if case .elementChanged = $0.kind { return true }
-                return false
+                switch $0.kind {
+                case .elementChanged, .elementUpdate:
+                    true
+                case .screenChanged, .announcement, .unknown:
+                    false
+                }
             }
             let currentEvent: Observation.Event
             let events: [Observation.Event]

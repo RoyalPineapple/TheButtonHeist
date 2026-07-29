@@ -118,6 +118,12 @@ struct RootView: View {
                 }
 
                 Section("Research") {
+                    NavigationLink("SwiftUI Value Probe") {
+                        SwiftUIAccessibilityValueProbeView()
+                    }
+                    NavigationLink("Notification Probe") {
+                        AccessibilityNotificationProbeView()
+                    }
                     NavigationLink("Scroll SPI Harness") {
                         ScrollSPIHarnessView()
                     }

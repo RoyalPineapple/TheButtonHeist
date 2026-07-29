@@ -22,7 +22,7 @@ final class ScreenClassifierTests: XCTestCase {
 
         for notification in [
             AccessibilityNotificationKind.elementChanged(.layout),
-            .elementChanged(.value),
+            .elementUpdate,
             .announcement,
         ] {
             XCTAssertEqual(
@@ -450,9 +450,9 @@ final class ScreenClassifierTests: XCTestCase {
         let after = screen(elements: [element(label: "Settings", traits: .header)])
         let notificationOrders: [[AccessibilityNotificationKind]] = [
             [],
-            [.elementChanged(.layout), .announcement, .elementChanged(.value)],
-            [.elementChanged(.value), .elementChanged(.layout), .announcement],
-            [.announcement, .elementChanged(.value), .elementChanged(.layout)],
+            [.elementChanged(.layout), .announcement, .elementUpdate],
+            [.elementUpdate, .elementChanged(.layout), .announcement],
+            [.announcement, .elementUpdate, .elementChanged(.layout)],
         ]
 
         XCTAssertTrue(notificationOrders.allSatisfy {
@@ -466,7 +466,7 @@ final class ScreenClassifierTests: XCTestCase {
         let notificationOrders: [[AccessibilityNotificationKind]] = [
             [.screenChanged],
             [.screenChanged, .elementChanged(.layout), .announcement],
-            [.elementChanged(.value), .announcement, .screenChanged],
+            [.elementUpdate, .announcement, .screenChanged],
         ]
 
         XCTAssertTrue(notificationOrders.allSatisfy {

@@ -196,7 +196,8 @@ deadline expiry all use this path. A screenshot failure is auxiliary evidence;
 it never replaces the original failed path.
 
 One pure `ScreenClassifier` combines typed snapshots with scoped
-`screenChanged`, `elementChanged`, and `announcement` notifications.
+`screenChanged`, `elementChanged(layout)`, `elementUpdate`, and `announcement`
+notifications.
 `AccessibilityNotificationBus` appends package-internal ingress records to one
 bounded log. An action window checkpoints retained history without clearing it;
 notifications are edge evidence, not a second state model. A scoped screen
@@ -258,9 +259,9 @@ announcement notifications do not append a screen marker. Capture admission can
 also report unhealthy snapshots rather than pretending an empty
 post-navigation parse is stable.
 
-UIKit value changes are not identified by an `elementChanged(.value)` ingress
-signal alone. UIKit controls may signal through either element-change subtype or
-an announcement, so all three trigger a recapture; successive admitted snapshots
+UIKit value changes are not identified by an `elementUpdate` ingress signal
+alone. UIKit controls may signal through an element change, element update, or
+announcement, so all three trigger a recapture; successive admitted snapshots
 confirm the `accessibilityValue` change. SwiftUI's uniform value notification
 follows the same recapture path.
 

@@ -208,7 +208,7 @@ extension TheVaultResolutionTests {
         )
     }
 
-    func testValueChangedNotificationRereadsAccessibilityValue() async throws {
+    func testElementUpdateNotificationRereadsAccessibilityValue() async throws {
         let before = InterfaceObservation.makeForTests(elements: [
             (element(label: "Volume", value: "50%", traits: .adjustable), "volume"),
         ])

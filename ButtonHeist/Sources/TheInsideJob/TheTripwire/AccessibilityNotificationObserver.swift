@@ -215,8 +215,17 @@ final class AccessibilityNotificationObserver {
         precondition(sequenceFloor < UInt64.max, "Accessibility notification sequence overflowed")
         latestSequence = sequenceFloor + 1
         let timestamp = Date()
-        let notificationPayload = CapturedAccessibilityNotificationPayload(notificationData).pendingPayload
-        let associatedElementPayload = CapturedAccessibilityNotificationPayload(associatedElement).pendingPayload
+        let capturedNotificationData = CapturedAccessibilityNotificationPayload(notificationData)
+        let capturedAssociatedElement = CapturedAccessibilityNotificationPayload(associatedElement)
+        if let probe = AccessibilityNotificationProbe.observe(
+            rawCode: code,
+            notificationData: capturedNotificationData,
+            associatedElement: capturedAssociatedElement
+        ) {
+            accessibilityNotificationLogger.info("\(probe.description, privacy: .public)")
+        }
+        let notificationPayload = capturedNotificationData.pendingPayload
+        let associatedElementPayload = capturedAssociatedElement.pendingPayload
         for subscriber in subscribers {
             subscriber.record(
                 sequence: latestSequence,
