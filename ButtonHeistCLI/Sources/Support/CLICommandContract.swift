@@ -219,7 +219,7 @@ enum CLICommandCatalog {
             }
             return commandType
         }
-        return directCommands + [JSONLinesCommand.self]
+        return directCommands + [AdversarialCatalogCommand.self, JSONLinesCommand.self]
     }()
 
     static func descriptor(for commandType: OneShotCLICommand.Type) -> FenceCommandDescriptor? {
