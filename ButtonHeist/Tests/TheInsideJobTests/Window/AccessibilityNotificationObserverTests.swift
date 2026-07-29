@@ -370,16 +370,16 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(second.batch.through.sequence, 2)
     }
 
-    func testUnacknowledgedCycleClaimIsReturnedIntactForRetry() async throws {
+    func testFailedCycleCommitLeavesExactClaimUnacknowledgedForRetry() throws {
         let bus = AccessibilityNotificationBus()
         bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
 
-        let failedAttempt = try XCTUnwrap(bus.freezeObservationCycleClaim())
+        let failedCommit = try XCTUnwrap(bus.freezeObservationCycleClaim())
         let retry = try XCTUnwrap(bus.freezeObservationCycleClaim())
 
-        XCTAssertEqual(retry.id, failedAttempt.id)
+        XCTAssertEqual(retry.id, failedCommit.id)
         XCTAssertEqual(retry.batch.events.map(\.sequence), [1])
-        XCTAssertEqual(retry.batch.through, failedAttempt.batch.through)
+        XCTAssertEqual(retry.batch.through, failedCommit.batch.through)
         XCTAssertTrue(retry.acknowledge())
         XCTAssertTrue(bus.checkpoint(after: .origin, selection: .all).events.isEmpty)
     }
@@ -401,7 +401,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(next.batch.events.map(\.sequence), [2])
     }
 
-    func testCycleClaimCanBeAcknowledgedAtMostOnce() async throws {
+    func testSuccessfulCycleCommitAcknowledgesExactClaimOnce() throws {
         let bus = AccessibilityNotificationBus()
         bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
 
@@ -410,6 +410,37 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertTrue(claim.acknowledge())
         XCTAssertFalse(claim.acknowledge())
         XCTAssertTrue(bus.checkpoint(after: .origin, selection: .all).events.isEmpty)
+    }
+
+    func testAmbientOverflowStartsReplacementBaselineInsteadOfNoChange() throws {
+        let bus = AccessibilityNotificationBus()
+        for _ in 0..<65 {
+            bus.recordForTesting(
+                code: 1008,
+                notificationData: .none,
+                associatedElement: .none
+            )
+        }
+
+        let claim = try XCTUnwrap(bus.freezeObservationCycleClaim())
+        XCTAssertEqual(
+            claim.batch.gap,
+            AccessibilityNotificationGap(droppedThroughSequence: 1)
+        )
+
+        var state = TheVault.State()
+        _ = state.commitObservation(admission())
+        state.discardCurrentObservation()
+
+        let newBaseline = claim.batch.beginningNewBaseline
+        let replacement = state.commitObservation(admission(notificationBatch: newBaseline))
+
+        XCTAssertNil(newBaseline.gap)
+        XCTAssertTrue(newBaseline.events.isEmpty)
+        guard case .elementsChanged = replacement.events.last else {
+            return XCTFail("Ambient overflow must publish a replacement, not noChange")
+        }
+        XCTAssertTrue(claim.acknowledge())
     }
 
     func testCancelledActionEvidenceBeyondAmbientLimitWaitsForCycleAdmission() async throws {
@@ -890,6 +921,34 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         }
         XCTFail("Timed out waiting for accessibility notification \(String(describing: kind))", file: file, line: line)
         throw WaitError.timedOut(kind)
+    }
+
+    private func admission(
+        notificationBatch: AccessibilityNotificationBatch = AccessibilityNotificationBatch(
+            events: [],
+            through: .origin,
+            scopedScreenChangedThrough: 0,
+            gap: nil
+        )
+    ) -> Observation.Admission {
+        let observation = InterfaceObservation.empty
+        return Observation.Admission(
+            tree: observation.tree,
+            tripwireSignal: .empty,
+            discoveryCommitPolicy: .mergeIntoInterface,
+            lineage: .resting,
+            scope: .visible,
+            notifications: Observation.NotificationSnapshot(
+                admittedNotifications: [],
+                through: notificationBatch.through,
+                scopedScreenChangedThrough: notificationBatch.scopedScreenChangedThrough,
+                gap: notificationBatch.gap
+            )!,
+            keyboardVisible: nil,
+            timestamp: Date(timeIntervalSince1970: 0),
+            viewportFrames: observation.tree.viewportFrames,
+            geometryTolerance: CoarseFrameComparison.currentGeometryTolerance
+        )
     }
 
     @MainActor
