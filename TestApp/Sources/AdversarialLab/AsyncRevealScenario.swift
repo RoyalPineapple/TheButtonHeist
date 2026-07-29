@@ -55,7 +55,7 @@ internal struct AsyncRevealScenarioView: View {
             }
             phase = .revealed
             if postNotification {
-                UIAccessibility.post(notification: .screenChanged, argument: "Delayed code: 7429")
+                UIAccessibility.post(notification: .announcement, argument: "Delayed code: 7429")
             }
         }
     }
