@@ -8,11 +8,10 @@ import UIKit
 @_spi(ButtonHeistInternals) @testable import TheScore
 
 @MainActor
-private func advanceInflationTickClock(
+private func advanceInflationObservationClock(
     _ now: inout RuntimeElapsed.Instant
-) -> TheTripwire.TickWaitOutcome {
+) {
     now = now.advanced(by: .milliseconds(10))
-    return .observed
 }
 
 @MainActor
@@ -80,7 +79,15 @@ extension TheBrainsScrollTests {
         var now = RuntimeElapsed.now
         inflation.geometryEnvironment = .init(
             now: { now },
-            awaitFrame: { _ in advanceInflationTickClock(&now) }
+            refreshVisibleObservation: { _ in
+                advanceInflationObservationClock(&now)
+                guard let current =
+                    await self.brains.vault.semanticObservationStream.stateOwner.current()
+                else {
+                    return .unavailable(.sourceTreeUnavailable)
+                }
+                return .committed(current)
+            }
         )
         inflation.exploration.moveViewport = { _ in
             object.accessibilityFrame = placedFrame

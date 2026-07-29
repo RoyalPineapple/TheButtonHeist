@@ -12,19 +12,10 @@ final class Navigation {
 
     let vault: TheVault
     let safecracker: TheSafecracker
-    let tripwire: TheTripwire
     lazy var elementInflation = ElementInflation(
         vault: vault,
         safecracker: safecracker,
-        tripwire: tripwire,
         exploration: ElementInflation.Exploration(
-            settleForDiscovery: { [weak self] in
-                guard let self else { return }
-                _ = await self.tripwire.waitForNextTick(
-                    timeout: SemanticObservationTiming.defaultTimeout,
-                    demand: .ambient
-                )
-            },
             discoverTarget: { [weak self] target in
                 guard let self else { return nil }
                 return await self.exploreScreen(
@@ -45,12 +36,10 @@ final class Navigation {
 
     init(
         vault: TheVault,
-        safecracker: TheSafecracker,
-        tripwire: TheTripwire
+        safecracker: TheSafecracker
     ) {
         self.vault = vault
         self.safecracker = safecracker
-        self.tripwire = tripwire
     }
 
     static let swipeGestureDuration: GestureDuration = .scrollSwipeDefault

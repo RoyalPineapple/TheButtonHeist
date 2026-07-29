@@ -99,7 +99,6 @@ internal final class ElementInflation {
     ) async -> Navigation.ViewportTransition
 
     internal struct Exploration {
-        internal var settleForDiscovery: @MainActor () async -> Void
         internal var discoverTarget: @MainActor (
             ResolvedAccessibilityTarget,
         ) async -> Navigation.InterfaceExplorationResult?
@@ -111,9 +110,9 @@ internal final class ElementInflation {
 
     internal struct GeometryEnvironment {
         internal let now: @MainActor () -> RuntimeElapsed.Instant
-        internal let awaitFrame: @MainActor (
-            Duration
-        ) async -> TheTripwire.TickWaitOutcome
+        internal let refreshVisibleObservation: @MainActor (
+            Double?
+        ) async -> VisibleObservationOutcome
     }
 
     internal struct CommittedElementTarget {
@@ -135,7 +134,6 @@ internal final class ElementInflation {
 
     internal let vault: TheVault
     internal let safecracker: TheSafecracker
-    internal let tripwire: TheTripwire
     internal var exploration: Exploration
     internal var geometryEnvironment: GeometryEnvironment
 
@@ -143,17 +141,15 @@ internal final class ElementInflation {
     internal init(
         vault: TheVault,
         safecracker: TheSafecracker,
-        tripwire: TheTripwire,
         exploration: Exploration
     ) {
         self.vault = vault
         self.safecracker = safecracker
-        self.tripwire = tripwire
         self.exploration = exploration
         geometryEnvironment = GeometryEnvironment(
             now: { RuntimeElapsed.now },
-            awaitFrame: { timeout in
-                await tripwire.waitForNextTick(timeout: timeout, demand: .immediate)
+            refreshVisibleObservation: { [vault] timeout in
+                await vault.semanticObservationStream.refreshedVisibleObservation(timeout: timeout)
             }
         )
     }

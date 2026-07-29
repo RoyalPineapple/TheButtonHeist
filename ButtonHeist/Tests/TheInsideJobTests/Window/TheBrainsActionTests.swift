@@ -227,7 +227,14 @@ final class TheBrainsActionTests: XCTestCase {
     private func installObservedGeometryTick() {
         brains.navigation.elementInflation.geometryEnvironment = .init(
             now: { RuntimeElapsed.now },
-            awaitFrame: { _ in .observed }
+            refreshVisibleObservation: { _ in
+                guard let current =
+                    await self.brains.vault.semanticObservationStream.stateOwner.current()
+                else {
+                    return .unavailable(.sourceTreeUnavailable)
+                }
+                return .committed(current)
+            }
         )
     }
 

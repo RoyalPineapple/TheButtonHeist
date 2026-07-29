@@ -88,8 +88,7 @@ final class TheBrains {
         self.safecracker = safecracker
         let navigation = Navigation(
             vault: vault,
-            safecracker: safecracker,
-            tripwire: tripwire
+            safecracker: safecracker
         )
         self.navigation = navigation
         self.actions = Actions(

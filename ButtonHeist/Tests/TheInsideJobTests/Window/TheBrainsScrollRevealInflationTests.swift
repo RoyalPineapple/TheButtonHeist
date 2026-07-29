@@ -936,7 +936,14 @@ extension TheBrainsScrollTests {
         brains.navigation.elementInflation.exploration.moveViewport = { _ in .unavailable() }
         brains.navigation.elementInflation.geometryEnvironment = .init(
             now: { RuntimeElapsed.now },
-            awaitFrame: { _ in .observed }
+            refreshVisibleObservation: { _ in
+                guard let current =
+                    await self.brains.vault.semanticObservationStream.stateOwner.current()
+                else {
+                    return .unavailable(.sourceTreeUnavailable)
+                }
+                return .committed(current)
+            }
         )
         brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in
             self.brains.vault.observeInterface(revealedObservation)

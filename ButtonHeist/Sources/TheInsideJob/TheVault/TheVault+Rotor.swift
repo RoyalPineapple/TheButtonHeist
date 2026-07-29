@@ -36,7 +36,7 @@ extension TheVault {
         direction: RotorDirection,
         on liveTarget: LiveActionTarget,
         history: RotorHistoryAdmission
-    ) -> RotorOutcome {
+    ) async -> RotorOutcome {
         let object = liveTarget.object
         let rotors = object.accessibilityCustomRotors ?? []
         guard !rotors.isEmpty else { return .noRotors }
@@ -116,7 +116,7 @@ extension TheVault {
         guard let resultObject else {
             return .resultTargetUnavailable(rotorName)
         }
-        let resolved = resolveRotorResultObject(resultObject)
+        let resolved = await resolveRotorResultObject(resultObject)
         guard let resolved else {
             return .resultTargetUnresolved(rotorName)
         }
@@ -201,21 +201,23 @@ private extension TheVault {
         return cached
     }
 
-    /// Capture the live hierarchy and resolve the `InterfaceTree.Element` corresponding to
-    /// a UIKit accessibility object. Used by live custom rotor steps so the
-    /// returned rotor target flows through the same parser as `get_interface`.
-    func resolveLiveObject(_ object: NSObject) -> InterfaceTree.Element? {
-        guard let observation = refreshLiveCapture() else { return nil }
-        guard let heistId = observation.liveCapture.heistId(matching: object) else { return nil }
-        return observation.tree.findElement(heistId: heistId)
+    /// Publish one fresh hierarchy and resolve the UIKit result from committed
+    /// live evidence.
+    func resolveLiveObject(_ object: NSObject) async -> InterfaceTree.Element? {
+        guard case .committed =
+            await semanticObservationStream.refreshedVisibleObservation(
+                timeout: SemanticObservationTiming.defaultTimeout / .seconds(1)
+            )
+        else { return nil }
+        return knownObject(object)
     }
 
-    func resolveRotorResultObject(_ object: NSObject) -> InterfaceTree.Element? {
+    func resolveRotorResultObject(_ object: NSObject) async -> InterfaceTree.Element? {
         if let known = knownObject(object) {
             return known
         }
 
-        return resolveLiveObject(object)
+        return await resolveLiveObject(object)
     }
 
     func textRange(from reference: TextRangeReference, in input: UITextInput) -> UITextRange? {

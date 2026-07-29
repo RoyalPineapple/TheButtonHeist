@@ -152,12 +152,7 @@ extension TheBrainsScrollTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
-
-        let visibleScreen = try XCTUnwrap(
-            brains.vault.refreshLiveCapture(),
-            "Expected a live hierarchy for the interface discovery contamination regression test"
-        )
+        let visibleScreen = try await publishedVisibleObservation()
         let scrollContainerPath = try XCTUnwrap(
             visibleScreen.tree.orderedContainers.compactMap { container -> TreePath? in
                 guard container.container.isScrollable else { return nil }
@@ -239,12 +234,8 @@ extension TheBrainsScrollTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
         let initialVisualOrigin = Navigation.visualOrigin(in: scrollView)
-        _ = try XCTUnwrap(
-            brains.vault.refreshLiveCapture(),
-            "Expected a live hierarchy for blank-page discovery"
-        )
+        _ = try await publishedVisibleObservation()
 
         guard let exploration = await brains.navigation.exploreScreen(
             target: try resolvedTarget(.label("Beyond Blank Page")),
@@ -302,13 +293,9 @@ extension TheBrainsScrollTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
         let initialVisualOrigin = Navigation.visualOrigin(in: scrollView)
 
-        _ = try XCTUnwrap(
-            brains.vault.refreshLiveCapture(),
-            "Expected a live hierarchy for wait discovery restoration"
-        )
+        _ = try await publishedVisibleObservation()
         guard let exploration = await brains.navigation.exploreScreen(
             target: try resolvedTarget(.label("Wait Discovery Target")),
             startingFresh: true,
@@ -381,6 +368,31 @@ extension TheBrainsScrollTests {
         XCTAssertTrue(observedLabels.contains("Scrolled"))
         XCTAssertEqual(exploration.viewportExit, .restored)
         XCTAssertEqual(Navigation.visualOrigin(in: fixture.scrollView).y, 0, accuracy: 0.01)
+    }
+
+    func testViewportMovementReturnsCommittedPublishedObservation() async throws {
+        let fixture = try await explorationViewport()
+        defer { fixture.close() }
+        publishVerticalOffsetObservations(from: fixture.scrollView)
+        let capturesBeforeMovement = visibleObservationSource.captureCount
+        let scrollTarget = try XCTUnwrap(
+            Navigation.ScrollableTarget.programmatic(fixture.scrollView, in: brains.vault)
+        )
+
+        let transition = await brains.navigation.performViewportTransition(
+            .page(scrollTarget, direction: .down, animated: false)
+        )
+
+        XCTAssertEqual(transition.outcome, .moved)
+        XCTAssertGreaterThan(visibleObservationSource.captureCount, capturesBeforeMovement)
+        XCTAssertTrue(transition.current?.snapshot.interface.projectedElements.contains {
+            $0.semantics.assertable.label == "Scrolled"
+        } == true)
+        let committed = await brains.vault.semanticObservationStream.stateOwner.current()
+        XCTAssertEqual(
+            transition.current?.snapshot,
+            committed?.snapshot
+        )
     }
 
     func testExpiredBusinessDeadlineStillPermitsBoundedRestoration() async throws {
@@ -540,8 +552,7 @@ extension TheBrainsScrollTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
-        _ = brains.vault.refreshLiveCapture()
+        _ = try await publishedVisibleObservation()
 
         let result = await brains.navigation.executeScrollToVisible(
             target: try resolvedScrollToVisibleTarget(

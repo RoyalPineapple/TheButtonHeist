@@ -118,9 +118,17 @@ extension ElementInflationProductTests {
         let deadlineStart = now
         refreshBrains.navigation.elementInflation.geometryEnvironment = .init(
             now: { now },
-            awaitFrame: { _ in
+            refreshVisibleObservation: { _ in
                 now = now.advanced(by: .milliseconds(10))
-                return .observed
+                await refreshBrains.vault.installObservationForTesting(
+                    refreshObservationSource.observation
+                )
+                guard let current =
+                    await refreshBrains.vault.semanticObservationStream.stateOwner.current()
+                else {
+                    return .unavailable(.sourceTreeUnavailable)
+                }
+                return .committed(current)
             }
         )
 

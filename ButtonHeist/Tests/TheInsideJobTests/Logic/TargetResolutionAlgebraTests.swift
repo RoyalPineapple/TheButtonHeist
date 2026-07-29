@@ -20,9 +20,7 @@ final class TargetResolutionAlgebraTests: XCTestCase {
         inflation = ElementInflation(
             vault: vault,
             safecracker: TheSafecracker(fingerprintsEnabled: false),
-            tripwire: tripwire,
             exploration: ElementInflation.Exploration(
-                settleForDiscovery: {},
                 discoverTarget: { _ in nil },
                 revealKnownTarget: { _ in nil },
                 moveViewport: { _ in .unavailable() }

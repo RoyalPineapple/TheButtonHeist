@@ -29,26 +29,23 @@ extension Actions {
             let result: TheSafecracker.ActionDispatchResult
             switch self.vault.dispatchOnFreshLiveActionTarget(
                 context.liveTarget,
-                operation: { liveTarget in
-                let outcome = self.vault.performRotor(
+                operation: { $0 }
+            ) {
+            case .success(let liveTarget):
+                let dispatchedOutcome = await self.vault.performRotor(
                     selection: selection,
                     direction: direction,
                     on: liveTarget,
                     history: rotorHistory
                 )
-                let result = Self.rotorDispatchOutcome(
-                    outcome: outcome,
+                outcome = dispatchedOutcome
+                result = Self.rotorDispatchOutcome(
+                    outcome: dispatchedOutcome,
                     rotor: rotor,
                     rotorIndex: rotorIndex,
                     direction: direction,
                     liveTarget: liveTarget
                 )
-                return (outcome, result)
-                }
-            ) {
-            case .success(let dispatch):
-                outcome = dispatch.0
-                result = dispatch.1
             case .failure(let staleness):
                 return self.staleLiveTargetFailure(staleness, payload: .rotor(nil))
             }

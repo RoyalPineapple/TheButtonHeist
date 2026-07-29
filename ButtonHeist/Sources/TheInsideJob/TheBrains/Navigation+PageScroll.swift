@@ -20,7 +20,13 @@ extension Navigation {
         selection: ResolvedScrollContainerSelection,
         direction: ScrollDirection,
     ) async -> TheSafecracker.ActionDispatchResult {
-        vault.refreshLiveCapture()
+        guard await refreshVisibleScrollEvidence() else {
+            return .failure(
+                .scroll,
+                message: "scroll failed: no committed visible observation was available",
+                failureKind: .targetUnavailable
+            )
+        }
         let axis = Self.requiredAxis(for: direction)
         switch resolveContainerScrollTarget(
             selection: selection,
@@ -64,7 +70,13 @@ extension Navigation {
         selection: ResolvedScrollContainerSelection,
         edge: ScrollEdge,
     ) async -> TheSafecracker.ActionDispatchResult {
-        vault.refreshLiveCapture()
+        guard await refreshVisibleScrollEvidence() else {
+            return .failure(
+                .scrollToEdge,
+                message: "scroll_to_edge failed: no committed visible observation was available",
+                failureKind: .targetUnavailable
+            )
+        }
         let axis = Self.requiredAxis(for: edge)
         switch resolveContainerScrollTarget(
             selection: selection,
@@ -94,6 +106,12 @@ extension Navigation {
                 failureKind: .targetUnavailable
             )
         }
+    }
+
+    private func refreshVisibleScrollEvidence() async -> Bool {
+        await vault.semanticObservationStream.refreshedVisibleObservation(
+            timeout: SemanticObservationTiming.defaultTimeout / .seconds(1)
+        ).isCommitted
     }
 
     func scrollToEdgeAndSettle(

@@ -42,7 +42,7 @@ final class RotorCursorTests: XCTestCase {
         )
 
         do {
-            let outcome = vault.performRotor(
+            let outcome = await vault.performRotor(
                 selection: .named("Items"),
                 direction: .next,
                 on: try rotorLiveTarget(hostHeistId: hostHeistId),
@@ -76,7 +76,7 @@ final class RotorCursorTests: XCTestCase {
         )
 
         XCTAssertNil(releasedInitialResult)
-        let outcome = vault.performRotor(
+        let outcome = await vault.performRotor(
             selection: .named("Items"),
             direction: .next,
             on: try rotorLiveTarget(hostHeistId: hostHeistId),
@@ -122,7 +122,7 @@ final class RotorCursorTests: XCTestCase {
             resultObject: nil
         )
 
-        let outcome = vault.performRotor(
+        let outcome = await vault.performRotor(
             selection: .named("Items"),
             direction: .next,
             on: try rotorLiveTarget(hostHeistId: hostHeistId),
@@ -164,7 +164,7 @@ final class RotorCursorTests: XCTestCase {
             resultHeistId: resultHeistId,
             resultObject: result
         )
-        let outcome = vault.performRotor(
+        let outcome = await vault.performRotor(
             selection: .named("Items"),
             direction: .next,
             on: try rotorLiveTarget(hostHeistId: hostHeistId),
@@ -237,7 +237,7 @@ final class RotorCursorTests: XCTestCase {
             resultObject: result
         )
 
-        let outcome = vault.performRotor(
+        let outcome = await vault.performRotor(
             selection: .named("Words"),
             direction: .next,
             on: try rotorLiveTarget(hostHeistId: hostHeistId),
@@ -316,7 +316,7 @@ final class RotorCursorTests: XCTestCase {
         hostHeistId: HeistId,
         rotorName: RotorName
     ) async throws {
-        let outcome = vault.performRotor(
+        let outcome = await vault.performRotor(
             selection: .named(rotorName),
             direction: .next,
             on: try rotorLiveTarget(hostHeistId: hostHeistId),

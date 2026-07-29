@@ -49,6 +49,18 @@ final class TheBrainsScrollTests: XCTestCase {
         await brains.vault.installObservationForTesting(observation)
     }
 
+    func publishedVisibleObservation() async throws -> InterfaceObservation {
+        let outcome = await brains.vault.semanticObservationStream.refreshedVisibleObservation(
+            timeout: SemanticObservationTiming.defaultTimeout / .seconds(1)
+        )
+        let current: TheVault.State.Current? = switch outcome {
+        case .committed(let current): current
+        case .unavailable: nil
+        }
+        _ = try XCTUnwrap(current, "Expected a committed visible observation")
+        return brains.vault.latestObservation
+    }
+
     func retainedLiveObject() -> NSObject {
         retainLiveObject(NSObject())
     }
@@ -221,9 +233,9 @@ final class TheBrainsScrollTests: XCTestCase {
         let inflation = brains.navigation.elementInflation
         inflation.geometryEnvironment = .init(
             now: { now },
-            awaitFrame: { _ in
+            refreshVisibleObservation: { _ in
                 now = now.advanced(by: .seconds(1))
-                return .observed
+                return .unavailable(.sourceTreeUnavailable)
             }
         )
         let inflatedTarget = ElementInflation.InflatedElementTarget(
@@ -280,12 +292,7 @@ final class TheBrainsScrollTests: XCTestCase {
         }
 
         window.layoutIfNeeded()
-        await brains.tripwire.yieldFrames(3)
-
-        XCTAssertNotNil(
-            brains.vault.refreshLiveCapture(),
-            "Expected a live hierarchy for the UIPageViewController regression test"
-        )
+        _ = try await publishedVisibleObservation()
 
         var seenUnsafeTargets = Set<ObjectIdentifier>()
         let unsafeTargets = brains.vault.scrollableContainerViewsByPath.values.filter {

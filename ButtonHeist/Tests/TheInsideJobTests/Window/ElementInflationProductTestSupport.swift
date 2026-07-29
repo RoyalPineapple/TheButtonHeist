@@ -33,6 +33,21 @@ final class ElementInflationProductTests: ButtonHeistRuntimeTestCase {
         visibleObservationSource = nil
     }
 
+    func publishedVisibleObservation(
+        in runtime: TheBrains? = nil
+    ) async throws -> InterfaceObservation {
+        let runtime = runtime ?? brains!
+        let outcome = await runtime.vault.semanticObservationStream.refreshedVisibleObservation(
+            timeout: SemanticObservationTiming.defaultTimeout / .seconds(1)
+        )
+        let current: TheVault.State.Current? = switch outcome {
+        case .committed(let current): current
+        case .unavailable: nil
+        }
+        _ = try XCTUnwrap(current, "Expected a committed visible observation")
+        return runtime.vault.latestObservation
+    }
+
     func installOffscreenActivationFixture(
         identifier: String,
         label: String,
@@ -100,8 +115,7 @@ final class ElementInflationProductTests: ButtonHeistRuntimeTestCase {
         refreshesFromUIKit: Bool = true
     ) async throws {
         let targetBrains = targetBrains ?? brains!
-        await targetBrains.tripwire.yieldFrames(2)
-        let screen = try XCTUnwrap(targetBrains.vault.refreshLiveCapture())
+        let screen = try await publishedVisibleObservation(in: targetBrains)
         let identifier = semanticIdentifier ?? fixture.identifier
         let label = semanticLabel ?? fixture.label
         let scrollContainerPath: TreePath

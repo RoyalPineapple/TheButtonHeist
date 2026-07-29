@@ -11,28 +11,6 @@ extension ElementInflationProductTests {
 
     // MARK: - Reveal and Nested Scrolling
 
-    func testMissingTargetSettlesBeforeViewportDiscovery() async throws {
-        enum Event: Equatable {
-            case settled
-            case discovered
-        }
-
-        var events: [Event] = []
-        brains.navigation.elementInflation.exploration.settleForDiscovery = {
-            events.append(.settled)
-        }
-        brains.navigation.elementInflation.exploration.discoverTarget = { _ in
-            events.append(.discovered)
-            return nil
-        }
-
-        _ = await brains.navigation.elementInflation.findTargetInTree(
-            try AccessibilityTarget.label("Offscreen Target").resolve(in: .empty)
-        )
-
-        XCTAssertEqual(events, [.settled, .discovered])
-    }
-
     func testSemanticActivateRevealsOffscreenScrollTargetWithoutManualPreScroll() async throws {
         let fixture = try installOffscreenActivationFixture(
             identifier: "semantic_checkout_submit",
@@ -70,7 +48,7 @@ extension ElementInflationProductTests {
             label: "Direct Scroll Owner"
         )
 
-        let screen = try XCTUnwrap(brains.vault.refreshLiveCapture())
+        let screen = try await publishedVisibleObservation()
         let paths = screen.liveCapture.scrollableContainerViewsByPath.compactMap { path, reference in
             reference.view === fixture.scrollView ? path : nil
         }
@@ -152,7 +130,7 @@ extension ElementInflationProductTests {
             label: "Customer Name"
         )
         defer { fixture.cleanup() }
-        let visible = try XCTUnwrap(brains.vault.refreshLiveCapture())
+        let visible = try await publishedVisibleObservation()
         _ = await brains.vault.semanticObservationStream
             .commitVisibleObservationForTesting(visible)
 
@@ -470,7 +448,7 @@ extension ElementInflationProductTests {
     private func seedOffViewportTextInputTarget(
         _ fixture: TextInputRevealFixture
     ) async throws {
-        let screen = try XCTUnwrap(brains.vault.refreshLiveCapture())
+        let screen = try await publishedVisibleObservation()
         let scrollContainerPath = try XCTUnwrap(
             firstLiveScrollableContainerPath(in: screen),
             "Expected fixture to expose a live scroll container. \(scrollContainerDiagnostics(in: screen))"
@@ -510,7 +488,7 @@ extension ElementInflationProductTests {
         decoy: NestedScrollDecoy = .absent
     ) async throws {
         await brains.tripwire.yieldFrames(2)
-        let screen = try XCTUnwrap(brains.vault.refreshLiveCapture())
+        let screen = try await publishedVisibleObservation()
         let outerContainerPath = try XCTUnwrap(
             liveScrollableContainerPath(for: fixture.outerScrollView, in: screen),
             "Expected nested fixture to expose the live outer scroll view. \(scrollContainerDiagnostics(in: screen))"

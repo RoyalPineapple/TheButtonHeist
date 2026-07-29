@@ -38,7 +38,7 @@ extension ElementInflationProductTests {
             identifier: "explicit_scroll_revealed",
             label: "Explicit Scroll Revealed"
         )
-        let visible = try XCTUnwrap(brains.vault.refreshLiveCapture())
+        let visible = try await publishedVisibleObservation()
         _ = await brains.vault.semanticObservationStream
             .commitVisibleObservationForTesting(visible)
 

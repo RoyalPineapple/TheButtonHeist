@@ -71,10 +71,8 @@ extension Navigation {
     func settledExplorationPage(
         deadline: SemanticObservationDeadline?,
         discoveryCommitPolicy: DiscoveryCommitPolicy,
-        notificationWindow: AccessibilityNotificationScopeLease? = nil,
         afterViewportMovement: Bool = false
     ) async -> TheVault.State.Current? {
-        defer { notificationWindow?.cancel() }
         guard afterViewportMovement
                 || (!Task.isCancelled && hasTimeRemaining(before: deadline))
         else { return nil }
@@ -84,24 +82,16 @@ extension Navigation {
         )
         let transitionDeadline = SemanticObservationDeadline(start: RuntimeElapsed.now, timeout: timeout)
         repeat {
-            // The tick only says time passed. The page still has to be re-read
-            // afterwards, or every iteration inspects the same observation the
-            // last one did and a scroll that is still settling looks like a
-            // scroll that never happened.
-            _ = await tripwire.waitForNextTick(
-                timeout: transitionDeadline.remainingDuration(at: RuntimeElapsed.now),
-                demand: .immediate
-            )
-            vault.refreshLiveCapture()
             guard afterViewportMovement || !Task.isCancelled else { return nil }
-            // This loop only waits for the caller's one dispatched scroll to
-            // land, so a page that still looks unmoved is mid-flight, not a
-            // failed scroll. Whether the reading counts as a change is the
-            // vault's question.
-            if let current = await vault.semanticObservationStream.commitDiscoveryObservation(
-                discoveryCommitPolicy: discoveryCommitPolicy,
-                notificationBatch: notificationWindow?.capture()
-            )?.current {
+            if discoveryCommitPolicy == .replaceInterface {
+                await vault.semanticObservationStream.discardCurrentObservation()
+            }
+            let remaining = min(
+                transitionDeadline.remainingSeconds(),
+                deadline?.remainingSeconds() ?? .greatestFiniteMagnitude
+            )
+            if case .committed(let current) =
+                await vault.semanticObservationStream.refreshedVisibleObservation(timeout: remaining) {
                 return current
             }
         } while transitionDeadline.hasTimeRemaining(at: RuntimeElapsed.now)

@@ -242,14 +242,28 @@ extension ElementInflation {
         )
 
         while deadline.hasTimeRemaining(at: geometryEnvironment.now()) {
-            let remaining = deadline.remainingDuration(at: geometryEnvironment.now())
-            let tick = await geometryEnvironment.awaitFrame(remaining)
-            guard tick == .observed, !Task.isCancelled else {
-                let event: LiveGeometryStabilizationEvent = tick == .cancelled || Task.isCancelled
-                    ? .cancelled
-                    : .deadlineExpired
+            guard !Task.isCancelled else {
                 return stateAfterGeometryReduction(
-                    stabilization.reduce(event),
+                    stabilization.reduce(.cancelled),
+                    target: stableTarget
+                )
+            }
+            switch await geometryEnvironment.refreshVisibleObservation(
+                deadline.remainingSeconds(at: geometryEnvironment.now())
+            ) {
+            case .committed:
+                break
+            case .unavailable(.cancelled):
+                return stateAfterGeometryReduction(
+                    stabilization.reduce(.cancelled),
+                    target: stableTarget
+                )
+            case .unavailable:
+                if deadline.hasTimeRemaining(at: geometryEnvironment.now()) {
+                    continue
+                }
+                return stateAfterGeometryReduction(
+                    stabilization.reduce(.deadlineExpired),
                     target: stableTarget
                 )
             }
@@ -259,26 +273,16 @@ extension ElementInflation {
                     target: stableTarget
                 )
             }
-            guard vault.refreshLiveCapture() != nil else { continue }
             let currentTreeElement: InterfaceTree.Element
-            switch stableTarget.identity {
-            case .captureLocal:
-                guard let current = vault.interfaceElement(
-                    heistId: stableTarget.treeElement.heistId
-                ) else {
-                    return .failed(.staleRefresh(
-                        "selected target \(stableTarget.treeElement.heistId.rawValue) "
-                            + "left committed semantic truth"
-                    ))
-                }
+            switch resolveCurrentElement(
+                for: stableTarget.identity,
+                pinnedElement: stableTarget.treeElement,
+                semanticTree: vault.latestObservation.tree
+            ) {
+            case .success(let current):
                 currentTreeElement = current
-            case .admitted(_, let target):
-                switch resolveAdmittedSemanticTarget(target, in: vault.latestObservation.tree) {
-                case .success(let current):
-                    currentTreeElement = current
-                case .failure(let failure):
-                    return .failed(failure.inflationFailure)
-                }
+            case .failure(let failure):
+                return .failed(failure)
             }
             let currentTarget: InflatedElementTarget
             switch stableActionTarget(

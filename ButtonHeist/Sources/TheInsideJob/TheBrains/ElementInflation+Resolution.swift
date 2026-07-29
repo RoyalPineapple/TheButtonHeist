@@ -65,7 +65,8 @@ extension ElementInflation {
         case .retry(let reason):
             let refreshedResolution = resolution.adding(reason.adjustment)
             let pendingRetry: (reason: RetryReason, resolution: ActionSubjectResolution)
-            if vault.refreshLiveCapture() != nil {
+            if case .committed = await vault.semanticObservationStream
+                .refreshedVisibleObservation(timeout: deadline.remainingSeconds()) {
                 let refreshedElement: InterfaceTree.Element
                 switch resolveCurrentElement(
                     for: identity,
@@ -190,7 +191,6 @@ extension ElementInflation {
         case .failure:
             break
         }
-        await exploration.settleForDiscovery()
         let explorationResult = await exploration.discoverTarget(target)
         switch visibleTargetResolution(target) {
         case .success(let visible):

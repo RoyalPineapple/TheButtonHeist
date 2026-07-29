@@ -80,14 +80,12 @@ extension Navigation {
               }) ?? true
         else { return .unavailable() }
         let previousVisibleIds = vault.viewportElementIDs
-        let notificationWindow = vault.accessibilityNotifications.beginActionWindow()
         let primitiveOutcome = await dispatchViewportMovement(intent)
         switch primitiveOutcome {
         case .moved:
             let current = await settledExplorationPage(
                 deadline: deadline,
                 discoveryCommitPolicy: discoveryCommitPolicy,
-                notificationWindow: notificationWindow,
                 afterViewportMovement: true
             )
             guard let current else {
@@ -102,14 +100,12 @@ extension Navigation {
                 current: current
             )
         case .alreadyInPosition:
-            notificationWindow.cancel()
             return ViewportTransition(
                 outcome: .unchanged,
                 previousVisibleIds: previousVisibleIds,
                 current: nil
             )
         case .unavailable:
-            notificationWindow.cancel()
             return .unavailable(previousVisibleIds: previousVisibleIds)
         }
     }

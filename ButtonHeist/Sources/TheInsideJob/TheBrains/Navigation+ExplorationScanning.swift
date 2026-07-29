@@ -292,7 +292,6 @@ extension Navigation {
                 }
                 guard let target = currentProgrammaticScrollTarget(for: container) else { return .exhausted }
 
-                await navigation.tripwire.yieldFrames(1)
                 let transition = await navigation.performViewportTransition(
                     .page(
                         target,
@@ -683,9 +682,13 @@ extension Navigation {
         _ viewSpace: HeistElement.Geometry.ViewSpace,
         request: ElementInflation.SemanticTargetRevealRequest
     ) async -> StoredSeedOutcome {
-        // Spending the seed is a live-geometry question, so the live capture is
-        // taken here rather than inherited from whenever one last happened.
-        vault.refreshLiveCapture()
+        guard case .committed =
+            await vault.semanticObservationStream.refreshedVisibleObservation(
+                timeout: request.deadline.remainingSeconds()
+            )
+        else {
+            return .noSeed(.targetUnresolved)
+        }
         // The owner is looked up where the target sits now. `scrollContainerPath`
         // names where it sat in the reading that admitted the target, and the
         // seed is spent against whatever the app has reached since; admitting
