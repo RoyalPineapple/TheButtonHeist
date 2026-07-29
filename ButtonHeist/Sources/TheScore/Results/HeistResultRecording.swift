@@ -86,7 +86,7 @@ public enum HeistResultRecordingError: Error, Sendable, Equatable, CustomStringC
 public struct HeistResultRecording: Codable, Sendable, Equatable {
     public static let currentSchemaVersion = 1
 
-    public let schemaVersion: Int
+    public var schemaVersion: Int { Self.currentSchemaVersion }
     public let result: HeistResult
     public let planName: HeistPlanName?
     public let planFingerprint: String
@@ -99,7 +99,6 @@ public struct HeistResultRecording: Codable, Sendable, Equatable {
         recordedAt: Date = Date(),
         producerVersion: ButtonHeistVersion = buttonHeistVersion
     ) throws {
-        schemaVersion = Self.currentSchemaVersion
         self.result = result
         planName = plan.name
         planFingerprint = try Self.planFingerprint(for: plan)
@@ -136,7 +135,6 @@ public struct HeistResultRecording: Codable, Sendable, Equatable {
             )
         }
 
-        self.schemaVersion = schemaVersion
         result = try container.decode(HeistResult.self, forKey: .result)
         planName = try container.decode(HeistPlanName?.self, forKey: .planName)
         self.planFingerprint = planFingerprint

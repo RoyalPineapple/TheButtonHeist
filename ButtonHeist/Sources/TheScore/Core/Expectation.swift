@@ -1,5 +1,13 @@
 import ThePlans
 
+private func multiset<Value: Hashable>(
+    _ values: some Sequence<Value>
+) -> [Value: Int] {
+    values.reduce(into: [:]) { counts, value in
+        counts[value, default: 0] += 1
+    }
+}
+
 /// An execution-ready predicate program that consumes one event at a time.
 ///
 /// Live execution constructs one expectation, then feeds it each observed event
@@ -125,33 +133,25 @@ private extension Expectation {
             switch self {
             case .graph:
                 return .semantics(
-                    elements: Self.multiset(
+                    elements: multiset(
                         matchInput.elements.lazy.map(\.element.semantics)
                     ),
-                    containers: Self.multiset(
+                    containers: multiset(
                         matchInput.containers.lazy.map(\.facts)
                     )
                 )
             case .target(let target):
                 let matches = graph.resolve(target)
                 return .semantics(
-                    elements: Self.multiset(
+                    elements: multiset(
                         matches.elements.elements.lazy.map(\.semantics)
                     ),
-                    containers: Self.multiset(matches.containers.lazy.map(\.facts))
+                    containers: multiset(matches.containers.lazy.map(\.facts))
                 )
             case .property(let property, let target):
                 let semantics = graph.resolve(target.accessibilityTarget)
                     .elements.elements.lazy.map(\.semantics)
                 return .property(property.semanticProjection(of: semantics))
-            }
-        }
-
-        private static func multiset<Value: Hashable>(
-            _ values: some Sequence<Value>
-        ) -> [Value: Int] {
-            values.reduce(into: [:]) { counts, value in
-                counts[value, default: 0] += 1
             }
         }
     }
@@ -445,14 +445,6 @@ private extension AssertableProperty {
             return .customContent(multiset(semantics.lazy.map(\.assertable.customContent)))
         case .rotors:
             return .rotors(multiset(semantics.lazy.map(\.assertable.rotors)))
-        }
-    }
-
-    private func multiset<Value: Hashable>(
-        _ values: some Sequence<Value>
-    ) -> [Value: Int] {
-        values.reduce(into: [:]) { counts, value in
-            counts[value, default: 0] += 1
         }
     }
 }

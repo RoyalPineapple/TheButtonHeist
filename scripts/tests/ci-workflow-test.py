@@ -25,17 +25,26 @@ class CIWorkflowTests(unittest.TestCase):
         blocks = job_blocks()
         self.assertIn("needs: ios-logic", blocks["ios-hosted"])
         self.assertIn(
-            "needs: [ios-logic, ios-integration-scope]",
+            "needs: [ios-logic, release-contract]",
             blocks["ios-integration"],
         )
         self.assertIn(
-            "needs.ios-integration-scope.outputs.run == 'true'",
+            "needs.release-contract.outputs.run_ios_integration == 'true'",
             blocks["ios-integration"],
         )
-        self.assertIn("runs-on: ubuntu-latest", blocks["ios-integration-scope"])
+        self.assertIn(
+            "if: always() && needs.ios-logic.result == 'success'",
+            blocks["ios-integration"],
+        )
+        self.assertNotIn("ios-integration-scope", blocks)
+        release = blocks["release-contract"]
+        self.assertIn(
+            "run_ios_integration: ${{ steps.integration-scope.outputs.run }}",
+            release,
+        )
         self.assertIn(
             "ButtonHeist/Tests/TheInsideJobTests/(Integration|Shared/Socket)",
-            blocks["ios-integration-scope"],
+            release,
         )
 
     def test_portable_contracts_stay_on_linux(self) -> None:

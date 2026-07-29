@@ -92,12 +92,6 @@ public extension Observation {
             }
             self = notification
         }
-
-        public func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encodeIfPresent(text, forKey: .text)
-            try container.encodeIfPresent(element, forKey: .element)
-        }
     }
 
     /// One semantic event admitted by the Vault.
@@ -151,12 +145,6 @@ public extension Observation {
             }
             self.afterSequence = afterSequence
             self.throughSequence = throughSequence
-        }
-
-        public func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(afterSequence, forKey: .afterSequence)
-            try container.encode(throughSequence, forKey: .throughSequence)
         }
     }
 
