@@ -31,8 +31,15 @@ VERSION_KEY = runpy.run_path(str(SELECTOR))["version_key"]
 SUITES = {
     "TheScoreTests": {"platform": "macos"},
     "ButtonHeistTests": {"platform": "macos"},
-    "TheInsideJobTests": {
+    "TheInsideJobLogicTests": {
         "platform": "ios",
+    },
+    "TheInsideJobWindowTests": {
+        "platform": "ios",
+        "scheme": "HostedBehaviorTests",
+        "derived_suite": "HostedBehaviorTests",
+        "only_testing": ("TheInsideJobWindowTests",),
+        "serial": True,
         "disable_animations": True,
     },
     "TheInsideJobIntegrationTests": {
@@ -41,6 +48,9 @@ SUITES = {
     },
     "HostedBehaviorTests": {
         "platform": "ios",
+        "scheme": "HostedBehaviorTests",
+        "derived_suite": "HostedBehaviorTests",
+        "skip_testing": ("TheInsideJobWindowTests",),
         "serial": True,
         "disable_animations": True,
     },
@@ -67,11 +77,15 @@ FOCUSES = {
             "TheScoreTests/ServerInfoTests",
             "TheScoreTests/AuthMessageTests",
         ),
-        "TheInsideJobTests": ("TheInsideJobTests/WireConversionTests",),
+        "TheInsideJobLogicTests": (
+            "TheInsideJobLogicTests/WireConverterTests",
+        ),
     },
     "contract-targets": {
         "MacFrameworkTests": ("ThePlansTests",),
-        "TheInsideJobTests": ("TheInsideJobTests/TheVaultResolutionTests",),
+        "TheInsideJobLogicTests": (
+            "TheInsideJobLogicTests/TheVaultResolutionTests",
+        ),
     },
 }
 
@@ -127,11 +141,12 @@ def suite_paths(name: str) -> dict[str, Path]:
         "BUTTONHEIST_TEST_DERIVED_DATA_ROOT", ROOT / ".build/test-derived-data"
     )).expanduser().resolve()
     root = artifacts / name
+    derived_suite = str(SUITES[name].get("derived_suite", name))
     return {
         "result_bundle": root / "result-bundles" / f"{name}.xcresult",
         "heist_results": root / "heist-results",
         "diagnostics": root / "diagnostics",
-        "derived": derived / name,
+        "derived": derived / derived_suite,
         "record": root / "run.json",
     }
 
@@ -274,7 +289,18 @@ def test_command(
         test_destination = f"platform=iOS Simulator,id={simulator['udid']},arch=arm64"
     else:
         test_destination = "platform=macOS"
-    only_testing = [f"-only-testing:{identifier}" for identifier in only_tests]
+    scheme = str(suite.get("scheme", name))
+    configured_only = tuple(suite.get("only_testing", ()))
+    configured_skip = tuple(suite.get("skip_testing", ()))
+    selected_only = tuple(only_tests) or configured_only
+    only_testing = [
+        f"-only-testing:{identifier}"
+        for identifier in selected_only
+    ]
+    skip_testing = [
+        f"-skip-testing:{identifier}"
+        for identifier in configured_skip
+    ]
     disable_animations = suite.get("disable_animations", False)
     test_host_settings = (
         ["BUTTONHEIST_TEST_DISABLE_ANIMATIONS=1"]
@@ -288,13 +314,13 @@ def test_command(
             "-workspace",
             str(WORKSPACE),
             "-scheme",
-            name,
+            scheme,
             "-destination",
             test_destination,
             "-derivedDataPath",
             str(paths["derived"]),
             *test_host_settings,
-            *only_testing,
+            *[f"-only-testing:{identifier}" for identifier in only_tests],
         ]
 
     test_options = ["-collect-test-diagnostics", "never"]
@@ -309,7 +335,7 @@ def test_command(
         "-workspace",
         str(WORKSPACE),
         "-scheme",
-        name,
+        scheme,
         "-destination",
         test_destination,
         "-derivedDataPath",
@@ -319,6 +345,7 @@ def test_command(
         *test_host_settings,
         *test_options,
         *only_testing,
+        *skip_testing,
     ]
     wrapper = [str(WRAPPER)]
     if suite["platform"] == "ios":
