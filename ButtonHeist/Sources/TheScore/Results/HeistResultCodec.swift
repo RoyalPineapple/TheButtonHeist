@@ -37,20 +37,20 @@ package struct HeistResultCodecLimits: Sendable, Equatable {
 }
 
 public enum HeistResultCodec {
-    public static func write(_ result: HeistResult, to url: URL) throws {
-        let data = try encode(result, format: format(for: url))
+    public static func write(_ recording: HeistResultRecording, to url: URL) throws {
+        let data = try encode(recording, format: .gzipJSON)
         try data.write(to: url, options: .atomic)
     }
 
-    public static func decode(contentsOf url: URL) throws -> HeistResult {
+    public static func decode(contentsOf url: URL) throws -> HeistResultRecording {
         try decode(contentsOf: url, limits: .default)
     }
 
     package static func decode(
         contentsOf url: URL,
         limits: HeistResultCodecLimits
-    ) throws -> HeistResult {
-        let format = format(for: url)
+    ) throws -> HeistResultRecording {
+        let format = try format(contentsOf: url)
         let data: Data
         switch format {
         case .json:
@@ -69,7 +69,7 @@ public enum HeistResultCodec {
         return try decode(data, format: format, limits: limits)
     }
 
-    public static func decode(_ data: Data, format: HeistResultFormat = .json) throws -> HeistResult {
+    public static func decode(_ data: Data, format: HeistResultFormat = .json) throws -> HeistResultRecording {
         try decode(data, format: format, limits: .default)
     }
 
@@ -77,7 +77,7 @@ public enum HeistResultCodec {
         _ data: Data,
         format: HeistResultFormat = .json,
         limits: HeistResultCodecLimits
-    ) throws -> HeistResult {
+    ) throws -> HeistResultRecording {
         let jsonData: Data
         switch format {
         case .json:
@@ -99,11 +99,14 @@ public enum HeistResultCodec {
         }
         let decoder = JSONDecoder()
         decoder.userInfo[.heistResultCodecLimits] = limits
-        return try decoder.decode(HeistResult.self, from: jsonData)
+        return try decoder.decode(HeistResultRecording.self, from: jsonData)
     }
 
-    public static func encode(_ result: HeistResult, format: HeistResultFormat = .json) throws -> Data {
-        let jsonData = try JSONEncoder.heistResult.encode(result)
+    public static func encode(
+        _ recording: HeistResultRecording,
+        format: HeistResultFormat = .json
+    ) throws -> Data {
+        let jsonData = try JSONEncoder.heistResultRecording.encode(recording)
         switch format {
         case .json:
             return jsonData
@@ -112,8 +115,11 @@ public enum HeistResultCodec {
         }
     }
 
-    private static func format(for url: URL) -> HeistResultFormat {
-        url.pathExtension.lowercased() == "gz" ? .gzipJSON : .json
+    private static func format(contentsOf url: URL) throws -> HeistResultFormat {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        let prefix = try handle.read(upToCount: 2) ?? Data()
+        return prefix.elementsEqual([0x1f, 0x8b]) ? .gzipJSON : .json
     }
 
     private static func readBoundedFile(
@@ -296,7 +302,7 @@ private enum GzipCodec {
 }
 
 private extension JSONEncoder {
-    static var heistResult: JSONEncoder {
+    static var heistResultRecording: JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         return encoder
