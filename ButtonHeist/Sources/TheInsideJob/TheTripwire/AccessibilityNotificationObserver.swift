@@ -217,12 +217,12 @@ final class AccessibilityNotificationObserver {
         let timestamp = Date()
         let capturedNotificationData = CapturedAccessibilityNotificationPayload(notificationData)
         let capturedAssociatedElement = CapturedAccessibilityNotificationPayload(associatedElement)
-        if let probe = AccessibilityNotificationProbe.observe(
+        if let description = AccessibilityNotificationProbe.description(
             rawCode: code,
             notificationData: capturedNotificationData,
             associatedElement: capturedAssociatedElement
         ) {
-            accessibilityNotificationLogger.info("\(probe.description, privacy: .public)")
+            accessibilityNotificationLogger.info("\(description, privacy: .public)")
         }
         let notificationPayload = capturedNotificationData.pendingPayload
         let associatedElementPayload = capturedAssociatedElement.pendingPayload

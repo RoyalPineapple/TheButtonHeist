@@ -86,13 +86,13 @@ extension TheBrainsPipelineTests {
         XCTAssertEqual(after.events, [.noChange])
     }
 
-    func testElementChangedNotificationDoesNotSuppressSnapshotScreenClassification() async {
+    func testLayoutChangedNotificationDoesNotSuppressSnapshotScreenClassification() async {
         _ = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Menu", .header, "menu_header")])
         )
         let after = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Checkout", .header, "checkout_header")]),
-            notificationBatch: notificationBatch(kind: .elementChanged(.layout))
+            notificationBatch: notificationBatch(kind: .layoutChanged)
         )
 
         XCTAssertEqual(
@@ -108,7 +108,7 @@ extension TheBrainsPipelineTests {
         let after = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Checkout", .header, "checkout_header")]),
             notificationBatch: notificationBatch(
-                kind: .elementChanged(.layout),
+                kind: .layoutChanged,
                 gap: AccessibilityNotificationGap(droppedThroughSequence: 1)
             )
         )

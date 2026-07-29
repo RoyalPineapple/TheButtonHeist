@@ -7,12 +7,12 @@ struct AccessibilityNotificationProbeView: View {
                 Text("Hand-Rolled UIKit Values")
                     .font(.headline)
 
-                Text("Tap each bare NSObject to mutate its accessibilityValue.")
+                Text("Tap the counter, or use the button to update the separate remote object.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
                 UIKitAccessibilityValueProbe()
-                    .frame(height: 390)
+                    .frame(height: 230)
             }
             .padding()
         }

@@ -196,7 +196,7 @@ deadline expiry all use this path. A screenshot failure is auxiliary evidence;
 it never replaces the original failed path.
 
 One pure `ScreenClassifier` combines typed snapshots with scoped
-`screenChanged`, `elementChanged(layout)`, `elementUpdate`, and `announcement`
+`screenChanged`, `layoutChanged`, `elementUpdate`, and `announcement`
 notifications.
 `AccessibilityNotificationBus` appends package-internal ingress records to one
 bounded log. An action window checkpoints retained history without clearing it;

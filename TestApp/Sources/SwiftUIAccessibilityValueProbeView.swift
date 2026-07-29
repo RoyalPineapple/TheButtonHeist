@@ -1,11 +1,7 @@
 import SwiftUI
 
 struct SwiftUIAccessibilityValueProbeView: View {
-    private let statuses = ["Idle", "Working", "Complete"]
-
     @State private var counter = 0
-    @State private var selectedStatus = 0
-    @State private var isFavorite = false
     @State private var level = 1
     @State private var remoteValue = 0
 
@@ -22,22 +18,6 @@ struct SwiftUIAccessibilityValueProbeView: View {
                     hint: "Increments the counter"
                 ) {
                     counter += 1
-                }
-
-                ActivatingSwiftUIValueCard(
-                    title: "SwiftUI Status",
-                    value: statuses[selectedStatus],
-                    hint: "Advances to the next status"
-                ) {
-                    selectedStatus = (selectedStatus + 1) % statuses.count
-                }
-
-                ActivatingSwiftUIValueCard(
-                    title: "SwiftUI Favorite",
-                    value: isFavorite ? "On" : "Off",
-                    hint: "Toggles the favorite value"
-                ) {
-                    isFavorite.toggle()
                 }
 
                 AdjustableSwiftUIValueCard(

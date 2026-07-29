@@ -596,7 +596,7 @@ ordered segment, with no intervening screen marker. Every admitted capture
 records at least one event; complete observed equality records `noChange`.
 
 Raw notification kinds are package-internal ingress data. The bus retains
-`screenChanged`, `elementChanged(layout)`, `elementUpdate`, `announcement`, and
+`screenChanged`, `layoutChanged`, `elementUpdate`, `announcement`, and
 unknown raw codes long enough to drive screen classification and recapture.
 Before publication, the Vault consumes the kind and emits
 `Observation.Event.notification` only for normalized text or element semantics.
@@ -636,14 +636,14 @@ events. `.notification` retains normalized notification content, while
 `.screenChanged` records the boundary and its `ScreenFacts`. `ScreenClassifier`
 owns precedence: scoped `screenChanged` is authoritative.
 Without that notification, every admitted pair is still classified from its
-snapshots; `elementChanged`, `elementUpdate`, and `announcement` remain
+snapshots; `layoutChanged`, `elementUpdate`, and `announcement` remain
 ingress-only recapture triggers and do not veto a replacement proved by the
 snapshots. Every inferred replacement records the resulting boundary as
 `.screenChanged`. Parsed screen IDs, first-responder state, geometry, and
 snapshot metadata never independently originate a screen classification; the
 ordered event records the classifier's result.
 
-For UIKit value controls, `elementChanged(layout)`, `elementUpdate`, and
+For UIKit value controls, `layoutChanged`, `elementUpdate`, and
 `announcement` trigger recapture. The ingress kind does not assert the new
 value; Button Heist re-reads the delivered node and derives any value update
 from successive admitted snapshots. SwiftUI value notifications use that same

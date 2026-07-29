@@ -236,7 +236,7 @@ extension TheVault {
             }
             let forcesElementChange = notifications.admittedNotifications.contains {
                 switch $0.kind {
-                case .elementChanged, .elementUpdate:
+                case .layoutChanged, .elementUpdate:
                     true
                 case .screenChanged, .announcement, .unknown:
                     false

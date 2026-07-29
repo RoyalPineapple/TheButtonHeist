@@ -8,7 +8,7 @@ final class AccessibilityNotificationIdentityTests: XCTestCase {
         let expectations: [(UInt32, AccessibilityNotificationKind)] = [
             (.min, .unknown(.min)),
             (1000, .screenChanged),
-            (1001, .elementChanged(.layout)),
+            (1001, .layoutChanged),
             (1005, .elementUpdate),
             (1008, .announcement),
             (4002, .unknown(4002)),
@@ -40,7 +40,7 @@ final class AccessibilityNotificationIdentityTests: XCTestCase {
     func testOnlyElementNotificationsAdmitAssociatedElementContent() {
         XCTAssertFalse(AccessibilityNotificationKind.screenChanged.admitsAssociatedElement)
         XCTAssertTrue(
-            AccessibilityNotificationKind.elementChanged(.layout).admitsAssociatedElement
+            AccessibilityNotificationKind.layoutChanged.admitsAssociatedElement
         )
         XCTAssertTrue(
             AccessibilityNotificationKind.elementUpdate.admitsAssociatedElement

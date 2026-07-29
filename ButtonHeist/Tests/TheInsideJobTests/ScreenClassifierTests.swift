@@ -16,12 +16,12 @@ final class ScreenClassifierTests: XCTestCase {
         )
     }
 
-    func testElementChangedAndAnnouncementDoNotDisproveStructuralScreenChange() {
+    func testLayoutChangedAndAnnouncementDoNotDisproveStructuralScreenChange() {
         let before = screen(elements: [element(label: "Home", traits: .header)])
         let after = screen(elements: [element(label: "Settings", traits: .header)])
 
         for notification in [
-            AccessibilityNotificationKind.elementChanged(.layout),
+            AccessibilityNotificationKind.layoutChanged,
             .elementUpdate,
             .announcement,
         ] {
@@ -450,9 +450,9 @@ final class ScreenClassifierTests: XCTestCase {
         let after = screen(elements: [element(label: "Settings", traits: .header)])
         let notificationOrders: [[AccessibilityNotificationKind]] = [
             [],
-            [.elementChanged(.layout), .announcement, .elementUpdate],
-            [.elementUpdate, .elementChanged(.layout), .announcement],
-            [.announcement, .elementUpdate, .elementChanged(.layout)],
+            [.layoutChanged, .announcement, .elementUpdate],
+            [.elementUpdate, .layoutChanged, .announcement],
+            [.announcement, .elementUpdate, .layoutChanged],
         ]
 
         XCTAssertTrue(notificationOrders.allSatisfy {
@@ -465,7 +465,7 @@ final class ScreenClassifierTests: XCTestCase {
         let screen = screen(elements: [element(label: "Checkout", traits: .header)])
         let notificationOrders: [[AccessibilityNotificationKind]] = [
             [.screenChanged],
-            [.screenChanged, .elementChanged(.layout), .announcement],
+            [.screenChanged, .layoutChanged, .announcement],
             [.elementUpdate, .announcement, .screenChanged],
         ]
 

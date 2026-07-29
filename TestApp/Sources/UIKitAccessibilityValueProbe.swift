@@ -13,14 +13,9 @@ struct UIKitAccessibilityValueProbe: UIViewRepresentable {
 }
 
 final class UIKitAccessibilityValueProbeView: UIView {
-    private let selfUpdatingElements = [
-        HandRolledAccessibilityElement(title: "Counter", mutation: .counter),
-        HandRolledAccessibilityElement(title: "Status", mutation: .status),
-        HandRolledAccessibilityElement(title: "Favorite", mutation: .favorite),
-    ]
+    private let selfUpdatingElement = HandRolledAccessibilityElement(title: "Counter")
     private let externallyUpdatedElement = HandRolledAccessibilityElement(
         title: "Remote value",
-        mutation: .counter,
         activatesItself: false
     )
     private let externalUpdateButton = UIButton(
@@ -29,6 +24,10 @@ final class UIKitAccessibilityValueProbeView: UIView {
     )
     private let stack = UIStackView()
     private var elementCards: [ValueCardView] = []
+
+    private var exposedElements: [HandRolledAccessibilityElement] {
+        [selfUpdatingElement, externallyUpdatedElement]
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -41,7 +40,6 @@ final class UIKitAccessibilityValueProbeView: UIView {
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
 
-        let exposedElements = selfUpdatingElements + [externallyUpdatedElement]
         elementCards = exposedElements.map { element in
             let card = ValueCardView(title: element.title, value: element.currentValue)
             element.valueDidChange = { [weak card] value in
@@ -79,7 +77,7 @@ final class UIKitAccessibilityValueProbeView: UIView {
         super.layoutSubviews()
 
         for (element, card) in zip(
-            selfUpdatingElements + [externallyUpdatedElement],
+            exposedElements,
             elementCards
         ) {
             element.accessibilityFrame = UIAccessibility.convertToScreenCoordinates(
@@ -99,8 +97,7 @@ final class UIKitAccessibilityValueProbeView: UIView {
             return
         }
 
-        let elements = selfUpdatingElements + [externallyUpdatedElement]
-        guard elements[index].accessibilityActivate() else {
+        guard exposedElements[index].accessibilityActivate() else {
             super.touchesEnded(touches, with: event)
             return
         }
@@ -112,52 +109,21 @@ final class UIKitAccessibilityValueProbeView: UIView {
 }
 
 final class HandRolledAccessibilityElement: NSObject {
-    enum Mutation {
-        case counter
-        case status
-        case favorite
-
-        func value(afterActivationCount count: Int) -> String {
-            switch self {
-            case .counter:
-                count.formatted()
-            case .status:
-                ["Idle", "Working", "Complete"][count % 3]
-            case .favorite:
-                count.isMultiple(of: 2) ? "Off" : "On"
-            }
-        }
-
-        var hint: String {
-            switch self {
-            case .counter:
-                "Increments the counter"
-            case .status:
-                "Advances to the next status"
-            case .favorite:
-                "Toggles the favorite value"
-            }
-        }
-    }
-
     let title: String
     var valueDidChange: ((String) -> Void)?
 
-    private let mutation: Mutation
     private let activatesItself: Bool
-    private var activationCount = 0
+    private var count = 0
 
     var currentValue: String {
-        mutation.value(afterActivationCount: activationCount)
+        count.formatted()
     }
 
     init(
         title: String,
-        mutation: Mutation,
         activatesItself: Bool = true
     ) {
         self.title = title
-        self.mutation = mutation
         self.activatesItself = activatesItself
         super.init()
 
@@ -165,7 +131,7 @@ final class HandRolledAccessibilityElement: NSObject {
         accessibilityLabel = title
         accessibilityValue = currentValue
         accessibilityTraits = activatesItself ? .button : .staticText
-        accessibilityHint = activatesItself ? mutation.hint : nil
+        accessibilityHint = activatesItself ? "Increments the counter" : nil
     }
 
     override var description: String {
@@ -179,7 +145,7 @@ final class HandRolledAccessibilityElement: NSObject {
     }
 
     func advanceValue() {
-        activationCount += 1
+        count += 1
         let value = currentValue
         accessibilityValue = value
         valueDidChange?(value)
