@@ -213,7 +213,9 @@ extension HeistExecutionStepResult {
         case .wait(let predicate, _, let completion):
             let evidence: HeistExpectationEvidence?
             switch completion {
-            case .passed(let value, _), .childAborted(let value, _, _):
+            case .passed(let value, _):
+                evidence = value.expectation
+            case .childAborted(let value, _, _):
                 evidence = value
             case .failed(let value, _, _):
                 evidence = value.value

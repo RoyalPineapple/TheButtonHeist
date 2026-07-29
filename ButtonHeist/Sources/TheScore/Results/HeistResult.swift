@@ -186,6 +186,7 @@ public struct HeistResult: Codable, Sendable, Equatable {
         _ step: HeistExecutionStepResult,
         childEdges: [(step: HeistExecutionStepResult, edge: HeistExecutionPath.ChildEdge)]
     ) throws {
+        try admitExpectationEvidence(step)
         switch step.kind {
         case .conditional:
             try admitConditionalEvidence(step, childEdges: childEdges)
@@ -214,6 +215,22 @@ public struct HeistResult: Codable, Sendable, Equatable {
              .heist,
              .invoke:
             break
+        }
+    }
+
+    private static func admitExpectationEvidence(_ step: HeistExecutionStepResult) throws {
+        guard step.kind == .wait, step.status == .failed else { return }
+
+        let replay: ExpectationResult?
+        do {
+            replay = try step.replayExpectation()
+        } catch {
+            return
+        }
+        guard let replay else { return }
+
+        if replay.met {
+            throw incoherent(step, "failed wait expectation must not replay as met")
         }
     }
 

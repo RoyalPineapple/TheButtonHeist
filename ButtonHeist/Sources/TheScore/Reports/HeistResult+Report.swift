@@ -292,7 +292,14 @@ public struct HeistReport: Sendable, Equatable {
     /// replayed from complete evidence.
     public static func project(result: HeistResult) throws(Observation.Gap) -> HeistReport {
         var reducer = Reducer(durationMs: result.durationMs)
-        try result.steps.walk(enter: { reducer.enter($0) }, leave: { try reducer.leave($0) })
+        try result.steps.walk(
+            enter: { (step: HeistExecutionStepResult) throws(Observation.Gap) in
+                reducer.enter(step)
+            },
+            leave: { (step: HeistExecutionStepResult) throws(Observation.Gap) in
+                try reducer.leave(step)
+            }
+        )
         return reducer.report(result: result)
     }
 }

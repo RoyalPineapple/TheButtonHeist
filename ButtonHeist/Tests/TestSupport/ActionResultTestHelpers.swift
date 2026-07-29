@@ -98,11 +98,14 @@ package enum HeistResultFixture {
         path: String = "$.body[0]",
         evidence: HeistExpectationEvidence = HeistResultFixture.defaultWaitEvidence(met: true)
     ) -> HeistExecutionStepResult {
-        .wait(
+        guard let passedEvidence = HeistPassedWaitEvidence.matched(evidence) else {
+            preconditionFailure("passed wait result fixture requires replay proof")
+        }
+        return .wait(
             path: executionPath(path),
             predicate: evidence.predicate,
             timeout: 1,
-            completion: .passed(evidence: evidence)
+            completion: .passed(evidence: passedEvidence)
         )
     }
 
@@ -130,7 +133,6 @@ package enum HeistResultFixture {
         do {
             return HeistExpectationEvidence(
                 predicate: predicate,
-                resolvedPredicate: try predicate.resolve(in: .empty),
                 observation: observation,
                 terminalCause: terminalCause
             )
@@ -327,7 +329,7 @@ package enum HeistResultFixture {
             predicate: predicate,
             observation: Observation.Evidence(
                 baseline: nil,
-                events: [.elementsChanged(current)],
+                events: [.elementsChanged(current), .noChange],
                 current: current,
                 coverage: .complete
             )

@@ -67,44 +67,65 @@ package enum HeistGroupCompletion: Sendable, Equatable {
     case skipped(children: HeistSkippedChildren = .empty)
 }
 
-package enum HeistWaitCompletion: Sendable, Equatable {
-    case passed(
-        evidence: HeistExpectationEvidence,
-        children: HeistPassingChildren = .empty
-    )
-    case failed(
-        evidence: HeistEvidenceAvailability<HeistExpectationEvidence>,
-        failure: HeistFailureDetail,
-        children: HeistPassingChildren = .empty
-    )
-    case childAborted(
-        evidence: HeistExpectationEvidence,
-        failure: HeistFailureDetail,
-        children: HeistAbortedChildren
-    )
-    case skipped(children: HeistSkippedChildren = .empty)
+package typealias HeistActionCompletion = HeistExecutionCompletion<
+    HeistPassedActionEvidence, HeistFailedActionEvidence, HeistPassedActionEvidence
+>
 
-    var facts: HeistStepFacts {
-        switch self {
-        case .passed(_, let children):
-            .init(status: .passed, failure: nil, children: children.values, abortedAtChildPath: nil)
-        case .failed(_, let failure, let children):
-            .init(status: .failed, failure: failure, children: children.values, abortedAtChildPath: nil)
-        case .childAborted(_, let failure, let children):
-            .init(
-                status: .failed,
-                failure: failure,
-                children: children.values,
-                abortedAtChildPath: children.abortedAtPath
-            )
-        case .skipped(let children):
-            .init(status: .skipped, failure: nil, children: children.values, abortedAtChildPath: nil)
+package enum HeistWaitDecision: String, Codable, Sendable, Equatable {
+    case matched
+    case fallback
+}
+
+package struct HeistPassedWaitEvidence: Codable, Sendable, Equatable {
+    package let decision: HeistWaitDecision
+    package let expectation: HeistExpectationEvidence
+
+    package static func matched(_ expectation: HeistExpectationEvidence) -> Self? {
+        Self(decision: .matched, expectation: expectation)
+    }
+
+    package static func fallback(_ expectation: HeistExpectationEvidence) -> Self? {
+        Self(decision: .fallback, expectation: expectation)
+    }
+
+    private init?(decision: HeistWaitDecision, expectation: HeistExpectationEvidence) {
+        guard let replay = try? expectation.replay(),
+              replay.met == (decision == .matched)
+        else { return nil }
+        self.decision = decision
+        self.expectation = expectation
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case decision
+        case expectation
+    }
+
+    package init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "passed wait evidence")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let decision = try container.decode(HeistWaitDecision.self, forKey: .decision)
+        let expectation = try container.decode(HeistExpectationEvidence.self, forKey: .expectation)
+        guard let admitted = Self(decision: decision, expectation: expectation) else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: container.codingPath,
+                debugDescription: "passed wait evidence decision must agree with replay proof"
+            ))
         }
+        self = admitted
+    }
+
+    package func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(decision, forKey: .decision)
+        try container.encode(expectation, forKey: .expectation)
     }
 }
 
-package typealias HeistActionCompletion = HeistExecutionCompletion<
-    HeistPassedActionEvidence, HeistFailedActionEvidence, HeistPassedActionEvidence
+package typealias HeistWaitCompletion = HeistExecutionCompletion<
+    HeistPassedWaitEvidence,
+    HeistEvidenceAvailability<HeistExpectationEvidence>,
+    HeistExpectationEvidence
 >
 package typealias HeistCaseSelectionCompletion = HeistExecutionCompletion<
     HeistCaseSelectionEvidence, HeistEvidenceAvailability<HeistCaseSelectionEvidence>, HeistCaseSelectionEvidence
@@ -254,10 +275,10 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         try container.encode(node, forKey: .node)
     }
 
-    package func walk(
-        enter: (HeistExecutionStepResult) throws -> Void,
-        leave: (HeistExecutionStepResult) throws -> Void
-    ) rethrows {
+    package func walk<Failure: Error>(
+        enter: (HeistExecutionStepResult) throws(Failure) -> Void,
+        leave: (HeistExecutionStepResult) throws(Failure) -> Void
+    ) throws(Failure) {
         try enter(self)
         for child in children { try child.walk(enter: enter, leave: leave) }
         try leave(self)
@@ -277,10 +298,10 @@ extension CodingUserInfoKey {
 }
 
 package extension Sequence where Element == HeistExecutionStepResult {
-    func walk(
-        enter: (HeistExecutionStepResult) throws -> Void,
-        leave: (HeistExecutionStepResult) throws -> Void
-    ) rethrows {
+    func walk<Failure: Error>(
+        enter: (HeistExecutionStepResult) throws(Failure) -> Void,
+        leave: (HeistExecutionStepResult) throws(Failure) -> Void
+    ) throws(Failure) {
         for step in self { try step.walk(enter: enter, leave: leave) }
     }
 
@@ -302,7 +323,9 @@ public extension HeistExecutionStepResult {
     var waitEvidence: HeistExpectationEvidence? {
         guard case .wait(_, _, let completion) = node else { return nil }
         switch completion {
-        case .passed(let evidence, _), .childAborted(let evidence, _, _):
+        case .passed(let evidence, _):
+            return evidence.expectation
+        case .childAborted(let evidence, _, _):
             return evidence
         case .failed(let evidence, _, _):
             return evidence.value

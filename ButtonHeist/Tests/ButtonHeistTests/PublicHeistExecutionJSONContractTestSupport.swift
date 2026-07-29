@@ -114,7 +114,7 @@ enum PublicHeistExecutionJSONContractFixture {
                 predicate: donePredicate,
                 observation: Observation.Evidence(
                     baseline: nil,
-                    events: [.elementsChanged(current)],
+                    events: [.elementsChanged(current), .noChange],
                     current: current,
                     coverage: .complete
                 )
@@ -128,7 +128,9 @@ enum PublicHeistExecutionJSONContractFixture {
             path: "$.body[0]",
             predicate: donePredicate,
             timeout: 1,
-            completion: .passed(evidence: evidence)
+            completion: .passed(
+                evidence: try XCTUnwrap(HeistPassedWaitEvidence.matched(evidence))
+            )
         )
     }
 
@@ -293,15 +295,14 @@ enum PublicHeistExecutionJSONContractFixture {
             ]),
             context: Observation.Context(screenId: "Done visible")
         )
-        return HeistExpectationEvidence(
+        return try HeistExpectationEvidence(
             predicate: donePredicate,
-            resolvedPredicate: try donePredicate.resolve(in: .empty),
             observation: Observation.Evidence(
                 baseline: Observation.Snapshot(
                     interface: makeTestInterface(elements: []),
                     context: Observation.Context(screenId: "Loading")
                 ),
-                events: [.elementsChanged(current)],
+                events: [.elementsChanged(current), .noChange],
                 current: current,
                 coverage: .complete
             ),

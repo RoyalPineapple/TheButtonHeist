@@ -207,10 +207,6 @@ where Rule: HeistResultEvidenceRule {
         self.value = value
     }
 
-    package init(admitted value: Rule.Evidence) {
-        self.value = value
-    }
-
     package init(from decoder: Decoder) throws {
         let value = try Rule.Evidence(from: decoder)
         guard let admitted = Self(value) else {
@@ -227,7 +223,11 @@ where Rule: HeistResultEvidenceRule {
 
 package enum HeistPassedActionRule: HeistResultEvidenceRule {
     package static let rejection = "passed action evidence must prove success"
-    package static func admits(_ evidence: HeistActionEvidence) -> Bool { evidence.admitsPassedResult }
+    package static func admits(_ evidence: HeistActionEvidence) -> Bool {
+        guard evidence.result?.outcome.isSuccess == true else { return false }
+        guard let expectation = evidence.expectationEvidence else { return true }
+        return (try? expectation.replay().met) == true
+    }
 }
 
 package enum HeistFailedActionRule: HeistResultEvidenceRule {
@@ -297,20 +297,3 @@ package typealias HeistPassedRepeatUntilIterationEvidence = HeistResultEvidence<
 package typealias HeistFailedRepeatUntilEvidence = HeistResultEvidence<HeistFailedRepeatUntilRule>
 package typealias HeistPassedInvocationEvidence = HeistResultEvidence<HeistPassedInvocationRule>
 package typealias HeistFailedInvocationEvidence = HeistResultEvidence<HeistFailedInvocationRule>
-
-private extension HeistActionEvidence {
-    var admitsPassedResult: Bool {
-        switch self {
-        case .commandResolutionFailure:
-            return false
-        case .completed(let result, let expectation):
-            guard result.outcome.isSuccess else { return false }
-            guard let expectation else { return true }
-            do {
-                return try expectation.replay().met
-            } catch {
-                return false
-            }
-        }
-    }
-}
