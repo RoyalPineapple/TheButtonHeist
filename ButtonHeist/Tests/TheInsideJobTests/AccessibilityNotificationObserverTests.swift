@@ -524,7 +524,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(observer.latestSequence, 8)
     }
 
-    func testProbeObservesOnlyElementUpdateAndPageScrolledNotifications() throws {
+    func testProbeObservesOnlyElementUpdateNotifications() throws {
         let payload = CapturedAccessibilityNotificationPayload("Updated" as NSString)
 
         XCTAssertNil(
@@ -543,16 +543,6 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
                 )
             ).code,
             .elementUpdate
-        )
-        XCTAssertEqual(
-            try XCTUnwrap(
-                AccessibilityNotificationProbe.observe(
-                    rawCode: 1009,
-                    notificationData: payload,
-                    associatedElement: .none
-                )
-            ).code,
-            .pageScrolled
         )
     }
 

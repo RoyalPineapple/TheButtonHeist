@@ -5,14 +5,11 @@ import Foundation
 enum AccessibilityNotificationProbe {
     enum Code: UInt32, CaseIterable, CustomStringConvertible {
         case elementUpdate = 1005
-        case pageScrolled = 1009
 
         var description: String {
             switch self {
             case .elementUpdate:
                 "elementUpdate"
-            case .pageScrolled:
-                "pageScrolled"
             }
         }
     }
