@@ -187,10 +187,12 @@ struct HeistMachineTestDriver {
                       let boundary = boundaries[leaf.id] else {
                     throw MachineDriverFailure.stalled
                 }
+                let outcome = nextLeafOutcome(default: .timedOut)
                 state = machine.advance(.observationFinished(
-                    leaf.id,
-                    evidence(since: boundary),
-                    nextLeafOutcome()
+                    source: .deadline,
+                    observationID: leaf.id,
+                    evidence: evidence(since: boundary),
+                    outcome: outcome
                 ))
             }
         }
@@ -224,14 +226,19 @@ struct HeistMachineTestDriver {
         case .explore(let id, _):
             return machine.advance(.viewportExited(id, .retained))
 
-        case .finishObservation(let id, _):
-            guard let boundary = boundaries[id] else {
+        case .finishObservation(
+            let requestID,
+            let observationID,
+            _
+        ):
+            guard let boundary = boundaries[observationID] else {
                 return machine.state
             }
             return machine.advance(.observationFinished(
-                id,
-                evidence(since: boundary),
-                nextLeafOutcome()
+                source: .request(requestID),
+                observationID: observationID,
+                evidence: evidence(since: boundary),
+                outcome: nextLeafOutcome(default: .completed)
             ))
 
         case .captureFailureScreenshot(let id, _, _):
@@ -256,8 +263,12 @@ struct HeistMachineTestDriver {
         )
     }
 
-    private mutating func nextLeafOutcome() -> HeistExecution.LeafOutcome {
-        script.leafOutcomes.isEmpty ? .completed : script.leafOutcomes.removeFirst()
+    private mutating func nextLeafOutcome(
+        default defaultOutcome: HeistExecution.LeafOutcome
+    ) -> HeistExecution.LeafOutcome {
+        script.leafOutcomes.isEmpty
+            ? defaultOutcome
+            : script.leafOutcomes.removeFirst()
     }
 }
 

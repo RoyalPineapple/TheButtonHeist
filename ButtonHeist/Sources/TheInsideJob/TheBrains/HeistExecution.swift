@@ -23,7 +23,11 @@ extension HeistExecution {
         case beginObservation(RequestID, ObservationRequest)
         case dispatch(RequestID, ResolvedHeistActionCommand)
         case explore(RequestID, Predicate)
-        case finishObservation(RequestID, exitPosition: Navigation.ViewportExitPosition)
+        case finishObservation(
+            requestID: RequestID,
+            observationID: RequestID,
+            exitPosition: Navigation.ViewportExitPosition
+        )
         case captureFailureScreenshot(
             RequestID,
             failedPath: HeistExecutionPath,
@@ -37,7 +41,12 @@ extension HeistExecution {
         case event(Observation.Event)
         case dispatchCompleted(RequestID, TheSafecracker.ActionDispatchResult)
         case viewportExited(RequestID, Navigation.ViewportExit.Outcome)
-        case observationFinished(RequestID, Observation.Evidence, LeafOutcome)
+        case observationFinished(
+            source: ObservationFinishSource,
+            observationID: RequestID,
+            evidence: Observation.Evidence,
+            outcome: LeafOutcome
+        )
         case failureScreenshotCaptured(RequestID, HeistExecutionStepResult?)
     }
 
@@ -83,6 +92,11 @@ extension HeistExecution {
         case cancelled
         case unavailable
         case viewportExitFailed(Navigation.ViewportExit.Failure)
+    }
+
+    internal enum ObservationFinishSource: Sendable, Equatable {
+        case request(RequestID)
+        case deadline
     }
 }
 
@@ -212,12 +226,12 @@ extension HeistExecution {
             }
         }
 
-        internal var isFinishingObservation: Bool {
+        internal var finishingObservationRequestID: RequestID? {
             switch self {
             case .action(let leaf):
-                leaf.phase == .finishingObservation
+                leaf.phase.finishingObservationRequestID
             case .wait(let leaf):
-                leaf.phase == .finishingObservation
+                leaf.phase.finishingObservationRequestID
             }
         }
     }
@@ -251,7 +265,23 @@ extension HeistExecution {
         case dispatching
         case observing
         case exploring
-        case finishingObservation
+        case finishingObservation(RequestID)
+
+        internal var finishingObservationRequestID: RequestID? {
+            guard case .finishingObservation(let requestID) = self else {
+                return nil
+            }
+            return requestID
+        }
+
+        internal func admits(_ source: ObservationFinishSource) -> Bool {
+            switch source {
+            case .request(let requestID):
+                self == .finishingObservation(requestID)
+            case .deadline:
+                true
+            }
+        }
     }
 }
 

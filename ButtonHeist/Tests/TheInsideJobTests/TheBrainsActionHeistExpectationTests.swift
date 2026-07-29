@@ -153,26 +153,65 @@ final class HeistMachineExpectationTests: XCTestCase {
               case .pending(.wait) = machine.advance(.event(heistNotification("Saved"))),
               case .pending(.perform(let firstFinish)) = machine.advance(.event(.noChange)),
               firstFinish.count == 1,
-              case .finishObservation(let firstFinishID, _) = firstFinish[0] else {
+              case .finishObservation(
+                let firstFinishID,
+                let firstObservationID,
+                _
+              ) = firstFinish[0] else {
             return XCTFail("A matched, unchanged wait must request final evidence")
         }
-        XCTAssertEqual(firstFinishID, id)
+        XCTAssertEqual(firstObservationID, id)
 
         guard case .pending(.wait) = machine.advance(
             .event(.elementsChanged(heistSnapshot(labels: ["Late Change"])))
         ) else {
             return XCTFail("A final-capture change must reopen observation")
         }
-        XCTAssertEqual(machine.activeLeaf?.isFinishingObservation, false)
+        XCTAssertNil(machine.activeLeaf?.finishingObservationRequestID)
 
         guard case .pending(.perform(let secondFinish)) = machine.advance(
             .event(.noChange)
         ),
               secondFinish.count == 1,
-              case .finishObservation(let secondFinishID, _) = secondFinish[0] else {
+              case .finishObservation(
+                let secondFinishID,
+                let secondObservationID,
+                _
+              ) = secondFinish[0] else {
             return XCTFail("Fresh stillness must request final evidence again")
         }
-        XCTAssertEqual(secondFinishID, id)
+        XCTAssertEqual(secondObservationID, id)
+        XCTAssertNotEqual(secondFinishID, firstFinishID)
+
+        let evidence = Observation.History(retentionLimit: 1).evidence(
+            in: 0..<0,
+            baseline: boundary.baseline,
+            current: boundary.baseline
+        )
+        guard case .pending(.wait) = machine.advance(.observationFinished(
+            source: .request(firstFinishID),
+            observationID: id,
+            evidence: evidence,
+            outcome: .completed
+        )) else {
+            return XCTFail("A superseded final-capture response must be ignored")
+        }
+        XCTAssertEqual(
+            machine.activeLeaf?.finishingObservationRequestID,
+            secondFinishID
+        )
+
+        guard case .complete(let completion) = machine.advance(
+            .observationFinished(
+                source: .deadline,
+                observationID: id,
+                evidence: evidence,
+                outcome: .completed
+            )
+        ) else {
+            return XCTFail("Satisfied final evidence at the deadline must complete")
+        }
+        XCTAssertEqual(completion.steps.first?.status, .passed)
     }
 
     func testIncompleteHistoryCannotManufactureSuccessfulEvidence() throws {

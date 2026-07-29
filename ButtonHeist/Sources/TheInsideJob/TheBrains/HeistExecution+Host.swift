@@ -68,60 +68,15 @@ extension HeistExecution {
         private enum Interaction {
             case idle
             case running(
-                RequestToken,
+                InteractionID,
                 task: Task<Void, Never>,
-                deferred: [MainActorRequest]
+                deferred: [MainActorRequest],
+                completesAfterDeadline: Bool
             )
         }
 
-        private struct RequestToken: Equatable {
-            enum Kind {
-                case currentSnapshot
-                case beginObservation
-                case dispatch
-                case explore
-                case finishObservation
-                case failureScreenshot
-                case terminalEvidence
-
-                var completesAfterDeadline: Bool {
-                    switch self {
-                    case .failureScreenshot, .terminalEvidence:
-                        true
-                    case .currentSnapshot,
-                         .beginObservation,
-                         .dispatch,
-                         .explore,
-                         .finishObservation:
-                        false
-                    }
-                }
-            }
-
-            let id: RequestID
-            let kind: Kind
-
-            init(id: RequestID, kind: Kind) {
-                self.id = id
-                self.kind = kind
-            }
-
-            init(_ request: MainActorRequest) {
-                switch request {
-                case .currentSnapshot(let id, _):
-                    self.init(id: id, kind: .currentSnapshot)
-                case .beginObservation(let id, _):
-                    self.init(id: id, kind: .beginObservation)
-                case .dispatch(let id, _):
-                    self.init(id: id, kind: .dispatch)
-                case .explore(let id, _):
-                    self.init(id: id, kind: .explore)
-                case .finishObservation(let id, _):
-                    self.init(id: id, kind: .finishObservation)
-                case .captureFailureScreenshot(let id, _, _):
-                    self.init(id: id, kind: .failureScreenshot)
-                }
-            }
+        private struct InteractionID: Equatable {
+            let sequence: UInt64
         }
 
         private enum DeadlineTargets {
@@ -201,6 +156,7 @@ extension HeistExecution {
         private unowned let brains: TheBrains
         private var phase = Phase.idle
         private var nextDeadlineTimerSequence: UInt64 = 0
+        private var nextInteractionSequence: UInt64 = 0
 
         internal init(brains: TheBrains) {
             self.brains = brains
@@ -372,11 +328,12 @@ extension HeistExecution {
                     phase = .running(session)
                     armDeadline()
                     performNext(requests)
-                case .running(let token, let task, _):
+                case .running(let id, let task, _, let completesAfterDeadline):
                     session.interaction = .running(
-                        token,
+                        id,
                         task: task,
-                        deferred: requests
+                        deferred: requests,
+                        completesAfterDeadline: completesAfterDeadline
                     )
                     phase = .running(session)
                     armDeadline()
@@ -394,36 +351,41 @@ extension HeistExecution {
                 return
             }
             let remaining = Array(requests.dropFirst())
-            let token = RequestToken(request)
+            let interactionID = nextInteractionID()
             let task = Task { @MainActor [weak self] in
                 guard let self else { return }
-                await self.perform(request, token: token)
-                self.interactionFinished(token)
+                await self.perform(request, interactionID: interactionID)
+                self.interactionFinished(interactionID)
             }
             session.interaction = .running(
-                token,
+                interactionID,
                 task: task,
-                deferred: remaining
+                deferred: remaining,
+                completesAfterDeadline: request.completesAfterDeadline
             )
             phase = .running(session)
         }
 
         private func perform(
             _ request: MainActorRequest,
-            token: RequestToken
+            interactionID: InteractionID
         ) async {
             switch request {
             case .currentSnapshot(let id, let scope):
                 let snapshot = await brains.captureHeistCurrentState(scope: scope)?
                     .snapshot
-                complete(token, input: .currentSnapshot(id, snapshot))
+                complete(interactionID, input: .currentSnapshot(id, snapshot))
 
             case .beginObservation(let id, let request):
-                await beginObservation(id: id, request: request, token: token)
+                await beginObservation(
+                    id: id,
+                    request: request,
+                    interactionID: interactionID
+                )
 
             case .dispatch(let id, let command):
                 let result = await brains.dispatchRuntimeAction(command)
-                complete(token, input: .dispatchCompleted(id, result))
+                complete(interactionID, input: .dispatchCompleted(id, result))
 
             case .explore(let id, let predicate):
                 let deadline = activeLeafDeadline(id: id)
@@ -433,7 +395,7 @@ extension HeistExecution {
                         target: predicate.resolved.singularTarget,
                         deadline: deadline,
                         stopWhen: { [weak self] in
-                            self?.shouldStopExploration(token) == true
+                            self?.shouldStopExploration(interactionID) == true
                         }
                     )
                 } else {
@@ -447,13 +409,18 @@ extension HeistExecution {
                 observation.viewportStatus.record(outcome)
                 session.activeObservation = observation
                 phase = .running(session)
-                complete(token, input: .viewportExited(id, outcome))
+                complete(interactionID, input: .viewportExited(id, outcome))
 
-            case .finishObservation(let id, let exitPosition):
+            case .finishObservation(
+                let requestID,
+                let observationID,
+                let exitPosition
+            ):
                 await finishObservation(
-                    id: id,
+                    requestID: requestID,
+                    observationID: observationID,
                     exitPosition: exitPosition,
-                    token: token
+                    interactionID: interactionID
                 )
 
             case .captureFailureScreenshot(
@@ -466,7 +433,7 @@ extension HeistExecution {
                     mode: mode
                 )
                 complete(
-                    token,
+                    interactionID,
                     input: .failureScreenshotCaptured(id, result)
                 )
             }
@@ -475,11 +442,11 @@ extension HeistExecution {
         private func beginObservation(
             id: RequestID,
             request: ObservationRequest,
-            token: RequestToken
+            interactionID: InteractionID
         ) async {
             guard case .running(var initialSession) = phase,
-                  case .running(let current, _, _) = initialSession.interaction,
-                  current == token else {
+                  case .running(let current, _, _, _) = initialSession.interaction,
+                  current == interactionID else {
                 return
             }
             precondition(
@@ -502,8 +469,8 @@ extension HeistExecution {
                 timeout: request.timeout
             )
             guard case .running(let armedSession) = phase,
-                  case .running(let current, _, _) = armedSession.interaction,
-                  current == token else {
+                  case .running(let current, _, _, _) = armedSession.interaction,
+                  current == interactionID else {
                 scope.cancel()
                 notificationWindow.cancel()
                 return
@@ -514,8 +481,8 @@ extension HeistExecution {
                 scope: request.scope
             )
             guard case .running(var session) = phase,
-                  case .running(let current, _, _) = session.interaction,
-                  current == token else {
+                  case .running(let current, _, _, _) = session.interaction,
+                  current == interactionID else {
                 scope.cancel()
                 notificationWindow.cancel()
                 return
@@ -549,8 +516,8 @@ extension HeistExecution {
             }
 
             guard case .running(var capturedSession) = phase,
-                  case .running(let capturedToken, _, _) = capturedSession.interaction,
-                  capturedToken == token,
+                  case .running(let capturedInteractionID, _, _, _) = capturedSession.interaction,
+                  capturedInteractionID == interactionID,
                   var observation = capturedSession.activeObservation,
                   observation.id == id,
                   let bufferedEvents = capturedSession.bufferedObservationEvents else {
@@ -562,20 +529,21 @@ extension HeistExecution {
             capturedSession.activeObservation = observation
             capturedSession.bufferedObservationEvents = nil
             phase = .running(capturedSession)
-            complete(token, input: .observationBegan(id, boundary))
+            complete(interactionID, input: .observationBegan(id, boundary))
             for event in bufferedEvents {
                 receive(event)
             }
         }
 
         private func finishObservation(
-            id: RequestID,
+            requestID: RequestID,
+            observationID: RequestID,
             exitPosition: Navigation.ViewportExitPosition,
-            token: RequestToken
+            interactionID: InteractionID
         ) async {
             guard case .running(let initialSession) = phase,
                   let observation = initialSession.activeObservation,
-                  observation.id == id else {
+                  observation.id == observationID else {
                 return
             }
 
@@ -585,7 +553,7 @@ extension HeistExecution {
                 break
             case .origin:
                 let exploration = await brains.navigation.fullGraph(
-                    deadline: activeLeafDeadline(id: id)
+                    deadline: activeLeafDeadline(id: observationID)
                 )
                 viewportStatus.record(exploration?.viewportExit)
             }
@@ -596,36 +564,45 @@ extension HeistExecution {
             }
             let evidence = await evidence(for: observation)
             guard case .running(let session) = phase,
-                  session.activeObservation?.id == id,
-                  session.machine.activeLeaf?.isFinishingObservation == true else {
+                  session.activeObservation?.id == observationID,
+                  session.machine.activeLeaf?.finishingObservationRequestID == requestID else {
                 return
             }
             let outcome: LeafOutcome
-            if Task.isCancelled {
+            if let expiration = session.deadlines.expiration {
+                outcome = observationOutcome(
+                    viewportStatus: viewportStatus,
+                    expiration: expiration
+                )
+                if outcome == .heistTimedOut {
+                    markTerminalCollection(expiration)
+                }
+            } else if Task.isCancelled {
                 outcome = .cancelled
             } else {
                 outcome = observationOutcome(
                     viewportStatus: viewportStatus,
-                    expiration: session.deadlines.expiration
+                    expiration: nil
                 )
-                if outcome == .heistTimedOut,
-                   let expiration = session.deadlines.expiration {
-                    markTerminalCollection(expiration)
-                }
             }
             releaseActiveObservation(
                 preservingDeadline: outcome == .heistTimedOut
             )
             complete(
-                token,
-                input: .observationFinished(id, evidence, outcome)
+                interactionID,
+                input: .observationFinished(
+                    source: .request(requestID),
+                    observationID: observationID,
+                    evidence: evidence,
+                    outcome: outcome
+                )
             )
         }
 
-        private func complete(_ token: RequestToken, input: Input) {
+        private func complete(_ interactionID: InteractionID, input: Input) {
             guard case .running(var session) = phase,
-                  case .running(let current, _, let deferred) = session.interaction,
-                  current == token else {
+                  case .running(let current, _, let deferred, _) = session.interaction,
+                  current == interactionID else {
                 return
             }
             session.interaction = .idle
@@ -647,19 +624,19 @@ extension HeistExecution {
             performNext(deferred)
         }
 
-        private func shouldStopExploration(_ token: RequestToken) -> Bool {
+        private func shouldStopExploration(_ interactionID: InteractionID) -> Bool {
             guard case .running(let session) = phase,
-                  case .running(let current, _, let deferred) = session.interaction,
-                  current == token else {
+                  case .running(let current, _, let deferred, _) = session.interaction,
+                  current == interactionID else {
                 return true
             }
             return !deferred.isEmpty || session.deadlines.expiration != nil
         }
 
-        private func interactionFinished(_ token: RequestToken) {
+        private func interactionFinished(_ interactionID: InteractionID) {
             guard case .running(var session) = phase,
-                  case .running(let current, _, _) = session.interaction,
-                  current == token else {
+                  case .running(let current, _, let deferred, _) = session.interaction,
+                  current == interactionID else {
                 return
             }
             session.interaction = .idle
@@ -667,6 +644,8 @@ extension HeistExecution {
             phase = .running(session)
             if let expiration {
                 collectTerminalEvidence(expiration)
+            } else if !deferred.isEmpty {
+                performNext(deferred)
             }
         }
 
@@ -679,6 +658,11 @@ extension HeistExecution {
                 return nil
             }
             return leaf
+        }
+
+        private func nextInteractionID() -> InteractionID {
+            defer { nextInteractionSequence &+= 1 }
+            return InteractionID(sequence: nextInteractionSequence)
         }
 
         private func armDeadline() {
@@ -748,9 +732,9 @@ extension HeistExecution {
             case .idle:
                 phase = .running(session)
                 collectTerminalEvidence(expiration)
-            case .running(let token, let task, _):
+            case .running(_, let task, _, let completesAfterDeadline):
                 phase = .running(session)
-                if !token.kind.completesAfterDeadline {
+                if !completesAfterDeadline {
                     task.cancel()
                 }
             }
@@ -772,12 +756,10 @@ extension HeistExecution {
                 session.deadlines.targets,
                 expiration
             )
-            let token = RequestToken(id: observation.id, kind: .terminalEvidence)
+            let interactionID = nextInteractionID()
             let task = Task { @MainActor [weak self] in
                 guard let self else { return }
                 var viewportStatus = observation.viewportStatus
-                let exploration = await self.brains.navigation.fullGraph()
-                viewportStatus.record(exploration?.viewportExit)
                 if await self.captureVisibleObservation(
                     window: observation.notificationWindow
                 ) == nil {
@@ -785,28 +767,35 @@ extension HeistExecution {
                 }
                 let evidence = await self.evidence(for: observation)
                 self.finishTerminalEvidence(
-                    token: token,
+                    interactionID: interactionID,
+                    observationID: observation.id,
                     evidence: evidence,
                     viewportStatus: viewportStatus,
                     expiration: expiration
                 )
-                self.interactionFinished(token)
+                self.interactionFinished(interactionID)
             }
-            session.interaction = .running(token, task: task, deferred: [])
+            session.interaction = .running(
+                interactionID,
+                task: task,
+                deferred: [],
+                completesAfterDeadline: true
+            )
             phase = .running(session)
         }
 
         private func finishTerminalEvidence(
-            token: RequestToken,
+            interactionID: InteractionID,
+            observationID: RequestID,
             evidence: Observation.Evidence,
             viewportStatus: ViewportStatus,
             expiration: DeadlineExpiration
         ) {
             guard case .running(var session) = phase,
-                  case .running(let current, _, _) = session.interaction,
-                  current == token,
+                  case .running(let current, _, _, _) = session.interaction,
+                  current == interactionID,
                   let observation = session.activeObservation,
-                  observation.id == token.id else {
+                  observation.id == observationID else {
                 return
             }
             session.interaction = .idle
@@ -831,9 +820,10 @@ extension HeistExecution {
                 )
             }
             let state = session.machine.advance(.observationFinished(
-                observation.id,
-                evidence,
-                outcome
+                source: .deadline,
+                observationID: observation.id,
+                evidence: evidence,
+                outcome: outcome
             ))
 
             if expiration.includesWhole {
@@ -997,7 +987,7 @@ extension HeistExecution {
             switch session.interaction {
             case .idle:
                 break
-            case .running(_, let task, _):
+            case .running(_, let task, _, _):
                 task.cancel()
             }
             switch resolution {
@@ -1016,7 +1006,7 @@ extension HeistExecution {
 
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                if case .running(_, let task, _) = session.interaction {
+                if case .running(_, let task, _, _) = session.interaction {
                     _ = await task.value
                 }
                 await self.brains.vault.semanticObservationStream.stateOwner
@@ -1043,9 +1033,13 @@ extension HeistExecution {
 }
 
 private extension HeistExecution.MainActorRequest {
-    var isTerminalEvidenceRequest: Bool {
+    var completesAfterDeadline: Bool {
         guard case .captureFailureScreenshot = self else { return false }
         return true
+    }
+
+    var isTerminalEvidenceRequest: Bool {
+        completesAfterDeadline
     }
 }
 

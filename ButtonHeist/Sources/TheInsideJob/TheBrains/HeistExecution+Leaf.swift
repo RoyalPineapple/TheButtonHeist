@@ -110,10 +110,15 @@ private extension HeistExecution.Machine {
                 return .pending(.wait)
             }
 
-        case .observationFinished(let id, let evidence, let outcome):
-            guard id == leaf.id,
+        case .observationFinished(
+            let source,
+            let observationID,
+            let evidence,
+            let outcome
+        ):
+            guard observationID == leaf.id,
                   leaf.boundary != nil,
-                  leaf.phase != .beginningObservation else {
+                  leaf.phase.admits(source) else {
                 return .pending(.wait)
             }
             let result = HeistExecution.ResultProjector.project(
@@ -188,10 +193,15 @@ private extension HeistExecution.Machine {
                 return .pending(.wait)
             }
 
-        case .observationFinished(let id, let evidence, let outcome):
-            guard id == leaf.id,
+        case .observationFinished(
+            let source,
+            let observationID,
+            let evidence,
+            let outcome
+        ):
+            guard observationID == leaf.id,
                   leaf.boundary != nil,
-                  leaf.phase != .beginningObservation else {
+                  leaf.phase.admits(source) else {
                 return .pending(.wait)
             }
             let result = HeistExecution.ResultProjector.project(
@@ -232,10 +242,15 @@ private extension HeistExecution.Machine {
         exitPosition: Navigation.ViewportExitPosition
     ) -> HeistExecution.State {
         var leaf = leaf
-        leaf.phase = .finishingObservation
+        let requestID = nextID()
+        leaf.phase = .finishingObservation(requestID)
         return update(
             action: leaf,
-            performing: [.finishObservation(leaf.id, exitPosition: exitPosition)]
+            performing: [.finishObservation(
+                requestID: requestID,
+                observationID: leaf.id,
+                exitPosition: exitPosition
+            )]
         )
     }
 
@@ -322,10 +337,15 @@ private extension HeistExecution.Machine {
         exitPosition: Navigation.ViewportExitPosition
     ) -> HeistExecution.State {
         var leaf = leaf
-        leaf.phase = .finishingObservation
+        let requestID = nextID()
+        leaf.phase = .finishingObservation(requestID)
         return update(
             wait: leaf,
-            performing: [.finishObservation(leaf.id, exitPosition: exitPosition)]
+            performing: [.finishObservation(
+                requestID: requestID,
+                observationID: leaf.id,
+                exitPosition: exitPosition
+            )]
         )
     }
 
