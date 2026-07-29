@@ -145,11 +145,20 @@ package enum ObservationPredicate: Sendable, Equatable {
     case noChange
     case screenChanged(ResolvedScreenPredicate)
 
-    package var singularTarget: ResolvedAccessibilityTarget? {
+    package var watchTarget: ResolvedAccessibilityTarget? {
         switch self {
         case .elementsChanged(let assertions):
             guard assertions.count == 1 else { return nil }
-            return assertions[0].target
+            switch assertions[0] {
+            case .exists(let target),
+                 .missing(let target),
+                 .disappeared(let target):
+                return target
+            case .updated(let target, _):
+                return target.accessibilityTarget
+            case .appeared:
+                return nil
+            }
         case .notification, .noChange, .screenChanged:
             // A notification element is a standalone semantic subject, not an
             // accessibility target. The other cases name no element.

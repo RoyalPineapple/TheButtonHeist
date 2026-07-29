@@ -253,7 +253,10 @@ struct RenderResponseTests {
         )
         elementAnnotations.append(InterfaceElementAnnotation(
             path: try #require(TreePath(validating: [0, 0])),
-            actions: [.activate]
+            actions: [.activate],
+            geometry: geometry(
+                ownerPath: try #require(TreePath(validating: [0]))
+            )
         ))
 
         let container = AccessibilityContainer(
@@ -294,7 +297,6 @@ struct RenderResponseTests {
         )
         let step: [String: Any] = [
             "path": "$.body[0]",
-            "durationMs": 1,
             "node": [
                 "type": HeistExecutionStepKind.action.rawValue,
                 "command": try jsonObject(command, encoder: encoder),
@@ -328,9 +330,24 @@ struct RenderResponseTests {
                 elements: elements.indices.map { index in
                     InterfaceElementAnnotation(
                         path: try #require(TreePath(validating: [index])),
-                        actions: []
+                        actions: [],
+                        geometry: geometry(ownerPath: .root)
                     )
                 }
+            )
+        )
+    }
+
+    private static func geometry(ownerPath: TreePath) -> HeistElement.Geometry {
+        HeistElement.Geometry(
+            screen: .onscreen(
+                frame: .available(ScreenRect(x: 0, y: 0, width: 100, height: 44)),
+                activationPoint: .defaultCenter(ScreenPoint(x: 50, y: 22))
+            ),
+            view: HeistElement.Geometry.ViewSpace(
+                ownerPath: ownerPath,
+                frame: ViewRect(x: 0, y: 0, width: 100, height: 44),
+                activationPoint: ViewPoint(x: 50, y: 22)
             )
         )
     }

@@ -145,31 +145,32 @@ private extension HeistExecution.Machine {
                 return .pending(.wait)
             }
             leaf.boundary = boundary
-            let predicateExpectation = Expectation(
-                [leaf.predicate.resolved],
-                baseline: boundary.baseline
-            )
-            leaf.expectation = predicateExpectation.result == .satisfied
-                ? Expectation([.noChange])
-                : Expectation(
-                    [leaf.predicate.resolved, .noChange],
-                    baseline: boundary.baseline
-                )
-            if predicateExpectation.result == .satisfied {
-                leaf.phase = .observing
-                activeLeaf = .wait(leaf)
-                return .pending(.wait)
-            }
             if leaf.predicate.isNotification {
+                leaf.expectation = Expectation([
+                    leaf.predicate.resolved,
+                    .noChange,
+                ])
                 leaf.phase = .observing
                 activeLeaf = .wait(leaf)
                 return .pending(.wait)
             }
-            leaf.phase = .exploring
             return update(
                 wait: leaf,
-                performing: [.explore(leaf.id, leaf.predicate)]
+                performing: [
+                    .currentSnapshot(
+                        leaf.id,
+                        scope: leaf.predicate.observationScope
+                    ),
+                ]
             )
+
+        case .currentSnapshot(let id, let snapshot):
+            guard id == leaf.id,
+                  leaf.phase == .beginningObservation,
+                  let boundary = leaf.boundary else {
+                return .pending(.wait)
+            }
+            return begin(wait: leaf, snapshot: snapshot, boundary: boundary)
 
         case .event(let event):
             return observe(wait: leaf, event: event)
@@ -232,9 +233,38 @@ private extension HeistExecution.Machine {
             )))
             return advanceExecution()
 
-        case .currentSnapshot, .dispatchCompleted, .failureScreenshotCaptured:
+        case .dispatchCompleted, .failureScreenshotCaptured:
             return .pending(.wait)
         }
+    }
+
+    mutating func begin(
+        wait leaf: HeistExecution.WaitLeaf,
+        snapshot: Observation.Snapshot?,
+        boundary: TheVault.State.HistoryBoundary
+    ) -> HeistExecution.State {
+        var leaf = leaf
+        let baseline = boundary.baseline ?? snapshot
+        let predicateExpectation = Expectation(
+            [leaf.predicate.resolved],
+            baseline: baseline
+        )
+        leaf.expectation = predicateExpectation.result == .satisfied
+            ? Expectation([.noChange])
+            : Expectation(
+                [leaf.predicate.resolved, .noChange],
+                baseline: baseline
+            )
+        if predicateExpectation.result == .satisfied {
+            leaf.phase = .observing
+            activeLeaf = .wait(leaf)
+            return .pending(.wait)
+        }
+        leaf.phase = .exploring
+        return update(
+            wait: leaf,
+            performing: [.explore(leaf.id, leaf.predicate)]
+        )
     }
 
     mutating func finish(
@@ -275,7 +305,9 @@ private extension HeistExecution.Machine {
                 evaluating: event
             )
             guard leaf.expectation.result == .satisfied else {
-                if shouldExplore(after: event, for: leaf.predicate) {
+                if leaf.predicate?.resolved.watchTarget != nil,
+                   !leaf.expectation.isWaitingOnlyForNoChange,
+                   shouldExplore(after: event, for: leaf.predicate) {
                     guard let predicate = leaf.predicate else {
                         preconditionFailure("An observing action without a predicate cannot request discovery")
                     }
@@ -321,6 +353,11 @@ private extension HeistExecution.Machine {
         }
         guard let predicate = leaf.predicate,
               !predicate.isNotification else {
+            leaf.phase = .observing
+            activeLeaf = .action(leaf)
+            return .pending(.wait)
+        }
+        guard predicate.resolved.watchTarget != nil else {
             leaf.phase = .observing
             activeLeaf = .action(leaf)
             return .pending(.wait)
@@ -372,6 +409,7 @@ private extension HeistExecution.Machine {
         )
         guard leaf.expectation.result == .satisfied else {
             if leaf.phase == .observing,
+               !leaf.expectation.isWaitingOnlyForNoChange,
                shouldExplore(after: event, for: leaf.predicate) {
                 leaf.phase = .exploring
                 return update(

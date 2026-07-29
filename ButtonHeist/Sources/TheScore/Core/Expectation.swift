@@ -58,6 +58,10 @@ package struct Expectation: Sendable, Equatable {
         return .waiting(description)
     }
 
+    package var isWaitingOnlyForNoChange: Bool {
+        pending.count == 1 && pending[0].isNoChange
+    }
+
     private func evaluating(_ input: Input) -> Expectation {
         var next: [Step] = []
         next.reserveCapacity(pending.count)

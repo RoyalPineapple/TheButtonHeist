@@ -84,6 +84,43 @@ final class HeistMachineExpectationTests: XCTestCase {
         )
     }
 
+    func testActionElementTransitionWithoutWatchTargetObservesWithoutExploring() throws {
+        let initial = heistSnapshot(labels: ["Submit"])
+        let processingStarted = heistSnapshot(labels: ["Processing", "Submit"])
+        let processing = heistSnapshot(labels: ["Processing"])
+        let plan = try HeistPlan(body: [
+            .action(ActionStep(
+                command: .dismiss,
+                expectationPolicy: .expect(ActionExpectation(
+                    predicate: .elementsChanged([
+                        .appeared(.label("Processing")),
+                        .disappeared(.label("Submit")),
+                    ]),
+                    timeout: 1
+                ))
+            )),
+        ])
+        var driver = try HeistMachineTestDriver(
+            plan: plan,
+            script: MachineRunScript(
+                snapshots: [initial],
+                events: [
+                    .elementsChanged(processingStarted),
+                    .elementsChanged(processing),
+                    .noChange,
+                ]
+            )
+        )
+
+        let completion = try driver.run()
+
+        XCTAssertEqual(completion.steps.first?.status, .passed)
+        XCTAssertFalse(driver.requests.contains { request in
+            guard case .explore = request else { return false }
+            return true
+        })
+    }
+
     func testNotificationExpectationConsumesOnlyMatchingNotificationEvent() throws {
         let plan = try HeistPlan(body: [
             .wait(WaitStep(

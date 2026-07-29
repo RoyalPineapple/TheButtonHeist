@@ -4,7 +4,7 @@
       "cliExposure" : "directCommand",
       "description" : "Perform primary accessibility activation on a semantic UI element, or one of its named accessibility actions.",
       "family" : "semanticAction",
-      "inputSchemaSHA256" : "2c8c6b821b2faa3b570a95bce7791ff3d3ea78042e868be88a091981c4a58004",
+      "inputSchemaSHA256" : "65df06b86e66248ba3af5c44cdd9a3978ad1f159d8cebd83506e3b1f95b94904",
       "mcpExposure" : "notExposed",
       "name" : "activate",
       "requiresConnectionBeforeDispatch" : true,
@@ -46,7 +46,7 @@
       "cliExposure" : "directCommand",
       "description" : "Dismiss the on-screen keyboard through the current first responder or keyboard action path.",
       "family" : "semanticAction",
-      "inputSchemaSHA256" : "e608d08f68258abd6ce5a623d792217c0818660ddb36262b5d6019b154680e9b",
+      "inputSchemaSHA256" : "ce176408f9456d852f039e4639a0f85efffa2cb737a17cbdd702f212c5378c0f",
       "mcpExposure" : "notExposed",
       "name" : "dismiss_keyboard",
       "requiresConnectionBeforeDispatch" : true,
@@ -60,7 +60,7 @@
       "cliExposure" : "directCommand",
       "description" : "Explicit spatial drag action using exactly one typed intent: elementToPoint (activation point or unit start override) or pointToPoint.",
       "family" : "spatialAction",
-      "inputSchemaSHA256" : "f5efe676630d3661272954f2e8e32c900a956c0ab68b7b8032a267c697c3aba2",
+      "inputSchemaSHA256" : "4607e8437785bf3a56a208d246e0b3077aec6a4e429cc7d281c1f7508a74db0e",
       "mcpExposure" : "notExposed",
       "name" : "drag",
       "requiresConnectionBeforeDispatch" : true,
@@ -74,7 +74,7 @@
       "cliExposure" : "directCommand",
       "description" : "Perform an edit action on the current first responder.",
       "family" : "semanticAction",
-      "inputSchemaSHA256" : "766ec67497f1a55ca95581ed0ed43c7ccd3b0dc151096ca300d61c7b49c89adc",
+      "inputSchemaSHA256" : "1900390a278fade4f20d545bbd7f37fd3baf3972354b9a80c703b926a1e6f743",
       "mcpExposure" : "notExposed",
       "name" : "edit_action",
       "requiresConnectionBeforeDispatch" : true,
@@ -82,24 +82,6 @@
         "base" : "standardAction",
         "kind" : "singleStepAction",
         "seconds" : 15
-      }
-    },
-    {
-      "cliExposure" : "directCommand",
-      "description" : "Read the ordered accessibility notifications retained by observation history, including spoken text and attached element semantics.",
-      "family" : "observation",
-      "inputSchemaSHA256" : "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
-      "mcpAnnotations" : {
-        "idempotentHint" : true,
-        "readOnlyHint" : true
-      },
-      "mcpExposure" : "directTool",
-      "name" : "get_notifications",
-      "requiresConnectionBeforeDispatch" : true,
-      "timeout" : {
-        "base" : "health",
-        "kind" : "fixed",
-        "seconds" : 3
       }
     },
     {
@@ -118,6 +100,24 @@
         "base" : "explore",
         "kind" : "fixed",
         "seconds" : 60
+      }
+    },
+    {
+      "cliExposure" : "directCommand",
+      "description" : "Read the ordered accessibility notifications retained by observation history, including spoken text and attached element semantics.",
+      "family" : "observation",
+      "inputSchemaSHA256" : "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "mcpAnnotations" : {
+        "idempotentHint" : true,
+        "readOnlyHint" : true
+      },
+      "mcpExposure" : "directTool",
+      "name" : "get_notifications",
+      "requiresConnectionBeforeDispatch" : true,
+      "timeout" : {
+        "base" : "health",
+        "kind" : "fixed",
+        "seconds" : 3
       }
     },
     {
@@ -223,7 +223,7 @@
       "cliExposure" : "directCommand",
       "description" : "Explicit spatial longPress action. Element targets dispatch at their activation point unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate.",
       "family" : "spatialAction",
-      "inputSchemaSHA256" : "7137bc15cc780ab9195094ac3f2dd779ea09aa2f1459481b1f006f3bfa44440f",
+      "inputSchemaSHA256" : "5bf0e79aec261c84166c053e3a8b4d6d8faa4c48029ab84623042093d3c78b18",
       "mcpExposure" : "notExposed",
       "name" : "long_press",
       "requiresConnectionBeforeDispatch" : true,
@@ -237,7 +237,7 @@
       "cliExposure" : "directCommand",
       "description" : "Explicit spatial oneFingerTap action. Element targets dispatch at their activation point unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate. Use activate for ordinary accessible controls.",
       "family" : "spatialAction",
-      "inputSchemaSHA256" : "047af028beb19e6f5baf21e1690908fd2b919d9337723a669003171c4677ac58",
+      "inputSchemaSHA256" : "23d2d3f28867f554d5d8db86bad4ec4bd60bd6c8d28bfc0b9cc4285de6586d12",
       "mcpExposure" : "notExposed",
       "name" : "one_finger_tap",
       "requiresConnectionBeforeDispatch" : true,
@@ -281,7 +281,7 @@
       "cliExposure" : "directCommand",
       "description" : "Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor.",
       "family" : "semanticAction",
-      "inputSchemaSHA256" : "dc9b23582a1edcaeca7c6d81ec0efd4df0413083fbded0c9c33e43d11edac122",
+      "inputSchemaSHA256" : "16f5b677c7afab5d17aefa6515a1fc32a5fe03916d09da7e1eed6bba444c5a0b",
       "mcpExposure" : "notExposed",
       "name" : "rotor",
       "requiresConnectionBeforeDispatch" : true,
@@ -295,21 +295,19 @@
       "cliExposure" : "directCommand",
       "description" : "Run a durable heist from a ButtonHeist source plan in `plan`, or from a generated `.heist` package at `path`.\n\nAuthor plans as ButtonHeist source, not raw JSON IR:\n`HeistPlan(\"shop\") { ... }`\n`HeistDef<String>(\"Cart.addItem\", parameter: \"item\") { item in ... }`\n`RunHeist(\"Cart.addItem\", \"Milk\").expect(.elementsChanged([.appeared(.element(.label(\"subtotal\"), .value(.contains(\"1 item\"))))]))`\n`If(.label(\"Pay\")) { ... }.else { ... }`\n`WaitFor(.screenChanged, timeout: 10).else { ... }`\n`ForEach(\"Milk\", \"Bread\") { item in ... }`\n`ForEach(.element(.label(.prefix(\"Delete\")), .traits([.button])), limit: 20) { target in ... }`\n`Warn(\"message\")`\n`Fail(\"message\")`\n\nProvide exactly one source: `path` or `plan`. Use `argument` when the root\nheist takes a string or accessibility target. Runtime source is restricted\nButtonHeist DSL, not arbitrary Swift.",
       "family" : "heistRuntime",
-      "inputSchemaSHA256" : "6aa76922c485bc436fb81792a67c687e2398c363b5f6d62d987c40863302ac92",
+      "inputSchemaSHA256" : "b14b985f2d1258ac3ef7ab1d1b12fb5c7cb0e33585b5e47d0fb5517e1f3e3f61",
       "mcpExposure" : "directTool",
       "name" : "run_heist",
       "requiresConnectionBeforeDispatch" : true,
       "timeout" : {
-        "base" : "longAction",
-        "kind" : "fixed",
-        "seconds" : 30
+        "kind" : "heist"
       }
     },
     {
       "cliExposure" : "directCommand",
       "description" : "Explicit viewport/debug operation: scroll one page in the visible viewport, within a semantic target's owning scroll ancestor, or for direct debug requests, within a current containerName.",
       "family" : "viewportDebug",
-      "inputSchemaSHA256" : "7aff662b91883dcbf74c0909cd52a00523f5f34e58dad85356f308be7c8368a2",
+      "inputSchemaSHA256" : "32097e5203aa67e74d0440d45179a8b6867b15621048f483c857eaf204ef9f9b",
       "mcpExposure" : "notExposed",
       "name" : "scroll",
       "requiresConnectionBeforeDispatch" : true,
@@ -323,7 +321,7 @@
       "cliExposure" : "directCommand",
       "description" : "Explicit viewport/debug operation: scroll the visible viewport, a semantic target's owning scroll ancestor, or for direct debug requests, a current containerName, to a requested edge.",
       "family" : "viewportDebug",
-      "inputSchemaSHA256" : "bbacc50a0c17a91ad26919d629e5ea0acfecd60b9a62b8f07551bf1fc26c2911",
+      "inputSchemaSHA256" : "de75ea2162b2a74f8d5b7cefba174244f53b229f3775987deeb02ae5180413f5",
       "mcpExposure" : "notExposed",
       "name" : "scroll_to_edge",
       "requiresConnectionBeforeDispatch" : true,
@@ -337,7 +335,7 @@
       "cliExposure" : "directCommand",
       "description" : "Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry.",
       "family" : "viewportDebug",
-      "inputSchemaSHA256" : "6be914d47450aaa651a048d5a013b2713a409126cfceb58480d8e6a8d9e6a695",
+      "inputSchemaSHA256" : "04d25d8dfbf3b559ceb8b307568136838829762c836c118b218eb2e27c8fdc3a",
       "mcpExposure" : "notExposed",
       "name" : "scroll_to_visible",
       "requiresConnectionBeforeDispatch" : true,
@@ -351,7 +349,7 @@
       "cliExposure" : "directCommand",
       "description" : "Write text to the general pasteboard from within the app.",
       "family" : "semanticAction",
-      "inputSchemaSHA256" : "e65f7d7ef734c901a2e70915c23b0d2574db72435fb0d1310e7ed796116748be",
+      "inputSchemaSHA256" : "b57108543ad8b430aa21f799835c19b3fb0dfb871adf1a0e10420ea10e16d7bb",
       "mcpExposure" : "notExposed",
       "name" : "set_pasteboard",
       "requiresConnectionBeforeDispatch" : true,
@@ -365,7 +363,7 @@
       "cliExposure" : "directCommand",
       "description" : "Explicit spatial swipe action using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection.",
       "family" : "spatialAction",
-      "inputSchemaSHA256" : "ca9830a9a599317187229a83d6b847dd088d68109ae367caf0e48db331d21623",
+      "inputSchemaSHA256" : "bb11c2093282c3e99a2710952892663b7ed099a6f31499de062679a7ed1c9821",
       "mcpExposure" : "notExposed",
       "name" : "swipe",
       "requiresConnectionBeforeDispatch" : true,
@@ -379,7 +377,7 @@
       "cliExposure" : "directCommand",
       "description" : "Type text. Replace mode clears the focused field before typing.",
       "family" : "semanticAction",
-      "inputSchemaSHA256" : "3b23d60638a18f9ced080c883dd0e8a870c4334ad1f769ac2d52e64f9997c040",
+      "inputSchemaSHA256" : "422362787107c1bbe3d7802dc52ba9b1a3160e758fd8a489cb41746b1ad7422f",
       "mcpExposure" : "notExposed",
       "name" : "type_text",
       "requiresConnectionBeforeDispatch" : true,
@@ -409,7 +407,7 @@
       "cliExposure" : "directCommand",
       "description" : "Assert that an accessibility predicate is satisfied within timeout by evaluating settled accessibility state.",
       "family" : "assertion",
-      "inputSchemaSHA256" : "159ece6361e7b23ee35feb024d38dcc5885b4d5b480dd3adba58d78285e0c81c",
+      "inputSchemaSHA256" : "1978bb825bfaf91b3e6dac3a9a4146435bf2bf2105e84b7ba53a2a532f801248",
       "mcpAnnotations" : {
         "readOnlyHint" : true
       },

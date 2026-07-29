@@ -392,7 +392,7 @@ extension HeistExecution {
                 let outcome: Navigation.ViewportExit.Outcome
                 if let deadline {
                     outcome = await brains.navigation.exploreForWait(
-                        target: predicate.resolved.singularTarget,
+                        target: predicate.resolved.watchTarget,
                         deadline: deadline,
                         stopWhen: { [weak self] in
                             self?.shouldStopExploration(interactionID) == true

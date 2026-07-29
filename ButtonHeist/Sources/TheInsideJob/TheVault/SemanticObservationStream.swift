@@ -82,6 +82,10 @@ internal final class Stream {
         scopePressure.hasActiveDemand
     }
 
+    internal var tickDemand: TheTripwire.TickDemand {
+        hasActiveObservationDemand ? .immediate : .ambient
+    }
+
     internal init(
         vault: TheVault,
         tripwire: TheTripwire
@@ -369,7 +373,7 @@ internal final class Stream {
     private func observeVisibleSemanticState() async -> Bool {
         _ = await tripwire.waitForNextTick(
             timeout: .milliseconds(Int(TheTripwire.singleTickSettleTimeout * 1_000)),
-            demand: .ambient
+            demand: tickDemand
         )
         await invalidateAdmissionIfSignalChanged(to: currentTripwireSignal())
         guard !Task.isCancelled else { return false }

@@ -99,8 +99,13 @@ final class HeistExecutionMachineTests: XCTestCase {
             baseline: heistSnapshot(labels: []),
             historyIndex: 0
         )
-        guard case .pending(.perform(let firstExploration)) = machine.advance(
+        guard let snapshotRequest = machine.advance(
             .observationBegan(id, boundary)
+        ).singleSnapshotRequest else {
+            return XCTFail("An element wait must read current visible truth")
+        }
+        guard case .pending(.perform(let firstExploration)) = machine.advance(
+            .currentSnapshot(snapshotRequest.id, boundary.baseline)
         ),
               firstExploration.count == 1,
               case .explore(id, _) = firstExploration[0] else {
@@ -130,6 +135,43 @@ final class HeistExecutionMachineTests: XCTestCase {
         }
         guard case .pending(.wait) = machine.advance(.event(.noChange)) else {
             return XCTFail("Stillness must not start another discovery")
+        }
+    }
+
+    func testCurrentVisibleTruthSatisfiesWaitBeforeDiscovery() throws {
+        let plan = try HeistPlan(body: [
+            .wait(WaitStep(
+                predicate: .exists(.label("Target")),
+                timeout: try .seconds(1)
+            )),
+        ])
+        var machine = try HeistExecution.Machine(plan: plan)
+        guard case .pending(.perform(let beginRequests)) = machine.start(),
+              beginRequests.count == 1,
+              case .beginObservation(let id, _) = beginRequests[0] else {
+            return XCTFail("The wait must begin one observation")
+        }
+        let boundary = TheVault.State.HistoryBoundary(
+            baseline: nil,
+            historyIndex: 0
+        )
+        let snapshotRequest = try XCTUnwrap(
+            machine.advance(.observationBegan(
+                id,
+                boundary
+            )).singleSnapshotRequest
+        )
+
+        guard case .pending(.wait) = machine.advance(.currentSnapshot(
+            snapshotRequest.id,
+            heistSnapshot(labels: ["Target"])
+        )) else {
+            return XCTFail("Current visible truth must satisfy existence without discovery")
+        }
+        guard case .pending(.perform(let requests)) = machine.advance(.event(.noChange)),
+              requests.count == 1,
+              case .finishObservation = requests[0] else {
+            return XCTFail("Settled current truth must finish the wait")
         }
     }
 }

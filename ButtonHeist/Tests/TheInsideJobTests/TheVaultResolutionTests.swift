@@ -201,12 +201,14 @@ extension TheVaultResolutionTests {
         XCTAssertFalse(vault.semanticObservationStream.hasActiveObservationDemand)
         XCTAssertEqual(vault.semanticObservationStream.activeObservationDemandCount, 0)
         XCTAssertEqual(vault.semanticObservationStream.activeObservationDemandState, .idle)
+        XCTAssertEqual(vault.semanticObservationStream.tickDemand, .ambient)
         XCTAssertEqual(vault.semanticObservationStream.subscribedObservationScope(), .visible)
 
         let demand = vault.semanticObservationStream.beginActiveObservationDemand()
         XCTAssertTrue(vault.semanticObservationStream.hasActiveObservationDemand)
         XCTAssertEqual(vault.semanticObservationStream.activeObservationDemandCount, 1)
         XCTAssertEqual(vault.semanticObservationStream.activeObservationDemandState, .active)
+        XCTAssertEqual(vault.semanticObservationStream.tickDemand, .immediate)
         XCTAssertEqual(vault.semanticObservationStream.subscribedObservationScope(), .visible)
 
         do {
@@ -222,6 +224,7 @@ extension TheVaultResolutionTests {
         XCTAssertFalse(vault.semanticObservationStream.hasActiveObservationDemand)
         XCTAssertEqual(vault.semanticObservationStream.activeObservationDemandCount, 0)
         XCTAssertEqual(vault.semanticObservationStream.activeObservationDemandState, .idle)
+        XCTAssertEqual(vault.semanticObservationStream.tickDemand, .ambient)
         XCTAssertEqual(vault.semanticObservationStream.subscribedObservationScope(), .visible)
     }
 

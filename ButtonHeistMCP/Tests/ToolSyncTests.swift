@@ -231,7 +231,15 @@ struct ToolSyncTests {
         let predicateProperties = try #require(
             schemaValue(at: ["properties", "predicate", "properties"], in: wait)?.objectValue
         )
-        #expect(Set(predicateProperties.keys) == ["type", "target", "match", "scope", "assertions"])
+        #expect(Set(predicateProperties.keys) == [
+            "type",
+            "target",
+            "match",
+            "scope",
+            "assertions",
+            "text",
+            "element",
+        ])
         // The authored vocabulary, which is what an agent can write. `noChange`
         // is absent because it is not authorable: it exists only on the resolved
         // predicate, where settlement uses it as its gate.
