@@ -79,7 +79,7 @@ final class HeistMachineExpectationTests: XCTestCase {
             .noChange,
         ])
         XCTAssertEqual(
-            action.actionEvidence?.result?.observationEvidence?.completeness,
+            action.actionEvidence?.result?.observationEvidence?.coverage,
             .complete
         )
     }
@@ -182,11 +182,10 @@ final class HeistMachineExpectationTests: XCTestCase {
               case .beginObservation(let id, _) = beginRequests[0] else {
             return XCTFail("The wait must begin one observation")
         }
-        let boundary = TheVault.State.HistoryBoundary(
-            baseline: heistSnapshot(labels: []),
-            historyIndex: 0
-        )
-        guard case .pending(.wait) = machine.advance(.observationBegan(id, boundary)),
+        let baseline = heistSnapshot(labels: [])
+        guard case .pending(.wait) = machine.advance(
+            .observationBegan(id, baseline: baseline)
+        ),
               case .pending(.wait) = machine.advance(.event(heistNotification("Saved"))),
               case .pending(.perform(let firstFinish)) = machine.advance(.event(.noChange)),
               firstFinish.count == 1,
@@ -222,8 +221,8 @@ final class HeistMachineExpectationTests: XCTestCase {
 
         let evidence = Observation.History(retentionLimit: 1).evidence(
             in: 0..<0,
-            baseline: boundary.baseline,
-            current: boundary.baseline
+            baseline: baseline,
+            current: baseline
         )
         guard case .pending(.wait) = machine.advance(.observationFinished(
             source: .request(firstFinishID),
@@ -267,7 +266,7 @@ final class HeistMachineExpectationTests: XCTestCase {
             current: current
         )
 
-        XCTAssertEqual(evidence.completeness, .incomplete)
+        XCTAssertEqual(evidence.coverage, .incomplete(.historyUnavailable))
         XCTAssertTrue(evidence.events.isEmpty)
     }
 }

@@ -11,6 +11,48 @@ import XCTest
 
 @MainActor
 final class HeistExecutionHostTests: ButtonHeistTestCase {
+    func testCausalCheckpointIncludesEarlierQueuedIngressAndEvictsAfterAdmission() async throws {
+        let bus = AccessibilityNotificationBus()
+        let window = bus.beginActionWindow()
+        DispatchQueue.main.async {
+            bus.record(
+                sequence: 1,
+                rawCode: 1008,
+                timestamp: Date(timeIntervalSince1970: 1),
+                notificationData: .string("Saved"),
+                associatedElement: .none
+            )
+        }
+
+        let captured = await window.causalCheckpoint()
+        let checkpoint = try XCTUnwrap(captured)
+        XCTAssertEqual(checkpoint.batch.events.map(\.sequence), [1])
+
+        window.admitCaptured()
+        XCTAssertTrue(bus.notifications().isEmpty)
+    }
+
+    func testUnadmittedStepIngressReturnsToTheHeistScope() async throws {
+        let bus = AccessibilityNotificationBus()
+        let heist = bus.beginHeistScope()
+        let window = bus.beginActionWindow()
+        bus.record(
+            sequence: 1,
+            rawCode: 1008,
+            timestamp: Date(timeIntervalSince1970: 1),
+            notificationData: .string("Saved"),
+            associatedElement: .none
+        )
+
+        window.cancel()
+        let captured = await heist.causalCheckpoint()
+        let checkpoint = try XCTUnwrap(captured)
+
+        XCTAssertEqual(checkpoint.batch.events.map(\.sequence), [1])
+        heist.admitCaptured()
+        XCTAssertTrue(bus.notifications().isEmpty)
+    }
+
     func testFreshSnapshotBecomesReplayBaselineAfterAdmissionInvalidation() async throws {
         let observation = hostObservation(label: "Home")
         let source = HostVisibleObservationSource(observation)
@@ -40,7 +82,8 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
 
         XCTAssertEqual(step.status, .passed)
         XCTAssertNotNil(evidence.baseline)
-        XCTAssertEqual(predicate.evaluate(in: evidence).met, true)
+        let evaluation = try predicate.evaluate(in: evidence)
+        XCTAssertEqual(evaluation.met, true)
     }
 
     func testEventPublishedDuringInitialCaptureIsReplayedExactlyOnce() async throws {

@@ -22,33 +22,30 @@ final class HeistMachineStepExecutionTests: XCTestCase {
         XCTAssertEqual(completion.steps.map(\.status), [.passed])
         XCTAssertEqual(driver.requests.map(\.kind), [
             .beginObservation,
-            .currentSnapshot,
             .dispatch,
             .finishObservation,
         ])
         XCTAssertEqual(Array(driver.history), [.noChange])
     }
 
-    func testStaleDispatchCompletionCannotFinishAction() throws {
+    func testStaleAndDuplicateDispatchCompletionsCannotAdvanceAction() throws {
         let plan = try HeistPlan(body: [
             .action(ActionStep(command: .dismiss)),
         ])
         var machine = try HeistExecution.Machine(plan: plan)
         let observation = try XCTUnwrap(machine.start().singleBeginObservationRequest)
-        let boundary = TheVault.State.HistoryBoundary(
-            baseline: nil,
-            historyIndex: 0
-        )
-        let snapshotRequest = try XCTUnwrap(
+        let dispatchRequest = try XCTUnwrap(
             machine.advance(.observationBegan(
                 observation.id,
-                boundary
-            )).singleSnapshotRequest
+                baseline: nil
+            )).singleDispatchRequest
         )
-        let dispatchRequest = try XCTUnwrap(
-            machine.advance(.currentSnapshot(snapshotRequest.id, nil))
-                .singleDispatchRequest
-        )
+        guard case .pending(.wait) = machine.advance(.observationBegan(
+            observation.id,
+            baseline: heistSnapshot(labels: ["Late"])
+        )) else {
+            return XCTFail("A duplicate observation receipt must be ignored")
+        }
 
         guard case .pending(.wait) = machine.advance(.dispatchCompleted(
             HeistExecution.RequestID(rawValue: dispatchRequest.id.rawValue + 1),
@@ -62,25 +59,31 @@ final class HeistMachineStepExecutionTests: XCTestCase {
         )) else {
             return XCTFail("The admitted dispatch completion must await settlement")
         }
+        guard case .pending(.wait) = machine.advance(.dispatchCompleted(
+            dispatchRequest.id,
+            .failure(.dismiss, message: "duplicate")
+        )) else {
+            return XCTFail("A duplicate dispatch completion must be ignored")
+        }
+        XCTAssertEqual(machine.activeLeaf?.expectationIsSatisfied, false)
+        guard case .action(let leaf) = machine.activeLeaf else {
+            return XCTFail("The admitted action must remain active")
+        }
+        XCTAssertEqual(leaf.dispatch?.success, true)
     }
 
-    func testActionCapturesBaselineBeforeDispatchWithoutWaitingForStillness() throws {
+    func testHostBaselineStartsActionWithoutSecondSnapshotRequest() throws {
         let plan = try HeistPlan(body: [
             .action(ActionStep(command: .dismiss)),
         ])
         var machine = try HeistExecution.Machine(plan: plan)
         let observation = try XCTUnwrap(machine.start().singleBeginObservationRequest)
-        let boundary = TheVault.State.HistoryBoundary(
-            baseline: heistSnapshot(labels: ["Before"]),
-            historyIndex: 0
-        )
-
-        let snapshot = try XCTUnwrap(machine.advance(.observationBegan(
+        let dispatch = try XCTUnwrap(machine.advance(.observationBegan(
             observation.id,
-            boundary
-        )).singleSnapshotRequest)
+            baseline: heistSnapshot(labels: ["Before"])
+        )).singleDispatchRequest)
 
-        XCTAssertEqual(snapshot.id, observation.id)
+        XCTAssertEqual(dispatch.id, observation.id)
     }
 
     func testDispatchFailureProducesFailedStepAndSkipsSibling() throws {

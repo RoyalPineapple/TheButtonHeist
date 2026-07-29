@@ -37,7 +37,7 @@ extension HeistExecution {
 
     internal enum Input {
         case currentSnapshot(RequestID, Observation.Snapshot?)
-        case observationBegan(RequestID, TheVault.State.HistoryBoundary)
+        case observationBegan(RequestID, baseline: Observation.Snapshot?)
         case event(Observation.Event)
         case dispatchCompleted(RequestID, TheSafecracker.ActionDispatchResult)
         case viewportExited(RequestID, Navigation.ViewportExit.Outcome)
@@ -216,19 +216,30 @@ extension HeistExecution {
         internal var expectationIsSatisfied: Bool {
             switch self {
             case .action(let leaf):
-                leaf.expectation.result == .satisfied
+                leaf.phase.expectation?.result == .satisfied
             case .wait(let leaf):
-                leaf.expectation.result == .satisfied
+                leaf.phase.expectation?.result == .satisfied
             }
         }
 
         internal var finishingObservationRequestID: RequestID? {
             switch self {
             case .action(let leaf):
-                leaf.phase.finishingObservationRequestID
+                guard case .finishingObservation(let requestID, _, _) = leaf.phase else {
+                    return nil
+                }
+                return requestID
             case .wait(let leaf):
-                leaf.phase.finishingObservationRequestID
+                guard case .finishingObservation(let requestID, _) = leaf.phase else {
+                    return nil
+                }
+                return requestID
             }
+        }
+
+        internal func admits(_ source: ObservationFinishSource) -> Bool {
+            guard case .request(let requestID) = source else { return true }
+            return finishingObservationRequestID == requestID
         }
     }
 
@@ -237,47 +248,87 @@ extension HeistExecution {
         internal let step: ActionStep
         internal let command: ResolvedHeistActionCommand
         internal let predicate: Predicate?
-        internal let timeout: Duration
         internal let context: StepContext
-        internal var phase: LeafPhase
-        internal var boundary: TheVault.State.HistoryBoundary?
-        internal var expectation: Expectation
-        internal var dispatch: TheSafecracker.ActionDispatchResult?
+        internal var phase: ActionLeafPhase
+
+        internal var expectation: Expectation {
+            guard let expectation = phase.expectation else {
+                preconditionFailure("An action expectation exists after observation begins")
+            }
+            return expectation
+        }
+
+        internal var dispatch: TheSafecracker.ActionDispatchResult? {
+            phase.dispatch
+        }
     }
 
     internal struct WaitLeaf: Sendable {
         internal let id: RequestID
         internal let step: WaitStep
         internal let predicate: Predicate
-        internal let timeout: Duration
         internal let context: StepContext
-        internal var phase: LeafPhase
-        internal var boundary: TheVault.State.HistoryBoundary?
-        internal var expectation: Expectation
+        internal var phase: WaitLeafPhase
+
+        internal var expectation: Expectation {
+            guard let expectation = phase.expectation else {
+                preconditionFailure("A wait expectation exists after observation begins")
+            }
+            return expectation
+        }
     }
 
-    internal enum LeafPhase: Sendable, Equatable {
+    internal enum ActionLeafPhase: Sendable {
         case beginningObservation
-        case dispatching
-        case observing
-        case exploring
-        case finishingObservation(RequestID)
+        case dispatching(Expectation)
+        case observing(Expectation, dispatch: TheSafecracker.ActionDispatchResult)
+        case exploring(Expectation, dispatch: TheSafecracker.ActionDispatchResult)
+        case finishingObservation(
+            RequestID, expectation: Expectation, dispatch: TheSafecracker.ActionDispatchResult
+        )
 
-        internal var finishingObservationRequestID: RequestID? {
-            guard case .finishingObservation(let requestID) = self else {
-                return nil
-            }
-            return requestID
-        }
-
-        internal func admits(_ source: ObservationFinishSource) -> Bool {
-            switch source {
-            case .request(let requestID):
-                self == .finishingObservation(requestID)
-            case .deadline:
-                true
+        internal var expectation: Expectation? {
+            switch self {
+            case .beginningObservation:
+                nil
+            case .dispatching(let expectation),
+                 .observing(let expectation, _),
+                 .exploring(let expectation, _),
+                 .finishingObservation(_, let expectation, _):
+                expectation
             }
         }
+
+        internal var dispatch: TheSafecracker.ActionDispatchResult? {
+            switch self {
+            case .beginningObservation, .dispatching:
+                nil
+            case .observing(_, let dispatch),
+                 .exploring(_, let dispatch),
+                 .finishingObservation(_, _, let dispatch):
+                dispatch
+            }
+        }
+
+    }
+
+    internal enum WaitLeafPhase: Sendable {
+        case beginningObservation
+        case observing(Expectation)
+        case exploring(Expectation)
+        case finishingObservation(RequestID, expectation: Expectation)
+
+        internal var expectation: Expectation? {
+            switch self {
+            case .beginningObservation:
+                nil
+            case .observing(let expectation),
+                 .exploring(let expectation),
+                 .finishingObservation(_, let expectation):
+                expectation
+            }
+        }
+
     }
 }
 

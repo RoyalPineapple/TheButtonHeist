@@ -488,6 +488,13 @@ struct AccessibilityNotificationBatch {
     let gap: AccessibilityNotificationGap?
 }
 
+/// A batch captured only after notification callbacks already queued on the
+/// main run loop have reached the ingress log.
+@MainActor
+struct AccessibilityNotificationCausalCheckpoint {
+    let batch: AccessibilityNotificationBatch
+}
+
 enum AccessibilityNotificationProvenance: Sendable, Equatable {
     case scoped
     case ambient
@@ -528,6 +535,16 @@ final class AccessibilityNotificationScopeLease: @unchecked Sendable {
         capturedThrough = batch.through
         lock.unlock()
         return batch
+    }
+
+    @MainActor
+    func causalCheckpoint() async -> AccessibilityNotificationCausalCheckpoint? {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            DispatchQueue.main.async {
+                continuation.resume()
+            }
+        }
+        return capture().map(AccessibilityNotificationCausalCheckpoint.init(batch:))
     }
 
     func cancel() {

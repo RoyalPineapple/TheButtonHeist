@@ -24,16 +24,39 @@ final class HeistExecutionMachineTests: XCTestCase {
             return XCTFail("A wait must begin one observation")
         }
 
-        let boundary = TheVault.State.HistoryBoundary(
-            baseline: nil,
-            historyIndex: 0
-        )
         guard case .pending(.wait) = machine.advance(.observationBegan(
             HeistExecution.RequestID(rawValue: 1),
-            boundary
+            baseline: nil
         )) else {
             return XCTFail("An observed wait must suspend for events")
         }
+    }
+
+    func testDeadlineDuringObservationStartCannotCompleteWait() throws {
+        let plan = try HeistPlan(body: [
+            .wait(WaitStep(
+                predicate: .missing(.label("Target")),
+                timeout: try .seconds(1)
+            )),
+        ])
+        var machine = try HeistExecution.Machine(plan: plan)
+        let request = try XCTUnwrap(machine.start().singleBeginObservationRequest)
+        let evidence = Observation.History(retentionLimit: 1).evidence(
+            in: 0..<0,
+            baseline: nil,
+            current: nil
+        )
+
+        guard machine.activeLeaf?.expectationIsSatisfied == false,
+              case .complete(let completion) = machine.advance(.observationFinished(
+                  source: .deadline,
+                  observationID: request.id,
+                  evidence: evidence,
+                  outcome: .timedOut
+              )) else {
+            return XCTFail("An uninitialized expectation must remain unmet at its deadline")
+        }
+        XCTAssertEqual(completion.steps.first?.status, .failed)
     }
 
     func testStaleRequestCompletionDoesNotAdvanceMachine() throws {
@@ -95,17 +118,8 @@ final class HeistExecutionMachineTests: XCTestCase {
               case .beginObservation(let id, _) = beginRequests[0] else {
             return XCTFail("The wait must begin one observation")
         }
-        let boundary = TheVault.State.HistoryBoundary(
-            baseline: heistSnapshot(labels: []),
-            historyIndex: 0
-        )
-        guard let snapshotRequest = machine.advance(
-            .observationBegan(id, boundary)
-        ).singleSnapshotRequest else {
-            return XCTFail("An element wait must read current visible truth")
-        }
         guard case .pending(.perform(let firstExploration)) = machine.advance(
-            .currentSnapshot(snapshotRequest.id, boundary.baseline)
+            .observationBegan(id, baseline: heistSnapshot(labels: []))
         ),
               firstExploration.count == 1,
               case .explore(id, _) = firstExploration[0] else {
@@ -151,20 +165,9 @@ final class HeistExecutionMachineTests: XCTestCase {
               case .beginObservation(let id, _) = beginRequests[0] else {
             return XCTFail("The wait must begin one observation")
         }
-        let boundary = TheVault.State.HistoryBoundary(
-            baseline: nil,
-            historyIndex: 0
-        )
-        let snapshotRequest = try XCTUnwrap(
-            machine.advance(.observationBegan(
-                id,
-                boundary
-            )).singleSnapshotRequest
-        )
-
-        guard case .pending(.wait) = machine.advance(.currentSnapshot(
-            snapshotRequest.id,
-            heistSnapshot(labels: ["Target"])
+        guard case .pending(.wait) = machine.advance(.observationBegan(
+            id,
+            baseline: heistSnapshot(labels: ["Target"])
         )) else {
             return XCTFail("Current visible truth must satisfy existence without discovery")
         }
@@ -188,13 +191,18 @@ struct SnapshotRequest {
     let scope: SemanticObservationScope
 }
 
+private struct MachineObservationStart {
+    let baseline: Observation.Snapshot?
+    let historyIndex: Int
+}
+
 struct HeistMachineTestDriver {
     private(set) var machine: HeistExecution.Machine
     private(set) var history = Observation.History(retentionLimit: 256)
     private(set) var requests: [HeistExecution.MainActorRequest] = []
     private var script: MachineRunScript
     private var currentSnapshot: Observation.Snapshot?
-    private var boundaries: [HeistExecution.RequestID: TheVault.State.HistoryBoundary] = [:]
+    private var observationStarts: [HeistExecution.RequestID: MachineObservationStart] = [:]
 
     init(
         plan: HeistPlan,
@@ -203,7 +211,7 @@ struct HeistMachineTestDriver {
     ) throws {
         machine = try HeistExecution.Machine(plan: plan, argument: argument)
         self.script = script
-        currentSnapshot = script.snapshots.first ?? nil
+        currentSnapshot = nil
     }
 
     mutating func run(maximumTransitions: Int = 256) throws -> HeistExecution.Completion {
@@ -226,14 +234,14 @@ struct HeistMachineTestDriver {
                     continue
                 }
                 guard let leaf = machine.activeLeaf,
-                      let boundary = boundaries[leaf.id] else {
+                      let start = observationStarts[leaf.id] else {
                     throw MachineDriverFailure.stalled
                 }
                 let outcome = nextLeafOutcome(default: .timedOut)
                 state = machine.advance(.observationFinished(
                     source: .deadline,
                     observationID: leaf.id,
-                    evidence: evidence(since: boundary),
+                    evidence: evidence(since: start),
                     outcome: outcome
                 ))
             }
@@ -246,18 +254,16 @@ struct HeistMachineTestDriver {
     ) -> HeistExecution.State {
         switch request {
         case .currentSnapshot(let id, _):
-            if !script.snapshots.isEmpty {
-                currentSnapshot = script.snapshots.removeFirst()
-            }
-            return machine.advance(.currentSnapshot(id, currentSnapshot))
+            let snapshot = nextSnapshot()
+            return machine.advance(.currentSnapshot(id, snapshot))
 
         case .beginObservation(let id, _):
-            let boundary = TheVault.State.HistoryBoundary(
-                baseline: currentSnapshot,
+            let start = MachineObservationStart(
+                baseline: nextSnapshot(),
                 historyIndex: history.endIndex
             )
-            boundaries[id] = boundary
-            return machine.advance(.observationBegan(id, boundary))
+            observationStarts[id] = start
+            return machine.advance(.observationBegan(id, baseline: start.baseline))
 
         case .dispatch(let id, let command):
             let result = script.dispatchResults.isEmpty
@@ -273,19 +279,26 @@ struct HeistMachineTestDriver {
             let observationID,
             _
         ):
-            guard let boundary = boundaries[observationID] else {
+            guard let start = observationStarts[observationID] else {
                 return machine.state
             }
             return machine.advance(.observationFinished(
                 source: .request(requestID),
                 observationID: observationID,
-                evidence: evidence(since: boundary),
+                evidence: evidence(since: start),
                 outcome: nextLeafOutcome(default: .completed)
             ))
 
         case .captureFailureScreenshot(let id, _, _):
             return machine.advance(.failureScreenshotCaptured(id, nil))
         }
+    }
+
+    private mutating func nextSnapshot() -> Observation.Snapshot? {
+        if !script.snapshots.isEmpty {
+            currentSnapshot = script.snapshots.removeFirst()
+        }
+        return currentSnapshot
     }
 
     private mutating func record(_ event: Observation.Event) {
@@ -296,11 +309,11 @@ struct HeistMachineTestDriver {
     }
 
     private func evidence(
-        since boundary: TheVault.State.HistoryBoundary
+        since start: MachineObservationStart
     ) -> Observation.Evidence {
         history.evidence(
-            in: boundary.historyIndex..<history.endIndex,
-            baseline: boundary.baseline,
+            in: start.historyIndex..<history.endIndex,
+            baseline: start.baseline,
             current: currentSnapshot
         )
     }

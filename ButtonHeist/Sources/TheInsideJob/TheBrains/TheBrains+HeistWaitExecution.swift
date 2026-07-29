@@ -30,11 +30,8 @@ extension HeistExecution.Machine {
             id: id,
             step: step,
             predicate: predicate,
-            timeout: timeout,
             context: context,
-            phase: .beginningObservation,
-            boundary: nil,
-            expectation: Expectation()
+            phase: .beginningObservation
         ))
         return .pending(.perform([
             .beginObservation(
