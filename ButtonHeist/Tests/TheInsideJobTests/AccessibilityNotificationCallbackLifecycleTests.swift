@@ -63,7 +63,7 @@ final class AccessibilityNotificationCallbackLifecycleTests: XCTestCase {
         XCTAssertEqual(activeBatch.through.sequence, 3)
         XCTAssertEqual(
             activeBatch.events.map(\.kind),
-            [.screenChanged, .elementChanged(.value), .announcement]
+            [.screenChanged, .elementUpdate, .announcement]
         )
         XCTAssertEqual(observer.latestSequence, 3)
     }

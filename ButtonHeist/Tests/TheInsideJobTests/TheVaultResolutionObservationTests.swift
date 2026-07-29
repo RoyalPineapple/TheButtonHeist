@@ -15,7 +15,7 @@ extension TheVaultResolutionTests {
         button.accessibilityValue = "Ready"
         let event = PendingAccessibilityNotificationEvent(
             sequence: 1,
-            kind: .elementChanged(.layout),
+            kind: .layoutChanged,
             timestamp: Date(timeIntervalSince1970: 0),
             notificationData: .string("Updated"),
             associatedElement: .object(AccessibilityNotificationObjectIdentity(button)),
@@ -27,7 +27,7 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(notification.text, "Updated")
         XCTAssertEqual(notification.element?.assertable.label, "Save")
         XCTAssertEqual(notification.element?.assertable.value, "Ready")
-        XCTAssertEqual(notification.kind, .elementChanged(.layout))
+        XCTAssertEqual(notification.kind, .layoutChanged)
     }
 
     func testScreenAndAnnouncementTextPublishesWithoutUIKitCorrelationContext() async throws {
@@ -95,7 +95,7 @@ extension TheVaultResolutionTests {
         let identity = AccessibilityNotificationObjectIdentity(try XCTUnwrap(button))
         let event = PendingAccessibilityNotificationEvent(
             sequence: 1,
-            kind: .elementChanged(.layout),
+            kind: .layoutChanged,
             timestamp: Date(timeIntervalSince1970: 0),
             notificationData: .none,
             associatedElement: .object(identity),
@@ -208,7 +208,7 @@ extension TheVaultResolutionTests {
         )
     }
 
-    func testValueChangedNotificationRereadsAccessibilityValue() async throws {
+    func testElementUpdateNotificationRereadsAccessibilityValue() async throws {
         let before = InterfaceObservation.makeForTests(elements: [
             (element(label: "Volume", value: "50%", traits: .adjustable), "volume"),
         ])

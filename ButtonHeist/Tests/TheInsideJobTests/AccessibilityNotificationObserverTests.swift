@@ -113,11 +113,11 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         element.accessibilityLabel = "BH layout element payload"
         UIAccessibility.post(notification: .layoutChanged, argument: element)
         let layoutChange = try await waitForNotification(
-            kind: .elementChanged(.layout),
+            kind: .layoutChanged,
             after: cursor,
             in: bus
         )
-        XCTAssertEqual(layoutChange.kind, .elementChanged(.layout))
+        XCTAssertEqual(layoutChange.kind, .layoutChanged)
         guard case .object(let objectIdentity) = layoutChange.notificationData else {
             return XCTFail("Expected element notification data, got \(layoutChange.notificationData)")
         }
@@ -155,13 +155,13 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         let batch = try XCTUnwrap(action.capture())
         action.cancel()
 
-        XCTAssertEqual(batch.events.map(\.kind), [.elementChanged(.value), .announcement])
+        XCTAssertEqual(batch.events.map(\.kind), [.elementUpdate, .announcement])
         XCTAssertEqual(batch.events.map(\.sequence), [2, 3])
         XCTAssertEqual(batch.through.sequence, 3)
         XCTAssertNil(batch.gap)
         XCTAssertEqual(
             bus.checkpoint(after: .origin, selection: .all).events.map(\.kind),
-            [.elementChanged(.layout), .elementChanged(.value), .announcement]
+            [.layoutChanged, .elementUpdate, .announcement]
         )
     }
 
@@ -179,8 +179,8 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         )
         let ownerBatch = try XCTUnwrap(owner.capture())
         XCTAssertEqual(ownerBatch.events.map(\.kind), [
-            .elementChanged(.layout),
-            .elementChanged(.value),
+            .layoutChanged,
+            .elementUpdate,
         ])
 
         owner.consume()
@@ -377,7 +377,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         vault.semanticObservationStream.stop()
 
         let batch = vault.accessibilityNotifications.checkpoint(after: .origin)
-        XCTAssertEqual(batch.events.map(\.kind), [.elementChanged(.layout)])
+        XCTAssertEqual(batch.events.map(\.kind), [.layoutChanged])
         XCTAssertNil(batch.gap)
     }
 
@@ -392,7 +392,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         let batch = try XCTUnwrap(action.capture())
         action.cancel()
-        XCTAssertEqual(batch.events.map(\.kind), [.elementChanged(.layout), .elementChanged(.value)])
+        XCTAssertEqual(batch.events.map(\.kind), [.layoutChanged, .elementUpdate])
         XCTAssertEqual(batch.through.sequence, 2)
         XCTAssertNil(batch.gap)
     }
@@ -424,7 +424,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(text, ["Item deleted", "3 items selected", "Checkout"])
         XCTAssertEqual(
             events.map(\.kind),
-            [.announcement, .elementChanged(.layout), .screenChanged]
+            [.announcement, .layoutChanged, .screenChanged]
         )
     }
 
@@ -449,8 +449,8 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         heist.cancel()
 
         let expectedKinds: [AccessibilityNotificationKind] = [
-            .elementChanged(.layout),
-            .elementChanged(.value),
+            .layoutChanged,
+            .elementUpdate,
             .announcement,
         ]
         XCTAssertEqual(actionBatch.events.map(\.kind), expectedKinds)
@@ -486,7 +486,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(secondEvents.map(\.sequence), [1, 2, 3])
         XCTAssertEqual(
             firstEvents.map(\.kind),
-            [.elementChanged(.layout), .elementChanged(.value), .announcement]
+            [.layoutChanged, .elementUpdate, .announcement]
         )
         XCTAssertEqual(secondEvents.map(\.kind), firstEvents.map(\.kind))
         XCTAssertEqual(observer.latestSequence, 3)
@@ -522,6 +522,52 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             [7, 8]
         )
         XCTAssertEqual(observer.latestSequence, 8)
+    }
+
+    func testProbeObservesOnlyElementUpdateNotifications() throws {
+        let payload = CapturedAccessibilityNotificationPayload("Updated" as NSString)
+
+        XCTAssertNil(
+            AccessibilityNotificationProbe.description(
+                rawCode: 1001,
+                notificationData: payload,
+                associatedElement: .none
+            )
+        )
+        XCTAssertNotNil(
+            AccessibilityNotificationProbe.description(
+                rawCode: 1005,
+                notificationData: payload,
+                associatedElement: .none
+            )
+        )
+    }
+
+    func testProbeDescriptionPreservesBehaviorTokensFromRawPayload() throws {
+        let behavior = [
+            "ChangeType": 2,
+            "IsQuiet": true,
+        ] as NSDictionary
+        let notificationData = [
+            "data": behavior,
+            "token": "kAXValueChangeUserInfoKey",
+        ] as NSDictionary
+        let associatedElement = NSObject()
+
+        let description = try XCTUnwrap(
+            AccessibilityNotificationProbe.description(
+                rawCode: 1005,
+                notificationData: CapturedAccessibilityNotificationPayload(notificationData),
+                associatedElement: CapturedAccessibilityNotificationPayload(associatedElement)
+            )
+        )
+
+        XCTAssertTrue(description.contains("code=1005(elementUpdate)"))
+        XCTAssertTrue(description.contains("notificationData.class="))
+        XCTAssertTrue(description.contains("kAXValueChangeUserInfoKey"))
+        XCTAssertTrue(description.contains("ChangeType"))
+        XCTAssertTrue(description.contains("IsQuiet"))
+        XCTAssertTrue(description.contains("associatedElement.class="))
     }
 
     func testUnknownNotificationsPreserveRawCodesAtBoundary() async {
@@ -604,17 +650,17 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         let claimed = action.capture()?.events ?? []
         action.cancel()
 
-        XCTAssertEqual(claimed.map(\.kind), [.elementChanged(.value), .announcement])
+        XCTAssertEqual(claimed.map(\.kind), [.elementUpdate, .announcement])
         XCTAssertEqual(
             bus.checkpoint(after: .origin, selection: .all).events.map(\.kind),
-            [.elementChanged(.layout), .elementChanged(.value), .announcement],
+            [.layoutChanged, .elementUpdate, .announcement],
             "Action attribution must not drain the heist-scoped notification stream."
         )
 
         heist.cancel()
         XCTAssertEqual(
             bus.checkpoint(after: .origin, selection: .all).events.map(\.kind),
-            [.elementChanged(.layout), .elementChanged(.value), .announcement]
+            [.layoutChanged, .elementUpdate, .announcement]
         )
     }
 

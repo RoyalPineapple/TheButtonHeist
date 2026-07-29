@@ -120,7 +120,7 @@ final class SemanticObservationStoreTests: XCTestCase {
         _ = state.commitObservation(admission())
         let notification = Observation.AdmittedNotification(
             sequence: 1,
-            kind: .elementChanged(.layout),
+            kind: .layoutChanged,
             text: "Updated",
             element: nil
         )

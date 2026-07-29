@@ -1,19 +1,15 @@
-package enum ElementChangeNotification: String, Sendable, Equatable, Hashable {
-    case layout
-    case value
-}
-
 package enum AccessibilityNotificationKind: Sendable, Equatable, Hashable, CustomStringConvertible {
     case screenChanged
-    case elementChanged(ElementChangeNotification)
+    case layoutChanged
+    case elementUpdate
     case announcement
     case unknown(UInt32)
 
     package init(rawCode: UInt32) {
         self = switch rawCode {
         case 1000: .screenChanged
-        case 1001: .elementChanged(.layout)
-        case 1005: .elementChanged(.value)
+        case 1001: .layoutChanged
+        case 1005: .elementUpdate
         case 1008: .announcement
         default: .unknown(rawCode)
         }
@@ -23,8 +19,10 @@ package enum AccessibilityNotificationKind: Sendable, Equatable, Hashable, Custo
         switch self {
         case .screenChanged:
             "screenChanged"
-        case .elementChanged(let notification):
-            "elementChanged(\(notification.rawValue))"
+        case .layoutChanged:
+            "layoutChanged"
+        case .elementUpdate:
+            "elementUpdate"
         case .announcement:
             "announcement"
         case .unknown(let rawCode):
@@ -34,7 +32,7 @@ package enum AccessibilityNotificationKind: Sendable, Equatable, Hashable, Custo
 
     package var admitsAssociatedElement: Bool {
         switch self {
-        case .elementChanged:
+        case .layoutChanged, .elementUpdate:
             true
         case .screenChanged, .announcement, .unknown:
             false
