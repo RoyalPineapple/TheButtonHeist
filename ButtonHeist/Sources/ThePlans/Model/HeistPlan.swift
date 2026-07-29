@@ -23,7 +23,7 @@ import Foundation
 /// Swift DSL source, runtime ButtonHeist source, generated artifact payloads,
 /// and run-heist all converge on this value.
 public struct HeistPlan: Codable, Sendable, Equatable {
-    public static let currentVersion = 2
+    public static let currentVersion = 3
 
     public let version: Int
     public let name: HeistPlanName?
@@ -231,6 +231,9 @@ private struct DecodedHeistPlan: Decodable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         version = try container.decode(Int.self, forKey: .version)
+        guard version == HeistPlan.currentVersion else {
+            throw HeistPlanVersionAdmissionError(observed: version)
+        }
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist plan")
         name = try container.decodeIfPresent(HeistPlanName.self, forKey: .name)
         parameter = try container.decodeIfPresent(HeistParameter.self, forKey: .parameter) ?? .none

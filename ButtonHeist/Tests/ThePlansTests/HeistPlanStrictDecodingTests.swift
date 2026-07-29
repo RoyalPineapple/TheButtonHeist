@@ -7,7 +7,7 @@ func `plan model rejects unknown top level fields`() {
     expectUnknownField("plan", contains: #"Unknown heist plan field "unexpected""#) {
         _ = try JSONDecoder().decode(HeistPlan.self, from: Data("""
         {
-          "version": 2,
+          "version": 3,
           "body": [
             { "type": "warn", "warn": { "message": "hello" } }
           ],
@@ -22,7 +22,7 @@ func `repeat until JSON rejects else body`() {
     expectUnknownField("repeat_until", contains: #"Unknown repeat_until step field "else_body""#) {
         _ = try JSONDecoder().decode(HeistPlan.self, from: Data("""
         {
-          "version": 2,
+          "version": 3,
           "body": [
             {
               "type": "repeat_until",

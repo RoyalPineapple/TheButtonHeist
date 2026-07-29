@@ -61,7 +61,7 @@ package from Swift/DSL source when crossing public artifact boundaries.
   "entry": "purchaseFlow",
   "format": "com.royalpineapple.buttonheist.heist",
   "formatVersion": 1,
-  "planVersion": 2,
+  "planVersion": 3,
   "producer": {
     "name": "buttonheist"
   }
@@ -73,7 +73,7 @@ package from Swift/DSL source when crossing public artifact boundaries.
 | `entry` | `HeistPlanName` as one JSON string | Required root plan identity. Must equal `plan.json.name`. |
 | `format` | `HeistArtifactFormat` as one JSON string | Closed vocabulary with the sole canonical value `com.royalpineapple.buttonheist.heist`. |
 | `formatVersion` | `Int` | Package/container schema version. Current value is `1`. |
-| `planVersion` | `Int` | Must match `plan.json.version`. Current value is `2`. |
+| `planVersion` | `Int` | Must match `plan.json.version`. Current value is `3`. |
 | `producer` | `HeistArtifactProducer` | Tool that generated the artifact. |
 | `createdAt` | `Date` | Artifact creation timestamp. |
 
@@ -119,7 +119,7 @@ The root shape is:
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "name": "purchaseFlow",
   "parameter": { "type": "none" },
   "definitions": [],
@@ -148,7 +148,7 @@ plan contract.
 
 Three version numbers exist, and they answer different questions:
 
-- **`formatVersion`** (currently `1`) and **`planVersion`** (currently `2`)
+- **`formatVersion`** (currently `1`) and **`planVersion`** (currently `3`)
   govern artifacts. The runtime accepts only plan versions it supports and rejects
   others at load with a diagnostic; it never guesses at an unsupported shape.
 - **`buttonHeistVersion`** encodes the typed `ButtonHeistVersion` used by the

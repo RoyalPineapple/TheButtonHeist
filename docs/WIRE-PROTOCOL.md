@@ -390,7 +390,7 @@ events.
   "type": "heistPlan",
   "payload": {
     "plan": {
-      "version": 2,
+      "version": 3,
       "parameter": { "type": "none" },
       "body": [
         {
@@ -456,7 +456,7 @@ media only through explicit, size-bounded opt-ins.
 ### Wait
 
 ```json
-{"buttonHeistVersion":"<semver>","type":"heistPlan","payload":{"plan":{"version":2,"parameter":{"type":"none"},"body":[{"type":"wait","wait":{"predicate":{"type":"changed","scope":"screen"},"timeout":30}}]},"argument":{"type":"none"},"timeout":60}}
+{"buttonHeistVersion":"<semver>","type":"heistPlan","payload":{"plan":{"version":3,"parameter":{"type":"none"},"body":[{"type":"wait","wait":{"predicate":{"type":"changed","scope":"screen"},"timeout":30}}]},"argument":{"type":"none"},"timeout":60}}
 ```
 
 The host lowers a standalone wait to a one-step `HeistPlan`; it performs no

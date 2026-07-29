@@ -62,7 +62,7 @@ func rawArtifactManifestJSON(
     var fields = [
         #"  "createdAt" : "2026-06-05T00:00:00Z""#,
         #"  "format" : "com.royalpineapple.buttonheist.heist""#,
-        #"  "planVersion" : 2"#,
+        #"  "planVersion" : 3"#,
         #"  "producer" : { \#(producerFields.joined(separator: ", ")) }"#,
     ]
     if let entry {

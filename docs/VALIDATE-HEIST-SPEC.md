@@ -486,7 +486,7 @@ dispatch.
   "admissible": true,
   "plan": {
     "valid": true,
-    "version": 2,
+    "version": 3,
     "name": "checkout",
     "parameter": {
       "type": "none"
@@ -611,7 +611,7 @@ plan but is not admissible as the corresponding `run_heist` request:
   "admissible": false,
   "plan": {
     "valid": true,
-    "version": 2,
+    "version": 3,
     "name": "search",
     "parameter": {
       "type": "string",
@@ -656,7 +656,7 @@ have plan-build errors.
   "admissible": true,
   "plan": {
     "valid": true,
-    "version": 2,
+    "version": 3,
     "parameter": {
       "type": "none"
     },

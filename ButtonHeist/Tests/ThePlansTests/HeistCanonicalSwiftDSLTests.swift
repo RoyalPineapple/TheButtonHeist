@@ -371,7 +371,7 @@ func directScrollCommandsAreNotDurableHeistDSL() throws {
     do {
         _ = try JSONDecoder().decode(HeistPlan.self, from: Data("""
     {
-      "version": 2,
+      "version": 3,
       "body": [
         {
           "type": "action",
