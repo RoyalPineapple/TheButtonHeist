@@ -41,7 +41,7 @@ extension HeistExecution {
         private struct ActiveObservation {
             let id: RequestID
             let request: ObservationRequest
-            let boundary: TheVault.State.HistoryBoundary
+            var boundary: TheVault.State.HistoryBoundary
             let scopeSubscription: SemanticObservationSubscription
             let notificationWindow: AccessibilityNotificationScopeLease
             var viewportStatus: ViewportStatus
@@ -374,6 +374,13 @@ extension HeistExecution {
             case .currentSnapshot(let id, let scope):
                 let snapshot = await brains.captureHeistCurrentState(scope: scope)?
                     .snapshot
+                let historyIndex = await brains.vault.semanticObservationStream
+                    .stateOwner.historyEndIndex()
+                retainCurrentSnapshotAsBaseline(
+                    snapshot,
+                    historyIndex: historyIndex,
+                    for: id
+                )
                 complete(interactionID, input: .currentSnapshot(id, snapshot))
 
             case .beginObservation(let id, let request):
@@ -437,6 +444,26 @@ extension HeistExecution {
                     input: .failureScreenshotCaptured(id, result)
                 )
             }
+        }
+
+        private func retainCurrentSnapshotAsBaseline(
+            _ snapshot: Observation.Snapshot?,
+            historyIndex: Int,
+            for observationID: RequestID
+        ) {
+            guard let snapshot,
+                  case .running(var session) = phase,
+                  var observation = session.activeObservation,
+                  observation.id == observationID,
+                  observation.boundary.baseline == nil else {
+                return
+            }
+            observation.boundary = TheVault.State.HistoryBoundary(
+                baseline: snapshot,
+                historyIndex: historyIndex
+            )
+            session.activeObservation = observation
+            phase = .running(session)
         }
 
         private func beginObservation(
@@ -557,6 +584,7 @@ extension HeistExecution {
                 )
                 viewportStatus.record(exploration?.viewportExit)
             }
+            await awaitNotificationIngressTurn()
             if await captureVisibleObservation(
                 window: observation.notificationWindow
             ) == nil {
@@ -760,6 +788,7 @@ extension HeistExecution {
             let task = Task { @MainActor [weak self] in
                 guard let self else { return }
                 var viewportStatus = observation.viewportStatus
+                await self.awaitNotificationIngressTurn()
                 if await self.captureVisibleObservation(
                     window: observation.notificationWindow
                 ) == nil {
@@ -900,6 +929,14 @@ extension HeistExecution {
         ) async -> Observation.Evidence {
             await brains.vault.semanticObservationStream.stateOwner
                 .evidence(after: observation.boundary)
+        }
+
+        private func awaitNotificationIngressTurn() async {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                DispatchQueue.main.async {
+                    continuation.resume()
+                }
+            }
         }
 
         private func captureVisibleObservation(

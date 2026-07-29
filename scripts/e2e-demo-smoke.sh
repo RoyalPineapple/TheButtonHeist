@@ -175,19 +175,6 @@ expect_screen_title() {
     fi
 }
 
-expect_element_label() {
-    local expected="$1"
-    if ! jq -e --arg expected "$expected" '
-        .. | objects | .element? | select(.label == $expected)
-    ' >/dev/null; then
-        fail "expected element with label '$expected'"
-    fi
-}
-
-expect_root_top() {
-    expect_element_label "Controls Demo"
-}
-
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --keep-simulator)
@@ -439,9 +426,11 @@ SESSION_JSON="$(run_cli_json get_session_state)"
 printf '%s' "$SESSION_JSON" | json_expect_ok "get_session_state"
 printf '%s' "$SESSION_JSON" | json_expect_connected
 
+ROOT_READY_JSON="$(run_cli_json wait --exists --label "Controls Demo" --traits button --timeout 15)"
+printf '%s' "$ROOT_READY_JSON" | json_expect_ok "wait for demo root"
 ROOT_JSON="$(run_cli_json get_interface)"
 printf '%s' "$ROOT_JSON" | json_expect_ok "root get_interface"
-printf '%s' "$ROOT_JSON" | expect_root_top
+printf '%s' "$ROOT_JSON" | expect_screen_title "ButtonHeist Demo"
 
 CONTROLS_ACTION_JSON="$(run_cli_json activate --label "Controls Demo" --traits button --timeout 15)"
 printf '%s' "$CONTROLS_ACTION_JSON" | json_expect_ok "activate Controls Demo"
@@ -454,7 +443,7 @@ if [[ "$SKIP_HEIST_PLAYBACK" == false ]]; then
     printf '%s' "$ROOT_BACK_JSON" | json_expect_ok "activate back to ButtonHeist Demo"
     PLAYBACK_ROOT_JSON="$(run_cli_json get_interface)"
     printf '%s' "$PLAYBACK_ROOT_JSON" | json_expect_ok "playback root get_interface"
-    printf '%s' "$PLAYBACK_ROOT_JSON" | expect_root_top
+    printf '%s' "$PLAYBACK_ROOT_JSON" | expect_screen_title "ButtonHeist Demo"
 
     PLAYBACK_JSON="$(run_cli_json run_heist --path "$HEIST_PATH")"
     printf '%s' "$PLAYBACK_JSON" | json_expect_ok "run_heist"
