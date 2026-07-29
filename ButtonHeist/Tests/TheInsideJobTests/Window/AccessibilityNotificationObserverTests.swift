@@ -139,7 +139,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         }
     }
 
-    func testActionWindowReadsOnlyEventsAfterCursorUntilAdmissionReleasesThem() async throws {
+    func testActionWindowProvidesCoverageAfterItsCursorWithoutDrainingIngress() async throws {
         let bus = AccessibilityNotificationBus()
         bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
 
@@ -152,175 +152,33 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             associatedElement: .none
         )
 
-        let admitted = await action.admitCaptured { batch in
-            XCTAssertEqual(batch.events.map(\.kind), [.elementUpdate, .announcement])
-            XCTAssertEqual(batch.events.map(\.sequence), [2, 3])
-            XCTAssertEqual(batch.through.sequence, 3)
-            XCTAssertNil(batch.gap)
+        let admitted = await action.admitCausallyCovered { coverage in
+            XCTAssertEqual(coverage.after.sequence, 1)
+            XCTAssertEqual(coverage.through.sequence, 3)
+            XCTAssertEqual(coverage.scopedScreenChangedThrough, 0)
             XCTAssertEqual(
                 bus.checkpoint(after: .origin, selection: .all).events.map(\.kind),
                 [.layoutChanged, .elementUpdate, .announcement]
             )
-            return batch
+            return coverage
         }
-        let batch = try XCTUnwrap(admitted)
+        let coverage = try XCTUnwrap(admitted)
 
-        XCTAssertEqual(batch.through.sequence, 3)
+        XCTAssertEqual(coverage.through.sequence, 3)
         XCTAssertEqual(
             bus.checkpoint(after: .origin, selection: .all).events.map(\.kind),
-            [.layoutChanged]
-        )
-    }
-
-    func testNestedActionWindowRollsEvidenceIntoOwnerWithoutReleasingIt() async throws {
-        let bus = AccessibilityNotificationBus()
-        let owner = bus.beginActionWindow()
-        bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
-        let child = bus.beginActionWindow()
-        bus.recordForTesting(code: 1005, notificationData: .none, associatedElement: .none)
-
-        child.cancel()
-
-        XCTAssertTrue(
-            bus.checkpoint(after: .origin, selection: .unclaimedScoped).events.isEmpty
-        )
-        let admitted = await owner.admitCaptured { Optional($0) }
-        let ownerBatch = try XCTUnwrap(admitted)
-        XCTAssertEqual(ownerBatch.events.map(\.kind), [
-            .layoutChanged,
-            .elementUpdate,
-        ])
-
-        XCTAssertTrue(
-            bus.checkpoint(after: .origin, selection: .unclaimedScoped).events.isEmpty
-        )
-    }
-
-    func testNestedActionAdmissionCommitsTheWholeAccumulatedActionWindow() async throws {
-        let bus = AccessibilityNotificationBus()
-        let owner = bus.beginActionWindow()
-        bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
-        let child = bus.beginActionWindow()
-        bus.recordForTesting(code: 1005, notificationData: .none, associatedElement: .none)
-
-        let admittedChild = await child.admitCaptured { Optional($0) }
-        let childBatch = try XCTUnwrap(admittedChild)
-        XCTAssertEqual(childBatch.events.map(\.sequence), [1, 2])
-
-        XCTAssertTrue(bus.checkpoint(after: .origin, selection: .all).events.isEmpty)
-
-        let admittedOwner = await owner.admitCaptured { Optional($0) }
-        let ownerBatch = try XCTUnwrap(admittedOwner)
-        XCTAssertTrue(ownerBatch.events.isEmpty)
-
-        XCTAssertTrue(bus.checkpoint(after: .origin, selection: .all).events.isEmpty)
-    }
-
-    func testOwnerCancellationRetainsNestedActionEvidenceForCycleClaim() async throws {
-        let bus = AccessibilityNotificationBus()
-        let owner = bus.beginActionWindow()
-        let child = bus.beginActionWindow()
-        bus.recordForTesting(code: 1000, notificationData: .none, associatedElement: .none)
-
-        child.cancel()
-        owner.cancel()
-
-        XCTAssertEqual(
-            bus.checkpoint(after: .origin, selection: .all).events.map(\.kind),
-            [.screenChanged]
-        )
-        XCTAssertEqual(
-            bus.checkpoint(after: .origin, selection: .all).events.map(\.provenance),
-            [.scoped]
+            [.layoutChanged, .elementUpdate, .announcement]
         )
         let claim = try XCTUnwrap(bus.freezeObservationCycleClaim())
-        XCTAssertEqual(claim.batch.events.map(\.kind), [.screenChanged])
-        XCTAssertTrue(claim.acknowledge())
+        XCTAssertEqual(claim.batch.events.map(\.sequence), [1, 2, 3])
+        XCTAssertTrue(claim.acknowledgeObservationCycle())
+        XCTAssertTrue(bus.checkpoint(after: .origin, selection: .all).events.isEmpty)
     }
 
-    func testOwnerCancellationKeepsEvidenceClaimedUntilChildEnds() async {
-        let bus = AccessibilityNotificationBus()
-        let owner = bus.beginActionWindow()
-        let child = bus.beginActionWindow()
-        bus.recordForTesting(code: 1000, notificationData: .none, associatedElement: .none)
-
-        owner.cancel()
-
-        XCTAssertTrue(
-            bus.checkpoint(after: .origin, selection: .unclaimedScoped).events.isEmpty
-        )
-
-        child.cancel()
-
-        XCTAssertEqual(
-            bus.checkpoint(after: .origin, selection: .all).events.map(\.kind),
-            [.screenChanged]
-        )
-        XCTAssertEqual(
-            bus.checkpoint(after: .origin, selection: .all).events.map(\.provenance),
-            [.scoped]
-        )
-    }
-
-    func testChildEventAfterOwnerCancellationStaysClaimedUntilLastChildEnds() async {
-        let bus = AccessibilityNotificationBus()
-        let owner = bus.beginActionWindow()
-        let child = bus.beginActionWindow()
-
-        owner.cancel()
-        bus.recordForTesting(code: 1000, notificationData: .none, associatedElement: .none)
-
-        XCTAssertTrue(
-            bus.checkpoint(after: .origin, selection: .unclaimedScoped).events.isEmpty
-        )
-
-        child.cancel()
-
-        XCTAssertEqual(
-            bus.checkpoint(after: .origin, selection: .all).events.map(\.kind),
-            [.screenChanged]
-        )
-        XCTAssertEqual(
-            bus.checkpoint(after: .origin, selection: .all).events.map(\.provenance),
-            [.scoped]
-        )
-    }
-
-    func testChildEventAfterSuccessorBeginsIsAttributedToDrainingWindow() async throws {
-        let bus = AccessibilityNotificationBus()
-        let owner = bus.beginActionWindow()
-        let child = bus.beginActionWindow()
-        owner.cancel()
-
-        let successor = bus.beginActionWindow()
-        bus.recordForTesting(code: 1000, notificationData: .none, associatedElement: .none)
-
-        let childBatch = try XCTUnwrap(
-            await child.admitCaptured { Optional($0) }
-        )
-        XCTAssertEqual(childBatch.events.map(\.kind), [.screenChanged])
-
-        child.cancel()
-
-        XCTAssertTrue(
-            bus.checkpoint(after: .origin, selection: .unclaimedScoped).events.isEmpty
-        )
-
-        successor.cancel()
-
-        XCTAssertEqual(
-            bus.checkpoint(after: .origin, selection: .all).events.map(\.kind),
-            [.screenChanged]
-        )
-        XCTAssertEqual(
-            bus.checkpoint(after: .origin, selection: .all).events.map(\.provenance),
-            [.scoped]
-        )
-    }
-
-    func testActionWindowRetainsMoreThanAmbientLimitUntilAdmission() async throws {
+    func testActiveActionWindowRetainsMoreThanAmbientLimitUntilCycleAcknowledgment() throws {
         let bus = AccessibilityNotificationBus()
         let action = bus.beginActionWindow()
+        defer { action.cancel() }
 
         for index in 0..<65 {
             bus.recordForTesting(
@@ -332,25 +190,22 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             )
         }
 
-        let admitted = await action.admitCaptured { batch in
-            XCTAssertEqual(
-                bus.checkpoint(after: .origin, selection: .all).events.map(\.sequence),
-                Array(UInt64(1)...UInt64(65))
-            )
-            return batch
-        }
-        let batch = try XCTUnwrap(admitted)
-        let retainedText = batch.events.compactMap { event -> String? in
+        let retained = bus.checkpoint(after: .origin, selection: .all)
+        let retainedText = retained.events.compactMap { event -> String? in
             guard case .string(let text) = event.notificationData else { return nil }
             return text
         }
-        XCTAssertNil(batch.gap)
-        XCTAssertEqual(batch.through.sequence, 65)
-        XCTAssertEqual(batch.events.map(\.sequence), Array(UInt64(1)...UInt64(65)))
+        XCTAssertNil(retained.gap)
+        XCTAssertEqual(retained.through.sequence, 65)
+        XCTAssertEqual(retained.events.map(\.sequence), Array(UInt64(1)...UInt64(65)))
         XCTAssertEqual(
             retainedText,
             (0..<65).map { "Action announcement \($0)" }
         )
+
+        let claim = try XCTUnwrap(bus.freezeObservationCycleClaim())
+        XCTAssertEqual(claim.batch.events.map(\.sequence), Array(UInt64(1)...UInt64(65)))
+        XCTAssertTrue(claim.acknowledgeObservationCycle())
         XCTAssertTrue(bus.checkpoint(after: .origin, selection: .all).events.isEmpty)
     }
 
@@ -363,7 +218,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         XCTAssertEqual(first.batch.events.map(\.sequence), [1])
         XCTAssertEqual(first.batch.through.sequence, 1)
-        XCTAssertTrue(first.acknowledge())
+        XCTAssertTrue(first.acknowledgeObservationCycle())
 
         let second = try XCTUnwrap(bus.freezeObservationCycleClaim())
         XCTAssertEqual(second.batch.events.map(\.sequence), [2])
@@ -380,25 +235,8 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(retry.id, failedCommit.id)
         XCTAssertEqual(retry.batch.events.map(\.sequence), [1])
         XCTAssertEqual(retry.batch.through, failedCommit.batch.through)
-        XCTAssertTrue(retry.acknowledge())
+        XCTAssertTrue(retry.acknowledgeObservationCycle())
         XCTAssertTrue(bus.checkpoint(after: .origin, selection: .all).events.isEmpty)
-    }
-
-    func testCancelledScopeTransfersItsExactFrozenClaimForRetry() async throws {
-        let bus = AccessibilityNotificationBus()
-        let action = bus.beginActionWindow()
-        bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
-        let failedCapture = try XCTUnwrap(action.capture())
-        bus.recordForTesting(code: 1005, notificationData: .none, associatedElement: .none)
-
-        action.cancel()
-
-        let retry = try XCTUnwrap(bus.freezeObservationCycleClaim())
-        XCTAssertEqual(retry.batch.events.map(\.sequence), failedCapture.events.map(\.sequence))
-        XCTAssertEqual(retry.batch.through, failedCapture.through)
-        XCTAssertTrue(retry.acknowledge())
-        let next = try XCTUnwrap(bus.freezeObservationCycleClaim())
-        XCTAssertEqual(next.batch.events.map(\.sequence), [2])
     }
 
     func testSuccessfulCycleCommitAcknowledgesExactClaimOnce() throws {
@@ -407,8 +245,8 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         let claim = try XCTUnwrap(bus.freezeObservationCycleClaim())
 
-        XCTAssertTrue(claim.acknowledge())
-        XCTAssertFalse(claim.acknowledge())
+        XCTAssertTrue(claim.acknowledgeObservationCycle())
+        XCTAssertFalse(claim.acknowledgeObservationCycle())
         XCTAssertTrue(bus.checkpoint(after: .origin, selection: .all).events.isEmpty)
     }
 
@@ -440,79 +278,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         guard case .elementsChanged = replacement.events.last else {
             return XCTFail("Ambient overflow must publish a replacement, not noChange")
         }
-        XCTAssertTrue(claim.acknowledge())
-    }
-
-    func testCancelledActionEvidenceBeyondAmbientLimitWaitsForCycleAdmission() async throws {
-        let bus = AccessibilityNotificationBus()
-        let action = bus.beginActionWindow()
-        for index in 0..<65 {
-            bus.recordForTesting(
-                code: 1008,
-                notificationData: CapturedAccessibilityNotificationPayload(
-                    "Cancelled action announcement \(index)" as NSString
-                ),
-                associatedElement: .none
-            )
-        }
-
-        action.cancel()
-
-        XCTAssertEqual(
-            bus.checkpoint(after: .origin, selection: .all).events.map(\.sequence),
-            Array(UInt64(1)...UInt64(65))
-        )
-        let claim = try XCTUnwrap(bus.freezeObservationCycleClaim())
-        XCTAssertEqual(claim.batch.events.map(\.sequence), Array(UInt64(1)...UInt64(65)))
-        XCTAssertNil(claim.batch.gap)
-        XCTAssertTrue(claim.acknowledge())
-        XCTAssertTrue(bus.checkpoint(after: .origin, selection: .all).events.isEmpty)
-    }
-
-    func testActionAdmissionDoesNotDiscardEventsAfterCapturedCutoff() async throws {
-        let bus = AccessibilityNotificationBus()
-        let action = bus.beginActionWindow()
-        bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
-        let admitted = await action.admitCaptured { _ -> Bool? in
-            bus.recordForTesting(code: 1005, notificationData: .none, associatedElement: .none)
-            return true
-        }
-
-        XCTAssertEqual(admitted, true)
-        let retained = bus.checkpoint(after: .origin, selection: .all)
-        XCTAssertEqual(retained.events.map(\.sequence), [2])
-        XCTAssertEqual(retained.events.map(\.provenance), [.scoped])
-        XCTAssertNil(retained.gap)
-    }
-
-    func testHeistScopeRetainsMoreThanAmbientLimitUntilAdmission() async throws {
-        let bus = AccessibilityNotificationBus()
-        let heist = bus.beginHeistScope()
-
-        for index in 0..<65 {
-            bus.recordForTesting(
-                code: 1008,
-                notificationData: CapturedAccessibilityNotificationPayload(
-                    "Heist announcement \(index)" as NSString
-                ),
-                associatedElement: .none
-            )
-        }
-
-        let admitted = await heist.admitCaptured { Optional($0) }
-        let batch = try XCTUnwrap(admitted)
-        let retainedText = batch.events.compactMap { event -> String? in
-            guard case .string(let text) = event.notificationData else { return nil }
-            return text
-        }
-        XCTAssertNil(batch.gap)
-        XCTAssertEqual(batch.events.map(\.sequence), Array(UInt64(1)...UInt64(65)))
-        XCTAssertEqual(
-            retainedText,
-            (0..<65).map { "Heist announcement \($0)" }
-        )
-
-        XCTAssertTrue(bus.checkpoint(after: .origin, selection: .all).events.isEmpty)
+        XCTAssertTrue(claim.acknowledgeObservationCycle())
     }
 
     func testRawCheckpointReportsOnlyRetentionEvictionAsGap() async {
@@ -608,23 +374,6 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertNil(batch.gap)
     }
 
-    func testEndingHeistScopePreservesEventsForOpenActionWindow() async throws {
-        let bus = AccessibilityNotificationBus()
-        let heist = bus.beginHeistScope()
-        let action = bus.beginActionWindow()
-        bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
-        bus.recordForTesting(code: 1005, notificationData: .none, associatedElement: .none)
-
-        heist.cancel()
-
-        let batch = try XCTUnwrap(
-            await action.admitCaptured { Optional($0) }
-        )
-        XCTAssertEqual(batch.events.map(\.kind), [.layoutChanged, .elementUpdate])
-        XCTAssertEqual(batch.through.sequence, 2)
-        XCTAssertNil(batch.gap)
-    }
-
     func testStringPayloadsFromPublicNotificationsAreCapturedInIngressOrder() async {
         let bus = AccessibilityNotificationBus()
 
@@ -654,36 +403,6 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             events.map(\.kind),
             [.announcement, .layoutChanged, .screenChanged]
         )
-    }
-
-    func testActionAdmissionPreventsHeistAndObserverReadmission() async throws {
-        let bus = AccessibilityNotificationBus()
-        let heist = bus.beginHeistScope()
-        let action = bus.beginActionWindow()
-
-        bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
-        bus.recordForTesting(code: 1005, notificationData: .none, associatedElement: .none)
-        bus.recordForTesting(
-            code: 1008,
-            notificationData: CapturedAccessibilityNotificationPayload("Done" as NSString),
-            associatedElement: .none
-        )
-
-        let actionBatch = try XCTUnwrap(
-            await action.admitCaptured { Optional($0) }
-        )
-        let heistBatch = try XCTUnwrap(
-            await heist.admitCaptured { Optional($0) }
-        )
-
-        let expectedKinds: [AccessibilityNotificationKind] = [
-            .layoutChanged,
-            .elementUpdate,
-            .announcement,
-        ]
-        XCTAssertEqual(actionBatch.events.map(\.kind), expectedKinds)
-        XCTAssertTrue(heistBatch.events.isEmpty)
-        XCTAssertTrue(bus.checkpoint(after: .origin, selection: .all).events.isEmpty)
     }
 
     func testObserverPublishesOneMonotonicPayloadSequenceToEverySubscriber() async throws {
@@ -842,64 +561,18 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(bus.latestSequence, 8)
     }
 
-    func testCheckpointIncludesScopedEventsAndExcludesAmbientEvents() async throws {
+    func testCheckpointIncludesScopedEventsAndExcludesAmbientEvents() {
         let bus = AccessibilityNotificationBus()
         bus.recordForTesting(code: 1000, notificationData: .none, associatedElement: .none)
         let heist = bus.beginHeistScope()
+        defer { heist.cancel() }
         bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
-        let batch = try XCTUnwrap(
-            await heist.admitCaptured { Optional($0) }
-        )
+        let batch = bus.checkpoint(after: heist.cursor)
         bus.recordForTesting(code: 1000, notificationData: .none, associatedElement: .none)
 
         XCTAssertEqual(batch.events.map(\.sequence), [2])
         XCTAssertEqual(batch.events.map(\.provenance), [.scoped])
         XCTAssertEqual(batch.through.sequence, 2)
-    }
-
-    func testCancelledScopesRemainOwnedUntilCycleAdmission() async throws {
-        let bus = AccessibilityNotificationBus()
-        bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
-
-        let heist = bus.beginHeistScope()
-        let action = bus.beginActionWindow()
-        bus.recordForTesting(code: 1005, notificationData: .none, associatedElement: .none)
-        bus.recordForTesting(
-            code: 1008,
-            notificationData: CapturedAccessibilityNotificationPayload("Done" as NSString),
-            associatedElement: .none
-        )
-
-        var claimed: [PendingAccessibilityNotificationEvent] = []
-        _ = await action.admitCaptured { batch -> Bool? in
-            claimed = batch.events
-            return nil
-        }
-        action.cancel()
-
-        XCTAssertEqual(claimed.map(\.kind), [.elementUpdate, .announcement])
-        XCTAssertEqual(
-            bus.checkpoint(after: .origin, selection: .all).events.map(\.kind),
-            [.layoutChanged, .elementUpdate, .announcement],
-            "Action attribution must not drain the heist-scoped notification stream."
-        )
-
-        heist.cancel()
-        XCTAssertEqual(
-            bus.checkpoint(after: .origin, selection: .all).events.map(\.kind),
-            [.layoutChanged, .elementUpdate, .announcement]
-        )
-        XCTAssertEqual(
-            bus.checkpoint(after: .origin, selection: .all).events.map(\.provenance),
-            [.ambient, .scoped, .scoped]
-        )
-        let cycle = try XCTUnwrap(bus.freezeObservationCycleClaim())
-        XCTAssertEqual(
-            cycle.batch.events.map(\.kind),
-            [.elementChanged(.layout), .elementChanged(.value), .announcement]
-        )
-        XCTAssertTrue(cycle.acknowledge())
-        XCTAssertTrue(bus.checkpoint(after: .origin, selection: .all).events.isEmpty)
     }
 
     private func waitForNotification(
@@ -1012,7 +685,7 @@ final class ScreenChangeCursorAdmissionTests: ButtonHeistObservationTestCase {
         defer { actionWindow.cancel() }
         recordScreenChanged()
 
-        let committed = await committedScopedScreenChangedCursor()
+        let committed = committedScopedScreenChangedCursor()
         XCTAssertGreaterThan(
             brains.vault.accessibilityNotifications.latestScopedScreenChangedSequence,
             committed,
@@ -1027,7 +700,7 @@ final class ScreenChangeCursorAdmissionTests: ButtonHeistObservationTestCase {
         let actionWindow = brains.vault.accessibilityNotifications.beginActionWindow()
         defer { actionWindow.cancel() }
 
-        let committed = await committedScopedScreenChangedCursor()
+        let committed = committedScopedScreenChangedCursor()
         XCTAssertLessThanOrEqual(
             brains.vault.accessibilityNotifications.latestScopedScreenChangedSequence,
             committed,
@@ -1054,8 +727,8 @@ final class ScreenChangeCursorAdmissionTests: ButtonHeistObservationTestCase {
         )
     }
 
-    private func committedScopedScreenChangedCursor() async -> UInt64 {
-        await brains.vault.semanticObservationStream.stateOwner.scopedScreenChangedSequence()
+    private func committedScopedScreenChangedCursor() -> UInt64 {
+        brains.vault.semanticObservationStream.scopedScreenChangedSequence()
     }
 }
 

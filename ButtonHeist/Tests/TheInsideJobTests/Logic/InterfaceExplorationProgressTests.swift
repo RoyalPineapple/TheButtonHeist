@@ -183,7 +183,7 @@ final class InterfaceExplorationProgressTests: XCTestCase {
         progress.markOmitted(TreePath([0]), reason: .discoveryScrollLimit)
 
         let diagnostics = try XCTUnwrap(
-            progress.interfaceDiagnostics(for: screen, includedElementCount: 12).discovery
+            progress.interfaceDiagnostics(for: screen.tree, includedElementCount: 12).discovery
         )
         let omitted = try XCTUnwrap(diagnostics.omittedContainers.first)
 

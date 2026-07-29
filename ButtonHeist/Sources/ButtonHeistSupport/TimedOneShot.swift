@@ -57,7 +57,7 @@ package struct TimedOneShot<Value: Sendable>: Sendable {
         }
         guard canArm else { return false }
 
-        let task = Task {
+        let task = Task { @concurrent in
             guard await Task.cancellableSleep(for: duration) else { return }
             await operation()
         }

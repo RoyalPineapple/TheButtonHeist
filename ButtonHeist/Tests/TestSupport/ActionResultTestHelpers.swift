@@ -3,6 +3,12 @@ import ThePlans
 @testable import TheScore
 
 package enum HeistResultFixture {
+    package static let expectationTiming = HeistExpectationTiming(
+        budgetMs: 1_000,
+        elapsedMs: 250,
+        lastTreeChangeElapsedMs: 125
+    )
+
     package static func actionResult(
         succeeded: Bool = true,
         payload: ActionResult.Payload = .activate,
@@ -98,8 +104,8 @@ package enum HeistResultFixture {
         path: String = "$.body[0]",
         evidence: HeistExpectationEvidence = HeistResultFixture.defaultWaitEvidence(met: true)
     ) -> HeistExecutionStepResult {
-        guard let passedEvidence = HeistPassedWaitEvidence.matched(evidence) else {
-            preconditionFailure("passed wait result fixture requires replay proof")
+        guard let passedEvidence = HeistPassedWaitEvidence(evidence) else {
+            preconditionFailure("passed wait result fixture requires complete replayable evidence")
         }
         return .wait(
             path: executionPath(path),
@@ -133,8 +139,10 @@ package enum HeistResultFixture {
         do {
             return HeistExpectationEvidence(
                 predicate: predicate,
+                boundPredicate: try predicate.resolve(in: .empty),
                 observation: observation,
-                terminalCause: terminalCause
+                terminalCause: terminalCause,
+                timing: expectationTiming
             )
         } catch {
             preconditionFailure("test expectation predicate must resolve: \(error)")

@@ -21,9 +21,9 @@ extension ElementInflationProductTests {
         XCTAssertEqual(fixture.scrollView.contentOffset, .zero)
 
         let result = await brains.executeRuntimeAction(
-            try HeistActionCommand.activate(
+            .activate(
                 .element(.identifier("semantic_checkout_submit"), traits: [.button])
-            ).resolve(in: .empty)
+            )
         )
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "semantic activate failed")
@@ -67,9 +67,9 @@ extension ElementInflationProductTests {
         try await seedOffViewportTarget(fixture)
 
         let result = await brains.executeRuntimeAction(
-            try HeistActionCommand.activate(
+            .activate(
                 .element(.identifier("nested_semantic_checkout_submit"), traits: [.button])
-            ).resolve(in: .empty)
+            )
         )
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "nested semantic activate failed")
@@ -100,10 +100,10 @@ extension ElementInflationProductTests {
         XCTAssertFalse(fixture.target.isFirstResponder)
 
         let result = await brains.executeRuntimeAction(
-            try HeistActionCommand.typeText(
+            .typeText(
                 text: "leave at desk",
                 target: .identifier(fixture.identifier)
-            ).resolve(in: .empty)
+            )
         )
         await invalidation.wait()
 
@@ -130,17 +130,15 @@ extension ElementInflationProductTests {
             label: "Customer Name"
         )
         defer { fixture.cleanup() }
-        let visible = try await publishedVisibleObservation()
-        _ = await brains.vault.semanticObservationStream
-            .commitVisibleObservationForTesting(visible)
+        _ = try await publishedVisibleObservation()
 
         XCTAssertEqual(fixture.scrollView.contentOffset, .zero)
         XCTAssertFalse(fixture.target.isFirstResponder)
 
         let result = await brains.executeRuntimeAction(
-            try HeistActionCommand.activate(
+            .activate(
                 .element(.identifier(fixture.identifier), traits: [.textEntry])
-            ).resolve(in: .empty)
+            )
         )
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "visible text field activate failed")
@@ -177,9 +175,9 @@ extension ElementInflationProductTests {
         XCTAssertEqual(fixture.innerScrollView.contentOffset, .zero)
 
         let result = await brains.executeRuntimeAction(
-            try HeistActionCommand.activate(
+            .activate(
                 .element(.identifier("nested_scroll_checkout_submit"), traits: [.button])
-            ).resolve(in: .empty)
+            )
         )
 
         XCTAssertTrue(
@@ -213,9 +211,9 @@ extension ElementInflationProductTests {
         let decoyOffset = decoy.scrollView.contentOffset
 
         let result = await brains.executeRuntimeAction(
-            try HeistActionCommand.activate(
+            .activate(
                 .element(.identifier("nested_scroll_with_decoy_submit"), traits: [.button])
-            ).resolve(in: .empty)
+            )
         )
 
         XCTAssertTrue(
@@ -247,9 +245,9 @@ extension ElementInflationProductTests {
         )
 
         let result = await brains.executeRuntimeAction(
-            try HeistActionCommand.activate(
+            .activate(
                 .element(.identifier(fixture.identifier), traits: [.button])
-            ).resolve(in: .empty)
+            )
         )
 
         XCTAssertTrue(
@@ -487,7 +485,6 @@ extension ElementInflationProductTests {
         _ fixture: NestedScrollRevealFixture,
         decoy: NestedScrollDecoy = .absent
     ) async throws {
-        await brains.tripwire.yieldFrames(2)
         let screen = try await publishedVisibleObservation()
         let outerContainerPath = try XCTUnwrap(
             liveScrollableContainerPath(for: fixture.outerScrollView, in: screen),

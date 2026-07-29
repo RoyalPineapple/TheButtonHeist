@@ -19,7 +19,7 @@ final class ScreenGenerationTests: XCTestCase {
         let second = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             screen(header: "Catalog", entries: [("Discovered", .button, "discovered")])
         )
-        let retained = try await brains.vault.semanticObservationStream.stateOwner
+        let retained = try brains.vault.semanticObservationStream
             .events(after: first.historyRange.upperBound)
             .get()
 
@@ -46,11 +46,23 @@ final class ScreenGenerationTests: XCTestCase {
             notificationData: .none,
             associatedElement: .none
         )
-        let after = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
-            screen(header: "Settings", entries: [("New Action", .button, "new_action")]),
-            notificationBatch: actionWindow.capture()
-        )
-        let retained = try await brains.vault.semanticObservationStream.stateOwner
+        let admitted: Observation.Publication? = await actionWindow.admitCausallyCovered { coverage in
+            let publication = await brains.vault.semanticObservationStream
+                .commitDiscoveryObservationForTesting(
+                    screen(
+                        header: "Settings",
+                        entries: [("New Action", .button, "new_action")]
+                    )
+                )
+            guard brains.vault.semanticObservationStream.currentObservation(
+                covering: coverage
+            ) != nil else {
+                return nil
+            }
+            return publication
+        }
+        let after = try XCTUnwrap(admitted)
+        let retained = try brains.vault.semanticObservationStream
             .events(after: before.historyRange.upperBound)
             .get()
 

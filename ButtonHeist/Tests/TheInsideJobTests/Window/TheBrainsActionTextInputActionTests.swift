@@ -23,13 +23,13 @@ extension TheBrainsActionTests {
 
         let window = try installModalWindow(rootView: rootView)
         defer {
-            brains.stopSemanticObservation()
-            brains.tripwire.stopPulse()
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
 
-        let keyboardImpl = ActionTextInputKeyboardImpl(textField: textField) {}
+        let keyboardImpl = ActionTextInputKeyboardImpl(textField: textField) {
+            self.visibleObservationSource.observation = self.textInputObservation(for: textField)
+        }
         var bridgeReadCount = 0
         var bridgeReadCountAtFocus: Int?
         await replaceBrains(keyboardInput: SafecrackerKeyboardInput(
@@ -41,13 +41,12 @@ extension TheBrainsActionTests {
         textField.onBecomeFirstResponder = {
             bridgeReadCountAtFocus = bridgeReadCount
         }
-        brains.tripwire.startPulse()
-        await brains.tripwire.yieldFrames(3)
+        await installSyntheticObservation(textInputObservation(for: textField))
 
-        let command = try HeistActionCommand.typeText(
+        let command = HeistActionCommand.typeText(
             text: "hello",
             target: .identifier("message_field")
-        ).resolve(in: .empty)
+        )
         let result = await brains.executeRuntimeAction(command)
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "type_text failed")
@@ -73,21 +72,19 @@ extension TheBrainsActionTests {
 
         let window = try installModalWindow(rootView: rootView)
         defer {
-            brains.stopSemanticObservation()
-            brains.tripwire.stopPulse()
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
 
-        let invalidation = TripwireInvalidationFixture(vault: brains.vault)
         let keyboardImpl = ActionTextInputKeyboardImpl(textField: textField) {
-            invalidation.signal()
+            self.visibleObservationSource.observation = self.textInputObservation(
+                for: textField,
+                heistId: "message_field"
+            )
         }
         await replaceBrains(keyboardInput: SafecrackerKeyboardInput(
             keyboardBridgeProvider: { keyboardImpl.bridge() }
         ))
-        brains.tripwire.startPulse()
-        await brains.tripwire.yieldFrames(3)
 
         let heistId: HeistId = "message_field"
         let element = AccessibilityElement.make(
@@ -109,12 +106,11 @@ extension TheBrainsActionTests {
             "targeted typing must work when an active input has no software keyboard"
         )
 
-        let command = try HeistActionCommand.typeText(
+        let command = HeistActionCommand.typeText(
             text: "hello",
             target: .identifier("message_field")
-        ).resolve(in: .empty)
+        )
         let result = await brains.executeRuntimeAction(command)
-        await invalidation.wait()
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "type_text failed")
         XCTAssertNotNil(result.observationEvidence?.current)
@@ -130,7 +126,6 @@ extension TheBrainsActionTests {
     }
 
     func testExecuteTypeTextKeepsCommittedHeistIdWhenOrdinalOrderChangesBeforeFocus() async throws {
-        brains.stopSemanticObservation()
         let selectedId: HeistId = "selected_message"
         let otherId: HeistId = "other_message"
         let selectedTextField = ActionActivatingTextField(
@@ -169,7 +164,6 @@ extension TheBrainsActionTests {
         await replaceBrains(keyboardInput: SafecrackerKeyboardInput(
             keyboardBridgeProvider: { keyboardImpl.bridge() }
         ))
-        brains.stopSemanticObservation()
         await installScreen(elements: [
             (selectedElement, selectedId),
             (otherElement, otherId),
@@ -179,14 +173,6 @@ extension TheBrainsActionTests {
             .label("Repeated Message"),
             ordinal: 0
         ).resolve(in: .empty)
-        let actionTask = Task { @MainActor in
-            await brains.actions.executeTypeText(
-                text: "hello",
-                target: resolvedTarget
-            )
-        }
-
-        await waitForSettledSemanticWaiter(on: brains.vault)
         let reorderedScreen = InterfaceObservation.makeForTests(
             elements: [
                 (otherElement, otherId),
@@ -197,10 +183,13 @@ extension TheBrainsActionTests {
                 otherId: otherTextField,
             ]
         )
-        _ = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(reorderedScreen)
         visibleObservationSource.observation = reorderedScreen
 
-        let result = await actionTask.value
+        let result = await brains.actions.executeTypeText(
+            text: "hello",
+            target: resolvedTarget,
+            deadline: actionDeadline()
+        )
 
         XCTAssertTrue(result.success, result.message ?? "type_text failed")
         XCTAssertEqual(result.resolvedElementId, selectedId)
@@ -223,28 +212,23 @@ extension TheBrainsActionTests {
 
         let window = try installModalWindow(rootView: rootView)
         defer {
-            brains.stopSemanticObservation()
-            brains.tripwire.stopPulse()
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
 
-        let invalidation = TripwireInvalidationFixture(vault: brains.vault)
         let keyboardImpl = ActionTextInputKeyboardImpl(textField: textField) {
-            invalidation.signal()
+            self.visibleObservationSource.observation = self.textInputObservation(for: textField)
         }
         await replaceBrains(keyboardInput: SafecrackerKeyboardInput(
             keyboardBridgeProvider: { keyboardImpl.bridge() }
         ))
-        brains.tripwire.startPulse()
-        await brains.tripwire.yieldFrames(3)
+        await installSyntheticObservation(textInputObservation(for: textField))
 
-        let command = try HeistActionCommand.typeText(
+        let command = HeistActionCommand.typeText(
             text: "hello",
             target: .identifier("message_field")
-        ).resolve(in: .empty)
+        )
         let result = await brains.executeRuntimeAction(command)
-        await invalidation.wait()
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "type_text failed")
         XCTAssertEqual(result.method, .typeText)
@@ -277,28 +261,23 @@ extension TheBrainsActionTests {
 
         let window = try installModalWindow(rootView: rootView)
         defer {
-            brains.stopSemanticObservation()
-            brains.tripwire.stopPulse()
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
 
-        let invalidation = TripwireInvalidationFixture(vault: brains.vault)
         let keyboardImpl = ActionTextInputKeyboardImpl(textField: textField) {
-            invalidation.signal()
+            self.visibleObservationSource.observation = self.textInputObservation(for: textField)
         }
         await replaceBrains(keyboardInput: SafecrackerKeyboardInput(
             keyboardBridgeProvider: { keyboardImpl.bridge() }
         ))
-        brains.tripwire.startPulse()
-        await brains.tripwire.yieldFrames(3)
+        await installSyntheticObservation(textInputObservation(for: textField))
 
-        let command = try HeistActionCommand.typeText(
+        let command = HeistActionCommand.typeText(
             text: .replacing("b"),
             target: .identifier("message_field")
-        ).resolve(in: .empty)
+        )
         let result = await brains.executeRuntimeAction(command)
-        await invalidation.wait()
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "type_text replacement failed")
         XCTAssertEqual(result.method, .typeText)
@@ -329,28 +308,23 @@ extension TheBrainsActionTests {
 
         let window = try installModalWindow(rootView: rootView)
         defer {
-            brains.stopSemanticObservation()
-            brains.tripwire.stopPulse()
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
 
-        let invalidation = TripwireInvalidationFixture(vault: brains.vault)
         let keyboardImpl = ActionTextInputKeyboardImpl(textField: textField) {
-            invalidation.signal()
+            self.visibleObservationSource.observation = self.textInputObservation(for: textField)
         }
         await replaceBrains(keyboardInput: SafecrackerKeyboardInput(
             keyboardBridgeProvider: { keyboardImpl.bridge() }
         ))
-        brains.tripwire.startPulse()
-        await brains.tripwire.yieldFrames(3)
+        await installSyntheticObservation(textInputObservation(for: textField))
 
-        let command = try HeistActionCommand.typeText(
+        let command = HeistActionCommand.typeText(
             text: .replacing(""),
             target: .identifier("message_field")
-        ).resolve(in: .empty)
+        )
         let result = await brains.executeRuntimeAction(command)
-        await invalidation.wait()
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "type_text clear failed")
         XCTAssertEqual(result.method, .typeText)
@@ -371,7 +345,8 @@ extension TheBrainsActionTests {
 
         let result = await brains.actions.executeTypeText(
             text: "hello",
-            target: nil
+            target: nil,
+            deadline: actionDeadline()
         )
 
         XCTAssertFalse(result.success)
@@ -395,7 +370,8 @@ extension TheBrainsActionTests {
 
         let result = await brains.actions.executeTypeText(
             text: "hello",
-            target: nil
+            target: nil,
+            deadline: actionDeadline()
         )
 
         XCTAssertFalse(result.success)
@@ -411,7 +387,10 @@ extension TheBrainsActionTests {
     func testExecuteEditActionWithoutResponderReportsFocusState() async {
         _ = brains.safecracker.dismissKeyboard()
 
-        let result = await brains.actions.executeEditAction(EditActionTarget(action: .copy))
+        let result = await brains.actions.executeEditAction(
+            EditActionTarget(action: .copy),
+            deadline: actionDeadline()
+        )
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .editAction)
@@ -428,7 +407,10 @@ extension TheBrainsActionTests {
     func testExecuteDeleteEditActionWithoutResponderReportsFocusState() async {
         _ = brains.safecracker.dismissKeyboard()
 
-        let result = await brains.actions.executeEditAction(EditActionTarget(action: .delete))
+        let result = await brains.actions.executeEditAction(
+            EditActionTarget(action: .delete),
+            deadline: actionDeadline()
+        )
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .editAction)
@@ -445,7 +427,9 @@ extension TheBrainsActionTests {
     func testExecuteResignFirstResponderWithoutResponderReportsFocusState() async {
         _ = brains.safecracker.dismissKeyboard()
 
-        let result = await brains.actions.executeResignFirstResponder()
+        let result = await brains.actions.executeResignFirstResponder(
+            deadline: actionDeadline()
+        )
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .dismissKeyboard)
@@ -486,7 +470,7 @@ extension TheBrainsActionTests {
             frame: replacementTextField.frame
         )
         let staleTextField = ResignationTrackingTextField(frame: replacementTextField.frame)
-        await brains.vault.installObservationForTesting(.makeForTests(
+        await installSyntheticObservation(.makeForTests(
             elements: [(element, heistId)],
             objects: [heistId: staleTextField],
             firstResponderHeistId: heistId
@@ -497,7 +481,9 @@ extension TheBrainsActionTests {
             firstResponderHeistId: heistId
         )
 
-        let result = await brains.actions.executeResignFirstResponder()
+        let result = await brains.actions.executeResignFirstResponder(
+            deadline: actionDeadline()
+        )
 
         XCTAssertTrue(result.success, result.message ?? "resign first responder failed")
         XCTAssertEqual(result.method, .dismissKeyboard)
@@ -505,6 +491,24 @@ extension TheBrainsActionTests {
         XCTAssertEqual(replacementTextField.resignationCount, 1)
         XCTAssertFalse(replacementTextField.isFirstResponder)
         XCTAssertEqual(brains.vault.interfaceTree.firstResponderHeistId, heistId)
+    }
+
+    private func textInputObservation(
+        for textField: UITextField,
+        heistId: HeistId = "message_field"
+    ) -> InterfaceObservation {
+        let element = AccessibilityElement.make(
+            label: textField.accessibilityLabel,
+            value: textField.accessibilityValue,
+            identifier: heistId.rawValue,
+            traits: .textEntry,
+            shape: .frame(AccessibilityRect(textField.frame))
+        )
+        return .makeForTests(
+            elements: [(element, heistId)],
+            objects: [heistId: textField],
+            firstResponderHeistId: textField.isFirstResponder ? heistId : nil
+        )
     }
 
 }

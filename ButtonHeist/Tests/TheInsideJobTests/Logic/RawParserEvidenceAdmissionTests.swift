@@ -22,17 +22,16 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
 
         let raw = observation(label: "Raw", heistId: "raw")
         visibleObservationSource.observation = raw
-        let refreshed = brains.vault.refreshLiveCapture()
+        let captured = visibleObservationSource.capture(from: brains.vault)
 
-        XCTAssertEqual(refreshed?.tree.interfaceHash, raw.tree.interfaceHash)
-        XCTAssertEqual(brains.vault.latestObservation.tree.interfaceHash, raw.tree.interfaceHash)
+        XCTAssertEqual(captured?.tree.interfaceHash, raw.tree.interfaceHash)
         XCTAssertEqual(brains.vault.interfaceTree.interfaceHash, committedHash)
         XCTAssertNotNil(brains.vault.interfaceTree.findElement(heistId: "committed"))
         XCTAssertNil(brains.vault.interfaceTree.findElement(heistId: "raw"))
-        let retainedAfterRefresh = try await stream.stateOwner
+        let retainedAfterRefresh = try stream
             .events(after: committedPublication.historyRange.upperBound)
             .get()
-        let currentAfterRefresh = await stream.stateOwner.current()
+        let currentAfterRefresh = stream.current()
         XCTAssertTrue(retainedAfterRefresh.isEmpty)
         XCTAssertEqual(currentAfterRefresh, committedPublication.current)
     }
@@ -46,17 +45,17 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
         let stream = brains.vault.semanticObservationStream
         let raw = observation(label: "Raw", heistId: "raw")
         visibleObservationSource.observation = raw
-        _ = brains.vault.refreshLiveCapture()
+        let captured = try XCTUnwrap(visibleObservationSource.capture(from: brains.vault))
 
         XCTAssertTrue(brains.vault.interfaceTree.orderedElements.isEmpty)
 
-        let boundary = await stream.stateOwner.historyEndIndex()
-        let publication = await stream.commitVisibleObservationForTesting(raw)
+        let boundary = stream.historyEndIndex()
+        let publication = await stream.commitVisibleObservationForTesting(captured)
 
         XCTAssertEqual(publication.historyRange.lowerBound, boundary)
         XCTAssertNotNil(brains.vault.interfaceTree.findElement(heistId: "raw"))
-        let retained = try await stream.stateOwner.events(after: boundary).get()
-        let current = await stream.stateOwner.current()
+        let retained = try stream.events(after: boundary).get()
+        let current = stream.current()
         XCTAssertEqual(retained, publication.events)
         XCTAssertEqual(current, publication.current)
         XCTAssertEqual(

@@ -125,12 +125,14 @@ final class TheGetawayTransportWiringTests: XCTestCase {
             notificationData: CapturedAccessibilityNotificationPayload("Ready" as NSString),
             associatedElement: .none
         )
-        let batch = try XCTUnwrap(notificationWindow.capture())
-        _ = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
-            .makeForTests(),
-            notificationBatch: batch
-        )
-        notificationWindow.cancel()
+        let committed = await notificationWindow.admitCausallyCovered { coverage in
+            _ = await brains.vault.semanticObservationStream
+                .commitVisibleObservationForTesting(.makeForTests())
+            return brains.vault.semanticObservationStream.currentObservation(
+                covering: coverage
+            )
+        }
+        XCTAssertNotNil(committed)
 
         let responses = TransportResponseSink()
         await controlPlane.observe(.dataReceived(

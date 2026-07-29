@@ -12,7 +12,7 @@ import ButtonHeistTestSupport
 final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
     func testHistoryRetainsEventsInPublicationOrder() async throws {
         let stream = vault.semanticObservationStream
-        let start = await stream.stateOwner.historyEndIndex()
+        let start = stream.historyEndIndex()
         let first = await stream.commitVisibleObservationForTesting(
             observation(label: "First", heistId: "first")
         )
@@ -20,16 +20,16 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
             observation(label: "Second", heistId: "second")
         )
 
-        let events = try await retainedEvents(after: start)
+        let events = try retainedEvents(after: start)
 
         XCTAssertEqual(events, first.events + second.events)
     }
 
     func testHistoryReportsGapAfterProtectedRangeIsReleased() async throws {
         let stream = vault.semanticObservationStream
-        await stream.stateOwner.reset(retentionLimit: 2)
-        let start = await stream.stateOwner.historyEndIndex()
-        await stream.stateOwner.protectHistory(from: start)
+        stream.reset(retentionLimit: 2)
+        let start = stream.historyEndIndex()
+        stream.protectHistory(from: start)
 
         let first = await stream.commitVisibleObservationForTesting(
             observation(label: "First", heistId: "first")
@@ -41,18 +41,18 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
             observation(label: "Third", heistId: "third")
         )
 
-        let protectedEvents = try await retainedEvents(after: start)
+        let protectedEvents = try retainedEvents(after: start)
         XCTAssertEqual(protectedEvents, first.events + second.events + third.events)
 
-        await stream.stateOwner.releaseHistory(from: start)
-        let releasedRead = await stream.stateOwner.events(after: start)
+        stream.releaseHistory(from: start)
+        let releasedRead = stream.events(after: start)
 
         XCTAssertEqual(releasedRead, .failure(.rangeUnavailable))
     }
 
     func testIndependentHistoryReadsDoNotShareProgress() async {
         let stream = vault.semanticObservationStream
-        let start = await stream.stateOwner.historyEndIndex()
+        let start = stream.historyEndIndex()
         _ = await stream.commitVisibleObservationForTesting(
             observation(label: "First", heistId: "first")
         )
@@ -60,8 +60,8 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
             observation(label: "Second", heistId: "second")
         )
 
-        let firstRead = await stream.stateOwner.events(after: start)
-        let secondRead = await stream.stateOwner.events(after: start)
+        let firstRead = stream.events(after: start)
+        let secondRead = stream.events(after: start)
 
         XCTAssertEqual(firstRead, secondRead)
     }
@@ -71,12 +71,12 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
         let first = await stream.commitVisibleObservationForTesting(
             observation(label: "Before", heistId: "before")
         )
-        let boundary = await stream.stateOwner.observationBoundary(scope: .visible)
+        let boundary = stream.observationBoundary(scope: .visible)
         let second = await stream.commitVisibleObservationForTesting(
             observation(label: "After", heistId: "after")
         )
 
-        let evidence = await stream.stateOwner.evidence(after: boundary)
+        let evidence = stream.evidence(after: boundary)
 
         XCTAssertEqual(evidence.baseline, first.current.snapshot)
         XCTAssertEqual(evidence.current, second.current.snapshot)
@@ -86,13 +86,13 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
 
     func testCommitCompletesEveryObservationWaiterWithCurrentState() async {
         let stream = vault.semanticObservationStream
-        let start = await stream.stateOwner.historyEndIndex()
+        let start = stream.historyEndIndex()
         let tasks = (0..<2).map { _ in
             Task { @MainActor in
                 await stream.waitForObservation(
                     after: start,
                     scope: .visible,
-                    deadline: nil
+                    boundary: .cancellation
                 )
             }
         }
@@ -111,12 +111,12 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
 
     func testCancellingObservationWaitRemovesWaiter() async {
         let stream = vault.semanticObservationStream
-        let start = await stream.stateOwner.historyEndIndex()
+        let start = stream.historyEndIndex()
         let task = Task { @MainActor in
             await stream.waitForObservation(
                 after: start,
                 scope: .visible,
-                deadline: nil
+                boundary: .cancellation
             )
         }
         await waitForObservationWaiterCount(1)
@@ -130,21 +130,23 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
 
     func testDiscoveryCycleCompletesWaiterWithoutInventingObservation() async {
         let stream = vault.semanticObservationStream
-        let start = await stream.stateOwner.historyEndIndex()
+        let start = stream.historyEndIndex()
         let task = Task { @MainActor in
             await stream.waitForObservation(
                 after: start,
                 scope: .discovery,
-                deadline: nil,
-                completingAfterCurrentCycle: true
+                boundary: .observationCycle
             )
         }
         await waitForObservationWaiterCount(1)
 
-        await stream.completeObservationWaiters(completedScope: .discovery)
+        stream.completeObservationWaiters(
+            completedScope: .discovery,
+            observationCommitted: false
+        )
         let result = await task.value
 
-        XCTAssertEqual(result, .cycleCompleted)
+        XCTAssertEqual(result, .cycleCompletedWithoutObservation)
         XCTAssertEqual(stream.observationWaiterCount, 0)
     }
 }

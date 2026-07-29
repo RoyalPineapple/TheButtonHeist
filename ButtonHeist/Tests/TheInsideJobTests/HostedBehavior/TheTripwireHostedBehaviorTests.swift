@@ -30,16 +30,6 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
         XCTAssertNil(tripwire.latestReading)
     }
 
-    func testTickWaitIsUnavailableWithoutCallerOwnedPulse() async {
-        let outcome = await tripwire.waitForNextTick(
-            timeout: .milliseconds(10),
-            demand: .ambient
-        )
-
-        XCTAssertEqual(outcome, .unavailable)
-        XCTAssertFalse(tripwire.isPulseRunning)
-    }
-
     func testTraversableWindowsAreVisibleSizedAndFrontToBack() {
         let windows = tripwire.captureTraversableWindows().map(\.window)
 
@@ -114,7 +104,7 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
                 $0.semantics.assertable.label == "Submit"
             }
         )
-        XCTAssertEqual(observation.completeness, .complete)
+        XCTAssertEqual(observation.coverage, .complete)
     }
 
     func testAnnouncementExpectationLatchesUntilReadyHandoff() async throws {
@@ -133,7 +123,7 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
 
         XCTAssertEqual(try evidence.replayExpectation()?.met, true)
         XCTAssertEqual(try evidence.announcement, "Ticket saved.")
-        XCTAssertEqual(observation.completeness, .complete)
+        XCTAssertEqual(observation.coverage, .complete)
     }
 
     private func actionEvidence(

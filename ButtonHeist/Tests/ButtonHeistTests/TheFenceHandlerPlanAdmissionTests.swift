@@ -235,7 +235,6 @@ extension TheFenceHandlerTests {
         XCTAssertEqual(request.plan.body, [
             .wait(WaitStep(predicate: .exists(.label("Pay")), timeout: 5)),
         ])
-        XCTAssertEqual(request.step, .wait(WaitStep(predicate: .exists(.label("Pay")), timeout: 5)))
     }
 
     @ButtonHeistActor

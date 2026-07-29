@@ -10,10 +10,15 @@ extension Actions {
     func performPointAction<PreparedDispatch: Sendable>(
         selection: ResolvedGesturePointSelection,
         payload: ActionResult.Payload,
+        deadline: SemanticObservationDeadline,
         prepare: (CGPoint) -> PreparedDispatch?,
         complete: (PreparedDispatch) async -> Bool
     ) async -> TheSafecracker.ActionDispatchResult {
-        switch await resolveGesturePoint(selection: selection, payload: payload) {
+        switch await resolveGesturePoint(
+            selection: selection,
+            payload: payload,
+            deadline: deadline
+        ) {
         case .failure(let result):
             return result
         case .success(let resolvedPoint):
@@ -37,10 +42,12 @@ extension Actions {
 
     func executeTap(
         _ target: ResolvedTapTarget,
+        deadline: SemanticObservationDeadline
     ) async -> TheSafecracker.ActionDispatchResult {
         return await performPointAction(
             selection: target.selection,
             payload: .oneFingerTap,
+            deadline: deadline,
             prepare: safecracker.prepareTap,
             complete: safecracker.completePreparedTouch
         )
@@ -48,10 +55,12 @@ extension Actions {
 
     func executeLongPress(
         _ target: ResolvedLongPressTarget,
+        deadline: SemanticObservationDeadline
     ) async -> TheSafecracker.ActionDispatchResult {
         return await performPointAction(
             selection: target.selection,
             payload: .longPress,
+            deadline: deadline,
             prepare: { point in
                 self.safecracker.prepareLongPress(at: point, duration: target.duration)
             },
@@ -61,6 +70,7 @@ extension Actions {
 
     func executeSwipe(
         _ request: ResolvedSwipeTarget,
+        deadline: SemanticObservationDeadline
     ) async -> TheSafecracker.ActionDispatchResult {
         let duration = request.duration ?? SwipeTarget.defaultDuration
         switch request.selection {
@@ -70,6 +80,7 @@ extension Actions {
                 start: start,
                 end: end,
                 duration: duration,
+                deadline: deadline
             )
         case .elementDirection(let target, let direction):
             return await performElementFrameSwipe(
@@ -77,6 +88,7 @@ extension Actions {
                 start: direction.defaultStart,
                 end: direction.defaultEnd,
                 duration: duration,
+                deadline: deadline
             )
         case .pointToPoint(let start, let end):
             return await performPointSwipe(start: start, duration: duration) { _ in end.cgPoint }
@@ -137,11 +149,13 @@ extension Actions {
         start: UnitPoint,
         end: UnitPoint,
         duration: GestureDuration,
+        deadline: SemanticObservationDeadline
     ) async -> TheSafecracker.ActionDispatchResult {
         let inflatedTarget: ElementInflation.InflatedElementTarget
         switch await navigation.elementInflation.inflate(
             for: target,
             method: .swipe,
+            deadline: deadline
         ) {
         case .inflated(let target):
             inflatedTarget = target
@@ -202,6 +216,7 @@ extension Actions {
 
     func executeDrag(
         _ target: ResolvedDragTarget,
+        deadline: SemanticObservationDeadline
     ) async -> TheSafecracker.ActionDispatchResult {
         let selection: ResolvedGesturePointSelection
         let end: ScreenPoint
@@ -224,6 +239,7 @@ extension Actions {
         return await performPointAction(
             selection: selection,
             payload: .drag,
+            deadline: deadline,
             prepare: { startPoint in
                 self.safecracker.prepareDrag(
                     from: startPoint,

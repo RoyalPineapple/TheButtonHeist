@@ -70,6 +70,13 @@ package struct Expectation: Sendable, Equatable {
         pending.count == 1 && pending[0].isNoChange
     }
 
+    package var hasMatchedTemporalBaseline: Bool {
+        pending.contains {
+            if case .after = $0 { return true }
+            return false
+        }
+    }
+
     private func evaluating(_ input: Input) -> Expectation {
         var next: [Step] = []
         next.reserveCapacity(pending.count)

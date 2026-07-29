@@ -33,7 +33,8 @@ extension TheBrainsScrollTests {
             ),
             element: second
         )
-        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(
             elements: [
                 firstEntry.heistId: firstEntry,
                 secondEntry.heistId: secondEntry,
@@ -47,12 +48,14 @@ extension TheBrainsScrollTests {
                 TreePath([1]): secondEntry.heistId,
             ],
             firstResponderHeistId: nil,
-        ))
+            )
+        )
 
         let result = await brains.navigation.executeScrollToVisible(
             target: try resolvedScrollToVisibleTarget(
                 ScrollToVisibleTarget(target: .label("Duplicate"))
-            )
+            ),
+            deadline: semanticRevealDeadline()
         )
 
         XCTAssertFalse(result.success)
@@ -77,12 +80,13 @@ extension TheBrainsScrollTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
+        _ = try await publishedVisibleObservation()
 
         let result = await brains.navigation.executeScrollToVisible(
             target: try resolvedScrollToVisibleTarget(
                 ScrollToVisibleTarget(target: .target(.label("Save"), ordinal: 3))
-            )
+            ),
+            deadline: semanticRevealDeadline()
         )
 
         XCTAssertFalse(result.success)
@@ -95,7 +99,6 @@ extension TheBrainsScrollTests {
 
     func testScrollToVisibleFailsWhenAdmittedIdentityBecomesAmbiguous() async throws {
         let rootView = UIView()
-        rootView.backgroundColor = .white
         let scrollView = AccessibilityRevealingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let firstTarget = makeAccessibleView(label: "Jump Target", frame: CGRect(x: 40, y: 900, width: 240, height: 44))
@@ -111,7 +114,7 @@ extension TheBrainsScrollTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
+        _ = try await publishedVisibleObservation()
         let scrollContainerPath = TreePath([0])
         let liveScreen = InterfaceObservation.makeForTests(
             elements: [:],
@@ -125,10 +128,9 @@ extension TheBrainsScrollTests {
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [scrollContainerPath: .init(view: scrollView)]
         )
-        await brains.vault.installObservationForTesting(liveScreen)
-        let prematureResolution = brains.vault.resolveTarget(
-            literalTarget(ResolvedElementPredicate.label("Jump Target"), ordinal: 0)
-        )
+        await brains.vault.semanticObservationStream
+            .commitVisibleObservationForTesting(liveScreen)
+        let prematureResolution = brains.vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Jump Target"), ordinal: 0))
         guard case .notFound = prematureResolution else {
             XCTFail("Parser exposed offscreen scroll content before semantic reveal: \(prematureResolution)")
             return
@@ -161,7 +163,8 @@ extension TheBrainsScrollTests {
             ),
             liveCapture: liveScreen.liveCapture
         )
-        await brains.vault.installObservationForTesting(knownScreen)
+        await brains.vault.semanticObservationStream
+            .commitVisibleObservationForTesting(knownScreen)
         let revealedScreen = duplicateRevealObservation(
             knownEntry: knownEntry,
             firstTarget: firstTarget,
@@ -171,7 +174,7 @@ extension TheBrainsScrollTests {
         )
         let inflation = brains.navigation.elementInflation
         let originalMoveViewport = inflation.exploration.moveViewport
-        inflation.exploration.moveViewport = { _ in
+        inflation.exploration.moveViewport = { _, _ in
             self.visibleObservationSource.observation = revealedScreen
             let current = await self.brains.vault.semanticObservationStream
                 .commitDiscoveryObservationAfterViewportMovementForTesting(revealedScreen)
@@ -182,14 +185,15 @@ extension TheBrainsScrollTests {
                 current: current
             )
         }
-        inflation.exploration.discoverTarget = { _ in nil }
+        inflation.exploration.discoverTarget = { _, _ in nil }
         defer {
             inflation.exploration.moveViewport = originalMoveViewport
         }
 
         let result = await inflation.inflate(
             for: try resolvedTarget(.label("Jump Target")),
-            method: .scrollToVisible
+            method: .scrollToVisible,
+            deadline: semanticRevealDeadline()
         )
 
         guard case .failed(let failure) = result else {

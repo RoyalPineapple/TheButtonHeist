@@ -13,12 +13,13 @@ struct SemanticObservationScopePressure {
         activeObservationDemands.count
     }
 
-    var demandState: SemanticObservationDemandState {
-        activeObservationDemands.isEmpty ? .idle : .active
+    var hasActiveDemand: Bool {
+        !activeObservationDemands.isEmpty
     }
 
-    var hasActiveDemand: Bool {
-        demandState == .active
+    var demandedObservationScope: SemanticObservationScope? {
+        subscriptions.values.max()
+            ?? (hasActiveDemand ? .visible : nil)
     }
 
     mutating func addSubscription(scope: SemanticObservationScope) -> UInt64 {
@@ -43,14 +44,6 @@ struct SemanticObservationScopePressure {
         activeObservationDemands.remove(id)
     }
 
-    func subscribedObservationScope() -> SemanticObservationScope {
-        subscriptions.values.max() ?? .visible
-    }
-}
-
-enum SemanticObservationDemandState: Sendable, Equatable {
-    case idle
-    case active
 }
 
 #endif // DEBUG

@@ -127,7 +127,8 @@ extension HeistExecution {
         internal static func project(
             action leaf: ActionLeaf,
             evidence: Observation.Evidence,
-            outcome: LeafOutcome
+            outcome: LeafOutcome,
+            timing: HeistExpectationTiming
         ) -> HeistExecutionStepResult {
             let actionResult = actionResult(
                 leaf: leaf,
@@ -138,9 +139,10 @@ extension HeistExecution {
                 guard leaf.dispatch?.success == true else { return nil }
                 return HeistExpectationEvidence(
                     predicate: predicate.authored,
-                    resolvedPredicate: predicate.resolved,
+                    boundPredicate: predicate.resolved,
                     observation: evidence,
-                    terminalCause: outcome.expectationTerminalCause
+                    terminalCause: outcome.expectationTerminalCause,
+                    timing: timing
                 )
             }
             let evidence = HeistActionEvidence.completed(
@@ -181,19 +183,21 @@ extension HeistExecution {
         internal static func project(
             wait leaf: WaitLeaf,
             evidence: Observation.Evidence,
-            outcome: LeafOutcome
+            outcome: LeafOutcome,
+            timing: HeistExpectationTiming
         ) -> HeistExecutionStepResult {
-            let matched = outcome.admitsSatisfiedExpectation
-                && leaf.expectation.result == .satisfied
             let expectation = HeistExpectationEvidence(
                 predicate: leaf.predicate.authored,
-                resolvedPredicate: leaf.predicate.resolved,
+                boundPredicate: leaf.predicate.resolved,
                 observation: evidence,
-                terminalCause: outcome.expectationTerminalCause
+                terminalCause: outcome.expectationTerminalCause,
+                timing: timing
             )
+            let passedEvidence = HeistPassedWaitEvidence(expectation)
             let completion: HeistWaitCompletion
-            if matched {
-                completion = .passed(evidence: expectation)
+            if let passedEvidence,
+               passedEvidence.matchesExpectation {
+                completion = .passed(evidence: passedEvidence)
             } else {
                 completion = .failed(
                     evidence: .observed(expectation),
@@ -232,13 +236,20 @@ private extension HeistExecution.ResultProjector {
 
         let resultOutcome: ActionResultOutcome
         let message: String?
-        switch dispatch.outcome {
-        case .failure(let failure):
-            resultOutcome = .failure(TheBrains.actionFailureKind(for: failure))
-            message = dispatch.message
-        case .success:
-            switch outcome {
-            case .completed, .timedOut, .heistTimedOut:
+        switch outcome {
+        case .timedOut, .heistTimedOut:
+            resultOutcome = .failure(.timeout)
+            message = timeoutMessage(
+                predicate: leaf.predicate,
+                evidence: evidence,
+                outstanding: leaf.expectation.result.outstandingDescription
+            )
+        case .completed:
+            switch dispatch.outcome {
+            case .failure(let failure):
+                resultOutcome = .failure(TheBrains.actionFailureKind(for: failure))
+                message = dispatch.message
+            case .success:
                 if leaf.expectation.result == .satisfied {
                     resultOutcome = .success
                     message = dispatch.message
@@ -250,16 +261,16 @@ private extension HeistExecution.ResultProjector {
                         outstanding: leaf.expectation.result.outstandingDescription
                     )
                 }
-            case .cancelled:
-                resultOutcome = .failure(.actionFailed)
-                message = "action observation cancelled"
-            case .unavailable:
-                resultOutcome = .failure(.accessibilityTreeUnavailable)
-                message = TheBrains.treeUnavailableMessage
-            case .viewportExitFailed:
-                resultOutcome = .failure(.actionFailed)
-                message = "Could not restore the accessibility viewport after observation"
             }
+        case .cancelled:
+            resultOutcome = .failure(.actionFailed)
+            message = "action observation cancelled"
+        case .unavailable:
+            resultOutcome = .failure(.accessibilityTreeUnavailable)
+            message = TheBrains.treeUnavailableMessage
+        case .viewportExitFailed:
+            resultOutcome = .failure(.actionFailed)
+            message = "Could not restore the accessibility viewport after observation"
         }
 
         return ActionResult(
@@ -392,6 +403,32 @@ private extension HeistExecution.ResultProjector {
 }
 
 extension ResolvedHeistActionCommand {
+    internal var actionResultPayload: ActionResult.Payload {
+        switch self {
+        case .activate: .activate
+        case .increment: .increment
+        case .decrement: .decrement
+        case .customAction: .customAction
+        case .rotor: .rotor(nil)
+        case .dismiss: .dismiss
+        case .magicTap: .magicTap
+        case .typeText: .typeText(nil)
+        case .oneFingerTap: .oneFingerTap
+        case .longPress: .longPress
+        case .swipe: .swipe
+        case .drag: .drag
+        case .scroll: .scroll
+        case .scrollToVisible: .scrollToVisible
+        case .scrollToEdge: .scrollToEdge
+        case .editAction: .editAction
+        case .setPasteboard: .setPasteboard(nil)
+        case .takeScreenshot: .screenshot(nil)
+        case .dismissKeyboard: .dismissKeyboard
+        }
+    }
+}
+
+extension HeistActionCommand {
     internal var actionResultPayload: ActionResult.Payload {
         switch self {
         case .activate: .activate

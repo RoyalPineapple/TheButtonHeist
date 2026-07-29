@@ -202,7 +202,6 @@ final class TheBrainsActionTests: XCTestCase {
             tripwire: TheTripwire(),
             visibleObservationSource: visibleObservationSource.capture
         )
-        installObservedGeometryTick()
         await brains.startTestObservation()
     }
 
@@ -220,25 +219,17 @@ final class TheBrainsActionTests: XCTestCase {
             keyboardInput: keyboardInput,
             visibleObservationSource: visibleObservationSource.capture
         )
-        installObservedGeometryTick()
         await brains.startTestObservation()
     }
 
-    private func installObservedGeometryTick() {
-        brains.navigation.elementInflation.geometryEnvironment = .init(
-            now: { RuntimeElapsed.now },
-            refreshVisibleObservation: { _ in
-                guard let current =
-                    await self.brains.vault.semanticObservationStream.stateOwner.current()
-                else {
-                    return .unavailable(.sourceTreeUnavailable)
-                }
-                return .committed(current)
-            }
+    // MARK: - Helpers
+
+    func actionDeadline() -> SemanticObservationDeadline {
+        SemanticObservationDeadline(
+            start: RuntimeElapsed.now,
+            timeoutSeconds: 10
         )
     }
-
-    // MARK: - Helpers
 
     func registerScreenElement(
         heistId: HeistId,

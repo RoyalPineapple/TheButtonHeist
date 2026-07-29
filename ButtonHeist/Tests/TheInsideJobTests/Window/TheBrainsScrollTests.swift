@@ -46,12 +46,13 @@ final class TheBrainsScrollTests: XCTestCase {
 
     func installSyntheticObservation(_ observation: InterfaceObservation) async {
         visibleObservationSource.observation = observation
-        await brains.vault.installObservationForTesting(observation)
+        await brains.vault.semanticObservationStream
+            .commitVisibleObservationForTesting(observation)
     }
 
     func publishedVisibleObservation() async throws -> InterfaceObservation {
         let outcome = await brains.vault.semanticObservationStream.refreshedVisibleObservation(
-            timeout: SemanticObservationTiming.defaultTimeout / .seconds(1)
+            boundary: .cancellation
         )
         let current: TheVault.State.Current? = switch outcome {
         case .committed(let current): current
@@ -150,7 +151,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
     func testSemanticTargetScanIsUnavailableWhenInitialSettlementIsCancelled() async throws {
         let staleId: HeistId = "stale_action_target"
-        await brains.vault.installObservationForTesting(.makeForTests([
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(.makeForTests([
             .init(
                 AccessibilityElement.make(label: "Stale action target", traits: .button),
                 heistId: staleId
@@ -183,7 +184,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
     func testSemanticTargetScanIsUnavailableWhenDeadlineIsExpired() async throws {
         let targetId: HeistId = "stale_action_target"
-        await brains.vault.installObservationForTesting(.makeForTests([
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(.makeForTests([
             .init(
                 AccessibilityElement.make(label: "Stale action target", traits: .button),
                 heistId: targetId
@@ -222,9 +223,11 @@ final class TheBrainsScrollTests: XCTestCase {
             shape: .frame(AccessibilityRect(CGRect(x: 40, y: 120, width: 200, height: 44)))
         )
         let object = retainedLiveObject()
-        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests([
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests([
             .init(element, heistId: targetId, object: object),
-        ]))
+            ])
+        )
         let treeElement = try XCTUnwrap(brains.vault.interfaceElement(heistId: targetId))
         guard case .resolved(let liveTarget) = brains.vault.resolveLiveActionTarget(for: treeElement) else {
             return XCTFail("Expected live geometry fixture to resolve")
@@ -233,7 +236,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let inflation = brains.navigation.elementInflation
         inflation.geometryEnvironment = .init(
             now: { now },
-            refreshVisibleObservation: { _ in
+            refreshVisibleObservation: {
                 now = now.advanced(by: .seconds(1))
                 return .unavailable(.sourceTreeUnavailable)
             }
@@ -459,7 +462,8 @@ final class TheBrainsScrollTests: XCTestCase {
             element: duplicate
         )
 
-        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(
             elements: [
                 firstEntry.heistId: firstEntry,
                 secondEntry.heistId: secondEntry,
@@ -477,7 +481,8 @@ final class TheBrainsScrollTests: XCTestCase {
                 secondEntry.heistId: .init(object: NSObject(), scrollView: nil),
             ],
             firstResponderHeistId: nil,
-        ))
+            )
+        )
 
         XCTAssertEqual(
             brains.vault.latestObservation.tree.orderedElements.map(\.heistId),
@@ -498,13 +503,15 @@ final class TheBrainsScrollTests: XCTestCase {
             element: element
         )
         var object: NSObject? = NSObject()
-        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(
             elements: [entry.heistId: entry],
             hierarchy: [.element(element, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): entry.heistId],
             elementRefs: [entry.heistId: .init(object: object, scrollView: nil)],
             firstResponderHeistId: nil,
-        ))
+            )
+        )
         object = nil
 
         switch brains.vault.resolveLiveActionTarget(for: entry) {

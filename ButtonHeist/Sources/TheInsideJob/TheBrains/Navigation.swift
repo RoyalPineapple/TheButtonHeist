@@ -16,20 +16,24 @@ final class Navigation {
         vault: vault,
         safecracker: safecracker,
         exploration: ElementInflation.Exploration(
-            discoverTarget: { [weak self] target in
+            discoverTarget: { [weak self] target, deadline in
                 guard let self else { return nil }
                 return await self.exploreScreen(
                     target: target,
                     exitPosition: .current,
+                    deadline: deadline
                 )
             },
             revealKnownTarget: { [weak self] request in
                 guard let self else { return nil }
                 return await self.scanForSemanticTarget(request)
             },
-            moveViewport: { [weak self] intent in
+            moveViewport: { [weak self] intent, deadline in
                 guard let self else { return .unavailable() }
-                return await self.performViewportTransition(intent)
+                return await self.performViewportTransition(
+                    intent,
+                    deadline: deadline
+                )
             }
         )
     )
@@ -183,10 +187,10 @@ final class Navigation {
         }
 
         func interfaceDiagnostics(
-            for observation: InterfaceObservation,
+            for interfaceTree: InterfaceTree,
             includedElementCount: Int
         ) -> InterfaceDiagnostics {
-            let omittedContainerDetails = omittedContainerDiagnostics(in: observation)
+            let omittedContainerDetails = omittedContainerDiagnostics(in: interfaceTree)
             let reasonCodes = discoveryReasonCodes(omittedContainerDetails)
             let isLimited = !reasonCodes.isEmpty || !omittedContainerDetails.isEmpty
             return InterfaceDiagnostics(discovery: InterfaceDiscoveryDiagnostics(
@@ -227,7 +231,7 @@ final class Navigation {
         }
 
         private func omittedContainerDiagnostics(
-            in observation: InterfaceObservation
+            in interfaceTree: InterfaceTree
         ) -> [InterfaceDiscoveryOmittedContainer] {
             var containers = omittedScrollPathReasons
             let pendingReason: InterfaceDiscoveryReasonCode = limitReasons.contains(.discoveryScrollLimit)
@@ -242,7 +246,7 @@ final class Navigation {
                 return omittedContainerDiagnostic(
                     containerPath,
                     reasons: reasons,
-                    observation: observation
+                    interfaceTree: interfaceTree
                 )
             }
 
@@ -252,9 +256,9 @@ final class Navigation {
         private func omittedContainerDiagnostic(
             _ containerPath: TreePath,
             reasons: Set<InterfaceDiscoveryReasonCode>,
-            observation: InterfaceObservation
+            interfaceTree: InterfaceTree
         ) -> InterfaceDiscoveryOmittedContainer? {
-            guard let semanticContainer = observation.tree.containers[containerPath] else { return nil }
+            guard let semanticContainer = interfaceTree.containers[containerPath] else { return nil }
             let container = semanticContainer.container
             let frame = container.frame
             let containerName = semanticContainer.containerName

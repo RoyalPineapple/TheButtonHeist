@@ -64,13 +64,13 @@ extension TheFenceCompactFormattingContractTests {
         )
         let evidence = Observation.Evidence(
             baseline: before,
-            current: after,
             events: [
                 .elementsChanged(elementChange),
                 .screenChanged(ScreenFacts(idAfter: "checkout")),
                 .elementsChanged(after),
             ],
-            completeness: .incomplete
+            current: after,
+            coverage: .incomplete(.historyUnavailable)
         )
         let response = FenceResponse.action(
             command: .activate,

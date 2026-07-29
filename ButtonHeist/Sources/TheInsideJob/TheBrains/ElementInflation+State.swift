@@ -78,7 +78,10 @@ extension ElementInflation {
             }
         }
 
-        internal func rollBack(using moveViewport: MoveViewport) async {
+        internal func rollBack(
+            using moveViewport: MoveViewport,
+            deadline: SemanticObservationDeadline
+        ) async {
             guard phase == .active else { return }
             phase = .rolledBack
             for identifier in movementOrder.reversed() {
@@ -91,7 +94,7 @@ extension ElementInflation {
                 _ = await moveViewport(.restoreVisualOrigin(
                     movement.visualOrigin,
                     in: .semantic(movement.target)
-                ))
+                ), deadline)
             }
         }
 

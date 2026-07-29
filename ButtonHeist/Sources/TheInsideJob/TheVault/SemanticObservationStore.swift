@@ -4,40 +4,6 @@ import Foundation
 import ThePlans
 import TheScore
 
-private enum StoreNotificationLane {
-    case passive
-    case action
-}
-
-private struct StoreNotificationIndices {
-    private var passive = AccessibilityNotificationCursor.origin
-    private var action = AccessibilityNotificationCursor.origin
-
-    var latest: AccessibilityNotificationCursor {
-        AccessibilityNotificationCursor(sequence: max(passive.sequence, action.sequence))
-    }
-
-    subscript(lane: StoreNotificationLane) -> AccessibilityNotificationCursor {
-        get {
-            switch lane {
-            case .passive: passive
-            case .action: action
-            }
-        }
-        set {
-            switch lane {
-            case .passive: passive = newValue
-            case .action: action = newValue
-            }
-        }
-    }
-}
-
-private struct StoreNotificationRead {
-    let lane: StoreNotificationLane
-    let notifications: Observation.Notifications
-}
-
 extension TheVault {
     internal struct State {
         internal nonisolated static let defaultRetentionLimit = 256
@@ -59,7 +25,7 @@ extension TheVault {
 
         private var navigationAdmission: NavigationAdmission?
         private var admittedTripwireSignal: TheTripwire.TripwireSignal?
-        private var notificationIndices = StoreNotificationIndices()
+        private var notificationCursor = AccessibilityNotificationCursor.origin
         private var replacementRequired = false
         private var protectedHistoryIndex: Int?
 
@@ -73,7 +39,7 @@ extension TheVault {
         }
 
         internal var notificationIndex: AccessibilityNotificationCursor {
-            notificationIndices.latest
+            notificationCursor
         }
 
         internal var notifications: [Observation.Notification] {
@@ -165,6 +131,23 @@ extension TheVault {
             history.prune(protectedBy: nil)
         }
 
+        internal mutating func advanceHistoryProtection(
+            from index: Int,
+            to nextIndex: Int
+        ) {
+            precondition(
+                protectedHistoryIndex == index,
+                "Observation history index does not belong to the active reader"
+            )
+            do {
+                _ = try history.events(after: nextIndex)
+            } catch {
+                preconditionFailure("Advanced protected index is unavailable in observation history")
+            }
+            protectedHistoryIndex = nextIndex
+            history.prune(protectedBy: nextIndex)
+        }
+
         internal func evidence(
             after boundary: HistoryBoundary
         ) -> Observation.Evidence {
@@ -194,8 +177,9 @@ extension TheVault {
         internal mutating func commitObservation(
             _ admission: Observation.Admission
         ) -> Observation.Publication {
-            let notificationRead = notificationRead(for: admission.notificationAdmission)
-            let notifications = notificationRead.notifications
+            let admittedNotifications = admission.notifications.admittedNotifications.filter {
+                $0.sequence > notificationCursor.sequence
+            }
             let previousTree = interfaceTree
             let comparedTree: InterfaceTree
             switch admission.scope {
@@ -220,7 +204,7 @@ extension TheVault {
                 continuity = ScreenClassifier.classify(
                     from: previousTree == .empty ? nil : previousTree,
                     to: comparedTree,
-                    notifications: notifications.admittedNotifications.map(\.kind),
+                    notifications: admittedNotifications.map(\.kind),
                     lineage: admission.lineage
                 )
             }
@@ -230,11 +214,11 @@ extension TheVault {
                 admission: admission,
                 semanticSignal: admission.tripwireSignal.semanticValue
             )
-            let notificationEvents = notifications.admittedNotifications.compactMap {
+            let notificationEvents = admittedNotifications.compactMap {
                 Observation.Notification(text: $0.text, element: $0.element)
                     .map(Observation.Event.notification)
             }
-            let forcesElementChange = notifications.admittedNotifications.contains {
+            let forcesElementChange = admittedNotifications.contains {
                 switch $0.kind {
                 case .layoutChanged, .elementUpdate:
                     true
@@ -266,10 +250,8 @@ extension TheVault {
             }
 
             var next = self
-            let historyRecord = next.history.record(
+            let historyRange = next.history.record(
                 events,
-                notificationGap: notifications.gap,
-                afterNotificationSequence: notifications.afterNotificationSequence,
                 protectedBy: next.protectedHistoryIndex
             )
             let current = Current(
@@ -283,38 +265,23 @@ extension TheVault {
                 continuity: continuity
             )
             next.interfaceTree = nextTree
-            next.notificationIndices[notificationRead.lane] = notifications.through
-            next.scopedScreenChangedSequence = notifications.scopedScreenChangedThrough
+            next.notificationCursor = AccessibilityNotificationCursor(
+                sequence: max(
+                    notificationCursor.sequence,
+                    admission.notifications.through.sequence
+                )
+            )
+            next.scopedScreenChangedSequence = max(
+                scopedScreenChangedSequence,
+                admission.notifications.scopedScreenChangedThrough
+            )
             next.replacementRequired = false
             next.admittedTripwireSignal = admission.tripwireSignal
             self = next
             return Observation.Publication(
                 current: current,
-                historyRange: historyRecord.range,
-                events: events,
-                coverage: historyRecord.coverage
-            )
-        }
-
-        private func notificationRead(
-            for admission: Observation.NotificationAdmission
-        ) -> StoreNotificationRead {
-            let lane: StoreNotificationLane
-            let snapshot: Observation.NotificationSnapshot
-            switch admission {
-            case .passive(let admittedSnapshot):
-                lane = .passive
-                snapshot = admittedSnapshot
-            case .action(let admittedSnapshot):
-                lane = .action
-                snapshot = admittedSnapshot
-            }
-            return StoreNotificationRead(
-                lane: lane,
-                notifications: snapshot.notifications(
-                    after: notificationIndices[lane],
-                    scopedScreenChangedCursor: scopedScreenChangedSequence
-                )
+                historyRange: historyRange,
+                events: events
             )
         }
 

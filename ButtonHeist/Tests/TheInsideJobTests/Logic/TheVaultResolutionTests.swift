@@ -182,50 +182,69 @@ extension TheVault.TargetNotFoundFacts {
 extension TheVaultResolutionTests {
 
     func testSemanticObservationSubscriptionsCoalesceToWidestScope() async {
-        XCTAssertEqual(vault.semanticObservationStream.subscribedObservationScope(), .visible)
+        XCTAssertNil(vault.semanticObservationStream.scopePressure.demandedObservationScope)
 
         let visible = vault.semanticObservationStream.subscribe(scope: .visible)
-        XCTAssertEqual(vault.semanticObservationStream.subscribedObservationScope(), .visible)
+        XCTAssertEqual(
+            vault.semanticObservationStream.scopePressure.demandedObservationScope,
+            .visible
+        )
 
         do {
             let discovery = vault.semanticObservationStream.subscribe(scope: .discovery)
-            XCTAssertEqual(vault.semanticObservationStream.subscribedObservationScope(), .discovery)
+            XCTAssertEqual(
+                vault.semanticObservationStream.scopePressure.demandedObservationScope,
+                .discovery
+            )
             _ = discovery
         }
 
-        XCTAssertEqual(vault.semanticObservationStream.subscribedObservationScope(), .visible)
-        _ = visible
+        XCTAssertEqual(
+            vault.semanticObservationStream.scopePressure.demandedObservationScope,
+            .visible
+        )
+        visible.cancel()
+        XCTAssertNil(vault.semanticObservationStream.scopePressure.demandedObservationScope)
     }
 
     func testActiveObservationDemandChangesCadenceWithoutWideningScope() async {
         XCTAssertFalse(vault.semanticObservationStream.hasActiveObservationDemand)
         XCTAssertEqual(vault.semanticObservationStream.activeObservationDemandCount, 0)
-        XCTAssertEqual(vault.semanticObservationStream.activeObservationDemandState, .idle)
-        XCTAssertEqual(vault.semanticObservationStream.tickDemand, .ambient)
-        XCTAssertEqual(vault.semanticObservationStream.subscribedObservationScope(), .visible)
+        XCTAssertFalse(vault.semanticObservationStream.hasActiveObservationDemand)
+        XCTAssertEqual(vault.semanticObservationStream.pulseDemand, .ambient)
+        XCTAssertNil(vault.semanticObservationStream.scopePressure.demandedObservationScope)
 
         let demand = vault.semanticObservationStream.beginActiveObservationDemand()
         XCTAssertTrue(vault.semanticObservationStream.hasActiveObservationDemand)
         XCTAssertEqual(vault.semanticObservationStream.activeObservationDemandCount, 1)
-        XCTAssertEqual(vault.semanticObservationStream.activeObservationDemandState, .active)
-        XCTAssertEqual(vault.semanticObservationStream.tickDemand, .immediate)
-        XCTAssertEqual(vault.semanticObservationStream.subscribedObservationScope(), .visible)
+        XCTAssertTrue(vault.semanticObservationStream.hasActiveObservationDemand)
+        XCTAssertEqual(vault.semanticObservationStream.pulseDemand, .immediate)
+        XCTAssertEqual(
+            vault.semanticObservationStream.scopePressure.demandedObservationScope,
+            .visible
+        )
 
         do {
             let discovery = vault.semanticObservationStream.subscribe(scope: .discovery)
-            XCTAssertEqual(vault.semanticObservationStream.subscribedObservationScope(), .discovery)
+            XCTAssertEqual(
+                vault.semanticObservationStream.scopePressure.demandedObservationScope,
+                .discovery
+            )
             _ = discovery
         }
 
-        XCTAssertEqual(vault.semanticObservationStream.subscribedObservationScope(), .visible)
+        XCTAssertEqual(
+            vault.semanticObservationStream.scopePressure.demandedObservationScope,
+            .visible
+        )
 
         demand.cancel()
 
         XCTAssertFalse(vault.semanticObservationStream.hasActiveObservationDemand)
         XCTAssertEqual(vault.semanticObservationStream.activeObservationDemandCount, 0)
-        XCTAssertEqual(vault.semanticObservationStream.activeObservationDemandState, .idle)
-        XCTAssertEqual(vault.semanticObservationStream.tickDemand, .ambient)
-        XCTAssertEqual(vault.semanticObservationStream.subscribedObservationScope(), .visible)
+        XCTAssertFalse(vault.semanticObservationStream.hasActiveObservationDemand)
+        XCTAssertEqual(vault.semanticObservationStream.pulseDemand, .ambient)
+        XCTAssertNil(vault.semanticObservationStream.scopePressure.demandedObservationScope)
     }
 
     func testInterfaceTreeKeepsLiveEvidenceOutOfTreeState() async {
@@ -356,44 +375,6 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(vault.interfaceTree.orderedElements.first?.element.label, "Settled")
     }
 
-    func testObservationEvidenceCarriesBaselineCurrentAndOrderedEvents() async {
-        let first = InterfaceObservation.makeForTests(elements: [
-            (element(label: "Home", traits: .header), "home"),
-        ])
-        let firstPublication = await vault.semanticObservationStream
-            .commitVisibleObservationForTesting(first)
-        let boundary = await vault.semanticObservationStream.stateOwner
-            .observationBoundary(scope: .visible)
-
-        let second = InterfaceObservation.makeForTests(elements: [
-            (element(label: "Home", traits: .header), "home"),
-            (element(label: "Toast"), "toast"),
-        ])
-        let secondPublication = await vault.semanticObservationStream
-            .commitVisibleObservationForTesting(second)
-        let evidence = await vault.semanticObservationStream.stateOwner
-            .evidence(after: boundary)
-
-        XCTAssertEqual(evidence.baseline, firstPublication.current.snapshot)
-        XCTAssertEqual(evidence.current, secondPublication.current.snapshot)
-        XCTAssertEqual(evidence.events, secondPublication.events)
-        XCTAssertEqual(evidence.completeness, .complete)
-        XCTAssertEqual(
-            evidence.baseline?.interface.projectedElements
-                .compactMap(\.semantics.assertable.label),
-            ["Home"]
-        )
-        XCTAssertEqual(
-            evidence.current?.interface.projectedElements
-                .compactMap(\.semantics.assertable.label),
-            ["Home", "Toast"]
-        )
-        guard case .elementsChanged(let currentSnapshot)? = evidence.events.last else {
-            return XCTFail("Expected the final event to carry current semantic truth")
-        }
-        XCTAssertEqual(currentSnapshot, evidence.current)
-    }
-
     func testVisiblePublicationCarriesCanonicalCommittedGraph() async {
         let visible = element(label: "Custom Rotors", traits: .button)
         let discovered = element(label: "ButtonHeist Demo", traits: .button)
@@ -423,7 +404,7 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(publication.events.last, .noChange)
     }
 
-    func testObservedEvidenceUpdatesVisibleWorldWithoutReplacingSettledTruth() async {
+    func testUncommittedEvidenceDoesNotReplaceCanonicalViewportTruth() async {
         let settled = InterfaceObservation.makeForTests(elements: [(element(label: "Settled"), "settled")])
         await vault.semanticObservationStream.commitVisibleObservationForTesting(settled)
 
@@ -434,10 +415,10 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(vault.latestObservation.tree.orderedElements.first?.element.label, "Observed")
         XCTAssertNil(vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Observed"))).resolvedElement)
         XCTAssertNil(vault.resolveVisibleTarget(literalTarget(ResolvedElementPredicate.label("Observed"))).resolvedElement)
-        XCTAssertEqual(vault.viewportElementIDs, ["observed"])
+        XCTAssertEqual(vault.viewportElementIDs, ["settled"])
     }
 
-    func testLiveVisibleEntriesUseFreshObservedRevealMetadataOverSettledCache() async throws {
+    func testLiveVisibleAliasPreservesCanonicalRevealMetadata() async throws {
         let row = element(label: "Row", traits: .button)
         let containerPath = TreePath([0])
         let rowPath = TreePath([0, 0])
@@ -480,10 +461,14 @@ extension TheVaultResolutionTests {
         ))
 
         XCTAssertEqual(vault.latestObservation.tree.findElement(heistId: "row")?.scrollMembership?.index, 500)
-        XCTAssertEqual(try XCTUnwrap(vault.liveInterfaceElement(heistId: "row")).scrollMembership?.index, 500)
+        let canonical = try XCTUnwrap(vault.interfaceElement(heistId: "row"))
+        XCTAssertEqual(
+            try XCTUnwrap(vault.visibleLiveElementAliasing(canonical)).scrollMembership?.index,
+            100
+        )
     }
 
-    func testLiveVisibleEntriesDoNotPreserveSettledRevealMetadataWhenFreshObservationHasNone() async throws {
+    func testLiveVisibleAliasDoesNotReplaceCanonicalRevealMetadata() async throws {
         let row = element(label: "Row", traits: .button)
         let staleEntry = InterfaceTree.Element(
             heistId: "row",
@@ -519,7 +504,10 @@ extension TheVaultResolutionTests {
         ))
 
         XCTAssertNil(vault.latestObservation.tree.findElement(heistId: "row")?.scrollMembership)
-        XCTAssertNil(try XCTUnwrap(vault.liveInterfaceElement(heistId: "row")).scrollMembership)
+        let canonical = try XCTUnwrap(vault.interfaceElement(heistId: "row"))
+        XCTAssertNotNil(
+            try XCTUnwrap(vault.visibleLiveElementAliasing(canonical)).scrollMembership
+        )
     }
 
 }

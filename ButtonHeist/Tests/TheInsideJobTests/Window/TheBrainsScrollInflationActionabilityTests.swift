@@ -48,7 +48,8 @@ extension TheBrainsScrollTests {
             object: object,
             scrollView: scrollView
         )
-        await brains.vault.installObservationForTesting(initialScreen)
+        await brains.vault.semanticObservationStream
+            .commitVisibleObservationForTesting(initialScreen)
         guard assertPlacementTargetIsLiveAndScrollable(
             heistId: targetId,
             in: scrollView
@@ -79,17 +80,17 @@ extension TheBrainsScrollTests {
         var now = RuntimeElapsed.now
         inflation.geometryEnvironment = .init(
             now: { now },
-            refreshVisibleObservation: { _ in
+            refreshVisibleObservation: {
                 advanceInflationObservationClock(&now)
                 guard let current =
-                    await self.brains.vault.semanticObservationStream.stateOwner.current()
+                    self.brains.vault.semanticObservationStream.current()
                 else {
                     return .unavailable(.sourceTreeUnavailable)
                 }
                 return .committed(current)
             }
         )
-        inflation.exploration.moveViewport = { _ in
+        inflation.exploration.moveViewport = { _, _ in
             object.accessibilityFrame = placedFrame
             object.accessibilityActivationPoint = placedActivationPoint
             self.visibleObservationSource.observation = placedScreen
@@ -109,7 +110,8 @@ extension TheBrainsScrollTests {
 
         let result = await inflation.inflate(
             for: try resolvedTarget(AccessibilityTarget.label("Placed Target").and(.traits([.button]))),
-            method: .activate
+            method: .activate,
+            deadline: semanticRevealDeadline()
         )
 
         guard case .inflated(let inflatedTarget) = result else {
@@ -138,7 +140,11 @@ extension TheBrainsScrollTests {
         case .geometryUnavailable:
             XCTFail(
                 "Expected placement target to have fresh live geometry: "
-                    + String(describing: brains.vault.liveInterfaceElement(heistId: heistId)?.element.shape)
+                    + String(
+                        describing: brains.vault.latestObservation.tree
+                            .findElement(heistId: heistId)?
+                            .element.shape
+                    )
             )
             return false
         }
@@ -163,7 +169,8 @@ extension TheBrainsScrollTests {
         )
         let result = await brains.navigation.elementInflation.inflate(
             for: try resolvedTarget(.label("Offscreen")),
-            method: .scrollToVisible
+            method: .scrollToVisible,
+            deadline: semanticRevealDeadline()
         )
 
         guard case .failed(let failure) = result else {
@@ -207,17 +214,20 @@ extension TheBrainsScrollTests {
             ),
             element: element
         )
-        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(
             elements: [entry.heistId: entry],
             hierarchy: [.element(element, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): entry.heistId],
             elementRefs: [entry.heistId: .init(object: object, scrollView: nil)],
             firstResponderHeistId: nil,
-        ))
+            )
+        )
 
         let result = await brains.navigation.elementInflation.inflate(
             for: try resolvedTarget(.label("Escaped")),
-            method: .scrollToVisible
+            method: .scrollToVisible,
+            deadline: semanticRevealDeadline()
         )
 
         guard case .failed(let failure) = result else {
@@ -260,7 +270,8 @@ extension TheBrainsScrollTests {
 
         let result = await brains.navigation.elementInflation.inflate(
             for: try resolvedTarget(.label("Escaped")),
-            method: .scrollToVisible
+            method: .scrollToVisible,
+            deadline: semanticRevealDeadline()
         )
 
         guard case .failed(let failure) = result else {
@@ -283,6 +294,7 @@ extension TheBrainsScrollTests {
         let result = await brains.actions.performElementAction(
             target: try resolvedTarget(.label("Offscreen")),
             payload: .activate,
+            deadline: semanticRevealDeadline(),
             timing: &timing,
             requireInteractive: false
         ) { _ in
@@ -307,7 +319,8 @@ extension TheBrainsScrollTests {
         let screen = InterfaceObservation.makeForTests([
             .init(element, heistId: "refreshable_button", object: object),
         ])
-        await brains.vault.installObservationForTesting(screen)
+        await brains.vault.semanticObservationStream
+            .commitVisibleObservationForTesting(screen)
         visibleObservationSource.observation = screen
         let target = try resolvedTarget(AccessibilityTarget.label("Refreshable").and(.traits([.button])))
         let finalResolution = ActionSubjectResolution(
@@ -319,6 +332,7 @@ extension TheBrainsScrollTests {
         let result = await brains.actions.performElementAction(
             target: target,
             payload: .activate,
+            deadline: semanticRevealDeadline(),
             timing: &timing,
             requireInteractive: false
         ) { context in
@@ -363,11 +377,11 @@ extension TheBrainsScrollTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
+        _ = try await publishedVisibleObservation()
         visibleObservationSource.useLiveCapture()
 
         let result = await brains.executeRuntimeAction(
-            .activate(try resolvedTarget(.label("Old Offscreen")))
+            .activate(.label("Old Offscreen"))
         )
 
         XCTAssertFalse(result.outcome.isSuccess)

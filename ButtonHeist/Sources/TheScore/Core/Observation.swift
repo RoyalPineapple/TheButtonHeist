@@ -154,6 +154,7 @@ public extension Observation {
             NotificationSequenceGap,
             additional: [NotificationSequenceGap]
         )
+        case captureUnavailable
         case historyUnavailable
     }
 

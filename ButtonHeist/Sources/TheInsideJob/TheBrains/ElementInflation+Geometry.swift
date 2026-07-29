@@ -46,7 +46,7 @@ extension ElementInflation {
 
         let treeElement = liveTarget.treeElement
         let description = Navigation.ScrollTargetDescription(treeElement).description
-        let historyIndex = await vault.semanticObservationStream.stateOwner.historyEndIndex()
+        let historyIndex = vault.semanticObservationStream.historyEndIndex()
         let admittedTarget: Result<AdmittedSemanticTarget, SemanticTargetResolutionFailure>
         if let admitted = inflatedTarget.identity.admittedSemanticTarget {
             admittedTarget = .success(admitted)
@@ -67,6 +67,7 @@ extension ElementInflation {
             ),
             unsafeProgrammaticScrollMessage: nil,
             scrollFailedMessage: "target \(description) activation point could not be brought on-screen",
+            deadline: inflatedTarget.deadline,
             transaction: transaction
         )
         switch placement {
@@ -124,6 +125,7 @@ extension ElementInflation {
         noScrollViewFailure: ElementInflationFailure,
         unsafeProgrammaticScrollMessage: String?,
         scrollFailedMessage: String,
+        deadline: SemanticObservationDeadline,
         transaction: RevealTransaction? = nil
     ) async -> Result<TheSafecracker.ScrollPrimitiveOutcome, ElementInflationFailure> {
         if Self.interactionComfortZone.contains(activationPoint) {
@@ -152,7 +154,8 @@ extension ElementInflation {
                 in: scrollTarget,
                 preferredScreenRect: Self.interactionComfortZone,
                 minimumScreenRect: ScreenMetrics.current.bounds
-            )
+            ),
+            deadline
         )
         switch transition.outcome {
         case .unchanged:
@@ -248,9 +251,7 @@ extension ElementInflation {
                     target: stableTarget
                 )
             }
-            switch await geometryEnvironment.refreshVisibleObservation(
-                deadline.remainingSeconds(at: geometryEnvironment.now())
-            ) {
+            switch await geometryEnvironment.refreshVisibleObservation() {
             case .committed:
                 break
             case .unavailable(.cancelled):
@@ -276,8 +277,7 @@ extension ElementInflation {
             let currentTreeElement: InterfaceTree.Element
             switch resolveCurrentElement(
                 for: stableTarget.identity,
-                pinnedElement: stableTarget.treeElement,
-                semanticTree: vault.latestObservation.tree
+                pinnedElement: stableTarget.treeElement
             ) {
             case .success(let current):
                 currentTreeElement = current

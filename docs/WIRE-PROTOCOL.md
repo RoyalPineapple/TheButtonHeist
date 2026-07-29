@@ -418,16 +418,17 @@ events.
 ```
 
 Semantic action steps identify elements semantically. The host first resolves
-the target against current admitted state and derives one deadline from the selected
-element's scroll-membership ancestor graph. If inflation crosses a capture
-boundary, the host removes the terminal ordinal and admits the target only when
-that semantic form uniquely selects the same element in the complete committed
-interface. Nested ancestors reveal outermost-first. After every committed
-capture, the host re-resolves the admitted semantic target and adopts only that
-match's current capture-local `HeistId` and live reference for refresh, geometry
-stabilization, and dispatch. Missing or ambiguous re-resolution fails the action;
-the host never retains a stale id or substitutes a sibling. Cached coordinates
-and `HeistId` values from a prior capture are not authority.
+the target against current admitted state and passes the action's already-active
+leaf deadline through dispatch, inflation, reveal, refresh, geometry
+stabilization, and navigation. If inflation crosses a capture boundary, the host
+removes the terminal ordinal and admits the target only when that semantic form
+uniquely selects the same element in the complete committed interface. Nested
+ancestors reveal outermost-first. After every committed capture, the host
+re-resolves the admitted semantic target and adopts only that match's current
+capture-local `HeistId` and live reference for refresh, geometry stabilization,
+and dispatch. Missing or ambiguous re-resolution fails the action; the host
+never retains a stale id or substitutes a sibling. Cached coordinates and
+`HeistId` values from a prior capture are not authority.
 
 `heistPlan.payload` is strict: its only keys are `plan`, `argument`, and
 `timeout`, and all three are required. `timeout` is the whole-heist deadline in

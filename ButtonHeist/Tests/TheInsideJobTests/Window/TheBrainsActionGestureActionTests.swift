@@ -13,7 +13,8 @@ extension TheBrainsActionTests {
     func testExecuteTapOutsideWindowReportsGestureDispatchState() async throws {
         let result = await brains.actions.executeTap(
             try TapTarget(selection: .coordinate(ScreenPoint(x: -10_000, y: -10_000)))
-                .resolve(in: .empty)
+                .resolve(in: .empty),
+            deadline: actionDeadline()
         )
 
         XCTAssertFalse(result.success)
@@ -39,6 +40,7 @@ extension TheBrainsActionTests {
         let result = await brains.actions.performPointAction(
             selection: .element(try AccessibilityTarget.label("Below Fold").resolve(in: .empty)),
             payload: .oneFingerTap,
+            deadline: actionDeadline(),
             prepare: { $0 },
             complete: { point in
                 dispatchedPoint = point
@@ -69,6 +71,7 @@ extension TheBrainsActionTests {
         let result = await brains.actions.performPointAction(
             selection: .element(try AccessibilityTarget.label("Live").resolve(in: .empty)),
             payload: .oneFingerTap,
+            deadline: actionDeadline(),
             prepare: { $0 },
             complete: { point in
                 dispatchedPoint = point
@@ -101,6 +104,7 @@ extension TheBrainsActionTests {
                 UnitPoint(x: 0.25, y: 0.75)
             ),
             payload: .oneFingerTap,
+            deadline: actionDeadline(),
             prepare: { $0 },
             complete: { point in
                 dispatchedPoint = point
@@ -120,6 +124,7 @@ extension TheBrainsActionTests {
         let result = await brains.actions.performPointAction(
             selection: .coordinate(ScreenPoint(x: 222, y: 333)),
             payload: .oneFingerTap,
+            deadline: actionDeadline(),
             prepare: { $0 },
             complete: { point in
                 dispatchedPoint = point
@@ -146,6 +151,7 @@ extension TheBrainsActionTests {
             selection: .named("Errors"),
             target: try AccessibilityTarget.label("Plain rotor host").resolve(in: .empty),
             direction: .next,
+            deadline: actionDeadline(),
             timing: &timing
         )
 
@@ -180,6 +186,7 @@ extension TheBrainsActionTests {
             selection: .named("Live Rotor"),
             target: try AccessibilityTarget.label("Rotor host").resolve(in: .empty),
             direction: .next,
+            deadline: actionDeadline(),
             timing: &timing
         )
 
@@ -215,6 +222,7 @@ extension TheBrainsActionTests {
             selection: .named("Live Rotor"),
             target: try AccessibilityTarget.identifier("edge_rotor_host").resolve(in: .empty),
             direction: .next,
+            deadline: actionDeadline(),
             timing: &timing
         )
 
@@ -253,6 +261,7 @@ extension TheBrainsActionTests {
             selection: .named("Live Rotor"),
             target: try AccessibilityTarget.identifier("offscreen_rotor_host").resolve(in: .empty),
             direction: .next,
+            deadline: actionDeadline(),
             timing: &timing
         )
 
@@ -356,6 +365,7 @@ extension TheBrainsActionTests {
             selection: .named("Live Rotor"),
             target: try AccessibilityTarget.identifier(hostHeistId.rawValue).resolve(in: .empty),
             direction: .next,
+            deadline: actionDeadline(),
             timing: &timing
         )
 
@@ -388,6 +398,7 @@ extension TheBrainsActionTests {
             selection: .named("Errors"),
             target: try AccessibilityTarget.label("Rotor host").resolve(in: .empty),
             direction: .next,
+            deadline: actionDeadline(),
             timing: &timing
         )
 
@@ -420,6 +431,7 @@ extension TheBrainsActionTests {
             selection: .named("Errors"),
             target: try AccessibilityTarget.label("Rotor host").resolve(in: .empty),
             direction: .next,
+            deadline: actionDeadline(),
             timing: &timing
         )
 
@@ -448,6 +460,7 @@ extension TheBrainsActionTests {
             selection: .named("Errors"),
             target: try AccessibilityTarget.label("Rotor host").resolve(in: .empty),
             direction: .next,
+            deadline: actionDeadline(),
             timing: &timing
         )
 

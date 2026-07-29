@@ -87,27 +87,26 @@ collects results after each run and during failure cleanup:
 
 ```bash
 BUTTONHEIST_RESULTS_MODE=failures \
-  scripts/test-runner.py run TheInsideJobTests \
+  scripts/test-runner.py run TheInsideJobWindowTests \
   --simulator-name "$TASK_SLUG"
 ```
 
-Button Heist owns six explicit `BH Demo`-hosted schemes. Target membership is
-the coverage contract; CI does not partition these suites with test selectors:
+The canonical runner exposes four iOS suites:
 
-| Scheme | Coverage |
-|--------|----------|
-| `TheInsideJobTests` | Deterministic core runtime and protocol tests |
-| `TheInsideJobIntegrationTests` | Real loopback, TLS, live-window, gesture, and observation integration tests |
-| `DogfoodFeatureFlowTests` | One semantic list mutation through the public heist API |
-| `DogfoodRuntimeContractTests` | Public roots/prebuilt plans and advanced control flow |
-| `AdversarialMutationTests` | Async reveal and stale-live-object recovery |
-| `AdversarialNavigationTests` | Modal fail-closed behavior and nested scrolling |
+| Runner suite | Hosting and coverage |
+|--------------|----------------------|
+| `TheInsideJobLogicTests` | Unhosted deterministic runtime and protocol logic |
+| `TheInsideJobWindowTests` | `BH Demo`-hosted foreground-window, gesture, and live-observation coverage |
+| `TheInsideJobIntegrationTests` | `BH Demo`-hosted real loopback, TLS, and server-transport integration coverage |
+| `HostedBehaviorTests` | `BH Demo`-hosted behavior, dogfood, and adversarial aggregate |
 
-`HostedBehaviorTests` combines the four dogfood and adversarial schemes. Those
-targets contain seven focused live canaries, all of which run serially on pull
-requests in one dedicated simulator. The scheduled adversarial workflow
-owns the complete external-driver scenario matrix, with a short daily pass and
-a deeper Sunday soak.
+`TheInsideJobWindowTests` and `HostedBehaviorTests` share the
+`HostedBehaviorTests` Xcode scheme and build products. The runner selects only
+the window target for the former and excludes it from the latter, which runs
+the hosted behavior, dogfood, and adversarial targets. Both projections run
+serially on pull requests in one dedicated simulator. The scheduled
+adversarial workflow owns the complete external-driver scenario matrix, with a
+short daily pass and a deeper Sunday soak.
 
 CI budgets macOS capacity explicitly:
 
@@ -115,10 +114,10 @@ CI budgets macOS capacity explicitly:
   run on Linux.
 - Pull requests use exactly three macOS runners: consolidated macOS validation
   (including every portable framework test target),
-  deterministic iOS core plus a trimmed demo smoke using one shared build, and
-  hosted behavior canaries.
+  deterministic iOS logic plus a trimmed demo smoke using one shared build,
+  and foreground-window plus hosted behavior coverage.
 - Pushes to `main` run those same three mandatory lanes. The genuine
-  `TheInsideJobIntegrationTests` suite then runs behind the completed iOS core
+  `TheInsideJobIntegrationTests` suite then runs behind the completed iOS logic
   lane, keeping macOS concurrency at three.
 - A final `exact-sha-suite` job records the commit, workflow revision, run ID,
   and every required suite conclusion in `buttonheist-exact-sha-suite`. Release
@@ -151,10 +150,11 @@ selected tests, phase, outcome, exit code, timeout state, duration, and executed
 test count. Tuist-backed runs reject a missing result bundle or zero executed
 tests.
 
-Run the core, integration, and combined behavior schemes for complete hosted coverage:
+Run the logic, window, integration, and hosted behavior suites for complete iOS coverage:
 
 ```bash
-scripts/test-runner.py run TheInsideJobTests
+scripts/test-runner.py run TheInsideJobLogicTests
+scripts/test-runner.py run TheInsideJobWindowTests
 scripts/test-runner.py run TheInsideJobIntegrationTests
 scripts/test-runner.py run HostedBehaviorTests
 ```
@@ -162,8 +162,11 @@ scripts/test-runner.py run HostedBehaviorTests
 CI preserves build-once execution without owning Xcode arguments:
 
 ```bash
-scripts/test-runner.py build-for-testing TheInsideJobTests
-scripts/test-runner.py test-without-building TheInsideJobTests
+scripts/test-runner.py build-for-testing TheInsideJobLogicTests
+scripts/test-runner.py test-without-building TheInsideJobLogicTests
+scripts/test-runner.py build-for-testing HostedBehaviorTests
+scripts/test-runner.py test-without-building TheInsideJobWindowTests
+scripts/test-runner.py test-without-building HostedBehaviorTests
 ```
 
 ## Topology 2: external driver

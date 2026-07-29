@@ -106,7 +106,10 @@ extension ElementInflation {
         case .alreadyVisible, .revealed:
             transaction.commit()
         case .targetResolutionFailed, .failed, .cancelled, .timedOut:
-            await transaction.rollBack(using: exploration.moveViewport)
+            await transaction.rollBack(
+                using: exploration.moveViewport,
+                deadline: deadline
+            )
         }
         return result
     }
@@ -220,13 +223,6 @@ extension ElementInflation {
         semanticTargetResolution(vault.resolveTarget(target.target))
     }
 
-    func resolveAdmittedSemanticTarget(
-        _ target: AdmittedSemanticTarget,
-        in tree: InterfaceTree
-    ) -> Result<InterfaceTree.Element, SemanticTargetResolutionFailure> {
-        semanticTargetResolution(vault.resolveTarget(target.target, in: tree))
-    }
-
     private func semanticTargetResolution(
         _ resolution: TheVault.TargetResolution
     ) -> Result<InterfaceTree.Element, SemanticTargetResolutionFailure> {
@@ -331,7 +327,8 @@ extension ElementInflation {
         }
         transaction.record(scrollView)
         let transition = await exploration.moveViewport(
-            .revealViewPoint(point, in: scrollTarget)
+            .revealViewPoint(point, in: scrollTarget),
+            deadline
         )
         guard semanticRevealInterruption(deadline: deadline) == nil else { return .unavailable }
         switch transition.outcome {

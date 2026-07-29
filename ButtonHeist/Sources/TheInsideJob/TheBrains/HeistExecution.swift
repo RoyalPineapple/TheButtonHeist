@@ -45,7 +45,8 @@ extension HeistExecution {
             source: ObservationFinishSource,
             observationID: RequestID,
             evidence: Observation.Evidence,
-            outcome: LeafOutcome
+            outcome: LeafOutcome,
+            timing: HeistExpectationTiming
         )
         case failureScreenshotCaptured(RequestID, HeistExecutionStepResult?)
     }
@@ -98,10 +99,17 @@ extension HeistExecution {
 
 extension HeistExecution {
     internal struct Scope: Sendable {
-        internal let rootPlan: HeistPlan
-        internal let plan: HeistPlan
-        internal let definitionPath: [HeistPlanName]
-        internal let invocationStack: Set<HeistInvocationPath>
+        private enum Source: Sendable {
+            case plan(
+                root: HeistPlan,
+                current: HeistPlan,
+                definitionPath: [HeistPlanName],
+                invocationStack: Set<HeistInvocationPath>
+            )
+            case directAction
+        }
+
+        private let source: Source
 
         internal init(
             plan: HeistPlan,
@@ -109,10 +117,46 @@ extension HeistExecution {
             definitionPath: [HeistPlanName] = [],
             invocationStack: Set<HeistInvocationPath> = []
         ) {
-            self.rootPlan = rootPlan ?? plan
-            self.plan = plan
-            self.definitionPath = definitionPath
-            self.invocationStack = invocationStack
+            source = .plan(
+                root: rootPlan ?? plan,
+                current: plan,
+                definitionPath: definitionPath,
+                invocationStack: invocationStack
+            )
+        }
+
+        private init(source: Source) {
+            self.source = source
+        }
+
+        internal static let directAction = Scope(source: .directAction)
+
+        internal var rootPlan: HeistPlan {
+            guard case .plan(let root, _, _, _) = source else {
+                preconditionFailure("A direct action has no plan definition scope")
+            }
+            return root
+        }
+
+        internal var plan: HeistPlan {
+            guard case .plan(_, let current, _, _) = source else {
+                preconditionFailure("A direct action has no current plan")
+            }
+            return current
+        }
+
+        internal var definitionPath: [HeistPlanName] {
+            guard case .plan(_, _, let definitionPath, _) = source else {
+                preconditionFailure("A direct action has no definition path")
+            }
+            return definitionPath
+        }
+
+        internal var invocationStack: Set<HeistInvocationPath> {
+            guard case .plan(_, _, _, let invocationStack) = source else {
+                preconditionFailure("A direct action has no invocation stack")
+            }
+            return invocationStack
         }
     }
 
@@ -195,7 +239,7 @@ extension HeistExecution {
     internal struct WaitElseContinuation: Sendable {
         internal let step: WaitStep
         internal let context: StepContext
-        internal let evidence: HeistWaitUnmatchedEvidence
+        internal let evidence: HeistPassedWaitEvidence
     }
 }
 
@@ -220,6 +264,28 @@ extension HeistExecution {
             case .wait(let leaf):
                 leaf.phase.expectation?.result == .satisfied
             }
+        }
+
+        internal func expectationIsProven(
+            by evidence: Observation.Evidence
+        ) -> Bool {
+            guard expectationIsSatisfied,
+                  evidence.coverage == .complete else {
+                return false
+            }
+            let predicate: ObservationPredicate?
+            switch self {
+            case .action(let leaf):
+                predicate = leaf.predicate?.resolved
+            case .wait(let leaf):
+                predicate = leaf.predicate.resolved
+            }
+            guard let predicate else { return true }
+            return Expectation(
+                [predicate, .noChange],
+                baseline: evidence.baseline,
+                events: evidence.events
+            ).result == .satisfied
         }
 
         internal var finishingObservationRequestID: RequestID? {

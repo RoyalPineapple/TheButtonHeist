@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 #if DEBUG
+import ButtonHeistTestSupport
 import Foundation
 import XCTest
 
@@ -52,7 +53,8 @@ final class HeistExecutionMachineTests: XCTestCase {
                   source: .deadline,
                   observationID: request.id,
                   evidence: evidence,
-                  outcome: .timedOut
+                  outcome: .timedOut,
+                  timing: HeistResultFixture.expectationTiming
               )) else {
             return XCTFail("An uninitialized expectation must remain unmet at its deadline")
         }
@@ -96,6 +98,10 @@ final class HeistExecutionMachineTests: XCTestCase {
         guard case .complete(let completion) = machine.start() else {
             return XCTFail("A warning-only plan must complete synchronously")
         }
+        XCTAssertEqual(completion.steps.map(\.path), ["$.body[0]"])
+        XCTAssertEqual(completion.steps.map(\.kind), [.warn])
+        XCTAssertEqual(completion.steps.map(\.reportMessage), ["done"])
+        XCTAssertNil(completion.abortedAtPath)
 
         guard case .complete(let lateCompletion) = machine.advance(.event(.noChange)) else {
             return XCTFail("Late input must not reopen a completed machine")
@@ -177,6 +183,79 @@ final class HeistExecutionMachineTests: XCTestCase {
             return XCTFail("Settled current truth must finish the wait")
         }
     }
+
+    func testDispatchesEveryDurableActionCommandThroughTypedRequests() throws {
+        let target = AccessibilityTarget.identifier("target")
+        let point = GesturePointSelection.coordinate(ScreenPoint(x: 10, y: 20))
+        let commands: [HeistActionCommand] = [
+            .activate(target),
+            .increment(target),
+            .decrement(target),
+            .customAction(name: "Archive", target: target),
+            .rotor(selection: .named("Errors"), target: target, direction: .next),
+            .typeText(text: "hello", target: target),
+            .oneFingerTap(TapTarget(selection: point)),
+            .longPress(LongPressTarget(selection: point)),
+            .swipe(SwipeTarget(selection: .pointDirection(
+                start: ScreenPoint(x: 20, y: 20),
+                direction: .left
+            ))),
+            .drag(DragTarget(
+                start: .coordinate(ScreenPoint(x: 20, y: 20)),
+                end: ScreenPoint(x: 80, y: 80)
+            )),
+            .editAction(EditActionTarget(action: .paste)),
+            .setPasteboard(SetPasteboardTarget(text: "clipboard")),
+            .takeScreenshot,
+            .dismissKeyboard,
+        ]
+        let plan = try HeistPlan(body: commands.map { .action(ActionStep(command: $0)) })
+        var driver = try HeistMachineTestDriver(
+            plan: plan,
+            script: MachineRunScript(
+                events: Array(repeating: [.noChange, .noChange], count: commands.count)
+                    .flatMap { $0 }
+            )
+        )
+
+        let completion = try driver.run()
+
+        let expectedCommands = try commands.map { try $0.resolve(in: .empty) }
+        XCTAssertEqual(driver.requests.compactMap(\.dispatchedCommand), expectedCommands)
+        XCTAssertEqual(completion.steps.count, commands.count)
+        XCTAssertTrue(completion.steps.allSatisfy { $0.status == .passed })
+    }
+
+    func testFailedActivateKeepsActivationTraceInActionEvidence() throws {
+        let activationTrace = ActivationTrace(.activationPointFallback(
+            axActivateReturned: false,
+            tapActivationPoint: ScreenPoint(x: 195, y: 139),
+            tapActivationSucceeded: true
+        ), implementsAccessibilityActivation: false)
+        let target = AccessibilityTarget.label("Search all items")
+        let command = HeistActionCommand.activate(target)
+        let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
+        var driver = try HeistMachineTestDriver(
+            plan: plan,
+            script: MachineRunScript(
+                events: [.noChange],
+                dispatchResults: [
+                    .failure(
+                        .activate,
+                        message: "text entry failed: observed focus=none "
+                            + "keyboardVisible=false activeTextInput=false",
+                        activationTrace: activationTrace
+                    ),
+                ]
+            )
+        )
+
+        let completion = try driver.run()
+        let step = try XCTUnwrap(completion.steps.first)
+
+        XCTAssertEqual(step.status, .failed)
+        XCTAssertEqual(step.actionEvidence?.result?.activationTrace, activationTrace)
+    }
 }
 
 struct MachineRunScript {
@@ -242,7 +321,8 @@ struct HeistMachineTestDriver {
                     source: .deadline,
                     observationID: leaf.id,
                     evidence: evidence(since: start),
-                    outcome: outcome
+                    outcome: outcome,
+                    timing: HeistResultFixture.expectationTiming
                 ))
             }
         }
@@ -286,7 +366,8 @@ struct HeistMachineTestDriver {
                 source: .request(requestID),
                 observationID: observationID,
                 evidence: evidence(since: start),
-                outcome: nextLeafOutcome(default: .completed)
+                outcome: nextLeafOutcome(default: .completed),
+                timing: HeistResultFixture.expectationTiming
             ))
 
         case .captureFailureScreenshot(let id, _, _):
@@ -344,52 +425,11 @@ extension HeistExecution.State {
     }
 }
 
-func heistSnapshot(
-    labels: [String],
-    timestamp: Date = Date(timeIntervalSince1970: 1)
-) -> Observation.Snapshot {
-    heistSnapshot(
-        elements: labels.map { AccessibilityElement.make(label: $0) },
-        timestamp: timestamp
-    )
-}
-
-func heistSnapshot(
-    elements: [AccessibilityElement],
-    timestamp: Date = Date(timeIntervalSince1970: 1)
-) -> Observation.Snapshot {
-    let indexedElements = elements.enumerated().map { index, element in
-        let path = TreePath([index])
-        let geometry = testGeometry(
-            for: element,
-            ownerPath: .root,
-            screen: element.visibility == .onscreen
-                ? TheVault.onscreenSpace(for: element)
-                : .offscreen
-        )
-        return (
-            hierarchy: AccessibilityHierarchy.element(
-                element,
-                traversalIndex: index
-            ),
-            annotation: InterfaceElementAnnotation(
-                path: path,
-                actions: [],
-                geometry: geometry
-            )
-        )
+private extension HeistExecution.MainActorRequest {
+    var dispatchedCommand: ResolvedHeistActionCommand? {
+        guard case .dispatch(_, let command) = self else { return nil }
+        return command
     }
-    guard let interface = try? Interface(
-        timestamp: timestamp,
-        tree: indexedElements.map(\.hierarchy),
-        annotations: InterfaceAnnotations(
-            elements: indexedElements.map(\.annotation),
-            containers: []
-        )
-    ) else {
-        preconditionFailure("The test snapshot must contain admitted geometry")
-    }
-    return Observation.Snapshot(interface: interface, context: .empty)
 }
 
 func heistNotification(_ text: String) -> Observation.Event {

@@ -18,6 +18,17 @@ import UIKit
 @MainActor
 final class TheTripwire {
 
+    enum PulseSource {
+        case displayLink
+        case injected
+    }
+
+    let pulseSource: PulseSource
+
+    init(pulseSource: PulseSource = .displayLink) {
+        self.pulseSource = pulseSource
+    }
+
     var pulsePhase: PulsePhase = .idle
 
     var runningContext: RunningContext? {
@@ -39,10 +50,6 @@ final class TheTripwire {
 
     static var pulseFrameRateRange: CAFrameRateRange {
         pulseFrameRateRange(knobs: .current)
-    }
-
-    static var singleTickSettleTimeout: TimeInterval {
-        ButtonHeistRuntimeKnobs.current.singleTripwireTickSettleTimeout
     }
 
     static func pulseFrameRateRange(knobs: ButtonHeistRuntimeKnobs) -> CAFrameRateRange {

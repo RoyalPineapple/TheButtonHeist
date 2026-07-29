@@ -283,7 +283,7 @@ extension TheVaultResolutionTests {
 
         XCTAssertNil(vault.interfaceElement(heistId: rawId))
         XCTAssertEqual(vault.resolveVisibleTarget(target).resolvedElement?.heistId, committedId)
-        XCTAssertNil(vault.liveInterfaceElement(heistId: committedId))
+        XCTAssertNil(vault.visibleLiveElementAliasing(semanticTarget))
         guard case .objectUnavailable = vault.resolveLiveActionTarget(for: semanticTarget) else {
             return XCTFail("Expected different-HeistId raw evidence to remain non-dispatchable")
         }

@@ -1,7 +1,5 @@
 #if canImport(UIKit)
-// Integration tests for TheTripwire that depend on wall-clock timing (CADisplayLink).
-// These require a live UIWindowScene test host and real time passing.
-import ButtonHeistSupport
+// Integration tests for TheTripwire that require a live UIWindowScene test host.
 import XCTest
 @testable import TheInsideJob
 
@@ -20,79 +18,23 @@ final class TripwireIntegrationTests: XCTestCase {
         tripwire = nil
     }
 
-    // MARK: - Tick waiters
-
-    func testNextTickIsUnavailableWithoutRuntimePulse() async {
-        let isolatedTripwire = TheTripwire()
-
-        let outcome = await isolatedTripwire.waitForNextTick(
-            timeout: .seconds(1),
-            demand: .immediate
-        )
-
-        XCTAssertEqual(outcome, .unavailable)
-    }
-
-    func testNextTickObservesFuturePulseAndRestoresAmbientRate() async throws {
+    func testObservationDemandDeliversPulseAndRestoresAmbientRate() async throws {
         let context = try XCTUnwrap(tripwire.runningContext)
-        let ambientRate = context.link.preferredFrameRateRange
-
-        let outcome = await tripwire.waitForNextTick(
-            timeout: .seconds(1),
-            demand: .immediate
-        )
-
-        XCTAssertEqual(outcome, .observed)
-        XCTAssertTrue(context.tickWaiters.isEmpty)
-        XCTAssertEqual(context.link.preferredFrameRateRange, ambientRate)
-    }
-
-    func testNextTickCancellationRemovesWaiterAndRestoresAmbientRate() async throws {
-        let context = try XCTUnwrap(tripwire.runningContext)
-        let ambientRate = context.link.preferredFrameRateRange
-        context.link.isPaused = true
-        defer { context.link.isPaused = false }
-        let task = Task { @MainActor in
-            await self.tripwire.waitForNextTick(
-                timeout: .seconds(1),
-                demand: .immediate
-            )
+        let ambientRate = try XCTUnwrap(context.displayFrameRateRange)
+        let observed = expectation(description: "observation pulse")
+        var fulfilled = false
+        tripwire.observePulses { _ in
+            guard !fulfilled else { return }
+            fulfilled = true
+            observed.fulfill()
         }
+        tripwire.setObservationPulseDemand(.immediate)
+        XCTAssertNotEqual(context.displayFrameRateRange, ambientRate)
 
-        for _ in 0..<20 where context.tickWaiters.isEmpty {
-            await Task.yield()
-        }
-        XCTAssertEqual(context.tickWaiters.count, 1)
-        XCTAssertNotEqual(context.link.preferredFrameRateRange, ambientRate)
-
-        task.cancel()
-        let outcome = await task.value
-
-        XCTAssertEqual(outcome, .cancelled)
-        XCTAssertTrue(context.tickWaiters.isEmpty)
-        XCTAssertEqual(context.link.preferredFrameRateRange, ambientRate)
-    }
-
-    func testStoppingPulseResolvesTickWaiterAsUnavailable() async throws {
-        let context = try XCTUnwrap(tripwire.runningContext)
-        context.link.isPaused = true
-        let task = Task { @MainActor in
-            await self.tripwire.waitForNextTick(
-                timeout: .seconds(1),
-                demand: .immediate
-            )
-        }
-
-        for _ in 0..<20 where context.tickWaiters.isEmpty {
-            await Task.yield()
-        }
-        XCTAssertEqual(context.tickWaiters.count, 1)
-
-        tripwire.stopPulse()
-        let outcome = await task.value
-
-        XCTAssertEqual(outcome, .unavailable)
-        XCTAssertTrue(context.tickWaiters.isEmpty)
+        await fulfillment(of: [observed], timeout: 1)
+        tripwire.setObservationPulseDemand(nil)
+        tripwire.stopObservingPulses()
+        XCTAssertEqual(context.displayFrameRateRange, ambientRate)
     }
 
     func testImmediateTickRateUsesScreenMaximum() {
@@ -124,18 +66,24 @@ final class TripwireIntegrationTests: XCTestCase {
         XCTAssertNotNil(reading.topmostVC)
     }
 
-    /// Await one tick of the caller-owned pulse — an observable signal that a
-    /// reading has been produced, rather than a wall-clock sleep.
     private func observeTick(
-        timeout: Duration = .seconds(1),
         file: StaticString = #filePath,
         line: UInt = #line
     ) async {
-        let outcome = await tripwire.waitForNextTick(timeout: timeout, demand: .ambient)
-        XCTAssertEqual(
-            outcome,
-            .observed,
-            "Pulse should tick within timeout; \(latestPulseDiagnostic())",
+        let observed = expectation(description: "observation pulse")
+        var fulfilled = false
+        tripwire.observePulses { _ in
+            guard !fulfilled else { return }
+            fulfilled = true
+            observed.fulfill()
+        }
+        tripwire.setObservationPulseDemand(.ambient)
+        await fulfillment(of: [observed], timeout: 1)
+        tripwire.setObservationPulseDemand(nil)
+        tripwire.stopObservingPulses()
+        XCTAssertNotNil(
+            tripwire.latestReading,
+            "The running display link should emit a pulse; \(latestPulseDiagnostic())",
             file: file,
             line: line
         )

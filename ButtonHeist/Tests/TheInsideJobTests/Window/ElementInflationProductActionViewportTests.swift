@@ -43,10 +43,10 @@ extension ElementInflationProductTests {
             .commitVisibleObservationForTesting(visible)
 
         let result = await brains.executeRuntimeAction(
-            try HeistActionCommand.scroll(ScrollTarget(
+            .scroll(ScrollTarget(
                 target: .identifier("visible_anchor_explicit_scroll_revealed"),
                 direction: .down
-            )).resolve(in: .empty)
+            ))
         )
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "explicit scroll failed")
@@ -79,9 +79,9 @@ extension ElementInflationProductTests {
         }
 
         let result = await brains.executeRuntimeAction(
-            try HeistActionCommand.activate(
+            .activate(
                 .element(.identifier(identifier), traits: [.button])
-            ).resolve(in: .empty)
+            )
         )
         return (result, fixture.target.activationCount)
     }

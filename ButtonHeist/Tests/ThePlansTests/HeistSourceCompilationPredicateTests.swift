@@ -55,7 +55,10 @@ import Testing
     let expected = try HeistPlan(body: [
         .action(ActionStep(
             command: .activate(.predicate(.label("Delete"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .notification("Item deleted"), timeout: 1))
+            expectationPolicy: .expect(ActionExpectation(
+                predicate: .notification("Item deleted"),
+                timeout: .sessionDefault
+            ))
         )),
         .wait(WaitStep(predicate: .notification(.contains("processed")), timeout: 5)),
         .wait(WaitStep(predicate: .notification)),

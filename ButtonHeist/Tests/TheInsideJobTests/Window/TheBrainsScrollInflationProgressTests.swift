@@ -11,8 +11,9 @@ import UIKit
 extension TheBrainsScrollTests {
 
     func testInflationRecordsDiscoveredOriginWhenExplorationFindsTarget() async throws {
+        brains.stopSemanticObservation()
         let baselineObject = retainedLiveObject()
-        await brains.vault.installObservationForTesting(.makeForTests([
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(.makeForTests([
             .init(makeElement(label: "Home"), heistId: "home", object: baselineObject),
         ]))
         let discoveredFrame = CGRect(x: 40, y: 120, width: 240, height: 44)
@@ -29,9 +30,7 @@ extension TheBrainsScrollTests {
                 object: discoveredObject
             ),
         ])
-        visibleObservationSource.observation = discoveredScreen
-        brains.navigation.elementInflation.exploration.discoverTarget = { _ in
-            self.brains.vault.observeInterface(discoveredScreen)
+        brains.navigation.elementInflation.exploration.discoverTarget = { _, _ in
             let current = await self.brains.vault.semanticObservationStream
                 .commitDiscoveryObservationForTesting(discoveredScreen)
                 .current
@@ -43,16 +42,27 @@ extension TheBrainsScrollTests {
             )
         }
         defer {
-            brains.navigation.elementInflation.exploration.discoverTarget = { _ in nil }
+            brains.navigation.elementInflation.exploration.discoverTarget = { _, _ in nil }
         }
 
-        let result = await brains.navigation.elementInflation.inflate(
-            for: try resolvedTarget(.label("Discovered").and(.traits([.button]))),
-            method: .activate
-        )
+        let target = try resolvedTarget(.label("Discovered").and(.traits([.button])))
+        let resultBox = InflationResultBox()
+        let inflation = Task { @MainActor in
+            resultBox.value = await self.brains.navigation.elementInflation.inflate(
+                for: target,
+                method: .activate,
+                deadline: self.semanticRevealDeadline()
+            )
+        }
+        await waitForSettledSemanticWaiter()
+        await brains.vault.semanticObservationStream
+            .commitVisibleObservationForTesting(discoveredScreen)
+        await inflation.value
 
-        guard case .inflated(let inflatedTarget) = result else {
-            return XCTFail("Expected discovered target inflation, got \(result)")
+        guard case .inflated(let inflatedTarget)? = resultBox.value else {
+            return XCTFail(
+                "Expected discovered target inflation, got \(String(describing: resultBox.value))"
+            )
         }
         XCTAssertTrue(inflatedTarget.liveTarget.object === discoveredObject)
         XCTAssertEqual(
@@ -84,14 +94,14 @@ extension TheBrainsScrollTests {
                 object: visibleObject
             )
         ])
-        brains.navigation.elementInflation.exploration.discoverTarget = { _ in nil }
+        brains.navigation.elementInflation.exploration.discoverTarget = { _, _ in nil }
         var revealAttempts = 0
         brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in
             revealAttempts += 1
             return nil
         }
         defer {
-            brains.navigation.elementInflation.exploration.discoverTarget = { _ in nil }
+            brains.navigation.elementInflation.exploration.discoverTarget = { _, _ in nil }
             brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
         }
 
@@ -100,11 +110,13 @@ extension TheBrainsScrollTests {
         let inflation = Task { @MainActor in
             resultBox.value = await self.brains.navigation.elementInflation.inflate(
                 for: target,
-                method: .activate
+                method: .activate,
+                deadline: self.semanticRevealDeadline()
             )
         }
         await waitForSettledSemanticWaiter()
-        visibleObservationSource.observation = visibleScreen
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(visibleScreen)
+        await waitForSettledSemanticWaiter()
         await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(visibleScreen)
         await inflation.value
 
@@ -146,10 +158,10 @@ extension TheBrainsScrollTests {
                 object: arrivedObject
             )
         ])
-        brains.navigation.elementInflation.exploration.discoverTarget = { _ in nil }
+        brains.navigation.elementInflation.exploration.discoverTarget = { _, _ in nil }
         brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
         defer {
-            brains.navigation.elementInflation.exploration.discoverTarget = { _ in nil }
+            brains.navigation.elementInflation.exploration.discoverTarget = { _, _ in nil }
             brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
         }
 
@@ -158,11 +170,13 @@ extension TheBrainsScrollTests {
         let inflation = Task { @MainActor in
             resultBox.value = await self.brains.navigation.elementInflation.inflate(
                 for: target,
-                method: .activate
+                method: .activate,
+                deadline: self.semanticRevealDeadline()
             )
         }
         await waitForSettledSemanticWaiter()
-        visibleObservationSource.observation = arrivedScreen
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(arrivedScreen)
+        await waitForSettledSemanticWaiter()
         await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(arrivedScreen)
 
         await inflation.value
@@ -197,14 +211,14 @@ extension TheBrainsScrollTests {
                 )
             ]
         )
-        brains.navigation.elementInflation.exploration.discoverTarget = { _ in nil }
+        brains.navigation.elementInflation.exploration.discoverTarget = { _, _ in nil }
         var revealAttempts = 0
         brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in
             revealAttempts += 1
             return nil
         }
         defer {
-            brains.navigation.elementInflation.exploration.discoverTarget = { _ in nil }
+            brains.navigation.elementInflation.exploration.discoverTarget = { _, _ in nil }
             brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
         }
 
@@ -213,11 +227,11 @@ extension TheBrainsScrollTests {
         let inflation = Task { @MainActor in
             resultBox.value = await self.brains.navigation.elementInflation.inflate(
                 for: target,
-                method: .activate
+                method: .activate,
+                deadline: self.semanticRevealDeadline()
             )
         }
         await waitForSettledSemanticWaiter()
-        visibleObservationSource.observation = freshKnownScreen
         await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(freshKnownScreen)
         await waitForSettledSemanticWaiter()
         XCTAssertEqual(revealAttempts, 0)
@@ -240,16 +254,17 @@ extension TheBrainsScrollTests {
             liveHierarchy: [(overviewVisible, "combo_overview_header")],
             offViewport: [InterfaceObservation.OffViewportEntry(staleCoke, heistId: "stale_coke_button")]
         )
-        brains.navigation.elementInflation.exploration.discoverTarget = { _ in nil }
+        brains.navigation.elementInflation.exploration.discoverTarget = { _, _ in nil }
         brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
         defer {
-            brains.navigation.elementInflation.exploration.discoverTarget = { _ in nil }
+            brains.navigation.elementInflation.exploration.discoverTarget = { _, _ in nil }
             brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
         }
 
         let result = await brains.navigation.elementInflation.inflate(
             for: try resolvedTarget(.label("Coke").and(.traits([.button]))),
-            method: .activate
+            method: .activate,
+            deadline: semanticRevealDeadline()
         )
 
         guard case .failed(let failure) = result else {

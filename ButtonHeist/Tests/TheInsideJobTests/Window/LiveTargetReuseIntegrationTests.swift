@@ -14,13 +14,17 @@ final class LiveTargetReuseIntegrationTests: XCTestCase {
         defer { fixture.remove() }
 
         let vault = TheVault(tripwire: TheTripwire())
-        _ = try XCTUnwrap(vault.refreshLiveCapture())
+        let initialObservation = try XCTUnwrap(vault.captureVisibleObservation())
+        await vault.semanticObservationStream
+            .commitVisibleObservationForTesting(initialObservation)
         let retained = try XCTUnwrap(fixture.collectionView.visibleCells.lazy.compactMap { cell in
             self.retainedTarget(for: cell, in: vault)
         }.first)
 
         retained.object.accessibilityLabel = "Reused Semantic Item"
-        _ = try XCTUnwrap(vault.refreshLiveCapture())
+        let reusedObservation = try XCTUnwrap(vault.captureVisibleObservation())
+        await vault.semanticObservationStream
+            .commitVisibleObservationForTesting(reusedObservation)
         let reusedObjectCurrentHeistID = try XCTUnwrap(vault.liveElementHeistId(matching: retained.object))
         XCTAssertNotEqual(reusedObjectCurrentHeistID, retained.heistID)
 

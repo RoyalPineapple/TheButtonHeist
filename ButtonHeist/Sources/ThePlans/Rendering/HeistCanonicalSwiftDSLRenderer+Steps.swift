@@ -12,22 +12,10 @@ extension HeistCanonicalSwiftDSLRenderer {
         var text = line(base, indent)
         if let expectation = invoke.expectation {
             let predicate = try render(predicate: expectation.predicate, environment: environment)
-            let timeout = renderInvocationExpectationTimeout(
-                expectation.timeout,
-                predicate: expectation.predicate
-            )
+            let timeout = renderExpectationTimeout(expectation.timeout)
             text += "\n" + line(".expect(\(predicate)\(timeout))", indent + 1)
         }
         return text
-    }
-
-    private func renderInvocationExpectationTimeout(
-        _ timeout: WaitTimeout,
-        predicate: AccessibilityPredicate
-    ) -> String {
-        timeout == ActionExpectationTimeoutPolicy.default.timeout(for: predicate)
-            ? ""
-            : ", timeout: \(decimal(timeout.seconds))"
     }
 
     func render(argument: HeistArgument, environment: RenderEnvironment) throws -> String {

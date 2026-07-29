@@ -69,6 +69,31 @@ extension TheFenceHandlerTests {
     }
 
     @ButtonHeistActor
+    func testRunHeistResolvesInvocationExpectationFromSessionPolicy() async throws {
+        let policy = ActionExpectationTimeoutPolicy(standard: 3, screenTransition: 12)
+        let (fence, mockConn) = makeConnectedFence(configuration: .init(
+            actionExpectationTimeoutPolicy: policy
+        ))
+        mockConn.responseScript = { _ in scriptedHeistResponse() }
+
+        _ = try await fence.execute(command: .runHeist, values: [
+            "plan": .string("""
+            HeistPlan {
+                HeistDef<Void>("OpenCheckout") {
+                    Warn("opened")
+                }
+                RunHeist("OpenCheckout").expect(.screenChanged)
+            }
+            """),
+        ])
+
+        guard case .invoke(let invocation)? = mockConn.sent.sentHeistPlan?.body.first else {
+            return XCTFail("Expected resolved invocation plan")
+        }
+        XCTAssertEqual(invocation.expectation?.resolvedStep.timeout, policy.screenTransition)
+    }
+
+    @ButtonHeistActor
     func testPerformResolvesActionExpectationFromSessionPolicy() async throws {
         let policy = ActionExpectationTimeoutPolicy(standard: 3, screenTransition: 12)
         let (fence, mockConn) = makeConnectedFence(configuration: .init(

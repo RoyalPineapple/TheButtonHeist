@@ -207,6 +207,17 @@ where Rule: HeistResultEvidenceRule {
         self.value = value
     }
 
+    /// Internal construction after the execution algebra has selected the
+    /// evidence branch. External and decoded values still pass through
+    /// `Rule.admits`.
+    package init(admitted value: Rule.Evidence) {
+        precondition(
+            Rule.admits(value),
+            "Execution selected evidence incompatible with \(Rule.self)"
+        )
+        self.value = value
+    }
+
     package init(from decoder: Decoder) throws {
         let value = try Rule.Evidence(from: decoder)
         guard let admitted = Self(value) else {
@@ -233,7 +244,12 @@ package enum HeistPassedActionRule: HeistResultEvidenceRule {
 package enum HeistFailedActionRule: HeistResultEvidenceRule {
     package static let rejection = "failed action evidence must prove failure"
     package static func admits(_ evidence: HeistActionEvidence) -> Bool {
-        evidence.result?.outcome.isSuccess == false
+        switch evidence {
+        case .commandResolutionFailure:
+            true
+        case .completed(let result, _):
+            !result.outcome.isSuccess
+        }
     }
 }
 

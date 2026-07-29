@@ -26,8 +26,14 @@ private extension HeistReport.Evidence {
                 to: container.superEncoder(forKey: .action),
                 profile: profile
             )
-        case .wait(let evidence):
-            try encode(evidence, to: container.superEncoder(forKey: .wait), profile: profile)
+        case .wait(let evidence, let expectation, let outcome):
+            try encode(
+                evidence: evidence,
+                expectation: expectation,
+                outcome: outcome,
+                to: container.superEncoder(forKey: .wait),
+                profile: profile
+            )
         case .caseSelection(let evidence):
             try encode(evidence, to: container.superEncoder(forKey: .caseSelection), profile: profile)
         case .forEachString(let declaration, let evidence):
@@ -52,7 +58,7 @@ private extension HeistReport.Evidence {
     }
 
     private enum ActionCodingKeys: String, CodingKey {
-        case commandName, target, result, expectation
+        case commandName, target, result, expectation, expectationTiming
     }
 
     private func encode(
@@ -82,28 +88,36 @@ private extension HeistReport.Evidence {
                 PublicHeistOutput.expectation(expectation),
                 forKey: .expectation
             )
+            try container.encodeIfPresent(
+                evidence.expectationEvidence?.timing,
+                forKey: .expectationTiming
+            )
         }
     }
 
     private enum WaitCodingKeys: String, CodingKey {
-        case outcome, expectation, baselineSummary, finalSummary, delta
+        case outcome, expectation, timing, baselineSummary, finalSummary, delta
     }
 
     private func encode(
-        _ evidence: HeistReport.WaitEvidence,
+        evidence: HeistExpectationEvidence,
+        expectation: ExpectationResult,
+        outcome: HeistPredicateEvidenceOutcome,
         to encoder: Encoder,
         profile: ProjectionProfile
     ) throws {
         var container = encoder.container(keyedBy: WaitCodingKeys.self)
-        try container.encode(evidence.outcome, forKey: .outcome)
+        let observation = evidence.observation
+        try container.encode(outcome, forKey: .outcome)
         try container.encodeIfPresent(
-            PublicHeistOutput.expectation(evidence.expectation),
+            PublicHeistOutput.expectation(expectation),
             forKey: .expectation
         )
-        try container.encodeIfPresent(evidence.baselineSummary, forKey: .baselineSummary)
-        try container.encodeIfPresent(evidence.finalSummary, forKey: .finalSummary)
+        try container.encode(evidence.timing, forKey: .timing)
+        try container.encodeIfPresent(observation.baseline?.summary, forKey: .baselineSummary)
+        try container.encodeIfPresent(observation.current?.summary, forKey: .finalSummary)
         if let delta = DeltaProjection(
-            evidence: evidence.observation,
+            evidence: observation,
             profile: profile,
             includeScreenInterface: true
         ) {

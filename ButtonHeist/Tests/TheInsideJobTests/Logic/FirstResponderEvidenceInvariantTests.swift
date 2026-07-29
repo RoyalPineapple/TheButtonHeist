@@ -100,13 +100,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
     func testFirstResponderInflationRejectsCurrentResponderUnderWrongHeistId() async throws {
         let expected: HeistId = "email_field"
         let replacement: HeistId = "password_field"
-        let visibleObservationSource = VisibleObservationSourceFixture()
-        let brains = TheBrains(
-            tripwire: TheTripwire(),
-            visibleObservationSource: visibleObservationSource.capture
-        )
-        brains.tripwire.startPulse()
-        defer { brains.tripwire.stopPulse() }
+        let brains = TheBrains(tripwire: TheTripwire())
         let expectedObject = UITextField()
         let replacementObject = UITextField()
         let expectedEntry = InterfaceObservation.TestEntry(
@@ -115,11 +109,30 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             traits: .textEntry,
             object: expectedObject
         )
-        await brains.vault.installObservationForTesting(.makeForTests(
+        let expectedScreen = InterfaceObservation.makeForTests(
             [expectedEntry],
             firstResponderHeistId: expected
-        ))
-        visibleObservationSource.observation = .makeForTests(
+        )
+        await brains.vault.installObservationForTesting(expectedScreen)
+        let expectedElement = try XCTUnwrap(brains.vault.interfaceElement(heistId: expected))
+        let expectedTarget = try XCTUnwrap(brains.vault.minimumUniqueTarget(for: expectedElement))
+            .resolve(in: .empty)
+        guard case .resolved(let expectedLiveTarget) = brains.vault.resolveLiveActionTarget(
+            for: expectedElement
+        ) else {
+            return XCTFail("Expected live first-responder target")
+        }
+        let inflatedTarget = ElementInflation.InflatedElementTarget(
+            target: expectedTarget,
+            treeElement: expectedElement,
+            liveTarget: expectedLiveTarget,
+            deadline: SemanticObservationDeadline(
+                start: RuntimeElapsed.now,
+                timeoutSeconds: 1
+            ),
+            resolution: ActionSubjectResolution(origin: .visible)
+        )
+        let replacementScreen = InterfaceObservation.makeForTests(
             [
                 expectedEntry,
                 InterfaceObservation.TestEntry(
@@ -131,7 +144,15 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             ],
             firstResponderHeistId: replacement
         )
-        let result = await brains.navigation.elementInflation.inflateFirstResponder(method: .editAction)
+        let result = await brains.navigation.elementInflation.inflateFirstResponder(
+            method: .editAction,
+            inflateTarget: { target, method in
+                XCTAssertEqual(target, expectedTarget)
+                XCTAssertEqual(method, .editAction)
+                await brains.vault.installObservationForTesting(replacementScreen)
+                return .inflated(inflatedTarget)
+            }
+        )
         guard case .failed(let failure) = result else {
             return XCTFail("Expected stale first-responder failure, got \(result)")
         }

@@ -14,7 +14,11 @@ extension ElementInflationProductTests {
     func testElementInflationRejectsContainerTargetWithTypedResolutionFailure() async throws {
         let result = await brains.navigation.elementInflation.inflate(
             for: try AccessibilityTarget.container(.identifier("content")).resolve(in: .empty),
-            method: .activate
+            method: .activate,
+            deadline: SemanticObservationDeadline(
+                start: RuntimeElapsed.now,
+                timeoutSeconds: 10
+            )
         )
 
         guard case .failed(let failure) = result else {
@@ -28,9 +32,9 @@ extension ElementInflationProductTests {
         let fixture = try installAmbiguousActivationFixture()
 
         let result = await brains.executeRuntimeAction(
-            try HeistActionCommand.activate(
+            .activate(
                 .element(.label("Duplicate"), traits: [.button])
-            ).resolve(in: .empty)
+            )
         )
 
         XCTAssertFalse(result.outcome.isSuccess)
@@ -133,9 +137,9 @@ extension ElementInflationProductTests {
         )
 
         let result = await brains.executeRuntimeAction(
-            try HeistActionCommand.activate(
+            .activate(
                 .element(.label(fixture.label), traits: [.button])
-            ).resolve(in: .empty)
+            )
         )
 
         XCTAssertFalse(result.outcome.isSuccess)

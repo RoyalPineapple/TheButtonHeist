@@ -13,6 +13,7 @@ extension Actions {
         selection: RotorSelection,
         target: ResolvedAccessibilityTarget,
         direction: RotorDirection,
+        deadline: SemanticObservationDeadline,
         timing: inout ActionTiming
     ) async -> TheSafecracker.ActionDispatchResult {
         let rotor = selection.rotorName
@@ -20,11 +21,12 @@ extension Actions {
         return await performElementAction(
             target: target,
             payload: .rotor(nil),
+            deadline: deadline,
             timing: &timing,
             requireInteractive: false,
             activationPointPolicy: .liveObjectOnly
         ) { context in
-            let rotorHistory = await self.vault.admitRotorHistory()
+            let rotorHistory = self.vault.admitRotorHistory()
             let outcome: TheVault.RotorOutcome
             let result: TheSafecracker.ActionDispatchResult
             switch self.vault.dispatchOnFreshLiveActionTarget(
@@ -50,7 +52,10 @@ extension Actions {
                 return self.staleLiveTargetFailure(staleness, payload: .rotor(nil))
             }
             if case .succeeded(let hit) = outcome {
-                await self.exposeRotorResultIfPossible(hit)
+                await self.exposeRotorResultIfPossible(
+                    hit,
+                    deadline: deadline
+                )
             }
             return result
         }
@@ -58,6 +63,7 @@ extension Actions {
 
     private func exposeRotorResultIfPossible(
         _ hit: TheVault.RotorHit,
+        deadline: SemanticObservationDeadline
     ) async {
         guard let treeElement = hit.treeElement else { return }
 
@@ -71,7 +77,8 @@ extension Actions {
                         container: target.container,
                         scrollView: target.scrollView
                     )
-                )
+                ),
+                deadline: deadline
             )
             if transition.outcome == .moved { return }
         }
@@ -79,7 +86,7 @@ extension Actions {
         if case .objectUnavailable = vault.resolveLiveActionTarget(for: treeElement) {
             _ = await navigation.elementInflation.revealSemanticTarget(
                 treeElement,
-                deadline: navigation.elementInflation.handoffDeadline(for: treeElement),
+                deadline: deadline
             )
         }
 
@@ -96,7 +103,8 @@ extension Actions {
                 "rotor result \(description) has no live scrollable ancestor to make activation point actionable"
             ),
             unsafeProgrammaticScrollMessage: nil,
-            scrollFailedMessage: "rotor result \(description) activation point could not be brought on-screen"
+            scrollFailedMessage: "rotor result \(description) activation point could not be brought on-screen",
+            deadline: deadline
         )
     }
 

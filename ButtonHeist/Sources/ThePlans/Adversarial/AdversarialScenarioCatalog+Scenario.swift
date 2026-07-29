@@ -71,7 +71,7 @@ extension AdversarialScenarioCatalog {
             case .textFieldFallbackPass:
                 [.element("Fallback field", value: "fallback typed")]
             case .textFieldFallbackTargetlessFails:
-                [.diagnostic("TypeText")]
+                [.diagnostic("text entry failed")]
             case .staleLiveObjectPass:
                 [.element("Submit Order", value: "Generation 2, actions 1, generation 1 actions 0")]
             case .staleLiveObjectAmbiguousFails:

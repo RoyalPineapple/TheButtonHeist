@@ -33,7 +33,8 @@ extension TheBrainsScrollTests {
         ))
 
         let result = await brains.navigation.executeScroll(
-            try resolvedScrollTarget(ScrollTarget(target: .label("Item"), direction: .down))
+            try resolvedScrollTarget(ScrollTarget(target: .label("Item"), direction: .down)),
+            deadline: semanticRevealDeadline()
         )
 
         XCTAssertFalse(result.success)
@@ -63,7 +64,8 @@ extension TheBrainsScrollTests {
         await installLiveScrollTarget(treeElement, scrollView: scrollView, containerName: "axis_scroll")
 
         let result = await brains.navigation.executeScroll(
-            try resolvedScrollTarget(ScrollTarget(target: .label("Item"), direction: .down))
+            try resolvedScrollTarget(ScrollTarget(target: .label("Item"), direction: .down)),
+            deadline: semanticRevealDeadline()
         )
 
         XCTAssertFalse(result.success)
@@ -94,7 +96,8 @@ extension TheBrainsScrollTests {
         await installLiveScrollTarget(treeElement, scrollView: scrollView, containerName: "vertical_scroll")
 
         let result = await brains.navigation.executeScroll(
-            try resolvedScrollTarget(ScrollTarget(target: .label("Item"), direction: .down))
+            try resolvedScrollTarget(ScrollTarget(target: .label("Item"), direction: .down)),
+            deadline: semanticRevealDeadline()
         )
 
         XCTAssertTrue(result.success, "Expected element scroll to succeed: \(String(describing: result.message))")
@@ -111,18 +114,19 @@ extension TheBrainsScrollTests {
             frame: AccessibilityRect(captureFrame)
         )
         let path = TreePath([0])
-        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerRefsByPath: [path: .init(object: retainedLiveObject())],
             firstResponderHeistId: nil
-        ))
+            )
+        )
 
-        let target = try XCTUnwrap(brains.navigation.scrollableTarget(
-            for: container,
-            path: path,
-            contentSize: contentSize
-        ))
+        let semanticContainer = try XCTUnwrap(brains.vault.interfaceTree.containers[path])
+        let target = try XCTUnwrap(
+            brains.navigation.scrollableTarget(for: semanticContainer)
+        )
 
         guard case .swipeable(let liveContainer, let resolvedContentSize) = target else {
             XCTFail("Expected semantic-only scroll container to use swipeable accessibility geometry")
@@ -135,23 +139,23 @@ extension TheBrainsScrollTests {
     func testScrollableTargetUsesPathKeyedLiveScrollView() async throws {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
-        let contentSize = AccessibilitySize(width: 320, height: 1_600)
         let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
         let path = TreePath([0])
-        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerNamesByPath: [path: "main_scroll"],
             containerRefsByPath: [path: .init(object: scrollView)],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [path: .init(view: scrollView)]
-        ))
+            )
+        )
 
-        let target = try XCTUnwrap(brains.navigation.scrollableTarget(
-            for: container,
-            path: path,
-            contentSize: contentSize
-        ))
+        let semanticContainer = try XCTUnwrap(brains.vault.interfaceTree.containers[path])
+        let target = try XCTUnwrap(
+            brains.navigation.scrollableTarget(for: semanticContainer)
+        )
 
         guard case .uiScrollView(_, let resolvedScrollView) = target else {
             XCTFail("Expected path-keyed UIScrollView target, got \(target)")
@@ -165,34 +169,37 @@ extension TheBrainsScrollTests {
         let oldScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         oldScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let container = makeScrollableContainer(contentSize: oldScrollView.contentSize, frame: oldScrollView.frame)
-        let contentSize = try XCTUnwrap(container.scrollableContentSize)
-        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerRefsByPath: [path: .init(object: oldScrollView)],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [path: .init(view: oldScrollView)]
-        ))
-        let staleTarget = try XCTUnwrap(brains.navigation.scrollableTarget(
-            for: container,
-            path: path,
-            contentSize: contentSize
-        ))
+            )
+        )
+        let semanticContainer = try XCTUnwrap(brains.vault.interfaceTree.containers[path])
+        let staleTarget = try XCTUnwrap(
+            brains.navigation.scrollableTarget(for: semanticContainer)
+        )
 
         let replacementScrollView = UIScrollView(frame: oldScrollView.frame)
         replacementScrollView.contentSize = oldScrollView.contentSize
-        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerRefsByPath: [path: .init(object: replacementScrollView)],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [path: .init(view: replacementScrollView)]
-        ))
+            )
+        )
 
         let transition = await brains.navigation.scrollOnePageAndSettle(
             staleTarget,
             direction: .down,
-            animated: false
+            animated: false,
+            deadline: semanticRevealDeadline()
         )
 
         XCTAssertEqual(transition.outcome, .moved)
@@ -205,31 +212,37 @@ extension TheBrainsScrollTests {
         let oldScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         oldScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let container = makeScrollableContainer(contentSize: oldScrollView.contentSize, frame: oldScrollView.frame)
-        let contentSize = try XCTUnwrap(container.scrollableContentSize)
-        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerRefsByPath: [path: .init(object: oldScrollView)],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [path: .init(view: oldScrollView)]
-        ))
-        let staleTarget = try XCTUnwrap(brains.navigation.scrollableTarget(
-            for: container,
-            path: path,
-            contentSize: contentSize
-        ))
+            )
+        )
+        let semanticContainer = try XCTUnwrap(brains.vault.interfaceTree.containers[path])
+        let staleTarget = try XCTUnwrap(
+            brains.navigation.scrollableTarget(for: semanticContainer)
+        )
 
         let replacementScrollView = UIScrollView(frame: oldScrollView.frame)
         replacementScrollView.contentSize = oldScrollView.contentSize
-        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerRefsByPath: [path: .init(object: replacementScrollView)],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [path: .init(view: replacementScrollView)]
-        ))
+            )
+        )
 
-        let transition = await brains.navigation.scrollToEdgeAndSettle(staleTarget, edge: .bottom)
+        let transition = await brains.navigation.scrollToEdgeAndSettle(
+            staleTarget,
+            edge: .bottom,
+            deadline: semanticRevealDeadline()
+        )
 
         XCTAssertEqual(transition.outcome, .moved)
         XCTAssertEqual(oldScrollView.contentOffset, .zero)
@@ -275,11 +288,13 @@ extension TheBrainsScrollTests {
         // must be clipped to end at its top edge.
         let tabBarFrame = CGRect(x: 0, y: 700, width: 400, height: 80)
         let tabBarContainer = AccessibilityContainer(type: .tabBar, frame: AccessibilityRect(tabBarFrame))
-        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(tabBarContainer, children: [])],
             firstResponderHeistId: nil,
-        ))
+            )
+        )
         let result = try XCTUnwrap(
             brains.navigation.safeSwipeFrame(from: CGRect(x: 100, y: 400, width: 200, height: 500))
         )

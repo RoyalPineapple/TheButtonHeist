@@ -64,14 +64,15 @@ extension TheBrainsScrollTests {
         ])
         await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(currentScreen)
         var discoveryAttempts = 0
-        brains.navigation.elementInflation.exploration.discoverTarget = { _ in
+        brains.navigation.elementInflation.exploration.discoverTarget = { _, _ in
             discoveryAttempts += 1
             return nil
         }
 
         let result = await brains.navigation.elementInflation.inflate(
             for: try resolvedTarget(.label("Controls Demo").and(.traits([.button]))),
-            method: .activate
+            method: .activate,
+            deadline: semanticRevealDeadline()
         )
 
         guard case .failed(let failure) = result else {
@@ -107,11 +108,13 @@ extension TheBrainsScrollTests {
             (currentHeader, "current_controls_header"),
             (currentBackButton, "current_back_button"),
         ])
-        brains.vault.observeInterface(currentScreen)
         visibleObservationSource.observation = currentScreen
+        await brains.vault.semanticObservationStream
+            .commitVisibleObservationForTesting(currentScreen)
 
         let discovered = await brains.navigation.elementInflation.exploration.discoverTarget(
-            try resolvedTarget(.label("Controls Demo").and(.traits([.button])))
+            try resolvedTarget(.label("Controls Demo").and(.traits([.button]))),
+            semanticRevealDeadline()
         )
 
         let controls = discovered?.current.snapshot.interface.projectedElements.filter {
@@ -388,14 +391,14 @@ extension TheBrainsScrollTests {
         XCTAssertTrue(transition.current?.snapshot.interface.projectedElements.contains {
             $0.semantics.assertable.label == "Scrolled"
         } == true)
-        let committed = await brains.vault.semanticObservationStream.stateOwner.current()
+        let committed = brains.vault.semanticObservationStream.current()
         XCTAssertEqual(
             transition.current?.snapshot,
             committed?.snapshot
         )
     }
 
-    func testExpiredBusinessDeadlineStillPermitsBoundedRestoration() async throws {
+    func testCancelledBusinessOperationStillCompletesViewportRestoration() async throws {
         let fixture = try await explorationViewport()
         defer { fixture.close() }
         publishVerticalOffsetObservations(from: fixture.scrollView)
@@ -404,20 +407,15 @@ extension TheBrainsScrollTests {
             label: "Scrolled",
             scrollView: fixture.scrollView
         ))
-        let businessDeadline = SemanticObservationDeadline(
-            start: RuntimeElapsed.now,
-            timeoutMs: 0
-        )
-
-        XCTAssertFalse(businessDeadline.hasTimeRemaining(at: RuntimeElapsed.now))
-        let cleanup = await brains.navigation.performViewportTransition(
-            .restoreVisualOrigin(.zero, in: .original(fixture.scrollView)),
-            deadline: SemanticObservationDeadline(
-                start: RuntimeElapsed.now,
-                timeout: SemanticObservationTiming.defaultTimeout
-            ),
-            discoveryCommitPolicy: .replaceInterface
-        )
+        let cleanupTask = Task { @MainActor in
+            await brains.navigation.performViewportTransition(
+                .restoreVisualOrigin(.zero, in: .original(fixture.scrollView)),
+                deadline: nil,
+                discoveryCommitPolicy: .replaceInterface
+            )
+        }
+        cleanupTask.cancel()
+        let cleanup = await cleanupTask.value
 
         XCTAssertEqual(cleanup.outcome, .moved)
         XCTAssertEqual(Navigation.visualOrigin(in: fixture.scrollView).y, 0, accuracy: 0.01)
@@ -557,12 +555,13 @@ extension TheBrainsScrollTests {
         let result = await brains.navigation.executeScrollToVisible(
             target: try resolvedScrollToVisibleTarget(
                 ScrollToVisibleTarget(target: .label("Top Target"))
-            )
+            ),
+            deadline: semanticRevealDeadline()
         )
 
         XCTAssertTrue(result.success, "Expected scroll_to_visible to discover the target above; got \(result)")
         XCTAssertLessThanOrEqual(scrollView.contentOffset.y, 10)
-        let current = await brains.vault.semanticObservationStream.stateOwner.current()
+        let current = brains.vault.semanticObservationStream.current()
         let visibleTarget = try XCTUnwrap(
             current?.snapshot.interface.projectedElements.first {
                 $0.semantics.assertable.label == "Top Target"
@@ -577,14 +576,15 @@ extension TheBrainsScrollTests {
         let staleScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
-        await brains.vault.installObservationForTesting(.makeForTests(
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(.makeForTests(
             elements: [(visible, HeistId(rawValue: "visible_element"))]
         ))
 
         let result = await brains.navigation.executeScrollToVisible(
             target: try resolvedScrollToVisibleTarget(
                 ScrollToVisibleTarget(target: .label("Offscreen"))
-            )
+            ),
+            deadline: semanticRevealDeadline()
         )
 
         XCTAssertFalse(result.success)
@@ -639,7 +639,7 @@ extension TheBrainsScrollTests {
             firstResponderHeistId: nil,
         )
         var discoveryAttempts = 0
-        brains.navigation.elementInflation.exploration.discoverTarget = { _ in
+        brains.navigation.elementInflation.exploration.discoverTarget = { _, _ in
             discoveryAttempts += 1
             return nil
         }
@@ -649,11 +649,16 @@ extension TheBrainsScrollTests {
         let inflation = Task { @MainActor in
             resultBox.value = await self.brains.navigation.elementInflation.inflate(
                 for: target,
-                method: .scrollToVisible
+                method: .scrollToVisible,
+                deadline: self.semanticRevealDeadline()
             )
         }
         await waitForSettledSemanticWaiter()
-        visibleObservationSource.observation = recoveredScreen
+        await brains.vault.semanticObservationStream
+            .commitDiscoveryObservationAfterViewportMovementForTesting(
+                recoveredScreen
+            )
+        await waitForSettledSemanticWaiter()
         await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
 
         await inflation.value
@@ -745,11 +750,13 @@ extension TheBrainsScrollTests {
         let inflation = Task { @MainActor in
             resultBox.value = await self.brains.navigation.elementInflation.inflate(
                 for: target,
-                method: .activate
+                method: .activate,
+                deadline: self.semanticRevealDeadline()
             )
         }
         await waitForSettledSemanticWaiter()
-        visibleObservationSource.observation = recoveredScreen
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
+        await waitForSettledSemanticWaiter()
         await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
         await inflation.value
 
@@ -782,7 +789,8 @@ extension TheBrainsScrollTests {
         )
 
         let result = await brains.navigation.executeScroll(
-            try resolvedScrollTarget(ScrollTarget(target: .label("Offscreen"), direction: .down))
+            try resolvedScrollTarget(ScrollTarget(target: .label("Offscreen"), direction: .down)),
+            deadline: semanticRevealDeadline()
         )
 
         XCTAssertFalse(result.success)
@@ -814,7 +822,8 @@ extension TheBrainsScrollTests {
         let result = await brains.navigation.executeScrollToEdge(
             try resolvedScrollToEdgeTarget(
                 ScrollToEdgeTarget(target: .label("Offscreen"), edge: .bottom)
-            )
+            ),
+            deadline: semanticRevealDeadline()
         )
 
         XCTAssertFalse(result.success)
@@ -855,7 +864,7 @@ extension TheBrainsScrollTests {
         scrollView.isPagingEnabled = isPagingEnabled
         rootView.addSubview(scrollView)
         let window = try installModalWindow(rootView: rootView)
-        await brains.tripwire.yieldFrames(3)
+        _ = try await publishedVisibleObservation()
         await installSyntheticObservation(explorationObservation(label: label, scrollView: scrollView))
         return ExplorationViewportFixture(rootView: rootView, scrollView: scrollView, window: window)
     }

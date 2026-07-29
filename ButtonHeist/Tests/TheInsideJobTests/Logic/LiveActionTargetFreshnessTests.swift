@@ -127,14 +127,14 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
 
     func testContainerCaptureReplacementReacquiresCurrentFrameBeforeDispatch() async throws {
         let vault = TheVault(tripwire: TheTripwire())
-        let original = try installContainer(
+        let original = try await installContainer(
             in: vault,
             identifier: "menu",
             object: UIScrollView(),
             frame: CGRect(x: 0, y: 80, width: 320, height: 400)
         )
         let replacementObject = UIScrollView()
-        let replacement = try installContainer(
+        let replacement = try await installContainer(
             in: vault,
             identifier: "menu",
             object: replacementObject,
@@ -164,13 +164,13 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
 
     func testContainerSemanticReplacementReturnsTypedStalenessWithoutInvocation() async throws {
         let vault = TheVault(tripwire: TheTripwire())
-        let original = try installContainer(
+        let original = try await installContainer(
             in: vault,
             identifier: "menu",
             object: UIScrollView(),
             frame: CGRect(x: 0, y: 80, width: 320, height: 400)
         )
-        _ = try installContainer(
+        _ = try await installContainer(
             in: vault,
             identifier: "checkout",
             object: UIScrollView(),
@@ -226,7 +226,7 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
         identifier: ContainerName,
         object: NSObject,
         frame: CGRect
-    ) throws -> TheVault.LiveContainerTarget {
+    ) async throws -> TheVault.LiveContainerTarget {
         let path = TreePath([0])
         let container = AccessibilityContainer(
             type: .semanticGroup(label: "Menu", value: nil),
@@ -245,7 +245,7 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
             containerName: identifier,
             viewSpace: viewSpace
         )
-        vault.observeInterface(InterfaceObservation.makeForTests(
+        await vault.installObservationForTesting(InterfaceObservation.makeForTests(
             tree: InterfaceTree(elements: [:], containers: [path: semanticContainer]),
             liveCapture: LiveCapture.makeForTests(
                 hierarchy: [.container(container, children: [])],

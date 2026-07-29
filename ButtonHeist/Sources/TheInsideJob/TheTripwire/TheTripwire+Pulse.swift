@@ -1,6 +1,5 @@
 #if canImport(UIKit)
 #if DEBUG
-import ButtonHeistSupport
 import UIKit
 
 extension TheTripwire {
@@ -9,16 +8,63 @@ extension TheTripwire {
 
     /// Mutable context that exists only while the pulse is running.
     /// Reference type so tick mutations don't require enum reconstruction.
+    @MainActor
     final class RunningContext {
-        let link: CADisplayLink
-        let target: PulseTick
+        private enum Driver {
+            case displayLink(CADisplayLink, target: PulseTick)
+            case injected
+        }
+
+        private let driver: Driver
         var latestReading: PulseReading?
         var tickCount: UInt64 = 0
-        var tickWaiters = WaiterStore<UInt64, TickWaiter>()
+        var observationDemand: TickDemand?
+        var receiveObservationPulse: (@MainActor (PulseReading) -> Void)?
 
-        init(link: CADisplayLink, target: PulseTick) {
-            self.link = link
-            self.target = target
+        var usesDisplayLink: Bool {
+            guard case .displayLink = driver else { return false }
+            return true
+        }
+
+        var displayFrameRateRange: CAFrameRateRange? {
+            guard case .displayLink(let link, _) = driver else { return nil }
+            return link.preferredFrameRateRange
+        }
+
+        init(source: PulseSource, tripwire: TheTripwire) {
+            switch source {
+            case .displayLink:
+                let target = PulseTick(tripwire: tripwire)
+                let link = CADisplayLink(
+                    target: target,
+                    selector: #selector(PulseTick.handleTick)
+                )
+                link.preferredFrameRateRange = TheTripwire.pulseFrameRateRange
+                link.add(to: .main, forMode: .common)
+                link.isPaused = true
+                driver = .displayLink(link, target: target)
+            case .injected:
+                driver = .injected
+            }
+        }
+
+        func stop() {
+            guard case .displayLink(let link, _) = driver else { return }
+            link.invalidate()
+        }
+
+        func updateDisplayLink(
+            demand: TickDemand?,
+            activeMaximumFramesPerSecond: Int
+        ) {
+            guard case .displayLink(let link, _) = driver else { return }
+            let hasImmediateDemand = demand == .immediate
+            link.preferredFrameRateRange = hasImmediateDemand
+                ? TheTripwire.activeDisplayFrameRateRange(
+                    maximumFramesPerSecond: activeMaximumFramesPerSecond
+                )
+                : TheTripwire.pulseFrameRateRange
+            link.isPaused = demand == nil
         }
     }
 
@@ -38,95 +84,52 @@ extension TheTripwire {
         case immediate
     }
 
-    enum TickWaitOutcome: Equatable, Sendable {
-        case observed
-        case timedOut
-        case cancelled
-        case unavailable
-    }
-
-    struct TickWaiter: Sendable {
-        let demand: TickDemand
-        let continuation: TimedOneShot<TickWaitOutcome>
-    }
-
     // MARK: - Pulse Lifecycle
 
     var isPulseRunning: Bool { runningContext != nil }
 
     func startPulse() {
         guard case .idle = pulsePhase else { return }
-        let target = PulseTick(tripwire: self)
-        let link = CADisplayLink(target: target, selector: #selector(PulseTick.handleTick))
-        link.preferredFrameRateRange = Self.pulseFrameRateRange
-        link.add(to: .main, forMode: .common)
-        pulsePhase = .running(RunningContext(link: link, target: target))
+        pulsePhase = .running(RunningContext(source: pulseSource, tripwire: self))
     }
 
     func stopPulse() {
         guard let context = runningContext else { return }
-        context.link.invalidate()
+        context.stop()
+        context.receiveObservationPulse = nil
+        context.observationDemand = nil
 
-        let tickWaiters = context.tickWaiters.removeAll()
-        tickWaiters.forEach { $0.continuation.resolve(returning: .unavailable) }
         pulsePhase = .idle
     }
 
-    // MARK: - Tick Waiting
+    // MARK: - Pulse Delivery
 
-    /// Waits for one future tick of Button Heist's single CADisplayLink tick.
-    /// Immediate demand temporarily raises the same link to the active screen's
-    /// maximum refresh rate; ambient demand preserves the configured monitor rate.
-    func waitForNextTick(
-        timeout: Duration,
-        demand: TickDemand
-    ) async -> TickWaitOutcome {
-        guard timeout > .zero else { return .timedOut }
-        guard let context = runningContext else { return .unavailable }
-        let waiterID = context.tickWaiters.reserveID()
-        let oneShot = TimedOneShot<TickWaitOutcome>()
-        return await oneShot.wait(
-            cancellationValue: .cancelled,
-            onRegistered: { oneShot in
-                guard runningContext === context else {
-                    oneShot.resolve(returning: .unavailable)
-                    return
-                }
-                context.tickWaiters.insert(
-                    TickWaiter(demand: demand, continuation: oneShot),
-                    id: waiterID
-                )
-                updateDisplayLinkRate(context)
-                oneShot.armTimeout(after: timeout) { [weak self] in
-                    await self?.resolveTickWaiter(
-                        id: waiterID,
-                        returning: .timedOut
-                    )
-                }
-            },
-            onFinished: { [weak self] in
-                self?.removeTickWaiter(id: waiterID, from: context)
-            }
+    /// Installs the semantic observation stream as the single durable pulse
+    /// consumer. Demand controls whether the display link runs; the callback
+    /// never performs work inline with the display-link invocation.
+    func observePulses(
+        _ receive: @escaping @MainActor (PulseReading) -> Void
+    ) {
+        guard let context = runningContext else { return }
+        precondition(
+            context.receiveObservationPulse == nil,
+            "Only one semantic observation pulse consumer may be active"
         )
+        context.receiveObservationPulse = receive
+        updateDisplayLinkRate(context)
     }
 
-    /// Yield to the main run loop for N display frames. Each iteration
-    /// flushes pending Core Animation transactions and gives layout a
-    /// chance to run — enough for lazy containers to materialise content
-    /// without waiting for animations to finish.
-    ///
-    /// **Settle signal boundary.** Fixed-count yields are not a settle
-    /// signal — they are empirically calibrated waits for known animation
-    /// timings. Use this when the caller needs to advance a known number
-    /// of layout passes (post-scroll CATransaction flush, intra-swipe
-    /// frame stepping) without subscribing to the persistent pulse. For
-    /// signal-driven waits, see `waitForNextTick` (tick) or
-    /// the observation stream (AX tree).
-    func yieldFrames(_ count: Int) async {
-        for _ in 0..<count {
-            CATransaction.flush()
-            await Task.yield()
-        }
+    func stopObservingPulses() {
+        guard let context = runningContext else { return }
+        context.receiveObservationPulse = nil
+        context.observationDemand = nil
+        updateDisplayLinkRate(context)
+    }
+
+    func setObservationPulseDemand(_ demand: TickDemand?) {
+        guard let context = runningContext else { return }
+        context.observationDemand = demand
+        updateDisplayLinkRate(context)
     }
 
     // MARK: - Tick Handler
@@ -140,48 +143,24 @@ extension TheTripwire {
         CATransaction.flush()
 
         let tripwireSignal = tripwireSignal()
-        context.latestReading = PulseReading(
+        let reading = PulseReading(
             tick: context.tickCount,
             timestamp: CFAbsoluteTimeGetCurrent(),
             topmostVC: tripwireSignal.topmostVC,
             tripwireSignal: tripwireSignal,
             windowCount: tripwireSignal.windowStack.windows.count
         )
+        context.latestReading = reading
 
-        observeTick(context)
-    }
-
-    private func observeTick(_ context: RunningContext) {
-        let waiters = context.tickWaiters.removeAll()
-        guard !waiters.isEmpty else { return }
-        updateDisplayLinkRate(context)
-        waiters.forEach { $0.continuation.resolve(returning: .observed) }
-    }
-
-    private func resolveTickWaiter(
-        id: UInt64,
-        returning outcome: TickWaitOutcome
-    ) {
-        guard let context = runningContext else { return }
-        guard let waiter = context.tickWaiters.remove(id: id) else { return }
-        updateDisplayLinkRate(context)
-        waiter.continuation.resolve(returning: outcome)
-    }
-
-    private func removeTickWaiter(id: UInt64, from context: RunningContext) {
-        guard context.tickWaiters.remove(id: id) != nil else { return }
-        updateDisplayLinkRate(context)
+        context.receiveObservationPulse?(reading)
     }
 
     private func updateDisplayLinkRate(_ context: RunningContext) {
-        let hasImmediateDemand = context.tickWaiters.contains {
-            $0.demand == .immediate
-        }
-        context.link.preferredFrameRateRange = hasImmediateDemand
-            ? Self.activeDisplayFrameRateRange(
-                maximumFramesPerSecond: activeScreenMaximumFramesPerSecond()
-            )
-            : Self.pulseFrameRateRange
+        guard context.usesDisplayLink else { return }
+        context.updateDisplayLink(
+            demand: context.observationDemand,
+            activeMaximumFramesPerSecond: activeScreenMaximumFramesPerSecond()
+        )
     }
 
     private func activeScreenMaximumFramesPerSecond() -> Int {

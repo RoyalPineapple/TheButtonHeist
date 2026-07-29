@@ -5,7 +5,7 @@ import ThePlans
 @testable import TheScore
 
 @Suite struct HeistResultSemanticAdmissionTests {
-    @Test func `passed wait evidence admits only the replayed decision`() throws {
+    @Test func `passed wait evidence projects replayed semantics`() throws {
         let predicate = AccessibilityPredicate.exists(.label("Done"))
         let unmatched = expectationEvidence(predicate: predicate, elements: [])
         let matched = expectationEvidence(
@@ -17,19 +17,20 @@ import ThePlans
             elements: [],
             coverage: .incomplete(.captureUnavailable)
         )
+        let matchedEvidence = try #require(HeistPassedWaitEvidence(matched))
+        let fallbackEvidence = try #require(HeistPassedWaitEvidence(unmatched))
 
-        #expect(HeistPassedWaitEvidence.matched(matched) != nil)
-        #expect(HeistPassedWaitEvidence.matched(unmatched) == nil)
-        #expect(HeistPassedWaitEvidence.matched(incomplete) == nil)
-        #expect(HeistPassedWaitEvidence.fallback(unmatched) != nil)
-        #expect(HeistPassedWaitEvidence.fallback(matched) == nil)
-        #expect(HeistPassedWaitEvidence.fallback(incomplete) == nil)
+        #expect(matchedEvidence.matchesExpectation)
+        #expect(!matchedEvidence.usesFallback)
+        #expect(!fallbackEvidence.matchesExpectation)
+        #expect(fallbackEvidence.usesFallback)
+        #expect(HeistPassedWaitEvidence(incomplete) == nil)
     }
 
     @Test func `aggregate admission accepts an unmet wait proven for fallback`() throws {
         let predicate = AccessibilityPredicate.exists(.label("Done"))
         let unmatched = expectationEvidence(predicate: predicate, elements: [])
-        let fallback = try #require(HeistPassedWaitEvidence.fallback(unmatched))
+        let fallback = try #require(HeistPassedWaitEvidence(unmatched))
         let step = HeistExecutionStepResult.wait(
             path: "$.body[0]",
             predicate: predicate,
@@ -62,19 +63,20 @@ import ThePlans
         #expect(HeistPassedActionEvidence(.completed(result: action, expectation: incomplete)) == nil)
     }
 
-    @Test func `passed wait decoding cannot bypass replay proof`() throws {
+    @Test func `passed wait decoding rejects unreplayable expectation evidence`() throws {
         let predicate = AccessibilityPredicate.exists(.label("Done"))
-        let matched = expectationEvidence(
+        let incomplete = expectationEvidence(
             predicate: predicate,
-            elements: [makeTestHeistElement(label: "Done")]
+            elements: [makeTestHeistElement(label: "Done")],
+            coverage: .incomplete(.captureUnavailable)
         )
-        let evidence = try #require(HeistPassedWaitEvidence.matched(matched))
-        var object = try #require(
-            JSONSerialization.jsonObject(with: JSONEncoder().encode(evidence))
+        let expectationObject = try #require(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(incomplete))
                 as? [String: Any]
         )
-        object["decision"] = HeistWaitDecision.fallback.rawValue
-        let data = try JSONSerialization.data(withJSONObject: object)
+        let data = try JSONSerialization.data(
+            withJSONObject: ["expectation": expectationObject]
+        )
 
         #expect(throws: (any Error).self) {
             try JSONDecoder().decode(HeistPassedWaitEvidence.self, from: data)

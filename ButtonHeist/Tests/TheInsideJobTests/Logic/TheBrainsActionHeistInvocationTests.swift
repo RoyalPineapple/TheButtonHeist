@@ -75,7 +75,7 @@ final class HeistMachineInvocationTests: XCTestCase {
             body: [
                 .invoke(HeistInvocationStep(
                     path: "Submit",
-                    expectation: WaitStep(
+                    expectation: ActionExpectation(
                         predicate: .exists(.label("Done")),
                         timeout: try .seconds(1)
                     )

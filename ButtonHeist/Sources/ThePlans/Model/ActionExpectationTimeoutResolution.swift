@@ -81,15 +81,7 @@ private extension HeistStep {
             return .invoke(HeistInvocationStep(
                 path: step.path,
                 argument: step.argument,
-                expectation: try step.expectation.map { expectation in
-                    WaitStep(
-                        predicate: expectation.predicate,
-                        timeout: expectation.timeout,
-                        elseBody: try expectation.elseBody?.map {
-                            try $0.resolvingActionExpectationTimeouts(using: policy)
-                        }
-                    )
-                }
+                expectation: step.expectation?.resolvingTimeout(using: policy)
             ))
         }
     }

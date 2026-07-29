@@ -46,7 +46,7 @@ final class RotorCursorTests: XCTestCase {
                 selection: .named("Items"),
                 direction: .next,
                 on: try rotorLiveTarget(hostHeistId: hostHeistId),
-                history: await vault.admitRotorHistory()
+                history: vault.admitRotorHistory()
             )
             guard case .succeeded = outcome else {
                 return XCTFail("Expected initial rotor result, got \(outcome)")
@@ -80,7 +80,7 @@ final class RotorCursorTests: XCTestCase {
             selection: .named("Items"),
             direction: .next,
             on: try rotorLiveTarget(hostHeistId: hostHeistId),
-            history: await vault.admitRotorHistory()
+            history: vault.admitRotorHistory()
         )
 
         guard case .succeeded = outcome else {
@@ -126,7 +126,7 @@ final class RotorCursorTests: XCTestCase {
             selection: .named("Items"),
             direction: .next,
             on: try rotorLiveTarget(hostHeistId: hostHeistId),
-            history: await vault.admitRotorHistory()
+            history: vault.admitRotorHistory()
         )
 
         guard case .currentItemUnavailable(let unavailableHeistId) = outcome else {
@@ -157,7 +157,7 @@ final class RotorCursorTests: XCTestCase {
         )
         try await expectSuccessfulStep(hostHeistId: hostHeistId, rotorName: "Items")
 
-        await vault.semanticObservationStream.discardCurrentObservation()
+        vault.semanticObservationStream.discardCurrentObservation()
         await installRotorScreen(
             hostHeistId: hostHeistId,
             hostObject: host,
@@ -168,7 +168,7 @@ final class RotorCursorTests: XCTestCase {
             selection: .named("Items"),
             direction: .next,
             on: try rotorLiveTarget(hostHeistId: hostHeistId),
-            history: await vault.admitRotorHistory()
+            history: vault.admitRotorHistory()
         )
 
         guard case .continuationInvalidated = outcome else {
@@ -241,7 +241,7 @@ final class RotorCursorTests: XCTestCase {
             selection: .named("Words"),
             direction: .next,
             on: try rotorLiveTarget(hostHeistId: hostHeistId),
-            history: await vault.admitRotorHistory()
+            history: vault.admitRotorHistory()
         )
 
         guard case .continuationTextRangeUnavailable = outcome else {
@@ -320,7 +320,7 @@ final class RotorCursorTests: XCTestCase {
             selection: .named(rotorName),
             direction: .next,
             on: try rotorLiveTarget(hostHeistId: hostHeistId),
-            history: await vault.admitRotorHistory()
+            history: vault.admitRotorHistory()
         )
         guard case .succeeded = outcome else {
             throw RotorCursorTestError.unexpectedOutcome(String(describing: outcome))

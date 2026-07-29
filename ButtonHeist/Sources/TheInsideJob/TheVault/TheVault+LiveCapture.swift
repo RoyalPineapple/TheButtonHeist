@@ -49,7 +49,7 @@ extension TheVault {
     }
 
     func liveContainerName(forPath path: TreePath) -> ContainerName? {
-        latestObservation.tree.containers[path]?.containerName
+        interfaceTree.containers[path]?.containerName
     }
 
     func liveScrollableContainerView(forPath path: TreePath) -> UIScrollView? {
@@ -70,7 +70,7 @@ extension TheVault {
 
     func liveScrollContainerDiagnostics() -> String {
         let summaries = currentLiveCapture.hierarchy.scrollablePathIndexedContainers.map { item in
-            let containerName = latestObservation.tree.containers[item.path]?.containerName
+            let containerName = interfaceTree.containers[item.path]?.containerName
             let hasLiveScrollView = currentLiveCapture.scrollView(forContainerPath: item.path) != nil
             let pathView = currentLiveCapture.scrollableContainerViewsByPath[item.path]?.view
             let containerObject = currentLiveCapture.containerRefsByPath[item.path]?.object

@@ -12,6 +12,7 @@ extension Actions {
     func performElementAction(
         target: ResolvedAccessibilityTarget,
         payload: ActionResult.Payload,
+        deadline: SemanticObservationDeadline,
         timing: inout ActionTiming,
         requireInteractive: Bool = true,
         activationPointPolicy: ElementInflation.ActivationPointPolicy = .requireOnscreen,
@@ -23,7 +24,8 @@ extension Actions {
         let inflation = await navigation.elementInflation.inflate(
             for: target,
             method: payload.method,
-            activationPointPolicy: activationPointPolicy
+            activationPointPolicy: activationPointPolicy,
+            deadline: deadline
         )
         timing.record(.targetResolution, since: resolutionStart)
 
@@ -88,11 +90,13 @@ extension Actions {
 
     func executeActivate(
         _ target: ResolvedAccessibilityTarget,
+        deadline: SemanticObservationDeadline,
         timing: inout ActionTiming
     ) async -> TheSafecracker.ActionDispatchResult {
         return await performElementAction(
             target: target,
             payload: .activate,
+            deadline: deadline,
             timing: &timing
         ) { context in
             await ActivationPolicy(
@@ -110,6 +114,7 @@ extension Actions {
                     switch await self.navigation.elementInflation.refreshCommittedTarget(
                         context.committedTarget,
                         method: .activate,
+                        deadline: deadline
                     ) {
                     case .inflated(let inflatedTarget):
                         return .resolved(inflatedTarget)
@@ -147,11 +152,13 @@ extension Actions {
 
     func executeIncrement(
         _ target: ResolvedAccessibilityTarget,
+        deadline: SemanticObservationDeadline,
         timing: inout ActionTiming
     ) async -> TheSafecracker.ActionDispatchResult {
         await executeAdjustment(
             target,
             payload: .increment,
+            deadline: deadline,
             timing: &timing,
             action: accessibilityActions.increment
         )
@@ -159,11 +166,13 @@ extension Actions {
 
     func executeDecrement(
         _ target: ResolvedAccessibilityTarget,
+        deadline: SemanticObservationDeadline,
         timing: inout ActionTiming
     ) async -> TheSafecracker.ActionDispatchResult {
         await executeAdjustment(
             target,
             payload: .decrement,
+            deadline: deadline,
             timing: &timing,
             action: accessibilityActions.decrement
         )
@@ -172,12 +181,14 @@ extension Actions {
     private func executeAdjustment(
         _ target: ResolvedAccessibilityTarget,
         payload: ActionResult.Payload,
+        deadline: SemanticObservationDeadline,
         timing: inout ActionTiming,
         action: @MainActor (TheVault.LiveActionTarget) -> Bool
     ) async -> TheSafecracker.ActionDispatchResult {
         await performElementAction(
             target: target,
             payload: payload,
+            deadline: deadline,
             timing: &timing,
             preflight: { treeElement in
                 guard treeElement.element.traits.contains(.adjustable) else {
@@ -205,17 +216,20 @@ extension Actions {
     func executeCustomAction(
         name: CustomActionName,
         target: ResolvedAccessibilityTarget,
+        deadline: SemanticObservationDeadline,
         timing: inout ActionTiming
     ) async -> TheSafecracker.ActionDispatchResult {
         await performElementAction(
             target: target,
             payload: .customAction,
+            deadline: deadline,
             timing: &timing
         ) { context in
             let dispatchContext: ElementInflation.InflatedElementTarget
             switch await self.customActionDispatchContext(
                 context,
                 actionName: name,
+                deadline: deadline
             ) {
             case .resolved(let context):
                 dispatchContext = context
@@ -273,15 +287,16 @@ extension Actions {
     private func customActionDispatchContext(
         _ context: ElementInflation.InflatedElementTarget,
         actionName: CustomActionName,
+        deadline: SemanticObservationDeadline
     ) async -> CustomActionDispatchContextResolution {
         guard accessibilityActions.needsPreDispatchRefresh(named: actionName, on: context.liveTarget) else {
             return .resolved(context)
         }
 
-        await tripwire.yieldFrames(1)
         switch await navigation.elementInflation.refreshCommittedTarget(
             context.committedTarget,
             method: .customAction,
+            deadline: deadline
         ) {
         case .inflated(let refreshedContext):
             return .resolved(refreshedContext)

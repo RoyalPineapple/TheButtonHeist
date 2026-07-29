@@ -12,6 +12,11 @@ final class HeistMachineStepExecutionTests: XCTestCase {
         let plan = try HeistPlan(body: [
             .action(ActionStep(command: .dismiss)),
         ])
+        var machine = try HeistExecution.Machine(plan: plan)
+        let observation = try XCTUnwrap(machine.start().singleBeginObservationRequest)
+
+        XCTAssertEqual(observation.request.timeout, SemanticObservationTiming.defaultTimeout)
+
         var driver = try HeistMachineTestDriver(
             plan: plan,
             script: MachineRunScript(events: [.noChange])
@@ -26,6 +31,23 @@ final class HeistMachineStepExecutionTests: XCTestCase {
             .finishObservation,
         ])
         XCTAssertEqual(Array(driver.history), [.noChange])
+    }
+
+    func testExpectedActionUsesOnlyItsResolvedExpectationBudget() throws {
+        let timeout = try WaitTimeout.seconds(7)
+        let plan = try HeistPlan(body: [
+            .action(ActionStep(
+                command: .dismiss,
+                expectationPolicy: .expect(ActionExpectation(
+                    predicate: .screenChanged,
+                    timeout: timeout
+                ))
+            )),
+        ])
+        var machine = try HeistExecution.Machine(plan: plan)
+        let observation = try XCTUnwrap(machine.start().singleBeginObservationRequest)
+
+        XCTAssertEqual(observation.request.timeout, .seconds(timeout.seconds))
     }
 
     func testStaleAndDuplicateDispatchCompletionsCannotAdvanceAction() throws {
@@ -205,11 +227,12 @@ private enum MachineRequestKind: Equatable {
     case captureFailureScreenshot
 }
 
-private struct BeginObservationRequest {
+struct BeginObservationRequest {
     let id: HeistExecution.RequestID
+    let request: HeistExecution.ObservationRequest
 }
 
-private struct DispatchRequest {
+struct DispatchRequest {
     let id: HeistExecution.RequestID
 }
 
@@ -226,14 +249,14 @@ private extension HeistExecution.MainActorRequest {
     }
 }
 
-private extension HeistExecution.State {
+extension HeistExecution.State {
     var singleBeginObservationRequest: BeginObservationRequest? {
         guard case .pending(.perform(let requests)) = self,
               requests.count == 1,
-              case .beginObservation(let id, _) = requests[0] else {
+              case .beginObservation(let id, let request) = requests[0] else {
             return nil
         }
-        return BeginObservationRequest(id: id)
+        return BeginObservationRequest(id: id, request: request)
     }
 
     var singleDispatchRequest: DispatchRequest? {

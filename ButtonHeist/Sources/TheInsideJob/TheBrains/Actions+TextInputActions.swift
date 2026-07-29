@@ -12,10 +12,12 @@ extension Actions {
 
     func executeEditAction(
         _ target: EditActionTarget,
+        deadline: SemanticObservationDeadline
     ) async -> TheSafecracker.ActionDispatchResult {
         let inflatedTarget: ElementInflation.InflatedElementTarget
         switch await navigation.elementInflation.inflateFirstResponder(
             method: .editAction,
+            deadline: deadline
         ) {
         case .unavailable:
             return .failure(
@@ -76,10 +78,12 @@ extension Actions {
     }
 
     func executeResignFirstResponder(
+        deadline: SemanticObservationDeadline
     ) async -> TheSafecracker.ActionDispatchResult {
         let inflatedTarget: ElementInflation.InflatedElementTarget
         switch await navigation.elementInflation.inflateFirstResponder(
             method: .dismissKeyboard,
+            deadline: deadline
         ) {
         case .unavailable:
             return .failure(
@@ -127,8 +131,9 @@ extension Actions {
     func executeTypeText(
         text: TextInputText,
         target: ResolvedAccessibilityTarget?,
+        deadline: SemanticObservationDeadline
     ) async -> TheSafecracker.ActionDispatchResult {
-        let focusResult = await focusTextInput(target)
+        let focusResult = await focusTextInput(target, deadline: deadline)
         switch focusResult {
         case .alreadyFocused:
             return await executeTypeText(text: text, using: nil)
@@ -198,6 +203,7 @@ extension Actions {
 
     private func focusTextInput(
         _ target: ResolvedAccessibilityTarget?,
+        deadline: SemanticObservationDeadline
     ) async -> TextInputFocusResult {
         guard let target else {
             guard safecracker.hasActiveTextInput else {
@@ -218,6 +224,7 @@ extension Actions {
         switch await navigation.elementInflation.inflate(
             for: target,
             method: .typeText,
+            deadline: deadline
         ) {
         case .inflated(let target):
             inflatedTarget = target
@@ -227,21 +234,27 @@ extension Actions {
 
         if let focused = await focusedFirstResponder(
             candidate: inflatedTarget,
-            waitForInput: false
+            waitForInput: false,
+            deadline: deadline
         ) {
             return .focused(focused)
         }
 
-        return await activateTextInputTarget(inflatedTarget.committedTarget)
+        return await activateTextInputTarget(
+            inflatedTarget.committedTarget,
+            deadline: deadline
+        )
     }
 
     private func activateTextInputTarget(
         _ target: ElementInflation.CommittedElementTarget,
+        deadline: SemanticObservationDeadline
     ) async -> TextInputFocusResult {
         let refreshedTarget: ElementInflation.InflatedElementTarget
         switch await navigation.elementInflation.refreshCommittedTarget(
             target,
             method: .activate,
+            deadline: deadline
         ) {
         case .inflated(let target):
             refreshedTarget = target
@@ -271,7 +284,8 @@ extension Actions {
         }
         if let focused = await focusedFirstResponder(
             candidate: refreshedTarget,
-            waitForInput: false
+            waitForInput: false,
+            deadline: deadline
         ) {
             return .focused(focused)
         }
@@ -305,7 +319,8 @@ extension Actions {
 
         if let focused = await focusedFirstResponder(
             candidate: refreshedTarget,
-            waitForInput: true
+            waitForInput: true,
+            deadline: deadline
         ) {
             return .focused(focused)
         }
@@ -328,7 +343,8 @@ extension Actions {
 
         guard let focused = await focusedFirstResponder(
             candidate: refreshedTarget,
-            waitForInput: true
+            waitForInput: true,
+            deadline: deadline
         ) else {
             return .failed(textEntryUnreachable(at: point))
         }
@@ -350,7 +366,8 @@ extension Actions {
 
     private func focusedFirstResponder(
         candidate: ElementInflation.InflatedElementTarget,
-        waitForInput: Bool
+        waitForInput: Bool,
+        deadline: SemanticObservationDeadline
     ) async -> FocusedTextInput? {
         if !safecracker.hasActiveTextInput {
             guard waitForInput,
@@ -367,7 +384,10 @@ extension Actions {
             return focused
         }
         let heistId = candidate.treeElement.heistId
-        switch await navigation.elementInflation.inflateFirstResponder(method: .typeText) {
+        switch await navigation.elementInflation.inflateFirstResponder(
+            method: .typeText,
+            deadline: deadline
+        ) {
         case .inflated(let target) where target.treeElement.heistId == heistId:
             return focusedTextInput(from: target, liveTarget: target.liveTarget)
         case .unavailable, .failed, .inflated:

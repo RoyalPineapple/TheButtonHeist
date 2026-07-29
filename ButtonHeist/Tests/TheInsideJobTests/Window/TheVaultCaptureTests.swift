@@ -20,12 +20,12 @@ final class TheVaultCaptureTests: XCTestCase {
 
     func testCaptureReturnsNilWhenNoAccessibleWindows() throws {
         let result = withNoTraversableWindows {
-            vault.refreshLiveCapture()
+            vault.captureVisibleObservation()
         }
         XCTAssertNil(result)
     }
 
-    func testInjectedObservationSourceRemainsTheRefreshOwnerAcrossLifecycleReset() async {
+    func testInjectedObservationSourceRemainsTheCaptureOwnerAcrossLifecycleReset() async {
         let observation = InterfaceObservation.empty
         var captureCount = 0
         let injectedVault = TheVault(
@@ -36,9 +36,9 @@ final class TheVaultCaptureTests: XCTestCase {
             }
         )
 
-        XCTAssertEqual(injectedVault.refreshLiveCapture()?.captureID, observation.captureID)
+        XCTAssertEqual(injectedVault.captureVisibleObservation()?.captureID, observation.captureID)
         await injectedVault.resetInterfaceForLifecycle()
-        XCTAssertEqual(injectedVault.refreshLiveCapture()?.captureID, observation.captureID)
+        XCTAssertEqual(injectedVault.captureVisibleObservation()?.captureID, observation.captureID)
         XCTAssertEqual(captureCount, 2)
     }
 
@@ -62,10 +62,10 @@ final class TheVaultCaptureTests: XCTestCase {
         }
 
         XCTAssertTrue(contentVC.navigationItem.hidesSearchBarWhenScrolling)
-        XCTAssertNotNil(vault.refreshLiveCapture())
+        XCTAssertNotNil(vault.captureVisibleObservation())
         XCTAssertTrue(
             contentVC.navigationItem.hidesSearchBarWhenScrolling,
-            "refreshLiveCapture() should not change hidesSearchBarWhenScrolling"
+            "Capturing should not change hidesSearchBarWhenScrolling"
         )
     }
 
@@ -84,7 +84,7 @@ final class TheVaultCaptureTests: XCTestCase {
                 windowB.isHidden = true
             }
 
-            return vault.refreshLiveCapture()
+            return vault.captureVisibleObservation()
         }
 
         guard let result else {
@@ -120,7 +120,7 @@ final class TheVaultCaptureTests: XCTestCase {
                 overlay.isHidden = true
             }
 
-            return vault.refreshLiveCapture()
+            return vault.captureVisibleObservation()
         }
 
         guard let result else {
@@ -153,7 +153,7 @@ final class TheVaultCaptureTests: XCTestCase {
                 lower.isHidden = true
             }
 
-            return vault.refreshLiveCapture()
+            return vault.captureVisibleObservation()
         }
 
         guard let result else {
@@ -181,7 +181,7 @@ final class TheVaultCaptureTests: XCTestCase {
                 keyWindow.isHidden = true
             }
 
-            return vault.refreshLiveCapture()
+            return vault.captureVisibleObservation()
         }
 
         guard let result else {
@@ -207,7 +207,7 @@ final class TheVaultCaptureTests: XCTestCase {
                 lowerModal.isHidden = true
             }
 
-            return vault.refreshLiveCapture()
+            return vault.captureVisibleObservation()
         }
 
         guard let result else {
@@ -238,7 +238,7 @@ final class TheVaultCaptureTests: XCTestCase {
                 keyWindow.isHidden = true
             }
 
-            return vault.refreshLiveCapture()
+            return vault.captureVisibleObservation()
         }
 
         guard let result else {
@@ -270,7 +270,7 @@ final class TheVaultCaptureTests: XCTestCase {
                 keyWindow.isHidden = true
             }
 
-            return vault.refreshLiveCapture()
+            return vault.captureVisibleObservation()
         }
 
         guard let result else {
@@ -300,7 +300,7 @@ final class TheVaultCaptureTests: XCTestCase {
                 lower.isHidden = true
             }
 
-            return vault.refreshLiveCapture()
+            return vault.captureVisibleObservation()
         }
 
         guard let result else {

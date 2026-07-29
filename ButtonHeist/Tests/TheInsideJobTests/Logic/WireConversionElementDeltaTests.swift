@@ -258,7 +258,7 @@ extension WireConverterTests {
         XCTAssertEqual(update?.after.semantics.assertable.label, "Telescope, Far Light, 3:32")
         XCTAssertEqual(update?.before.geometry.screen, TheVault.onscreenSpace(for: beforeElement.element))
         XCTAssertEqual(update?.after.geometry.screen, TheVault.onscreenSpace(for: afterElement.element))
-        XCTAssertEqual(update?.before.semantics.semanticHash, update?.after.semantics.semanticHash)
+        XCTAssertEqual(update?.before.semantics, update?.after.semantics)
         XCTAssertTrue(update?.changes.contains { $0.property == .frame } == true)
     }
 
@@ -308,7 +308,7 @@ extension WireConverterTests {
         XCTAssertEqual(update?.after.semantics.assertable.traits, [.button, .selected])
         XCTAssertEqual(update?.before.geometry.screen, TheVault.onscreenSpace(for: beforeElement.element))
         XCTAssertEqual(update?.after.geometry.screen, TheVault.onscreenSpace(for: afterElement.element))
-        XCTAssertNotEqual(update?.before.semantics.semanticHash, update?.after.semantics.semanticHash)
+        XCTAssertNotEqual(update?.before.semantics, update?.after.semantics)
         XCTAssertTrue(update?.changes.contains { $0.property == .value } == true)
         XCTAssertTrue(update?.changes.contains { $0.property == .traits } == true)
     }
@@ -348,7 +348,7 @@ extension WireConverterTests {
         XCTAssertEqual(update?.after.semantics.assertable.label, "Telescope, Far Light, 3:32")
         XCTAssertEqual(update?.before.geometry.screen, TheVault.onscreenSpace(for: beforeElement.element))
         XCTAssertEqual(update?.after.geometry.screen, TheVault.onscreenSpace(for: afterElement.element))
-        XCTAssertEqual(update?.before.semantics.semanticHash, update?.after.semantics.semanticHash)
+        XCTAssertEqual(update?.before.semantics, update?.after.semantics)
         XCTAssertTrue(update?.changes.contains { $0.property == .frame } == true)
     }
 

@@ -142,11 +142,11 @@ extension WireConverterTests {
         let snapshot = Observation.Snapshot(interface: interface, context: .empty)
         let evidence = Observation.Evidence(
             baseline: snapshot,
-            current: snapshot,
             events: [],
-            completeness: .complete
+            current: snapshot,
+            coverage: .complete
         )
-        let result = predicate.evaluate(in: evidence)
+        let result = try predicate.evaluate(in: evidence)
 
         XCTAssertEqual(result, PredicateEvaluationResult(met: true))
         XCTAssertEqual(
@@ -244,11 +244,11 @@ extension WireConverterTests {
         let snapshot = Observation.Snapshot(interface: interface, context: .empty)
         let evidence = Observation.Evidence(
             baseline: snapshot,
-            current: snapshot,
             events: [],
-            completeness: .complete
+            current: snapshot,
+            coverage: .complete
         )
-        let result = predicate.evaluate(in: evidence)
+        let result = try predicate.evaluate(in: evidence)
 
         XCTAssertEqual(result, PredicateEvaluationResult(met: true))
         XCTAssertEqual(interface.annotations.containers.count, 4)

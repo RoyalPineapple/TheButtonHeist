@@ -51,8 +51,8 @@ public struct HeistReport: Sendable, Equatable {
             switch evidence {
             case .action(_, _, let expectation):
                 expectation
-            case .wait(let evidence):
-                evidence.expectation
+            case .wait(_, let expectation, _):
+                expectation
             case .caseSelection,
                  .forEachString,
                  .forEachElement,
@@ -104,7 +104,11 @@ public struct HeistReport: Sendable, Equatable {
             evidence: HeistActionEvidence,
             expectation: ExpectationResult?
         )
-        case wait(WaitEvidence)
+        case wait(
+            evidence: HeistExpectationEvidence,
+            expectation: ExpectationResult,
+            outcome: HeistPredicateEvidenceOutcome
+        )
         case caseSelection(HeistCaseSelectionEvidence)
         case forEachString(declaration: HeistForEachStringDeclaration, evidence: HeistForEachStringEvidence)
         case forEachElement(declaration: HeistForEachElementDeclaration, evidence: HeistForEachElementEvidence)
@@ -123,11 +127,17 @@ public struct HeistReport: Sendable, Equatable {
                 )
             case .wait:
                 guard let evidence = step.waitEvidence else { return nil }
-                self = .wait(WaitEvidence(
+                let expectation = try evidence.replay()
+                let outcome: HeistPredicateEvidenceOutcome = switch (step.status, expectation.met) {
+                case (.passed, true): .matched
+                case (.passed, false): .handledElse
+                default: .failed
+                }
+                self = .wait(
                     evidence: evidence,
-                    expectation: try evidence.replay(),
-                    status: step.status
-                ))
+                    expectation: expectation,
+                    outcome: outcome
+                )
             case .conditional:
                 guard let evidence = step.caseSelectionEvidence else { return nil }
                 self = .caseSelection(evidence)
@@ -152,40 +162,6 @@ public struct HeistReport: Sendable, Equatable {
             case .failure, .heist:
                 return nil
             }
-        }
-    }
-
-    package struct WaitEvidence: Sendable, Equatable {
-        package let evidence: HeistExpectationEvidence
-        package let expectation: ExpectationResult
-        package let outcome: HeistPredicateEvidenceOutcome
-
-        package var observation: Observation.Evidence { evidence.observation }
-
-        package var baselineSummary: String? {
-            Self.summary(observation.baseline)
-        }
-
-        package var finalSummary: String? {
-            Self.summary(observation.current)
-        }
-
-        package init(
-            evidence: HeistExpectationEvidence,
-            expectation: ExpectationResult,
-            status: HeistExecutionStepStatus
-        ) {
-            self.evidence = evidence
-            self.expectation = expectation
-            outcome = switch (status, expectation.met) {
-            case (.passed, true): .matched
-            case (.passed, false): .handledElse
-            default: .failed
-            }
-        }
-
-        private static func summary(_ snapshot: Observation.Snapshot?) -> String? {
-            snapshot?.summary
         }
     }
 

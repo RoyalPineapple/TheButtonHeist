@@ -71,45 +71,34 @@ package typealias HeistActionCompletion = HeistExecutionCompletion<
     HeistPassedActionEvidence, HeistFailedActionEvidence, HeistPassedActionEvidence
 >
 
-package enum HeistWaitDecision: String, Codable, Sendable, Equatable {
-    case matched
-    case fallback
-}
-
 package struct HeistPassedWaitEvidence: Codable, Sendable, Equatable {
-    package let decision: HeistWaitDecision
     package let expectation: HeistExpectationEvidence
 
-    package static func matched(_ expectation: HeistExpectationEvidence) -> Self? {
-        Self(decision: .matched, expectation: expectation)
-    }
-
-    package static func fallback(_ expectation: HeistExpectationEvidence) -> Self? {
-        Self(decision: .fallback, expectation: expectation)
-    }
-
-    private init?(decision: HeistWaitDecision, expectation: HeistExpectationEvidence) {
-        guard let replay = try? expectation.replay(),
-              replay.met == (decision == .matched)
-        else { return nil }
-        self.decision = decision
+    package init?(_ expectation: HeistExpectationEvidence) {
+        guard (try? expectation.replay()) != nil else { return nil }
         self.expectation = expectation
     }
 
+    package var matchesExpectation: Bool {
+        (try? expectation.replay().met) == true
+    }
+
+    package var usesFallback: Bool {
+        !matchesExpectation
+    }
+
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case decision
         case expectation
     }
 
     package init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "passed wait evidence")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let decision = try container.decode(HeistWaitDecision.self, forKey: .decision)
         let expectation = try container.decode(HeistExpectationEvidence.self, forKey: .expectation)
-        guard let admitted = Self(decision: decision, expectation: expectation) else {
+        guard let admitted = Self(expectation) else {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: container.codingPath,
-                debugDescription: "passed wait evidence decision must agree with replay proof"
+                debugDescription: "passed wait evidence requires replayable expectation evidence"
             ))
         }
         self = admitted
@@ -117,7 +106,6 @@ package struct HeistPassedWaitEvidence: Codable, Sendable, Equatable {
 
     package func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(decision, forKey: .decision)
         try container.encode(expectation, forKey: .expectation)
     }
 }

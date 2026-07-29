@@ -658,12 +658,6 @@ struct HeistPlanTraversal {
     ) rethrows {
         let invokeContext = context.child(path: context.path.child(.invoke))
         try observe(.invoke(invoke, context: invokeContext))
-        if let expectation = invoke.expectation {
-            try observe(.wait(
-                expectation,
-                context: invokeContext.child(path: invokeContext.path.child(.expectation))
-            ))
-        }
         guard expandsInvocations else { return }
         guard let resolved = context.resolveInvocation(path: invoke.path) else { return }
         let resolvedNode = resolved.callGraphNode

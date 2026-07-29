@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import ButtonHeistTestSupport
 import XCTest
 
 @testable import AccessibilitySnapshotParser
@@ -197,6 +198,9 @@ final class HeistMachineExpectationTests: XCTestCase {
             return XCTFail("A matched, unchanged wait must request final evidence")
         }
         XCTAssertEqual(firstObservationID, id)
+        XCTAssertTrue(
+            machine.activeLeaf?.admits(.request(firstFinishID)) == true
+        )
 
         guard case .pending(.wait) = machine.advance(
             .event(.elementsChanged(heistSnapshot(labels: ["Late Change"])))
@@ -204,6 +208,9 @@ final class HeistMachineExpectationTests: XCTestCase {
             return XCTFail("A final-capture change must reopen observation")
         }
         XCTAssertNil(machine.activeLeaf?.finishingObservationRequestID)
+        XCTAssertFalse(
+            machine.activeLeaf?.admits(.request(firstFinishID)) == true
+        )
 
         guard case .pending(.perform(let secondFinish)) = machine.advance(
             .event(.noChange)
@@ -218,17 +225,33 @@ final class HeistMachineExpectationTests: XCTestCase {
         }
         XCTAssertEqual(secondObservationID, id)
         XCTAssertNotEqual(secondFinishID, firstFinishID)
+        XCTAssertFalse(
+            machine.activeLeaf?.admits(.request(firstFinishID)) == true
+        )
+        XCTAssertTrue(
+            machine.activeLeaf?.admits(.request(secondFinishID)) == true
+        )
 
-        let evidence = Observation.History(retentionLimit: 1).evidence(
-            in: 0..<0,
+        let lateChange = heistSnapshot(labels: ["Late Change"])
+        let events: [Observation.Event] = [
+            heistNotification("Saved"),
+            .noChange,
+            .elementsChanged(lateChange),
+            .noChange,
+        ]
+        var history = Observation.History(retentionLimit: events.count)
+        let recorded = history.record(events, protectedBy: nil)
+        let evidence = history.evidence(
+            in: recorded,
             baseline: baseline,
-            current: baseline
+            current: lateChange
         )
         guard case .pending(.wait) = machine.advance(.observationFinished(
             source: .request(firstFinishID),
             observationID: id,
             evidence: evidence,
-            outcome: .completed
+            outcome: .completed,
+            timing: HeistResultFixture.expectationTiming
         )) else {
             return XCTFail("A superseded final-capture response must be ignored")
         }
@@ -242,7 +265,8 @@ final class HeistMachineExpectationTests: XCTestCase {
                 source: .deadline,
                 observationID: id,
                 evidence: evidence,
-                outcome: .completed
+                outcome: .completed,
+                timing: HeistResultFixture.expectationTiming
             )
         ) else {
             return XCTFail("Satisfied final evidence at the deadline must complete")

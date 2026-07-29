@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Select expensive macOS CI scopes from repository-relative changed paths."""
+"""Select expensive CI scopes from repository-relative changed paths."""
 
 from __future__ import annotations
 
@@ -12,7 +12,8 @@ from pathlib import Path
 PACKAGE_API = "run_package_api_contracts"
 CLI_TOOLS = "run_cli_tool_tests"
 BUMPER_RULE_TESTS = "run_bumper_rule_tests"
-SCOPES = (PACKAGE_API, CLI_TOOLS, BUMPER_RULE_TESTS)
+IOS_INTEGRATION = "run_ios_integration"
+SCOPES = (PACKAGE_API, CLI_TOOLS, BUMPER_RULE_TESTS, IOS_INTEGRATION)
 
 DOCUMENTATION_FILES = {
     "AGENTS.md",
@@ -76,6 +77,25 @@ IOS_AUTOMATION_PATHS = {
     "scripts/tests/select-ios-ci-simulator-test.py",
 }
 
+IOS_INTEGRATION_PATHS = {
+    ".github/workflows/ci.yml",
+    "Project.swift",
+    "Workspace.swift",
+    "Tuist/Package.swift",
+    "scripts/select-ios-ci-simulator.py",
+    "scripts/test-runner.py",
+}
+IOS_INTEGRATION_PREFIXES = (
+    "ButtonHeist/Sources/ButtonHeistSupport/",
+    "ButtonHeist/Sources/ButtonHeistTesting/",
+    "ButtonHeist/Sources/TheInsideJob/",
+    "ButtonHeist/Sources/ThePlant/",
+    "ButtonHeist/Sources/TheScore/",
+    "ButtonHeist/Tests/TheInsideJobTests/Integration/",
+    "ButtonHeist/Tests/TheInsideJobTests/Shared/Socket/",
+    "TestApp/",
+)
+
 
 def normalize_path(path: str) -> str:
     """Normalize common git path spellings without accepting paths outside the repo."""
@@ -103,20 +123,25 @@ def is_documentation(path: str) -> bool:
 
 def scopes_for_path(path: str) -> set[str]:
     """Return scopes affected by one path, failing open for unknown paths."""
+    integration = (
+        {IOS_INTEGRATION}
+        if matches(path, IOS_INTEGRATION_PATHS, IOS_INTEGRATION_PREFIXES)
+        else set()
+    )
     if matches(path, BUMPER_RULE_PATHS, BUMPER_RULE_PREFIXES):
-        return {BUMPER_RULE_TESTS}
+        return integration.union([BUMPER_RULE_TESTS])
 
     if is_documentation(path):
-        return set()
+        return integration
 
     if matches(path, PACKAGE_CONTRACT_PATHS, PACKAGE_CONTRACT_PREFIXES):
-        return {PACKAGE_API, CLI_TOOLS}
+        return integration.union([PACKAGE_API, CLI_TOOLS])
 
     if matches(path, CLI_TOOL_PATHS, CLI_TOOL_PREFIXES):
-        return {CLI_TOOLS}
+        return integration.union([CLI_TOOLS])
 
     if matches(path, IOS_AUTOMATION_PATHS, IOS_OR_FRAMEWORK_TEST_PREFIXES):
-        return set()
+        return integration
 
     # Workflow, toolchain, project-generation, and unclassified changes run every
     # optional scope. A new path must earn a narrower classification explicitly.

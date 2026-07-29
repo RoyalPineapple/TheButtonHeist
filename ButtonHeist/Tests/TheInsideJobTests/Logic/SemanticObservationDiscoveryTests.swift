@@ -27,7 +27,7 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
 
         let changedSignal = tripwireSignal(sequence: 2)
         vault.semanticObservationStream.readTripwireSignal = { changedSignal }
-        let staleAdmission = await vault.semanticObservationStream.admittedObservation(
+        let staleAdmission = vault.semanticObservationStream.admittedObservation(
             scope: .visible,
             after: nil
         )
@@ -67,7 +67,7 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
                 rowObject: newRow
             )
         )
-        let replacementEvents = try await retainedEvents(
+        let replacementEvents = try retainedEvents(
             after: firstPublication.historyRange.upperBound
         )
 
@@ -92,7 +92,7 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
         let discovery = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(first)
         let visible = await vault.semanticObservationStream.commitVisibleObservationForTesting(second)
 
-        let events = try await retainedEvents(after: discovery.historyRange.upperBound)
+        let events = try retainedEvents(after: discovery.historyRange.upperBound)
         XCTAssertEqual(discovery.historyRange.upperBound, visible.historyRange.lowerBound)
         XCTAssertEqual(events, visible.events)
         XCTAssertEqual(events.count, 2)
@@ -115,7 +115,7 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
 
         let publication = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(observation)
         let snapshot = publication.current.snapshot
-        let retained = try await retainedEvents(
+        let retained = try retainedEvents(
             after: publication.historyRange.lowerBound
         )
 
@@ -138,7 +138,7 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
             accessibilityNotificationSequence: 1
         )
         vault.semanticObservationStream.readTripwireSignal = { currentSignal }
-        let admission = await vault.semanticObservationStream.admitCurrentObservation(
+        let admission = vault.semanticObservationStream.admitCurrentObservation(
             vault: vault,
             tripwireSignal: tripwireSignal(sequence: 1),
             discoveryCommitPolicy: .mergeIntoInterface,
@@ -177,7 +177,7 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
             replacementDiscovery.historyRange.lowerBound
         )
 
-        let events = try await retainedEvents(after: initialDiscovery.historyRange.upperBound)
+        let events = try retainedEvents(after: initialDiscovery.historyRange.upperBound)
         XCTAssertEqual(events, replacementVisible.events + replacementDiscovery.events)
         XCTAssertEqual(events.count, 3)
         guard case .screenChanged = events[0] else {

@@ -21,9 +21,9 @@ final class TargetResolutionAlgebraTests: XCTestCase {
             vault: vault,
             safecracker: TheSafecracker(fingerprintsEnabled: false),
             exploration: ElementInflation.Exploration(
-                discoverTarget: { _ in nil },
+                discoverTarget: { _, _ in nil },
                 revealKnownTarget: { _ in nil },
-                moveViewport: { _ in .unavailable() }
+                moveViewport: { _, _ in .unavailable() }
             )
         )
     }

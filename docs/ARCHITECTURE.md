@@ -393,8 +393,8 @@ The pipeline is:
 
 1. Resolve the semantic target against current admitted accessibility state.
 2. Reject missing or ambiguous targets with diagnostics.
-3. Derive one deadline from the selected element's scroll-membership graph. If
-   reveal will cross a capture boundary, admit an ordinal-free
+3. Carry the active leaf deadline from the execution host. If reveal will cross
+   a capture boundary, admit an ordinal-free
    `AdmittedSemanticTarget` that still uniquely selects that exact element.
 4. Reveal nested scroll ancestors outermost-first when viewport movement is
    required, using the initial capture's `HeistId` only to locate the live scroll
@@ -407,7 +407,7 @@ The pipeline is:
    resolution ends inflation without a live handoff.
 6. Acquire and stabilize fresh live geometry under the same deadline.
 7. Execute the accessibility operation or explicit spatial gesture.
-8. Return admitted semantic evidence through `InteractionCoordinator`.
+8. Commit admitted semantic evidence through `Observation.Stream`.
 
 Predicate evaluation uses semantic observations, not live UIKit geometry. Live
 geometry is used for inflation and explicit spatial gesture or viewport commands; it

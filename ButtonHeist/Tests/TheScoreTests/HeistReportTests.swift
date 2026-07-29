@@ -104,7 +104,7 @@ import TheScore
         #expect(evidence.first?.current?.interface == after)
     }
 
-    @Test func reportPreservesDistinctObservationWindows() throws {
+    @Test func reportPreservesEvidenceForEachExecutedStep() throws {
         let first = evidence(
             before: makeTestInterface(elementCount: 0),
             after: makeTestInterface(elementCount: 1),
@@ -126,11 +126,11 @@ import TheScore
             ),
         ])
 
-        guard case .changed(let windows) = try HeistReport.project(result: result).accessibilityChange else {
+        guard case .changed(let evidence) = try HeistReport.project(result: result).accessibilityChange else {
             Issue.record("Expected accessibility changes")
             return
         }
-        #expect(windows == [first, second])
+        #expect(evidence == [first, second])
     }
 
     private func report(evidence: Observation.Evidence) throws -> HeistReport {

@@ -74,6 +74,12 @@ enum PublicHeistJSONFixtureValue {
 
     static let doneExpectation = expectation(label: "Done")
 
+    static let expectationTiming = object([
+        "budgetMs": int(1_000),
+        "elapsedMs": int(250),
+        "lastTreeChangeElapsedMs": int(125),
+    ])
+
     static let readyCase = object([
         "predicate": existsPredicate(label: "Ready"),
         "met": bool(true),
@@ -83,6 +89,7 @@ enum PublicHeistJSONFixtureValue {
     static let matchedWaitEvidence = object([
         "outcome": string("matched"),
         "expectation": doneExpectation,
+        "timing": expectationTiming,
         "baselineSummary": string("screen: Loading; interface: 0 elements"),
         "finalSummary": string("screen: Done visible; interface: 1 elements"),
         "delta": object([
@@ -124,12 +131,13 @@ enum PublicHeistExecutionJSONContractFixture {
 
     static func wait() throws -> HeistExecutionStepResult {
         let evidence = try waitEvidence()
+        let passedEvidence = try XCTUnwrap(HeistPassedWaitEvidence(evidence))
         return .wait(
             path: "$.body[0]",
             predicate: donePredicate,
             timeout: 1,
             completion: .passed(
-                evidence: try XCTUnwrap(HeistPassedWaitEvidence.matched(evidence))
+                evidence: passedEvidence
             )
         )
     }
@@ -295,8 +303,9 @@ enum PublicHeistExecutionJSONContractFixture {
             ]),
             context: Observation.Context(screenId: "Done visible")
         )
-        return try HeistExpectationEvidence(
+        return HeistExpectationEvidence(
             predicate: donePredicate,
+            boundPredicate: try donePredicate.resolve(in: .empty),
             observation: Observation.Evidence(
                 baseline: Observation.Snapshot(
                     interface: makeTestInterface(elements: []),
@@ -306,7 +315,8 @@ enum PublicHeistExecutionJSONContractFixture {
                 current: current,
                 coverage: .complete
             ),
-            terminalCause: .observed
+            terminalCause: .observed,
+            timing: HeistResultFixture.expectationTiming
         )
     }
 }

@@ -19,8 +19,7 @@ final class SemanticObservationStoreTests: XCTestCase {
 
         let recorded = history.record(events, protectedBy: nil)
 
-        XCTAssertEqual(recorded.range, 0..<3)
-        XCTAssertEqual(recorded.coverage, .complete)
+        XCTAssertEqual(recorded, 0..<3)
         XCTAssertEqual(Array(history), events)
         XCTAssertEqual(history.screenGeneration(at: 0), 0)
         XCTAssertEqual(history.screenGeneration(at: 1), 0)
@@ -66,6 +65,33 @@ final class SemanticObservationStoreTests: XCTestCase {
         }
     }
 
+    func testAdvancingProtectedBoundaryReleasesCompletedLeafHistory() throws {
+        var state = TheVault.State(retentionLimit: 2)
+        _ = state.commitObservation(admission())
+        let firstBoundary = state.history.endIndex
+        state.protectHistory(from: firstBoundary)
+
+        _ = state.commitObservation(admission())
+        _ = state.commitObservation(admission())
+        let nextBoundary = state.history.endIndex
+        state.advanceHistoryProtection(from: firstBoundary, to: nextBoundary)
+        _ = state.commitObservation(admission())
+
+        XCTAssertEqual(state.history.count, 2)
+        XCTAssertThrowsError(
+            try state.history.events(after: firstBoundary)
+        ) { error in
+            XCTAssertEqual(
+                error as? Observation.History.ReadError,
+                .rangeUnavailable
+            )
+        }
+        XCTAssertEqual(
+            Array(try state.history.events(after: nextBoundary)),
+            [.noChange]
+        )
+    }
+
     func testEvictedRangeProducesIncompleteEvidence() {
         var history = Observation.History(retentionLimit: 1)
         _ = history.record([.noChange], protectedBy: nil)
@@ -81,51 +107,14 @@ final class SemanticObservationStoreTests: XCTestCase {
         XCTAssertTrue(evidence.events.isEmpty)
     }
 
-    func testHistoryPreservesExactNotificationGapCoverage() {
-        var history = Observation.History(retentionLimit: 2)
-        let firstRecord = history.record(
-            [.noChange],
-            notificationGap: AccessibilityNotificationGap(
-                droppedThroughSequence: 7
-            ),
-            afterNotificationSequence: 4,
-            protectedBy: nil
-        )
-        let expected = Observation.Coverage.incomplete(.notificationIngress(
-            .init(afterSequence: 4, throughSequence: 7),
-            additional: []
-        ))
-
-        XCTAssertEqual(firstRecord.coverage, expected)
-        XCTAssertEqual(
-            history.evidence(
-                in: firstRecord.range,
-                baseline: nil,
-                current: nil
-            ).coverage,
-            expected
-        )
-
-        let secondRecord = history.record(
-            [.noChange],
-            notificationGap: AccessibilityNotificationGap(
-                droppedThroughSequence: 13
-            ),
-            afterNotificationSequence: 11,
-            protectedBy: nil
-        )
-        XCTAssertEqual(
-            history.evidence(
-                in: firstRecord.range.lowerBound..<secondRecord.range.upperBound,
-                baseline: nil,
-                current: nil
-            ).coverage,
-            .incomplete(.notificationIngress(
-                .init(afterSequence: 4, throughSequence: 7),
-                additional: [
-                    .init(afterSequence: 11, throughSequence: 13),
-                ]
-            ))
+    func testIncompleteNotificationBatchCannotConstructAnAdmissionSnapshot() {
+        XCTAssertNil(
+            Observation.NotificationSnapshot(
+                admittedNotifications: [],
+                through: AccessibilityNotificationCursor(sequence: 7),
+                scopedScreenChangedThrough: 0,
+                gap: AccessibilityNotificationGap(droppedThroughSequence: 7)
+            )
         )
     }
 
@@ -218,11 +207,11 @@ final class SemanticObservationStoreTests: XCTestCase {
             discoveryCommitPolicy: .mergeIntoInterface,
             lineage: .resting,
             scope: scope,
-            notificationAdmission: .action(.init(
+            notifications: Observation.NotificationSnapshot(
                 admittedNotifications: notifications,
                 through: AccessibilityNotificationCursor(sequence: through),
                 scopedScreenChangedThrough: 0
-            )),
+            )!,
             keyboardVisible: nil,
             timestamp: Date(timeIntervalSince1970: 0),
             viewportFrames: observation.tree.viewportFrames,

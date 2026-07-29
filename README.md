@@ -473,10 +473,11 @@ open ButtonHeist.xcworkspace
 ### Test locally
 
 ```bash
-scripts/test-runner.py run MacFrameworkTests --selection full
-scripts/test-runner.py run TheInsideJobTests --selection full
-scripts/test-runner.py run TheInsideJobIntegrationTests --selection full
-scripts/test-runner.py run HostedBehaviorTests --selection full
+scripts/test-runner.py run MacFrameworkTests
+scripts/test-runner.py run TheInsideJobLogicTests
+scripts/test-runner.py run TheInsideJobWindowTests
+scripts/test-runner.py run TheInsideJobIntegrationTests
+scripts/test-runner.py run HostedBehaviorTests
 ```
 
 ### Project structure

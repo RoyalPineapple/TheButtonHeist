@@ -133,33 +133,29 @@ import Testing
             .invoke(HeistInvocationStep(
                 path: "Cart.addItem",
                 argument: .string("Milk"),
-                expectation: WaitStep(
-                    predicate: .elementsChanged([.appeared(.label("subtotal"))]),
-                    timeout: ActionExpectationTimeoutPolicy.default.standard
+                expectation: ActionExpectation(
+                    predicate: .elementsChanged([.appeared(.label("subtotal"))])
                 )
             )),
             .invoke(HeistInvocationStep(
                 path: "Cart.addItem",
                 argument: .string("Eggs"),
-                expectation: WaitStep(
+                expectation: ActionExpectation(
                     predicate: .elementsChanged([
                         .updated(.label("subtotal"), .value(after: .contains("2 items"))),
-                    ]),
-                    timeout: ActionExpectationTimeoutPolicy.default.standard
+                    ])
                 )
             )),
             .invoke(HeistInvocationStep(
                 path: "Checkout.pay",
-                expectation: WaitStep(
-                    predicate: .exists(.label("Payment Complete")),
-                    timeout: ActionExpectationTimeoutPolicy.default.standard
+                expectation: ActionExpectation(
+                    predicate: .exists(.label("Payment Complete"))
                 )
             )),
             .invoke(HeistInvocationStep(
                 path: "Checkout.pay",
-                expectation: WaitStep(
-                    predicate: .screenChanged("Receipt"),
-                    timeout: ActionExpectationTimeoutPolicy.default.screenTransition
+                expectation: ActionExpectation(
+                    predicate: .screenChanged("Receipt")
                 )
             )),
         ]
@@ -224,21 +220,21 @@ import Testing
             ),
             expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                 .updated(.identifier("Search"), .value(after: "Bruschetta")),
-            ]), timeout: 1)))),
+            ]), timeout: .sessionDefault)))),
     ])
     let expectedUnscoped = try HeistPlan(body: [
         .action(ActionStep(
             command: .increment(.predicate(.identifier("Quantity"))),
             expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                 .updated(.identifier("Quantity"), .value(after: "3")),
-            ]), timeout: 1)))),
+            ]), timeout: .sessionDefault)))),
     ])
     let expectedBeforeAfter = try HeistPlan(body: [
         .action(ActionStep(
             command: .increment(.predicate(.identifier("Quantity"))),
             expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                 .updated(.identifier("Quantity"), .value(before: "2", after: "3")),
-            ]), timeout: 1)))),
+            ]), timeout: .sessionDefault)))),
     ])
     let expectedBroadBeforeAfter = try HeistPlan(body: [
         .action(ActionStep(
@@ -248,7 +244,7 @@ import Testing
                     .identifier("Quantity"),
                     .value(before: .prefix("cart:"), after: .contains("items"))
                 ),
-            ]), timeout: 1)))),
+            ]), timeout: .sessionDefault)))),
     ])
 
     #expect(scoped == expectedScoped)
@@ -317,35 +313,35 @@ import Testing
             command: .activate(.predicate(.label("Add"))),
             expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                 .appeared(.label("Back")),
-            ]), timeout: 1)))),
+            ]), timeout: .sessionDefault)))),
     ])
     let expectedDisappeared = try HeistPlan(body: [
         .action(ActionStep(
             command: .activate(.predicate(.label("Clear"))),
             expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                 .disappeared(.identifier("row-1")),
-            ]), timeout: 1)))),
+            ]), timeout: .sessionDefault)))),
     ])
     let expectedUpdatedPropertyOnly = try HeistPlan(body: [
         .action(ActionStep(
             command: .typeText(text: "milk", target: .predicate(.identifier("Search"))),
             expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                 .updated(.identifier("Search"), .value()),
-            ]), timeout: 1)))),
+            ]), timeout: .sessionDefault)))),
     ])
     let expectedUpdatedBeforeAfterOnly = try HeistPlan(body: [
         .action(ActionStep(
             command: .typeText(text: "milk", target: .predicate(.identifier("Search"))),
             expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                 .updated(.identifier("Search"), .value(before: "", after: "milk")),
-            ]), timeout: 1)))),
+            ]), timeout: .sessionDefault)))),
     ])
     let expectedUpdatedAllFields = try HeistPlan(body: [
         .action(ActionStep(
             command: .typeText(text: "milk", target: .predicate(.identifier("Search"))),
             expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                 .updated(.identifier("Search"), .value(before: "", after: "milk")),
-            ]), timeout: 1)))),
+            ]), timeout: .sessionDefault)))),
     ])
     #expect(appeared == expectedAppeared)
     #expect(disappeared == expectedDisappeared)

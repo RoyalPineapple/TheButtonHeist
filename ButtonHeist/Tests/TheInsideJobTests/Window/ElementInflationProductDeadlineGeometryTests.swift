@@ -11,79 +11,7 @@ extension ElementInflationProductTests {
 
     // MARK: - Deadline and Geometry
 
-    func testHandoffTickCountFollowsNestedScrollMembershipGraph() async {
-        let outerPath = TreePath([0])
-        let innerPath = TreePath([0, 0])
-        let nestedTarget = AccessibilityElement.make(label: "Nested Target", traits: .button)
-        let element = InterfaceTree.Element(
-            heistId: "nested_target",
-            path: innerPath.appending(0),
-            scrollMembership: .init(containerPath: innerPath, index: nil),
-            geometry: testGeometry(
-                for: nestedTarget,
-                ownerPath: innerPath,
-                screen: .offscreen
-            ),
-            element: nestedTarget
-        )
-        let container = AccessibilityContainer(
-            type: .none,
-            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 640))
-        )
-        let containerFrame = try? ViewRect(validating: container.frame.cgRect)
-        let tree = InterfaceTree(
-            elements: [element.heistId: element],
-            containers: [
-                outerPath: .init(
-                    container: container,
-                    path: outerPath,
-                    containerName: nil,
-                    viewSpace: HeistElement.Geometry.ViewSpace(
-                        ownerPath: .root,
-                        frame: containerFrame,
-                        activationPoint: nil
-                    )
-                ),
-                innerPath: .init(
-                    container: container,
-                    path: innerPath,
-                    containerName: nil,
-                    viewSpace: HeistElement.Geometry.ViewSpace(
-                        ownerPath: outerPath,
-                        frame: containerFrame,
-                        activationPoint: nil
-                    ),
-                    scrollMembership: .init(containerPath: outerPath, index: nil)
-                ),
-            ]
-        )
-
-        let visibleTarget = AccessibilityElement.make(label: "Visible Target", traits: .button)
-        XCTAssertEqual(
-            ElementInflation.handoffTickCount(
-                for: InterfaceTree.Element(
-                    heistId: "visible_target",
-                    scrollMembership: nil,
-                    geometry: testGeometry(
-                        for: visibleTarget,
-                        ownerPath: .root,
-                        screen: TheVault.onscreenSpace(for: visibleTarget)
-                    ),
-                    element: visibleTarget
-                ),
-                in: .empty
-            ),
-            2,
-            "A direct target keeps the existing two-tick minimum"
-        )
-        XCTAssertEqual(
-            ElementInflation.handoffTickCount(for: element, in: tree),
-            3,
-            "Two scroll memberships plus one geometry confirmation require three ticks"
-        )
-    }
-
-    func testCommittedTargetRefreshReplacesStaleLiveEvidenceAndStartsANewDeadline() async throws {
+    func testCommittedTargetRefreshPreservesSuppliedLeafDeadline() async throws {
         let heistId: HeistId = "committed_refresh_target"
         let element = makeElement(
             label: "Committed Refresh Target",
@@ -115,16 +43,22 @@ extension ElementInflationProductTests {
             .init(element, heistId: heistId, object: replacementObject),
         ])
         var now = RuntimeElapsed.now
-        let deadlineStart = now
+        let deadline = SemanticObservationDeadline(
+            start: now,
+            timeoutSeconds: 7
+        )
         refreshBrains.navigation.elementInflation.geometryEnvironment = .init(
             now: { now },
-            refreshVisibleObservation: { _ in
+            refreshVisibleObservation: {
                 now = now.advanced(by: .milliseconds(10))
+                guard let observation = refreshObservationSource.observation else {
+                    return .unavailable(.sourceTreeUnavailable)
+                }
                 await refreshBrains.vault.installObservationForTesting(
-                    refreshObservationSource.observation
+                    observation
                 )
                 guard let current =
-                    await refreshBrains.vault.semanticObservationStream.stateOwner.current()
+                    refreshBrains.vault.semanticObservationStream.current()
                 else {
                     return .unavailable(.sourceTreeUnavailable)
                 }
@@ -134,17 +68,17 @@ extension ElementInflationProductTests {
 
         let result = await refreshBrains.navigation.elementInflation.refreshCommittedTarget(
             completedInflation.committedTarget,
-            method: .activate
+            method: .activate,
+            deadline: deadline
         )
 
         guard case .inflated(let refreshedTarget) = result else {
-            return XCTFail("Expected a new refresh handoff, got \(result)")
+            return XCTFail("Expected a refreshed target, got \(result)")
         }
         XCTAssertEqual(refreshedTarget.treeElement.heistId, heistId)
         XCTAssertTrue(refreshedTarget.liveTarget.object === replacementObject)
         XCTAssertFalse(refreshedTarget.liveTarget.object === staleObject)
-        XCTAssertEqual(refreshedTarget.deadline.start, deadlineStart)
-        XCTAssertEqual(refreshedTarget.deadline.timeoutSeconds, 2)
+        XCTAssertEqual(refreshedTarget.deadline, deadline)
     }
 
     func testMovingGeometryRequiresOneMatchingQuietSample() async {
@@ -209,7 +143,7 @@ extension ElementInflationProductTests {
     private var geometryViewport: CGRect {
         CGRect(x: 0, y: 0, width: 320, height: 640)
     }
-    func testMissingRevealPathIsBoundedByInflationDeadline() async throws {
+    func testMissingRevealPathIsBoundedByActionDeadline() async throws {
         let fixture = try installOffscreenActivationFixture(
             identifier: "live_decoy_unrevealable_submit",
             label: "Live Decoy"
@@ -223,20 +157,15 @@ extension ElementInflationProductTests {
         )
 
         let result = await brains.executeRuntimeAction(
-            try HeistActionCommand.activate(
+            .activate(
                 .element(.identifier("unrevealable_submit"), traits: [.button])
-            ).resolve(in: .empty)
+            )
         )
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .activate)
-        XCTAssertDiagnostic(result.message, contains: [
-            "element inflation failed [noRevealPath]",
-            "no live scrollable ancestor",
-            "expectedScrollContainerPath=[99]",
-            "available live scroll containers:",
-            "no reveal path appeared before the action deadline",
-        ])
+        XCTAssertEqual(result.outcome.failureKind, .timeout)
+        XCTAssertDiagnostic(result.message, contains: ["timed out"])
         XCTAssertFalse(result.message?.localizedCaseInsensitiveContains("scroll first") ?? false)
         XCTAssertFalse(result.message?.contains("get_interface") ?? false)
         XCTAssertEqual(fixture.target.activationCount, 0)

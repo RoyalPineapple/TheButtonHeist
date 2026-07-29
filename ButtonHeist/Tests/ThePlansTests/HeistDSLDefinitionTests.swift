@@ -224,9 +224,8 @@ func runHeistBuildsHeistRunSteps() throws {
         .invoke(HeistInvocationStep(path: "Rows.activate", argument: .accessibilityTarget(.label("Row 1")))),
     ])
 
-    let expectedSubtotal = WaitStep(
-        predicate: .elementsChanged([.appeared(.label("subtotal"))]),
-        timeout: ActionExpectationTimeoutPolicy.default.standard
+    let expectedSubtotal = ActionExpectation(
+        predicate: .elementsChanged([.appeared(.label("subtotal"))])
     )
     let addItemDefinition = HeistDef<String>("Cart.addItem") { _ in Warn("declared") }
     let expectedRun = ThePlans.RunHeist("Cart.addItem", "Milk")
@@ -239,11 +238,10 @@ func runHeistBuildsHeistRunSteps() throws {
         )),
     ])
 
-    let expectedStatus = WaitStep(
+    let expectedStatus = ActionExpectation(
         predicate: .elementsChanged([
             .updated(.label("subtotal"), .value(after: .contains("2 items"))),
-        ]),
-        timeout: ActionExpectationTimeoutPolicy.default.standard
+        ])
     )
     let updatedRun = ThePlans.RunHeist("Cart.addItem", "Eggs")
         .expect(.elementsChanged([
@@ -257,9 +255,8 @@ func runHeistBuildsHeistRunSteps() throws {
         )),
     ])
 
-    let expectedCompletion = WaitStep(
-        predicate: .exists(.label("Payment Complete")),
-        timeout: ActionExpectationTimeoutPolicy.default.standard
+    let expectedCompletion = ActionExpectation(
+        predicate: .exists(.label("Payment Complete"))
     )
     let paymentDefinition = HeistDef<Void>("Checkout.pay") { Warn("declared") }
     let snapshotRun = ThePlans.RunHeist("Checkout.pay")
@@ -271,9 +268,8 @@ func runHeistBuildsHeistRunSteps() throws {
         )),
     ])
 
-    let expectation = WaitStep(
-        predicate: .screenChanged("Receipt"),
-        timeout: ActionExpectationTimeoutPolicy.default.screenTransition
+    let expectation = ActionExpectation(
+        predicate: .screenChanged("Receipt")
     )
     let screenRun = ThePlans.RunHeist("Checkout.pay")
         .expect(.screenChanged("Receipt"))
@@ -354,9 +350,8 @@ func runHeistRendersAsRunHeistInCanonicalSwift() throws {
         ],
         body: [.invoke(HeistInvocationStep(
             path: "CartScreen.checkout",
-            expectation: WaitStep(
-                predicate: .screenChanged,
-                timeout: ActionExpectationTimeoutPolicy.default.screenTransition
+            expectation: ActionExpectation(
+                predicate: .screenChanged
             )
         ))]
     )

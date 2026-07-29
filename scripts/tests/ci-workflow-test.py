@@ -39,13 +39,16 @@ class CIWorkflowTests(unittest.TestCase):
         self.assertNotIn("ios-integration-scope", blocks)
         release = blocks["release-contract"]
         self.assertIn(
-            "run_ios_integration: ${{ steps.integration-scope.outputs.run }}",
+            "run_ios_integration: "
+            "${{ steps.integration-scope.outputs.run_ios_integration }}",
             release,
         )
         self.assertIn(
-            "ButtonHeist/Tests/TheInsideJobTests/(Integration|Shared/Socket)",
+            "python3 scripts/select-ci-change-scopes.py "
+            '--github-output "$GITHUB_OUTPUT"',
             release,
         )
+        self.assertNotIn("grep -Eq", release)
 
     def test_portable_contracts_stay_on_linux(self) -> None:
         release = job_blocks()["release-contract"]

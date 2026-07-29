@@ -150,7 +150,7 @@ extension TheFenceCompactFormattingContractTests {
                         payload: .activate,
                         observation: .observed(makeObservationEvidence(
                             before: makeTestInterface(elementCount: 0),
-                            completeness: .complete
+                            coverage: .complete
                         )),
                         timing: ActionPerformanceTiming(targetResolutionMs: 1, totalMs: 9)
                     ),

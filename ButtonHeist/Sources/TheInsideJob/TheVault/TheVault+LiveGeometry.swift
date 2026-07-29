@@ -56,16 +56,25 @@ extension TheVault {
     }
 
     func resolveLiveActionTarget(for treeElement: InterfaceTree.Element) -> LiveTargetResolution<LiveActionTarget> {
-        let captureID = latestObservation.captureID
-        guard let liveElement = visibleLiveElementAliasing(treeElement),
-              let object = dispatchObject(for: liveElement) else {
+        guard let semanticElement = interfaceTree.findElement(heistId: treeElement.heistId) else {
             return .objectUnavailable
         }
-        guard let geometry = Self.liveGeometry(for: liveElement.element) else {
+        return resolveLiveActionTarget(forCanonical: semanticElement)
+    }
+
+    private func resolveLiveActionTarget(
+        forCanonical semanticElement: InterfaceTree.Element
+    ) -> LiveTargetResolution<LiveActionTarget> {
+        let captureID = latestObservation.captureID
+        guard let liveEvidence = liveElementEvidence(aliasedTo: semanticElement),
+              let object = currentLiveCapture.object(for: semanticElement.heistId) else {
+            return .objectUnavailable
+        }
+        guard let geometry = Self.liveGeometry(for: liveEvidence.element) else {
             return .geometryUnavailable
         }
         return .resolved(LiveActionTarget(
-            treeElement: treeElement,
+            treeElement: semanticElement,
             object: object,
             frame: geometry.frame,
             activationPoint: geometry.activationPoint,
@@ -78,10 +87,10 @@ extension TheVault {
         operation: (LiveActionTarget) -> Value
     ) -> Result<Value, LiveTargetStaleness<HeistId>> {
         let heistId = target.treeElement.heistId
-        guard let currentTreeElement = latestObservation.tree.findElement(heistId: heistId) else {
+        guard let semanticElement = interfaceTree.findElement(heistId: heistId) else {
             return .failure(.semanticTargetUnavailable(heistId))
         }
-        switch resolveLiveActionTarget(for: currentTreeElement) {
+        switch resolveLiveActionTarget(forCanonical: semanticElement) {
         case .resolved(let currentTarget):
             return .success(operation(currentTarget))
         case .objectUnavailable:
@@ -92,35 +101,52 @@ extension TheVault {
     }
 
     func visibleLiveElementAliasing(_ treeElement: InterfaceTree.Element) -> InterfaceTree.Element? {
-        guard viewportElementIDs.contains(treeElement.heistId) else { return nil }
-        guard let liveElement = liveInterfaceElement(heistId: treeElement.heistId) else { return nil }
-        let committedIdentity = AccessibilityPolicy.matcherIdentityFacts(
-            for: WireConversion.convert(treeElement.element, geometry: treeElement.geometry)
+        guard let semanticElement = interfaceTree.findElement(heistId: treeElement.heistId),
+              liveElementEvidence(aliasedTo: semanticElement) != nil
+        else { return nil }
+        return semanticElement
+    }
+
+    private func liveElementEvidence(
+        aliasedTo semanticElement: InterfaceTree.Element
+    ) -> InterfaceTree.Element? {
+        guard interfaceTree.viewportElementIDs.contains(semanticElement.heistId),
+              currentLiveCapture.contains(heistId: semanticElement.heistId),
+              let evidence = latestObservation.tree.findElement(heistId: semanticElement.heistId)
+        else { return nil }
+        let semanticIdentity = AccessibilityPolicy.matcherIdentityFacts(
+            for: WireConversion.convert(semanticElement.element, geometry: semanticElement.geometry)
         )
-        let liveIdentity = AccessibilityPolicy.matcherIdentityFacts(
-            for: WireConversion.convert(liveElement.element, geometry: liveElement.geometry)
+        let evidenceIdentity = AccessibilityPolicy.matcherIdentityFacts(
+            for: WireConversion.convert(evidence.element, geometry: evidence.geometry)
         )
-        guard liveIdentity == committedIdentity else { return nil }
-        return liveElement
+        guard evidenceIdentity == semanticIdentity else { return nil }
+        return evidence
     }
 
     func resolveLiveContainerTarget(
         for containerTarget: InterfaceTree.Container
     ) -> LiveTargetResolution<LiveContainerTarget> {
+        guard let semanticContainer = interfaceTree.containers[containerTarget.path],
+              Self.container(semanticContainer, matches: containerTarget) else {
+            return .objectUnavailable
+        }
+        return resolveLiveContainerTarget(forCanonical: semanticContainer)
+    }
+
+    private func resolveLiveContainerTarget(
+        forCanonical semanticContainer: InterfaceTree.Container
+    ) -> LiveTargetResolution<LiveContainerTarget> {
         let captureID = latestObservation.captureID
-        guard let currentContainer = latestObservation.tree.containers[containerTarget.path],
-              Self.container(currentContainer, matches: containerTarget) else {
+        guard let liveEvidence = liveContainerEvidence(aliasedTo: semanticContainer),
+              let object = currentLiveCapture.containerObject(forPath: semanticContainer.path) else {
             return .objectUnavailable
         }
-        guard let object = liveContainerObject(forPath: containerTarget.path) else {
-            return .objectUnavailable
-        }
-        guard let liveContainer = liveContainer(forPath: containerTarget.path),
-              let geometry = Self.liveGeometry(for: liveContainer) else {
+        guard let geometry = Self.liveGeometry(for: liveEvidence) else {
             return .geometryUnavailable
         }
         return .resolved(LiveContainerTarget(
-            containerTarget: containerTarget,
+            containerTarget: semanticContainer,
             object: object,
             frame: geometry.frame,
             activationPoint: geometry.activationPoint,
@@ -133,11 +159,11 @@ extension TheVault {
         operation: (LiveContainerTarget) -> Value
     ) -> Result<Value, LiveTargetStaleness<TreePath>> {
         let path = target.containerTarget.path
-        guard let currentContainer = latestObservation.tree.containers[path],
-              Self.container(currentContainer, matches: target.containerTarget) else {
+        guard let semanticContainer = interfaceTree.containers[path],
+              Self.container(semanticContainer, matches: target.containerTarget) else {
             return .failure(.semanticTargetUnavailable(path))
         }
-        switch resolveLiveContainerTarget(for: currentContainer) {
+        switch resolveLiveContainerTarget(forCanonical: semanticContainer) {
         case .resolved(let currentTarget):
             return .success(operation(currentTarget))
         case .objectUnavailable:
@@ -148,7 +174,11 @@ extension TheVault {
     }
 
     func liveObject(for treeElement: InterfaceTree.Element) -> NSObject? {
-        dispatchObject(for: treeElement)
+        guard let semanticElement = interfaceTree.findElement(heistId: treeElement.heistId),
+              liveElementEvidence(aliasedTo: semanticElement) != nil else {
+            return nil
+        }
+        return currentLiveCapture.object(for: semanticElement.heistId)
     }
 
     /// Why a path names no live scroll target.
@@ -164,13 +194,14 @@ extension TheVault {
     func liveScrollTarget(
         at path: TreePath
     ) -> Result<LiveScrollTarget, LiveScrollTargetFailure> {
-        guard let semanticContainer = latestObservation.tree.containers[path] else {
+        guard let semanticContainer = interfaceTree.containers[path] else {
             return .failure(.noSemanticContainer)
         }
-        guard case .resolved(let liveContainer) = resolveLiveContainerTarget(for: semanticContainer) else {
+        guard case .resolved(let liveContainer) =
+            resolveLiveContainerTarget(forCanonical: semanticContainer) else {
             return .failure(.liveContainerUnresolved)
         }
-        guard let scrollView = liveScrollableContainerView(forPath: path) else {
+        guard let scrollView = currentLiveCapture.scrollView(forContainerPath: path) else {
             return .failure(.notScrollable)
         }
         return .success(LiveScrollTarget(container: liveContainer, scrollView: scrollView))
@@ -220,11 +251,9 @@ extension TheVault {
         var visitedPaths = Set<TreePath>()
         var path: TreePath? = membership.containerPath
         while let currentPath = path, visitedPaths.insert(currentPath).inserted {
-            if let scrollView = liveScrollableContainerView(forPath: currentPath),
-               liveContainerObject(forPath: currentPath) != nil,
-               liveContainer(forPath: currentPath) != nil,
-               !scrollView.bhIsUnsafeForProgrammaticScrolling {
-                return ObjectIdentifier(scrollView)
+            if case .success(let target) = liveScrollTarget(at: currentPath),
+               !target.scrollView.bhIsUnsafeForProgrammaticScrolling {
+                return target.scrollViewID
             }
             path = interfaceTree.containers[currentPath]?.scrollMembership?.containerPath
         }
@@ -235,10 +264,11 @@ extension TheVault {
         for semanticContainer: InterfaceTree.Container,
         directChildOf parent: UIScrollView? = nil
     ) -> UIScrollView? {
-        var matches = latestObservation.tree.orderedContainers.compactMap { candidate -> LiveCapture.ScrollEntry? in
+        var matches = interfaceTree.orderedContainers.compactMap { candidate -> LiveCapture.ScrollEntry? in
             guard Self.container(candidate, matches: semanticContainer),
-                  let view = liveScrollableContainerView(forPath: candidate.path) else { return nil }
-            return LiveCapture.ScrollEntry(path: candidate.path, view: view)
+                  case .success(let target) = liveScrollTarget(at: candidate.path)
+            else { return nil }
+            return LiveCapture.ScrollEntry(path: candidate.path, view: target.scrollView)
         }
         if let parent {
             matches = matches.filter { match in
@@ -249,11 +279,18 @@ extension TheVault {
         return matches[0].view
     }
 
-    private func dispatchObject(for treeElement: InterfaceTree.Element) -> NSObject? {
-        if viewportElementIDs.contains(treeElement.heistId) {
-            return liveObject(for: treeElement.heistId)
+    private func liveContainerEvidence(
+        aliasedTo semanticContainer: InterfaceTree.Container
+    ) -> AccessibilityContainer? {
+        let path = semanticContainer.path
+        guard let observedContainer = latestObservation.tree.containers[path],
+              Self.container(observedContainer, matches: semanticContainer),
+              case .container(let evidence, _) = currentLiveCapture.hierarchy.node(at: path),
+              Self.container(evidence, matches: semanticContainer)
+        else {
+            return nil
         }
-        return nil
+        return evidence
     }
 
     private static func liveGeometry(for element: AccessibilityElement) -> LiveGeometry? {
@@ -283,6 +320,14 @@ extension TheVault {
         candidate.container.containerPredicateFacts == semanticContainer.container.containerPredicateFacts
             && candidate.container.scrollableContentSize == semanticContainer.container.scrollableContentSize
             && viewportSize(of: candidate) == viewportSize(of: semanticContainer)
+    }
+
+    private static func container(
+        _ candidate: AccessibilityContainer,
+        matches semanticContainer: InterfaceTree.Container
+    ) -> Bool {
+        candidate.containerPredicateFacts == semanticContainer.container.containerPredicateFacts
+            && candidate.scrollableContentSize == semanticContainer.container.scrollableContentSize
     }
 
     private static func viewportSize(of container: InterfaceTree.Container) -> CGSize {

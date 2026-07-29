@@ -42,8 +42,10 @@ final class AdversarialMutationTests: XCTestCase {
             (.textFieldFallbackPass, .textFieldFallbackTargetlessFails),
         ]
         for contract in contracts {
-            XCTAssertNil(try await runScenario(contract.success).result.firstFailedStep)
-            XCTAssertEqual(try await runFailingScenario(contract.failure).failedStepKind, .action)
+            let success = try await runScenario(contract.success)
+            XCTAssertNil(success.result.firstFailedStep)
+            let failure = try await runFailingScenario(contract.failure)
+            XCTAssertEqual(failure.failedStepKind, .action)
         }
     }
 

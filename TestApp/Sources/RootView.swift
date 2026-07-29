@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+@_spi(AdversarialLab) import ThePlans
 
 struct RootView: View {
     @EnvironmentObject private var settings: AppSettings
@@ -174,7 +175,7 @@ struct RootView: View {
               url.host == "adversarial",
               let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let rawScenario = components.queryItems?.first(where: { $0.name == "scenario" })?.value,
-              let scenario = AdversarialScenario(rawValue: rawScenario),
+              let scenario = AdversarialScenarioCatalog.Route(rawValue: rawScenario),
               let rawRouteID = components.queryItems?.first(where: { $0.name == "route_id" })?.value,
               let routeID = UUID(uuidString: rawRouteID)
         else { return }
@@ -188,7 +189,7 @@ struct RootView: View {
 
 struct AdversarialRoute: Identifiable, Hashable {
     let id: UUID
-    let scenario: AdversarialScenario
+    let scenario: AdversarialScenarioCatalog.Route
 }
 
 @MainActor
@@ -207,7 +208,7 @@ internal final class AdversarialLabRoute {
 
     private init() {}
 
-    internal static func open(_ scenario: AdversarialScenario) async throws {
+    internal static func open(_ scenario: AdversarialScenarioCatalog.Route) async throws {
         try await present(AdversarialRoute(id: UUID(), scenario: scenario))
     }
 
@@ -282,5 +283,5 @@ internal final class AdversarialLabRoute {
 
 internal enum AdversarialLabRouteError: Error {
     case hostTimedOut
-    case timedOut(AdversarialScenario)
+    case timedOut(AdversarialScenarioCatalog.Route)
 }

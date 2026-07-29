@@ -54,12 +54,14 @@ extension Navigation {
     func performViewportTransition(
         _ intent: ViewportMovementIntent,
         deadline: SemanticObservationDeadline? = nil,
+        observationBoundary: SemanticObservationWaitBoundary = .cancellation,
         discoveryCommitPolicy: DiscoveryCommitPolicy = .mergeIntoInterface
     ) async -> ViewportTransition {
         await vault.semanticObservationStream.movingViewport {
             await performViewportTransitionMovingViewport(
                 intent,
                 deadline: deadline,
+                observationBoundary: observationBoundary,
                 discoveryCommitPolicy: discoveryCommitPolicy
             )
         }
@@ -70,6 +72,7 @@ extension Navigation {
     private func performViewportTransitionMovingViewport(
         _ intent: ViewportMovementIntent,
         deadline: SemanticObservationDeadline?,
+        observationBoundary: SemanticObservationWaitBoundary,
         discoveryCommitPolicy: DiscoveryCommitPolicy
     ) async -> ViewportTransition {
         if Task.isCancelled {
@@ -83,11 +86,24 @@ extension Navigation {
         let primitiveOutcome = await dispatchViewportMovement(intent)
         switch primitiveOutcome {
         case .moved:
-            let current = await settledExplorationPage(
-                deadline: deadline,
-                discoveryCommitPolicy: discoveryCommitPolicy,
-                afterViewportMovement: true
-            )
+            let current: TheVault.State.Current?
+            if case .restoreVisualOrigin = intent {
+                current = await Task { @MainActor in
+                    await self.settledExplorationPage(
+                        deadline: nil,
+                        observationBoundary: .observationCycle,
+                        discoveryCommitPolicy: discoveryCommitPolicy,
+                        afterViewportMovement: true
+                    )
+                }.value
+            } else {
+                current = await settledExplorationPage(
+                    deadline: deadline,
+                    observationBoundary: observationBoundary,
+                    discoveryCommitPolicy: discoveryCommitPolicy,
+                    afterViewportMovement: true
+                )
+            }
             guard let current else {
                 return .unavailable(previousVisibleIds: previousVisibleIds)
             }

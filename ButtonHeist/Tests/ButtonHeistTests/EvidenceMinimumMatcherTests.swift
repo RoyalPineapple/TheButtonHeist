@@ -53,7 +53,7 @@ private func semanticActionResult(
         observation: .observed(makeObservationEvidence(
             before: makeTestInterface(elements: before),
             after: makeTestInterface(elements: after),
-            completeness: complete ? .complete : .incomplete
+            coverage: complete ? .complete : .incomplete(.historyUnavailable)
         )),
         subjectEvidence: ActionSubjectEvidence(
             source: source,

@@ -51,8 +51,8 @@ final class ActionResultEvidenceContractTests: XCTestCase {
     }
 
     func testEveryOutcomeRoundTripsWithEveryObservationCase() throws {
-        let complete = observationEvidenceWithAnnouncement("Ready", completeness: .complete)
-        let incomplete = observationEvidenceWithAnnouncement("Ready", completeness: .incomplete)
+        let complete = observationEvidenceWithAnnouncement("Ready", coverage: .complete)
+        let incomplete = observationEvidenceWithAnnouncement("Ready", coverage: .incomplete(.historyUnavailable))
         let observations: [ActionResultObservationEvidence] = [
             .none,
             .announcement("Ready"),
@@ -82,7 +82,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
     func testSuccessEvidenceRoundTripsWithCanonicalShape() throws {
         let observationEvidence = observationEvidenceWithAnnouncement(
             "Checkout",
-            completeness: .incomplete
+            coverage: .incomplete(.historyUnavailable)
         )
         let result = ActionResult.activationSuccess(
             message: "done",
@@ -114,9 +114,12 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         XCTAssertEqual(Set(observation.keys), Set(["kind", "observationEvidence"]))
         XCTAssertEqual(
             Set(encodedObservationEvidence.keys),
-            Set(["baseline", "current", "events", "completeness"])
+            Set(["baseline", "current", "events", "coverage"])
         )
-        XCTAssertEqual(encodedObservationEvidence["completeness"] as? String, "incomplete")
+        let coverage = try XCTUnwrap(encodedObservationEvidence["coverage"] as? [String: Any])
+        let incomplete = try XCTUnwrap(coverage["incomplete"] as? [String: Any])
+        let gap = try XCTUnwrap(incomplete["_0"] as? [String: Any])
+        XCTAssertNotNil(gap["historyUnavailable"] as? [String: Any])
         XCTAssertNil(observation["announcement"])
         XCTAssertEqual(timing["actionDispatchMs"] as? Int, 4)
 
@@ -191,7 +194,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
     func testObservationEvidenceOwnsCapturedNotificationText() {
         let observationEvidence = observationEvidenceWithAnnouncement(
             "Checkout",
-            completeness: .incomplete
+            coverage: .incomplete(.historyUnavailable)
         )
         let result = ActionResult.success(
             payload: .activate,
@@ -285,7 +288,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
 
     private func observationEvidenceWithAnnouncement(
         _ text: String,
-        completeness: Observation.Evidence.Completeness
+        coverage: Observation.Coverage
     ) -> Observation.Evidence {
         let baseline = makeTestObservationSnapshot(
             elements: [],
@@ -300,7 +303,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
             baseline: baseline,
             current: current,
             events: notification.map { [.notification($0)] } ?? [],
-            completeness: completeness
+            coverage: coverage
         )
     }
 

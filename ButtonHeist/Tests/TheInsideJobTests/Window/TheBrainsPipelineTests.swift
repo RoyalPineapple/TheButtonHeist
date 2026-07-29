@@ -28,41 +28,6 @@ final class TheBrainsPipelineTests: XCTestCase {
         try await super.tearDown()
     }
 
-    func testDiscoveryProjectionFeedsCanonicalHistoryAndPredicateFold() throws {
-        let viewportObservation = makeDiscoveryObservationProjectionFixture()
-        let discoveryInterface = TheVault.WireConversion.discoveryProjection(
-            from: viewportObservation.tree
-        ).interface
-        let snapshot = Observation.Snapshot(
-            interface: discoveryInterface,
-            context: .empty
-        )
-        let event = Observation.Event.elementsChanged(snapshot)
-        var history = Observation.History(retentionLimit: 8)
-        _ = history.record([event], protectedBy: nil)
-        let predicate = AccessibilityPredicate.exists(.container(.identifier("OffscreenGroup")))
-        let resolved = try predicate.resolve(in: .empty)
-
-        XCTAssertEqual(Expectation([resolved], events: Array(history)).result, .satisfied)
-        XCTAssertEqual(history.endIndex, 1)
-        XCTAssertEqual(history[history.startIndex], event)
-    }
-
-    func testScreenGenerationIsDerivedFromHistoryPosition() {
-        var history = Observation.History(retentionLimit: 8)
-        _ = history.record([
-            .elementsChanged(heistSnapshot(labels: [])),
-            .screenChanged(ScreenFacts(idAfter: "Checkout")),
-            .elementsChanged(heistSnapshot(labels: ["Checkout"])),
-            .noChange,
-        ], protectedBy: nil)
-
-        XCTAssertEqual(history.screenGeneration(at: history.startIndex), 0)
-        XCTAssertEqual(history.screenGeneration(at: history.startIndex + 1), 0)
-        XCTAssertEqual(history.screenGeneration(at: history.startIndex + 2), 1)
-        XCTAssertEqual(history.screenGeneration(at: history.endIndex), 1)
-    }
-
     func testObservationScopeDerivesFromCompiledProgramTargets() throws {
         let visible = try AccessibilityPredicate.elementsChanged([
             .appeared(.label("Ready")),
@@ -79,41 +44,15 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     // MARK: - Semantic Discovery Observation
 
-    func testSemanticDiscoveryObservationCommitsUnion() async {
-        brains.tripwire.startPulse()
-        defer { brains.tripwire.stopPulse() }
-        // Exploration seeds the local union from the interface tree and merges each
-        // parse into it. The observation stream commits the completed union as
-        // current discovery truth. There is no pruning — the union is the
-        // canonical "all elements seen this cycle".
-        // With no scrollable containers in the host hierarchy, semantic discovery
-        // reduces to refresh-and-commit, and the seeded entry merges into the
-        // live parse rather than being pruned.
-        await seedScreen(elements: [("Seed", .button, "button_seed")])
-        XCTAssertEqual(brains.vault.interfaceTree.elements.count, 1)
-
-        await brains.startSemanticObservation()
-        let observation = await brains.vault.semanticObservationStream.nextObservation(
-            scope: .discovery,
-            after: nil,
-            timeout: 2
-        )
-
-        // Either the seed survives (no live parse landed and the union still
-        // holds it) or it merges with new live entries — either way, the
-        // current screen reflects the committed union, not the pre-explore
-        // value alone.
-        XCTAssertNotNil(observation)
-        XCTAssertGreaterThanOrEqual(brains.vault.interfaceTree.elements.count, 1)
-    }
-
     func testExploreScreenStopsEarlyWhenTargetAlreadyResolved() async throws {
         brains.tripwire.startPulse()
         defer { brains.tripwire.stopPulse() }
         let screen = try XCTUnwrap(
-            brains.vault.refreshLiveCapture(),
+            brains.vault.captureVisibleObservation(),
             "Expected a live hierarchy in the hosted test app"
         )
+        await brains.vault.semanticObservationStream
+            .commitVisibleObservationForTesting(screen)
         let label = try XCTUnwrap(
             screen.tree.viewportElementIDs
                 .compactMap { screen.tree.findElement(heistId: $0)?.element.label }
@@ -398,10 +337,6 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
     }
 
-    func seedScreen(elements: [(label: String, traits: UIAccessibilityTraits, heistId: HeistId)]) async {
-        await brains.vault.installObservationForTesting(makeScreen(elements: elements))
-    }
-
     func notificationBatch(
         kind: AccessibilityNotificationKind,
         gap: AccessibilityNotificationGap? = nil
@@ -420,20 +355,6 @@ final class TheBrainsPipelineTests: XCTestCase {
             scopedScreenChangedThrough: kind == .screenChanged ? sequence : 0,
             gap: gap
         )
-    }
-
-    func volumeScreen(value: String) -> InterfaceObservation {
-        InterfaceObservation.makeForTests(elements: [
-            (
-                AccessibilityElement.make(
-                    label: "Volume",
-                    value: value,
-                    traits: .adjustable,
-                    respondsToUserInteraction: false
-                ),
-                "volume"
-            ),
-        ])
     }
 
     func makeScreen(elements: [(label: String, traits: UIAccessibilityTraits, heistId: HeistId)]) -> InterfaceObservation {

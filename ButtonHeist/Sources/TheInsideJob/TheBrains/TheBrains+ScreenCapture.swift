@@ -51,12 +51,14 @@ extension TheBrains {
     }
 
     func captureScreenPayload(
-        mode: ScreenCaptureMode = .raw
+        mode: ScreenCaptureMode = .raw,
+        observationBoundary: SemanticObservationWaitBoundary
     ) async -> ScreenCaptureGatewayResult {
         guard semanticObservationIsActive else {
             return .failure(.inactiveRuntime)
         }
-        guard let observation = await interactionCoordinator.admittedVisibleObservation(timeout: 1.0) else {
+        guard let observation = await vault.semanticObservationStream
+            .admittedVisibleObservation(boundary: observationBoundary) else {
             return .failure(.accessibilityTreeUnavailable)
         }
         let interface = observation.snapshot.interface
@@ -92,9 +94,13 @@ extension TheBrains {
     }
 
     func dispatchTakeScreenshot(
-        mode: ScreenCaptureMode = .raw
+        mode: ScreenCaptureMode = .raw,
+        observationBoundary: SemanticObservationWaitBoundary
     ) async -> TheSafecracker.ActionDispatchResult {
-        switch await captureScreenPayload(mode: mode) {
+        switch await captureScreenPayload(
+            mode: mode,
+            observationBoundary: observationBoundary
+        ) {
         case .success(let payload):
             return .success(
                 payload: .screenshot(payload),

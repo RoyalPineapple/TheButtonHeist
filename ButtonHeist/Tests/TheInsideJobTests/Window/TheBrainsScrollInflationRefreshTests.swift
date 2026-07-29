@@ -10,7 +10,7 @@ import UIKit
 @MainActor
 extension TheBrainsScrollTests {
 
-    func testStaleLiveObjectRawRefreshDoesNotPromoteSemanticTruth() async throws {
+    func testUnpublishedRefreshSourceDoesNotChangeSemanticOrLiveTruth() async throws {
         brains.stopSemanticObservation()
         let targetId = HeistId(rawValue: "gone_target")
         let staleTarget = AccessibilityElement.make(
@@ -18,10 +18,14 @@ extension TheBrainsScrollTests {
             traits: .button,
             frame: CGRect(x: 40, y: 120, width: 240, height: 44)
         )
-        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
-            elements: [(staleTarget, targetId)],
-            objects: [targetId: nil]
-        ))
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(
+                elements: [(staleTarget, targetId)],
+                objects: [targetId: nil]
+            )
+        )
+        let committedBefore = try XCTUnwrap(brains.vault.interfaceElement(heistId: targetId))
+        let liveAliasBefore = brains.vault.visibleLiveElementAliasing(committedBefore)
 
         let rawTarget = AccessibilityElement.make(
             label: "Raw Replacement",
@@ -41,17 +45,29 @@ extension TheBrainsScrollTests {
         let inflation = Task { @MainActor in
             resultBox.value = await self.brains.navigation.elementInflation.inflate(
                 for: target,
-                method: .activate
+                method: .activate,
+                deadline: self.semanticRevealDeadline()
             )
         }
         await waitForSettledSemanticWaiter()
 
-        XCTAssertEqual(brains.vault.latestObservation.tree.orderedElements.first?.element.label, "Raw Replacement")
-        XCTAssertEqual(brains.vault.interfaceTree.orderedElements.first?.element.label, "Gone Target")
-        if let committed = brains.vault.interfaceElement(heistId: targetId) {
-            XCTAssertNil(brains.vault.visibleLiveElementAliasing(committed))
-        } else {
-            XCTFail("Expected committed semantic target to remain available")
+        XCTAssertEqual(
+            brains.vault.latestObservation.tree.orderedElements.first?.element.label,
+            "Gone Target"
+        )
+        XCTAssertEqual(
+            brains.vault.interfaceTree.orderedElements.first?.element.label,
+            "Gone Target"
+        )
+        let committedAfter = try XCTUnwrap(brains.vault.interfaceElement(heistId: targetId))
+        XCTAssertEqual(committedAfter, committedBefore)
+        XCTAssertEqual(
+            brains.vault.visibleLiveElementAliasing(committedAfter),
+            liveAliasBefore
+        )
+        guard case .objectUnavailable =
+            brains.vault.resolveLiveActionTarget(for: committedAfter) else {
+            return XCTFail("Unpublished source data must not attach a live action object")
         }
 
         inflation.cancel()
@@ -71,10 +87,12 @@ extension TheBrainsScrollTests {
             traits: .button,
             frame: staleFrame
         )
-        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
-            elements: [(staleTarget, targetId)],
-            objects: [targetId: nil]
-        ))
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(
+                elements: [(staleTarget, targetId)],
+                objects: [targetId: nil]
+            )
+        )
 
         let recoveredFrame = CGRect(x: 48, y: 136, width: 260, height: 44)
         let recoveredTarget = AccessibilityElement.make(
@@ -95,11 +113,13 @@ extension TheBrainsScrollTests {
         let inflation = Task { @MainActor in
             resultBox.value = await self.brains.navigation.elementInflation.inflate(
                 for: target,
-                method: .scrollToVisible
+                method: .scrollToVisible,
+                deadline: self.semanticRevealDeadline()
             )
         }
         await waitForSettledSemanticWaiter()
-        visibleObservationSource.observation = recoveredScreen
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
+        await waitForSettledSemanticWaiter()
         await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
 
         await inflation.value
@@ -133,12 +153,13 @@ extension TheBrainsScrollTests {
                 object: retainedLiveObject()
             ),
         ])
-        await brains.vault.installObservationForTesting(originalScreen)
+        await brains.vault.semanticObservationStream
+            .commitVisibleObservationForTesting(originalScreen)
         let selected = try XCTUnwrap(brains.vault.interfaceElement(heistId: targetId))
 
         let emptyScreen = InterfaceObservation.makeForTests()
-        await brains.vault.installObservationForTesting(emptyScreen)
-        visibleObservationSource.observation = emptyScreen
+        await brains.vault.semanticObservationStream
+            .commitVisibleObservationForTesting(emptyScreen)
 
         let recoveredFrame = CGRect(x: 40, y: 120, width: 240, height: 44)
         let recoveredElement = makeElement(
@@ -174,7 +195,8 @@ extension TheBrainsScrollTests {
             return inflatedTarget.resolution
         }
         await waitForSettledSemanticWaiter()
-        visibleObservationSource.observation = recoveredScreen
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
+        await waitForSettledSemanticWaiter()
         await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
 
         let resolution = await resolutionTask.value

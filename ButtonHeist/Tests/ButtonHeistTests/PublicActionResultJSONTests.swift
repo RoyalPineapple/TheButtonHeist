@@ -304,7 +304,7 @@ final class PublicActionResultJSONTests: XCTestCase {
                 payload: .activate,
                 observation: .observed(makeObservationEvidence(
                     before: interface,
-                    completeness: .incomplete
+                    coverage: .incomplete(.historyUnavailable)
                 ))
             ),
             profile: .mcp

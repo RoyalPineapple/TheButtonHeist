@@ -32,9 +32,9 @@ final class DeltaProjectionTests: XCTestCase {
         }
         let evidence = Observation.Evidence(
             baseline: snapshots[0],
-            current: snapshots.last,
             events: snapshots.dropFirst().map(Observation.Event.elementsChanged),
-            completeness: .incomplete
+            current: snapshots.last,
+            coverage: .incomplete(.historyUnavailable)
         )
 
         let projection = try XCTUnwrap(DeltaProjection(
@@ -135,13 +135,13 @@ final class DeltaProjectionTests: XCTestCase {
         )
         let evidence = Observation.Evidence(
             baseline: baseline,
-            current: checkoutSnapshot,
             events: [
                 .elementsChanged(toastSnapshot),
                 .screenChanged(ScreenFacts(idAfter: "checkout")),
                 .elementsChanged(checkoutSnapshot),
             ],
-            completeness: .incomplete
+            current: checkoutSnapshot,
+            coverage: .incomplete(.historyUnavailable)
         )
 
         let projection = try XCTUnwrap(DeltaProjection(

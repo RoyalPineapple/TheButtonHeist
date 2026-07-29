@@ -220,7 +220,7 @@ extension TheFenceCompactFormattingContractTests {
         let unchanged = makeTestInterface(elementCount: 1)
         let evidence = makeObservationEvidence(
             before: unchanged,
-            completeness: .complete
+            coverage: .complete
         )
         let result = ActionResult.success(
             payload: .activate,
@@ -348,7 +348,7 @@ extension TheFenceCompactFormattingContractTests {
                 payload: .activate,
                 observationEvidence: makeObservationEvidence(
                     before: interface,
-                    completeness: .complete
+                    coverage: .complete
                 ),
                 activationTrace: ActivationTrace(.activationPointFallback(
                     axActivateReturned: false,

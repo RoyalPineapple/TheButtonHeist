@@ -85,7 +85,7 @@ func actionExpectationSupportsScopedPropertyUpdateDelta() throws {
             ),
             expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                 .updated(.identifier("Search"), .value(after: "Bruschetta")),
-            ]), timeout: 1)))),
+            ]), timeout: .sessionDefault)))),
     ]))
 }
 
@@ -117,7 +117,7 @@ func actionExpectationUsesCanonicalElementChangeAssertions() throws {
                 predicate: .elementsChanged([
                     .appeared(.label(.contains("Bruschetta, $9.00"))),
                 ]),
-                timeout: 1
+                timeout: .sessionDefault
             )))),
     ]))
     #expect(try disappeared == HeistPlan(body: [
@@ -127,7 +127,7 @@ func actionExpectationUsesCanonicalElementChangeAssertions() throws {
                 predicate: .elementsChanged([
                     .disappeared(.identifier("cart-row-bruschetta")),
                 ]),
-                timeout: 1
+                timeout: .sessionDefault
             )))),
     ]))
     #expect(try updated == HeistPlan(body: [
@@ -138,7 +138,7 @@ func actionExpectationUsesCanonicalElementChangeAssertions() throws {
             ),
             expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                 .updated(.identifier("Search"), .value(after: "Bruschetta")),
-            ]), timeout: 1)))),
+            ]), timeout: .sessionDefault)))),
     ]))
 }
 
@@ -161,12 +161,15 @@ func predicateContextsUseExplicitCanonicalAssertions() throws {
     #expect(try heist == HeistPlan(body: [
         .action(ActionStep(
             command: .activate(.label("Search")),
-            expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Results")), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(
+                predicate: .exists(.label("Results")),
+                timeout: .sessionDefault
+            )))),
         .action(ActionStep(
             command: .activate(.label("Open Details")),
             expectationPolicy: .expect(ActionExpectation(
                 predicate: .screenChanged("Details"),
-                timeout: 1
+                timeout: .sessionDefault
             )))),
         .wait(WaitStep(predicate: .exists(.identifier("ready")), timeout: 2)),
         .conditional(try ConditionalStep(cases: [
@@ -208,7 +211,10 @@ func forEachInfersStringValuesAndElementPredicates() throws {
             body: [
                 .action(ActionStep(
                     command: .activate(.ref("target")),
-                    expectationPolicy: .expect(ActionExpectation(predicate: .missing(.ref("target")), timeout: 1)))),
+                    expectationPolicy: .expect(ActionExpectation(
+                        predicate: .missing(.ref("target")),
+                        timeout: .sessionDefault
+                    )))),
             ]
         )),
     ]))

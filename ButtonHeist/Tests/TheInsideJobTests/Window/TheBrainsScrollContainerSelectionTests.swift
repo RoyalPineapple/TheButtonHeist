@@ -22,17 +22,18 @@ extension TheBrainsScrollTests {
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [TreePath([0]): .init(view: scrollView)]
         ))
-        let historyStart = await brains.vault.semanticObservationStream.stateOwner.historyEndIndex()
+        let historyStart = brains.vault.semanticObservationStream.historyEndIndex()
 
         let result = await brains.navigation.executeScroll(
-            try resolvedScrollTarget(ScrollTarget())
+            try resolvedScrollTarget(ScrollTarget()),
+            deadline: semanticRevealDeadline()
         )
 
         XCTAssertTrue(result.success, "Expected default scroll to pick the only visible container: \(String(describing: result.message))")
         XCTAssertGreaterThan(scrollView.contentOffset.y, 0)
-        let currentSnapshot = await brains.vault.semanticObservationStream.stateOwner.current()
+        let currentSnapshot = brains.vault.semanticObservationStream.current()
         let current = try XCTUnwrap(currentSnapshot)
-        let committedEvents = try await brains.vault.semanticObservationStream.stateOwner
+        let committedEvents = try brains.vault.semanticObservationStream
             .events(after: historyStart)
             .get()
         XCTAssertEqual(current.scope, .discovery)
@@ -54,7 +55,8 @@ extension TheBrainsScrollTests {
         ))
 
         let result = await brains.navigation.executeScrollToEdge(
-            try resolvedScrollToEdgeTarget(ScrollToEdgeTarget())
+            try resolvedScrollToEdgeTarget(ScrollToEdgeTarget()),
+            deadline: semanticRevealDeadline()
         )
 
         XCTAssertTrue(result.success, "Expected default edge scroll to pick the only visible container: \(String(describing: result.message))")
@@ -75,7 +77,8 @@ extension TheBrainsScrollTests {
         ))
 
         let result = await brains.navigation.executeScrollToEdge(
-            try resolvedScrollToEdgeTarget(ScrollToEdgeTarget(edge: .top))
+            try resolvedScrollToEdgeTarget(ScrollToEdgeTarget(edge: .top)),
+            deadline: semanticRevealDeadline()
         )
 
         XCTAssertTrue(result.success, "Expected already-at-edge scroll to be idempotent: \(String(describing: result.message))")
@@ -113,7 +116,8 @@ extension TheBrainsScrollTests {
         let result = await brains.navigation.executeScroll(
             try resolvedScrollTarget(
                 ScrollTarget(selection: .container("second_scroll"), direction: .down)
-            )
+            ),
+            deadline: semanticRevealDeadline()
         )
 
         XCTAssertTrue(result.success, "Expected named container scroll to succeed: \(String(describing: result.message))")
@@ -154,7 +158,8 @@ extension TheBrainsScrollTests {
         let result = await brains.navigation.executeScrollToEdge(
             try resolvedScrollToEdgeTarget(
                 ScrollToEdgeTarget(selection: .container("second_scroll"), edge: .top)
-            )
+            ),
+            deadline: semanticRevealDeadline()
         )
 
         XCTAssertTrue(result.success, "Expected named container edge scroll to succeed: \(String(describing: result.message))")
@@ -198,7 +203,8 @@ extension TheBrainsScrollTests {
         let result = await brains.navigation.executeScroll(
             try resolvedScrollTarget(
                 ScrollTarget(selection: .container("second_repeated_scroll"), direction: .down)
-            )
+            ),
+            deadline: semanticRevealDeadline()
         )
 
         XCTAssertTrue(result.success, "Expected path-keyed named container scroll to succeed: \(String(describing: result.message))")
@@ -228,7 +234,8 @@ extension TheBrainsScrollTests {
         ))
 
         let result = await brains.navigation.executeScroll(
-            try resolvedScrollTarget(ScrollTarget())
+            try resolvedScrollTarget(ScrollTarget()),
+            deadline: semanticRevealDeadline()
         )
 
         XCTAssertFalse(result.success)

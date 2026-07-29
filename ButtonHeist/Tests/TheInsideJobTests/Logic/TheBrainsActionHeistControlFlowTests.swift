@@ -152,6 +152,34 @@ final class HeistMachineControlFlowTests: XCTestCase {
         XCTAssertEqual(loop.children.map(\.kind), [.repeatUntilIteration])
         XCTAssertEqual(loop.children.first?.children.map(\.kind), [.warn])
     }
+
+    func testRepeatUntilRejectsDeadlineMatchWithoutSettledNoChange() throws {
+        let plan = try HeistPlan(body: [
+            .repeatUntil(try RepeatUntilStep(
+                predicate: .elementsChanged([
+                    .appeared(.label("Done")),
+                ]),
+                timeout: try .seconds(1),
+                body: [.warn(WarnStep(message: "attempt"))]
+            )),
+        ])
+        var driver = try HeistMachineTestDriver(
+            plan: plan,
+            script: MachineRunScript(
+                snapshots: [heistSnapshot(labels: [])],
+                events: [
+                    .elementsChanged(heistSnapshot(labels: ["Done"])),
+                ]
+            )
+        )
+
+        let completion = try driver.run()
+        let loop = try XCTUnwrap(completion.steps.first)
+
+        XCTAssertEqual(loop.status, .failed)
+        XCTAssertEqual(loop.repeatUntilEvidence?.iterationCount, 1)
+        XCTAssertEqual(loop.children.map(\.kind), [.repeatUntilIteration])
+    }
 }
 
 private extension HeistMachineControlFlowTests {

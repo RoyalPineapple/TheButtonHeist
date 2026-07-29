@@ -49,65 +49,75 @@ struct ActionTiming {
 }
 
 extension TheBrains {
-    func executeRuntimeAction(_ command: ResolvedHeistActionCommand) async -> ActionResult {
+    func executeRuntimeAction(_ command: HeistActionCommand) async -> ActionResult {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(payload: command.actionResultPayload)
         }
-        let observationBoundary = await vault.semanticObservationStream.stateOwner
-            .observationBoundary(scope: .visible)
-        let dispatch = await dispatchRuntimeAction(command)
-        let observation: ActionResultObservationEvidence
-        switch await vault.semanticObservationStream.refreshVisibleObservation() {
-        case .committed:
-            observation = .observed(
-                await vault.semanticObservationStream.stateOwner
-                    .evidence(after: observationBoundary)
-            )
-        case .unavailable:
-            observation = .none
-        }
-        let outcome: ActionResultOutcome = switch dispatch.outcome {
-        case .success:
-            .success
+        let completion: HeistExecution.Completion
+        switch await executeHeistAction(command) {
+        case .success(let result):
+            completion = result
         case .failure(let failure):
-            .failure(Self.actionFailureKind(for: failure))
+            return .failure(
+                payload: command.actionResultPayload,
+                failureKind: failure.actionFailureKind,
+                message: failure.description
+            )
         }
-        return ActionResult(
-            outcome: outcome,
-            payload: dispatch.payload,
-            message: dispatch.message,
-            observation: observation,
-            subjectEvidence: dispatch.subjectEvidence,
-            activationTrace: dispatch.activationTrace,
-            screenActionHandler: dispatch.screenActionHandler,
-            timing: dispatch.timing
+        return completion.steps.first?.reportActionResult ?? .failure(
+            payload: command.actionResultPayload,
+            failureKind: .actionFailed,
+            message: "single-action execution produced no action result"
         )
     }
 
     func dispatchRuntimeAction(
-        _ command: ResolvedHeistActionCommand
+        _ command: ResolvedHeistActionCommand,
+        deadline: SemanticObservationDeadline
     ) async -> TheSafecracker.ActionDispatchResult {
         clearRotorCursorBeforeNonRotorAction(command)
         let startedAt = RuntimeElapsed.now
         var timing = ActionTiming(startedAt: startedAt)
-        let result = await dispatchRawRuntimeAction(command, timing: &timing)
+        let result = await dispatchRawRuntimeAction(
+            command,
+            deadline: deadline,
+            timing: &timing
+        )
         timing.record(.interaction, since: startedAt)
         return result.withTiming(timing.freeze())
     }
 
     private func dispatchRawRuntimeAction(
         _ command: ResolvedHeistActionCommand,
+        deadline: SemanticObservationDeadline,
         timing: inout ActionTiming
     ) async -> TheSafecracker.ActionDispatchResult {
         switch command {
         case .activate(let target):
-            return await actions.executeActivate(target, timing: &timing)
+            return await actions.executeActivate(
+                target,
+                deadline: deadline,
+                timing: &timing
+            )
         case .increment(let target):
-            return await actions.executeIncrement(target, timing: &timing)
+            return await actions.executeIncrement(
+                target,
+                deadline: deadline,
+                timing: &timing
+            )
         case .decrement(let target):
-            return await actions.executeDecrement(target, timing: &timing)
+            return await actions.executeDecrement(
+                target,
+                deadline: deadline,
+                timing: &timing
+            )
         case .customAction(let name, let target):
-            return await actions.executeCustomAction(name: name, target: target, timing: &timing)
+            return await actions.executeCustomAction(
+                name: name,
+                target: target,
+                deadline: deadline,
+                timing: &timing
+            )
         case .dismiss:
             return await actions.executeDismiss()
         case .magicTap:
@@ -117,37 +127,46 @@ extension TheBrains {
                 selection: selection,
                 target: target,
                 direction: direction,
+                deadline: deadline,
                 timing: &timing
             )
         case .editAction(let target):
-            return await actions.executeEditAction(target)
+            return await actions.executeEditAction(target, deadline: deadline)
         case .setPasteboard(let target):
             return await actions.executeSetPasteboard(target)
         case .takeScreenshot:
-            return await dispatchTakeScreenshot()
+            return await dispatchTakeScreenshot(
+                observationBoundary: .cancellation
+            )
         case .dismissKeyboard:
-            return await actions.executeResignFirstResponder()
+            return await actions.executeResignFirstResponder(deadline: deadline)
         case .oneFingerTap(let target):
-            return await actions.executeTap(target)
+            return await actions.executeTap(target, deadline: deadline)
         case .longPress(let target):
-            return await actions.executeLongPress(target)
+            return await actions.executeLongPress(target, deadline: deadline)
         case .swipe(let target):
-            return await actions.executeSwipe(target)
+            return await actions.executeSwipe(target, deadline: deadline)
         case .drag(let target):
-            return await actions.executeDrag(target)
+            return await actions.executeDrag(target, deadline: deadline)
         case .typeText(let payload):
-            return await actions.executeTypeText(text: payload.text, target: payload.target)
+            return await actions.executeTypeText(
+                text: payload.text,
+                target: payload.target,
+                deadline: deadline
+            )
         case .scroll(let target):
-            return await navigation.executeScroll(target)
+            return await navigation.executeScroll(target, deadline: deadline)
         case .scrollToVisible(let target):
-            return await navigation.executeScrollToVisible(target: target)
+            return await navigation.executeScrollToVisible(
+                target: target,
+                deadline: deadline
+            )
         case .scrollToEdge(let target):
-            return await navigation.executeScrollToEdge(target)
+            return await navigation.executeScrollToEdge(
+                target,
+                deadline: deadline
+            )
         }
-    }
-
-    func executeSemanticDiscovery() async -> Navigation.InterfaceExplorationResult? {
-        await navigation.fullGraph()
     }
 
     private func clearRotorCursorBeforeNonRotorAction(_ command: ResolvedHeistActionCommand) {

@@ -21,7 +21,7 @@ extension HeistExecution.Machine {
         }
 
         let predicate: HeistExecution.Predicate?
-        let expectationTimeout: Duration
+        let observationTimeout: Duration
         do {
             if let authored = step.expectationPolicy.expectedStep {
                 let resolved = try authored.resolve(in: context.environment)
@@ -29,10 +29,10 @@ extension HeistExecution.Machine {
                     authored: authored.predicate,
                     resolved: resolved.predicate
                 )
-                expectationTimeout = HeistExecution.duration(resolved.timeout)
+                observationTimeout = HeistExecution.duration(resolved.timeout)
             } else {
                 predicate = nil
-                expectationTimeout = .zero
+                observationTimeout = SemanticObservationTiming.defaultTimeout
             }
         } catch {
             return resume(afterCompletedLeaf: HeistExecution.ResultProjector.expectationResolutionFailure(
@@ -44,7 +44,6 @@ extension HeistExecution.Machine {
         }
 
         let id = nextID()
-        let timeout = SemanticObservationTiming.defaultTimeout + expectationTimeout
         activeLeaf = .action(HeistExecution.ActionLeaf(
             id: id,
             step: step,
@@ -58,7 +57,7 @@ extension HeistExecution.Machine {
                 id,
                 HeistExecution.ObservationRequest(
                     scope: predicate?.observationScope ?? .visible,
-                    timeout: timeout
+                    timeout: observationTimeout
                 )
             ),
         ]))

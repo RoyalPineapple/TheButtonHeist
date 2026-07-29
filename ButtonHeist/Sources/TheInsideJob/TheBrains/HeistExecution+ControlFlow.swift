@@ -999,7 +999,7 @@ private extension HeistExecution.Machine {
                 to: definition.parameter
             )
             if let expectation = step.expectation {
-                _ = try expectation.resolve(in: context.environment)
+                _ = try expectation.resolvedStep.resolve(in: context.environment)
             }
         } catch {
             return resume(afterCompletedLeaf: invocationPreparationFailure(
@@ -1010,7 +1010,7 @@ private extension HeistExecution.Machine {
         }
 
         let steps = definition.body + (step.expectation.map {
-            [HeistStep.wait($0)]
+            [HeistStep.wait($0.resolvedStep)]
         } ?? [])
         continuations.append(.invocation(.init(
             step: step,
@@ -1041,14 +1041,9 @@ private extension HeistExecution.Machine {
         _ invocation: HeistExecution.InvocationContinuation,
         children executed: HeistExecutedChildren
     ) -> HeistExecution.State {
-        let split = invocationChildren(
-            executed,
-            hasExpectation: invocation.step.expectation != nil
-        )
         let result = invocationResult(
             invocation,
-            children: split.children,
-            expectationResult: split.expectationResult
+            children: executed
         )
         return resume(afterCompletedLeaf: result)
     }
@@ -1059,11 +1054,6 @@ private extension HeistExecution.Machine {
         let requestedPath: HeistInvocationPath
         let resolvedPath: HeistInvocationPath
         let definition: HeistPlan?
-    }
-
-    struct InvocationChildren {
-        let children: HeistExecutedChildren
-        let expectationResult: HeistExecutionStepResult?
     }
 
     func resolveInvocation(
@@ -1097,37 +1087,9 @@ private extension HeistExecution.Machine {
         )
     }
 
-    func invocationChildren(
-        _ executed: HeistExecutedChildren,
-        hasExpectation: Bool
-    ) -> InvocationChildren {
-        guard hasExpectation, let expectation = executed.values.last else {
-            return InvocationChildren(
-                children: executed,
-                expectationResult: nil
-            )
-        }
-        let values = Array(executed.values.dropLast())
-        let children: HeistExecutedChildren
-        if let passing = HeistPassingChildren(values) {
-            children = .passed(passing)
-        } else if let aborted = HeistAbortedChildren(values) {
-            children = .aborted(aborted)
-        } else {
-            preconditionFailure("Invocation body results must be admitted")
-        }
-        return InvocationChildren(
-            children: children,
-            expectationResult: expectation.status == .skipped
-                ? nil
-                : expectation
-        )
-    }
-
     func invocationResult(
         _ invocation: HeistExecution.InvocationContinuation,
-        children: HeistExecutedChildren,
-        expectationResult: HeistExecutionStepResult?
+        children: HeistExecutedChildren
     ) -> HeistExecutionStepResult {
         switch children {
         case .aborted(let children):
@@ -1148,71 +1110,16 @@ private extension HeistExecution.Machine {
                 )
             )
         case .passed(let children):
-            return passedInvocation(
-                invocation,
-                children: children,
-                expectationResult: expectationResult
-            )
-        }
-    }
-
-    func passedInvocation(
-        _ invocation: HeistExecution.InvocationContinuation,
-        children: HeistPassingChildren,
-        expectationResult: HeistExecutionStepResult?
-    ) -> HeistExecutionStepResult {
-        guard invocation.step.expectation != nil else {
-            guard expectationResult == nil else {
-                preconditionFailure("An invocation without an expectation cannot produce expectation evidence")
-            }
             return .invocation(
                 path: invocation.context.path,
                 invocationPath: invocation.step.path,
                 argument: invocation.step.argument,
                 completion: .passed(
-                    evidence: .init(admitted: .completed(expectation: nil)),
+                    evidence: .init(admitted: .completed),
                     children: children
                 )
             )
         }
-        guard let expectationResult else {
-            preconditionFailure("An invocation expectation must complete as a wait result")
-        }
-        if let matched = expectationResult.passedWaitEvidence {
-            let evidence = HeistInvocationEvidence.completed(
-                expectation: .waitPassed(matched)
-            )
-            return .invocation(
-                path: invocation.context.path,
-                invocationPath: invocation.step.path,
-                argument: invocation.step.argument,
-                completion: .passed(
-                    evidence: .init(admitted: evidence),
-                    children: children
-                )
-            )
-        }
-        guard let unmatched = expectationResult.unmatchedWaitEvidence else {
-            preconditionFailure("An invocation expectation must retain wait evidence")
-        }
-        let evidence = HeistInvocationEvidence.completed(
-            expectation: .waitUnmatched(unmatched)
-        )
-        return .invocation(
-            path: invocation.context.path,
-            invocationPath: invocation.step.path,
-            argument: invocation.step.argument,
-            completion: .failed(
-                evidence: .observed(.init(admitted: evidence)),
-                failure: .init(
-                    category: .expectation,
-                    contract: "heist invocation expectation is met",
-                    observed: invocationExpectationObserved(unmatched),
-                    expected: invocation.step.expectation?.predicate.description
-                ),
-                children: children
-            )
-        )
     }
 
     func recursiveInvocation(
@@ -1255,54 +1162,20 @@ private extension HeistExecution.Machine {
         error: Error
     ) -> HeistExecutionStepResult {
         let observed = "could not prepare heist run: \(error)"
-        let evidence: HeistInvocationFailureEvidence
-        if let expectation = step.expectation {
-            let actionResult = ActionResult.failure(
-                payload: .wait,
-                failureKind: .actionFailed,
-                message: observed
-            )
-            let expectationResult = ExpectationResult(
-                met: false,
-                predicate: nil,
-                actual: observed
-            )
-            let invocationEvidence = HeistInvocationEvidence.completed(
-                expectation: .result(
-                    actionResult: actionResult,
-                    expectation: expectationResult
-                )
-            )
-            evidence = .observed(.init(admitted: invocationEvidence))
-            return .invocation(
-                path: context.path,
-                invocationPath: step.path,
-                argument: step.argument,
-                completion: .failed(evidence: evidence, failure: .init(
-                    category: .expectation,
-                    contract: "heist invocation expectation predicate resolves before evaluation",
-                    observed: observed,
-                    expected: expectation.predicate.description
-                ))
-            )
-        }
-        evidence = .unavailable
+        let expected = step.expectation?.predicate.description
         return .invocation(
             path: context.path,
             invocationPath: step.path,
             argument: step.argument,
-            completion: .failed(evidence: evidence, failure: .init(
-                category: .validation,
-                contract: "heist invocation argument binds to the target parameter",
-                observed: observed
+            completion: .failed(evidence: .unavailable, failure: .init(
+                category: expected == nil ? .validation : .expectation,
+                contract: expected == nil
+                    ? "heist invocation argument binds to the target parameter"
+                    : "heist invocation expectation predicate resolves before evaluation",
+                observed: observed,
+                expected: expected
             ))
         )
-    }
-
-    func invocationExpectationObserved(
-        _ evidence: HeistWaitUnmatchedEvidence
-    ) -> String {
-        evidence.expectation.actual ?? "invocation expectation was not met"
     }
 }
 
@@ -1436,8 +1309,16 @@ private extension HeistExecution.Machine {
         bodyChildren: HeistPassingChildren,
         result: HeistExecutionStepResult
     ) -> HeistExecution.State {
-        guard let expectation = result.waitExpectation,
-              let observation = result.waitObservation else {
+        let expectation: ExpectationResult
+        do {
+            guard let replayed = try result.replayExpectation() else {
+                preconditionFailure("repeat_until check requires expectation evidence")
+            }
+            expectation = replayed
+        } catch {
+            preconditionFailure("runtime repeat_until evidence must be complete: \(error)")
+        }
+        guard let observation = result.waitObservation else {
             preconditionFailure("repeat_until check requires wait evidence")
         }
         let snapshot = observation.current
@@ -1450,12 +1331,11 @@ private extension HeistExecution.Machine {
                 evaluation: expectation,
                 snapshot: snapshot
             )
-        case .unmet(let expectation):
+        case .unmet:
             return resumeTimedOutRepeat(
                 loop,
                 resolved: resolvedRepeat(loop),
                 bodyChildren: bodyChildren,
-                expectation: expectation,
                 snapshot: snapshot
             )
         }
@@ -1475,14 +1355,12 @@ private extension HeistExecution.Machine {
         _ loop: HeistExecution.RepeatUntilContinuation,
         resolved: ResolvedRepeatUntilStep,
         bodyChildren: HeistPassingChildren,
-        expectation: ExpectationResult.Unmet,
         snapshot: Observation.Snapshot?
     ) -> HeistExecution.State {
         let count = loop.iterationIndex + 1
         let iterationEvidence = HeistRepeatUntilEvidence.executedContinued(
             iterationCount: count,
             iterationOrdinal: loop.iterationIndex,
-            expectation: expectation,
             lastObservedSummary: snapshotSummary(snapshot)
         )
         let iteration = repeatUntilIteration(
@@ -1496,7 +1374,6 @@ private extension HeistExecution.Machine {
         let reason = "repeat_until deadline elapsed"
         let evidence = HeistRepeatUntilEvidence.executedFailed(
             iterationCount: count,
-            expectation: expectation,
             lastObservedSummary: snapshotSummary(snapshot),
             failureReason: reason
         )
@@ -1526,12 +1403,10 @@ private extension HeistExecution.Machine {
         let count = loop.iterationIndex + 1
         let iteration: HeistExecutionStepResult
         switch evaluation {
-        case .met(let expectation):
+        case .met:
             let evidence = HeistRepeatUntilEvidence.executedMatched(
                 iterationCount: count,
                 iterationOrdinal: loop.iterationIndex,
-                expectation: expectation,
-                actionResult: latestActionResult(in: children.values),
                 lastObservedSummary: snapshotSummary(snapshot)
             )
             iteration = repeatUntilIteration(
@@ -1539,12 +1414,10 @@ private extension HeistExecution.Machine {
                 children: children,
                 evidence: evidence
             )
-        case .unmet(let expectation):
+        case .unmet:
             let evidence = HeistRepeatUntilEvidence.executedContinued(
                 iterationCount: count,
                 iterationOrdinal: loop.iterationIndex,
-                expectation: expectation,
-                actionResult: latestActionResult(in: children.values),
                 lastObservedSummary: snapshotSummary(snapshot)
             )
             iteration = repeatUntilIteration(
@@ -1559,7 +1432,6 @@ private extension HeistExecution.Machine {
         if evaluation.met {
             return resume(afterCompletedLeaf: repeatUntilMatched(
                 loop,
-                resolved: resolved,
                 iterations: passingChildren(iterations),
                 evaluation: evaluation,
                 snapshot: snapshot
@@ -1592,17 +1464,12 @@ private extension HeistExecution.Machine {
             )
         }
 
-        let expectation = ExpectationResult.Unmet(
-            predicate: resolved.predicateExpression,
-            actual: "iteration body failed before predicate evaluation"
-        )
         let childPath = children.abortedAtPath
         let count = loop.iterationIndex + 1
         let reason = "child failed at \(childPath)"
         let evidence = HeistRepeatUntilEvidence.executedFailed(
             iterationCount: count,
             iterationOrdinal: loop.iterationIndex,
-            expectation: expectation,
             lastObservedSummary: snapshotSummary(snapshot),
             failureReason: reason
         )
@@ -1624,7 +1491,6 @@ private extension HeistExecution.Machine {
             loop,
             resolved: resolved,
             iterations: abortedIterations,
-            expectation: expectation,
             snapshot: snapshot
         ))
     }
@@ -1646,18 +1512,15 @@ private extension HeistExecution.Machine {
 
     func repeatUntilMatched(
         _ loop: HeistExecution.RepeatUntilContinuation,
-        resolved _: ResolvedRepeatUntilStep,
         iterations: HeistPassingChildren,
         evaluation: ExpectationResult,
         snapshot: Observation.Snapshot?
     ) -> HeistExecutionStepResult {
-        guard case .met(let expectation) = evaluation else {
+        guard case .met = evaluation else {
             preconditionFailure("Matched repeat_until requires a met predicate")
         }
         let evidence = HeistRepeatUntilEvidence.executedMatched(
             iterationCount: loop.iterationIndex + 1,
-            expectation: expectation,
-            actionResult: latestActionResult(in: iterations.values),
             lastObservedSummary: snapshotSummary(snapshot)
         )
         return .repeatUntil(
@@ -1674,13 +1537,11 @@ private extension HeistExecution.Machine {
         _ loop: HeistExecution.RepeatUntilContinuation,
         resolved: ResolvedRepeatUntilStep,
         iterations: HeistAbortedChildren,
-        expectation: ExpectationResult.Unmet,
         snapshot: Observation.Snapshot?
     ) -> HeistExecutionStepResult {
         let reason = "iteration \(loop.iterationIndex) failed at \(iterations.abortedAtPath)"
         let evidence = HeistRepeatUntilEvidence.executedFailed(
             iterationCount: loop.iterationIndex + 1,
-            expectation: expectation,
             lastObservedSummary: snapshotSummary(snapshot),
             failureReason: reason
         )
@@ -1810,12 +1671,12 @@ private extension HeistExecution.Machine {
         switch children {
         case .passed(let children):
             completion = .passed(
-                evidence: .handledElse(waitElse.evidence),
+                evidence: waitElse.evidence,
                 children: children
             )
         case .aborted(let children):
             completion = .childAborted(
-                evidence: waitElse.evidence,
+                evidence: waitElse.evidence.expectation,
                 failure: childFailure(
                     category: .wait,
                     path: children.abortedAtPath
@@ -1882,20 +1743,6 @@ private extension HeistExecution.Machine {
             }
             if let current = latestSnapshot(in: result.children) {
                 return current
-            }
-        }
-        return nil
-    }
-
-    func latestActionResult(
-        in results: [HeistExecutionStepResult]
-    ) -> ActionResult? {
-        for result in results.reversed() {
-            if let action = result.actionEvidence?.result {
-                return action
-            }
-            if let action = latestActionResult(in: result.children) {
-                return action
             }
         }
         return nil

@@ -103,10 +103,12 @@ extension Navigation {
         var progress: InterfaceExplorationProgress
         private(set) var discoveryCommitPolicy: DiscoveryCommitPolicy
         let deadline: SemanticObservationDeadline?
+        let observationBoundary: SemanticObservationWaitBoundary
 
         init(
             startingFresh: Bool,
             deadline: SemanticObservationDeadline? = nil,
+            observationBoundary: SemanticObservationWaitBoundary = .cancellation,
             maxScrollsPerContainer: Int = InterfaceExplorationProgress.maxScrollsPerContainer,
             maxScrollsPerDiscovery: Int = InterfaceExplorationProgress.maxScrollsPerDiscovery
         ) {
@@ -114,6 +116,7 @@ extension Navigation {
             // which is what `recordCommittedObservation` latches.
             discoveryCommitPolicy = startingFresh ? .replaceInterface : .mergeIntoInterface
             self.deadline = deadline
+            self.observationBoundary = observationBoundary
             progress = InterfaceExplorationProgress(
                 maxScrollsPerContainer: maxScrollsPerContainer,
                 maxScrollsPerDiscovery: maxScrollsPerDiscovery
@@ -183,7 +186,7 @@ extension Navigation {
            case .inflated = await elementInflation.inflate(
                for: target,
                method: .scrollToVisible,
-               operationDeadline: deadline
+               deadline: deadline
            ) {
             return .retained
         }

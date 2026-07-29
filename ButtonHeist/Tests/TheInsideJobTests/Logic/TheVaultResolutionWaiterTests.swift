@@ -9,25 +9,16 @@ import ThePlans
 @MainActor
 extension TheVaultResolutionTests {
 
-    func testVisibleWaiterCompletesWithLaterPublication() async {
-        let first = await vault.semanticObservationStream.commitVisibleObservationForTesting(
-            InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
+    func testAdmittedVisibleObservationReturnsCurrentTruthWithoutWaitingForAnotherPublication() async {
+        let publication = await vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(elements: [(element(label: "Current"), "current")])
         )
-        let waiter = Task { @MainActor in
-            await vault.semanticObservationStream.waitForObservation(
-                after: first.historyRange.upperBound,
-                scope: .visible,
-                deadline: nil
-            )
-        }
-        await waitForObservationWaiterCount(1)
 
-        let second = await vault.semanticObservationStream.commitVisibleObservationForTesting(
-            InterfaceObservation.makeForTests(elements: [(element(label: "Second"), "second")])
+        let current = await vault.semanticObservationStream.admittedVisibleObservation(
+            boundary: .cancellation
         )
-        let result = await waiter.value
 
-        XCTAssertEqual(result, .observation(second.current))
+        XCTAssertEqual(current, publication.current)
         XCTAssertEqual(vault.semanticObservationStream.observationWaiterCount, 0)
     }
 
@@ -35,9 +26,9 @@ extension TheVaultResolutionTests {
         let first = await vault.semanticObservationStream.commitVisibleObservationForTesting(
             InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
         )
-        await vault.semanticObservationStream.invalidateCurrentAdmission()
+        vault.semanticObservationStream.invalidateCurrentAdmission()
 
-        let admittedObservation = await vault.semanticObservationStream.admittedObservation(
+        let admittedObservation = vault.semanticObservationStream.admittedObservation(
             scope: .visible,
             after: nil
         )
@@ -48,7 +39,7 @@ extension TheVaultResolutionTests {
             await vault.semanticObservationStream.waitForObservation(
                 after: first.historyRange.upperBound,
                 scope: .visible,
-                deadline: nil
+                boundary: .cancellation
             )
         }
         await waitForObservationWaiterCount(1)
@@ -69,7 +60,7 @@ extension TheVaultResolutionTests {
             await vault.semanticObservationStream.waitForObservation(
                 after: first.historyRange.upperBound,
                 scope: .discovery,
-                deadline: nil
+                boundary: .cancellation
             )
         }
         await waitForObservationWaiterCount(1)
@@ -100,7 +91,7 @@ extension TheVaultResolutionTests {
             await vault.semanticObservationStream.waitForObservation(
                 after: first.historyRange.upperBound,
                 scope: .visible,
-                deadline: nil
+                boundary: .cancellation
             )
         }
         await waitForObservationWaiterCount(1)
@@ -135,8 +126,7 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(vault.semanticObservationStream.observationWaiterCount, 0)
     }
 
-    func testDiscoveryPublicationsRetainOrderedHistoryAndAccumulatedGraph() async {
-        let start = await vault.semanticObservationStream.stateOwner.historyEndIndex()
+    func testDiscoveryPublicationsRetainAccumulatedGraph() async {
         let sharedHeader = element(label: "Catalog", traits: .header)
         let first = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             InterfaceObservation.makeForTests(
@@ -179,16 +169,6 @@ extension TheVaultResolutionTests {
                 .compactMap(\.semantics.assertable.label).sorted(),
             ["Catalog", "First Known", "First Visible", "Second Known", "Second Visible"]
         )
-        guard case .success(let events) =
-            await vault.semanticObservationStream.stateOwner.events(after: start)
-        else {
-            return XCTFail("Expected retained discovery history")
-        }
-        XCTAssertEqual(events, first.events + second.events)
-        XCTAssertFalse(events.contains { event in
-            if case .screenChanged = event { return true }
-            return false
-        })
         XCTAssertEqual(
             vault.interfaceElementIDs,
             ["catalog", "first_known", "first_visible", "second_known", "second_visible"]
@@ -256,126 +236,25 @@ extension TheVaultResolutionTests {
         )
     }
 
-    func testZeroTimeoutTurnsDiscoveryCycleBeforeReturningCurrentSnapshot() async {
-        _ = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
-            InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
-        )
-        let second = InterfaceObservation.makeForTests(elements: [(element(label: "Second"), "second")])
-        var discoveryCount = 0
-        await vault.semanticObservationStream.start {
-            discoveryCount += 1
-            self.vault.observeInterface(second)
-            let publication = await self.vault.semanticObservationStream
-                .commitDiscoveryObservationForTesting(second)
-            return Navigation.InterfaceExplorationResult(
-                current: publication.current,
-                progress: .init(),
-                viewportExit: .restored
-            )
-        }
-
+    func testObservationCycleDoesNotRunDiscoveryOnStoppedStream() async {
         let current = await vault.semanticObservationStream.nextObservation(
             scope: .discovery,
             after: nil,
-            timeout: 0
-        )
-
-        XCTAssertGreaterThanOrEqual(discoveryCount, 1)
-        XCTAssertEqual(
-            current?.snapshot.interface.projectedElements
-                .compactMap(\.semantics.assertable.label),
-            ["Second"]
-        )
-    }
-
-    func testDiscoveryDemandWidensPassiveObservationScopeForOneCycle() async {
-        let discovery = InterfaceObservation.makeForTests(
-            elements: [(element(label: "Discovery"), "discovery")]
-        )
-        var discoveryCount = 0
-        await vault.semanticObservationStream.start {
-            discoveryCount += 1
-            self.vault.observeInterface(discovery)
-            let publication = await self.vault.semanticObservationStream
-                .commitDiscoveryObservationForTesting(discovery)
-            return Navigation.InterfaceExplorationResult(
-                current: publication.current,
-                progress: .init(),
-                viewportExit: .restored
-            )
-        }
-
-        XCTAssertEqual(vault.semanticObservationStream.subscribedObservationScope(), .visible)
-        await Task.yield()
-        let countBeforeDemand = discoveryCount
-        XCTAssertEqual(countBeforeDemand, 0)
-
-        let current = await vault.semanticObservationStream.nextObservation(
-            scope: .discovery,
-            after: nil,
-            timeout: 0
-        )
-
-        XCTAssertGreaterThanOrEqual(discoveryCount, countBeforeDemand + 1)
-        XCTAssertEqual(current?.scope, .discovery)
-        XCTAssertEqual(
-            current?.snapshot.interface.projectedElements
-                .compactMap(\.semantics.assertable.label),
-            ["Discovery"]
-        )
-    }
-
-    func testZeroTimeoutDoesNotRunDiscoveryOnStoppedStream() async {
-        let current = await vault.semanticObservationStream.nextObservation(
-            scope: .discovery,
-            after: nil,
-            timeout: 0
+            boundary: .observationCycle
         )
 
         XCTAssertNil(current)
     }
 
-    func testCancelledVisibleWaiterUnregisters() async {
-        let start = await vault.semanticObservationStream.stateOwner.historyEndIndex()
-        let waiter = Task { @MainActor in
-            await vault.semanticObservationStream.waitForObservation(
-                after: start,
-                scope: .visible,
-                deadline: nil
-            )
-        }
-        await waitForObservationWaiterCount(1)
-
-        waiter.cancel()
-        let result = await waiter.value
-
-        XCTAssertEqual(result, .cancelled)
-        XCTAssertEqual(vault.semanticObservationStream.observationWaiterCount, 0)
-        _ = await vault.semanticObservationStream.commitVisibleObservationForTesting(
-            InterfaceObservation.makeForTests(elements: [(element(label: "Late"), "late")])
-        )
-        XCTAssertEqual(vault.semanticObservationStream.observationWaiterCount, 0)
-    }
-
     func testCancelledDiscoveryWaiterUnregisters() async {
-        var discoveryContinuation: CheckedContinuation<Void, Never>?
-        await vault.semanticObservationStream.start {
-            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                discoveryContinuation = continuation
-            }
-            return nil
-        }
-        defer {
-            discoveryContinuation?.resume()
-            discoveryContinuation = nil
-        }
+        vault.semanticObservationStream.start()
 
-        let start = await vault.semanticObservationStream.stateOwner.historyEndIndex()
+        let start = vault.semanticObservationStream.historyEndIndex()
         let waiter = Task { @MainActor in
             await vault.semanticObservationStream.waitForObservation(
                 after: start,
                 scope: .discovery,
-                deadline: nil
+                boundary: .cancellation
             )
         }
         await waitForObservationWaiterCount(1)
@@ -384,6 +263,23 @@ extension TheVaultResolutionTests {
         let result = await waiter.value
 
         XCTAssertEqual(result, .cancelled)
+        XCTAssertEqual(vault.semanticObservationStream.observationWaiterCount, 0)
+    }
+
+    func testExternalDeadlineTerminatesObservationWait() async {
+        vault.semanticObservationStream.start()
+        let deadline = SemanticObservationDeadline(
+            start: RuntimeElapsed.now,
+            timeoutSeconds: 0
+        )
+
+        let result = await vault.semanticObservationStream.waitForObservation(
+            after: vault.semanticObservationStream.historyEndIndex(),
+            scope: .visible,
+            boundary: .externalDeadline(deadline)
+        )
+
+        XCTAssertEqual(result, .deadlineReached)
         XCTAssertEqual(vault.semanticObservationStream.observationWaiterCount, 0)
     }
 

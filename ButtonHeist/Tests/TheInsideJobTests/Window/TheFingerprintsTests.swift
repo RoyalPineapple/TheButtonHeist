@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+// The fingerprint lifecycle owns a scene-attached overlay window.
 import XCTest
 @testable import TheInsideJob
 

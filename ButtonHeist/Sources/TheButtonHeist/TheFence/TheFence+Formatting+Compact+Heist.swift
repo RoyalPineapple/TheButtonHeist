@@ -26,6 +26,9 @@ extension FenceResponse {
             if let failureMessage = step.failure?.message {
                 line += " -> error: \(failureMessage)"
                 detailLines = Self.compactHeistFailureDeltaLines(delta)
+                if let timing = step.evidence?.expectationTiming {
+                    detailLines.append("    expectation: \(Self.compactExpectationTiming(timing))")
+                }
                 if let activationTrace = step.activationTrace {
                     detailLines.append("    activation: \(Self.compactActivationTrace(activationTrace))")
                 }
@@ -60,6 +63,16 @@ extension FenceResponse {
         step.invocationDisplayName ?? step.command?.rawValue ?? step.kind.rawValue
     }
 
+    private static func compactExpectationTiming(
+        _ timing: HeistExpectationTiming
+    ) -> String {
+        var text = "budget=\(timing.budgetMs)ms elapsed=\(timing.elapsedMs)ms"
+        if let lastTreeChangeElapsedMs = timing.lastTreeChangeElapsedMs {
+            text += " lastTreeChange=\(lastTreeChangeElapsedMs)ms"
+        }
+        return text
+    }
+
 }
 
 private extension HeistReport.Evidence {
@@ -73,7 +86,7 @@ private extension HeistReport.Evidence {
                     includeScreenInterface: true
                 )
             }
-        case .wait(let evidence):
+        case .wait(let evidence, _, _):
             return DeltaProjection(
                 evidence: evidence.observation,
                 profile: profile,
@@ -86,6 +99,22 @@ private extension HeistReport.Evidence {
              .invocation,
              .warning:
             return nil
+        }
+    }
+
+    var expectationTiming: HeistExpectationTiming? {
+        switch self {
+        case .action(_, let evidence, _):
+            evidence.expectationEvidence?.timing
+        case .wait(let evidence, _, _):
+            evidence.timing
+        case .caseSelection,
+             .forEachString,
+             .forEachElement,
+             .repeatUntil,
+             .invocation,
+             .warning:
+            nil
         }
     }
 }

@@ -388,7 +388,6 @@ final class StartupConfigurationTests: XCTestCase {
         XCTAssertEqual(knobs.maxScrollsPerDiscovery, 200)
         XCTAssertEqual(knobs.visibleElementBudget, 300)
         XCTAssertEqual(knobs.totalNodeBudget, 5_000)
-        XCTAssertEqual(knobs.singleTripwireTickSettleTimeout, 0.2, accuracy: 0.001)
     }
 
     func testRuntimeKnobsReadEnvironmentFromOneResolver() {
@@ -405,7 +404,6 @@ final class StartupConfigurationTests: XCTestCase {
         XCTAssertEqual(knobs.maxScrollsPerDiscovery, 30)
         XCTAssertEqual(knobs.visibleElementBudget, 75)
         XCTAssertEqual(knobs.totalNodeBudget, 4_000)
-        XCTAssertEqual(knobs.singleTripwireTickSettleTimeout, 0.05, accuracy: 0.001)
     }
 
     func testRuntimeKnobsReadTestRunnerPrefixedEnvironmentAndClamp() {
@@ -422,7 +420,6 @@ final class StartupConfigurationTests: XCTestCase {
         XCTAssertEqual(knobs.maxScrollsPerDiscovery, 2_000)
         XCTAssertEqual(knobs.visibleElementBudget, 1_000)
         XCTAssertEqual(knobs.totalNodeBudget, 5_000)
-        XCTAssertEqual(knobs.singleTripwireTickSettleTimeout, 2.0, accuracy: 0.001)
     }
 }
 

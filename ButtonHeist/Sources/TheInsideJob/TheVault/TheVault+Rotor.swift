@@ -145,15 +145,15 @@ extension TheVault {
     /// A screen boundary or unavailable retained history invalidates
     /// continuation. The returned index is the history position immediately
     /// preceding dispatch and becomes the next successful selection's cursor.
-    func admitRotorHistory() async -> RotorHistoryAdmission {
+    func admitRotorHistory() -> RotorHistoryAdmission {
         guard let cursor = rotorCursor else {
             return RotorHistoryAdmission(
-                historyIndex: await semanticObservationStream.stateOwner.historyEndIndex(),
+                historyIndex: semanticObservationStream.historyEndIndex(),
                 invalidatedCursor: nil
             )
         }
 
-        switch await semanticObservationStream.stateOwner.events(
+        switch semanticObservationStream.events(
             after: cursor.selectionHistoryIndex
         ) {
         case .success(let events):
@@ -172,7 +172,7 @@ extension TheVault {
         case .failure:
             clearRotorCursor(ifHolding: cursor)
             return RotorHistoryAdmission(
-                historyIndex: await semanticObservationStream.stateOwner.historyEndIndex(),
+                historyIndex: semanticObservationStream.historyEndIndex(),
                 invalidatedCursor: cursor
             )
         }
@@ -206,7 +206,7 @@ private extension TheVault {
     func resolveLiveObject(_ object: NSObject) async -> InterfaceTree.Element? {
         guard case .committed =
             await semanticObservationStream.refreshedVisibleObservation(
-                timeout: SemanticObservationTiming.defaultTimeout / .seconds(1)
+                boundary: .cancellation
             )
         else { return nil }
         return knownObject(object)

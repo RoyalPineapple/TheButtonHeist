@@ -131,7 +131,7 @@ extension TheBrainsScrollTests {
         )
         let originalMoveViewport = brains.navigation.elementInflation.exploration.moveViewport
         var fallbackRequest: ElementInflation.SemanticTargetRevealRequest?
-        brains.navigation.elementInflation.exploration.moveViewport = { _ in
+        brains.navigation.elementInflation.exploration.moveViewport = { _, _ in
             Navigation.ViewportTransition(
                 outcome: .moved,
                 previousVisibleIds: [],
@@ -210,7 +210,7 @@ extension TheBrainsScrollTests {
         let sourceTarget = try resolvedTarget(.label("Settings").and(.traits([.button])))
         var dispatchedPoints: [ViewPoint] = []
         var dispatchedOwnerPaths: [TreePath] = []
-        brains.navigation.elementInflation.exploration.moveViewport = { intent in
+        brains.navigation.elementInflation.exploration.moveViewport = { intent, _ in
             if case .revealViewPoint(let point, let target) = intent {
                 dispatchedPoints.append(point)
                 dispatchedOwnerPaths.append(target.containerTarget.path)
@@ -266,7 +266,7 @@ extension TheBrainsScrollTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
+        _ = try await publishedVisibleObservation()
 
         let ancestorPath = TreePath([0])
         let missingOwnerPath = ancestorPath.appending(0)
@@ -363,7 +363,7 @@ extension TheBrainsScrollTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
+        _ = try await publishedVisibleObservation()
 
         await installSyntheticObservation(fixture.initialObservation)
         fixture.siblingScrollView.onSetContentOffset = { _ in
@@ -608,14 +608,15 @@ extension TheBrainsScrollTests {
 
     func testScrollToVisibleUnknownTargetUsesCurrentSemanticDiagnostics() async throws {
         let visible = makeElement(label: "Visible")
-        await brains.vault.installObservationForTesting(.makeForTests(
-            elements: [(visible, HeistId(rawValue: "visible_element"))]
-        ))
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            .makeForTests(elements: [(visible, HeistId(rawValue: "visible_element"))])
+        )
 
         let result = await brains.navigation.executeScrollToVisible(
             target: try resolvedScrollToVisibleTarget(
                 ScrollToVisibleTarget(target: .label("Missing Button"))
-            )
+            ),
+            deadline: semanticRevealDeadline()
         )
 
         XCTAssertFalse(result.success)
@@ -637,7 +638,8 @@ extension TheBrainsScrollTests {
 
         let result = await brains.navigation.elementInflation.inflate(
             for: try resolvedTarget(.label("Offscreen")),
-            method: .activate
+            method: .activate,
+            deadline: semanticRevealDeadline()
         )
 
         guard case .failed(let failure) = result else {
@@ -904,6 +906,7 @@ extension TheBrainsScrollTests {
     private func inflateSemanticDuplicate(
         postRevealObservation: InterfaceObservation
     ) async throws -> ElementInflation.ElementInflationResult {
+        brains.stopSemanticObservation()
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         await installScreenWithOffViewport(
@@ -932,21 +935,8 @@ extension TheBrainsScrollTests {
             ),
         ])
         let originalMoveViewport = brains.navigation.elementInflation.exploration.moveViewport
-        let originalGeometryEnvironment = brains.navigation.elementInflation.geometryEnvironment
-        brains.navigation.elementInflation.exploration.moveViewport = { _ in .unavailable() }
-        brains.navigation.elementInflation.geometryEnvironment = .init(
-            now: { RuntimeElapsed.now },
-            refreshVisibleObservation: { _ in
-                guard let current =
-                    await self.brains.vault.semanticObservationStream.stateOwner.current()
-                else {
-                    return .unavailable(.sourceTreeUnavailable)
-                }
-                return .committed(current)
-            }
-        )
+        brains.navigation.elementInflation.exploration.moveViewport = { _, _ in .unavailable() }
         brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in
-            self.brains.vault.observeInterface(revealedObservation)
             let current = await self.brains.vault.semanticObservationStream
                 .commitDiscoveryObservationForTesting(revealedObservation)
                 .current
@@ -957,7 +947,6 @@ extension TheBrainsScrollTests {
                     .count,
                 2
             )
-            self.visibleObservationSource.observation = postRevealObservation
             guard let currentElement = self.brains.vault.interfaceElement(heistId: "current_priority_one") else {
                 return .unavailable
             }
@@ -974,7 +963,6 @@ extension TheBrainsScrollTests {
         defer {
             brains.navigation.elementInflation.exploration.moveViewport = originalMoveViewport
             brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in .unavailable }
-            brains.navigation.elementInflation.geometryEnvironment = originalGeometryEnvironment
         }
         let target = try resolvedTarget(
             .label("Review PR").and(
@@ -982,11 +970,20 @@ extension TheBrainsScrollTests {
                 .customContent(.init(label: "Priority", value: "P1"))
             )
         )
-        return await brains.navigation.elementInflation.inflate(
-            for: target,
-            method: .activate,
-            activationPointPolicy: .liveObjectOnly
-        )
+        let resultBox = InflationResultBox()
+        let inflation = Task { @MainActor in
+            resultBox.value = await self.brains.navigation.elementInflation.inflate(
+                for: target,
+                method: .activate,
+                activationPointPolicy: .liveObjectOnly,
+                deadline: self.semanticRevealDeadline()
+            )
+        }
+        await waitForSettledSemanticWaiter()
+        await brains.vault.semanticObservationStream
+            .commitVisibleObservationForTesting(postRevealObservation)
+        await inflation.value
+        return try XCTUnwrap(resultBox.value)
     }
 
     private func reviewPRElement(

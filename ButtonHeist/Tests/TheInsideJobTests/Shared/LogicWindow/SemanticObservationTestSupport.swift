@@ -4,51 +4,43 @@
 extension Observation.Stream {
     @discardableResult
     func commitVisibleObservationForTesting(
-        _ observation: InterfaceObservation,
-        notificationBatch: AccessibilityNotificationBatch? = nil
+        _ observation: InterfaceObservation
     ) async -> Observation.Publication {
-        await commitVisibleObservation(
-            .admitCaptured(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
-            notificationBatch: notificationBatch
+        await commitObservationCycleForTesting(
+            observation,
+            scope: .visible,
+            lineage: .resting
         )
     }
 
     @discardableResult
-    func commitVisibleEventForTesting(
+    func commitVisibleObservationForTesting(
         _ observation: InterfaceObservation,
-        notificationBatch: AccessibilityNotificationBatch? = nil
-    ) async -> Observation.Event {
-        let publication = await commitVisibleObservation(
-            .admitCaptured(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
-            notificationBatch: notificationBatch
-        )
-        guard let event = publication.events.last else {
-            preconditionFailure("Test observation did not publish its committed event")
-        }
-        return event
-    }
-
-    @discardableResult
-    func commitVisibleObservationAfterViewportMovementForTesting(
-        _ observation: InterfaceObservation,
-        notificationBatch: AccessibilityNotificationBatch? = nil
+        notificationBatch: AccessibilityNotificationBatch
     ) async -> Observation.Publication {
-        await commitVisibleObservation(
-            .admitCaptured(
-                observation,
-                tripwireSignal: currentTripwireSignal(),
-                lineage: .viewportMovement
-            ),
+        commitVisibleObservation(
+            .admitCaptured(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
             notificationBatch: notificationBatch
         )
     }
 
     @discardableResult
     func commitDiscoveryObservationForTesting(
-        _ observation: InterfaceObservation,
-        notificationBatch: AccessibilityNotificationBatch? = nil
+        _ observation: InterfaceObservation
     ) async -> Observation.Publication {
-        await commitDiscoveryObservation(
+        await commitObservationCycleForTesting(
+            observation,
+            scope: .discovery,
+            lineage: .resting
+        )
+    }
+
+    @discardableResult
+    func commitDiscoveryObservationForTesting(
+        _ observation: InterfaceObservation,
+        notificationBatch: AccessibilityNotificationBatch
+    ) async -> Observation.Publication {
+        commitDiscoveryObservation(
             .admitCaptured(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
             notificationBatch: notificationBatch
         )
@@ -56,17 +48,40 @@ extension Observation.Stream {
 
     @discardableResult
     func commitDiscoveryObservationAfterViewportMovementForTesting(
-        _ observation: InterfaceObservation,
-        notificationBatch: AccessibilityNotificationBatch? = nil
+        _ observation: InterfaceObservation
     ) async -> Observation.Publication {
-        await commitDiscoveryObservation(
-            .admitCaptured(
-                observation,
-                tripwireSignal: currentTripwireSignal(),
-                lineage: .viewportMovement
-            ),
-            notificationBatch: notificationBatch
+        await commitObservationCycleForTesting(
+            observation,
+            scope: .discovery,
+            lineage: .viewportMovement
         )
+    }
+
+    private func commitObservationCycleForTesting(
+        _ observation: InterfaceObservation,
+        scope: SemanticObservationScope,
+        lineage: ScreenLineage
+    ) async -> Observation.Publication {
+        guard let vault else {
+            preconditionFailure("A test observation cycle requires a live Vault")
+        }
+        let claim = vault.accessibilityNotifications.freezeObservationCycleClaim()
+        let admitted = CommittableInterfaceObservation.admitCaptured(
+            observation,
+            tripwireSignal: currentTripwireSignal(),
+            lineage: lineage
+        )
+        let publication = switch scope {
+        case .visible:
+            commitVisibleObservation(admitted, notificationBatch: claim.batch)
+        case .discovery:
+            commitDiscoveryObservation(admitted, notificationBatch: claim.batch)
+        }
+        precondition(
+            claim.acknowledgeObservationCycle(),
+            "A test observation cycle must acknowledge its exact notification claim"
+        )
+        return publication
     }
 }
 
@@ -84,6 +99,7 @@ final class VisibleObservationSourceFixture {
     }
 
     private var source: Source = .liveCapture
+    private(set) var captureCount = 0
 
     var observation: InterfaceObservation? {
         get {
@@ -96,6 +112,7 @@ final class VisibleObservationSourceFixture {
     }
 
     func capture(from vault: TheVault) -> InterfaceObservation? {
+        captureCount += 1
         switch source {
         case .liveCapture:
             return TheVault.captureVisibleObservation(from: vault)
@@ -121,7 +138,7 @@ final class TripwireInvalidationFixture {
         self.continuation = continuation
         invalidation = Task {
             for await _ in stream {
-                await vault.semanticObservationStream.invalidateCurrentAdmission()
+                vault.semanticObservationStream.invalidateCurrentAdmission()
                 break
             }
         }

@@ -299,7 +299,7 @@ final class ClientMessageTests: XCTestCase {
 
         XCTAssertEqual(
             step.description,
-            #"action(command=activate expect=wait(.screenChanged timeout=10))"#
+            #"action(command=activate expect=.screenChanged)"#
         )
     }
 

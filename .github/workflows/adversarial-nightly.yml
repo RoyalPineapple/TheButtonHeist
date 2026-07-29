@@ -9,10 +9,6 @@ on:
         description: Passing scenario repeat count
         required: false
         default: "5"
-      failure_repeat_count:
-        description: Expected-failure scenario repeat count
-        required: false
-        default: "1"
 
 concurrency:
   group: adversarial-nightly-${{ github.ref }}
@@ -29,8 +25,6 @@ jobs:
     env:
       DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-adversarial
       BUTTONHEIST_ADVERSARIAL_REPEAT_COUNT: ${{ github.event.inputs.passing_repeat_count || '5' }}
-      BUTTONHEIST_ADVERSARIAL_FAILURE_REPEAT_COUNT: ${{ github.event.inputs.failure_repeat_count || '1' }}
-      BUTTONHEIST_ADVERSARIAL_CEILING_POLICY: fail
       BUTTONHEIST_RESULTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-results/adversarial-nightly
       BUTTONHEIST_RESULTS_MODE: failures
 
@@ -82,8 +76,6 @@ jobs:
             --app "$APP" \
             --cli "$PWD/ButtonHeistCLI/.build/debug/buttonheist" \
             --repeat-count "$BUTTONHEIST_ADVERSARIAL_REPEAT_COUNT" \
-            --failure-repeat-count "$BUTTONHEIST_ADVERSARIAL_FAILURE_REPEAT_COUNT" \
-            --ceiling-policy "$BUTTONHEIST_ADVERSARIAL_CEILING_POLICY" \
             --report "$RUNNER_TEMP/buttonheist-adversarial-nightly-report.json"
 
       - name: Run lifecycle gate

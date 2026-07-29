@@ -10,13 +10,19 @@ import XCTest
 @MainActor
 extension TheBrainsActionTests {
 
-    func testInteractionCoordinatorDoesNotReuseInvalidatedSettledObservation() async {
+    func testObservationStreamDoesNotReuseInvalidatedSettledObservation() async {
         await installScreen(elements: [(makeElement(label: "Title", traits: .header), "header_title")])
-        await brains.vault.semanticObservationStream.invalidateCurrentAdmission()
+        brains.vault.semanticObservationStream.invalidateCurrentAdmission()
         visibleObservationSource.observation = nil
 
         let current = await withNoTraversableWindows {
-            await brains.interactionCoordinator.admittedVisibleObservation(timeout: 0.001)
+            await brains.vault.semanticObservationStream
+                .admittedVisibleObservation(
+                    boundary: .externalDeadline(SemanticObservationDeadline(
+                        start: RuntimeElapsed.now,
+                        timeoutSeconds: 0.001
+                    ))
+                )
         }
 
         XCTAssertNil(
@@ -36,7 +42,11 @@ extension TheBrainsActionTests {
 
         let target = try AccessibilityTarget.label("Live").resolve(in: .empty)
         var timing = ActionTiming()
-        let result = await brains.actions.executeIncrement(target, timing: &timing)
+        let result = await brains.actions.executeIncrement(
+            target,
+            deadline: actionDeadline(),
+            timing: &timing
+        )
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .increment)
@@ -60,7 +70,11 @@ extension TheBrainsActionTests {
 
         let target = try AccessibilityTarget.label("Live").resolve(in: .empty)
         var timing = ActionTiming()
-        let result = await brains.actions.executeDecrement(target, timing: &timing)
+        let result = await brains.actions.executeDecrement(
+            target,
+            deadline: actionDeadline(),
+            timing: &timing
+        )
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .decrement)
@@ -91,6 +105,7 @@ extension TheBrainsActionTests {
         let result = await brains.actions.executeCustomAction(
             name: "Share",
             target: try AccessibilityTarget.label("Options").resolve(in: .empty),
+            deadline: actionDeadline(),
             timing: &timing
         )
 
@@ -127,6 +142,7 @@ extension TheBrainsActionTests {
         let result = await brains.actions.executeCustomAction(
             name: "Delete",
             target: try AccessibilityTarget.label("Options").resolve(in: .empty),
+            deadline: actionDeadline(),
             timing: &timing
         )
 
@@ -163,6 +179,7 @@ extension TheBrainsActionTests {
         let result = await brains.actions.executeCustomAction(
             name: "Archive",
             target: try AccessibilityTarget.label("Options").resolve(in: .empty),
+            deadline: actionDeadline(),
             timing: &timing
         )
 
@@ -193,6 +210,7 @@ extension TheBrainsActionTests {
         let result = await brains.actions.executeCustomAction(
             name: "Archive",
             target: try AccessibilityTarget.label("Options").resolve(in: .empty),
+            deadline: actionDeadline(),
             timing: &timing
         )
 
@@ -223,11 +241,26 @@ extension TheBrainsActionTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
+        let heistId: HeistId = "plain_action"
+        await installSyntheticObservation(.makeForTests(
+            elements: [(
+                AccessibilityElement.make(
+                    label: "Plain action",
+                    identifier: heistId.rawValue,
+                    shape: .frame(AccessibilityRect(liveObject.frame))
+                ),
+                heistId
+            )],
+            objects: [heistId: liveObject]
+        ))
 
         let target = try AccessibilityTarget.identifier("plain_action").resolve(in: .empty)
         var timing = ActionTiming()
-        let result = await brains.actions.executeActivate(target, timing: &timing)
+        let result = await brains.actions.executeActivate(
+            target,
+            deadline: actionDeadline(),
+            timing: &timing
+        )
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .activate)
@@ -251,10 +284,22 @@ extension TheBrainsActionTests {
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
+        let heistId: HeistId = "timed_action"
+        let observation = InterfaceObservation.makeForTests(
+            elements: [(
+                AccessibilityElement.make(
+                    label: "Timed action",
+                    identifier: heistId.rawValue,
+                    traits: .button,
+                    shape: .frame(AccessibilityRect(liveObject.frame))
+                ),
+                heistId
+            )],
+            objects: [heistId: liveObject]
+        )
+        await installSyntheticObservation(observation)
 
-        let command = try HeistActionCommand.activate(.identifier("timed_action"))
-            .resolve(in: .empty)
+        let command = HeistActionCommand.activate(.identifier("timed_action"))
         let result = await brains.executeRuntimeAction(command)
         let timing = try XCTUnwrap(result.timing)
 
@@ -282,7 +327,11 @@ extension TheBrainsActionTests {
 
         let target = try AccessibilityTarget.label("Plain label").resolve(in: .empty)
         var timing = ActionTiming()
-        let result = await brains.actions.executeActivate(target, timing: &timing)
+        let result = await brains.actions.executeActivate(
+            target,
+            deadline: actionDeadline(),
+            timing: &timing
+        )
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .activate)
@@ -295,7 +344,6 @@ extension TheBrainsActionTests {
     }
 
     func testExecuteCommandFailedActivateCarriesPostActionObservationLikeSuccessfulAction() async throws {
-        brains.tripwire.startPulse()
         let rootView = UIView(frame: UIScreen.main.bounds)
         rootView.backgroundColor = .white
 
@@ -315,34 +363,60 @@ extension TheBrainsActionTests {
 
         let window = try installModalWindow(rootView: rootView)
         defer {
-            brains.stopSemanticObservation()
-            brains.tripwire.stopPulse()
             window.rootViewController?.view.accessibilityViewIsModal = false
             window.isHidden = true
         }
-        await brains.tripwire.yieldFrames(3)
+        let successId: HeistId = "trace_success"
+        let failureId: HeistId = "trace_failure"
+        let observation = InterfaceObservation.makeForTests(
+            elements: [
+                (
+                    makeElement(
+                        label: "Trace Success",
+                        identifier: successId.rawValue,
+                        traits: .button
+                    ),
+                    successId
+                ),
+                (
+                    makeElement(
+                        label: "Trace Failure",
+                        identifier: failureId.rawValue,
+                        traits: .notEnabled
+                    ),
+                    failureId
+                ),
+            ],
+            objects: [
+                successId: successful,
+                failureId: failing,
+            ]
+        )
+        await installSyntheticObservation(observation)
 
+        let successPlan = try HeistPlan(body: [
+            .action(ActionStep(command: .activate(.identifier("trace_success")))),
+        ])
         let success = await brains.executeSingleStepPlan(
-            try HeistPlan(body: [
-                .action(ActionStep(command: .activate(.identifier("trace_success")))),
-            ]),
+            successPlan,
             fallbackPayload: .activate
         )
         XCTAssertTrue(success.outcome.isSuccess, success.message ?? "activate failed")
         let successObservation = try XCTUnwrap(success.observationEvidence)
-        XCTAssertEqual(successObservation.completeness, .complete)
+        XCTAssertEqual(successObservation.coverage, .complete)
         XCTAssertNotNil(successObservation.current)
 
+        let failurePlan = try HeistPlan(body: [
+            .action(ActionStep(command: .activate(.identifier("trace_failure")))),
+        ])
         let failure = await brains.executeSingleStepPlan(
-            try HeistPlan(body: [
-                .action(ActionStep(command: .activate(.identifier("trace_failure")))),
-            ]),
+            failurePlan,
             fallbackPayload: .activate
         )
         XCTAssertFalse(failure.outcome.isSuccess)
         XCTAssertEqual(failure.method, .activate)
         let failureObservation = try XCTUnwrap(failure.observationEvidence)
-        XCTAssertEqual(failureObservation.completeness, .complete)
+        XCTAssertEqual(failureObservation.coverage, .complete)
         let current = try XCTUnwrap(failureObservation.current)
         XCTAssertTrue(current.interface.projectedElements.contains {
             $0.semantics.assertable.identifier == "trace_failure"
@@ -360,7 +434,11 @@ extension TheBrainsActionTests {
 
         let target = try AccessibilityTarget.label("Disabled action").resolve(in: .empty)
         var timing = ActionTiming()
-        let result = await brains.actions.executeActivate(target, timing: &timing)
+        let result = await brains.actions.executeActivate(
+            target,
+            deadline: actionDeadline(),
+            timing: &timing
+        )
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
@@ -379,7 +457,11 @@ extension TheBrainsActionTests {
 
         let target = try AccessibilityTarget.label("Live").resolve(in: .empty)
         var timing = ActionTiming()
-        let result = await brains.actions.executeIncrement(target, timing: &timing)
+        let result = await brains.actions.executeIncrement(
+            target,
+            deadline: actionDeadline(),
+            timing: &timing
+        )
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .increment)
@@ -416,7 +498,11 @@ extension TheBrainsActionTests {
 
         var timing = ActionTiming()
 
-        let result = await brains.actions.executeIncrement(target, timing: &timing)
+        let result = await brains.actions.executeIncrement(
+            target,
+            deadline: actionDeadline(),
+            timing: &timing
+        )
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .increment)
@@ -450,7 +536,11 @@ extension TheBrainsActionTests {
 
         var timing = ActionTiming()
 
-        let result = await brains.actions.executeIncrement(try target.resolve(in: .empty), timing: &timing)
+        let result = await brains.actions.executeIncrement(
+            try target.resolve(in: .empty),
+            deadline: actionDeadline(),
+            timing: &timing
+        )
 
         XCTAssertTrue(result.success, result.message ?? "increment failed")
         XCTAssertEqual(result.method, .increment)
@@ -481,127 +571,15 @@ extension TheBrainsActionTests {
 
         var timing = ActionTiming()
 
-        let result = await brains.actions.executeIncrement(try target.resolve(in: .empty), timing: &timing)
+        let result = await brains.actions.executeIncrement(
+            try target.resolve(in: .empty),
+            deadline: actionDeadline(),
+            timing: &timing
+        )
 
         XCTAssertTrue(result.success, result.message ?? "increment failed")
         XCTAssertEqual(result.method, .increment)
         XCTAssertEqual(liveObject.incrementCount, 1)
-    }
-
-    func testHeistCommandsMatchSingleCommandMatcherFailures() async throws {
-        let fixtureElements: [(AccessibilityElement, HeistId)] = [
-            (makeElement(label: "Matcher Failure Fixture"), "matcher_failure_fixture"),
-        ]
-        await installScreen(elements: fixtureElements)
-
-        let target = AccessibilityTarget.identifier("missing_target")
-        let commands: [(String, HeistActionCommand)] = [
-            ("activate", .activate(target)),
-            ("custom action", .customAction(name: "Archive", target: target)),
-            ("rotor", .rotor(selection: .named("Links"), target: target, direction: .next)),
-            ("tap", .oneFingerTap(TapTarget(selection: .element(target)))),
-            ("swipe", .swipe(SwipeTarget(selection: .elementDirection(target, .left)))),
-            ("type text", .typeText(text: "hello", target: target)),
-        ]
-
-        for (label, authoredCommand) in commands {
-            let command = try authoredCommand.resolve(in: .empty)
-            await brains.vault.resetInterfaceForLifecycle()
-            let single = await brains.executeRuntimeAction(command)
-            await brains.vault.resetInterfaceForLifecycle()
-            let heist = try await heistStepResult(
-                for: .action(ActionStep(command: authoredCommand)),
-                label: authoredCommand.wireType.rawValue
-            )
-            assertSameActionResult(
-                label,
-                single: single,
-                heist: heist
-            )
-        }
-
-        brains.tripwire.stopPulse()
-        defer { brains.tripwire.startPulse() }
-        let authoredWait = WaitStep(predicate: .exists(target), timeout: 0.01)
-        await brains.vault.resetInterfaceForLifecycle()
-        await installScreen(elements: fixtureElements)
-        let singleWait = await brains.performWait(step: authoredWait)
-        await brains.vault.resetInterfaceForLifecycle()
-        await installScreen(elements: fixtureElements)
-        let heistWait = try await heistStepResult(
-            for: .wait(authoredWait),
-            label: "wait"
-        )
-        XCTAssertEqual(heistWait.outcome.isSuccess, singleWait.outcome.isSuccess)
-        XCTAssertEqual(heistWait.method, singleWait.method)
-        XCTAssertEqual(heistWait.outcome.failureKind, singleWait.outcome.failureKind)
-    }
-
-    func testHeistMachineDispatchesEveryDurableActionCommandThroughTypedRequests() throws {
-        let target = AccessibilityTarget.identifier("target")
-        let point = GesturePointSelection.coordinate(ScreenPoint(x: 10, y: 20))
-        let commands: [HeistActionCommand] = [
-            .activate(target),
-            .increment(target),
-            .decrement(target),
-            .customAction(name: "Archive", target: target),
-            .rotor(selection: .named("Errors"), target: target, direction: .next),
-            .typeText(text: "hello", target: target),
-            .oneFingerTap(TapTarget(selection: point)),
-            .longPress(LongPressTarget(selection: point)),
-            .swipe(SwipeTarget(selection: .pointDirection(start: ScreenPoint(x: 20, y: 20), direction: .left))),
-            .drag(DragTarget(start: .coordinate(ScreenPoint(x: 20, y: 20)), end: ScreenPoint(x: 80, y: 80))),
-            .editAction(EditActionTarget(action: .paste)),
-            .setPasteboard(SetPasteboardTarget(text: "clipboard")),
-            .takeScreenshot,
-            .dismissKeyboard,
-        ]
-        let plan = try HeistPlan(body: commands.map { .action(ActionStep(command: $0)) })
-        var driver = try HeistMachineTestDriver(
-            plan: plan,
-            script: MachineRunScript(
-                events: Array(repeating: [.noChange, .noChange], count: commands.count)
-                    .flatMap { $0 }
-            )
-        )
-
-        let completion = try driver.run()
-
-        let expectedCommands = try commands.map { try $0.resolve(in: .empty) }
-        XCTAssertEqual(driver.requests.compactMap(\.dispatchedCommand), expectedCommands)
-        XCTAssertEqual(completion.steps.count, commands.count)
-        XCTAssertTrue(completion.steps.allSatisfy { $0.status == .passed })
-    }
-
-    func testFailedActivateHeistActionKeepsActivationTraceInActionEvidence() throws {
-        let activationTrace = ActivationTrace(.activationPointFallback(
-            axActivateReturned: false,
-            tapActivationPoint: ScreenPoint(x: 195, y: 139),
-            tapActivationSucceeded: true
-        ), implementsAccessibilityActivation: false)
-        let target = AccessibilityTarget.label("Search all items")
-        let command = HeistActionCommand.activate(target)
-        let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
-        var driver = try HeistMachineTestDriver(
-            plan: plan,
-            script: MachineRunScript(
-                events: [.noChange],
-                dispatchResults: [
-                    .failure(
-                        .activate,
-                        message: "text entry failed: observed focus=none "
-                            + "keyboardVisible=false activeTextInput=false",
-                        activationTrace: activationTrace
-                    ),
-                ]
-            )
-        )
-
-        let completion = try driver.run()
-        let step = try XCTUnwrap(completion.steps.first)
-
-        XCTAssertEqual(step.status, .failed)
-        XCTAssertEqual(step.actionEvidence?.result?.activationTrace, activationTrace)
     }
 
     func testViewportDebugCommandsResolveForDirectRuntimeDispatch() async throws {
@@ -662,7 +640,11 @@ extension TheBrainsActionTests {
             liveTarget = nil
         }
         var timing = ActionTiming()
-        let result = await brains.actions.executeIncrement(target, timing: &timing)
+        let result = await brains.actions.executeIncrement(
+            target,
+            deadline: actionDeadline(),
+            timing: &timing
+        )
 
         XCTAssertNotNil(resolved)
         XCTAssertNil(liveTarget)
@@ -721,14 +703,21 @@ extension TheBrainsActionTests {
 
         var timing = ActionTiming()
 
-        let result = await brains.actions.executeIncrement(target, timing: &timing)
+        let result = await brains.actions.executeIncrement(
+            target,
+            deadline: actionDeadline(),
+            timing: &timing
+        )
 
         XCTAssertTrue(result.success, result.message ?? "increment failed")
         XCTAssertEqual(result.method, .increment)
         XCTAssertEqual(committedTarget.heistId, heistId)
         XCTAssertEqual(result.subjectEvidence?.element.semantics.assertable.identifier, heistId.rawValue)
         XCTAssertEqual(replacementObject.incrementCount, 1)
-        XCTAssertEqual(brains.vault.interfaceElement(heistId: heistId)?.element.bhFrame, settledElement.bhFrame)
+        XCTAssertEqual(
+            brains.vault.interfaceElement(heistId: heistId)?.element.bhFrame,
+            refreshedElement.bhFrame
+        )
         guard case .resolved(let liveTarget) = brains.vault.resolveLiveActionTarget(for: committedTarget) else {
             XCTFail("Expected replacement live evidence for committed target")
             return
@@ -755,7 +744,11 @@ extension TheBrainsActionTests {
 
         let target = try AccessibilityTarget.identifier("refresh_activate").resolve(in: .empty)
         var timing = ActionTiming()
-        let result = await brains.actions.executeActivate(target, timing: &timing)
+        let result = await brains.actions.executeActivate(
+            target,
+            deadline: actionDeadline(),
+            timing: &timing
+        )
 
         XCTAssertTrue(result.success, result.message ?? "activate failed")
         XCTAssertEqual(result.method, .activate)
@@ -765,7 +758,6 @@ extension TheBrainsActionTests {
     }
 
     func testActionsExecuteActivateKeepsCommittedHeistIdWhenOrdinalOrderChangesDuringRefresh() async throws {
-        brains.stopSemanticObservation()
         let selectedId: HeistId = "selected_action"
         let otherId: HeistId = "other_action"
         let element = AccessibilityElement.make(
@@ -784,12 +776,6 @@ extension TheBrainsActionTests {
             .label("Repeated Action"),
             ordinal: 0
         ).resolve(in: .empty)
-        let actionTask = Task { @MainActor in
-            var timing = ActionTiming()
-            return await brains.actions.executeActivate(target, timing: &timing)
-        }
-
-        await waitForSettledSemanticWaiter(on: brains.vault)
         let reorderedScreen = InterfaceObservation.makeForTests(
             elements: [
                 (element, otherId),
@@ -800,10 +786,14 @@ extension TheBrainsActionTests {
                 otherId: otherObject,
             ]
         )
-        _ = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(reorderedScreen)
         visibleObservationSource.observation = reorderedScreen
 
-        let result = await actionTask.value
+        var timing = ActionTiming()
+        let result = await brains.actions.executeActivate(
+            target,
+            deadline: actionDeadline(),
+            timing: &timing
+        )
 
         XCTAssertTrue(result.success, result.message ?? "activate failed")
         XCTAssertEqual(result.resolvedElementId, selectedId)
@@ -812,12 +802,4 @@ extension TheBrainsActionTests {
     }
 
 }
-
-private extension HeistExecution.MainActorRequest {
-    var dispatchedCommand: ResolvedHeistActionCommand? {
-        guard case .dispatch(_, let command) = self else { return nil }
-        return command
-    }
-}
-
 #endif

@@ -8,11 +8,13 @@ authored order and retains all progress for the complete heist.
 
 ```mermaid
 flowchart LR
-    UIKit["UIKit hierarchy"] --> Host["MainActor host"]
-    Notice["accessibility notification payload"] --> Host
-    Host --> Admit["admit Snapshot or Notification"]
-    Admit --> Vault["TheVault<br/>current truth + Observation.History"]
-    Vault --> Machine["one HeistExecution machine<br/>advance private progress"]
+    Demand["visible or discovery demand"] --> Stream["Observation.Stream<br/>one serialized cycle"]
+    Link["TheTripwire CADisplayLink"] -->|"pulse while demanded"| Stream
+    Notice["AccessibilityNotificationBus<br/>ordered ingress"] -->|"freeze exact claim"| Stream
+    UIKit["UIKit hierarchy"] -->|"capture + parse once"| Stream
+    Stream -->|"commit Snapshot + Event"| Vault["TheVault<br/>current truth + Observation.History"]
+    Vault -->|"record, then publish"| Host["MainActor host"]
+    Host -->|"admit ordered input"| Machine["one HeistExecution machine<br/>advance private progress"]
     Machine --> Perform["pending(.perform(requests))"]
     Machine --> Wait["pending(.wait)"]
     Machine --> Complete["complete(Completion)"]
@@ -21,12 +23,16 @@ flowchart LR
     Complete --> Result["HeistResult<br/>step-local Observation.Evidence"]
     Result --> Report["report projection"]
     Report --> Render["JSON / compact / human / JUnit"]
+    Stream -->|"acknowledge after commit"| Notice
 ```
 
-The Vault constructs each event and records it before delivery. A snapshot is
-current truth, an event is one ordered fact, history is the Vault-owned retained
-event array, and evidence is immutable result data. UIKit objects remain at the
-boundary.
+One display pulse starts at most one claim, capture, parse, commit, publication,
+and evaluation cycle. A pulse arriving during an active cycle becomes one
+coalesced pending pulse. Zero demand pauses the display link, so the runtime is
+otherwise inert. The Vault constructs each event and records it before delivery.
+A snapshot is current truth, an event is one ordered fact, history is the
+Vault-owned retained event array, and evidence is immutable result data. UIKit
+objects remain at the boundary.
 
 The host interprets pending actions. For `.perform`, it performs the typed
 MainActor requests and admits their results. For `.wait`, it waits for the next
@@ -35,6 +41,8 @@ replayable from its initial heist and ordered admitted inputs.
 
 The host owns the active leaf and whole-heist absolute deadlines, scheduling
 one task for the earlier value. Neither deadline enters the machine or
-observation history. Expiry cancels the active interaction, admits terminal
-evidence, and gives the machine one final crank; only an incomplete heist then
-becomes a timeout.
+observation history. Exploration may consult the host's deadline but never arms
+another timer. Expiry cancels the active interaction, lets dispatched viewport
+restoration and its observation cycle finish, admits terminal evidence, and
+gives the machine one final crank; only an incomplete heist then becomes a
+timeout.

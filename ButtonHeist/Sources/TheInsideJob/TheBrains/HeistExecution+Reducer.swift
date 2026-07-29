@@ -15,8 +15,6 @@ extension HeistExecution {
             case complete(Completion)
         }
 
-        internal let plan: HeistPlan
-        internal let argument: HeistArgument
         internal let rootEnvironment: HeistExecutionEnvironment
         internal let failureCaptureMode: ScreenCaptureMode?
         internal var continuations: [Continuation]
@@ -30,8 +28,6 @@ extension HeistExecution {
             argument: HeistArgument = .none,
             failureCaptureMode: ScreenCaptureMode? = nil
         ) throws {
-            self.plan = plan
-            self.argument = argument
             self.failureCaptureMode = failureCaptureMode
             rootEnvironment = try HeistExecutionEnvironment.empty.binding(
                 argument: argument,
@@ -44,6 +40,26 @@ extension HeistExecution {
                         path: .body,
                         environment: rootEnvironment,
                         scope: Scope(plan: plan)
+                    ),
+                    nextIndex: 0,
+                    children: .empty
+                )),
+            ]
+        }
+
+        internal init(
+            action: HeistActionCommand,
+            failureCaptureMode: ScreenCaptureMode? = nil
+        ) throws {
+            self.failureCaptureMode = failureCaptureMode
+            rootEnvironment = .empty
+            continuations = [
+                .sequence(SequenceContinuation(
+                    steps: [.action(ActionStep(command: action))],
+                    context: StepContext(
+                        path: .body,
+                        environment: rootEnvironment,
+                        scope: .directAction
                     ),
                     nextIndex: 0,
                     children: .empty

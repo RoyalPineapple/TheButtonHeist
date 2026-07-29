@@ -100,7 +100,8 @@ private extension HeistExecution.Machine {
             let source,
             let observationID,
             let evidence,
-            let outcome
+            let outcome,
+            let timing
         ):
             guard observationID == leaf.id,
                   HeistExecution.ActiveLeaf.action(leaf).admits(source) else {
@@ -109,7 +110,8 @@ private extension HeistExecution.Machine {
             let result = HeistExecution.ResultProjector.project(
                 action: leaf,
                 evidence: evidence,
-                outcome: outcome
+                outcome: outcome,
+                timing: timing
             )
             return resume(afterCompletedLeaf: result)
 
@@ -165,7 +167,8 @@ private extension HeistExecution.Machine {
             let source,
             let observationID,
             let evidence,
-            let outcome
+            let outcome,
+            let timing
         ):
             guard observationID == leaf.id,
                   HeistExecution.ActiveLeaf.wait(leaf).admits(source) else {
@@ -177,10 +180,13 @@ private extension HeistExecution.Machine {
             let result = HeistExecution.ResultProjector.project(
                 wait: leaf,
                 evidence: evidence,
-                outcome: outcome
+                outcome: outcome,
+                timing: timing
             )
             guard outcome == .timedOut,
-                  let unmatched = result.unmatchedWaitEvidence,
+                  let evidence = result.waitEvidence,
+                  let fallbackEvidence = HeistPassedWaitEvidence(evidence),
+                  fallbackEvidence.usesFallback,
                   let elseBody = leaf.step.elseBody else {
                 return resume(afterCompletedLeaf: result)
             }
@@ -188,7 +194,7 @@ private extension HeistExecution.Machine {
             continuations.append(.waitElse(HeistExecution.WaitElseContinuation(
                 step: leaf.step,
                 context: leaf.context,
-                evidence: unmatched
+                evidence: fallbackEvidence
             )))
             continuations.append(.sequence(HeistExecution.SequenceContinuation(
                 steps: elseBody,
@@ -223,6 +229,12 @@ private extension HeistExecution.Machine {
                 baseline: baseline
             )
         if predicateExpectation.result == .satisfied {
+            leaf.phase = .observing(expectation)
+            activeLeaf = .wait(leaf)
+            return .pending(.wait)
+        }
+        guard leaf.predicate.resolved.canPrepareTargetThroughExploration,
+              !predicateExpectation.hasMatchedTemporalBaseline else {
             leaf.phase = .observing(expectation)
             activeLeaf = .wait(leaf)
             return .pending(.wait)
@@ -446,6 +458,21 @@ private extension HeistExecution.Machine {
             return evaluated.requiringNoChange()
         }
         return evaluated
+    }
+}
+
+private extension ObservationPredicate {
+    var canPrepareTargetThroughExploration: Bool {
+        guard case .elementsChanged(let assertions) = self,
+              assertions.count == 1 else {
+            return false
+        }
+        switch assertions[0] {
+        case .exists, .disappeared, .updated:
+            return true
+        case .missing, .appeared:
+            return false
+        }
     }
 }
 

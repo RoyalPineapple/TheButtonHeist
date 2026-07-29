@@ -207,7 +207,10 @@ import Testing
             body: [
                 .action(ActionStep(
                     command: .activate(.ref("rowTarget")),
-                    expectationPolicy: .expect(ActionExpectation(predicate: .missing(.ref("rowTarget")), timeout: 1)))),
+                    expectationPolicy: .expect(ActionExpectation(
+                        predicate: .missing(.ref("rowTarget")),
+                        timeout: .sessionDefault
+                    )))),
             ]
         )),
     ])

@@ -20,11 +20,13 @@ final class TheVault {
     init(
         tripwire: TheTripwire,
         visibleObservationSource: @escaping VisibleObservationSource = TheVault.captureVisibleObservation,
-        keyboardVisibilitySource: @escaping KeyboardVisibilitySource = { nil }
+        keyboardVisibilitySource: @escaping KeyboardVisibilitySource = { nil },
+        notificationIngress: AccessibilityNotificationIngress = .process
     ) {
         self.tripwire = tripwire
         self.visibleObservationSource = visibleObservationSource
         self.keyboardVisibilitySource = keyboardVisibilitySource
+        self.notificationIngress = notificationIngress
     }
 
     /// TheTripwire handles window access and animation detection.
@@ -40,6 +42,7 @@ final class TheVault {
     /// UIKit; tests may replace the source only while constructing the vault.
     private let visibleObservationSource: VisibleObservationSource
     private let keyboardVisibilitySource: KeyboardVisibilitySource
+    private let notificationIngress: AccessibilityNotificationIngress
 
     var keyboardVisible: Bool? {
         keyboardVisibilitySource()
@@ -48,7 +51,7 @@ final class TheVault {
     // MARK: - Interface State
 
     var interfaceTree: InterfaceTree {
-        semanticObservationStream.stateOwner.interfaceTree
+        semanticObservationStream.canonicalInterfaceTree
     }
     var latestObservation: InterfaceObservation = .empty
 
@@ -58,7 +61,11 @@ final class TheVault {
 
     // MARK: - Observation Scheduling
 
-    lazy var semanticObservationStream = Observation.Stream(vault: self, tripwire: tripwire)
+    lazy var semanticObservationStream = Observation.Stream(
+        vault: self,
+        tripwire: tripwire,
+        notificationIngress: notificationIngress
+    )
 
     // MARK: - Interaction Cursor State
 
@@ -122,15 +129,6 @@ final class TheVault {
 
     func interfaceElement(heistId: HeistId) -> InterfaceTree.Element? {
         interfaceTree.findElement(heistId: heistId)
-    }
-
-    /// Latest observed capture payload for a viewport heistId.
-    ///
-    /// Snapshot identity proves the element belongs to the latest viewport;
-    /// `InterfaceTree` owns its semantic value and reveal metadata.
-    func liveInterfaceElement(heistId: HeistId) -> InterfaceTree.Element? {
-        guard currentLiveCapture.contains(heistId: heistId) else { return nil }
-        return latestObservation.tree.findElement(heistId: heistId)
     }
 
     /// Elements in matcher/diagnostic order.

@@ -87,13 +87,6 @@ enum AuthoredActionExpectation: Sendable, Equatable {
     )
     case waived(ActionExpectationWaiver)
 
-    var waitStep: WaitStep? {
-        guard case .expect(let expectation, _) = self else { return nil }
-        return expectation
-            .resolvingTimeout(using: .default)
-            .resolvedStep
-    }
-
     var diagnostics: [HeistBuildDiagnostic] {
         guard case .expect(_, let diagnostics) = self else { return [] }
         return diagnostics

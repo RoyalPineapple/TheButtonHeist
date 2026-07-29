@@ -19,23 +19,15 @@ final class SemanticObservationLifecycleTests: XCTestCase {
         vault = nil
     }
 
-    func testLifecycleOwnsRunningObservationAndCancellation() async {
+    func testLifecycleOwnsOnlyWhetherObservationIsRunning() async {
         var state = SemanticObservationLifecycle.stopped
-        let task = Task<Void, Never> { await Task.yield() }
-        let initialDiscovery: SemanticObservationLifecycle.DiscoveryObservation = { nil }
-        state.start(task: task, discovery: initialDiscovery)
 
+        XCTAssertTrue(state.start())
         XCTAssertTrue(state.isRunning)
-        XCTAssertNotNil(state.discovery)
-        XCTAssertTrue(state.replaceDiscoveryIfRunning { nil })
-
-        let stoppedTask = state.stop()
-        stoppedTask?.cancel()
-
+        XCTAssertFalse(state.start())
+        XCTAssertTrue(state.stop())
         XCTAssertFalse(state.isRunning)
-        XCTAssertNil(state.discovery)
-        XCTAssertFalse(state.replaceDiscoveryIfRunning { nil })
-        XCTAssertTrue(task.isCancelled)
+        XCTAssertFalse(state.stop())
     }
 
     func testStreamRunningTruthIsLifecycle() async {
@@ -43,7 +35,7 @@ final class SemanticObservationLifecycleTests: XCTestCase {
         XCTAssertFalse(stream.isActive)
         XCTAssertFalse(stream.lifecycle.isRunning)
 
-        await stream.start { nil }
+        stream.start()
         XCTAssertTrue(stream.isActive)
         XCTAssertTrue(stream.lifecycle.isRunning)
 
@@ -52,59 +44,95 @@ final class SemanticObservationLifecycleTests: XCTestCase {
         XCTAssertFalse(stream.lifecycle.isRunning)
     }
 
-    func testVisibleCaptureReturnsTypedSourceFailure() async {
-        let unavailableVault = TheVault(
-            tripwire: TheTripwire(),
-            visibleObservationSource: { _ in nil }
+    func testIdleStreamDoesNotReadAccessibility() async {
+        let source = VisibleObservationSourceFixture()
+        source.observation = .empty
+        let tripwire = TheTripwire()
+        let idleVault = TheVault(
+            tripwire: tripwire,
+            visibleObservationSource: source.capture
+        )
+        tripwire.startPulse()
+        defer {
+            idleVault.semanticObservationStream.stop()
+            tripwire.stopPulse()
+        }
+        idleVault.semanticObservationStream.start()
+
+        tripwire.onTick()
+        tripwire.onTick()
+
+        XCTAssertEqual(source.captureCount, 0)
+    }
+
+    func testDemandedPulseCommitsOneObservationCycle() async {
+        let source = VisibleObservationSourceFixture()
+        source.observation = .empty
+        let tripwire = TheTripwire()
+        let demandedVault = TheVault(
+            tripwire: tripwire,
+            visibleObservationSource: source.capture
+        )
+        tripwire.startPulse()
+        defer {
+            demandedVault.semanticObservationStream.stop()
+            tripwire.stopPulse()
+        }
+        let stream = demandedVault.semanticObservationStream
+        stream.start()
+        let historyIndex = stream.historyEndIndex()
+        let subscription = stream.subscribe(scope: .visible)
+        defer { subscription.cancel() }
+
+        tripwire.onTick()
+        let result = await stream.waitForObservation(
+            after: historyIndex,
+            scope: .visible,
+            boundary: .externalDeadline(SemanticObservationDeadline(
+                start: RuntimeElapsed.now,
+                timeout: .seconds(1)
+            ))
         )
 
-        let outcome = await unavailableVault.semanticObservationStream
-            .refreshVisibleObservation()
-
-        XCTAssertEqual(outcome, .unavailable(.sourceTreeUnavailable))
-    }
-
-    func testVisibleCaptureReturnsTypedRuntimeFailureAfterVaultRelease() async {
-        var releasedVault: TheVault? = TheVault(tripwire: TheTripwire())
-        let stream = releasedVault!.semanticObservationStream
-        releasedVault = nil
-
-        let outcome = await stream.refreshVisibleObservation()
-
-        XCTAssertEqual(outcome, .unavailable(.runtimeUnavailable))
-    }
-
-    func testVisibleCaptureReturnsTypedCancellation() async {
-        let stream = vault.semanticObservationStream
-        let capture = Task { @MainActor in
-            await stream.refreshVisibleObservation()
+        guard case .observation = result else {
+            return XCTFail("Expected one committed observation, got \(result)")
         }
-        capture.cancel()
+        XCTAssertEqual(source.captureCount, 1)
+    }
 
-        let outcome = await capture.value
+    func testDiscoveryDemandCapturesNextPulseAfterCycleCompletes() throws {
+        var cycle = SemanticObservationCycle()
+        _ = cycle.demand(scope: .discovery, pulseDemand: .ambient)
 
-        XCTAssertEqual(outcome, .unavailable(.cancelled))
+        XCTAssertEqual(
+            try XCTUnwrap(cycle.receive(pulse(tick: 1, timestamp: 10))).pulse.tick,
+            1
+        )
+        XCTAssertNil(cycle.receive(pulse(tick: 2, timestamp: 10.5)))
+        cycle.complete()
+        XCTAssertEqual(
+            try XCTUnwrap(cycle.receive(pulse(tick: 3, timestamp: 11))).pulse.tick,
+            3
+        )
     }
 
     func testSubscriptionPublishesVaultHistoryInAuthoredOrder() async throws {
         let stream = vault.semanticObservationStream
-        let before = await stream.stateOwner.commitAdmission(admission())
-        stream.publish(before)
+        let before = await stream.commitVisibleObservationForTesting(.empty)
         var received: [Observation.Event] = []
         var historyError: Observation.History.ReadError?
 
-        let subscription = await stream.subscribe(
+        let subscription = stream.subscribe(
             scope: .visible,
             replayingAfter: 0,
             receive: { received.append($0) },
             historyUnavailable: { historyError = $0 }
         )
-        await stream.stateOwner.discardCurrentObservation()
-        let during = await stream.stateOwner.commitAdmission(admission())
-        stream.publish(during)
+        stream.discardCurrentObservation()
+        let during = await stream.commitVisibleObservationForTesting(.empty)
         let expected = before.events + during.events
-        let current = await stream.stateOwner.current()
-        let history = try await stream.stateOwner.events(after: 0).get()
+        let current = stream.current()
+        let history = try stream.events(after: 0).get()
 
         XCTAssertNil(historyError)
         XCTAssertEqual(received, expected)
@@ -116,35 +144,25 @@ final class SemanticObservationLifecycleTests: XCTestCase {
         XCTAssertEqual(history, expected)
 
         subscription.cancel()
-        let afterCancellation = await stream.stateOwner.commitAdmission(admission())
-        stream.publish(afterCancellation)
-        let currentAfterCancellation = await stream.stateOwner.current()
-        let historyAfterCancellation = try await stream.stateOwner.events(after: 0).get()
+        let afterCancellation = await stream.commitVisibleObservationForTesting(.empty)
+        let currentAfterCancellation = stream.current()
+        let historyAfterCancellation = try stream.events(after: 0).get()
 
         XCTAssertEqual(received, expected)
         XCTAssertEqual(currentAfterCancellation, afterCancellation.current)
         XCTAssertEqual(historyAfterCancellation, expected + afterCancellation.events)
     }
 
-    private func admission(
-        scope: SemanticObservationScope = .visible
-    ) -> Observation.Admission {
-        let observation = InterfaceObservation.empty
-        return Observation.Admission(
-            tree: observation.tree,
+    private func pulse(
+        tick: UInt64,
+        timestamp: CFAbsoluteTime = 0
+    ) -> TheTripwire.PulseReading {
+        TheTripwire.PulseReading(
+            tick: tick,
+            timestamp: timestamp,
+            topmostVC: nil,
             tripwireSignal: .empty,
-            discoveryCommitPolicy: .mergeIntoInterface,
-            lineage: .resting,
-            scope: scope,
-            notificationAdmission: .action(.init(
-                admittedNotifications: [],
-                through: .origin,
-                scopedScreenChangedThrough: 0
-            )),
-            keyboardVisible: nil,
-            timestamp: Date(timeIntervalSince1970: 0),
-            viewportFrames: observation.tree.viewportFrames,
-            geometryTolerance: CoarseFrameComparison.currentGeometryTolerance
+            windowCount: 0
         )
     }
 }

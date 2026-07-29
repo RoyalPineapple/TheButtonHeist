@@ -38,7 +38,7 @@ final class TheVaultCustomRotorTests: ButtonHeistTestCase {
         tripwire = TheTripwire()
         vault = TheVault(tripwire: tripwire)
         tripwire.startPulse()
-        await vault.semanticObservationStream.start { nil }
+        vault.semanticObservationStream.start()
     }
 
     override func afterEach() async throws {
@@ -84,7 +84,9 @@ final class TheVaultCustomRotorTests: ButtonHeistTestCase {
         present(rotorHost: rootView)
 
         guard case .committed =
-            await vault.semanticObservationStream.refreshedVisibleObservation(timeout: 1)
+            await vault.semanticObservationStream.refreshedVisibleObservation(
+                boundary: .cancellation
+            )
         else { return XCTFail("Expected a committed live observation") }
 
         let resolvedHost = vault.resolveTarget(
@@ -100,7 +102,7 @@ final class TheVaultCustomRotorTests: ButtonHeistTestCase {
             selection: .named("Errors"),
             direction: .next,
             on: liveHost,
-            history: await vault.admitRotorHistory()
+            history: vault.admitRotorHistory()
         )
 
         guard case .succeeded(let hit) = outcome else {
@@ -140,7 +142,9 @@ final class TheVaultCustomRotorTests: ButtonHeistTestCase {
         present(rotorHost: rootView)
 
         guard case .committed =
-            await vault.semanticObservationStream.refreshedVisibleObservation(timeout: 1)
+            await vault.semanticObservationStream.refreshedVisibleObservation(
+                boundary: .cancellation
+            )
         else { return XCTFail("Expected a committed live observation") }
 
         let resolvedHost = vault.resolveTarget(
@@ -159,7 +163,7 @@ final class TheVaultCustomRotorTests: ButtonHeistTestCase {
             selection: .named("Links"),
             direction: .next,
             on: liveHost,
-            history: await vault.admitRotorHistory()
+            history: vault.admitRotorHistory()
         )
 
         guard case .succeeded(let hit) = outcome else {
@@ -198,7 +202,9 @@ final class TheVaultCustomRotorTests: ButtonHeistTestCase {
         await brains.startTestObservation()
         defer { brains.stopTestObservation() }
         guard case .committed =
-            await brains.vault.semanticObservationStream.refreshedVisibleObservation(timeout: 1)
+            await brains.vault.semanticObservationStream.refreshedVisibleObservation(
+                boundary: .cancellation
+            )
         else { return XCTFail("Expected a committed live observation") }
         let observation = brains.vault.latestObservation
 
@@ -231,6 +237,10 @@ final class TheVaultCustomRotorTests: ButtonHeistTestCase {
             selection: .named("Cached Items"),
             target: literalTarget(ResolvedElementPredicate.identifier("cached_rotor_host")),
             direction: .next,
+            deadline: SemanticObservationDeadline(
+                start: RuntimeElapsed.now,
+                timeoutSeconds: 10
+            ),
             timing: &timing
         )
 
@@ -281,7 +291,7 @@ final class TheVaultCustomRotorTests: ButtonHeistTestCase {
             selection: .named("Errors"),
             direction: .next,
             on: try XCTUnwrap(liveTarget(for: treeElement)),
-            history: await vault.admitRotorHistory()
+            history: vault.admitRotorHistory()
         )
 
         guard case .noSuchRotor(let available) = outcome else {
@@ -358,7 +368,7 @@ final class RotorActionOutOfTreeResultTests: ButtonHeistRuntimeTestCase {
     func testOutOfTreeRotorResultFailsInsteadOfCreatingHiddenContinuationState() async throws {
         let searchResult = await brains.executeRuntimeAction(.rotor(
             selection: .named("Primary Action"),
-            target: literalTarget(ResolvedElementPredicate.identifier("virtual_activation_rotor_host")),
+            target: .identifier("virtual_activation_rotor_host"),
             direction: .next
         ))
 

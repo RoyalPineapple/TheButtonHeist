@@ -1,11 +1,9 @@
 import SwiftUI
 @_spi(AdversarialLab) import ThePlans
 
-typealias AdversarialScenario = AdversarialScenarioCatalog.Route
-
 struct AdversarialLabView: View {
     var body: some View {
-        List(AdversarialScenario.allCases) { scenario in
+        List(AdversarialScenarioCatalog.Route.allCases) { scenario in
             NavigationLink(scenario.title) {
                 AdversarialScenarioView(scenario: scenario)
             }
@@ -15,7 +13,7 @@ struct AdversarialLabView: View {
 }
 
 struct AdversarialScenarioView: View {
-    let scenario: AdversarialScenario
+    let scenario: AdversarialScenarioCatalog.Route
 
     var body: some View {
         switch scenario {

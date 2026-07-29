@@ -9,7 +9,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         var text = try line(render(command: action.command, environment: environment), indent)
         if let expectation = action.expectationPolicy.expectedExpectation {
             let predicate = try render(predicate: expectation.predicate, environment: environment)
-            let timeout = renderActionExpectationTimeout(expectation.timeout)
+            let timeout = renderExpectationTimeout(expectation.timeout)
             text += "\n" + line(".expect(\(predicate)\(timeout))", indent + 1)
         }
         if let waiver = action.expectationPolicy.waiver?.reason {
@@ -18,7 +18,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         return text
     }
 
-    private func renderActionExpectationTimeout(_ timeout: ActionExpectation.Timeout) -> String {
+    func renderExpectationTimeout(_ timeout: ActionExpectation.Timeout) -> String {
         switch timeout {
         case .sessionDefault:
             return ""

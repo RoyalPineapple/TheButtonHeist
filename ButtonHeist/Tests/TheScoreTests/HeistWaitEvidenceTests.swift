@@ -13,12 +13,13 @@ import ThePlans
                 makeTestHeistElement(label: "Done"),
             ])
         )
+        let passedEvidence = try #require(HeistPassedWaitEvidence(evidence))
         let step = HeistExecutionStepResult.wait(
             path: "$.body[0]",
             predicate: predicate,
             timeout: 1,
             completion: .passed(
-                evidence: try #require(HeistPassedWaitEvidence.matched(evidence))
+                evidence: passedEvidence
             )
         )
         let result = try HeistResult(steps: [step], durationMs: 1)
@@ -48,15 +49,17 @@ import ThePlans
         let current = makeTestObservationSnapshot(elements: [
             makeTestHeistElement(label: "Done"),
         ])
-        let evidence = try HeistExpectationEvidence(
+        let evidence = HeistExpectationEvidence(
             predicate: predicate,
+            boundPredicate: try predicate.resolve(in: .empty),
             observation: Observation.Evidence(
                 baseline: makeTestObservationSnapshot(elements: []),
                 events: [.elementsChanged(current)],
                 current: current,
                 coverage: .complete
             ),
-            terminalCause: .deadline
+            terminalCause: .deadline,
+            timing: HeistResultFixture.expectationTiming
         )
         let decoded = try JSONDecoder().decode(
             HeistExpectationEvidence.self,
@@ -135,15 +138,17 @@ import ThePlans
         let current = makeTestObservationSnapshot(elements: [
             makeTestHeistElement(label: "Done"),
         ])
-        let evidence = try HeistExpectationEvidence(
+        let evidence = HeistExpectationEvidence(
             predicate: predicate,
+            boundPredicate: try predicate.resolve(in: .empty),
             observation: Observation.Evidence(
                 baseline: nil,
                 events: [.elementsChanged(current)],
                 current: current,
                 coverage: .complete
             ),
-            terminalCause: .cancelled
+            terminalCause: .cancelled,
+            timing: HeistResultFixture.expectationTiming
         )
 
         let replay = try evidence.replay()
@@ -156,15 +161,17 @@ import ThePlans
         let predicate = AccessibilityPredicate.notification("Saved")
         let matching = try #require(Observation.Notification(text: "Saved", element: nil))
         let later = try #require(Observation.Notification(text: "Unrelated", element: nil))
-        let evidence = try HeistExpectationEvidence(
+        let evidence = HeistExpectationEvidence(
             predicate: predicate,
+            boundPredicate: try predicate.resolve(in: .empty),
             observation: Observation.Evidence(
                 baseline: nil,
                 events: [.notification(matching), .notification(later), .noChange],
                 current: nil,
                 coverage: .complete
             ),
-            terminalCause: .observed
+            terminalCause: .observed,
+            timing: HeistResultFixture.expectationTiming
         )
 
         let replay = try evidence.replay()
@@ -180,15 +187,17 @@ import ThePlans
             throughSequence: 9
         )
         let gap = Observation.Gap.notificationIngress(sequenceGap, additional: [])
-        let expectation = try HeistExpectationEvidence(
+        let expectation = HeistExpectationEvidence(
             predicate: predicate,
+            boundPredicate: try predicate.resolve(in: .empty),
             observation: Observation.Evidence(
                 baseline: nil,
                 events: [],
                 current: nil,
                 coverage: .incomplete(gap)
             ),
-            terminalCause: .observed
+            terminalCause: .observed,
+            timing: HeistResultFixture.expectationTiming
         )
         let evidence = HeistActionEvidence.completed(
             result: HeistResultFixture.actionResult(),
@@ -213,50 +222,46 @@ import ThePlans
 
         #expect(Set(object.keys) == [
             "predicate",
+            "boundPredicate",
             "observation",
             "terminalCause",
+            "timing",
         ])
         #expect(object["met"] == nil)
         #expect(object["actual"] == nil)
         #expect(object["expectation"] == nil)
     }
 
-    @Test func evidenceRejectsAnUnboundAuthoredPredicate() throws {
+    @Test func boundPredicatePreservesResolvedReferenceAcrossWire() throws {
         let reference: HeistReferenceName = "label"
         let predicate = AccessibilityPredicate.exists(
             .predicate(.label(.exact(reference)))
         )
-        let current = makeTestObservationSnapshot(elements: [])
-
-        #expect(throws: (any Error).self) {
-            try HeistExpectationEvidence(
-                predicate: predicate,
-                observation: Observation.Evidence(
-                    baseline: nil,
-                    events: [.elementsChanged(current), .noChange],
-                    current: current,
-                    coverage: .complete
-                ),
-                terminalCause: .observed
-            )
-        }
-    }
-
-    @Test func decoderRejectsTheRemovedResolvedPredicateWireField() throws {
-        let evidence = try expectationEvidence(
-            predicate: .exists(.label("Done")),
-            current: makeTestObservationSnapshot(elements: [])
+        let boundPredicate = try AccessibilityPredicate
+            .exists(.label("Done"))
+            .resolve(in: .empty)
+        let current = makeTestObservationSnapshot(elements: [
+            makeTestHeistElement(label: "Done"),
+        ])
+        let evidence = HeistExpectationEvidence(
+            predicate: predicate,
+            boundPredicate: boundPredicate,
+            observation: Observation.Evidence(
+                baseline: nil,
+                events: [.elementsChanged(current), .noChange],
+                current: current,
+                coverage: .complete
+            ),
+            terminalCause: .observed,
+            timing: HeistResultFixture.expectationTiming
         )
-        var object = try #require(
-            JSONSerialization.jsonObject(with: JSONEncoder().encode(evidence))
-                as? [String: Any]
+        let decoded = try JSONDecoder().decode(
+            HeistExpectationEvidence.self,
+            from: JSONEncoder().encode(evidence)
         )
-        object["resolvedPredicate"] = object["predicate"]
-        let data = try JSONSerialization.data(withJSONObject: object)
 
-        #expect(throws: (any Error).self) {
-            try JSONDecoder().decode(HeistExpectationEvidence.self, from: data)
-        }
+        #expect(try decoded.replay().met)
+        #expect(decoded.predicate == predicate)
     }
 
     private func expectationEvidence(
@@ -264,15 +269,17 @@ import ThePlans
         current: Observation.Snapshot,
         coverage: Observation.Coverage = .complete
     ) throws -> HeistExpectationEvidence {
-        try HeistExpectationEvidence(
+        HeistExpectationEvidence(
             predicate: predicate,
+            boundPredicate: try predicate.resolve(in: .empty),
             observation: Observation.Evidence(
                 baseline: nil,
                 events: [.elementsChanged(current), .noChange],
                 current: current,
                 coverage: coverage
             ),
-            terminalCause: .observed
+            terminalCause: .observed,
+            timing: HeistResultFixture.expectationTiming
         )
     }
 }

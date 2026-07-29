@@ -38,7 +38,7 @@ final class ElementInflationProductTests: ButtonHeistRuntimeTestCase {
     ) async throws -> InterfaceObservation {
         let runtime = runtime ?? brains!
         let outcome = await runtime.vault.semanticObservationStream.refreshedVisibleObservation(
-            timeout: SemanticObservationTiming.defaultTimeout / .seconds(1)
+            boundary: .cancellation
         )
         let current: TheVault.State.Current? = switch outcome {
         case .committed(let current): current

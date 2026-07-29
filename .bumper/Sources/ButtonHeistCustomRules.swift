@@ -41,32 +41,11 @@ let buttonHeistRules = RuleSet {
     heistContentOpacityRule
     planElseOwnershipRule
     exportedTupleContractRule
-    heistExecutionMachinePurityRule
-    directLiveCaptureOwnershipRule
+    semanticObservationCycleOwnershipRule
     Rules.constructionOwnership(
         "CADisplayLink",
         allowed: .files([observationPulseClockPath]),
         id: "buttonheist.observation_pulse_clock_ownership"
-    )
-    Rules.memberReferenceOwnership(
-        "setObservationPulseDemand",
-        allowed: .files([semanticObservationStreamPath]),
-        id: "buttonheist.observation_pulse_demand_ownership"
-    )
-    Rules.memberReferenceOwnership(
-        "freezeObservationCycleClaim",
-        allowed: .files([semanticObservationStreamPath]),
-        id: "buttonheist.notification_cycle_claim_ownership"
-    )
-    Rules.memberReferenceOwnership(
-        "commitAdmission",
-        allowed: .files([semanticObservationCaptureAdmissionPath]),
-        id: "buttonheist.semantic_observation_commit_ownership"
-    )
-    Rules.memberReferenceOwnership(
-        "commitObservation",
-        allowed: .files([semanticObservationStoreOwnerPath]),
-        id: "buttonheist.semantic_observation_store_mutation_ownership"
     )
     Rules.constructionOwnership(
         "HeistExecution.Machine",
@@ -77,6 +56,11 @@ let buttonHeistRules = RuleSet {
         "HeistExecution.Host",
         allowed: .files([heistExecutionEntryPath]),
         id: "buttonheist.heist_execution_host_ownership"
+    )
+    Rules.memberReferenceOwnership(
+        "dispatchRuntimeAction",
+        allowed: .files([heistExecutionHostPath]),
+        id: "buttonheist.heist_action_dispatch_ownership"
     )
     Rules.memberReferenceOwnership(
         "setContentOffset",
@@ -101,26 +85,14 @@ private let demoAccessibilityIdentifierResearchFixtures: Set<RelativeFilePath> =
     "TestApp/Sources/TraitValidationView.swift",
 ]
 
-private let semanticObservationCaptureAdmissionPath: RelativeFilePath =
-    "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream+CaptureAdmission.swift"
 private let semanticObservationStreamPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream.swift"
-private let semanticObservationStoreOwnerPath: RelativeFilePath =
-    "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStoreOwner.swift"
 private let observationPulseClockPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheTripwire/TheTripwire+Pulse.swift"
 private let heistExecutionHostPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheBrains/HeistExecution+Host.swift"
 private let heistExecutionEntryPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistExecution.swift"
-private let heistExecutionMachinePaths: Set<RelativeFilePath> = [
-    "ButtonHeist/Sources/TheInsideJob/TheBrains/HeistExecution.swift",
-    "ButtonHeist/Sources/TheInsideJob/TheBrains/HeistExecution+Reducer.swift",
-    "ButtonHeist/Sources/TheInsideJob/TheBrains/HeistExecution+ControlFlow.swift",
-    "ButtonHeist/Sources/TheInsideJob/TheBrains/HeistExecution+Leaf.swift",
-    "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistActionExecution.swift",
-    "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistWaitExecution.swift",
-]
 private let scrollContentOffsetOwnerPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheSafecracker/TheSafecracker+Scroll.swift"
 private let transportEventOwnerPaths: Set<RelativeFilePath> = [
@@ -130,83 +102,31 @@ private let transportEventOwnerPaths: Set<RelativeFilePath> = [
 private let startupConfigurationPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/Lifecycle/StartupConfiguration.swift"
 
-private let machineRuntimeCapabilities: Set<String> = [
-    "CheckedContinuation",
-    "RuntimeElapsed",
-    "SemanticObservationDeadline",
-    "SemanticObservationDemand",
-    "SemanticObservationSubscription",
-    "Task",
-    "TheBrains",
-    "TheVault",
+private let semanticObservationCycleMemberNames: Set<String> = [
+    "freezeObservationCycleClaim",
+    "observePulses",
+    "setObservationPulseDemand",
+    "stopObservingPulses",
 ]
 
-private let heistExecutionMachinePurityRule = Rules.files(
-    "buttonheist.heist_execution_machine_purity",
+private let semanticObservationCycleOwnershipRule = Rules.files(
+    "buttonheist.semantic_observation_cycle_ownership",
     severity: .error,
-    summary: "HeistExecution.Machine is a deterministic value reducer; Host owns UIKit, clocks, tasks, and live resources.",
-    scope: .files(heistExecutionMachinePaths)
-) { file in
-    let imports = SyntaxQuery<ImportDeclSyntax>()
-        .filter { match in
-            match.node.path.first?.name.text == "UIKit"
-        }
-        .matches(in: file)
-        .map { match in
-            machinePurityFailure(
-                match: match,
-                capability: "UIKit",
-                observed: match.node.trimmedDescription
-            )
-        }
-
-    let typeReferences = SyntaxQuery<IdentifierTypeSyntax>()
-        .filter { match in
-            machineRuntimeCapabilities.contains(match.node.name.text)
-        }
-        .matches(in: file)
-        .map { match in
-            machinePurityFailure(
-                match: match,
-                capability: match.node.name.text,
-                observed: match.node.trimmedDescription
-            )
-        }
-
-    let valueReferences = SyntaxQuery<DeclReferenceExprSyntax>()
-        .filter { match in
-            machineRuntimeCapabilities.contains(match.node.baseName.text)
-        }
-        .matches(in: file)
-        .map { match in
-            machinePurityFailure(
-                match: match,
-                capability: match.node.baseName.text,
-                observed: match.node.trimmedDescription
-            )
-        }
-
-    return imports + typeReferences + valueReferences
-}
-
-private let directLiveCaptureOwnershipRule = Rules.files(
-    "buttonheist.semantic_observation_live_capture_ownership",
-    severity: .error,
-    summary: "Production live capture enters through the semantic observation cycle.",
+    summary: "SemanticObservationStream.swift exclusively acquires and controls the observation cycle.",
     scope: runtimeScope
 ) { file in
-    guard file.path != semanticObservationCaptureAdmissionPath else { return [] }
-    return functionCalls()
+    guard file.path != semanticObservationStreamPath else { return [] }
+    return SyntaxQuery<MemberAccessExprSyntax>()
         .filter { match in
-            match.node.calleeBaseName == "captureVisibleObservation"
+            semanticObservationCycleMemberNames.contains(match.node.declName.baseName.text)
         }
         .matches(in: file)
         .map { match in
             match.failure(
-                message: "direct live capture bypasses the semantic observation cycle",
+                message: "observation cycle authority outside SemanticObservationStream.swift",
                 evidence: ViolationEvidence(
                     observed: match.node.trimmedDescription,
-                    expectation: "request a semantic observation publication from Observation.Stream"
+                    expectation: "request and consume observations through Observation.Stream"
                 )
             )
         }
@@ -607,18 +527,4 @@ private func functionName(_ node: FunctionDeclSyntax) -> String {
 private func isAllowedPlanElseOwner(_ node: FunctionDeclSyntax) -> Bool {
     let owner = node.bumper.lexicalContext.enclosingNominalNames.first
     return owner == "WaitFor" || owner == "IfContent"
-}
-
-private func machinePurityFailure<Node: SyntaxProtocol>(
-    match: SyntaxMatch<Node>,
-    capability: String,
-    observed: String
-) -> RuleFailure {
-    match.failure(
-        message: "HeistExecution.Machine owns runtime capability: \(capability)",
-        evidence: ViolationEvidence(
-            observed: observed,
-            expectation: "keep runtime capabilities in HeistExecution.Host and pass values through typed inputs"
-        )
-    )
 }
