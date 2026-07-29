@@ -1,247 +1,246 @@
 #if canImport(UIKit)
-import ButtonHeistSupport
 import ButtonHeistTestSupport
 import XCTest
+
 @testable import AccessibilitySnapshotParser
 @_spi(ButtonHeistInternals) @testable import ThePlans
 @testable import TheInsideJob
 @_spi(ButtonHeistInternals) @testable import TheScore
 
-@MainActor
-extension TheBrainsActionTests {
-
-    func testHeistActionAndWaitStepsUseSeparateRuntimeTransitions() async throws {
-        let observedReady = await observedState(labels: ["Ready"])
-        let target = AccessibilityTarget.identifier("target")
-        var dispatchedCommands: [ResolvedHeistActionCommand] = []
-        var settlementCommands: [Settlement.Command] = []
-        let runtime = heistRuntime(
-            observations: [observedReady],
-            execute: { command in
-                dispatchedCommands.append(command)
-                return ActionResult.success(payload: .activate)
-            },
-            observedSettlementCommands: { settlementCommands.append($0) }
-        )
+final class HeistMachineStepExecutionTests: XCTestCase {
+    func testBareActionUsesOneTypedRequestPipeline() throws {
         let plan = try HeistPlan(body: [
-            .action(ActionStep(command: .activate(target))),
-            .wait(WaitStep(
-                predicate: .exists(.label("Ready")),
-                timeout: .milliseconds(1)
-            )),
+            .action(ActionStep(command: .dismiss)),
         ])
+        var driver = try HeistMachineTestDriver(
+            plan: plan,
+            script: MachineRunScript(events: [.noChange])
+        )
 
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heistResult: HeistResult = try XCTUnwrap(result.resultPayload)
-        let actionStep = try XCTUnwrap(heistResult.steps.first)
-        let waitStep = try XCTUnwrap(heistResult.steps.dropFirst().first)
+        let completion = try driver.run()
 
-        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "heist failed")
-        XCTAssertEqual(dispatchedCommands, [.activate(try target.resolve(in: .empty))])
-        XCTAssertEqual(settlementCommands.count, 1)
-        guard let settlementCommand = settlementCommands.first,
-              case .observation(let predicate, _, let baseline) = settlementCommand else {
-            return XCTFail("Wait step must execute an observation settlement")
+        XCTAssertEqual(completion.steps.map(\.status), [.passed])
+        XCTAssertEqual(driver.requests.map(\.kind), [
+            .beginObservation,
+            .currentSnapshot,
+            .dispatch,
+            .finishObservation,
+        ])
+        XCTAssertEqual(Array(driver.history), [.noChange])
+    }
+
+    func testStaleDispatchCompletionCannotFinishAction() throws {
+        let plan = try HeistPlan(body: [
+            .action(ActionStep(command: .dismiss)),
+        ])
+        var machine = try HeistExecution.Machine(plan: plan)
+        let observation = try XCTUnwrap(machine.start().singleBeginObservationRequest)
+        let boundary = TheVault.State.HistoryBoundary(
+            baseline: nil,
+            historyIndex: 0
+        )
+        let snapshotRequest = try XCTUnwrap(
+            machine.advance(.observationBegan(
+                observation.id,
+                boundary
+            )).singleSnapshotRequest
+        )
+        let dispatchRequest = try XCTUnwrap(
+            machine.advance(.currentSnapshot(snapshotRequest.id, nil))
+                .singleDispatchRequest
+        )
+
+        guard case .pending(.wait) = machine.advance(.dispatchCompleted(
+            HeistExecution.RequestID(rawValue: dispatchRequest.id.rawValue + 1),
+            .success(payload: .dismiss)
+        )) else {
+            return XCTFail("A stale dispatch completion must be ignored")
         }
-        XCTAssertEqual(
-            predicate.resolved,
-            try resolvedPredicate(.exists(.label("Ready")))
-        )
-        XCTAssertEqual(baseline, .capture)
-        XCTAssertEqual(heistResult.steps.map(\.kind), [HeistExecutionStepKind.action, .wait])
-        XCTAssertNotNil(actionStep.actionEvidence)
-        XCTAssertNil(actionStep.waitEvidence)
-        XCTAssertNil(waitStep.actionEvidence)
-        let waitEvidence = try XCTUnwrap(waitStep.waitEvidence)
-        XCTAssertTrue(waitEvidence.expectation.met)
+        guard case .pending(.wait) = machine.advance(.dispatchCompleted(
+            dispatchRequest.id,
+            .success(payload: .dismiss)
+        )) else {
+            return XCTFail("The admitted dispatch completion must await settlement")
+        }
     }
 
-    func testHeistActivateRecordsWeakAffordanceWarningOnSuccessfulActionEvidence() async throws {
-        let target = AccessibilityTarget.label("Checkout")
-        let resolvedTarget = try target.resolve(in: .empty)
-        let subject = makeTestHeistElement(
-            label: "Checkout",
-            traits: [.staticText],
-            actions: []
-        )
-        let runtime = heistRuntime(
-            observations: [],
-            execute: { _ in
-                ActionResult.activationSuccess(
-                    observation: .none,
-                    subjectEvidence: ActionSubjectEvidence(
-                        source: .resolvedSemanticTarget,
-                        target: resolvedTarget,
-                        element: subject,
-                        resolution: ActionSubjectResolution(origin: .visible)
-                    ),
-                    activationTrace: ActivationTrace(.activationPointFallback(
-                        axActivateReturned: false,
-                        tapActivationPoint: ScreenPoint(x: 50, y: 50),
-                        tapActivationSucceeded: true
-                    ), implementsAccessibilityActivation: false)
-                )
-            }
-        )
+    func testActionCapturesBaselineBeforeDispatchWithoutWaitingForStillness() throws {
         let plan = try HeistPlan(body: [
-            .action(ActionStep(command: .activate(target))),
+            .action(ActionStep(command: .dismiss)),
         ])
-
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-
-        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "heist failed")
-        let heistResult = try XCTUnwrap(result.resultPayload)
-        let warning = try XCTUnwrap(heistResult.steps.first?.actionEvidence?.warning)
-        XCTAssertEqual(warning.code, "activation_weak_affordance_evidence")
-        XCTAssertEqual(
-            warning.message,
-            "target advertised no interactivity and implements no activation; "
-                + "activate proceeded as VoiceOver would"
+        var machine = try HeistExecution.Machine(plan: plan)
+        let observation = try XCTUnwrap(machine.start().singleBeginObservationRequest)
+        let boundary = TheVault.State.HistoryBoundary(
+            baseline: heistSnapshot(labels: ["Before"]),
+            historyIndex: 0
         )
-        XCTAssertEqual(warning.evidence, #"label="Checkout" traits=[staticText] actions=[]"#)
-        XCTAssertEqual(HeistReport.project(result: heistResult).warnings, [])
+
+        let snapshot = try XCTUnwrap(machine.advance(.observationBegan(
+            observation.id,
+            boundary
+        )).singleSnapshotRequest)
+
+        XCTAssertEqual(snapshot.id, observation.id)
     }
 
-    func testHeistTypeTextRecordsWeakAffordanceWarningOnSuccessfulActionEvidence() async throws {
-        let target = AccessibilityTarget.label("Notes")
-        let resolvedTarget = try target.resolve(in: .empty)
-        let subject = makeTestHeistElement(
-            label: "Notes",
-            traits: [.staticText],
-            actions: []
-        )
-        let runtime = heistRuntime(
-            observations: [],
-            execute: { _ in
-                ActionResult.success(
-                    payload: .typeText(nil),
-                    observation: .none,
-                    subjectEvidence: ActionSubjectEvidence(
-                        source: .textInputTarget,
-                        target: resolvedTarget,
-                        element: subject,
-                        resolution: ActionSubjectResolution(origin: .visible)
-                    )
-                )
-            }
-        )
+    func testDispatchFailureProducesFailedStepAndSkipsSibling() throws {
         let plan = try HeistPlan(body: [
-            .action(ActionStep(command: .typeText(
-                text: "hello",
-                target: target
-            ))),
+            .action(ActionStep(command: .dismiss)),
+            .warn(WarnStep(message: "later")),
         ])
-
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-
-        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "heist failed")
-        let heistResult = try XCTUnwrap(result.resultPayload)
-        let warning = try XCTUnwrap(heistResult.steps.first?.actionEvidence?.warning)
-        XCTAssertEqual(warning.code, "text_entry_weak_affordance_evidence")
-        XCTAssertEqual(
-            warning.message,
-            "typeText succeeded, but the target does not advertise a text-input trait"
-        )
-        XCTAssertEqual(warning.evidence, #"label="Notes" traits=[staticText] actions=[]"#)
-    }
-
-    func testHeistFailureRecordsScreenshotAsActionEvidence() async throws {
-        let target = AccessibilityTarget.identifier("target")
-        let screenshot = ScreenPayload(
-            pngData: "png",
-            width: 10,
-            height: 20,
-            timestamp: Date(timeIntervalSince1970: 0),
-            interface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        )
-        var dispatchedCommands: [ResolvedHeistActionCommand] = []
-        let runtime = heistRuntime(observations: []) { command in
-            dispatchedCommands.append(command)
-            if case .takeScreenshot = command {
-                return ActionResult.success(payload: .screenshot(screenshot))
-            }
-            return ActionResult.failure(
-                payload: .activate,
-                failureKind: .actionFailed,
-                message: "activate failed",
+        var driver = try HeistMachineTestDriver(
+            plan: plan,
+            script: MachineRunScript(
+                events: [.noChange],
+                dispatchResults: [
+                    .failure(.dismiss, message: "dismiss unavailable"),
+                ]
             )
-        }
-        let plan = try HeistPlan(body: [
-            .action(ActionStep(command: .activate(target))),
-        ])
+        )
 
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let completion = try driver.run()
 
-        XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(dispatchedCommands, [
-            .activate(try target.resolve(in: .empty)),
-            .takeScreenshot,
-        ])
-        let heistResult = try XCTUnwrap(result.resultPayload)
-        let report = HeistReport.project(result: heistResult)
-        XCTAssertEqual(heistResult.abortedAtPath, "$.body[0]")
-        XCTAssertEqual(report.summary.executedTopLevelStepCount, 1)
-        XCTAssertEqual(heistResult.outputNodes.count, 2)
-        XCTAssertEqual(heistResult.steps.map(\.path), ["$.body[0]", "$.body[0].failure.actions[0]"])
-        let screenshotStep = try XCTUnwrap(heistResult.steps.last)
-        XCTAssertEqual(screenshotStep.kind, .action)
-        XCTAssertEqual(screenshotStep.status, .passed)
-        XCTAssertEqual(screenshotStep.actionCommand, .takeScreenshot)
-        guard case .screenshot(let payload) = screenshotStep.actionEvidence?.result?.payload else {
-            return XCTFail("Expected screenshot action payload")
-        }
-        XCTAssertEqual(payload, screenshot)
+        XCTAssertEqual(completion.steps.map(\.status), [.failed, .skipped])
+        XCTAssertEqual(completion.steps.first?.actionEvidence?.result?.outcome.failureKind, .actionFailed)
+        XCTAssertEqual(completion.abortedAtPath, completion.steps.first?.path)
     }
 
-    func testHeistFailurePhaseSkipsRemainingStepsWithoutDispatchingActions() async throws {
-        let target = AccessibilityTarget.identifier("target")
-        var dispatchedCommands: [ResolvedHeistActionCommand] = []
-        let runtime = heistRuntime(observations: []) { command in
-            dispatchedCommands.append(command)
-            if case .takeScreenshot = command {
-                return ActionResult.success(payload: .screenshot(nil))
-            }
-            return ActionResult.failure(
-                payload: .activate,
-                failureKind: .actionFailed,
-                message: "activate failed",
+    func testCancelledActionIsTerminalFailure() throws {
+        let plan = try HeistPlan(body: [
+            .action(ActionStep(command: .dismiss)),
+            .warn(WarnStep(message: "later")),
+        ])
+        var driver = try HeistMachineTestDriver(
+            plan: plan,
+            script: MachineRunScript(
+                events: [.noChange, .noChange],
+                leafOutcomes: [.cancelled]
             )
-        }
-        let plan = try HeistPlan(body: [
-            .action(ActionStep(command: .activate(target))),
-            .action(ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "not dispatched")))),
-            .heist(try HeistPlan(body: [
-                .action(ActionStep(command: .dismissKeyboard)),
-            ])),
-        ])
+        )
 
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let completion = try driver.run()
 
-        XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(dispatchedCommands, [
-            .activate(try target.resolve(in: .empty)),
-            .takeScreenshot,
-        ])
-        let heistResult = try XCTUnwrap(result.resultPayload)
-        XCTAssertEqual(heistResult.abortedAtPath, "$.body[0]")
-        XCTAssertEqual(heistResult.steps.map(\.path), [
-            "$.body[0]",
-            "$.body[1]",
-            "$.body[2]",
-            "$.body[0].failure.actions[0]",
-        ])
-        XCTAssertEqual(heistResult.steps.map(\.status), [.failed, .skipped, .skipped, .passed])
-        let skippedInlineHeist = try XCTUnwrap(heistResult.steps.dropFirst(2).first)
-        XCTAssertEqual(skippedInlineHeist.children.map(\.status), [.skipped])
+        XCTAssertEqual(completion.steps.map(\.status), [.failed, .skipped])
+        XCTAssertEqual(
+            completion.steps.first?.actionEvidence?.result?.outcome.failureKind,
+            .actionFailed
+        )
     }
 
-}
+    func testWarnAndFailRetainCanonicalPathsAndStatuses() throws {
+        let plan = try HeistPlan(body: [
+            .warn(WarnStep(message: "heads up")),
+            .fail(FailStep(message: "stop")),
+            .warn(WarnStep(message: "unreachable")),
+        ])
+        var driver = try HeistMachineTestDriver(plan: plan)
 
-private extension ActionResult {
-    var resultPayload: HeistResult? {
-        guard case .heist(let result) = payload else { return nil }
-        return result
+        let completion = try driver.run()
+
+        XCTAssertEqual(completion.steps.map(\.kind), [.warn, .fail, .warn])
+        XCTAssertEqual(completion.steps.map(\.status), [.passed, .failed, .skipped])
+        XCTAssertEqual(
+            completion.steps.map(\.path.description),
+            ["$.body[0]", "$.body[1]", "$.body[2]"]
+        )
+        XCTAssertEqual(completion.abortedAtPath, completion.steps[1].path)
+    }
+
+    func testFailureScreenshotIsAHostRequestNotASecondExecutor() throws {
+        let plan = try HeistPlan(body: [
+            .fail(FailStep(message: "stop")),
+        ])
+        var machine = try HeistExecution.Machine(
+            plan: plan,
+            failureCaptureMode: .raw
+        )
+
+        guard case .pending(.perform(let requests)) = machine.start(),
+              requests.count == 1,
+              case let .captureFailureScreenshot(
+                  id,
+                  failedPath: failedPath,
+                  mode: .raw
+              ) = requests[0] else {
+            return XCTFail("Failure capture must be one typed host request")
+        }
+        XCTAssertEqual(failedPath.description, "$.body[0]")
+
+        let screenshot = HeistResultFixture.action(
+            path: "$.body[0].failure.actions[0]",
+            command: .takeScreenshot,
+            result: .success(payload: .screenshot(nil))
+        )
+        guard case .complete(let completion) = machine.advance(
+            .failureScreenshotCaptured(id, screenshot)
+        ) else {
+            return XCTFail("The screenshot completion must finish the same machine")
+        }
+        XCTAssertEqual(
+            completion.steps.map(\.kind),
+            [HeistExecutionStepKind.fail, .action]
+        )
+        XCTAssertEqual(
+            completion.steps.map(\.status),
+            [HeistExecutionStepStatus.failed, .passed]
+        )
+        XCTAssertEqual(completion.steps.last?.actionCommand, .takeScreenshot)
+        XCTAssertEqual(
+            completion.steps.last?.path.description,
+            "$.body[0].failure.actions[0]"
+        )
+        XCTAssertEqual(completion.abortedAtPath, completion.steps.first?.path)
     }
 }
 
-#endif
+private enum MachineRequestKind: Equatable {
+    case currentSnapshot
+    case beginObservation
+    case dispatch
+    case explore
+    case finishObservation
+    case captureFailureScreenshot
+}
+
+private struct BeginObservationRequest {
+    let id: HeistExecution.RequestID
+}
+
+private struct DispatchRequest {
+    let id: HeistExecution.RequestID
+}
+
+private extension HeistExecution.MainActorRequest {
+    var kind: MachineRequestKind {
+        switch self {
+        case .currentSnapshot: .currentSnapshot
+        case .beginObservation: .beginObservation
+        case .dispatch: .dispatch
+        case .explore: .explore
+        case .finishObservation: .finishObservation
+        case .captureFailureScreenshot: .captureFailureScreenshot
+        }
+    }
+}
+
+private extension HeistExecution.State {
+    var singleBeginObservationRequest: BeginObservationRequest? {
+        guard case .pending(.perform(let requests)) = self,
+              requests.count == 1,
+              case .beginObservation(let id, _) = requests[0] else {
+            return nil
+        }
+        return BeginObservationRequest(id: id)
+    }
+
+    var singleDispatchRequest: DispatchRequest? {
+        guard case .pending(.perform(let requests)) = self,
+              requests.count == 1,
+              case .dispatch(let id, _) = requests[0] else {
+            return nil
+        }
+        return DispatchRequest(id: id)
+    }
+}
+
+#endif // canImport(UIKit)

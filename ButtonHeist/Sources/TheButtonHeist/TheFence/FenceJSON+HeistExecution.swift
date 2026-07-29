@@ -21,8 +21,8 @@ private enum PublicHeistExpectationSummaryCodingKey: String, CodingKey {
 }
 
 private enum PublicHeistReportNodeCodingKey: String, CodingKey {
-    case path, kind, capability, status, message, durationMs, evidence, failure
-    case abortedAtChildPath, expectation, settlement, children
+    case path, kind, capability, status, message, evidence, failure
+    case abortedAtChildPath, expectation, children
 }
 
 private enum PublicHeistReportFailureCodingKey: String, CodingKey {
@@ -53,10 +53,9 @@ struct PublicHeistExecutionResponse: Encodable {
         for node in report.nodes {
             try encode(node, to: nodes.superEncoder())
         }
-        guard case .changed(let trace) = report.accessibilityChange,
+        guard case .changed(let evidence) = report.accessibilityChange,
               let delta = DeltaProjection(
-                  trace: trace,
-                  isComplete: true,
+                  evidence: evidence,
                   profile: profile,
                   includeScreenInterface: true
               ) else { return }
@@ -92,7 +91,6 @@ struct PublicHeistExecutionResponse: Encodable {
         try container.encodeIfPresent(node.capability?.description, forKey: .capability)
         try container.encode(node.status.rawValue, forKey: .status)
         try container.encodeIfPresent(node.message, forKey: .message)
-        try container.encode(node.durationMs, forKey: .durationMs)
         if let evidence = node.evidence {
             try container.encode(PublicHeistReportEvidenceJSON(evidence: evidence, profile: profile), forKey: .evidence)
         }
@@ -104,9 +102,6 @@ struct PublicHeistExecutionResponse: Encodable {
             node.expectation.map { ExpectationProjection(result: $0) },
             forKey: .expectation
         )
-        if node.settlement?.settled == false {
-            try container.encodeIfPresent(node.settlement, forKey: .settlement)
-        }
         var children = container.nestedUnkeyedContainer(forKey: .children)
         for child in node.children {
             try encode(child, to: children.superEncoder())
@@ -170,20 +165,6 @@ struct PublicHeistElementEditOmissions: Encodable {
             && addedKeys == nil
             && removedKeys == nil
             && updatedKeys == nil
-    }
-}
-
-struct PublicHeistDeltaOmissions: Encodable {
-    let transient: Int?
-    let transientKeys: [String]?
-
-    init(projection: ElementProjectionBucket) {
-        self.transient = projection.omittedCount
-        self.transientKeys = projection.omittedKeys
-    }
-
-    var isEmpty: Bool {
-        transient == nil && transientKeys == nil
     }
 }
 

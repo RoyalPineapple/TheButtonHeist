@@ -4,21 +4,12 @@ extension HeistPlanSourceParser {
     mutating func parseAccessibilityPredicateExpr() throws -> AccessibilityPredicate {
         let name = try parseDotCallName()
         switch name {
-        case "changed":
-            try expectSymbol("(")
-            let scopeName = try parseDotCallName()
-            let predicate: AccessibilityPredicate
-            switch scopeName {
-            case "screen": predicate = .changed(try parseScreenDelta())
-            case "elements": predicate = .changed(try parseElementsDelta())
-            default: throw error(previous, "unsupported changed scope '.\(scopeName)'. Valid: screen, elements")
-            }
-            try expectSymbol(")")
-            return predicate
-        case "noChange":
-            return .noChange
-        case "announcement":
-            return try parseAnnouncementPredicate()
+        case "screenChanged":
+            return try parseScreenChanged()
+        case "elementsChanged":
+            return try parseElementsChanged()
+        case "notification":
+            return try parseNotificationPredicate()
         case "exists", "missing":
             let target = try parseCurrentTreeTarget()
             return name == "exists" ? .exists(target) : .missing(target)
@@ -27,38 +18,59 @@ extension HeistPlanSourceParser {
         }
     }
 
-    mutating func parseAnnouncementPredicate() throws -> AccessibilityPredicate {
-        guard consumeSymbol("(") else { return .announcement }
+    mutating func parseNotificationPredicate() throws -> AccessibilityPredicate {
+        guard consumeSymbol("(") else { return .notification }
         if consumeSymbol(")") {
-            throw error(previous, "empty announcement predicate must use .announcement")
+            throw error(previous, "empty notification predicate must use .notification")
         }
-        let expression = try parseStringMatchCallArgument(field: "announcement")
-        try expectSymbol(")")
-        return .announcement(expression)
-    }
 
-    mutating func parseScreenDelta() throws -> ChangeDeclaration {
-        try expectSymbol("(")
-        var assertions: [ChangeDeclaration.ScreenAssertion] = []
-        if !consumeSymbol(")") {
-            try expectSymbol("[")
-            repeat {
-                let name = try parseDotCallName()
-                guard name == "exists" || name == "missing" else {
-                    throw error(previous, "screen assertions accept only .exists and .missing")
-                }
-                let target = try parseCurrentTreeTarget()
-                assertions.append(name == "exists" ? .exists(target) : .missing(target))
-            } while consumeSymbol(",")
-            try expectSymbol("]")
+        if consumeLabel("text") {
+            let text = try parseStringMatchFieldValue(field: "notification text")
+            let element: ElementPredicate?
+            if consumeSymbol(",") {
+                try expectIdentifier("element")
+                try expectSymbol(":")
+                element = try parseElementPredicate()
+            } else {
+                element = nil
+            }
             try expectSymbol(")")
+            return .notification(text: text, element: element)
         }
-        return .screen(assertions)
+        if consumeLabel("element") {
+            let element = try parseElementPredicate()
+            try expectSymbol(")")
+            return .notification(element: element)
+        }
+
+        let expression = try parseStringMatchCallArgument(field: "notification")
+        try expectSymbol(")")
+        return .notification(expression)
     }
 
-    mutating func parseElementsDelta() throws -> ChangeDeclaration {
-        try expectSymbol("(")
-        var assertions: [ChangeDeclaration.ElementAssertion] = []
+    mutating func parseScreenChanged() throws -> AccessibilityPredicate {
+        // `.screenChanged` asks only that a boundary was crossed;
+        // `.screenChanged("Name")` asks which screen it arrived at. Elements are
+        // never named here — those are element assertions, answered by the
+        // snapshots either side.
+        guard consumeSymbol("(") else { return .screenChanged }
+        if consumeSymbol(")") { return .screenChanged }
+        if currentToken.isSymbol("[") {
+            throw error(
+                currentToken,
+                "screen predicates name the arrived-at screen, not elements: "
+                    + "use .screenChanged or .screenChanged(\"Name\"), "
+                    + "and .elementsChanged([...]) for element assertions"
+            )
+        }
+        let expression = try parseStringMatchCallArgument(field: "screenChanged")
+        try expectSymbol(")")
+        return .screenChanged(ScreenPredicate(match: expression))
+    }
+
+    mutating func parseElementsChanged() throws -> AccessibilityPredicate {
+        guard consumeSymbol("(") else { return .elementsChanged }
+        var assertions: [ElementAssertion] = []
         if !consumeSymbol(")") {
             try expectSymbol("[")
             repeat {
@@ -67,7 +79,7 @@ extension HeistPlanSourceParser {
             try expectSymbol("]")
             try expectSymbol(")")
         }
-        return .elements(assertions)
+        return .elementsChanged(assertions)
     }
 
     mutating func parseCurrentTreeTarget() throws -> AccessibilityTarget {
@@ -77,16 +89,16 @@ extension HeistPlanSourceParser {
         return target
     }
 
-    mutating func parseScreenAssertion() throws -> ChangeDeclaration.ScreenAssertion {
+    mutating func parsePresenceCondition() throws -> PresenceCondition {
         let name = try parseDotCallName()
         guard name == "exists" || name == "missing" else {
-            throw error(previous, "screen assertion accepts only .exists and .missing")
+            throw error(previous, "branch conditions accept only .exists and .missing")
         }
         let target = try parseCurrentTreeTarget()
         return name == "exists" ? .exists(target) : .missing(target)
     }
 
-    mutating func parseElementsAssertion() throws -> ChangeDeclaration.ElementAssertion {
+    mutating func parseElementsAssertion() throws -> ElementAssertion {
         let name = try parseDotCallName()
         switch name {
         case "exists", "missing":
@@ -106,9 +118,16 @@ extension HeistPlanSourceParser {
         }
     }
 
-    mutating func parseUpdatedAssertion() throws -> ChangeDeclaration.ElementAssertion {
+    mutating func parseUpdatedAssertion() throws -> ElementAssertion {
         try expectSymbol("(")
-        let target = try parseTargetExpr()
+        let targetToken = currentToken
+        let parsedTarget = try parseTargetExpr()
+        let target: AccessibilityElementTarget
+        do {
+            target = try AccessibilityElementTarget(admitting: parsedTarget)
+        } catch let grammarError as AccessibilityTargetGrammarError {
+            throw error(targetToken, grammarError.diagnosticDescription)
+        }
         try expectSymbol(",")
         let change = try parsePropertyChangeExpr()
         try expectSymbol(")")
@@ -148,22 +167,6 @@ extension HeistPlanSourceParser {
                 if isBefore { before = value } else { after = value }
             }
             change = .actions(before: before, after: after)
-        case "frame":
-            var before: ElementFrameMatch?
-            var after: ElementFrameMatch?
-            try parsePropertyChangeFields(property: name) { parser, isBefore, _, role in
-                let value = try parser.parseElementFrameMatch(role: role)
-                if isBefore { before = value } else { after = value }
-            }
-            change = .frame(before: before, after: after)
-        case "activationPoint":
-            var before: ElementPointMatch?
-            var after: ElementPointMatch?
-            try parsePropertyChangeFields(property: name) { parser, isBefore, _, role in
-                let value = try parser.parseElementPointMatch(role: role)
-                if isBefore { before = value } else { after = value }
-            }
-            change = .activationPoint(before: before, after: after)
         case "customContent":
             var before: CustomContentMatch?
             var after: CustomContentMatch?
@@ -306,63 +309,6 @@ extension HeistPlanSourceParser {
         }
     }
 
-    mutating func parseElementFrameMatch(role: String) throws -> ElementFrameMatch {
-        try expectContextualInitializer(role: "frame match")
-        let fields = try parseIntegerMatchFields(role: role, allowsSize: true)
-        try expectSymbol(")")
-        return ElementFrameMatch(
-            x: fields.x,
-            y: fields.y,
-            width: fields.width,
-            height: fields.height
-        )
-    }
-
-    mutating func parseElementPointMatch(role: String) throws -> ElementPointMatch {
-        try expectContextualInitializer(role: "activation point match")
-        let fields = try parseIntegerMatchFields(role: role, allowsSize: false)
-        try expectSymbol(")")
-        return ElementPointMatch(x: fields.x, y: fields.y)
-    }
-
-    mutating func parseIntegerMatchFields(
-        role: String,
-        allowsSize: Bool
-    ) throws -> (x: Int?, y: Int?, width: Int?, height: Int?) {
-        var fields: (x: Int?, y: Int?, width: Int?, height: Int?) = (nil, nil, nil, nil)
-        if !currentToken.isSymbol(")") {
-            while true {
-                let token = currentToken
-                let name = try parseIdentifier()
-                guard name == "x" || name == "y" || (allowsSize && (name == "width" || name == "height")) else {
-                    throw error(token, "\(role) does not accept '\(name)'")
-                }
-                try expectSymbol(":")
-                let isDuplicate = switch name {
-                case "x": fields.x != nil
-                case "y": fields.y != nil
-                case "width": fields.width != nil
-                case "height": fields.height != nil
-                default: false
-                }
-                guard !isDuplicate else {
-                    throw error(token, "\(role) accepts \(name) only once")
-                }
-                let value = try parseSignedInteger()
-                switch name {
-                case "x": fields.x = value
-                case "y": fields.y = value
-                case "width": fields.width = value
-                case "height": fields.height = value
-                default:
-                    preconditionFailure("admitted integer match field must be assignable")
-                }
-                guard consumeSymbol(",") else { break }
-            }
-        }
-        return fields
-    }
-
     mutating func parseSignedInteger() throws -> Int {
         let token = currentToken
         let value = try parseNumber()
@@ -439,10 +385,10 @@ extension HeistPlanSourceParser {
     }
 
     private static var validElementPropertyNames: Set<String> {
-        Set(ElementProperty.updateProperties.map(\.rawValue))
+        Set(AssertableProperty.allCases.map(\.rawValue))
     }
 
     private static var validElementProperties: String {
-        ElementProperty.updatePropertyNameList
+        AssertableProperty.nameList
     }
 }

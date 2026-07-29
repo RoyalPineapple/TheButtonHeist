@@ -495,11 +495,22 @@ extension TheFenceCompactFormattingContractTests {
                 totalElementCount: testCase.totalElementCount,
                 materializedElementCount: testCase.materializedElementCount
             )
+            XCTAssertTrue(interface.annotations.elements.isEmpty, testCase.name)
             let publicInterface = publicInterfaceProjection(
                 interface: interface,
                 detail: .summary,
                 visibleElementBudget: testCase.visibleElementBudget
             )
+            if case .container(let projectedContainer)? = publicInterface.tree.first {
+                for child in projectedContainer.children {
+                    guard case .element(let projectedElement) = child else { continue }
+                    XCTAssertEqual(
+                        projectedElement.element.geometry.screen,
+                        .offscreen,
+                        testCase.name
+                    )
+                }
+            }
             let json = try publicInterfaceJSONProbe(publicInterface)
             let rendering = try json.object("rendering")
             let container = try XCTUnwrap(try json.array("tree").first).object("container")
@@ -562,6 +573,7 @@ extension TheFenceCompactFormattingContractTests {
             totalElementCount: 2,
             materializedElementCounts: [2, 1]
         )
+        XCTAssertTrue(interface.annotations.elements.isEmpty)
         let json = try publicInterfaceJSONProbe(publicInterfaceProjection(
             interface: interface,
             detail: .summary,
@@ -617,7 +629,7 @@ extension TheFenceCompactFormattingContractTests {
                 children: [innerScroll, outerElement]
             ),
         ]
-        let inventory = try XCTUnwrap(ScrollInventory(totalElementCount: 5, visibleIndices: [4]))
+        let inventory = try XCTUnwrap(ScrollInventory(totalElementCount: 5))
         let interface = try Interface(
             timestamp: Date(timeIntervalSince1970: 0),
             tree: tree,
@@ -630,6 +642,7 @@ extension TheFenceCompactFormattingContractTests {
                 ),
             ])
         )
+        XCTAssertTrue(interface.annotations.elements.isEmpty)
 
         let json = try publicInterfaceJSONProbe(publicInterfaceProjection(
             interface: interface,
@@ -727,7 +740,7 @@ private func scrollInventoryInterface(
             children: children
         ),
     ]
-    let inventory = ScrollInventory(totalElementCount: totalElementCount, visibleIndices: [])
+    let inventory = ScrollInventory(totalElementCount: totalElementCount)
     return try Interface(
         timestamp: Date(timeIntervalSince1970: 0),
         tree: tree,
@@ -763,7 +776,7 @@ private func siblingScrollInventoryInterface(
             }
         )
     }
-    let inventory = try XCTUnwrap(ScrollInventory(totalElementCount: totalElementCount, visibleIndices: []))
+    let inventory = try XCTUnwrap(ScrollInventory(totalElementCount: totalElementCount))
     let annotations = materializedElementCounts.indices.map { index in
         InterfaceContainerAnnotation(
             path: TreePath([index]),

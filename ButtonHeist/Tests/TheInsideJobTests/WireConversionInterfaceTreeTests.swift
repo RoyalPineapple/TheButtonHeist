@@ -8,6 +8,17 @@ import ThePlans
 
 @MainActor
 extension WireConverterTests {
+    private func interfaceTreeViewSpace(
+        for container: AccessibilityContainer,
+        ownerPath: TreePath = .root
+    ) -> HeistElement.Geometry.ViewSpace {
+        HeistElement.Geometry.ViewSpace(
+            ownerPath: ownerPath,
+            frame: try? ViewRect(validating: container.frame.cgRect),
+            activationPoint: nil
+        )
+    }
+
     // MARK: - Tree Conversion
 
     func testToWireTreePreservesParserModalBoundary() async throws {
@@ -31,24 +42,42 @@ extension WireConverterTests {
     }
 
     func testSemanticInterfaceAnnotatesTraceIdentityFromHeistIds() async throws {
-        let treeElement = makeScreenElement(
-            heistId: "checkout_button",
+        let path = TreePath([0])
+        let element = makeElement(
             label: "Checkout",
             traits: [.button],
             respondsToUserInteraction: true
         )
+        let geometry = testGeometry(
+            for: element,
+            ownerPath: .root,
+            screen: TheVault.onscreenSpace(for: element)
+        )
+        let treeElement = InterfaceTree.Element(
+            heistId: "checkout_button",
+            path: path,
+            scrollMembership: nil,
+            geometry: geometry,
+            element: element
+        )
         let screen = InterfaceObservation.makeForTests(
             elements: ["checkout_button": treeElement],
             hierarchy: [.element(treeElement.element, traversalIndex: 0)],
-            heistIdsByPath: [TreePath([0]): "checkout_button"],
+            heistIdsByPath: [path: "checkout_button"],
             firstResponderHeistId: nil
         )
 
         let interface = WireConversion.toSemanticInterface(from: screen.tree)
         let record = try XCTUnwrap(interface.projectedElementRecords.single)
 
-        XCTAssertEqual(record.element.label, "Checkout")
-        XCTAssertEqual(record.traceIdentity, HeistId(rawValue: "checkout_button").traceElementIdentity)
+        XCTAssertEqual(
+            record.element,
+            HeistElement(
+                semantics: WireConversion.semantics(element),
+                geometry: geometry
+            )
+        )
+        XCTAssertEqual(record.observationIdentity, HeistId(rawValue: "checkout_button").observationElementIdentity)
     }
 
     func testSemanticInterfacePreservesContainersWhenKnownElementsShareParserPath() async throws {
@@ -68,12 +97,22 @@ extension WireConverterTests {
                         heistId: "first_row_staticText",
                         path: recycledElementPath,
                         scrollMembership: nil,
+                        geometry: testGeometry(
+                            for: first,
+                            ownerPath: .root,
+                            screen: .offscreen
+                        ),
                         element: first
                     ),
                     "second_row_staticText": InterfaceTree.Element(
                         heistId: "second_row_staticText",
                         path: recycledElementPath,
                         scrollMembership: nil,
+                        geometry: testGeometry(
+                            for: second,
+                            ownerPath: .root,
+                            screen: TheVault.onscreenSpace(for: second)
+                        ),
                         element: second
                     ),
                 ],
@@ -82,7 +121,7 @@ extension WireConverterTests {
                         container: container,
                         path: containerPath,
                         containerName: "container_order_entry",
-                        contentFrame: nil
+                        viewSpace: interfaceTreeViewSpace(for: container)
                     ),
                 ]
             ),
@@ -100,16 +139,24 @@ extension WireConverterTests {
         let interface = WireConversion.toSemanticInterface(from: screen.tree)
         let expression = AccessibilityPredicate.exists(.container(.identifier(containerIdentifier)))
         let predicate = try expression.resolve(in: .empty)
-        let evidence = try XCTUnwrap(AccessibilityTraceEvidence(
-            trace: AccessibilityTrace(captures: [
-                AccessibilityTrace.Capture(sequence: 1, interface: interface),
-            ]),
-            completeness: .incomplete
-        ))
+        let snapshot = Observation.Snapshot(interface: interface, context: .empty)
+        let evidence = Observation.Evidence(
+            baseline: snapshot,
+            current: snapshot,
+            events: [],
+            completeness: .complete
+        )
         let result = predicate.evaluate(in: evidence)
 
         XCTAssertEqual(result, PredicateEvaluationResult(met: true))
-        XCTAssertEqual(Set(interface.projectedElements.compactMap(\.label)), ["First row", "Second row"])
+        XCTAssertEqual(
+            interface.projectedElements.compactMap(\.semantics.assertable.label),
+            ["Second row", "First row"]
+        )
+        XCTAssertEqual(
+            interface.projectedElements.map(\.geometry.screen),
+            [TheVault.onscreenSpace(for: second), .offscreen]
+        )
     }
 
     func testSemanticInterfaceDensifiesSparseContainerPathsBeforeValidation() async throws {
@@ -136,7 +183,11 @@ extension WireConverterTests {
             identifier: "LibraryListScreen",
             frame: AccessibilityRect(CGRect(x: 0, y: 96, width: 820, height: 672))
         )
-        let row = makeElement(label: "Search all items", identifier: "LibraryListScreen-SearchField", traits: [.searchField])
+        let row = makeElement(
+            label: "Search all items",
+            identifier: "LibraryListScreen-SearchField",
+            traits: [.searchField]
+        )
         let screen = InterfaceObservation.makeForTests(
             tree: InterfaceTree(
                 elements: [
@@ -144,6 +195,11 @@ extension WireConverterTests {
                         heistId: "library_search_searchField",
                         path: rowPath,
                         scrollMembership: nil,
+                        geometry: testGeometry(
+                            for: row,
+                            ownerPath: .root,
+                            screen: .offscreen
+                        ),
                         element: row
                     ),
                 ],
@@ -152,25 +208,25 @@ extension WireConverterTests {
                         container: root,
                         path: rootPath,
                         containerName: "root",
-                        contentFrame: nil
+                        viewSpace: interfaceTreeViewSpace(for: root)
                     ),
                     splitPath: InterfaceTree.Container(
                         container: split,
                         path: splitPath,
                         containerName: "split",
-                        contentFrame: nil
+                        viewSpace: interfaceTreeViewSpace(for: split)
                     ),
                     orderPath: InterfaceTree.Container(
                         container: order,
                         path: orderPath,
                         containerName: "order_entry",
-                        contentFrame: nil
+                        viewSpace: interfaceTreeViewSpace(for: order)
                     ),
                     libraryPath: InterfaceTree.Container(
                         container: library,
                         path: libraryPath,
                         containerName: "library",
-                        contentFrame: nil
+                        viewSpace: interfaceTreeViewSpace(for: library)
                     ),
                 ]
             ),
@@ -185,23 +241,50 @@ extension WireConverterTests {
         let interface = WireConversion.toSemanticInterface(from: screen.tree)
         let expression = AccessibilityPredicate.exists(.container(.identifier(orderIdentifier)))
         let predicate = try expression.resolve(in: .empty)
-        let evidence = try XCTUnwrap(AccessibilityTraceEvidence(
-            trace: AccessibilityTrace(captures: [
-                AccessibilityTrace.Capture(sequence: 1, interface: interface),
-            ]),
-            completeness: .incomplete
-        ))
+        let snapshot = Observation.Snapshot(interface: interface, context: .empty)
+        let evidence = Observation.Evidence(
+            baseline: snapshot,
+            current: snapshot,
+            events: [],
+            completeness: .complete
+        )
         let result = predicate.evaluate(in: evidence)
 
         XCTAssertEqual(result, PredicateEvaluationResult(met: true))
         XCTAssertEqual(interface.annotations.containers.count, 4)
-        XCTAssertEqual(interface.projectedElements.single?.label, "Search all items")
+        XCTAssertEqual(
+            interface.projectedElements.single?.semantics.assertable.label,
+            "Search all items"
+        )
+        XCTAssertEqual(interface.projectedElements.single?.geometry.screen, .offscreen)
         XCTAssertEqual(interface.graph.nodesInPathOrder.count, 5)
     }
 
-    func testInterfaceSelectionPreservesTraceIdentityAnnotations() async throws {
-        let first = makeScreenElement(heistId: "first_button", label: "First", traits: [.button])
-        let second = makeScreenElement(heistId: "second_button", label: "Second", traits: [.button])
+    func testInterfaceSelectionPreservesObservationIdentityAnnotations() async throws {
+        let firstElement = makeElement(label: "First", traits: [.button])
+        let secondElement = makeElement(label: "Second", traits: [.button])
+        let first = InterfaceTree.Element(
+            heistId: "first_button",
+            path: TreePath([0]),
+            scrollMembership: nil,
+            geometry: testGeometry(
+                for: firstElement,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: firstElement)
+            ),
+            element: firstElement
+        )
+        let second = InterfaceTree.Element(
+            heistId: "second_button",
+            path: TreePath([1]),
+            scrollMembership: nil,
+            geometry: testGeometry(
+                for: secondElement,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: secondElement)
+            ),
+            element: secondElement
+        )
         let screen = InterfaceObservation.makeForTests(
             elements: [
                 "first_button": first,
@@ -224,13 +307,47 @@ extension WireConverterTests {
         ))
         let record = try XCTUnwrap(selected.projectedElementRecords.single)
 
-        XCTAssertEqual(record.element.label, "Second")
-        XCTAssertEqual(record.traceIdentity, HeistId(rawValue: "second_button").traceElementIdentity)
+        XCTAssertEqual(record.element.semantics, WireConversion.semantics(secondElement))
+        XCTAssertEqual(record.element.geometry.screen, second.geometry.screen)
+        XCTAssertEqual(
+            record.element.geometry.view,
+            HeistElement.Geometry.ViewSpace(
+                ownerPath: .root,
+                frame: nil,
+                activationPoint: nil
+            )
+        )
+        XCTAssertEqual(record.observationIdentity, HeistId(rawValue: "second_button").observationElementIdentity)
     }
 
-    func testContainerSubtreeSelectionPreservesAnnotationsAndTraceIdentity() async throws {
-        let first = makeScreenElement(heistId: "first_button", label: "First", traits: [.button])
-        let second = makeScreenElement(heistId: "second_button", label: "Second", traits: [.button])
+    func testContainerSubtreeSelectionPreservesAnnotationsAndObservationIdentity() async throws {
+        let containerPath = TreePath([0])
+        let firstPath = TreePath([0, 0])
+        let secondPath = TreePath([0, 1])
+        let firstElement = makeElement(label: "First", traits: [.button])
+        let secondElement = makeElement(label: "Second", traits: [.button])
+        let first = InterfaceTree.Element(
+            heistId: "first_button",
+            path: firstPath,
+            scrollMembership: nil,
+            geometry: testGeometry(
+                for: firstElement,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: firstElement)
+            ),
+            element: firstElement
+        )
+        let second = InterfaceTree.Element(
+            heistId: "second_button",
+            path: secondPath,
+            scrollMembership: nil,
+            geometry: testGeometry(
+                for: secondElement,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: secondElement)
+            ),
+            element: secondElement
+        )
         let container = AccessibilityContainer(
             type: .semanticGroup(label: "Actions", value: nil), identifier: nil,
             frame: .zero
@@ -246,10 +363,10 @@ extension WireConverterTests {
                     .element(second.element, traversalIndex: 1),
                 ]),
             ],
-            containerNamesByPath: [TreePath([0]): "actions"],
+            containerNamesByPath: [containerPath: "actions"],
             heistIdsByPath: [
-                TreePath([0, 0]): "first_button",
-                TreePath([0, 1]): "second_button",
+                firstPath: "first_button",
+                secondPath: "second_button",
             ],
             firstResponderHeistId: nil
         )
@@ -260,12 +377,19 @@ extension WireConverterTests {
         ))
         let records = selected.projectedElementRecords
 
-        XCTAssertEqual(selected.projectedElements.map(\.label), ["First", "Second"])
-        XCTAssertEqual(selected.annotations.containerByPath[TreePath([0])]?.containerName, "actions")
-        XCTAssertEqual(selected.annotations.elementByPath[TreePath([0, 0])]?.actions, [.activate])
-        XCTAssertEqual(records.map(\.traceIdentity), [
-            HeistId(rawValue: "first_button").traceElementIdentity,
-            HeistId(rawValue: "second_button").traceElementIdentity,
+        XCTAssertEqual(
+            selected.projectedElements.compactMap(\.semantics.assertable.label),
+            ["First", "Second"]
+        )
+        XCTAssertEqual(selected.annotations.containerByPath[containerPath]?.containerName, "actions")
+        XCTAssertEqual(selected.annotations.elementByPath[firstPath]?.actions, [.activate])
+        XCTAssertEqual(
+            selected.annotations.elementByPath[firstPath]?.geometry.screen,
+            first.geometry.screen
+        )
+        XCTAssertEqual(records.map(\.observationIdentity), [
+            HeistId(rawValue: "first_button").observationElementIdentity,
+            HeistId(rawValue: "second_button").observationElementIdentity,
         ])
     }
 
@@ -296,12 +420,22 @@ extension WireConverterTests {
                     heistId: "aardvark_staticText",
                     path: TreePath([0, 0]),
                     scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 0),
+                    geometry: testGeometry(
+                        for: visible,
+                        ownerPath: TreePath([0]),
+                        screen: TheVault.onscreenSpace(for: visible)
+                    ),
                     element: visible
                 ),
                 "zymurgy_staticText": InterfaceTree.Element(
                     heistId: "zymurgy_staticText",
                     path: TreePath([0, 1]),
                     scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 1),
+                    geometry: testGeometry(
+                        for: offViewport,
+                        ownerPath: TreePath([0]),
+                        screen: .offscreen
+                    ),
                     element: offViewport
                 ),
             ],
@@ -312,6 +446,9 @@ extension WireConverterTests {
             ],
             containerNamesByPath: [TreePath([0]): "words_list"],
             heistIdsByPath: [TreePath([0, 0]): "aardvark_staticText"],
+            containerViewSpacesByPath: [
+                TreePath([0]): interfaceTreeViewSpace(for: container),
+            ],
             firstResponderHeistId: nil,
         )
 
@@ -321,11 +458,22 @@ extension WireConverterTests {
             return XCTFail("Expected root scroll container")
         }
         XCTAssertEqual(children.count, 2)
-        XCTAssertEqual(children.compactMap(\.testLabel), ["aardvark", "zymurgy"])
+        XCTAssertEqual(children.compactMap { $0.testLabel }, ["aardvark", "zymurgy"])
         XCTAssertNotNil(interface.annotations.elementByPath[TreePath([0, 1])])
 
         let projected = interface.projectedElements
-        XCTAssertEqual(projected.compactMap(\.label), ["aardvark", "zymurgy"])
+        XCTAssertEqual(
+            projected.compactMap { $0.semantics.assertable.label },
+            ["aardvark", "zymurgy"]
+        )
+        XCTAssertEqual(
+            interface.annotations.elementByPath[TreePath([0, 0])]?.geometry,
+            screen.tree.elements["aardvark_staticText"]?.geometry
+        )
+        XCTAssertEqual(
+            interface.annotations.elementByPath[TreePath([0, 1])]?.geometry,
+            screen.tree.elements["zymurgy_staticText"]?.geometry
+        )
 
         let vault = TheVault(tripwire: TheTripwire())
         await vault.installObservationForTesting(screen)
@@ -333,7 +481,17 @@ extension WireConverterTests {
             subtree: .predicate(ElementPredicate(label: "zymurgy"))
         ))
         let selectedProjection = try XCTUnwrap(selectedInterface.projectedElements.first)
-        XCTAssertEqual(selectedProjection.label, "zymurgy")
+        XCTAssertEqual(selectedProjection.semantics.assertable.label, "zymurgy")
+        XCTAssertEqual(selectedProjection.geometry.screen, .offscreen)
+        XCTAssertEqual(
+            selectedProjection.geometry.view,
+            HeistElement.Geometry.ViewSpace(
+                ownerPath: .root,
+                frame: nil,
+                activationPoint: nil
+            ),
+            "Detaching the element subtree must not retain geometry owned by its omitted scroll container"
+        )
     }
 
     func testDiscoveryInterfaceDoesNotRegraftOffscreenElementsAlreadyInFullTreeCapture() async throws {
@@ -354,12 +512,22 @@ extension WireConverterTests {
                     heistId: "visible",
                     path: TreePath([0, 0]),
                     scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 0),
+                    geometry: testGeometry(
+                        for: visible,
+                        ownerPath: TreePath([0]),
+                        screen: TheVault.onscreenSpace(for: visible)
+                    ),
                     element: visible
                 ),
                 "offscreen": InterfaceTree.Element(
                     heistId: "offscreen",
                     path: TreePath([0, 1]),
                     scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 1),
+                    geometry: testGeometry(
+                        for: offscreen,
+                        ownerPath: TreePath([0]),
+                        screen: .offscreen
+                    ),
                     element: offscreen
                 ),
             ],
@@ -373,13 +541,25 @@ extension WireConverterTests {
                 TreePath([0, 0]): "visible",
                 TreePath([0, 1]): "offscreen",
             ],
+            containerViewSpacesByPath: [
+                TreePath([0]): interfaceTreeViewSpace(for: container),
+            ],
             firstResponderHeistId: nil
         )
 
         let interface = WireConversion.discoveryProjection(from: screen.tree).interface
 
-        XCTAssertEqual(interface.projectedElements.compactMap(\.label), ["Visible", "Offscreen"])
-        XCTAssertEqual(interface.projectedElements.filter { $0.label == "Offscreen" }.count, 1)
+        XCTAssertEqual(
+            interface.projectedElements.compactMap { $0.semantics.assertable.label },
+            ["Visible", "Offscreen"]
+        )
+        XCTAssertEqual(
+            interface.projectedElements.filter {
+                $0.semantics.assertable.label == "Offscreen"
+            }.count,
+            1
+        )
+        XCTAssertEqual(interface.projectedElements.last?.geometry.screen, .offscreen)
     }
 
     func testDiscoveryInterfaceGraftsKnownNestedScrollContainers() async throws {
@@ -396,6 +576,9 @@ extension WireConverterTests {
             elements: [:],
             hierarchy: [.container(outer, children: [])],
             containerNamesByPath: [TreePath([0]): "outer_words"],
+            containerViewSpacesByPath: [
+                TreePath([0]): interfaceTreeViewSpace(for: outer),
+            ],
             firstResponderHeistId: nil,
         )
         var containers = liveScreen.tree.containers
@@ -403,7 +586,10 @@ extension WireConverterTests {
             container: inner,
             path: TreePath([0, 0]),
             containerName: "inner_words",
-            contentFrame: nil,
+            viewSpace: interfaceTreeViewSpace(
+                for: inner,
+                ownerPath: TreePath([0])
+            ),
             scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 0)
         )
         let screen = InterfaceObservation.makeForTests(
@@ -413,6 +599,11 @@ extension WireConverterTests {
                         heistId: "interstitial_staticText",
                         path: TreePath([0, 0, 0]),
                         scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0, 0]), index: 0),
+                        geometry: testGeometry(
+                            for: nestedWord,
+                            ownerPath: TreePath([0, 0]),
+                            screen: .offscreen
+                        ),
                         element: nestedWord
                     ),
                 ],
@@ -431,7 +622,15 @@ extension WireConverterTests {
         }
         XCTAssertEqual(innerChildren.compactMap(\.testLabel), ["interstitial"])
         XCTAssertEqual(interface.annotations.containerByPath[TreePath([0, 0])]?.containerName, "inner_words")
-        XCTAssertNotNil(interface.annotations.elementByPath[TreePath([0, 0, 0])])
+        XCTAssertEqual(
+            interface.annotations.elementByPath[TreePath([0, 0, 0])]?.geometry.view.ownerPath,
+            TreePath([0, 0])
+        )
+        XCTAssertEqual(
+            interface.projectedElements.single?.semantics.assertable.label,
+            "interstitial"
+        )
+        XCTAssertEqual(interface.projectedElements.single?.geometry.screen, .offscreen)
     }
 
     func testDiscoveryInterfaceEmitsCanonicalGraftedHeistIdOnce() async throws {
@@ -454,6 +653,11 @@ extension WireConverterTests {
                         heistId: "recycled_cell",
                         path: TreePath([0, 0]),
                         scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 0),
+                        geometry: testGeometry(
+                            for: recycledCell,
+                            ownerPath: TreePath([0]),
+                            screen: .offscreen
+                        ),
                         element: recycledCell
                     ),
                 ],
@@ -462,7 +666,7 @@ extension WireConverterTests {
                         container: rootContainer,
                         path: TreePath([0]),
                         containerName: "transactions_list",
-                        contentFrame: nil
+                        viewSpace: interfaceTreeViewSpace(for: rootContainer)
                     ),
                 ]
             ),
@@ -470,6 +674,9 @@ extension WireConverterTests {
                 hierarchy: [.container(rootContainer, children: [])],
                 containerNamesByPath: [TreePath([0]): "transactions_list"],
                 elementRefs: [:],
+                containerViewSpacesByPath: [
+                    TreePath([0]): interfaceTreeViewSpace(for: rootContainer),
+                ],
                 firstResponderHeistId: nil,
             )
         )
@@ -479,9 +686,21 @@ extension WireConverterTests {
         guard case .container(_, let children) = interface.tree.first else {
             return XCTFail("Expected root scroll container")
         }
-        XCTAssertEqual(children.compactMap(\.testLabel), ["618F3ADF"])
-        XCTAssertEqual(interface.projectedElements.filter { $0.label == "618F3ADF" }.count, 1)
-        XCTAssertNotNil(interface.annotations.elementByPath[TreePath([0, 0])])
+        XCTAssertEqual(children.compactMap { $0.testLabel }, ["618F3ADF"])
+        XCTAssertEqual(
+            interface.projectedElements.filter {
+                $0.semantics.assertable.label == "618F3ADF"
+            }.count,
+            1
+        )
+        XCTAssertEqual(
+            interface.annotations.elementByPath[TreePath([0, 0])]?.geometry,
+            screen.tree.elements["recycled_cell"]?.geometry
+        )
+        XCTAssertEqual(
+            interface.projectedElementRecords.single?.observationIdentity,
+            HeistId(rawValue: "recycled_cell").observationElementIdentity
+        )
         XCTAssertNil(interface.annotations.elementByPath[TreePath([0, 1])])
     }
 
@@ -513,12 +732,22 @@ extension WireConverterTests {
                         heistId: "repeat_button",
                         path: TreePath([0, 0]),
                         scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 0),
+                        geometry: testGeometry(
+                            for: firstCell,
+                            ownerPath: TreePath([0]),
+                            screen: .offscreen
+                        ),
                         element: firstCell
                     ),
                     "repeat_button_1": InterfaceTree.Element(
                         heistId: "repeat_button_1",
                         path: TreePath([0, 1]),
                         scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 1),
+                        geometry: testGeometry(
+                            for: secondCell,
+                            ownerPath: TreePath([0]),
+                            screen: .offscreen
+                        ),
                         element: secondCell
                     ),
                 ],
@@ -527,7 +756,7 @@ extension WireConverterTests {
                         container: rootContainer,
                         path: TreePath([0]),
                         containerName: "transactions_list",
-                        contentFrame: nil
+                        viewSpace: interfaceTreeViewSpace(for: rootContainer)
                     ),
                 ]
             ),
@@ -535,6 +764,9 @@ extension WireConverterTests {
                 hierarchy: [.container(rootContainer, children: [])],
                 containerNamesByPath: [TreePath([0]): "transactions_list"],
                 elementRefs: [:],
+                containerViewSpacesByPath: [
+                    TreePath([0]): interfaceTreeViewSpace(for: rootContainer),
+                ],
                 firstResponderHeistId: nil,
             )
         )
@@ -544,8 +776,24 @@ extension WireConverterTests {
         guard case .container(_, let children) = interface.tree.first else {
             return XCTFail("Expected root scroll container")
         }
-        XCTAssertEqual(children.compactMap(\.testLabel), ["Repeat", "Repeat"])
-        XCTAssertEqual(interface.projectedElements.filter { $0.label == "Repeat" }.count, 2)
+        XCTAssertEqual(children.compactMap { $0.testLabel }, ["Repeat", "Repeat"])
+        XCTAssertEqual(
+            interface.projectedElements.filter {
+                $0.semantics.assertable.label == "Repeat"
+            }.count,
+            2
+        )
+        XCTAssertEqual(
+            interface.projectedElementRecords.map { $0.observationIdentity },
+            [
+                HeistId(rawValue: "repeat_button").observationElementIdentity,
+                HeistId(rawValue: "repeat_button_1").observationElementIdentity,
+            ]
+        )
+        XCTAssertEqual(
+            interface.projectedElements.map { $0.geometry.view.ownerPath },
+            [TreePath([0]), TreePath([0])]
+        )
         XCTAssertNotNil(interface.annotations.elementByPath[TreePath([0, 0])])
         XCTAssertNotNil(interface.annotations.elementByPath[TreePath([0, 1])])
     }
@@ -567,20 +815,26 @@ extension WireConverterTests {
                         container: rootContainer,
                         path: TreePath([0]),
                         containerName: "transactions_list",
-                        contentFrame: nil
+                        viewSpace: interfaceTreeViewSpace(for: rootContainer)
                     ),
                     TreePath([0, 0]): InterfaceTree.Container(
                         container: recycledContainer,
                         path: TreePath([0, 0]),
                         containerName: "saved_carts_group",
-                        contentFrame: nil,
+                        viewSpace: interfaceTreeViewSpace(
+                            for: recycledContainer,
+                            ownerPath: TreePath([0])
+                        ),
                         scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 0)
                     ),
                     TreePath([0, 1]): InterfaceTree.Container(
                         container: recycledContainer,
                         path: TreePath([0, 1]),
                         containerName: "saved_carts_group",
-                        contentFrame: nil,
+                        viewSpace: interfaceTreeViewSpace(
+                            for: recycledContainer,
+                            ownerPath: TreePath([0])
+                        ),
                         scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 1)
                     ),
                 ]
@@ -589,6 +843,9 @@ extension WireConverterTests {
                 hierarchy: [.container(rootContainer, children: [])],
                 containerNamesByPath: [TreePath([0]): "transactions_list"],
                 elementRefs: [:],
+                containerViewSpacesByPath: [
+                    TreePath([0]): interfaceTreeViewSpace(for: rootContainer),
+                ],
                 firstResponderHeistId: nil,
             )
         )
@@ -605,6 +862,14 @@ extension WireConverterTests {
         )
         XCTAssertNotNil(interface.annotations.containerByPath[TreePath([0, 0])])
         XCTAssertNotNil(interface.annotations.containerByPath[TreePath([0, 1])])
+        XCTAssertEqual(
+            screen.tree.containers[TreePath([0, 0])]?.viewSpace.ownerPath,
+            TreePath([0])
+        )
+        XCTAssertEqual(
+            screen.tree.containers[TreePath([0, 1])]?.viewSpace.ownerPath,
+            TreePath([0])
+        )
     }
 
 }

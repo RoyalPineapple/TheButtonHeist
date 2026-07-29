@@ -202,29 +202,29 @@ final class TheBrainsActionTests: XCTestCase {
             tripwire: TheTripwire(),
             visibleObservationSource: visibleObservationSource.capture
         )
-        installObservedGeometryHeartbeat()
-        await brains.startActionTestRuntime()
+        installObservedGeometryTick()
+        await brains.startTestObservation()
     }
 
     override func tearDown() async throws {
-        brains.stopActionTestRuntime()
+        brains.stopTestObservation()
         brains = nil
         visibleObservationSource = nil
         try await super.tearDown()
     }
 
     func replaceBrains(keyboardInput: SafecrackerKeyboardInput) async {
-        brains.stopActionTestRuntime()
+        brains.stopTestObservation()
         brains = TheBrains(
             tripwire: TheTripwire(),
             keyboardInput: keyboardInput,
             visibleObservationSource: visibleObservationSource.capture
         )
-        installObservedGeometryHeartbeat()
-        await brains.startActionTestRuntime()
+        installObservedGeometryTick()
+        await brains.startTestObservation()
     }
 
-    private func installObservedGeometryHeartbeat() {
+    private func installObservedGeometryTick() {
         brains.navigation.elementInflation.geometryEnvironment = .init(
             now: { RuntimeElapsed.now },
             awaitFrame: { _ in .observed }
@@ -414,16 +414,6 @@ final class TheBrainsActionTests: XCTestCase {
         return actionResult
     }
 
-    func observedState(
-        labels: [String],
-        screenId: String? = nil,
-        screenChanged: Bool = false
-    ) async -> Observation.SnapshotEvent {
-        await observedState(elements: labels.enumerated().map { index, label in
-            (makeElement(label: label), HeistId(rawValue: "element_\(index)"))
-        }, screenId: screenId, screenChanged: screenChanged)
-    }
-
     func waitForSettledSemanticWaiter(
         on vault: TheVault,
         file: StaticString = #filePath,
@@ -436,222 +426,6 @@ final class TheBrainsActionTests: XCTestCase {
             guard await Task.cancellableSleep(for: .milliseconds(5)) else { break }
         }
         XCTAssertEqual(vault.semanticObservationStream.observationWaiterCount, 1, file: file, line: line)
-    }
-
-    func observedState(
-        elements: [(AccessibilityElement, HeistId)],
-        screenId: String? = nil,
-        screenChanged: Bool = false
-    ) async -> Observation.SnapshotEvent {
-        let event = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
-            .makeForTests(elements: elements)
-        )
-        guard let screenId else { return event }
-        let state = event.moment.capture
-
-        let context = AccessibilityTrace.Context(
-            firstResponder: state.context.firstResponder,
-            keyboardVisible: state.context.keyboardVisible,
-            screenId: screenId,
-            observationGeneration: state.context.observationGeneration,
-            windowStack: state.context.windowStack
-        )
-        let capture = AccessibilityTrace.Capture(
-            sequence: state.sequence,
-            interface: state.interface,
-            parentHash: state.parentHash,
-            context: context,
-            transition: screenChanged
-                ? AccessibilityTrace.Transition(accessibilityNotifications: [
-                    AccessibilityNotificationEvidence(
-                        sequence: 1,
-                        kind: .screenChanged,
-                        timestamp: Date(timeIntervalSince1970: 0),
-                        notificationData: .none,
-                        associatedElement: .none
-                    ),
-                ])
-                : state.transition
-        )
-        let snapshot = Observation.Snapshot(
-            sequence: event.sequence,
-            generation: event.generation,
-            sourceScope: event.scope,
-            observation: event.snapshot.observation,
-            semanticSignal: event.snapshot.semanticSignal,
-            notificationSequence: event.notificationSequence,
-            trace: AccessibilityTrace(capture: capture)
-        )
-        var log = Observation.Log(retentionLimit: 1)
-        do {
-            return try log.record(snapshot: snapshot, continuity: .sameGeneration)
-        } catch {
-            preconditionFailure("Test observation fixture produced an invalid transition: \(error)")
-        }
-    }
-
-    func observationEvents(
-        for events: [Observation.SnapshotEvent]
-    ) -> [Observation.SnapshotEvent] {
-        var log = Observation.Log(retentionLimit: Observation.Store.defaultRetentionLimit)
-        var previousCapture: AccessibilityTrace.Capture?
-        var recordedEvents: [Observation.SnapshotEvent] = []
-
-        for (index, event) in events.enumerated() {
-            let capture = event.moment.capture
-            let trace = previousCapture.map {
-                AccessibilityTrace(capture: $0).appending(
-                    capture.interface,
-                    context: capture.context,
-                    transition: capture.transition
-                )
-            } ?? AccessibilityTrace(capture: capture)
-            let snapshot = Observation.Snapshot(
-                sequence: SettledObservationSequence(UInt64(index + 1)),
-                generation: .initial,
-                sourceScope: .visible,
-                observation: event.snapshot.observation,
-                semanticSignal: .empty,
-                notificationSequence: UInt64(index + 1),
-                trace: trace
-            )
-            do {
-                let event = try log.record(snapshot: snapshot, continuity: .sameGeneration)
-                recordedEvents.append(event)
-            } catch {
-                preconditionFailure("Test moment fixture produced an invalid observation transition: \(error)")
-            }
-            previousCapture = trace.captures.last
-        }
-        return recordedEvents
-    }
-
-    func heistRuntime(
-        observations: [Observation.SnapshotEvent],
-        execute: (@MainActor (ResolvedHeistActionCommand) async -> ActionResult)? = nil,
-        settle: (@MainActor (Settlement.Command) async -> Settlement.Result)? = nil,
-        observedScopes: (@MainActor (SemanticObservationScope) -> Void)? = nil,
-        observedTimeouts: (@MainActor (Double?) -> Void)? = nil,
-        observedSettlementCommands: (@MainActor (Settlement.Command) -> Void)? = nil,
-        unavailableObservationCount: Int = 0,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) -> TheBrains.HeistExecutionRuntime {
-        let observationSource = ScriptedHeistObservationSource(
-            observations: observations,
-            unavailableObservationCount: unavailableObservationCount,
-            observedScopes: observedScopes,
-            observedTimeouts: observedTimeouts,
-            file: file,
-            line: line
-        )
-        return TheBrains.HeistExecutionRuntime(
-            execute: { command, expectation in
-                let result = if let execute {
-                    await execute(command)
-                } else {
-                    ActionResult.success(payload: command.resultPayload)
-                }
-                guard result.outcome.isSuccess, let expectation else {
-                    return RuntimeActionExecution(result: result)
-                }
-                let settlementCommand = Settlement.Command.action(.init(
-                    command: command,
-                    predicate: expectation.predicate,
-                    allowances: .init(readiness: .milliseconds(Int64(SettleSession.defaultTimeoutMs)),
-                        expectation: expectation.allowance
-                    ),
-                    baseline: .capture
-                ))
-                observedSettlementCommands?(settlementCommand)
-                guard let settle else {
-                    preconditionFailure("Scripted attached expectation requires action settlement")
-                }
-                return RuntimeActionExecution(
-                    evidence: Settlement.ResultProjector.projectAction(await settle(settlementCommand))
-                )
-            },
-            settle: { command in
-                observedSettlementCommands?(command)
-                return await self.scriptedSettlement(
-                    command,
-                    settle: settle,
-                    observationSource: observationSource
-                )
-            }
-        )
-    }
-
-    func repeatUntilSettlementRuntime(
-        execute: (@MainActor (ResolvedHeistActionCommand) async -> ActionResult)? = nil,
-        settle: @escaping @MainActor (Settlement.Command) async -> Settlement.Result
-    ) -> TheBrains.HeistExecutionRuntime {
-        return TheBrains.HeistExecutionRuntime(
-            execute: { command, _ in
-                let result: ActionResult
-                if let execute {
-                    result = await execute(command)
-                } else {
-                    result = ActionResult.success(
-                        payload: command.resultPayload
-                    )
-                }
-                return RuntimeActionExecution(result: result)
-            },
-            settle: settle
-        )
-    }
-
-    private func scriptedSettlement(
-        _ command: Settlement.Command,
-        settle: (@MainActor (Settlement.Command) async -> Settlement.Result)?,
-        observationSource: ScriptedHeistObservationSource
-    ) async -> Settlement.Result {
-        if let settle {
-            return await settle(command)
-        }
-        if let baseline = command.baseline,
-           case .unavailable = baseline {
-            return TheInsideJobTests.scriptedSettlement(command, observation: nil)
-        }
-        let timeout: Double?
-        switch command {
-        case .currentState:
-            timeout = nil
-        case .observation(_, let deadline, _):
-            timeout = deadline.remainingDuration(at: RuntimeElapsed.now) / .seconds(1)
-        case .action(let action):
-            timeout = action.allowances.readiness / .seconds(1)
-        }
-        let observation = observationSource.next(
-            scope: command.observationScope,
-            timeout: timeout
-        )
-        return TheInsideJobTests.scriptedSettlement(command, observation: observation)
-    }
-
-    func metExpectation(
-        _ result: ExpectationResult,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) -> ExpectationResult.Met {
-        guard let expectation = ExpectationResult.Met(result) else {
-            XCTFail("Expected met expectation fixture", file: file, line: line)
-            return ExpectationResult.Met(predicate: result.predicate, actual: result.actual)
-        }
-        return expectation
-    }
-
-    func unmetExpectation(
-        _ result: ExpectationResult,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) -> ExpectationResult.Unmet {
-        guard let expectation = ExpectationResult.Unmet(result) else {
-            XCTFail("Expected unmet expectation fixture", file: file, line: line)
-            return ExpectationResult.Unmet(predicate: result.predicate, actual: result.actual)
-        }
-        return expectation
     }
 
     func withNoTraversableWindows<T>(
@@ -669,160 +443,6 @@ final class TheBrainsActionTests: XCTestCase {
         }
         return await operation()
     }
-}
-
-@MainActor
-extension TheBrains {
-    func startActionTestRuntime() async {
-        tripwire.uikitIdleTracker.installIfAvailable()
-        tripwire.startPulse()
-        await startSemanticObservation()
-    }
-
-    func stopActionTestRuntime() {
-        stopSemanticObservation()
-        tripwire.stopPulse()
-        tripwire.uikitIdleTracker.uninstallIfNeeded()
-    }
-}
-
-extension ResolvedHeistActionCommand {
-    var resultPayload: ActionResult.Payload {
-        switch self {
-        case .activate: .activate
-        case .increment: .increment
-        case .decrement: .decrement
-        case .customAction: .customAction
-        case .rotor: .rotor(nil)
-        case .dismiss: .dismiss
-        case .magicTap: .magicTap
-        case .oneFingerTap: .oneFingerTap
-        case .longPress: .longPress
-        case .swipe: .swipe
-        case .drag: .drag
-        case .typeText: .typeText(nil)
-        case .editAction: .editAction
-        case .scroll: .scroll
-        case .scrollToVisible: .scrollToVisible
-        case .scrollToEdge: .scrollToEdge
-        case .dismissKeyboard: .dismissKeyboard
-        case .setPasteboard: .setPasteboard(nil)
-        case .takeScreenshot: .screenshot(nil)
-        }
-    }
-}
-
-@MainActor
-private final class ScriptedHeistObservationSource {
-    private var remainingObservations: [Observation.SnapshotEvent]
-    private var remainingUnavailableObservations: Int
-    private var previousCapture: AccessibilityTrace.Capture?
-    private var nextObservationSequence: SettledObservationSequence = 0
-    private var log = Observation.Log(retentionLimit: Observation.Store.defaultRetentionLimit)
-    private let observedScopes: (@MainActor (SemanticObservationScope) -> Void)?
-    private let observedTimeouts: (@MainActor (Double?) -> Void)?
-    private let file: StaticString
-    private let line: UInt
-
-    init(
-        observations: [Observation.SnapshotEvent],
-        unavailableObservationCount: Int,
-        observedScopes: (@MainActor (SemanticObservationScope) -> Void)?,
-        observedTimeouts: (@MainActor (Double?) -> Void)?,
-        file: StaticString,
-        line: UInt
-    ) {
-        remainingObservations = observations
-        remainingUnavailableObservations = unavailableObservationCount
-        self.observedScopes = observedScopes
-        self.observedTimeouts = observedTimeouts
-        self.file = file
-        self.line = line
-    }
-
-    func next(
-        scope: SemanticObservationScope,
-        timeout: Double?
-    ) -> Observation.SnapshotEvent? {
-        observedScopes?(scope)
-        observedTimeouts?(timeout)
-        if remainingUnavailableObservations > 0 {
-            remainingUnavailableObservations -= 1
-            return nil
-        }
-        guard !remainingObservations.isEmpty else {
-            XCTFail("Expected scripted heist case observation", file: file, line: line)
-            return nil
-        }
-        let sourceEvent = remainingObservations.removeFirst()
-        nextObservationSequence += 1
-        let event = event(
-            from: sourceEvent,
-            scope: scope,
-            sequence: nextObservationSequence
-        )
-        previousCapture = event.trace.captures.last
-        return event
-    }
-
-    private func event(
-        from sourceEvent: Observation.SnapshotEvent,
-        scope: SemanticObservationScope,
-        sequence: SettledObservationSequence
-    ) -> Observation.SnapshotEvent {
-        let capture = sourceEvent.moment.capture
-        let trace = if let previousCapture {
-            AccessibilityTrace(capture: previousCapture).appending(
-                capture.interface,
-                context: capture.context,
-                transition: capture.transition
-            )
-        } else {
-            AccessibilityTrace(capture: capture)
-        }
-        let snapshot = Observation.Snapshot(
-            sequence: sequence,
-            generation: .initial,
-            sourceScope: scope,
-            observation: sourceEvent.snapshot.observation,
-            semanticSignal: .empty,
-            notificationSequence: 0,
-            trace: trace
-        )
-        do {
-            return try log.record(snapshot: snapshot, continuity: .sameGeneration)
-        } catch {
-            preconditionFailure("Scripted heist produced an invalid observation transition: \(error)")
-        }
-    }
-}
-
-private extension ActionResult {
-    var resultPayload: HeistResult? {
-        guard case .heist(let result) = payload else { return nil }
-        return result
-    }
-}
-
-private func makeWaitActionResult(
-    met: Bool,
-    message: String?,
-    traceEvidence: AccessibilityTraceEvidence?
-) -> ActionResult {
-    let observation = traceEvidence.map(ActionResultObservationEvidence.trace) ?? .none
-    if met {
-        return ActionResult.success(
-            payload: .wait,
-            message: message,
-            observation: observation
-        )
-    }
-    return ActionResult.failure(
-        payload: .wait,
-        failureKind: .timeout,
-        message: message,
-        observation: observation
-    )
 }
 
 #endif

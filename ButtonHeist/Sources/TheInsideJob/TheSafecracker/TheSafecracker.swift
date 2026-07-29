@@ -4,6 +4,15 @@ import UIKit
 import TheScore
 import ThePlans
 
+/// Drives UIKit and reads UIKit's own state back.
+///
+/// The tripwire is the only source of time, and this type holds the only waiver:
+/// wall-clock waits are correct here and nowhere else. Input has to be
+/// synthesized at real timestamps, because UIKit derives gesture velocity and
+/// key repeat from them, and display-linking would make input speed depend on
+/// the refresh rate. State like the keyboard's is UIKit's own answer rather than
+/// part of the interface we observe, so no tick ever means "the keyboard
+/// arrived" and asking again after a wait is the only way to hear it change.
 @MainActor
 final class TheSafecracker {
 
@@ -71,6 +80,10 @@ final class TheSafecracker {
 
     func dismissKeyboard() -> Bool {
         editActions.resignFirstResponder()
+    }
+
+    func focusFirstResponder(_ object: NSObject) -> Bool {
+        editActions.becomeFirstResponder(object)
     }
 
     func dismissKeyboard(_ object: NSObject) -> Bool {

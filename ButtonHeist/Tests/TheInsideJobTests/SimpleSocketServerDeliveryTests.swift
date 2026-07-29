@@ -1,3 +1,5 @@
+#if canImport(UIKit)
+#if DEBUG
 import XCTest
 import Network
 import ButtonHeistSupport
@@ -218,3 +220,6 @@ private actor SendCompletionGate {
         handler?(error)
     }
 }
+
+#endif // DEBUG
+#endif // canImport(UIKit)

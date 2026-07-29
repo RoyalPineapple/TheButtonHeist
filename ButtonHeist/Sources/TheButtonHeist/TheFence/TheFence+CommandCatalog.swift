@@ -41,6 +41,7 @@ import TheScore
     case wait
     case singleStepAction(base: FenceCommandFixedTimeout)
     case performStep
+    case heist
 
     public var fixedSeconds: TimeInterval? {
         guard case .fixed(let timeout) = self else { return nil }
@@ -134,7 +135,7 @@ extension TheFence {
         case listDevices = "list_devices"
         case getInterface = "get_interface"
         case getScreen = "get_screen"
-        case getAnnouncements = "get_announcements"
+        case getNotifications = "get_notifications"
         case wait
         case oneFingerTap = "one_finger_tap"
         case longPress = "long_press"
@@ -370,15 +371,18 @@ extension TheFence.Command {
                 let request = try fence.makeScreenRequest(arguments)
                 return .init { fence in try await fence.handleGetScreen(request, timeout: timeout) }
             }
-        case .getAnnouncements:
+        case .getNotifications:
             return fixedResponseContract(
                 family: .observation,
                 timeout: .health,
-                description: "Read recent spoken accessibility text captured from announcement, elementChanged, valueChanged, or screenChanged notifications.",
+                description: """
+                    Read the ordered accessibility notifications retained by observation history, \
+                    including spoken text and attached element semantics.
+                    """,
                 mcpExposure: .directTool,
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
             ) { _, _, timeout in
-                .init { fence in try await fence.handleGetAnnouncements(timeout: timeout) }
+                .init { fence in try await fence.handleGetNotifications(timeout: timeout) }
             }
         case .wait:
             return responseContract(
@@ -593,15 +597,17 @@ extension TheFence.Command {
                 return .init { fence in try await fence.handlePerform(request) }
             }
         case .runHeist:
-            return fixedResponseContract(
+            return responseContract(
                 family: .heistRuntime,
-                parameters: FenceCommandParameters([Self.rootArgumentParameter] + Self.planSourceParameters),
-                timeout: .longAction,
+                parameters: FenceCommandParameters(
+                    [Self.rootArgumentParameter, FenceParameters.heistTimeout.spec] + Self.planSourceParameters
+                ),
+                timeout: .heist,
                 description: Self.runHeistDescription,
                 mcpExposure: .directTool
-            ) { fence, arguments, timeout in
+            ) { fence, arguments in
                 let request = try fence.decodeRunHeistRequest(arguments)
-                return .init { fence in try await fence.handleRunHeist(request, timeout: timeout) }
+                return .init { fence in try await fence.handleRunHeist(request) }
             }
         case .validateHeist:
             return responseContract(

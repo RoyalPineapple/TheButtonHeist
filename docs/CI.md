@@ -48,7 +48,7 @@ final class CheckoutHeistTests: XCTestCase {
     func testCheckoutCompletes() async throws {
         try await runHeist("Checkout.pay") {
             Activate(.label("Pay"))
-                .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
+                .expect(.elementsChanged([.appeared(.label("Payment Complete"))]))
         }
     }
 }
@@ -66,7 +66,7 @@ directory:
 ```swift
 runHeistSync("Checkout.pay", recordResult: .always, to: resultsURL) {
     Activate(.label("Pay"))
-        .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
+        .expect(.elementsChanged([.appeared(.label("Payment Complete"))]))
 }
 ```
 
@@ -78,7 +78,7 @@ wrapper and owns the Xcode result-bundle and recorded-heist-result paths:
 
 ```bash
 BUTTONHEIST_RESULTS_MODE=failures \
-  scripts/test-runner.py run ButtonHeistTests --selection full
+  scripts/test-runner.py run ButtonHeistTests
 ```
 
 iOS simulator-hosted test bundles write inside the app/test process sandbox.
@@ -87,7 +87,7 @@ collects results after each run and during failure cleanup:
 
 ```bash
 BUTTONHEIST_RESULTS_MODE=failures \
-  scripts/test-runner.py run TheInsideJobTests --selection full \
+  scripts/test-runner.py run TheInsideJobTests \
   --simulator-name "$TASK_SLUG"
 ```
 
@@ -97,7 +97,7 @@ the coverage contract; CI does not partition these suites with test selectors:
 | Scheme | Coverage |
 |--------|----------|
 | `TheInsideJobTests` | Deterministic core runtime and protocol tests |
-| `TheInsideJobIntegrationTests` | Real loopback, TLS, live-window, gesture, and settle integration tests |
+| `TheInsideJobIntegrationTests` | Real loopback, TLS, live-window, gesture, and observation integration tests |
 | `DogfoodFeatureFlowTests` | One semantic list mutation through the public heist API |
 | `DogfoodRuntimeContractTests` | Public roots/prebuilt plans and advanced control flow |
 | `AdversarialMutationTests` | Async reveal and stale-live-object recovery |
@@ -134,7 +134,7 @@ local validation both delegate test driving to `scripts/test-runner.py`.
 Run the complete portable framework suite with:
 
 ```bash
-scripts/test-runner.py run MacFrameworkTests --selection full
+scripts/test-runner.py run MacFrameworkTests
 ```
 
 For a bounded, maintained projection of a contract or critical invariant, use a
@@ -142,7 +142,7 @@ named focus instead of reconstructing scheme and test selectors:
 
 ```bash
 scripts/test-runner.py catalog
-scripts/test-runner.py run --focus contract-results --selection full
+scripts/test-runner.py run --focus contract-results
 ```
 
 Every invocation writes `run.json` beside its result artifacts. The record
@@ -154,9 +154,9 @@ tests.
 Run the core, integration, and combined behavior schemes for complete hosted coverage:
 
 ```bash
-scripts/test-runner.py run TheInsideJobTests --selection full
-scripts/test-runner.py run TheInsideJobIntegrationTests --selection full
-scripts/test-runner.py run HostedBehaviorTests --selection full
+scripts/test-runner.py run TheInsideJobTests
+scripts/test-runner.py run TheInsideJobIntegrationTests
+scripts/test-runner.py run HostedBehaviorTests
 ```
 
 CI preserves build-once execution without owning Xcode arguments:

@@ -135,6 +135,7 @@ private extension PublicCommandContractFixture {
             case wait
             case singleStepAction
             case performStep
+            case heist
         }
 
         enum CodingKeys: String, CodingKey {
@@ -148,6 +149,7 @@ private extension PublicCommandContractFixture {
         case wait
         case singleStepAction(FenceCommandFixedTimeout)
         case performStep
+        case heist
 
         init(_ timeout: FenceCommandTimeoutSemantics) {
             switch timeout {
@@ -161,6 +163,8 @@ private extension PublicCommandContractFixture {
                 self = .singleStepAction(base)
             case .performStep:
                 self = .performStep
+            case .heist:
+                self = .heist
             }
         }
 
@@ -181,6 +185,8 @@ private extension PublicCommandContractFixture {
                 try container.encode(base.seconds, forKey: .seconds)
             case .performStep:
                 try container.encode(Kind.performStep, forKey: .kind)
+            case .heist:
+                try container.encode(Kind.heist, forKey: .kind)
             }
         }
     }

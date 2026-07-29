@@ -85,16 +85,6 @@ public extension FenceError {
                 details: FailureDetails(code: .requestTimeout),
                 coreMessage: "Command timed out waiting for a response from the app."
             )
-        case .mainThreadUnresponsive:
-            return FenceFailureDescriptor(
-                details: FailureDetails(code: .requestMainThreadUnresponsive),
-                coreMessage: "The app's main thread is unresponsive."
-            )
-        case .mainThreadWorkTimedOut:
-            return FenceFailureDescriptor(
-                details: FailureDetails(code: .requestMainThreadWorkTimedOut),
-                coreMessage: "The app's main thread accepted the liveness probe but did not complete its work."
-            )
         case .actionFailed(let message):
             let displayMessage = "Action failed: \(message)"
             return FenceFailureDescriptor(

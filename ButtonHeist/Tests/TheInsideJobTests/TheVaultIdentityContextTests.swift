@@ -29,11 +29,14 @@ final class TheVaultIdentityContextTests: XCTestCase {
             hierarchy: hierarchy,
         )
 
-        XCTAssertEqual(result.contentFramesByPath[TreePath([0])]?.cgRect, container.frame.cgRect)
+        XCTAssertEqual(
+            result.viewSpacesByPath[TreePath([0])]?.frame?.cgRect,
+            container.frame.cgRect
+        )
         XCTAssertFalse(result.nestedInScrollViewPaths.contains(TreePath([0])))
     }
 
-    func testNestedContainerExpressedInParentScrollableContentSpace() {
+    func testIdentityContextKeepsParserViewGeometryAndScrollMembershipSeparate() {
         let scrollContainerPath = TreePath([0])
         let outer = AccessibilityContainer(
             type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 5000),
@@ -55,23 +58,19 @@ final class TheVaultIdentityContextTests: XCTestCase {
             scrollableContainerPaths: [scrollContainerPath]
         )
 
-        XCTAssertEqual(result.contentFramesByPath[TreePath([0])]?.cgRect, outer.frame.cgRect,
-                       "Top-level scrollable: no enclosing scrollable, frame stays in observation space")
+        XCTAssertEqual(
+            result.viewSpacesByPath[TreePath([0])]?.frame?.cgRect,
+            outer.frame.cgRect
+        )
         XCTAssertFalse(result.nestedInScrollViewPaths.contains(TreePath([0])))
 
-        let innerContent = result.contentFramesByPath[TreePath([0, 0])]
-        XCTAssertNotNil(innerContent)
-        XCTAssertEqual(innerContent?.origin.x ?? .nan, 0, accuracy: 0.5)
-        XCTAssertEqual(innerContent?.origin.y ?? .nan, 0, accuracy: 0.5,
-                       "Nested container identity drops moving viewport origin")
-        XCTAssertEqual(innerContent?.size, inner.frame.size.cgSize,
-                       "Size remains parser evidence; origin is capture-local hierarchy evidence")
+        let innerViewSpace = result.viewSpacesByPath[TreePath([0, 0])]
+        XCTAssertEqual(innerViewSpace?.ownerPath, .root)
+        XCTAssertEqual(innerViewSpace?.frame?.cgRect, inner.frame.cgRect)
         XCTAssertTrue(result.nestedInScrollViewPaths.contains(TreePath([0, 0])))
     }
 
-    func testNestedContainerScrollIndependence() {
-        // Same inner container, two different viewport-relative parser frames:
-        // semantic container identity must not follow moving viewport origin.
+    func testViewHierarchyOwnsViewGeometryWhenScreenCaptureMoves() {
         let scrollContainerPath = TreePath([0])
 
         let outer = AccessibilityContainer(
@@ -79,21 +78,23 @@ final class TheVaultIdentityContextTests: XCTestCase {
             frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 480)
         )
 
-        // Parse 1: inner is at observation-y 200.
         let innerParse1 = AccessibilityContainer(
             type: .list,
             frame: AccessibilityRect(x: 0, y: 200, width: 320, height: 200)
         )
+        let viewHierarchy: [AccessibilityHierarchy] = [
+            .container(outer, children: [
+                .container(innerParse1, children: [.element(makeElement(), traversalIndex: 0)])
+            ])
+        ]
         let result1 = TheVault.buildIdentityContext(
             hierarchy: [.container(outer, children: [
                 .container(innerParse1, children: [.element(makeElement(), traversalIndex: 0)])
             ])],
+            viewHierarchy: viewHierarchy,
             scrollableContainerPaths: [scrollContainerPath]
         )
 
-        // Parse 2: the same logical inner container — same data behind it — is
-        // now at observation-y -800. Its identity frame
-        // should still drop origin and keep size.
         let innerParse2 = AccessibilityContainer(
             type: .list,
             frame: AccessibilityRect(x: 0, y: -800, width: 320, height: 200)
@@ -102,12 +103,18 @@ final class TheVaultIdentityContextTests: XCTestCase {
             hierarchy: [.container(outer, children: [
                 .container(innerParse2, children: [.element(makeElement(), traversalIndex: 0)])
             ])],
+            viewHierarchy: viewHierarchy,
             scrollableContainerPaths: [scrollContainerPath]
         )
 
-        XCTAssertEqual(result1.contentFramesByPath[TreePath([0, 0])]?.origin.y ?? .nan, 0, accuracy: 0.5)
-        XCTAssertEqual(result2.contentFramesByPath[TreePath([0, 0])]?.origin.y ?? .nan, 0, accuracy: 0.5,
-                       "Inner container identity must be invariant under outer scroll")
+        XCTAssertEqual(
+            result1.viewSpacesByPath[TreePath([0, 0])],
+            result2.viewSpacesByPath[TreePath([0, 0])]
+        )
+        XCTAssertEqual(
+            result2.viewSpacesByPath[TreePath([0, 0])]?.frame?.cgRect,
+            innerParse1.frame.cgRect
+        )
         XCTAssertTrue(result1.nestedInScrollViewPaths.contains(TreePath([0, 0])))
         XCTAssertTrue(result2.nestedInScrollViewPaths.contains(TreePath([0, 0])))
     }
@@ -170,54 +177,98 @@ final class TheVaultIdentityContextTests: XCTestCase {
         )
         XCTAssertEqual(elementsByPath[outerElementPath]?.element, repeated)
         XCTAssertEqual(elementsByPath[innerElementPath]?.element, repeated)
-        XCTAssertEqual(result.contentFramesByPath[groupPath]?.origin, .zero)
-        XCTAssertEqual(result.contentFramesByPath[innerPath]?.origin, .zero)
+        XCTAssertEqual(result.viewSpacesByPath[groupPath]?.frame?.cgRect, group.frame.cgRect)
+        XCTAssertEqual(result.viewSpacesByPath[innerPath]?.frame?.cgRect, inner.frame.cgRect)
     }
 
-    /// `coarseFrameHash` is a wire-format heistId fragment for container
-    /// containerNames (`list_...`, `landmark_...`, `tabBar_...`, etc.).
-    func testCoarseFrameHashHandlesPathologicalFrame() {
-        let hugeFrame = CGRect(
-            x: 1e100,
-            y: -1e100,
-            width: CGFloat.greatestFiniteMagnitude,
-            height: 1e200
-        )
-        let hash = TheVault.coarseFrameHash(hugeFrame)
-        XCTAssertFalse(hash.isEmpty)
-        // Bucket-divided clamped output remains deterministic across calls.
-        XCTAssertEqual(hash, TheVault.coarseFrameHash(hugeFrame))
+    /// The regression this naming scheme exists for: a container that moves —
+    /// by a third of a point, or across a would-be bucket edge, or off the
+    /// screen entirely — keeps its name. A frame-derived name could not promise
+    /// that, because a name is one value with nothing to compare against.
+    func testContainerNameSurvivesFrameMotion() {
+        let frames = [
+            CGRect(x: 0, y: 100, width: 320, height: 44),
+            CGRect(x: 0, y: 100.3, width: 320, height: 44),
+            CGRect(x: 0, y: 96, width: 320, height: 44),
+            CGRect(x: 0, y: -800, width: 320, height: 44),
+            CGRect(x: .nan, y: .infinity, width: -.infinity, height: 44),
+        ]
+        let names = frames.map { frame in
+            TheVault.containerName(
+                for: AccessibilityContainer(type: .list, frame: AccessibilityRect(frame))
+            )
+        }
 
-        let nonFiniteFrame = CGRect(
-            x: .nan,
-            y: .infinity,
-            width: -.infinity,
-            height: .signalingNaN
-        )
-        let nonFiniteHash = TheVault.coarseFrameHash(nonFiniteFrame)
-        XCTAssertEqual(nonFiniteHash, "unavailable")
+        XCTAssertEqual(Set(names).count, 1, "Container names must not encode position or size")
+        XCTAssertEqual(names.first, ContainerName(stringLiteral: "list"))
     }
 
-    /// Locks in the no-change-for-normal-inputs invariant for `coarseFrameHash`.
-    func testCoarseFrameHashUnchangedForOrdinaryFrame() {
-        let bucket = CoarseFrameComparison.currentBucket
-        let frame = CGRect(x: bucket * 2, y: bucket * 12, width: bucket * 40, height: bucket * 5)
-        XCTAssertEqual(TheVault.coarseFrameHash(frame), "2_12_40_5")
-    }
+    /// Values the container exposes still separate roles and identifiers, so the
+    /// readable prefix stays readable without geometry.
+    func testContainerNameUsesExposedValuesNotGeometry() {
+        let frame = AccessibilityRect(CGRect(x: 7, y: 11, width: 320, height: 44))
 
-    func testCoarseFrameHashTreatsNegativeSizeAsUnavailable() {
         XCTAssertEqual(
-            TheVault.coarseFrameHash(CGRect(x: 10, y: 20, width: -1, height: 44)),
-            "unavailable"
+            TheVault.containerName(for: AccessibilityContainer(type: .tabBar, frame: frame)),
+            ContainerName(stringLiteral: "tabBar")
+        )
+        XCTAssertEqual(
+            TheVault.containerName(
+                for: AccessibilityContainer(type: .list, identifier: "orders-list", frame: frame)
+            ),
+            ContainerName(stringLiteral: "list_orders-list")
+        )
+        XCTAssertEqual(
+            TheVault.containerName(
+                for: AccessibilityContainer(
+                    type: .none,
+                    scrollableContentSize: AccessibilitySize(width: 320, height: 1_000),
+                    frame: frame
+                )
+            ),
+            ContainerName(stringLiteral: "scrollable")
         )
     }
 
-    func testCoarseFrameComparisonUsesDeviceBuckets() {
-        XCTAssertEqual(CoarseFrameComparison.bucket(for: .phone), 8)
-        XCTAssertEqual(CoarseFrameComparison.bucket(for: .pad), 13)
+    func testCoarseFrameComparisonUsesDeviceTolerances() {
+        XCTAssertEqual(CoarseFrameComparison.geometryTolerance(for: .phone), 8)
+        XCTAssertEqual(CoarseFrameComparison.geometryTolerance(for: .pad), 13)
     }
 
-    func testDuplicateReadableContainerIdsGetCaptureLocalHashes() {
+    /// `y = 100` is exactly where an 8pt grid would put a bucket edge, and a
+    /// grid would call these frames moved. Distance has no edges to sit on.
+    func testFramesWithinToleranceAreInTheSamePlaceEvenAcrossABucketEdge() {
+        let onEdge = CGRect(x: 0, y: 100, width: 200, height: 44)
+        XCTAssertTrue(
+            onEdge.isInSamePlace(
+                as: onEdge.offsetBy(dx: 0, dy: 0.3),
+                geometryTolerance: 8
+            )
+        )
+        XCTAssertTrue(
+            onEdge.isInSamePlace(
+                as: onEdge.offsetBy(dx: 0, dy: -0.3),
+                geometryTolerance: 8
+            )
+        )
+        XCTAssertFalse(
+            onEdge.isInSamePlace(
+                as: onEdge.offsetBy(dx: 0, dy: 9),
+                geometryTolerance: 8
+            )
+        )
+    }
+
+    /// Unreadable geometry is never in the same place as anything, including
+    /// itself: a frame we could not read is not a frame we saw hold still.
+    func testUnreadableFrameIsNeverInTheSamePlace() {
+        let unreadable = CGRect(x: 0, y: 0, width: -1, height: 44)
+        XCTAssertFalse(
+            unreadable.isInSamePlace(as: unreadable, geometryTolerance: 8)
+        )
+    }
+
+    func testDuplicateReadableContainerIdsGetTreePathSuffixes() {
         let frame = CGRect(x: 0, y: 0, width: 320, height: 400)
         let firstContainer = AccessibilityContainer(
             type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 1_000),
@@ -244,43 +295,34 @@ final class TheVaultIdentityContextTests: XCTestCase {
         ))
         let interface = TheVault.WireConversion.toSemanticInterface(from: observation.tree)
         let containerNames = interface.annotations.containers.compactMap(\.containerName)
-        let repeatedFramePrefix = "scrollable_\(TheVault.coarseFrameHash(frame))-"
 
-        XCTAssertEqual(containerNames.count, 2)
-        XCTAssertEqual(Set(containerNames).count, 2)
-        XCTAssertTrue(containerNames.allSatisfy { $0.rawValue.hasPrefix(repeatedFramePrefix) })
+        XCTAssertEqual(
+            Set(containerNames),
+            [ContainerName(stringLiteral: "scrollable-0"), ContainerName(stringLiteral: "scrollable-1")],
+            "Colliding siblings are separated by tree position, never by frame"
+        )
         XCTAssertTrue(observation.liveCapture.scrollView(forContainerPath: TreePath([0])) === firstScrollView)
         XCTAssertTrue(observation.liveCapture.scrollView(forContainerPath: TreePath([1])) === secondScrollView)
     }
 
-    func testCaptureLocalContainerHashHandlesNonFiniteParserGeometry() {
-        let container = AccessibilityContainer(
-            type: .list,
-            frame: AccessibilityRect(x: .nan, y: .infinity, width: -.infinity, height: 400)
-        )
-        let node = AccessibilityHierarchy.container(
-            container,
-            children: [.element(makeElement(label: "Row"), traversalIndex: 0)]
-        )
-
-        let containerName = TheVault.captureLocalContainerId(
-            readableName: "list_0_0_0_50",
-            node: node,
-            path: TreePath([0])
-        )
-
-        XCTAssertTrue(containerName.rawValue.hasPrefix("list_0_0_0_50-"))
+    /// The disambiguation suffix reads no geometry, so parser frames it could not
+    /// have read cannot reach it.
+    func testCaptureLocalContainerIdIsGeometryFree() {
         XCTAssertEqual(
-            containerName,
-            TheVault.captureLocalContainerId(
-                readableName: "list_0_0_0_50",
-                node: node,
-                path: TreePath([0])
-            )
+            TheVault.captureLocalContainerId(readableName: "list", path: TreePath([0, 3, 1])),
+            ContainerName(stringLiteral: "list-0_3_1")
+        )
+        XCTAssertEqual(
+            TheVault.captureLocalContainerId(readableName: "list", path: TreePath([0, 3, 1])),
+            TheVault.captureLocalContainerId(readableName: "list", path: TreePath([0, 3, 1]))
+        )
+        XCTAssertNotEqual(
+            TheVault.captureLocalContainerId(readableName: "list", path: TreePath([0, 3, 1])),
+            TheVault.captureLocalContainerId(readableName: "list", path: TreePath([0, 3, 2]))
         )
     }
 
-    func testNestedDuplicateScrollableFrameIdsGetCaptureLocalHashes() {
+    func testNestedDuplicateScrollableIdsGetTreePathSuffixes() {
         let frame = CGRect(x: 0, y: 0, width: 320, height: 400)
         let pagerFrame = CGRect(x: 0, y: 0, width: 960, height: 400)
         let repeatedContentSize = AccessibilitySize(width: 320, height: 800)
@@ -326,14 +368,17 @@ final class TheVaultIdentityContextTests: XCTestCase {
         ))
         let interface = TheVault.WireConversion.toSemanticInterface(from: observation.tree)
         let containerNames = interface.annotations.containers.compactMap(\.containerName)
-        let repeatedFramePrefix = "scrollable_\(TheVault.coarseFrameHash(frame))-"
-        let pagerName = ContainerName(stringLiteral: "scrollable_\(TheVault.coarseFrameHash(pagerFrame))")
-        let repeatedFrameIds = containerNames.filter { $0.rawValue.hasPrefix(repeatedFramePrefix) }
 
-        XCTAssertEqual(containerNames.count, 4)
-        XCTAssertEqual(repeatedFrameIds.count, 3)
-        XCTAssertEqual(Set(repeatedFrameIds).count, 3)
-        XCTAssertTrue(containerNames.contains(pagerName))
+        XCTAssertEqual(
+            Set(containerNames),
+            [
+                ContainerName(stringLiteral: "scrollable-0"),
+                ContainerName(stringLiteral: "scrollable-0_0"),
+                ContainerName(stringLiteral: "scrollable-0_0_0"),
+                ContainerName(stringLiteral: "scrollable-0_0_0_0"),
+            ],
+            "Nested containers exposing the same values are separated by depth, not by frame width"
+        )
         let repeatedScrollViews = [
             TreePath([0]),
             TreePath([0, 0, 0]),
@@ -343,7 +388,7 @@ final class TheVaultIdentityContextTests: XCTestCase {
         XCTAssertEqual(Set(repeatedScrollViews.map(ObjectIdentifier.init)).count, 3)
     }
 
-    func testUniqueContainerKeepsReadableIdWithoutHashSuffix() {
+    func testUniqueContainerKeepsReadableIdWithoutPathSuffix() {
         let container = AccessibilityContainer(
             type: .list,
             frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 400)
@@ -358,7 +403,59 @@ final class TheVaultIdentityContextTests: XCTestCase {
 
         XCTAssertEqual(
             interface.annotations.containers.first?.containerName,
-            ContainerName(stringLiteral: "list_\(TheVault.coarseFrameHash(container.frame.cgRect))")
+            ContainerName(stringLiteral: "list")
+        )
+    }
+
+    /// The regression at the level that matters: two parses of the same screen
+    /// whose layout drifted a fraction of a point produce identical container
+    /// names, disambiguation suffixes included.
+    func testContainerNamesAreIdenticalAcrossTwoParsesOfADriftedScreen() {
+        func names(originY: CGFloat) -> [ContainerName] {
+            let frame = CGRect(x: 0, y: originY, width: 320, height: 400)
+            let outer = AccessibilityContainer(
+                type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 1_000),
+                frame: AccessibilityRect(frame)
+            )
+            let inner = AccessibilityContainer(
+                type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 1_000),
+                frame: AccessibilityRect(frame)
+            )
+            let tabBar = AccessibilityContainer(
+                type: .tabBar,
+                frame: AccessibilityRect(CGRect(x: 0, y: originY + 400, width: 320, height: 49))
+            )
+            let observation = TheVault.buildObservation(from: TheVault.CaptureResult(
+                hierarchy: [
+                    .container(outer, children: [
+                        .container(inner, children: [
+                            .element(makeElement(label: "Row"), traversalIndex: 0),
+                        ]),
+                    ]),
+                    .container(tabBar, children: [
+                        .element(makeElement(label: "Home"), traversalIndex: 1),
+                    ]),
+                ],
+                scrollViewsByPath: [
+                    TreePath([0]): UIScrollView(frame: frame),
+                    TreePath([0, 0]): UIScrollView(frame: frame),
+                ]
+            ))
+            let interface = TheVault.WireConversion.toSemanticInterface(from: observation.tree)
+            return interface.annotations.containers.compactMap(\.containerName).sorted()
+        }
+
+        // 100 is exactly on an 8pt bucket edge: the frame-derived scheme renamed
+        // these containers under 0.3pt of drift.
+        XCTAssertEqual(names(originY: 100), names(originY: 100.3))
+        XCTAssertEqual(names(originY: 100), names(originY: 99.7))
+        XCTAssertEqual(
+            names(originY: 100),
+            [
+                ContainerName(stringLiteral: "scrollable-0"),
+                ContainerName(stringLiteral: "scrollable-0_0"),
+                ContainerName(stringLiteral: "tabBar"),
+            ]
         )
     }
 }

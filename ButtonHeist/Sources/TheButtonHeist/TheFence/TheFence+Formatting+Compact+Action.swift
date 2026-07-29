@@ -51,9 +51,6 @@ extension FenceResponse {
         if let announcement = projection.announcement {
             text += "\nannouncement: \"\(announcement)\""
         }
-        if let settlement = projection.incompleteSettlement {
-            text += "\nsettlement: \(Self.incompleteSettlementSummary(settlement))"
-        }
         if let activationTrace = projection.activationTrace {
             text += "\nactivate: \(Self.compactActivationTrace(activationTrace))"
         }
@@ -79,18 +76,17 @@ extension FenceResponse {
         guard case .unmet = expectation,
               let result,
               result.outcome.isSuccess,
-              let traceEvidence = result.traceEvidence,
+              let observationEvidence = result.observationEvidence,
               let changeKind = DeltaProjection(
-                  trace: traceEvidence.trace,
-                  isComplete: traceEvidence.isComplete,
+                  evidence: observationEvidence,
                   profile: .summary
               )?.kind
         else { return nil }
 
-        if expectation.predicate == .changed(.screen()),
+        if expectation.predicate == .screenChanged,
            changeKind == .elementsChanged {
-            return ".changed(.screen()) requires a screen-level transition; " +
-                "use .changed(.elements()) for same-screen element updates " +
+            return ".screenChanged requires a screen-level transition; " +
+                "use .elementsChanged for same-screen element updates " +
                 "or wait when the UI may settle asynchronously"
         }
 
@@ -109,10 +105,12 @@ extension FenceResponse {
     ) -> Bool {
         guard changeKind == .noChange,
               result.method == .activate,
-              let predicate = expectation.predicate,
-              case .changed = predicate.core
+              let predicate = expectation.predicate
         else { return false }
-        return true
+        switch predicate.core {
+        case .screenChanged, .elementsChanged: return true
+        case .presence, .notification: return false
+        }
     }
 
     static func compactActivationTrace(_ trace: ActivationTrace) -> String {
@@ -134,7 +132,9 @@ extension FenceResponse {
     private static func compactRotor(_ search: RotorResult) -> String {
         var text = "rotor \(search.direction.rawValue): \(search.rotor)"
         if let foundElement = search.foundElement {
-            text += "\n  found=\(foundElement.label ?? foundElement.description)"
+            let description = foundElement.semantics.assertable.label
+                ?? foundElement.semantics.spokenDescription
+            text += "\n  found=\(description)"
         }
         if let range = search.textRange {
             text += "\n  textRange=\(range.rangeDescription)"

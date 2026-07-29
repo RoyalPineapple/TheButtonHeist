@@ -55,11 +55,11 @@ if [[ "$MODE" == "report" ]]; then
     exit 0
 fi
 
-# v0.6.31 is the baseline for the intentional source-breaking architecture release. The waiver
-# is bound to that baseline, so it expires automatically as soon as a newer tag
-# becomes the comparison point. Swift's diagnostic output remains authoritative.
-if [[ "$BASELINE_TAG" == "v0.6.31" ]]; then
-    echo "Intentional source-breaking architecture release against $BASELINE_TAG."
+# v0.6.32 exposed the automatic main-thread watchdog as public API. Removing that
+# incorrect contract is intentional. The waiver is bound to that baseline, so it
+# expires automatically as soon as a newer tag becomes the comparison point.
+if [[ "$BASELINE_TAG" == "v0.6.32" ]]; then
+    echo "Intentional source-breaking watchdog correction against $BASELINE_TAG."
     echo "The exemption expires when the next release tag becomes the API baseline."
     exit 0
 fi

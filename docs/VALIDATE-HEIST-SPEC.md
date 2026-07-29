@@ -137,7 +137,7 @@ Examples:
 
 ```bash
 buttonheist validate_heist \
-  --plan 'HeistPlan { Activate(.label("Pay")).expect(.changed(.screen())) }'
+  --plan 'HeistPlan { Activate(.label("Pay")).expect(.screenChanged()) }'
 
 buttonheist validate_heist \
   --path Checkout.heist \
@@ -218,7 +218,7 @@ Inline source:
 
 ```json
 {
-  "plan": "HeistPlan { Activate(.label(\"Pay\")).expect(.changed(.screen())) }",
+  "plan": "HeistPlan { Activate(.label(\"Pay\")).expect(.screenChanged()) }",
   "lint": "strict_test"
 }
 ```
@@ -486,7 +486,7 @@ dispatch.
   "admissible": true,
   "plan": {
     "valid": true,
-    "version": 2,
+    "version": 3,
     "name": "checkout",
     "parameter": {
       "type": "none"
@@ -505,7 +505,7 @@ dispatch.
     "findings": []
   },
   "buildDiagnostics": [],
-  "canonicalPlan": "HeistPlan(\"checkout\") {\n    Activate(.label(\"Pay\"))\n        .expect(.changed(.screen()))\n}"
+  "canonicalPlan": "HeistPlan(\"checkout\") {\n    Activate(.label(\"Pay\"))\n        .expect(.screenChanged())\n}"
 }
 ```
 
@@ -611,7 +611,7 @@ plan but is not admissible as the corresponding `run_heist` request:
   "admissible": false,
   "plan": {
     "valid": true,
-    "version": 2,
+    "version": 3,
     "name": "search",
     "parameter": {
       "type": "string",
@@ -656,7 +656,7 @@ have plan-build errors.
   "admissible": true,
   "plan": {
     "valid": true,
-    "version": 2,
+    "version": 3,
     "parameter": {
       "type": "none"
     },
@@ -1038,7 +1038,7 @@ is final. Treat the new input and response JSON shapes as public contracts.
 Run at minimum:
 
 ```bash
-scripts/test-runner.py run MacFrameworkTests --selection full
+scripts/test-runner.py run MacFrameworkTests
 ```
 
 Run the ButtonHeistMCP package tests through the repository gate:

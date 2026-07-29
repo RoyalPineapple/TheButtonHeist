@@ -19,10 +19,32 @@ extension TheVault {
 
     // MARK: - Element Conversion
 
-    static func convert(_ element: AccessibilityElement) -> HeistElement {
+    static func convert(
+        _ element: AccessibilityElement,
+        geometry: HeistElement.Geometry
+    ) -> HeistElement {
         HeistElement(
-            accessibilityElement: element,
-            actions: element.projectedActionSet.orderedActions
+            semantics: semantics(element),
+            geometry: geometry
+        )
+    }
+
+    static func semantics(_ element: AccessibilityElement) -> HeistElement.Semantics {
+        let customContent = element.customContent.compactMap(HeistCustomContent.init(projecting:))
+        let rotors = element.customRotors.filter { !$0.name.isEmpty }
+        return HeistElement.Semantics(
+            spokenDescription: element.description,
+            assertable: HeistElement.Semantics.AssertableProperties(
+                label: element.label,
+                value: element.value,
+                identifier: element.identifier,
+                hint: element.hint,
+                traits: Set(element.traits.heistTraits),
+                customContent: customContent,
+                rotors: Set(rotors.map { HeistRotor(name: $0.name) }),
+                actions: element.projectedActionSet.actions
+            ),
+            respondsToUserInteraction: element.respondsToUserInteraction
         )
     }
 
@@ -35,7 +57,7 @@ extension TheVault {
         InterfaceTreeProjection.discovery(from: tree, timestamp: timestamp).discoveryProjection
     }
 
-    /// Convert the committed semantic screen into a trace-facing interface.
+    /// Convert the committed semantic screen into a observation-facing interface.
     ///
     /// Exploration commits the full targetable element set into
     /// the full interface tree; the latest live capture remains viewport-local
@@ -79,7 +101,7 @@ private struct InterfaceTreeProjection {
         var containerPathBySourcePath = Dictionary(
             uniqueKeysWithValues: containerAnnotations.map { ($0.path, $0.path) }
         )
-        var traceIdentitiesByPath = traceIdentities(from: tree).byPath
+        var observationIdentitiesByPath = observationIdentities(from: tree).byPath
         let containerAnnotationsByPath = Dictionary(
             containerAnnotations.map { ($0.path, $0) },
             uniquingKeysWith: { _, latest in latest }
@@ -108,10 +130,14 @@ private struct InterfaceTreeProjection {
                     let childPath = path.appending(children.count)
                     children.append(.element(entry.element, traversalIndex: nextTraversalIndex))
                     nextTraversalIndex += 1
-                    traceIdentitiesByPath[childPath] = entry.heistId.traceElementIdentity
+                    observationIdentitiesByPath[childPath] = entry.heistId.observationElementIdentity
                     elementAnnotations.append(InterfaceElementAnnotation(
                         path: childPath,
-                        actions: entry.element.projectedActionSet.orderedActions
+                        actions: entry.element.projectedActionSet.orderedActions,
+                        geometry: geometry(
+                            for: entry,
+                            projectedOwnerPathByOriginalPath: containerPathBySourcePath
+                        )
                     ))
                 case .container(let entry):
                     guard emittedContainerPaths.insert(entry.path).inserted else {
@@ -160,7 +186,7 @@ private struct InterfaceTreeProjection {
                 hierarchy: hierarchy,
                 elementAnnotations: elementAnnotations,
                 containerAnnotations: containerAnnotations,
-                traceIdentitiesByPath: traceIdentitiesByPath
+                observationIdentitiesByPath: observationIdentitiesByPath
             ),
             containerPathBySourcePath: containerPathBySourcePath
         )
@@ -202,7 +228,7 @@ private struct InterfaceTreeProjection {
         var traversalIndex = 0
         var elementAnnotations: [InterfaceElementAnnotation] = []
         var containerAnnotations: [InterfaceContainerAnnotation] = []
-        var traceIdentitiesByPath: [TreePath: TraceElementIdentity] = [:]
+        var observationIdentitiesByPath: [TreePath: Observation.ElementIdentity] = [:]
 
         func buildNode(path: TreePath) -> AccessibilityHierarchy? {
             if let entry = elementsByPath[path] {
@@ -210,9 +236,13 @@ private struct InterfaceTreeProjection {
                 traversalIndex += 1
                 elementAnnotations.append(InterfaceElementAnnotation(
                     path: path,
-                    actions: entry.element.projectedActionSet.orderedActions
+                    actions: entry.element.projectedActionSet.orderedActions,
+                    geometry: geometry(
+                        for: entry,
+                        projectedOwnerPathByOriginalPath: projectedContainerPathByOriginalPath
+                    )
                 ))
-                traceIdentitiesByPath[path] = entry.heistId.traceElementIdentity
+                observationIdentitiesByPath[path] = entry.heistId.observationElementIdentity
                 return .element(entry.element, traversalIndex: traversalIndexByHeistId[entry.heistId] ?? index)
             }
             guard let entry = containersByProjectedPath[path] else { return nil }
@@ -232,7 +262,7 @@ private struct InterfaceTreeProjection {
                 hierarchy: roots,
                 elementAnnotations: elementAnnotations,
                 containerAnnotations: containerAnnotations,
-                traceIdentitiesByPath: traceIdentitiesByPath
+                observationIdentitiesByPath: observationIdentitiesByPath
             ),
             containerPathBySourcePath: projectedContainerPathByOriginalPath
         )
@@ -243,7 +273,7 @@ private struct InterfaceTreeProjection {
         hierarchy: [AccessibilityHierarchy],
         elementAnnotations: [InterfaceElementAnnotation],
         containerAnnotations: [InterfaceContainerAnnotation],
-        traceIdentitiesByPath: [TreePath: TraceElementIdentity]
+        observationIdentitiesByPath: [TreePath: Observation.ElementIdentity]
     ) -> Interface {
         let elementAnnotationByPath = InterfaceAnnotations(elements: elementAnnotations).elementByPath
         let containerAnnotationByPath = InterfaceAnnotations(containers: containerAnnotations).containerByPath
@@ -254,7 +284,8 @@ private struct InterfaceTreeProjection {
                 guard let annotation = elementAnnotationByPath[path] else { return nil }
                 return InterfaceElementProjectionMetadata(
                     actions: annotation.actions,
-                    traceIdentity: traceIdentitiesByPath[path]
+                    geometry: annotation.geometry,
+                    observationIdentity: observationIdentitiesByPath[path]
                 )
             },
             containerMetadata: { path, _ in
@@ -342,18 +373,47 @@ private struct InterfaceTreeProjection {
     }
 
     private static func elementAnnotations(from tree: InterfaceTree) -> [InterfaceElementAnnotation] {
-        tree.viewportCapture.hierarchy.compactMapSubtrees { node, path in
+        tree.viewportCapture.hierarchy.compactMapSubtrees { node, path -> InterfaceElementAnnotation? in
             guard case .element(let element, _) = node else { return nil }
+            guard let heistId = tree.viewportCapture.heistIdsByPath[path],
+                  let entry = tree.elements[heistId]
+            else {
+                preconditionFailure("Viewport element path must resolve to canonical element geometry")
+            }
             return InterfaceElementAnnotation(
                 path: path,
-                actions: element.projectedActionSet.orderedActions
+                actions: element.projectedActionSet.orderedActions,
+                geometry: geometry(
+                    for: entry,
+                    projectedOwnerPathByOriginalPath: Dictionary(
+                        uniqueKeysWithValues: tree.containers.keys.map { ($0, $0) }
+                    )
+                )
             )
         }
     }
 
-    private static func traceIdentities(from tree: InterfaceTree) -> InterfaceTraceIdentities {
-        InterfaceTraceIdentities(Dictionary(uniqueKeysWithValues: tree.viewportCapture.heistIdsByPath.map { path, heistId in
-            (path, heistId.traceElementIdentity)
+    private static func geometry(
+        for entry: InterfaceTree.Element,
+        projectedOwnerPathByOriginalPath: [TreePath: TreePath]
+    ) -> HeistElement.Geometry {
+        let originalOwnerPath = entry.geometry.view.ownerPath
+        let projectedOwnerPath = originalOwnerPath == .root
+            ? .root
+            : projectedOwnerPathByOriginalPath[originalOwnerPath] ?? originalOwnerPath
+        return HeistElement.Geometry(
+            screen: entry.geometry.screen,
+            view: HeistElement.Geometry.ViewSpace(
+                ownerPath: projectedOwnerPath,
+                frame: entry.geometry.view.frame,
+                activationPoint: entry.geometry.view.activationPoint
+            )
+        )
+    }
+
+    private static func observationIdentities(from tree: InterfaceTree) -> InterfaceElementIdentities {
+        InterfaceElementIdentities(Dictionary(uniqueKeysWithValues: tree.viewportCapture.heistIdsByPath.map { path, heistId in
+            (path, heistId.observationElementIdentity)
         }))
     }
 

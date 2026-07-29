@@ -53,14 +53,24 @@ import AccessibilitySnapshotParser
 
     // MARK: - Text / Edit Actions
 
+    /// Why a text action could not reach an editable field.
+    ///
+    /// The focus state says nothing arrived; `tap` says where the touch went
+    /// and what took it. Those are different failures — a point outside the
+    /// field, and a point inside it that some other view answered — and the
+    /// focus state alone reads the same for both.
     static func textEntryFailed(
         operation: String,
         vault: TheVault,
         safecracker: TheSafecracker,
-        suggestion: String
+        suggestion: String,
+        tap: (point: CGPoint, receiver: TheSafecracker.TapReceiverDiagnostic?)? = nil
     ) -> String {
-        "text entry failed: observed \(formatFocusState(vault: vault, safecracker: safecracker)) "
-            + "during \(operation); try \(suggestion)."
+        let observedTap = tap.map {
+            " after tap \(formatPointObservation(point: $0.point, receiver: $0.receiver))"
+        } ?? ""
+        return "text entry failed: observed \(formatFocusState(vault: vault, safecracker: safecracker))"
+            + "\(observedTap) during \(operation); try \(suggestion)."
     }
 
     static func editActionFailed(

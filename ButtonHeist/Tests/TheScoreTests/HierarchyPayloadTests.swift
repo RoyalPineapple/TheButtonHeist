@@ -43,7 +43,10 @@ final class SnapshotTests: XCTestCase {
 
         XCTAssertEqual(decoded.projectedElements.count, 10)
         for i in 0..<10 {
-            XCTAssertEqual(decoded.projectedElements[i].label, "Label \(i)")
+            XCTAssertEqual(
+                decoded.projectedElements[i].semantics.assertable.label,
+                "Label \(i)"
+            )
         }
     }
 

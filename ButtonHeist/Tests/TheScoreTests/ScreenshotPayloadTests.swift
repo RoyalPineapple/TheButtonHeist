@@ -20,7 +20,7 @@ final class ScreenshotPayloadTests: XCTestCase {
     }
 
     func testEncodingRoundTripWithInterfaceEvidence() throws {
-        let element = HeistElement(
+        let element = makeTestHeistElement(
             description: "Total $12.34",
             label: "Total",
             value: "$12.34",
@@ -52,8 +52,12 @@ final class ScreenshotPayloadTests: XCTestCase {
         XCTAssertEqual(payload.width, decoded.width)
         XCTAssertEqual(payload.height, decoded.height)
         XCTAssertEqual(decoded.interface?.projectedElements, [element])
-        XCTAssertEqual(decoded.interface?.projectedElements.first?.frameY, 680)
-        XCTAssertEqual(decoded.interface?.projectedElements.first?.activationPointY, 696)
+        let decodedElement = try XCTUnwrap(decoded.interface?.projectedElements.first)
+        guard case .onscreen(let frame, let activationPoint) = decodedElement.geometry.screen else {
+            return XCTFail("Expected onscreen geometry")
+        }
+        XCTAssertEqual(frame.rect?.y.value, 680)
+        XCTAssertEqual(activationPoint.point?.y, 696)
     }
 
     func testEncodingRoundTripWithoutInterfaceEvidence() throws {

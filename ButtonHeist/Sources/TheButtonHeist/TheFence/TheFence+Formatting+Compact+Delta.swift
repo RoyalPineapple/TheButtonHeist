@@ -14,40 +14,14 @@ extension FenceResponse {
 
     static func compactDeltaRendering(_ projection: DeltaProjection) -> CompactDeltaRendering {
         switch projection {
-        case .noChange(let metadata):
-            // Auto-settle can produce a no-change delta carrying transients
-            // when an element appeared and disappeared during settle but
-            // baseline and final are otherwise identical. Surface those.
-            if metadata.transient.elements.isEmpty {
-                return CompactDeltaRendering(summary: "no change")
-            }
-            var lines: [String] = []
-            for element in metadata.transient.elements {
-                lines.append("  +- \(compactElementLine(element))")
-            }
-            if let omitted = metadata.transient.omittedCount {
-                lines.append("  ... transient omitted \(omitted) observed elements")
-            }
-            lines.append(contentsOf: compactNotificationLines(metadata.accessibilityNotifications))
-            return CompactDeltaRendering(
-                summary: "no net change (\(metadata.elementCount) elements)",
-                detailLines: lines
-            )
+        case .noChange:
+            return CompactDeltaRendering(summary: "no change")
 
         case .elementsChanged(let delta):
             let metadata = delta.metadata
-            var lines: [String] = []
-            lines.append(contentsOf: compactEditLines(delta.edits))
-            for element in metadata.transient.elements {
-                lines.append("  +- \(compactElementLine(element))")
-            }
-            if let omitted = metadata.transient.omittedCount {
-                lines.append("  ... transient omitted \(omitted) observed elements")
-            }
-            lines.append(contentsOf: compactNotificationLines(metadata.accessibilityNotifications))
             return CompactDeltaRendering(
                 summary: "elements changed (\(metadata.elementCount) elements)",
-                detailLines: lines
+                detailLines: compactEditLines(delta.edits)
             )
 
         case .screenChanged(let delta):
@@ -57,7 +31,6 @@ extension FenceResponse {
             } else {
                 lines.append("\(delta.screen.screenDescription) (\(delta.screen.elementCount) elements)")
             }
-            lines.append(contentsOf: compactNotificationLines(delta.metadata.accessibilityNotifications))
             return CompactDeltaRendering(summary: "screen changed", detailLines: lines)
         }
     }
@@ -110,21 +83,16 @@ extension FenceResponse {
         "  ~ \(name): \(change.property.rawValue) \"\(display(change.oldValue))\" → \"\(display(change.newValue))\""
     }
 
-    private static func compactNotificationLines(
-        _ notifications: [AccessibilityNotificationEvidence]
-    ) -> [String] {
-        notifications.map { "  ! accessibility notification \($0.kind) #\($0.sequence)" }
-    }
-
     private static func display(_ value: ElementPropertyValue?) -> String {
         value?.displayText ?? "nil"
     }
 
     private static func nonEmptyDescription(_ element: HeistElement) -> String {
-        if let label = element.label, !label.isEmpty { return label }
-        if let value = element.value, !value.isEmpty { return value }
-        if let identifier = element.identifier, !identifier.isEmpty { return identifier }
-        return element.description
+        let assertable = element.semantics.assertable
+        if let label = assertable.label, !label.isEmpty { return label }
+        if let value = assertable.value, !value.isEmpty { return value }
+        if let identifier = assertable.identifier, !identifier.isEmpty { return identifier }
+        return element.semantics.spokenDescription
     }
 
 }

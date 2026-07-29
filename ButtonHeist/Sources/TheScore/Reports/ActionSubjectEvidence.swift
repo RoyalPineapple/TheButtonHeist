@@ -60,7 +60,7 @@ public struct ActionSubjectResolution: Codable, Sendable, Equatable, Hashable {
 /// Semantic subject the runtime resolved immediately before dispatching an action.
 ///
 /// This is result evidence, not a replay selector. Offline suggestion tooling can
-/// combine it with settled before/after traces to choose a minimum matcher later.
+/// combine it with observed before/after state to choose a minimum matcher later.
 public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
     public enum Source: String, Codable, Sendable {
         case resolvedSemanticTarget
@@ -77,22 +77,19 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
     package let target: ResolvedAccessibilityTarget
     public let element: HeistElement
     public let resolution: ActionSubjectResolution
-    public let settledObservationSequence: SettledObservationSequence?
 
     package init(
         source: Source,
         phase: Phase = .resolvedBeforeDispatch,
         target: ResolvedAccessibilityTarget,
         element: HeistElement,
-        resolution: ActionSubjectResolution,
-        settledObservationSequence: SettledObservationSequence? = nil
+        resolution: ActionSubjectResolution
     ) {
         self.source = source
         self.phase = phase
         self.target = target
         self.element = element
         self.resolution = resolution
-        self.settledObservationSequence = settledObservationSequence
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -101,7 +98,6 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
         case target
         case element
         case resolution
-        case settledObservationSequence
     }
 
     public init(from decoder: Decoder) throws {
@@ -112,8 +108,7 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
             phase: try container.decode(Phase.self, forKey: .phase),
             target: try container.decode(ResolvedAccessibilityTarget.self, forKey: .target),
             element: try container.decode(HeistElement.self, forKey: .element),
-            resolution: try container.decode(ActionSubjectResolution.self, forKey: .resolution),
-            settledObservationSequence: try container.decodeIfPresent(SettledObservationSequence.self, forKey: .settledObservationSequence)
+            resolution: try container.decode(ActionSubjectResolution.self, forKey: .resolution)
         )
     }
 
@@ -124,7 +119,6 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
         try container.encode(target, forKey: .target)
         try container.encode(element, forKey: .element)
         try container.encode(resolution, forKey: .resolution)
-        try container.encodeIfPresent(settledObservationSequence, forKey: .settledObservationSequence)
     }
 }
 

@@ -301,6 +301,75 @@ public enum WaitTimeoutError: Error, Sendable, Equatable, CustomStringConvertibl
     }
 }
 
+public struct HeistTimeout: Codable, Sendable, Equatable, Comparable, CustomStringConvertible,
+    ExpressibleByFloatLiteral, ExpressibleByIntegerLiteral {
+    public static let `default`: Self = 60
+
+    public let seconds: Double
+
+    public init(validatingSeconds seconds: Double) throws(HeistTimeoutError) {
+        guard seconds.isFinite, seconds > 0 else {
+            throw HeistTimeoutError.invalid(observed: seconds)
+        }
+        self.seconds = seconds
+    }
+
+    public init(floatLiteral value: Double) {
+        self = requireValidLiteralPayload {
+            try Self(validatingSeconds: value)
+        }
+    }
+
+    public init(integerLiteral value: Int) {
+        self = requireValidLiteralPayload {
+            try Self(validatingSeconds: Double(value))
+        }
+    }
+
+    public static func seconds(_ value: Double) throws(HeistTimeoutError) -> Self {
+        try Self(validatingSeconds: value)
+    }
+
+    public static func milliseconds(_ value: Double) throws(HeistTimeoutError) -> Self {
+        try Self(validatingSeconds: value / 1_000)
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        do {
+            self = try Self(validatingSeconds: container.decode(Double.self))
+        } catch {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: String(describing: error)
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(seconds)
+    }
+
+    public var description: String { CanonicalValueDescription.decimal(seconds) }
+
+    public static func < (lhs: Self, rhs: Self) -> Bool {
+        lhs.seconds < rhs.seconds
+    }
+}
+
+public enum HeistTimeoutError: Error, Sendable, Equatable, CustomStringConvertible {
+    case invalid(observed: Double)
+
+    public var description: String {
+        switch self {
+        case .invalid(let observed):
+            return "heist timeout must be a finite number greater than 0 " +
+                "(observed \(CanonicalValueDescription.decimal(observed)))"
+        }
+    }
+}
+
 /// Target for the `wait` command — wait until an accessibility predicate is
 /// satisfied. State predicates poll the current interface; change predicates
 /// ride through intermediate settled states until the requested change is met.

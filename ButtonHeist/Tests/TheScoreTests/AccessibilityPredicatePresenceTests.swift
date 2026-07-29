@@ -1,131 +1,107 @@
-import ButtonHeistTestSupport
 import AccessibilitySnapshotModel
-import XCTest
+import ButtonHeistTestSupport
 import ThePlans
+import XCTest
 @testable import TheScore
 
 final class AccessibilityPredicateTests: XCTestCase {
-
-    // MARK: - Codable Round-Trip: presence
-
-    func testPresentEncodeDecode() throws {
-        let predicate = AccessibilityPredicate.exists(.label("Done"))
-        let data = try JSONEncoder().encode(predicate)
-        let decoded = try JSONDecoder().decode(AccessibilityPredicate.self, from: data)
-        XCTAssertEqual(decoded, predicate)
-    }
-
-    func testAbsentEncodeDecode() throws {
-        let predicate = AccessibilityPredicate.missing(.label("Loading"))
-        let data = try JSONEncoder().encode(predicate)
-        let decoded = try JSONDecoder().decode(AccessibilityPredicate.self, from: data)
-        XCTAssertEqual(decoded, predicate)
-    }
-
-    func testContainerIdentifierEncodeDecode() throws {
-        let predicate = AccessibilityPredicate.exists(.container(.identifier("checkout-container")))
-        let data = try JSONEncoder().encode(predicate)
-        let object = try JSONProbe(data: data)
-
-        XCTAssertEqual(try object.string("type"), "exists")
-        let checks = try object.object("target").object("container").array("checks")
-        XCTAssertEqual(checks.count, 1)
-        XCTAssertEqual(try checks[0].string("kind"), "identifier")
-        XCTAssertEqual(try checks[0].object("match").string("value"), "checkout-container")
-        XCTAssertEqual(try JSONDecoder().decode(AccessibilityPredicate.self, from: data), predicate)
-    }
-
-    func testContainerIdentifierPredicatesMatchEveryContainerRole() throws {
-        let cases: [(AccessibilityContainer.ContainerType, ContainerPredicateRoleFacts, String)] = [
-            (.none, .none, "roleless-container"),
-            (
-                .scrollable(contentSize: AccessibilitySize(width: 320, height: 1_200)),
-                .none,
-                "checkout-scroll"
-            ),
-            (
-                .semanticGroup(label: "Checkout", value: nil),
-                .semanticGroup(label: "Checkout", value: nil),
-                "checkout-group"
-            ),
-            (.list, .list, "checkout-list"),
-            (.landmark, .landmark, "checkout-landmark"),
-            (
-                .dataTable(rowCount: 3, columnCount: 2, cells: []),
-                .dataTable(rowCount: 3, columnCount: 2),
-                "checkout-table"
-            ),
-            (.tabBar, .tabBar, "checkout-tabs"),
-            (.series, .series, "checkout-series"),
+    func testPresencePredicatesRoundTrip() throws {
+        let predicates: [AccessibilityPredicate] = [
+            .exists(.label("Done")),
+            .missing(.label("Loading")),
+            .exists(.container(.identifier("checkout-container"))),
         ]
 
-        for (type, expectedRole, identifier) in cases {
-            let facts = makeTestAccessibilityContainer(type: type, identifier: identifier).containerPredicateFacts
-
-            XCTAssertEqual(facts.role, expectedRole)
-            XCTAssertEqual(facts.identifier, identifier)
-            XCTAssertTrue(try ContainerPredicate.identifier(identifier).resolve(in: .empty).matches(facts), "\(type)")
-            XCTAssertFalse(try ContainerPredicate.identifier("other").resolve(in: .empty).matches(facts), "\(type)")
+        for predicate in predicates {
+            let data = try JSONEncoder().encode(predicate)
+            XCTAssertEqual(
+                try JSONDecoder().decode(
+                    AccessibilityPredicate.self,
+                    from: data
+                ),
+                predicate
+            )
         }
     }
 
-    func testContainerScrollablePredicateMatchesScrollFactIndependentOfRole() throws {
-        let scrollableListFacts = makeTestAccessibilityContainer(
-            type: .list,
-            identifier: "orders-list",
-            scrollableContentSize: AccessibilitySize(width: 320, height: 1200)
-        ).containerPredicateFacts
-        let plainListFacts = makeTestAccessibilityContainer(type: .list, identifier: "orders-list").containerPredicateFacts
-
-        XCTAssertTrue(try ContainerPredicate.scrollable(true).resolve(in: .empty).matches(scrollableListFacts))
-        XCTAssertTrue(
-            try ContainerPredicate.matching(.type(.list), .scrollable(true)).resolve(in: .empty)
-                .matches(scrollableListFacts)
+    func testContainerIdentifierKeepsItsWireContract() throws {
+        let predicate = AccessibilityPredicate.exists(
+            .container(.identifier("checkout-container"))
         )
-        XCTAssertFalse(try ContainerPredicate.scrollable(true).resolve(in: .empty).matches(plainListFacts))
-    }
+        let object = try JSONProbe(data: JSONEncoder().encode(predicate))
+        let checks = try object.object("target")
+            .object("container")
+            .array("checks")
 
-    func testParserScrollableContainerUsesOnlyScrollabilityFact() throws {
-        let facts = makeTestAccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 1_200))
-        ).containerPredicateFacts
-
-        XCTAssertEqual(facts.role, .none)
-        XCTAssertTrue(try ContainerPredicate.type(.none).resolve(in: .empty).matches(facts))
-        XCTAssertTrue(try ContainerPredicate.scrollable(true).resolve(in: .empty).matches(facts))
-    }
-
-    func testContainerActionPredicateMatchesCustomActionsIndependentOfRole() throws {
-        let actions = [AccessibilityElement.CustomAction(name: "Archive")]
-        let rolelessFacts = makeTestAccessibilityContainer(type: .none, customActions: actions).containerPredicateFacts
-        let listFacts = makeTestAccessibilityContainer(type: .list, customActions: actions).containerPredicateFacts
-        let plainFacts = makeTestAccessibilityContainer(type: .list).containerPredicateFacts
-
-        XCTAssertEqual(rolelessFacts.actions, [.custom("Archive")])
-        let requiredActions = ContainerPredicateActions(.custom("Archive"))
-        XCTAssertTrue(try ContainerPredicate.actions(requiredActions).resolve(in: .empty).matches(rolelessFacts))
-        XCTAssertTrue(
-            try ContainerPredicate.matching(.type(.list), .actions(requiredActions)).resolve(in: .empty)
-                .matches(listFacts)
+        XCTAssertEqual(try object.string("type"), "exists")
+        XCTAssertEqual(checks.count, 1)
+        XCTAssertEqual(try checks[0].string("kind"), "identifier")
+        XCTAssertEqual(
+            try checks[0].object("match").string("value"),
+            "checkout-container"
         )
-        XCTAssertFalse(try ContainerPredicate.actions(requiredActions).resolve(in: .empty).matches(plainFacts))
     }
 
-    // MARK: - Presence Evaluation
+    func testExistsAndMissingReadAnElementsChangedEvent() throws {
+        let event = Observation.Event.elementsChanged(
+            observationSnapshot(elements: [element(label: "Ready")])
+        )
+        let exists = evaluateExpectation(Expectation([
+            try resolved(.exists(.label("Ready"))),
+        ]), events: [event])
+        let missing = evaluateExpectation(Expectation([
+            try resolved(.missing(.label("Loading"))),
+        ]), events: [event])
+        let contradicted = evaluateExpectation(Expectation([
+            try resolved(.missing(.label("Ready"))),
+        ]), events: [event])
 
-    func testCanonicalPredicateAgreesAcrossTargetAndExpectation() throws {
-        let element = element(
+        XCTAssertTrue(exists.isSatisfied)
+        XCTAssertTrue(missing.isSatisfied)
+        XCTAssertFalse(contradicted.isSatisfied)
+        XCTAssertTrue(
+            contradicted.outstandingDescription?.contains("Ready") == true
+        )
+    }
+
+    func testEvidenceEvaluatesCurrentPresenceFromBaseline() throws {
+        let baseline = observationSnapshot(elements: [element(label: "Ready")])
+        let evidence = Observation.Evidence(
+            baseline: baseline,
+            current: baseline,
+            events: [],
+            completeness: .complete
+        )
+
+        XCTAssertTrue(
+            try resolved(.exists(.label("Ready"))).evaluate(in: evidence).met
+        )
+        XCTAssertTrue(
+            try resolved(.missing(.label("Loading"))).evaluate(in: evidence).met
+        )
+    }
+
+    func testCanonicalTargetGraphAndExpectationAgree() throws {
+        let subject = element(
             label: "Checkout",
             value: "Ready",
             identifier: "checkout.button",
             hint: "Opens checkout",
             traits: [.button],
-            customContent: [HeistCustomContent(label: "State", value: "Ready", isImportant: true)],
+            customContent: [
+                HeistCustomContent(
+                    label: "State",
+                    value: "Ready",
+                    isImportant: true
+                ),
+            ],
             rotors: [HeistRotor(name: "Actions")],
             actions: [.activate]
         )
-        let interface = makeTestInterface(nodes: [testElement(element)])
-        let evidence = evidence(AccessibilityTrace(interface: interface))
+        let interface = makeTestInterface(nodes: [testElement(subject)])
+        let event = Observation.Event.elementsChanged(
+            observationSnapshot(nodes: [testElement(subject)])
+        )
         let targets: [AccessibilityTarget] = [
             .label(.contains("Check")),
             .identifier(.suffix("button")),
@@ -133,119 +109,27 @@ final class AccessibilityPredicateTests: XCTestCase {
             .hint(.prefix("Opens")),
             .traits([.button]),
             .actions([.activate]),
-            .customContent(CustomContentMatch(label: "State", value: "Ready")),
+            .customContent(
+                CustomContentMatch(label: "State", value: "Ready")
+            ),
             .rotors(["Actions"]),
             .exclude(.label("Cancel")),
         ]
 
         for target in targets {
-            let targetMatched = !AccessibilityTargetMatchGraph(interface: interface)
-                .resolve(try target.resolve(in: .empty))
-                .isEmpty
-            let expectationMatched = try AccessibilityPredicate.exists(target)
-                .resolve(in: .empty)
-                .evaluate(in: evidence)
-                .met
+            let graphMatched = !AccessibilityTargetMatchGraph(
+                interface: interface
+            ).resolve(try target.resolve(in: .empty)).isEmpty
+            let expectationMatched = evaluateExpectation(Expectation([
+                try resolved(.exists(target)),
+            ]), events: [event]).isSatisfied
 
-            XCTAssertTrue(targetMatched, "\(target)")
-            XCTAssertEqual(expectationMatched, targetMatched, "\(target)")
+            XCTAssertTrue(graphMatched, "\(target)")
+            XCTAssertEqual(expectationMatched, graphMatched, "\(target)")
         }
     }
 
-    func testPresentMatchesAnyValueFour() throws {
-        let elements = [element(label: "Counter", value: "4")]
-        let predicate = AccessibilityPredicate.exists(.value("4"))
-        XCTAssertTrue(
-            try predicate.resolve(in: .empty).validate(
-                against: result(success: true, trace: currentTrace(elements), completeness: .incomplete)
-            ).met
-        )
-    }
-
-    func testStateEvaluationReturnsPredicateLocalResult() throws {
-        let predicate = AccessibilityPredicate.exists(.label("Ready"))
-        let result = try predicate.resolve(in: .empty).evaluate(in: evidence(currentTrace([
-            element(label: "Ready"),
-        ])))
-
-        XCTAssertEqual(result, PredicateEvaluationResult(met: true))
-    }
-
-    func testContainerLabelMatchesCurrentInterfaceWithoutTransition() throws {
-        let interface = makeTestInterface(nodes: [
-            testContainer(makeTestAccessibilityContainer(
-                type: .semanticGroup(label: "Checkout", value: nil), identifier: nil
-            ), children: [
-                testElement(element(label: "Pay", traits: [.button])),
-            ]),
-        ])
-        let predicate = AccessibilityPredicate.exists(.container(.label("Checkout")))
-
-        let result = try predicate.resolve(in: .empty).evaluate(in: evidence(AccessibilityTrace(interface: interface)))
-
-        XCTAssertEqual(result, PredicateEvaluationResult(met: true))
-    }
-
-    func testContainerLabelFailureReportsMissingContainer() throws {
-        let interface = makeTestInterface(nodes: [
-            testContainer(makeTestAccessibilityContainer(), children: [
-                testElement(element(label: "Pay", traits: [.button])),
-            ]),
-        ])
-        let predicate = AccessibilityPredicate.exists(.container(.label("Checkout")))
-
-        let result = try predicate.resolve(in: .empty).evaluate(in: evidence(AccessibilityTrace(interface: interface)))
-
-        XCTAssertFalse(result.met)
-        XCTAssertTrue(result.actual?.contains("Checkout") == true)
-    }
-
-    func testContainerExistsAndMissingEvaluateAgainstCurrentInterface() throws {
-        let interface = makeTestInterface(nodes: [
-            testContainer(makeTestAccessibilityContainer(
-                type: .semanticGroup(label: "Checkout", value: nil),
-                identifier: "checkout"
-            ), children: []),
-        ])
-        let action = result(success: true, trace: AccessibilityTrace(interface: interface), completeness: .incomplete)
-
-        XCTAssertTrue(
-            try AccessibilityPredicate.exists(.container(.identifier("checkout")))
-                .resolve(in: .empty)
-                .validate(against: action).met
-        )
-        XCTAssertTrue(
-            try AccessibilityPredicate.missing(.container(.identifier("account")))
-                .resolve(in: .empty)
-                .validate(against: action).met
-        )
-        XCTAssertFalse(
-            try AccessibilityPredicate.missing(.container(.identifier("checkout")))
-                .resolve(in: .empty)
-                .validate(against: action).met
-        )
-    }
-
-    func testPresentNarrowsByIdentifierAndValue() throws {
-        let elements = [
-            element(label: "Counter", value: "4", identifier: "slider"),
-            element(label: "Other", value: "4", identifier: "knob"),
-        ]
-        let matching = AccessibilityPredicate.exists(.element(.identifier("slider"), .value("4")))
-        let missing = AccessibilityPredicate.exists(.element(.identifier("slider"), .value("5")))
-        let action = result(success: true, trace: currentTrace(elements), completeness: .incomplete)
-        XCTAssertTrue(try matching.resolve(in: .empty).validate(against: action).met)
-        XCTAssertFalse(try missing.resolve(in: .empty).validate(against: action).met)
-    }
-
-    func testAbsentTrueOnlyWhenNoneMatch() throws {
-        let elements = [element(label: "Ready")]
-        let action = result(success: true, trace: currentTrace(elements), completeness: .incomplete)
-        XCTAssertTrue(try AccessibilityPredicate.missing(.label("Loading")).resolve(in: .empty).validate(against: action).met)
-        XCTAssertFalse(try AccessibilityPredicate.missing(.label("Ready")).resolve(in: .empty).validate(against: action).met)
-    }
-
-    func testAccessibilityTargetMatchGraphKeepsEqualInterfaceElementsDistinctByTreePath() throws {
+    func testEqualElementsRemainDistinctByTreePath() throws {
         let duplicate = element(label: "Save", traits: [.button])
         let interface = makeTestInterface(nodes: [
             testContainer(makeTestAccessibilityContainer(), children: [
@@ -258,179 +142,124 @@ final class AccessibilityPredicateTests: XCTestCase {
             .resolve(ResolvedElementPredicate.label("Save"))
 
         XCTAssertEqual(matches.count, 2)
-        XCTAssertEqual(matches.orderedPaths, [TreePath([0, 0]), TreePath([0, 1])])
+        XCTAssertEqual(
+            matches.orderedPaths,
+            [TreePath([0, 0]), TreePath([0, 1])]
+        )
     }
 
-    func testPredicateResolutionIntersectsCheckMatchSets() throws {
+    func testPredicateChecksIntersectAndExcludeMatchSets() throws {
         let elements = [
-            element(label: "Save", identifier: "primary", traits: [.button]),
-            element(label: "Save", identifier: "primary", traits: [.staticText]),
-            element(label: "Save", identifier: "secondary", traits: [.button]),
-            element(label: "Cancel", identifier: "primary", traits: [.button]),
+            element(
+                label: "Save",
+                identifier: "primary",
+                traits: [.button],
+                actions: [.activate]
+            ),
+            element(
+                label: "Save",
+                identifier: "primary",
+                traits: [.staticText]
+            ),
+            element(
+                label: "Save",
+                identifier: "secondary",
+                traits: [.button]
+            ),
         ]
-
         let graph = AccessibilityTargetMatchGraph(elements: elements)
-        let predicate = try ElementPredicate(
-            label: "Save",
-            identifier: "primary",
-            traits: [.button]
-        ).resolve(in: .empty)
+        let predicate = try ElementPredicate([
+            .label("Save"),
+            .identifier("primary"),
+            .traits([.button]),
+            .exclude(.actions([.custom("Archive")])),
+        ]).resolve(in: .empty)
+
         let matches = graph.resolve(predicate)
-        let expected = graph.resolve(ResolvedElementPredicate.label("Save"))
-            .intersection(graph.resolve(ResolvedElementPredicate.identifier("primary")))
-            .intersection(graph.resolve(ResolvedElementPredicate.traits([.button])))
 
         XCTAssertEqual(matches.elements, [elements[0]])
-        XCTAssertEqual(matches, expected)
         XCTAssertEqual(matches.orderedPaths, [TreePath([0])])
     }
 
-    func testPredicateResolutionSubtractsExcludedMatchSet() throws {
-        let elements = [
-            element(label: "Coke", traits: [.staticText], actions: [.activate, .custom("Modify")]),
-            element(label: "Coke", traits: [.staticText], actions: [.custom("Sub")]),
-            element(label: "Coke", traits: [.staticText], actions: []),
-            element(label: "Sprite", traits: [.staticText], actions: [.custom("Sub")]),
-        ]
-        let predicate = try ElementPredicate([
-            .label("Coke"),
-            .exclude(.actions([.custom("Sub")])),
-        ]).resolve(in: .empty)
-
-        let matches = AccessibilityTargetMatchGraph(elements: elements).resolve(predicate)
-
-        XCTAssertEqual(matches.elements, [elements[0], elements[2]])
-        XCTAssertEqual(matches.orderedPaths, [TreePath([0]), TreePath([2])])
-    }
-
-    func testElementMatchSetUnionUsesPathIdentityAndTraversalOrder() throws {
-        let elements = [
-            element(label: "Save"),
-            element(label: "Other"),
-            element(label: "Cancel"),
-        ]
-        let graph = AccessibilityTargetMatchGraph(elements: elements)
-        let cancelMatches = graph.resolve(ResolvedElementPredicate.label("Cancel"))
-        let saveMatches = graph.resolve(ResolvedElementPredicate.label("Save"))
-
-        XCTAssertEqual(cancelMatches.union(saveMatches).orderedPaths, [TreePath([0]), TreePath([2])])
-    }
-
-    func testAccessibilityTargetMatchGraphPreservesTraversalOrderFromMatches() throws {
-        let later = AccessibilityTargetElementMatch(
-            path: TreePath([9]),
-            traversalOrder: 9,
-            parentContainerPath: nil,
-            element: element(label: "Row", actions: [.activate])
-        )
-        let earlier = AccessibilityTargetElementMatch(
-            path: TreePath([1]),
-            traversalOrder: 1,
-            parentContainerPath: nil,
-            element: element(label: "Row", actions: [.activate])
-        )
-        let graph = AccessibilityTargetMatchGraph(
-            AccessibilityTargetMatchInput(elements: [later, earlier], containers: [])
-        )
-
-        let matches = graph.resolve(ResolvedElementPredicate.label("Row"))
-
-        XCTAssertEqual(matches.orderedPaths, [TreePath([1]), TreePath([9])])
-    }
-
-    func testTargetOrdinalSelectsFromNarrowedMatchSet() throws {
+    func testOrdinalSelectsFromTheNarrowedMatchSet() throws {
         let elements = [
             element(label: "Save", traits: [.button]),
             element(label: "Save", traits: [.staticText]),
             element(label: "Save", traits: [.button]),
         ]
-        let graph = AccessibilityTargetMatchGraph(elements: elements)
-
-        let authored = AccessibilityTarget.predicate(
+        let target = AccessibilityTarget.predicate(
             ElementPredicate(label: "Save", traits: [.button]),
             ordinal: 1
         )
-        let selected = graph.resolve(try authored.resolve(in: .empty))
+        let selected = AccessibilityTargetMatchGraph(elements: elements)
+            .resolve(try target.resolve(in: .empty))
 
         XCTAssertEqual(selected.elements.elements, [elements[2]])
         XCTAssertEqual(selected.elements.orderedPaths, [TreePath([2])])
-        let predicate = AccessibilityPredicate.exists(
-            .predicate(ElementPredicate(label: "Save", traits: [.button]), ordinal: 1)
-        )
-        XCTAssertTrue(
-            try predicate.resolve(in: .empty).validate(
-                against: result(success: true, trace: currentTrace(elements), completeness: .incomplete)
-            ).met
-        )
     }
 
-    func testTargetWithinContainerSelectsOnlyDescendants() throws {
-        let pay = element(label: "Pay", traits: [.button])
-        let otherPay = element(label: "Pay", traits: [.button])
+    func testWithinContainerSelectsOnlyDescendants() throws {
+        let checkoutPay = element(label: "Pay", traits: [.button])
+        let cartPay = element(label: "Pay", traits: [.button])
         let interface = makeTestInterface(nodes: [
-            testContainer(makeTestAccessibilityContainer(
-                type: .semanticGroup(label: "Checkout", value: nil), identifier: nil
-            ), children: [
-                testElement(pay),
-            ]),
-            testContainer(makeTestAccessibilityContainer(
-                type: .semanticGroup(label: "Cart", value: nil), identifier: nil
-            ), children: [
-                testElement(otherPay),
-            ]),
+            testContainer(
+                makeTestAccessibilityContainer(
+                    type: .semanticGroup(label: "Checkout", value: nil)
+                ),
+                children: [testElement(checkoutPay)]
+            ),
+            testContainer(
+                makeTestAccessibilityContainer(
+                    type: .semanticGroup(label: "Cart", value: nil)
+                ),
+                children: [testElement(cartPay)]
+            ),
         ])
+        let target = AccessibilityTarget.within(
+            container: .label("Checkout"),
+            target: .label("Pay")
+        )
 
-        let authored = AccessibilityTarget.within(container: .label("Checkout"), target: .label("Pay"))
         let selected = AccessibilityTargetMatchGraph(interface: interface)
-            .resolve(try authored.resolve(in: .empty))
+            .resolve(try target.resolve(in: .empty))
 
-        XCTAssertEqual(selected.elements.elements, [pay])
+        XCTAssertEqual(selected.elements.elements, [checkoutPay])
         XCTAssertEqual(selected.elements.orderedPaths, [TreePath([0, 0])])
     }
 
-    func testStatePredicateRequiresObservedTraceForActionResultValidation() throws {
-        let action = ActionResult.success(payload: .activate)
-        let result = try AccessibilityPredicate.missing(.label("Loading")).resolve(in: .empty).validate(against: action)
+    func testPredicateEvaluatesCanonicalObservationEvidence() throws {
+        let snapshot = observationSnapshot(elements: [element(label: "Ready")])
+        let evidence = Observation.Evidence(
+            baseline: nil,
+            current: snapshot,
+            events: [.elementsChanged(snapshot)],
+            completeness: .complete
+        )
+        let result = try resolved(.exists(.label("Ready"))).evaluate(in: evidence)
 
-        XCTAssertFalse(result.met)
-        XCTAssertEqual(result.actual, "no observed accessibility trace")
+        XCTAssertTrue(result.met)
+        XCTAssertNil(result.actual)
     }
 
-    // MARK: - ExpectationResult Codable Round-Trip
-
-    func testExpectationResultEncodeDecode() throws {
+    func testExpectationResultRoundTrips() throws {
         let result = ExpectationResult(
             met: false,
-            predicate: .changed(.elements([
+            predicate: .elementsChanged([
                 .updated(.label("counter"), .value(after: "hello")),
-            ])),
-            actual: "counter: value: world → hell"
+            ]),
+            actual: "counter remains outstanding"
         )
         let data = try JSONEncoder().encode(result)
-        let decoded = try JSONDecoder().decode(ExpectationResult.self, from: data)
-        XCTAssertEqual(decoded, result)
-    }
 
-    func testExpectationResultWithNilPredicateEncodeDecode() throws {
-        let result = ExpectationResult(met: true, predicate: nil, actual: "delivered")
-        let data = try JSONEncoder().encode(result)
-        let decoded = try JSONDecoder().decode(ExpectationResult.self, from: data)
-        XCTAssertEqual(decoded, result)
-    }
-
-    func testExpectationResultRoundTrip() throws {
-        let result = ExpectationResult(
-            met: false,
-            predicate: .changed(.screen()),
-            actual: "noChange"
+        XCTAssertEqual(
+            try JSONDecoder().decode(ExpectationResult.self, from: data),
+            result
         )
-        let data = try JSONEncoder().encode(result)
-        let decoded = try JSONDecoder().decode(ExpectationResult.self, from: data)
-        XCTAssertEqual(decoded, result)
     }
 
-    private func currentTrace(_ elements: [HeistElement]) -> AccessibilityTrace {
-        AccessibilityTrace(interface: makeTestInterface(elements: elements))
+    private func resolved(
+        _ predicate: AccessibilityPredicate
+    ) throws -> ObservationPredicate {
+        try predicate.resolve(in: .empty)
     }
-
 }

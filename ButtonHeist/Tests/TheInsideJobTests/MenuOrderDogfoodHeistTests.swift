@@ -7,17 +7,20 @@ import ButtonHeistTesting
 private enum MenuScreen {
     static let addItem = HeistDef<String>("MenuScreen.addItem", parameter: "item") { item in
         CustomAction("Add to Cart", on: .label(item))
-            .expect(.changed(.elements()), timeout: 2)
+            .expect(.elementsChanged, timeout: 2)
     }
 
     static let checkout = HeistDef<Void>("MenuScreen.checkout") {
         Activate(.label("Checkout"))
-            .expect(.changed(.screen([.exists(.label("Checkout"))])), timeout: 8)
+            .expect(.screenChanged, timeout: 8)
+        WaitFor(.exists(.label("Checkout")), timeout: 8)
 
+        // The demo holds payment for up to 1.6 seconds, so anything that waits
+        // on what follows it has to outlast the slowest of those.
         Activate(.label(DemoOrder.confirmPaymentLabel))
-            .expect(.changed(.screen([.exists(.label("Processing payment"))])), timeout: 8)
+            .expect(.exists(.label("Processing payment")), timeout: 6)
 
-        WaitFor(.exists(.label("Payment Successful")), timeout: 12)
+        WaitFor(.exists(.label("Payment Successful")), timeout: 6)
     }
 }
 

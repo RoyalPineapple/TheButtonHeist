@@ -23,7 +23,7 @@ struct HandoffServerMessageRouter {
         switch message {
         case .info(let info):
             return .serverInfo(info)
-        case .interface, .actionResult, .screen, .announcements, .mainThreadProbe:
+        case .interface, .actionResult, .screen, .notifications, .mainThreadProbe:
             return .forward(message, requestId)
         case .error(let serverError):
             if let requestId {

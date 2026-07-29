@@ -36,27 +36,28 @@ enum RepairActionRequirement: Sendable, Equatable {
     }
 
     func isSupported(by element: HeistElement) -> Bool {
+        let assertable = element.semantics.assertable
         switch self {
         case .activate:
-            return element.actions.contains(.activate)
-                || element.respondsToUserInteraction
-                || !Set(element.traits).isDisjoint(with: AccessibilityPolicy.interactiveTraits)
+            return assertable.actions.contains(.activate)
+                || element.semantics.respondsToUserInteraction
+                || !assertable.traits.isDisjoint(with: AccessibilityPolicy.interactiveTraits)
         case .increment:
-            return element.actions.contains(.increment) || element.traits.contains(.adjustable)
+            return assertable.actions.contains(.increment) || assertable.traits.contains(.adjustable)
         case .decrement:
-            return element.actions.contains(.decrement) || element.traits.contains(.adjustable)
+            return assertable.actions.contains(.decrement) || assertable.traits.contains(.adjustable)
         case .customAction(let name):
-            return element.actions.contains { action in
+            return assertable.actions.contains { action in
                 guard case .custom(let candidateName) = action else { return false }
                 return ElementPredicate.stringEquals(candidateName.description, name.description)
             }
         case .rotor:
-            return element.rotors?.isEmpty == false
+            return !assertable.rotors.isEmpty
         case .textInput:
-            return element.traits.contains(.textEntry)
-                || element.traits.contains(.searchField)
-                || element.traits.contains(.textArea)
-                || element.traits.contains(.secureTextField)
+            return assertable.traits.contains(.textEntry)
+                || assertable.traits.contains(.searchField)
+                || assertable.traits.contains(.textArea)
+                || assertable.traits.contains(.secureTextField)
         case .unknown:
             return true
         }

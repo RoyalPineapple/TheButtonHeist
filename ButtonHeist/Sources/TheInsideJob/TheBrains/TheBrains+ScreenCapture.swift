@@ -59,7 +59,7 @@ extension TheBrains {
         guard let observation = await interactionCoordinator.admittedVisibleObservation(timeout: 1.0) else {
             return .failure(.accessibilityTreeUnavailable)
         }
-        let moment = observation.event.moment
+        let interface = observation.snapshot.interface
 
         guard let screenCapture = vault.captureScreen() else {
             return .failure(.appWindowUnavailable)
@@ -69,7 +69,7 @@ extension TheBrains {
             guard let payload = renderAccessibilitySnapshotPayload(
                 image: screenCapture.image,
                 bounds: screenCapture.bounds,
-                interface: moment.capture.interface
+                interface: interface
             ) else {
                 return .failure(.accessibilitySnapshotRenderingFailed)
             }
@@ -84,36 +84,11 @@ extension TheBrains {
             pngData: pngData.base64EncodedString(),
             width: screenCapture.bounds.width,
             height: screenCapture.bounds.height,
-            interface: moment.capture.interface
+            interface: interface
         ) else {
             return .failure(.invalidScreenDimensions)
         }
         return .success(payload)
-    }
-
-    func executeTakeScreenshot(
-        mode: ScreenCaptureMode = .raw
-    ) async -> RuntimeActionExecution {
-        let timing = ActionTiming()
-        switch await captureScreenPayload(mode: mode) {
-        case .success(let payload):
-            return RuntimeActionExecution(
-                result: .success(
-                    payload: .screenshot(payload),
-                    message: "Captured screenshot \(Int(payload.width))x\(Int(payload.height))",
-                    timing: timing.freeze()
-                )
-            )
-        case .failure(let failure):
-            return RuntimeActionExecution(
-                result: .failure(
-                    payload: .screenshot(nil),
-                    failureKind: failure.actionFailureKind,
-                    message: failure.message,
-                    timing: timing.freeze()
-                )
-            )
-        }
     }
 
     func dispatchTakeScreenshot(

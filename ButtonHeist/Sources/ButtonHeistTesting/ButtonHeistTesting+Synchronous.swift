@@ -58,7 +58,7 @@ public enum HeistTestResultRecording: Sendable, Equatable {
 @discardableResult
 public func runHeistSync(
     _ path: HeistDefinitionPath,
-    timeout: TimeInterval = 60,
+    timeout: HeistTimeout = .default,
     recordResult: HeistTestResultRecording = .environment,
     to resultDirectory: URL? = nil,
     file: StaticString = #filePath,
@@ -81,7 +81,7 @@ public func runHeistSync(
     _ path: HeistDefinitionPath,
     argument input: String,
     parameter: HeistReferenceName = "input",
-    timeout: TimeInterval = 60,
+    timeout: HeistTimeout = .default,
     recordResult: HeistTestResultRecording = .environment,
     to resultDirectory: URL? = nil,
     file: StaticString = #filePath,
@@ -107,7 +107,7 @@ public func runHeistSync(
     _ path: HeistDefinitionPath,
     argument input: AccessibilityTarget,
     parameter: HeistReferenceName = "input",
-    timeout: TimeInterval = 60,
+    timeout: HeistTimeout = .default,
     recordResult: HeistTestResultRecording = .environment,
     to resultDirectory: URL? = nil,
     file: StaticString = #filePath,
@@ -128,7 +128,7 @@ public func runHeistSync(
 
 private func runHeistSynchronously(
     prepareCommand: () throws -> HeistRunCommand,
-    timeout: TimeInterval,
+    timeout: HeistTimeout,
     recordResult: HeistTestResultRecording,
     resultDirectory: URL?,
     file: StaticString,
@@ -151,10 +151,18 @@ private func runHeistSynchronously(
         return nil
     }
 
-    return runHeistSyncOperation(timeout: timeout, file: file, line: line) { @MainActor in
+    return runHeistSyncOperation(
+        timeout: timeout.seconds + heistResultDeliveryHeadroomSeconds,
+        file: file,
+        line: line
+    ) { @MainActor in
         try await HeistResultRecording.withEnvironmentRecording(recordResult.usesEnvironment) {
             do {
-                let heist = try await Heist(command.plan, argument: command.argument)
+                let heist = try await Heist(
+                    command.plan,
+                    argument: command.argument,
+                    timeout: timeout
+                )
                 try recordResultIfRequested(
                     heist.result,
                     plan: command.plan,
@@ -181,6 +189,8 @@ private func runHeistSynchronously(
         }
     }
 }
+
+private let heistResultDeliveryHeadroomSeconds: TimeInterval = 5
 
 @discardableResult
 func runHeistSyncOperation<Value: Sendable>(

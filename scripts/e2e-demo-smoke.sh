@@ -425,6 +425,8 @@ if [[ -z "$APP" ]]; then
 fi
 [[ -d "$APP" ]] || fail "built app not found at $APP"
 
+xcrun simctl terminate "$SIM_UDID" com.buttonheist.testapp >/dev/null 2>&1 || true
+xcrun simctl uninstall "$SIM_UDID" com.buttonheist.testapp >/dev/null 2>&1 || true
 xcrun simctl install "$SIM_UDID" "$APP"
 SIMCTL_CHILD_INSIDEJOB_PORT="$PORT" \
 SIMCTL_CHILD_INSIDEJOB_TOKEN="$TOKEN" \

@@ -449,21 +449,22 @@ private extension HeistPlan {
                 switch predicate.core {
                 case .presence(.exists(let target)), .presence(.missing(let target)):
                     observedTargets.append(target)
-                case .changed(.screen(let assertions)):
-                    for assertion in assertions {
-                        switch assertion {
-                        case .exists(let target), .missing(let target): observedTargets.append(target)
-                        }
-                    }
-                case .changed(.elements(let assertions)):
+                // A screen boundary names no elements, so it observes no targets.
+                case .screenChanged: break
+                case .elementsChanged(let assertions):
                     for assertion in assertions {
                         switch assertion {
                         case .exists(let target), .missing(let target),
-                             .appeared(let target), .disappeared(let target), .updated(let target, _):
+                             .appeared(let target), .disappeared(let target):
                             observedTargets.append(target)
+                        case .updated(let target, _):
+                            observedTargets.append(target.accessibilityTarget)
                         }
                     }
-                case .announcement, .noChange: break
+                case .notification(let notification):
+                    if let element = notification.element {
+                        observedTargets.append(.predicate(element))
+                    }
                 }
             }
             for var target in observedTargets {

@@ -8,38 +8,38 @@ struct CanonicalHeistSourceRoundTripTests {
         try assertRoundTrip(try HeistPlan(body: [
             .action(ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 0.001)))),
+                expectationPolicy: .expect(ActionExpectation(predicate: .screenChanged, timeout: 0.001)))),
             .action(ActionStep(
                 command: .typeText(text: "milk", target: .predicate(.label("Search"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .exists(.element(.label("Search"), .value("milk"))), timeout: 2)))),
             .action(ActionStep(
                 command: .typeText(text: "Bruschetta", target: .predicate(.identifier("Search"))),
-                expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+                expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                     .updated(.identifier("Search"), .value(after: "Bruschetta")),
-                ])))))),
+                ]))))),
             .action(ActionStep(
                 command: .activate(.predicate(.label("Add item"))),
-                expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+                expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                     .appeared(.label("Milk")),
-                ])))))),
+                ]))))),
             .action(ActionStep(
                 command: .activate(.predicate(.label("Remove"))),
-                expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+                expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                     .disappeared(.identifier("row-1")),
-                ])))))),
+                ]))))),
             .action(ActionStep(
                 command: .typeText(text: "milk", target: .predicate(.identifier("Search"))),
-                expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+                expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                     .updated(.identifier("Search"), .value(before: "", after: "milk")),
-                ])))))),
+                ]))))),
             .action(ActionStep(
                 command: .activate(.predicate(.identifier("Favorite"))),
-                expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+                expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                     .updated(
                         .identifier("Favorite"),
                         .traits(before: .init(exclude: [.selected]), after: .init(include: [.selected]))
                     ),
-                ])))))),
+                ]))))),
             .action(ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
             .action(ActionStep(command: .decrement(.predicate(.identifier("quantity"), ordinal: 0)))),
             .action(ActionStep(command: .customAction(
@@ -67,10 +67,10 @@ struct CanonicalHeistSourceRoundTripTests {
     func canonicalSourceRendersShortestUnambiguousSugar() throws {
         let plan = try HeistPlan {
             Activate(.label("Add"))
-                .expect(.changed(.elements([.appeared(.label("Toast"))])))
+                .expect(.elementsChanged([.appeared(.label("Toast"))]))
 
             TypeText("milk", into: .label("Search"))
-                .expect(.changed(.elements([.updated(.label("Search"), .value("milk"))])))
+                .expect(.elementsChanged([.updated(.label("Search"), .value("milk"))]))
 
             WaitFor(.exists(.label("Results")), timeout: 2)
 
@@ -91,10 +91,10 @@ struct CanonicalHeistSourceRoundTripTests {
         #expect(try plan.canonicalSwiftDSL() == """
         HeistPlan {
             Activate(.label("Add"))
-                .expect(.changed(.elements([.appeared(.label("Toast"))])))
+                .expect(.elementsChanged([.appeared(.label("Toast"))]))
 
             TypeText("milk", into: .label("Search"))
-                .expect(.changed(.elements([.updated(.label("Search"), .value("milk"))])))
+                .expect(.elementsChanged([.updated(.label("Search"), .value("milk"))]))
 
             WaitFor(.exists(.label("Results")), timeout: 2)
 
@@ -185,7 +185,7 @@ struct CanonicalHeistSourceRoundTripTests {
                 elseBody: [.fail(FailStep(message: "Pay button missing"))]
             )),
             .wait(WaitStep(
-                predicate: .changed(.screen()),
+                predicate: .screenChanged,
                 timeout: 3,
                 elseBody: [.fail(FailStep(message: "screen did not change"))]
             )),

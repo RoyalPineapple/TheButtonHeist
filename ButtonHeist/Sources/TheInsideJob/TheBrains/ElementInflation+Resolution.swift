@@ -101,6 +101,7 @@ extension ElementInflation {
             } else {
                 pendingRetry = (reason, refreshedResolution)
             }
+            let historyIndex = await vault.semanticObservationStream.stateOwner.historyEndIndex()
             let refresh: TargetRefreshTerminal
             switch identity {
             case .captureLocal(let target):
@@ -108,7 +109,7 @@ extension ElementInflation {
                     for: target,
                     treeElement: currentElement,
                     method: method,
-                    after: await vault.semanticObservationStream.latestCommittedEvent()?.sequence,
+                    after: historyIndex,
                     deadline: deadline,
                     resolution: pendingRetry.resolution
                 )
@@ -118,7 +119,7 @@ extension ElementInflation {
                     sourceTarget: sourceTarget,
                     pinnedElement: currentElement,
                     method: method,
-                    after: await vault.semanticObservationStream.latestCommittedEvent()?.sequence,
+                    after: historyIndex,
                     deadline: deadline,
                     resolution: pendingRetry.resolution
                 )
@@ -166,6 +167,13 @@ extension ElementInflation {
     internal func findTargetInTree(
         _ target: ResolvedAccessibilityTarget,
     ) async -> Result<TreeTargetMatch, ElementInflationFailure> {
+        guard await vault.semanticObservationStream.admittedVisibleObservation(
+            timeout: SemanticObservationTiming.defaultTimeout / .seconds(1)
+        ) != nil else {
+            return .failure(.notFound(
+                "no admitted visible accessibility observation was available for target resolution"
+            ))
+        }
         switch visibleTargetResolution(target) {
         case .success(let visible):
             return .success(.visible(visible, ActionSubjectResolution(origin: .visible)))

@@ -5,7 +5,7 @@ import Testing
     try assertCanonicalRoundTrip(try HeistPlan(body: [
         .action(ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 0.001)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .screenChanged, timeout: 0.001)))),
         .action(ActionStep(
             command: .typeText(text: "milk", target: .predicate(.label("Search"))),
             expectationPolicy: .expect(ActionExpectation(predicate: .exists(.value("milk")), timeout: 2)))),
@@ -132,7 +132,7 @@ import Testing
             elseBody: [.fail(FailStep(message: "Pay button missing"))]
         )),
         .wait(WaitStep(
-            predicate: .changed(.screen()),
+            predicate: .screenChanged,
             timeout: 3,
             elseBody: [.fail(FailStep(message: "screen did not change"))]
         )),

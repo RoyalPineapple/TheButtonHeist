@@ -40,7 +40,6 @@ final class RuntimeResourceObservationTests: XCTestCase {
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.brains.vault.semanticObservationStream.isActive)
         XCTAssertFalse(job.tripwire.isPulseRunning)
-        XCTAssertFalse(job.tripwire.uikitIdleTracker.isInstalled)
         XCTAssertFalse(job.lifecycleObservationIsInstalled)
 
         await activateRuntime()
@@ -48,7 +47,6 @@ final class RuntimeResourceObservationTests: XCTestCase {
         XCTAssertTrue(job.brains.semanticObservationIsActive)
         XCTAssertTrue(job.brains.vault.semanticObservationStream.isActive)
         XCTAssertTrue(job.tripwire.isPulseRunning)
-        XCTAssertTrue(job.tripwire.uikitIdleTracker.isInstalled)
         XCTAssertTrue(job.lifecycleObservationIsInstalled)
         assertIdleTimerProtection(on: job, retainedBaseline: idleTimerBaseline)
 
@@ -57,7 +55,6 @@ final class RuntimeResourceObservationTests: XCTestCase {
         XCTAssertTrue(job.brains.semanticObservationIsActive)
         XCTAssertTrue(job.brains.vault.semanticObservationStream.isActive)
         XCTAssertTrue(job.tripwire.isPulseRunning)
-        XCTAssertTrue(job.tripwire.uikitIdleTracker.isInstalled)
         XCTAssertTrue(job.lifecycleObservationIsInstalled)
         assertIdleTimerProtection(on: job, retainedBaseline: idleTimerBaseline)
     }
@@ -68,7 +65,6 @@ final class RuntimeResourceObservationTests: XCTestCase {
         XCTAssertTrue(job.brains.semanticObservationIsActive)
         XCTAssertTrue(job.brains.vault.semanticObservationStream.isActive)
         XCTAssertTrue(job.tripwire.isPulseRunning)
-        XCTAssertTrue(job.tripwire.uikitIdleTracker.isInstalled)
         XCTAssertTrue(job.lifecycleObservationIsInstalled)
 
         await job.suspend()
@@ -76,24 +72,23 @@ final class RuntimeResourceObservationTests: XCTestCase {
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.brains.vault.semanticObservationStream.isActive)
         XCTAssertFalse(job.tripwire.isPulseRunning)
-        XCTAssertFalse(job.tripwire.uikitIdleTracker.isInstalled)
         XCTAssertTrue(job.lifecycleObservationIsInstalled)
         assertIdleTimerProtection(on: job, retainedBaseline: idleTimerBaseline)
         XCTAssertEqual(UIApplication.shared.isIdleTimerDisabled, idleTimerBaseline)
     }
 
-    func testRuntimeReactivationReinstallsUIKitIdleTracking() async {
+    func testRuntimeReactivationRestartsThePulse() async {
         await activateRuntime()
-        XCTAssertTrue(job.tripwire.uikitIdleTracker.isInstalled)
+        XCTAssertTrue(job.tripwire.isPulseRunning)
 
         job.releaseRuntimeOwnedResources(
             policy: .suspend,
             idleTimerBaseline: resources.idleTimerBaseline
         )
-        XCTAssertFalse(job.tripwire.uikitIdleTracker.isInstalled)
+        XCTAssertFalse(job.tripwire.isPulseRunning)
 
         await job.activateRuntime(resources)
-        XCTAssertTrue(job.tripwire.uikitIdleTracker.isInstalled)
+        XCTAssertTrue(job.tripwire.isPulseRunning)
     }
 
     func testStopClearsLifecycleObservationAndIdleTimerBaseline() async {
@@ -107,43 +102,9 @@ final class RuntimeResourceObservationTests: XCTestCase {
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.brains.vault.semanticObservationStream.isActive)
         XCTAssertFalse(job.tripwire.isPulseRunning)
-        XCTAssertFalse(job.tripwire.uikitIdleTracker.isInstalled)
         XCTAssertFalse(job.lifecycleObservationIsInstalled)
         assertIdleTimerProtectionIsCleared(on: job)
         XCTAssertEqual(UIApplication.shared.isIdleTimerDisabled, idleTimerBaseline)
-    }
-
-    func testSuspendResourceReleasePreservesLatestSettleFailureDiagnostic() async {
-        await activateRuntime()
-        let diagnostic = await recordSettleFailureDiagnostic()
-
-        job.releaseRuntimeOwnedResources(
-            policy: .suspend,
-            idleTimerBaseline: resources.idleTimerBaseline
-        )
-
-        let retainedDiagnostic = await job.brains.vault.semanticObservationStream.latestSettleFailureDiagnostic()
-        XCTAssertEqual(retainedDiagnostic, diagnostic)
-        XCTAssertTrue(job.lifecycleObservationIsInstalled)
-        XCTAssertFalse(job.brains.semanticObservationIsActive)
-        XCTAssertFalse(job.brains.vault.semanticObservationStream.isActive)
-        XCTAssertFalse(job.tripwire.isPulseRunning)
-        XCTAssertFalse(job.tripwire.uikitIdleTracker.isInstalled)
-    }
-
-    func testStopPreservesLatestSettleFailureDiagnostic() async {
-        await activateRuntime()
-        let diagnostic = await recordSettleFailureDiagnostic()
-
-        await job.stop()
-
-        let retainedDiagnostic = await job.brains.vault.semanticObservationStream.latestSettleFailureDiagnostic()
-        XCTAssertEqual(retainedDiagnostic, diagnostic)
-        XCTAssertFalse(job.lifecycleObservationIsInstalled)
-        XCTAssertFalse(job.brains.semanticObservationIsActive)
-        XCTAssertFalse(job.brains.vault.semanticObservationStream.isActive)
-        XCTAssertFalse(job.tripwire.isPulseRunning)
-        XCTAssertFalse(job.tripwire.uikitIdleTracker.isInstalled)
     }
 
     func testInactiveCommandFailsWithoutStartingObservation() async {
@@ -154,30 +115,6 @@ final class RuntimeResourceObservationTests: XCTestCase {
         XCTAssertEqual(result.message, TheBrains.runtimeInactiveMessage)
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.brains.vault.semanticObservationStream.isActive)
-    }
-
-    private func recordSettleFailureDiagnostic() async -> String {
-        let stream = job.brains.vault.semanticObservationStream
-        stream.settleVisibleObservation = { vault, _, _, signal, _ in
-            let observation = InterfaceObservation.makeForTests()
-            vault.observeInterface(observation)
-            return SettleSession.Result(
-                outcome: .timedOut(timeMs: 17),
-                finalObservation: SettleSessionFinalObservation(observation: observation),
-                tripwireSignal: signal,
-                instabilityDescription: "runtime resource diagnostic"
-            )
-        }
-        _ = await stream.refreshVisibleObservation(
-            baselineTripwireSignal: job.tripwire.tripwireSignal(),
-            timeoutMs: 1
-        )
-        guard let diagnostic = await stream.latestSettleFailureDiagnostic() else {
-            XCTFail("Expected settle failure diagnostic")
-            return ""
-        }
-        XCTAssertTrue(diagnostic.contains("runtime resource diagnostic"))
-        return diagnostic
     }
 
     private func activateRuntime() async {

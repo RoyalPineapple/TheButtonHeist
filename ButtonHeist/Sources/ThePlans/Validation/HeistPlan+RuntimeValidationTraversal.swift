@@ -303,7 +303,7 @@ package struct HeistPlanRuntimeSafetyValidator {
         scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment
     ) {
-        validatePredicate(wait.predicate, path: path.child(.predicate), depth: 1, scope: scope)
+        validatePredicate(wait.predicate, path: path.child(.predicate), scope: scope)
         do {
             _ = try wait.resolve(in: environment)
         } catch {
@@ -322,7 +322,7 @@ package struct HeistPlanRuntimeSafetyValidator {
         scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment
     ) {
-        validatePredicate(predicateCase.predicate, path: path.child(.predicate), depth: 1, scope: scope)
+        validatePredicate(predicateCase.predicate, path: path.child(.predicate), scope: scope)
         do {
             _ = try predicateCase.predicate.resolve(in: environment)
         } catch {

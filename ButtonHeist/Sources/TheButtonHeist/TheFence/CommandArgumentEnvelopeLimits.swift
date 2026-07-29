@@ -4,10 +4,6 @@ import TheScore
 
 enum CommandArgumentEnvelopeLimits {
 
-    static func validateRunHeist(_ arguments: TheFence.CommandArgumentEnvelope) throws {
-        try validateHeistPlanSource(arguments, field: "run_heist")
-    }
-
     static func validateHeistPlanSource(
         _ arguments: TheFence.CommandArgumentEnvelope,
         field: String

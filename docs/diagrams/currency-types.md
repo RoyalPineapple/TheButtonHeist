@@ -12,9 +12,9 @@ flowchart TD
         AXE["AccessibilityElement /<br/>AccessibilityHierarchy<br/>(AccessibilitySnapshotModel)"]
         OBS["InterfaceObservation<br/>tree: InterfaceTree<br/>liveCapture: LiveCapture"]
         TREE["InterfaceTree<br/>elements + containers + HeistIds<br/>canonical viewport snapshot"]
-        STORE["Observation.Store<br/>InterfaceTree + Observation.Log<br/>lineage + admitted-read state"]
-        MOMENT["Observation.Moment<br/>Snapshot + private Log.Index"]
-        STASH["TheVault<br/>Store projection + latest live evidence"]
+        SNAPSHOT["Observation.Snapshot<br/>Interface + context"]
+        HISTORY["Observation.History<br/>ordered Event array"]
+        STASH["TheVault<br/>current Snapshot + History<br/>+ latest live evidence"]
         ADMITTED["AdmittedSemanticTarget<br/>ordinal-free resolved target<br/>+ semantic scroll-container path"]
         PIN["CommittedElementTarget<br/>CrossCaptureTarget + current-capture HeistId<br/>+ action subject resolution"]
         LIVET["LiveActionTarget<br/>weak live object + frame + activationPoint"]
@@ -22,11 +22,11 @@ flowchart TD
         INVENTORY["InventoryEnumeration.Result<br/>reported counts + attempted indices<br/>offscreen elements + known omissions"]
         WALK --> AXE
         AXE --> OBS
-        OBS -- "admitted commit / merge" --> STORE
+        OBS -- "admitted commit / merge" --> SNAPSHOT
         OBS -- "live evidence for<br/>committed HeistIds only" --> STASH
-        STORE --> TREE
-        STORE --> MOMENT
-        STORE --> STASH
+        SNAPSHOT --> TREE
+        SNAPSHOT --> STASH
+        HISTORY --> STASH
         STASH -- "current live evidence<br/>for current HeistId" --> PIN
         ADMITTED -- "re-resolve after each<br/>committed capture" --> PIN
         PIN --> LIVET
@@ -67,18 +67,17 @@ flowchart TD
 Notes:
 
 - `AccessibilityElement` and `AccessibilityHierarchy` are the parser's output and the internal working currency. They never cross the wire; the wire representation of an element is `HeistElement` (TheScore, Codable).
-- The settled `InterfaceTree` is the sole current semantic truth. It contains value types only; `merging(_:)` is pure last-read-wins and retains the newest viewport capture.
+- The admitted `InterfaceTree` is the sole current semantic truth. It contains value types only; `merging(_:)` is pure last-read-wins and retains the newest viewport capture.
 - `InterfaceObservation` pairs an interface tree with one viewport's disposable
   `LiveCapture`. `LiveCapture.Snapshot` stores the viewport's canonical element
   and container entries once; its path-indexed convenience views are derived.
   Live references are replaced on every parse and never unioned across
   exploration pages.
-- `Observation.Store` owns one `InterfaceTree`, retained `Observation.Log`,
-  lineage, and admitted-read state. `Observation.Moment` combines one immutable
-  snapshot with its private Log index for direct `events(since:)` reads.
-  `TheVault` keeps only the latest live
-  UIKit observation beside that Store. There is no parallel screen/query store
-  or semantic back map.
+- `TheVault` owns one current `Observation.Snapshot`, one ordered
+  `Observation.History`, and the latest disposable UIKit evidence used for
+  dispatch. History positions are private arguments to bounded reads; they are
+  not properties of snapshots or events. There is no parallel screen/query
+  store or semantic back map.
 - Each delivered `Interface` validates and stores one package `InterfaceGraph`
   for structural hierarchy operations and formatting. The delivered value
   supplies `HeistElement` subjects while the host supplies
@@ -109,6 +108,6 @@ Notes:
   Those facts project through existing `ScrollInventory` and completeness
   fields rather than creating another evidence or wire model.
 - First-responder identity uses the same currency: the capture stores one
-  `HeistId`, trace context may project it to an `AccessibilityTarget`, and a
-  first-responder action verifies that the current and inflated ids still equal
-  the captured id.
+  `HeistId`, TheVault projects it into `Observation.Context.firstResponder` as
+  an `AccessibilityTarget`, and a first-responder action verifies that the
+  current and inflated ids still equal the captured id.

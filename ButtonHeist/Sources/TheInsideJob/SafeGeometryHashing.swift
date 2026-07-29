@@ -1,56 +1,108 @@
 #if canImport(UIKit) && canImport(AccessibilitySnapshotParser)
 import AccessibilitySnapshotParser
 import CoreGraphics
+import ThePlans
 import TheScore
 import UIKit
 
-// MARK: - Coarse Frame Comparison
-
-enum CoarseFrameKey: Hashable {
-    case available(minX: Int, minY: Int, width: Int, height: Int)
-    case masked
-    case unavailable
-
-    var hashFragment: String {
-        switch self {
-        case .available(let minX, let minY, let width, let height):
-            "\(minX)_\(minY)_\(width)_\(height)"
-        case .masked:
-            "masked"
-        case .unavailable:
-            "unavailable"
-        }
-    }
-}
-
-@MainActor enum CoarseFrameComparison {
-    static var currentBucket: CGFloat {
-        bucket(for: UIDevice.current.userInterfaceIdiom)
+enum CoarseFrameComparison {
+    /// The smallest distance that counts as having moved: one touch target,
+    /// which is the smallest thing a user could have been aiming at.
+    @MainActor static var currentGeometryTolerance: CGFloat {
+        geometryTolerance(for: UIDevice.current.userInterfaceIdiom)
     }
 
-    static func bucket(for idiom: UIUserInterfaceIdiom) -> CGFloat {
+    static func geometryTolerance(for idiom: UIUserInterfaceIdiom) -> CGFloat {
         idiom == .pad ? 13 : 8
     }
 
-    static func key(for frame: CGRect, bucket: CGFloat = currentBucket) -> CoarseFrameKey {
-        guard let frame = ScreenFrameEvidence(frame).rect?.cgRect else { return .unavailable }
-        return .available(
-            minX: component(frame.origin.x, bucket: bucket),
-            minY: component(frame.origin.y, bucket: bucket),
-            width: component(frame.size.width, bucket: bucket),
-            height: component(frame.size.height, bucket: bucket)
-        )
+    /// Whether two frames describe the same place, within the given geometryTolerance.
+    ///
+    /// Unreadable geometry is never in the same place as anything, including
+    /// itself: we cannot claim a frame held still if we could not read where it
+    /// was.
+    ///
+    /// The geometryTolerance is a parameter and not read from the device here, so that
+    /// this stays callable off the main actor — the reducer that asks whether a
+    /// tree moved is deliberately nonisolated.
+    static func isInSamePlace(
+        _ lhs: CGRect,
+        _ rhs: CGRect,
+        geometryTolerance: CGFloat
+    ) -> Bool {
+        guard let lhs = ScreenFrameEvidence(lhs).rect?.cgRect,
+              let rhs = ScreenFrameEvidence(rhs).rect?.cgRect
+        else { return false }
+        return abs(lhs.minX - rhs.minX) < geometryTolerance
+            && abs(lhs.minY - rhs.minY) < geometryTolerance
+            && abs(lhs.width - rhs.width) < geometryTolerance
+            && abs(lhs.height - rhs.height) < geometryTolerance
     }
 
-    static func hashFragment(for frame: CGRect, bucket: CGFloat = currentBucket) -> String {
-        key(for: frame, bucket: bucket).hashFragment
+    static func isInSamePlace(
+        _ lhs: ScreenRect,
+        _ rhs: ScreenRect,
+        geometryTolerance: CGFloat
+    ) -> Bool {
+        isInSamePlace(lhs.cgRect, rhs.cgRect, geometryTolerance: geometryTolerance)
     }
 
-    private static func component(_ value: CGFloat, bucket: CGFloat) -> Int {
-        let scaled = bucket > 0 && bucket.isFinite ? (value / bucket).rounded() : value.rounded()
-        if scaled >= CGFloat(Int.max) { return Int.max }
-        if scaled <= CGFloat(Int.min) { return Int.min }
-        return Int(scaled)
+    static func isInSamePlace(
+        _ lhs: ViewRect,
+        _ rhs: ViewRect,
+        geometryTolerance: CGFloat
+    ) -> Bool {
+        isInSamePlace(lhs.cgRect, rhs.cgRect, geometryTolerance: geometryTolerance)
+    }
+
+    static func isInSamePlace(
+        _ lhs: ScreenPoint,
+        _ rhs: ScreenPoint,
+        geometryTolerance: CGFloat
+    ) -> Bool {
+        isInSamePlace(lhs.cgPoint, rhs.cgPoint, geometryTolerance: geometryTolerance)
+    }
+
+    static func isInSamePlace(
+        _ lhs: ViewPoint,
+        _ rhs: ViewPoint,
+        geometryTolerance: CGFloat
+    ) -> Bool {
+        isInSamePlace(lhs.cgPoint, rhs.cgPoint, geometryTolerance: geometryTolerance)
+    }
+
+    private static func isInSamePlace(
+        _ lhs: CGPoint,
+        _ rhs: CGPoint,
+        geometryTolerance: CGFloat
+    ) -> Bool {
+        guard lhs.x.isFinite, lhs.y.isFinite, rhs.x.isFinite, rhs.y.isFinite else {
+            return false
+        }
+        return abs(lhs.x - rhs.x) < geometryTolerance
+            && abs(lhs.y - rhs.y) < geometryTolerance
+    }
+}
+
+extension CGRect {
+    /// Whether this frame is in the same place as another.
+    ///
+    /// Raw `CGRect` equality is never that question: a layout pass re-runs the
+    /// same arithmetic and lands a fraction of a point away, so exact
+    /// comparison reports motion no user could see and no accessibility client
+    /// cares about.
+    ///
+    /// A geometryTolerance rather than a grid, deliberately. Snapping each frame to a
+    /// bucket and comparing the buckets looks equivalent and is not: a frame
+    /// sitting on a bucket edge — `y = 100` with an 8pt bucket — flips buckets
+    /// under a third of a point of noise, so the elements most likely to be
+    /// called moved are the ones that never moved at all. Comparing the
+    /// distance between two frames has no edges to sit on.
+    ///
+    /// Exact frames stay exact everywhere else: they are what gets stored,
+    /// reported, and turned into a tap point. Only the comparison is coarse.
+    func isInSamePlace(as other: CGRect, geometryTolerance: CGFloat) -> Bool {
+        CoarseFrameComparison.isInSamePlace(self, other, geometryTolerance: geometryTolerance)
     }
 }
 

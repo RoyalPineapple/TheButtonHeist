@@ -1,8 +1,8 @@
 #if canImport(UIKit)
 #if DEBUG
 import Foundation
-import TheScore
 import ThePlans
+import TheScore
 
 private enum StoreNotificationLane {
     case passive
@@ -20,314 +20,323 @@ private struct StoreNotificationIndices {
     subscript(lane: StoreNotificationLane) -> AccessibilityNotificationCursor {
         get {
             switch lane {
-            case .passive:
-                passive
-            case .action:
-                action
+            case .passive: passive
+            case .action: action
             }
         }
         set {
             switch lane {
-            case .passive:
-                passive = newValue
-            case .action:
-                action = newValue
+            case .passive: passive = newValue
+            case .action: action = newValue
             }
         }
     }
 }
 
-extension Observation {
-    internal struct Store {
+private struct StoreNotificationRead {
+    let lane: StoreNotificationLane
+    let notifications: Observation.Notifications
+}
+
+extension TheVault {
+    internal struct State {
         internal nonisolated static let defaultRetentionLimit = 256
 
-        internal private(set) var log: Log
-        private var availability = Availability.invalidated(sourceScope: nil)
+        internal struct HistoryBoundary: Sendable, Equatable {
+            internal let baseline: Observation.Snapshot?
+            internal let historyIndex: Int
+        }
+
+        private struct NavigationAdmission {
+            let scope: SemanticObservationScope
+            let continuity: ScreenContinuity
+        }
+
+        internal private(set) var history: Observation.History
+        internal private(set) var currentSnapshot: Observation.Snapshot?
         internal private(set) var interfaceTree: InterfaceTree = .empty
-        internal private(set) var sequence: SettledObservationSequence = 0
-        private var notificationIndices = StoreNotificationIndices()
         internal private(set) var scopedScreenChangedSequence: UInt64 = 0
-        internal private(set) var settleFailureDiagnostic: String?
+
+        private var navigationAdmission: NavigationAdmission?
+        private var admittedTripwireSignal: TheTripwire.TripwireSignal?
+        private var notificationIndices = StoreNotificationIndices()
         private var replacementRequired = false
-        private var activeSettlementBoundaries: [Moment] = []
+        private var protectedHistoryIndex: Int?
 
-        internal var latestCommittedEvent: SnapshotEvent? {
-            switch availability {
-            case .admitted, .invalidated(.some):
-                log.latestSnapshotEvent
-            case .invalidated(.none):
-                nil
-            }
-        }
-
-        internal var latestCommittedSnapshot: Snapshot? {
-            latestCommittedEvent?.snapshot
-        }
-
-        internal var latestCommittedMoment: Moment? {
-            latestCommittedEvent?.moment
-        }
-
-        internal var latestSettledObservationInvalidated: Bool {
-            switch availability {
-            case .invalidated:
-                true
-            case .admitted:
-                false
-            }
+        internal var current: Current? {
+            guard let currentSnapshot, let navigationAdmission else { return nil }
+            return Current(
+                snapshot: currentSnapshot,
+                scope: navigationAdmission.scope,
+                continuity: navigationAdmission.continuity
+            )
         }
 
         internal var notificationIndex: AccessibilityNotificationCursor {
             notificationIndices.latest
         }
 
-        internal init(retentionLimit: Int = defaultRetentionLimit) {
-            log = Log(retentionLimit: retentionLimit)
-        }
-
-        internal mutating func invalidateCurrentObservation() {
-            switch availability {
-            case .admitted(let sourceScope, _):
-                availability = .invalidated(sourceScope: sourceScope)
-            case .invalidated:
-                break
+        internal var notifications: [Observation.Notification] {
+            history.compactMap { event in
+                guard case .notification(let notification) = event else {
+                    return nil
+                }
+                return notification
             }
         }
 
-        @discardableResult
-        internal mutating func invalidateIfSignalChanged(
+        internal init(retentionLimit: Int = defaultRetentionLimit) {
+            history = Observation.History(retentionLimit: retentionLimit)
+        }
+
+        internal mutating func discardCurrentObservation() {
+            currentSnapshot = nil
+            navigationAdmission = nil
+            interfaceTree = .empty
+            admittedTripwireSignal = nil
+            replacementRequired = true
+        }
+
+        internal mutating func invalidateCurrentAdmission() {
+            admittedTripwireSignal = nil
+        }
+
+        internal mutating func invalidateAdmissionIfSignalChanged(
             to tripwireSignal: TheTripwire.TripwireSignal
-        ) -> Bool {
-            guard case .admitted(let sourceScope, let admittedSignal) = availability,
-                  admittedSignal != tripwireSignal else { return false }
-            availability = .invalidated(sourceScope: sourceScope)
-            return true
+        ) {
+            guard let admittedTripwireSignal,
+                  admittedTripwireSignal != tripwireSignal
+            else { return }
+            invalidateCurrentAdmission()
         }
 
         internal func admittedObservation(
             scope: SemanticObservationScope,
-            after sequence: SettledObservationSequence?
-        ) -> AdmittedObservation? {
-            guard case .admitted(let sourceScope, let tripwireSignal) = availability,
-                  sourceScope.canFulfill(scope),
-                  let latest = log.latestSnapshotEvent,
-                  latest.sequence > (sequence ?? 0) else { return nil }
-            return AdmittedObservation(event: latest, tripwireSignal: tripwireSignal)
+            after historyIndex: Int?
+        ) -> Result<Current?, Observation.History.ReadError> {
+            guard admittedTripwireSignal != nil,
+                  let current,
+                  current.scope.canFulfill(scope)
+            else { return .success(nil) }
+            guard let historyIndex else { return .success(current) }
+            do {
+                _ = try history.events(after: historyIndex)
+                return .success(history.endIndex > historyIndex ? current : nil)
+            } catch {
+                return .failure(error)
+            }
         }
 
-        internal func readSnapshot(
-            since moment: Moment?,
+        internal func current(
+            after historyIndex: Int?,
             scope: SemanticObservationScope
-        ) -> SnapshotRead {
-            log.readSnapshot(after: moment, fulfilling: scope)
+        ) -> Result<Current?, Observation.History.ReadError> {
+            guard let current,
+                  current.scope.canFulfill(scope)
+            else { return .success(nil) }
+            guard let historyIndex else { return .success(current) }
+            do {
+                _ = try history.events(after: historyIndex)
+                return .success(history.endIndex > historyIndex ? current : nil)
+            } catch {
+                return .failure(error)
+            }
         }
 
-        internal func latestMoment(scope: SemanticObservationScope) -> Moment? {
-            log.latestSnapshot(fulfilling: scope)?.moment
-        }
-
-        internal func snapshotEvent(at moment: Moment) -> SnapshotEvent? {
-            log.snapshotEvent(at: moment)
-        }
-
-        internal func snapshotEvent(
-            scope: SemanticObservationScope,
-            sequence: SettledObservationSequence
-        ) -> SnapshotEvent? {
-            log.snapshotEvent(fulfilling: scope, sequence: sequence)
-        }
-
-        internal func moment(
-            scope: SemanticObservationScope,
-            at sequence: SettledObservationSequence
-        ) -> Moment? {
-            snapshotEvent(scope: scope, sequence: sequence)?.moment
-        }
-
-        internal mutating func settlementDidArm(at moment: Moment) {
-            if case .unavailable = log.events(since: moment) {
-                preconditionFailure("Settlement boundary belongs to a different observation log")
+        internal mutating func protectHistory(from index: Int) {
+            do {
+                _ = try history.events(after: index)
+            } catch {
+                preconditionFailure("Protected index is unavailable in observation history")
             }
             precondition(
-                !activeSettlementBoundaries.contains(moment),
-                "Settlement observation boundary is already active"
+                protectedHistoryIndex == nil,
+                "Observation history already has an active reader"
             )
-            activeSettlementBoundaries.append(moment)
+            protectedHistoryIndex = index
         }
 
-        internal mutating func settlementDidFinish(at moment: Moment) {
-            guard let index = activeSettlementBoundaries.firstIndex(of: moment) else {
-                preconditionFailure("Settlement observation boundary is not active")
+        internal mutating func releaseHistory(from index: Int) {
+            precondition(
+                protectedHistoryIndex == index,
+                "Observation history index does not belong to the active reader"
+            )
+            protectedHistoryIndex = nil
+            history.prune(protectedBy: nil)
+        }
+
+        internal func evidence(
+            after boundary: HistoryBoundary
+        ) -> Observation.Evidence {
+            history.evidence(
+                in: boundary.historyIndex..<history.endIndex,
+                baseline: boundary.baseline,
+                current: currentSnapshot
+            )
+        }
+
+        internal func observationBoundary(
+            scope: SemanticObservationScope
+        ) -> HistoryBoundary {
+            let baseline: Observation.Snapshot?
+            switch admittedObservation(scope: scope, after: nil) {
+            case .success(let current):
+                baseline = current?.snapshot
+            case .failure:
+                baseline = nil
             }
-            activeSettlementBoundaries.remove(at: index)
-            log.prune(protectedBy: earliestActiveSettlementBoundary)
+            return HistoryBoundary(
+                baseline: baseline,
+                historyIndex: history.endIndex
+            )
         }
 
         internal mutating func commitObservation(
-            _ admission: Admission
-        ) throws -> CommittedObservation {
-            let notificationLane: StoreNotificationLane
-            let notificationSnapshot: NotificationSnapshot
-            switch admission.notificationAdmission {
-            case .passive(let snapshot):
-                notificationLane = .passive
-                notificationSnapshot = snapshot
-            case .action(let snapshot):
-                notificationLane = .action
-                notificationSnapshot = snapshot
-            }
-            let notifications = notificationSnapshot.notifications(
-                after: notificationIndices[notificationLane],
-                scopedScreenChangedCursor: scopedScreenChangedSequence
-            )
+            _ admission: Observation.Admission
+        ) -> Observation.Publication {
+            let notificationRead = notificationRead(for: admission.notificationAdmission)
+            let notifications = notificationRead.notifications
             let previousTree = interfaceTree
-            let candidateTree = switch admission.scope {
+            let comparedTree: InterfaceTree
+            switch admission.scope {
             case .visible:
-                previousTree.updatingViewport(with: admission.tree)
+                comparedTree = previousTree.updatingViewport(with: admission.tree)
             case .discovery:
-                admission.discoveryCommitPolicy == .replaceInterface
+                comparedTree = admission.discoveryCommitPolicy == .replaceInterface
                     ? admission.tree
                     : previousTree.merging(admission.tree)
             }
-            let classifiedContinuity = ScreenClassifier.classify(
-                from: previousTree == .empty ? nil : previousTree,
-                to: candidateTree,
-                notifications: notifications.kinds,
-                lineageEvidence: admission.lineageEvidence
-            )
-            let continuity = replacementRequired
-                ? ScreenContinuity.replacement(.screenChangedNotification)
-                : classifiedContinuity
+            let candidateTree = switch admission.lineage {
+            case .resting:
+                comparedTree
+            case .viewportMovement:
+                previousTree.merging(admission.tree)
+            }
+
+            let continuity: ScreenContinuity
+            if replacementRequired {
+                continuity = .replacement(.screenChangedNotification)
+            } else {
+                continuity = ScreenClassifier.classify(
+                    from: previousTree == .empty ? nil : previousTree,
+                    to: comparedTree,
+                    notifications: notifications.admittedNotifications.map(\.kind),
+                    lineage: admission.lineage
+                )
+            }
             let nextTree = continuity.isReplacement ? admission.tree : candidateTree
-            let generation = continuity.isReplacement
-                ? (log.latestSnapshotEvent?.generation ?? .initial).advanced()
-                : (log.latestSnapshotEvent?.generation ?? .initial)
-            let previousCapture = log.latestSnapshotEvent?.trace.captures.last
-            let capture = Self.capture(
+            let snapshot = Self.snapshot(
                 tree: nextTree,
                 admission: admission,
-                sequence: (previousCapture?.sequence ?? 0) + 1,
-                parentHash: previousCapture?.hash,
-                generation: generation,
-                notifications: notifications,
-                fallbackReason: continuity.fallbackReason
+                semanticSignal: admission.tripwireSignal.semanticValue
             )
-            let trace = previousCapture.map {
-                AccessibilityTrace(captures: [$0, capture])
-            } ?? AccessibilityTrace(capture: capture)
-            let snapshot = Snapshot(
-                sequence: sequence + 1,
-                generation: generation,
-                sourceScope: admission.scope,
-                tree: nextTree,
-                captureID: admission.captureID,
-                semanticSignal: admission.tripwireSignal.semanticValue,
-                notificationSequence: notifications.through.sequence,
-                trace: trace
-            )
+            let notificationEvents = notifications.admittedNotifications.compactMap {
+                Observation.Notification(text: $0.text, element: $0.element)
+                    .map(Observation.Event.notification)
+            }
+            let forcesElementChange = notifications.admittedNotifications.contains {
+                if case .elementChanged = $0.kind { return true }
+                return false
+            }
+            let currentEvent: Observation.Event
+            let events: [Observation.Event]
+            if continuity.isReplacement {
+                currentEvent = .elementsChanged(snapshot)
+                events = notificationEvents + [
+                    .elementsChanged(.empty(timestamp: snapshot.interface.timestamp)),
+                    .screenChanged(ScreenFacts(
+                        idAfter: InterfaceSummary.screenName(for: snapshot.interface)
+                    )),
+                    currentEvent,
+                ]
+            } else {
+                let changed = currentSnapshot.map {
+                    !$0.hasSameObservedState(
+                        as: snapshot,
+                        geometryTolerance: admission.geometryTolerance
+                    )
+                } ?? true
+                currentEvent = forcesElementChange || changed
+                    ? .elementsChanged(snapshot)
+                    : .noChange
+                events = notificationEvents + [currentEvent]
+            }
 
             var next = self
-            let event = try next.log.record(
+            let historyRange = next.history.record(
+                events,
+                protectedBy: next.protectedHistoryIndex
+            )
+            let current = Current(
                 snapshot: snapshot,
-                continuity: continuity,
-                protectedBy: next.earliestActiveSettlementBoundary
+                scope: admission.scope,
+                continuity: continuity
+            )
+            next.currentSnapshot = snapshot
+            next.navigationAdmission = NavigationAdmission(
+                scope: admission.scope,
+                continuity: continuity
             )
             next.interfaceTree = nextTree
-            next.sequence = event.sequence
-            next.notificationIndices[notificationLane] = notifications.through
+            next.notificationIndices[notificationRead.lane] = notifications.through
             next.scopedScreenChangedSequence = notifications.scopedScreenChangedThrough
-            next.settleFailureDiagnostic = nil
             next.replacementRequired = false
-            next.availability = .admitted(
-                sourceScope: admission.scope,
-                tripwireSignal: admission.tripwireSignal
-            )
+            next.admittedTripwireSignal = admission.tripwireSignal
             self = next
-            return CommittedObservation(
-                tree: nextTree,
-                captureID: admission.captureID,
-                event: event
+            return Observation.Publication(
+                current: current,
+                historyRange: historyRange,
+                events: events
             )
         }
 
-        internal mutating func requireReplacement() {
-            invalidateCurrentObservation()
-            replacementRequired = true
-            settleFailureDiagnostic = nil
-        }
-
-        internal mutating func clearCurrentInterface() {
-            interfaceTree = .empty
-            requireReplacement()
-        }
-
-        internal mutating func recordSettleFailure(_ diagnostic: String?) {
-            settleFailureDiagnostic = diagnostic
-        }
-
-        private var earliestActiveSettlementBoundary: Moment? {
-            activeSettlementBoundaries.reduce(nil) { earliest, candidate in
-                guard let earliest else { return candidate }
-                return candidate.isSameOrAfter(earliest) ? earliest : candidate
+        private func notificationRead(
+            for admission: Observation.NotificationAdmission
+        ) -> StoreNotificationRead {
+            let lane: StoreNotificationLane
+            let snapshot: Observation.NotificationSnapshot
+            switch admission {
+            case .passive(let admittedSnapshot):
+                lane = .passive
+                snapshot = admittedSnapshot
+            case .action(let admittedSnapshot):
+                lane = .action
+                snapshot = admittedSnapshot
             }
+            return StoreNotificationRead(
+                lane: lane,
+                notifications: snapshot.notifications(
+                    after: notificationIndices[lane],
+                    scopedScreenChangedCursor: scopedScreenChangedSequence
+                )
+            )
         }
 
-        private static func capture(
+        private static func snapshot(
             tree: InterfaceTree,
             admission: Observation.Admission,
-            sequence: Int,
-            parentHash: String?,
-            generation: ScreenGeneration,
-            notifications: Observation.Notifications,
-            fallbackReason: AccessibilityObservationFallbackReason?
-        ) -> AccessibilityTrace.Capture {
-            let semanticSignal = admission.tripwireSignal.semanticValue
+            semanticSignal: TheTripwire.SemanticSignal
+        ) -> Observation.Snapshot {
             let windows = semanticSignal.windows.enumerated().map { index, window in
-                AccessibilityTrace.WindowContext(
+                Observation.WindowContext(
                     index: index,
                     level: window.level,
                     isKeyWindow: window.isKeyWindow
                 )
             }
-            return AccessibilityTrace.Capture(
-                sequence: sequence,
+            return Observation.Snapshot(
                 interface: TheVault.WireConversion.toSemanticInterface(
                     from: tree,
                     timestamp: admission.timestamp
                 ),
-                parentHash: parentHash,
-                context: AccessibilityTrace.Context(
+                context: Observation.Context(
                     firstResponder: tree.firstResponderTarget,
                     keyboardVisible: admission.keyboardVisible,
                     screenId: tree.id,
-                    observationGeneration: generation.rawValue,
                     windowStack: windows
-                ),
-                transition: AccessibilityTrace.Transition(
-                    fallbackReason: fallbackReason,
-                    accessibilityNotifications: notifications.evidence,
-                    accessibilityNotificationGap: notifications.gap
                 )
             )
         }
-    }
-}
-
-extension Observation.Store {
-    internal struct AdmittedObservation: Sendable, Equatable {
-        internal let event: Observation.SnapshotEvent
-        internal let tripwireSignal: TheTripwire.TripwireSignal
-    }
-
-    internal struct CommittedObservation: Sendable {
-        internal let tree: InterfaceTree
-        internal let captureID: InterfaceCaptureID
-        internal let event: Observation.SnapshotEvent
-    }
-
-    private enum Availability: Sendable, Equatable {
-        case admitted(sourceScope: SemanticObservationScope, tripwireSignal: TheTripwire.TripwireSignal)
-        case invalidated(sourceScope: SemanticObservationScope?)
     }
 }
 

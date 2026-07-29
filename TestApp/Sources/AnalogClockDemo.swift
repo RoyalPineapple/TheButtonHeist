@@ -3,13 +3,16 @@ import SwiftUI
 /// Analog-clock face with hands that rotate continuously via CALayer
 /// animation. Used as a regression fixture for AX-tree-only settle:
 /// callers should see actions on this screen settle within ~300ms even
-/// though CALayer animations are running indefinitely. (Pre-auto-settle,
-/// the single-cycle waitForAllClear timed out at 1s on this screen
-/// because the layer fingerprint never quiesced.)
+/// though CALayer animations are running indefinitely.
 ///
 /// The accessibility tree is intentionally stable: one element labelled
 /// "Analog clock" plus the action button. The hands have no AX
 /// representation — they're purely visual.
+///
+/// On paper this is indistinguishable from a screen that never settles: an
+/// animation that never ends over an AX tree that never changes. It settles
+/// anyway, because settlement is a statement about the accessibility tree and
+/// nothing else.
 struct AnalogClockDemo: View {
 
     @State private var actionsTapped = 0

@@ -169,7 +169,7 @@ final class JoinHeistIntegrationTests: XCTestCase {
                 let interface = try await client.requestInterface()
                 return JoinHeistProbe(
                     reportedPort: info.listeningPort,
-                    labels: interface.projectedElements.compactMap(\.label)
+                    labels: interface.projectedElements.compactMap(\.semantics.assertable.label)
                 )
             }) else {
                 return

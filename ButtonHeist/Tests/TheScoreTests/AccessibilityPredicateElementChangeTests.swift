@@ -1,703 +1,429 @@
-import ButtonHeistTestSupport
 import AccessibilitySnapshotModel
-import XCTest
+import ButtonHeistTestSupport
 import ThePlans
+import XCTest
 @testable import TheScore
 
 extension AccessibilityPredicateTests {
+    func testElementsChangedRoundTrips() throws {
+        let predicates: [AccessibilityPredicate] = [
+            .elementsChanged,
+            .elementsChanged([
+                .appeared(.label("Ready")),
+                .disappeared(.label("Loading")),
+                .updated(
+                    .label("Counter"),
+                    .value(before: "3", after: "5")
+                ),
+            ]),
+        ]
 
-    // MARK: - Codable
-
-    func testElementsChangedEncodeDecode() throws {
-        let predicate = AccessibilityPredicate.changed(.elements())
-        let data = try JSONEncoder().encode(predicate)
-        let decoded = try JSONDecoder().decode(AccessibilityPredicate.self, from: data)
-        XCTAssertEqual(decoded, predicate)
+        for predicate in predicates {
+            let data = try JSONEncoder().encode(predicate)
+            XCTAssertEqual(
+                try JSONDecoder().decode(
+                    AccessibilityPredicate.self,
+                    from: data
+                ),
+                predicate
+            )
+        }
     }
 
-    func testScreenDepartureAndArrivalSatisfyElementLifecycleAssertions() throws {
-        let trace = screenTrace(
-            before: makeTestInterface(elements: [element(label: "Home")]),
-            after: makeTestInterface(elements: [element(label: "Settings")])
-        )
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .disappeared(.label("Home")),
-            .appeared(.label("Settings")),
-        ]))
-
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result(success: true, trace: trace, completeness: .incomplete)).met)
-    }
-
-    func testIdenticalTargetCanDisappearAndReappearAcrossScreenBoundary() throws {
-        let shared = element(label: "Continue", traits: [.button])
-        let trace = screenTrace(
-            before: makeTestInterface(elements: [shared]),
-            after: makeTestInterface(elements: [shared])
-        )
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .disappeared(.label("Continue")),
-            .appeared(.label("Continue")),
-        ]))
-
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result(success: true, trace: trace, completeness: .incomplete)).met)
-    }
-
-    func testUpdatedOnlyMatchesSameScreenElementFacts() throws {
-        let before = makeTestInterface(elements: [element(label: "Count", value: "1")])
-        let after = makeTestInterface(elements: [element(label: "Count", value: "2")])
-        let sameScreen = AccessibilityTrace(first: before).appending(after)
-        let screenBoundary = screenTrace(before: before, after: after)
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("Count"), .value(before: "1", after: "2")),
-        ]))
-
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result(success: true, trace: sameScreen, completeness: .incomplete)).met)
-        XCTAssertFalse(try predicate.resolve(in: .empty).validate(against: result(success: true, trace: screenBoundary, completeness: .incomplete)).met)
-    }
-
-    func testNotificationOnlyFactSatisfiesGenericElementsChange() throws {
-        let interface = makeTestInterface(elements: [element(label: "Status")])
-        let notification = AccessibilityNotificationEvidence(
-            sequence: 1,
-            kind: .elementChanged(.layout),
-            timestamp: Date(timeIntervalSince1970: 1),
-            notificationData: .none,
-            associatedElement: .none
-        )
-        let trace = AccessibilityTrace(first: interface).appending(
-            interface,
-            transition: AccessibilityTrace.Transition(accessibilityNotifications: [notification])
-        )
-
-        XCTAssertTrue(
-            try AccessibilityPredicate.changed(.elements())
-                .resolve(in: .empty)
-                .validate(against: result(success: true, trace: trace, completeness: .incomplete)).met
-        )
-    }
-
-    func testNoChangeRequiresCompleteFactFreeWindow() throws {
-        let interface = makeTestInterface(elements: [element(label: "Ready")])
-        let factFreeTrace = AccessibilityTrace(first: interface).appending(interface)
-        let changed = AccessibilityTrace(first: interface).appending(
-            makeTestInterface(elements: [element(label: "Done")])
-        )
-        let predicate = AccessibilityPredicate.noChange
-
-        let incompleteResult = try predicate.resolve(in: .empty).validate(against: result(
-            success: true,
-            trace: factFreeTrace,
-            completeness: .incomplete
-        ))
-        XCTAssertFalse(incompleteResult.met)
-        XCTAssertEqual(incompleteResult.actual, "observation history incomplete")
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result(
-            success: true,
-            trace: factFreeTrace,
-            completeness: .complete
-        )).met)
-        XCTAssertFalse(try predicate.resolve(in: .empty).validate(against: result(
-            success: true,
-            trace: changed,
-            completeness: .complete
-        )).met)
-
-        let explicitlyIncomplete = ActionResult.success(
-            payload: .oneFingerTap,
-                observation: .settledTrace(
-                    traceEvidence(factFreeTrace, completeness: .incomplete),
-                    .settled(duration: 0)
-                )
-
-        )
-        let explicitlyIncompleteResult = try predicate.resolve(in: .empty).validate(against: explicitlyIncomplete)
-        XCTAssertFalse(explicitlyIncompleteResult.met)
-        XCTAssertEqual(explicitlyIncompleteResult.actual, "observation history incomplete")
-    }
-
-    func testActionResultValidationUsesAccumulatedTraceEvidence() throws {
-        let baseline = makeTestInterface(elements: [
-            element(label: "Counter", value: "0"),
+    func testBareElementsChangedRequiresGraphSemanticMovement() throws {
+        let before = observationSnapshot(elements: [
+            element(label: "Status"),
         ])
-        let updated = makeTestInterface(elements: [
-            element(label: "Counter", value: "1"),
+        let after = observationSnapshot(elements: [
+            element(label: "Status"),
+            element(label: "Detail"),
         ])
-        let final = makeTestInterface(elements: [
-            element(label: "Counter", value: "0"),
+        let expectation = Expectation([
+            try resolvedChange(.elementsChanged),
         ])
-        let trace = AccessibilityTrace(first: baseline)
-            .appending(updated)
-            .appending(final)
 
-        XCTAssertEqual(trace.changeFacts.map(\.kind), [.elementsChanged, .elementsChanged])
-
-        let action = ActionResult.success(
-            payload: .activate,
-                observation: .trace(traceEvidence(trace, completeness: .incomplete))
-
-        )
-        let changePredicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("Counter"), .value(before: "0", after: "1")),
-        ]))
-
-        XCTAssertTrue(try changePredicate.resolve(in: .empty).validate(against: action).met)
-        XCTAssertFalse(try AccessibilityPredicate.noChange.resolve(in: .empty).validate(against: action).met)
+        XCTAssertFalse(evaluateExpectation(expectation, events: [
+            .elementsChanged(before),
+        ]).isSatisfied)
+        XCTAssertTrue(evaluateExpectation(expectation, events: [
+            .elementsChanged(before),
+            .elementsChanged(after),
+        ]).isSatisfied)
     }
 
-    // MARK: - Validation: elements changed (superset rule)
+    func testUpdatedRequiresTargetAndPropertyAtDecodeBoundary() {
+        let stale = Data("""
+        {
+          "type": "updated",
+          "target": {
+            "checks": [{
+              "kind": "label",
+              "match": {"mode": "exact", "value": "counter"}
+            }]
+          }
+        }
+        """.utf8)
 
-    func testElementsChangedMetWhenTraceChangesElements() throws {
-        let trace = try makeUpdateTrace(label: "counter", property: .value, old: "0", new: "1")
-        let action = result(success: true, trace: trace, completeness: .incomplete)
-        let result = try AccessibilityPredicate.changed(.elements()).resolve(in: .empty).validate(against: action)
-        XCTAssertTrue(result.met)
-    }
-
-    func testElementsChangedNotMetWhenTraceHasNoChange() throws {
-        let action = result(success: true, trace: .noChangeForTests(elementCount: 5), completeness: .incomplete)
-        let result = try AccessibilityPredicate.changed(.elements()).resolve(in: .empty).validate(against: action)
-        XCTAssertFalse(result.met)
-        XCTAssertEqual(result.actual, "noChange")
-    }
-
-    func testElementsChangedMetForScreenDepartureAndArrivalFacts() throws {
-        let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        let action = result(success: true, trace: .screenChangedForTests(replacementInterface: interface), completeness: .incomplete)
-        let result = try AccessibilityPredicate.changed(.elements()).resolve(in: .empty).validate(against: action)
-        XCTAssertTrue(result.met)
-    }
-
-    // MARK: - Codable: element updated
-
-    func testElementUpdatedToOnlyEncodeDecode() throws {
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("counter"), .value(after: "5")),
-        ]))
-        let data = try JSONEncoder().encode(predicate)
-        let decoded = try JSONDecoder().decode(AccessibilityPredicate.self, from: data)
-        XCTAssertEqual(decoded, predicate)
-    }
-
-    func testElementUpdatedAllFieldsEncodeDecode() throws {
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("Counter"), .value(before: "3", after: "5")),
-        ]))
-        let data = try JSONEncoder().encode(predicate)
-        let decoded = try JSONDecoder().decode(AccessibilityPredicate.self, from: data)
-        XCTAssertEqual(decoded, predicate)
-    }
-
-    func testElementUpdatedRequiresTargetAndPropertyAtEncodeBoundary() throws {
-        let stale = Data(#"{"type":"updated","target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"counter"}}]}}"#.utf8)
         XCTAssertThrowsError(
-            try JSONDecoder().decode(ChangeDeclaration.ElementAssertion.self, from: stale)
+            try JSONDecoder().decode(ElementAssertion.self, from: stale)
         )
     }
 
-    // MARK: - Validation: element updated
-
-    func testElementUpdatedMetWhenNewValueMatches() throws {
-        let trace = try makeUpdateTrace(label: "counter", property: .value, old: "3", new: "5")
-        let action = result(success: true, trace: trace, completeness: .incomplete)
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("counter"), .value(after: "5")),
-        ]))
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: action).met)
-    }
-
-    func testElementUpdatedPassReportsObservedPropertyEvidence() throws {
-        let trace = try makeUpdateTrace(label: "Quantity", property: .value, old: "2", new: "3")
-        let action = result(success: true, trace: trace, completeness: .incomplete)
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("Quantity"), .value(before: "2", after: "3")),
-        ]))
-        let result = try predicate.resolve(in: .empty).validate(against: action)
-
-        XCTAssertTrue(result.met)
-        XCTAssertNil(result.actual)
-    }
-
-    func testElementUpdatedDoesNotPassWhenCurrentValueAlreadyMatchedWithoutChangeEvidence() throws {
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("Quantity"), .value(before: "3", after: "3")),
-        ]))
-        let trace = AccessibilityTrace.noChangeForTests(elementCount: 1)
-        let result = try predicate.resolve(in: .empty).evaluate(in: evidence(trace))
-
-        XCTAssertFalse(result.met)
-        XCTAssertEqual(result.actual, "noChange")
-    }
-
-    func testElementUpdatedNotMetWhenNoMatch() throws {
-        let trace = try makeUpdateTrace(label: "counter", property: .value, old: "3", new: "4")
-        let action = result(success: true, trace: trace, completeness: .incomplete)
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("counter"), .value(after: "5")),
-        ]))
-        XCTAssertFalse(try predicate.resolve(in: .empty).validate(against: action).met)
-    }
-
-    func testElementUpdatedMetWhenElementPredicateAndNewValueMatch() throws {
-        let trace = AccessibilityTrace.elementsChangedForTests(elementCount: 5, edits: ElementEdits(updated: [
-            try makeUpdate(label: "Other", property: .value, old: "1", new: "5"),
-            try makeUpdate(label: "Counter", property: .value, old: "3", new: "5"),
-        ]))
-        let action = result(success: true, trace: trace, completeness: .incomplete)
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("Counter"), .value(after: "5")),
-        ]))
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: action).met)
-    }
-
-    func testElementUpdatedNotMetWhenElementPredicateDoesNotMatch() throws {
-        let trace = try makeUpdateTrace(label: "Other", property: .value, old: "3", new: "5")
-        let action = result(success: true, trace: trace, completeness: .incomplete)
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("Counter"), .value(after: "5")),
-        ]))
-        XCTAssertFalse(try predicate.resolve(in: .empty).validate(against: action).met)
-    }
-
-    func testElementUpdatedMetWhenOldAndNewValueMatch() throws {
-        let trace = try makeUpdateTrace(label: "counter", property: .value, old: "3", new: "5")
-        let action = result(success: true, trace: trace, completeness: .incomplete)
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("counter"), .value(before: "3", after: "5")),
-        ]))
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: action).met)
-    }
-
-    func testElementUpdatedUsesConfiguredStringMatchForOldAndNewValues() throws {
-        let trace = try makeUpdateTrace(label: "cart", property: .value, old: "cart: empty", new: "3 items")
-        let action = result(success: true, trace: trace, completeness: .incomplete)
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("cart"), .value(before: .prefix("cart:"), after: .suffix("items"))),
-        ]))
-
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: action).met)
-    }
-
-    func testElementUpdatedUsesConfiguredStringMatchForEveryModeAcrossBeforeAndAfter() throws {
-        let trace = try makeUpdateTrace(
-            label: "Search Field",
-            property: .value,
-            old: "Search for tea",
-            new: "John Smith"
+    func testUpdatedValueMatchesAuthoredBeforeAndAfterChecks() throws {
+        let expectation = try updateExpectation(
+            target: .label("Counter"),
+            change: .value(before: "3", after: "5")
         )
-        let action = result(success: true, trace: trace, completeness: .incomplete)
+
+        XCTAssertTrue(evaluateExpectation(expectation, events: [
+            .elementsChanged(snapshot([
+                element(label: "Counter", value: "3"),
+            ])),
+            .elementsChanged(snapshot([
+                element(label: "Counter", value: "5"),
+            ])),
+        ]).isSatisfied)
+        XCTAssertFalse(evaluateExpectation(expectation, events: [
+            .elementsChanged(snapshot([
+                element(label: "Counter", value: "4"),
+            ])),
+            .elementsChanged(snapshot([
+                element(label: "Counter", value: "5"),
+            ])),
+        ]).isSatisfied)
+    }
+
+    func testUpdatedUsesEveryStringMatchMode() throws {
         let changes: [ElementPropertyChange] = [
-            .value(before: .exact("Search for tea"), after: .exact("John Smith")),
-            .value(before: .contains("for"), after: .contains("Smith")),
-            .value(before: .prefix("Search"), after: .prefix("John")),
-            .value(before: .suffix("tea"), after: .suffix("Smith")),
+            .value(
+                before: .exact("Search for tea"),
+                after: .exact("John Smith")
+            ),
+            .value(
+                before: .contains("for"),
+                after: .contains("Smith")
+            ),
+            .value(
+                before: .prefix("Search"),
+                after: .prefix("John")
+            ),
+            .value(
+                before: .suffix("tea"),
+                after: .suffix("Smith")
+            ),
+        ]
+        let events: [Observation.Event] = [
+            .elementsChanged(snapshot([
+                element(label: "Search", value: "Search for tea"),
+            ])),
+            .elementsChanged(snapshot([
+                element(label: "Search", value: "John Smith"),
+            ])),
         ]
 
         for change in changes {
-            let predicate = AccessibilityPredicate.changed(.elements([
-                .updated(.label("Search Field"), change),
-            ]))
-            XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: action).met)
+            XCTAssertTrue(
+                evaluateExpectation(
+                    try updateExpectation(
+                        target: .label("Search"),
+                        change: change
+                    ),
+                    events: events
+                ).isSatisfied,
+                "\(change)"
+            )
         }
     }
 
-    func testElementUpdatedMatchesTraitGainAndLossAcrossBeforeAndAfter() throws {
-        let gained = try makeTraitUpdate(label: "Favorites", beforeTraits: [.button], afterTraits: [.button, .selected])
-        let lost = try makeTraitUpdate(label: "Disabled", beforeTraits: [.button, .notEnabled], afterTraits: [.button])
-        let action = result(
-            success: true,
-            trace: .elementsChangedForTests(elementCount: 2, edits: ElementEdits(updated: [gained, lost])),
-            completeness: .incomplete
+    func testUpdatedIgnoresSemanticChangeOutsidePropertyScope() throws {
+        let expectation = try updateExpectation(
+            target: .label("Counter"),
+            change: .value(before: "1", after: "1")
+        )
+        let before = element(
+            label: "Counter",
+            value: "1",
+            hint: "Old hint",
+            traits: [.staticText]
+        )
+        let after = element(
+            label: "Counter",
+            value: "1",
+            hint: "New hint",
+            traits: [.button],
+            actions: [.activate]
         )
 
-        let selectedGain = AccessibilityPredicate.changed(.elements([
-            .updated(
-                .label("Favorites"),
-                .traits(before: .init(exclude: [.selected]), after: .init(include: [.selected]))
-            ),
-        ]))
-        let enabledLoss = AccessibilityPredicate.changed(.elements([
-            .updated(
-                .label("Disabled"),
-                .traits(before: .init(include: [.notEnabled]), after: .init(exclude: [.notEnabled]))
-            ),
-        ]))
-
-        XCTAssertTrue(try selectedGain.resolve(in: .empty).validate(against: action).met)
-        XCTAssertTrue(try enabledLoss.resolve(in: .empty).validate(against: action).met)
+        XCTAssertFalse(evaluateExpectation(expectation, events: [
+            .elementsChanged(snapshot([before])),
+            .elementsChanged(snapshot([after])),
+        ]).isSatisfied)
     }
 
-    func testElementUpdatedMatchesTypedActionChecker() throws {
-        let update = try XCTUnwrap(projectElementStateChange(
-            old: element(label: "Stepper", actions: [.increment]),
-            new: element(label: "Stepper", actions: [.increment, .activate])
-        ))
-        let action = result(
-            success: true,
-            trace: .elementsChangedForTests(elementCount: 1, edits: ElementEdits(updated: [update])),
-            completeness: .incomplete
+    func testUpdatedRejectsIdenticalPropertyReadings() throws {
+        let expectation = try updateExpectation(
+            target: .label("Counter"),
+            change: .value(before: "1", after: "1")
+        )
+        let counter = element(label: "Counter", value: "1")
+
+        XCTAssertFalse(evaluateExpectation(expectation, events: [
+            .elementsChanged(snapshot([counter])),
+            .elementsChanged(snapshot([counter])),
+        ]).isSatisfied)
+    }
+
+    func testUpdatedRejectsGeometryOnlyChange() throws {
+        let expectation = try updateExpectation(
+            target: .label("Counter"),
+            change: .value(before: "1", after: "1")
+        )
+        let before = element(
+            label: "Counter",
+            value: "1",
+            frameX: 0,
+            frameY: 0
+        )
+        let after = element(
+            label: "Counter",
+            value: "1",
+            frameX: 200,
+            frameY: 300
         )
 
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(
-                .label("Stepper"),
-                .actions(
-                    before: ActionSetMatch(exclude: Set<ElementAction>([.activate])),
-                    after: ActionSetMatch(include: Set<ElementAction>([.activate]))
-                )
-            ),
-        ]))
-        let mismatch = AccessibilityPredicate.changed(.elements([
-            .updated(.label("Stepper"), .actions(after: ActionSetMatch(exclude: [.activate]))),
-        ]))
-
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: action).met)
-        XCTAssertFalse(try mismatch.resolve(in: .empty).validate(against: action).met)
+        XCTAssertEqual(before.semantics, after.semantics)
+        XCTAssertFalse(evaluateExpectation(expectation, events: [
+            .elementsChanged(snapshot([before])),
+            .elementsChanged(snapshot([after])),
+        ]).isSatisfied)
     }
 
-    func testElementUpdatedMatchesTypedGeometryCheckers() throws {
-        let frameUpdate = try XCTUnwrap(projectElementStateChange(
-            old: element(label: "Card", frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44),
-            new: element(label: "Card", frameX: 12, frameY: 20, frameWidth: 120, frameHeight: 44)
-        ))
-        let pointUpdate = try XCTUnwrap(projectElementStateChange(
-            old: element(label: "Knob", activationPointEvidence: .explicit(ScreenPoint(x: 10, y: 12))),
-            new: element(label: "Knob", activationPointEvidence: .explicit(ScreenPoint(x: 42, y: 64)))
-        ))
-        let action = result(
-            success: true,
-            trace: .elementsChangedForTests(
-                elementCount: 2,
-                edits: ElementEdits(updated: [frameUpdate, pointUpdate])
-            ),
-            completeness: .incomplete
+    func testUpdatedPropertyReadingUsesDuplicateCardinality() throws {
+        let expectation = try updateExpectation(
+            target: .label("Counter"),
+            change: .value(before: "1", after: "1")
+        )
+        let counter = element(label: "Counter", value: "1")
+
+        XCTAssertTrue(evaluateExpectation(expectation, events: [
+            .elementsChanged(snapshot([counter])),
+            .elementsChanged(snapshot([counter, counter])),
+        ]).isSatisfied)
+    }
+
+    func testUpdatedTraitsMatchGainAndLoss() throws {
+        let gain = try updateExpectation(
+            target: .label("Favorite"),
+            change: .traits(
+                before: .init(exclude: [.selected]),
+                after: .init(include: [.selected])
+            )
+        )
+        let loss = try updateExpectation(
+            target: .label("Disabled"),
+            change: .traits(
+                before: .init(include: [.notEnabled]),
+                after: .init(exclude: [.notEnabled])
+            )
         )
 
-        let framePredicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("Card"), .frame(after: ElementFrameMatch(x: 12, y: 20, width: 120, height: 44))),
-        ]))
-        let pointPredicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("Knob"), .activationPoint(after: ElementPointMatch(x: 42, y: 64))),
-        ]))
-        let mismatch = AccessibilityPredicate.changed(.elements([
-            .updated(.label("Card"), .frame(after: ElementFrameMatch(x: 13))),
-        ]))
-
-        XCTAssertTrue(try framePredicate.resolve(in: .empty).validate(against: action).met)
-        XCTAssertTrue(try pointPredicate.resolve(in: .empty).validate(against: action).met)
-        XCTAssertFalse(try mismatch.resolve(in: .empty).validate(against: action).met)
+        XCTAssertTrue(evaluateExpectation(gain, events: [
+            .elementsChanged(snapshot([
+                element(label: "Favorite", traits: [.button]),
+            ])),
+            .elementsChanged(snapshot([
+                element(label: "Favorite", traits: [.button, .selected]),
+            ])),
+        ]).isSatisfied)
+        XCTAssertTrue(evaluateExpectation(loss, events: [
+            .elementsChanged(snapshot([
+                element(label: "Disabled", traits: [.button, .notEnabled]),
+            ])),
+            .elementsChanged(snapshot([
+                element(label: "Disabled", traits: [.button]),
+            ])),
+        ]).isSatisfied)
     }
 
-    func testElementUpdatedMatchesTypedCustomContentAndRotorCheckers() throws {
-        let customContent = HeistCustomContent(label: "Status", value: "Ready to submit", isImportant: true)
-        let customUpdate = try XCTUnwrap(projectElementStateChange(
-            old: element(label: "Form", customContent: [HeistCustomContent(label: "Help", value: "Optional", isImportant: false)]),
-            new: element(label: "Form", customContent: [customContent])
-        ))
-        let rotorUpdate = try XCTUnwrap(projectElementStateChange(
-            old: element(label: "Article", rotors: [HeistRotor(name: "Links")]),
-            new: element(label: "Article", rotors: [HeistRotor(name: "Headings"), HeistRotor(name: "Links")])
-        ))
-        let action = result(
-            success: true,
-            trace: .elementsChangedForTests(
-                elementCount: 2,
-                edits: ElementEdits(updated: [customUpdate, rotorUpdate])
-            ),
-            completeness: .incomplete
+    func testUpdatedActionsUseTypedSetChecks() throws {
+        let expectation = try updateExpectation(
+            target: .label("Stepper"),
+            change: .actions(
+                before: ActionSetMatch(exclude: [.activate]),
+                after: ActionSetMatch(include: [.activate])
+            )
         )
 
-        let customPredicate = AccessibilityPredicate.changed(.elements([
-            .updated(
-                .label("Form"),
-                .customContent(after: CustomContentMatch(
-                    label: StringMatch.exact("Status"),
-                    value: StringMatch.contains("Ready"),
-                    isImportant: true
-                ))
-            ),
-        ]))
-        let rotorPredicate = AccessibilityPredicate.changed(.elements([
-            .updated(
-                .label("Article"),
-                .rotors(
-                    before: RotorSetMatch(exclude: [StringMatch.exact("Headings")]),
-                    after: RotorSetMatch(include: [StringMatch.contains("Head")])
-                )
-            ),
-        ]))
-        let mismatch = AccessibilityPredicate.changed(.elements([
-            .updated(
-                .label("Form"),
-                .customContent(after: CustomContentMatch(
-                    label: StringMatch.exact("Status"),
-                    isImportant: false
-                ))
-            ),
-        ]))
-
-        XCTAssertTrue(try customPredicate.resolve(in: .empty).validate(against: action).met)
-        XCTAssertTrue(try rotorPredicate.resolve(in: .empty).validate(against: action).met)
-        XCTAssertFalse(try mismatch.resolve(in: .empty).validate(against: action).met)
+        XCTAssertTrue(evaluateExpectation(expectation, events: [
+            .elementsChanged(snapshot([
+                element(label: "Stepper", actions: [.increment]),
+            ])),
+            .elementsChanged(snapshot([
+                element(
+                    label: "Stepper",
+                    actions: [.increment, .activate]
+                ),
+            ])),
+        ]).isSatisfied)
     }
 
-    func testElementUpdatedResolvesTargetThroughCaptureReferences() throws {
-        let trace = try makeUpdateTrace(label: "counter", property: .value, old: "a", new: "b")
-        let edge = try XCTUnwrap(trace.changeFacts.first?.metadata.captureEdge)
-        XCTAssertEqual(trace.capture(ref: edge.before)?.sequence, edge.before.sequence)
-        XCTAssertEqual(trace.capture(ref: edge.after)?.sequence, edge.after.sequence)
-
-        let action = result(success: true, trace: trace, completeness: .incomplete)
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("counter"), .value()),
-        ]))
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: action).met)
-    }
-
-    func testElementUpdatedNotMetWithoutTrace() throws {
-        let action = result(success: true)
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("counter"), .value(after: "5")),
-        ]))
-        let result = try predicate.resolve(in: .empty).validate(against: action)
-        XCTAssertFalse(result.met)
-        XCTAssertEqual(result.actual, "no observed accessibility trace")
-    }
-
-    func testElementUpdatedNotMetWhenEmptyUpdates() throws {
-        let trace = AccessibilityTrace.elementsChangedForTests(elementCount: 5, edits: ElementEdits())
-        let action = result(success: true, trace: trace, completeness: .incomplete)
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("counter"), .value(after: "5")),
-        ]))
-        let result = try predicate.resolve(in: .empty).validate(against: action)
-        XCTAssertFalse(result.met)
-        XCTAssertEqual(result.actual, "no matching element updates")
-    }
-
-    func testElementUpdatedDiagnosticOnMiss() throws {
-        let trace = try makeUpdateTrace(label: "counter", property: .value, old: "3", new: "4")
-        let action = result(success: true, trace: trace, completeness: .incomplete)
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("counter"), .value(after: "5")),
-        ]))
-        let result = try predicate.resolve(in: .empty).validate(against: action)
-        XCTAssertFalse(result.met)
-        XCTAssertEqual(result.actual, "counter: value: 3 → 4")
-    }
-
-    func testElementUpdatedMatchesAnyAmongMultipleUpdates() throws {
-        let trace = AccessibilityTrace.elementsChangedForTests(elementCount: 10, edits: ElementEdits(updated: [
-            try makeUpdate(label: "label", property: .value, old: "A", new: "B"),
-            try makeUpdate(label: "counter", property: .value, old: "3", new: "5"),
-        ]))
-        let action = result(success: true, trace: trace, completeness: .incomplete)
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("counter"), .value(after: "5")),
-        ]))
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: action).met)
-    }
-
-    func testElementUpdatedWithPropertyFilter() throws {
-        let trace = AccessibilityTrace.elementsChangedForTests(elementCount: 5, edits: ElementEdits(updated: [
-            ElementUpdate(
-                before: element(label: "Toggle", traits: [.button]),
-                after: element(label: "Toggle", value: "5", traits: [.button, .selected]),
-                changes: [
-                    try XCTUnwrap(PropertyChange.traits(old: [.button], new: [.button, .selected])),
-                    try XCTUnwrap(PropertyChange.value(old: "3", new: "5")),
-                ]
-            ),
-        ]))
-        let action = result(success: true, trace: trace, completeness: .incomplete)
-        let traitsPredicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("Toggle"), .traits()),
-        ]))
-        let traitsResult = try traitsPredicate.resolve(in: .empty).validate(against: action)
-        XCTAssertTrue(traitsResult.met)
-        let valuePredicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("Toggle"), .value(after: "5")),
-        ]))
-        let valueResult = try valuePredicate.resolve(in: .empty).validate(against: action)
-        XCTAssertTrue(valueResult.met)
-        let hintPredicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("Toggle"), .hint()),
-        ]))
-        let hintResult = try hintPredicate.resolve(in: .empty).validate(against: action)
-        XCTAssertFalse(hintResult.met)
-    }
-
-    func testElementUpdatedAllFieldsMatch() throws {
-        let result = ActionResult.success(
-            payload: .activate,
-                observation: .trace(traceEvidence(
-                    .elementsChangedForTests(
-                        elementCount: 5,
-                        edits: ElementEdits(updated: [
-                            try makeUpdate(label: "btn_1", property: .value, old: "OFF", new: "ON"),
-                        ])
-                    ),
-                    completeness: .incomplete
-                ))
-
+    func testUpdatedCustomContentAndRotorsUseTypedSetChecks() throws {
+        let customContent = HeistCustomContent(
+            label: "Status",
+            value: "Ready to submit",
+            isImportant: true
         )
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("btn_1"), .value(before: "OFF", after: "ON")),
-        ]))
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result).met)
-    }
-
-    func testElementUpdatedPropertyOnly() throws {
-        let result = ActionResult.success(
-            payload: .activate,
-                observation: .trace(traceEvidence(
-                    .elementsChangedForTests(
-                        elementCount: 5,
-                        edits: ElementEdits(updated: [
-                            try makeUpdate(label: "any", property: .value, old: "A", new: "B"),
-                        ])
-                    ),
-                    completeness: .incomplete
-                ))
-
+        let customExpectation = try updateExpectation(
+            target: .label("Form"),
+            change: .customContent(after: CustomContentMatch(
+                label: .exact("Status"),
+                value: .contains("Ready"),
+                isImportant: true
+            ))
         )
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("any"), .value()),
-        ]))
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result).met)
-    }
-
-    func testElementUpdatedNoUpdatesInResult() throws {
-        let result = ActionResult.success(
-            payload: .activate,
-                observation: .trace(traceEvidence(
-                    .elementsChangedForTests(elementCount: 5, edits: ElementEdits()),
-                    completeness: .incomplete
-                ))
-
+        let rotorExpectation = try updateExpectation(
+            target: .label("Article"),
+            change: .rotors(
+                before: RotorSetMatch(exclude: [.exact("Headings")]),
+                after: RotorSetMatch(include: [.contains("Head")])
+            )
         )
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("any"), .value()),
-        ]))
-        let outcome = try predicate.resolve(in: .empty).validate(against: result)
-        XCTAssertFalse(outcome.met)
-        XCTAssertEqual(outcome.actual, "no matching element updates")
+
+        XCTAssertTrue(evaluateExpectation(customExpectation, events: [
+            .elementsChanged(snapshot([
+                element(
+                    label: "Form",
+                    customContent: [
+                        HeistCustomContent(
+                            label: "Help",
+                            value: "Optional",
+                            isImportant: false
+                        ),
+                    ]
+                ),
+            ])),
+            .elementsChanged(snapshot([
+                element(label: "Form", customContent: [customContent]),
+            ])),
+        ]).isSatisfied)
+        XCTAssertTrue(evaluateExpectation(rotorExpectation, events: [
+            .elementsChanged(snapshot([
+                element(
+                    label: "Article",
+                    rotors: [HeistRotor(name: "Links")]
+                ),
+            ])),
+            .elementsChanged(snapshot([
+                element(
+                    label: "Article",
+                    rotors: [
+                        HeistRotor(name: "Headings"),
+                        HeistRotor(name: "Links"),
+                    ]
+                ),
+            ])),
+        ]).isSatisfied)
     }
 
-    func testElementUpdatedPropertyMismatch() throws {
-        let result = ActionResult.success(
-            payload: .activate,
-                observation: .trace(traceEvidence(
-                    .elementsChangedForTests(
-                        elementCount: 5,
-                        edits: ElementEdits(updated: [
-                            try makeUpdate(label: "btn_1", property: .hint, old: "A", new: "B"),
-                        ])
-                    ),
-                    completeness: .incomplete
-                ))
-
+    func testUpdatedRequiresMatchingTargetOnBothEvents() throws {
+        let expectation = try updateExpectation(
+            target: .label("Counter"),
+            change: .value()
         )
-        let predicate = AccessibilityPredicate.changed(.elements([
-            .updated(.label("btn_1"), .value()),
-        ]))
-        XCTAssertFalse(try predicate.resolve(in: .empty).validate(against: result).met)
+
+        XCTAssertFalse(evaluateExpectation(expectation, events: [
+            .elementsChanged(snapshot([
+                element(label: "Counter", value: "1"),
+            ])),
+            .elementsChanged(snapshot([
+                element(label: "Total", value: "2"),
+            ])),
+        ]).isSatisfied)
     }
 
-    // MARK: - Helpers
-
-    func makeUpdateTrace(
-        label: String,
-        property: ElementProperty,
-        old: String?,
-        new: String?,
-        elementCount: Int = 5
-    ) throws -> AccessibilityTrace {
-        .elementsChangedForTests(
-            elementCount: elementCount,
-            edits: ElementEdits(updated: [
-                try makeUpdate(label: label, property: property, old: old, new: new),
-            ])
+    func testUpdatedCannotCrossScreenGeneration() throws {
+        let expectation = try updateExpectation(
+            target: .label("Counter"),
+            change: .value(before: "1", after: "2")
         )
+        XCTAssertFalse(evaluateExpectation(expectation, events: [
+            .elementsChanged(snapshot([
+                element(label: "Counter", value: "1"),
+            ])),
+            .screenChanged(ScreenFacts(idAfter: "Checkout")),
+            .elementsChanged(snapshot([
+                element(label: "Counter", value: "2"),
+            ])),
+        ]).isSatisfied)
     }
 
-    private func makeUpdate(
-        label: String,
-        property: ElementProperty,
-        old: String?,
-        new: String?,
-        beforeTraits: [HeistTrait] = [],
-        afterTraits: [HeistTrait] = []
-    ) throws -> ElementUpdate {
-        ElementUpdate(
-            before: makeElementForUpdate(label: label, property: property, value: old, traits: beforeTraits),
-            after: makeElementForUpdate(label: label, property: property, value: new, traits: afterTraits),
-            changes: [try propertyChange(
-                property: property,
-                old: old,
-                new: new,
-                beforeTraits: beforeTraits,
-                afterTraits: afterTraits
-            )]
+    func testUpdatedCanRestartWithinNewScreenGeneration() throws {
+        let expectation = try updateExpectation(
+            target: .label("Counter"),
+            change: .value(before: "1", after: "2")
         )
+        XCTAssertTrue(evaluateExpectation(expectation, events: [
+            .elementsChanged(snapshot([
+                element(label: "Counter", value: "1"),
+            ])),
+            .screenChanged(ScreenFacts(idAfter: "Checkout")),
+            .elementsChanged(snapshot([
+                element(label: "Counter", value: "1"),
+            ])),
+            .elementsChanged(snapshot([
+                element(label: "Counter", value: "2"),
+            ])),
+        ]).isSatisfied)
     }
 
-    private func makeTraitUpdate(
-        label: String,
-        beforeTraits: [HeistTrait],
-        afterTraits: [HeistTrait]
-    ) throws -> ElementUpdate {
-        ElementUpdate(
-            before: element(label: label, traits: beforeTraits),
-            after: element(label: label, traits: afterTraits),
-            changes: [
-                try XCTUnwrap(PropertyChange.traits(old: beforeTraits, new: afterTraits)),
-            ]
-        )
+    func testScreenBoundaryResetBlocksLaterAuthoredPredicate() throws {
+        let expectation = Expectation([
+            try resolvedChange(.elementsChanged([
+                .updated(
+                    .label("Counter"),
+                    .value(before: "1", after: "2")
+                ),
+            ])),
+            try resolvedChange(.screenChanged("Checkout")),
+        ])
+        let events: [Observation.Event] = [
+            .elementsChanged(snapshot([
+                element(label: "Counter", value: "1"),
+            ])),
+            .screenChanged(ScreenFacts(idAfter: "Checkout")),
+            .elementsChanged(snapshot([
+                element(label: "Counter", value: "1"),
+            ])),
+            .elementsChanged(snapshot([
+                element(label: "Counter", value: "2"),
+            ])),
+        ]
+
+        XCTAssertFalse(evaluateExpectation(expectation, events: events).isSatisfied)
+        XCTAssertTrue(evaluateExpectation(
+            expectation,
+            events: events + [.screenChanged(ScreenFacts(idAfter: "Checkout"))]
+        ).isSatisfied)
     }
 
-    private func propertyChange(
-        property: ElementProperty,
-        old: String?,
-        new: String?,
-        beforeTraits: [HeistTrait],
-        afterTraits: [HeistTrait]
-    ) throws -> PropertyChange {
-        switch property {
-        case .label:
-            return try XCTUnwrap(PropertyChange.label(old: old, new: new))
-        case .identifier:
-            return try XCTUnwrap(PropertyChange.identifier(old: old, new: new))
-        case .value:
-            return try XCTUnwrap(PropertyChange.value(old: old, new: new))
-        case .hint:
-            return try XCTUnwrap(PropertyChange.hint(old: old, new: new))
-        case .traits:
-            return try XCTUnwrap(PropertyChange.traits(old: beforeTraits, new: afterTraits))
-        case .actions, .frame, .activationPoint, .customContent, .rotors:
-            fatalError("Unsupported test property \(property)")
-        }
+    private func updateExpectation(
+        target: AccessibilityElementTarget,
+        change: ElementPropertyChange
+    ) throws -> Expectation {
+        Expectation([
+            try resolvedChange(.elementsChanged([
+                .updated(target, change),
+            ])),
+        ])
     }
 
-    private func makeElementForUpdate(
-        label: String,
-        property: ElementProperty,
-        value: String?,
-        traits: [HeistTrait]
-    ) -> HeistElement {
-        switch property {
-        case .label:
-            return element(label: value ?? label, traits: traits)
-        case .identifier:
-            return element(label: label, identifier: value, traits: traits)
-        case .value:
-            return element(label: label, value: value, traits: traits)
-        case .traits:
-            return element(label: label, traits: traits)
-        case .hint:
-            return element(label: label, hint: value, traits: traits)
-        default:
-            return element(label: label, value: value, traits: traits)
-        }
+    private func resolvedChange(
+        _ predicate: AccessibilityPredicate
+    ) throws -> ObservationPredicate {
+        try predicate.resolve(in: .empty)
     }
 
+    private func snapshot(_ elements: [HeistElement]) -> Observation.Snapshot {
+        observationSnapshot(elements: elements)
+    }
 }

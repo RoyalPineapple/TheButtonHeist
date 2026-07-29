@@ -8,6 +8,14 @@ public struct TraitSetMatch: Sendable, Equatable {
         self.include = include.heistTraitSet
         self.exclude = exclude.heistTraitSet
     }
+
+    public static func includes(_ traits: HeistTrait...) -> Self {
+        Self(include: traits)
+    }
+
+    public static func excludes(_ traits: HeistTrait...) -> Self {
+        Self(exclude: traits)
+    }
 }
 
 public struct ActionSetMatch: Sendable, Equatable {
@@ -18,29 +26,13 @@ public struct ActionSetMatch: Sendable, Equatable {
         self.include = include
         self.exclude = exclude
     }
-}
 
-public struct ElementFrameMatch: Sendable, Equatable {
-    public let x: Int?
-    public let y: Int?
-    public let width: Int?
-    public let height: Int?
-
-    public init(x: Int? = nil, y: Int? = nil, width: Int? = nil, height: Int? = nil) {
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
+    public static func includes(_ actions: ElementAction...) -> Self {
+        Self(include: Set(actions))
     }
-}
 
-public struct ElementPointMatch: Sendable, Equatable {
-    public let x: Int?
-    public let y: Int?
-
-    public init(x: Int? = nil, y: Int? = nil) {
-        self.x = x
-        self.y = y
+    public static func excludes(_ actions: ElementAction...) -> Self {
+        Self(exclude: Set(actions))
     }
 }
 
@@ -103,6 +95,14 @@ public struct RotorSetMatch: Codable, Sendable, Equatable, Hashable {
     public init(include: [StringMatch] = [], exclude: [StringMatch] = []) {
         self.include = include
         self.exclude = exclude
+    }
+
+    public static func includes(_ matches: StringMatch...) -> Self {
+        Self(include: matches)
+    }
+
+    public static func excludes(_ matches: StringMatch...) -> Self {
+        Self(exclude: matches)
     }
 
     package func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedRotorSetMatch {

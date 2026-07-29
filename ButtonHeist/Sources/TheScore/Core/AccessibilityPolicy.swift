@@ -18,7 +18,7 @@ public enum AccessibilityMatcherFact: Sendable, Equatable {
 
 /// Single source of truth for trait-related rules-of-the-world.
 ///
-/// Every site that encodes a rule *about traits* — which are transient,
+/// Every site that encodes a rule *about traits* — which are state,
 /// which are interactive, which drive heistId synthesis, which are
 /// purely descriptive — reads from this namespace. Adding or moving a
 /// trait policy is a one-file edit; downstream sites are pure consumers.
@@ -29,14 +29,31 @@ public enum AccessibilityMatcherFact: Sendable, Equatable {
 /// format) read the same `Set<HeistTrait>`. UIKit-bitmask derivations
 /// live in TheInsideJob as `AccessibilityPolicy+UIKit`.
 ///
+/// Traits are classified on two independent axes, so a trait is placed by
+/// answering two separate questions:
+///
+/// - **Identity or state.** Identity traits define the element — what it *is*.
+///   State traits change during the element's lifecycle. Every trait is
+///   exactly one of the two, so only `stateTraits` is written down and
+///   identity is everything else.
+/// - **Interactive or not.** Whether Button Heist can act on the element.
+///
+/// The axes cut across each other: `.button` is identity *and* interactive —
+/// being a button is what it is. `.notEnabled` is state *and* about
+/// interactivity, but negatively: it says the element cannot be acted on right
+/// now. `interactiveTraits` holds only the positive capability, because
+/// `Interactivity` reads membership as "advertises an action"; a trait that
+/// withdraws interactivity is expressed by excluding it at the call site
+/// (`.exclude(.traits([.notEnabled]))`), not by joining the set.
+///
 /// Rules:
-/// - Add a new transient trait → edit `transientTraits` only.
+/// - Add a new state trait → edit `stateTraits` only.
 /// - Add a new interactive trait → edit `interactiveTraits` only.
 /// - Reorder heistId synthesis → edit `synthesisPriority` only and run
 ///   `SynthesisDeterminismTests` (changes here are wire-format breaks).
 public enum AccessibilityPolicy {
 
-    // MARK: - Transient Traits
+    // MARK: - State Traits
 
     /// Traits whose presence is *state*, not *identity*.
     ///
@@ -44,10 +61,10 @@ public enum AccessibilityPolicy {
     /// same heistId — these traits do not contribute to element identity.
     /// Consumed by:
     /// - `HeistIdAssignment` duplicate-id disambiguation
-    /// - `AccessibilityTrace.ChangeFact.between` (functional-move pairing)
+    /// - `ElementEdits.between` (functional-move pairing)
     /// - `MinimumPredicateSelector` (matcher suggestion — adds state only
     ///   when semantic predicates remain ambiguous)
-    public static let transientTraits: Set<HeistTrait> = [
+    public static let stateTraits: Set<HeistTrait> = [
         .selected,
         .notEnabled,
         .isEditing,
@@ -160,9 +177,9 @@ public enum AccessibilityPolicy {
         case .value:
             return .state
         case .trait(let trait):
-            return transientTraits.contains(trait) ? .state : .identity
+            return stateTraits.contains(trait) ? .state : .identity
         case .excludedTrait(let trait):
-            return transientTraits.contains(trait) ? .state : nil
+            return stateTraits.contains(trait) ? .state : nil
         }
     }
 
@@ -173,7 +190,7 @@ public enum AccessibilityPolicy {
         case .label:
             return 10
         case .trait(let trait):
-            return (transientTraits.contains(trait) ? 220 : 20) + matcherTraitPriority(trait)
+            return (stateTraits.contains(trait) ? 220 : 20) + matcherTraitPriority(trait)
         case .value:
             return 200
         case .excludedTrait(let trait):
@@ -191,8 +208,9 @@ public enum AccessibilityPolicy {
         label: String?,
         identifier: String?,
         value: String?,
-        traits: [HeistTrait]
+        traits: some Sequence<HeistTrait>
     ) -> [AccessibilityMatcherFact] {
+        let traitSet = Set(traits)
         var facts: [AccessibilityMatcherFact] = []
         if let identifier = nonEmpty(identifier) {
             facts.append(.identifier(identifier))
@@ -200,7 +218,7 @@ public enum AccessibilityPolicy {
         if let label = nonEmpty(label) {
             facts.append(.label(label))
         }
-        for trait in orderedMatcherTraits(traits) {
+        for trait in orderedMatcherTraits(Array(traitSet)) {
             facts.append(.trait(trait))
         }
         if let value = nonEmpty(value) {
@@ -208,8 +226,7 @@ public enum AccessibilityPolicy {
         }
 
         if !facts.isEmpty {
-            let presentTraits = Set(traits)
-            for trait in orderedMatcherStateTraits where !presentTraits.contains(trait) {
+            for trait in orderedMatcherStateTraits where !traitSet.contains(trait) {
                 facts.append(.excludedTrait(trait))
             }
         }
@@ -217,11 +234,12 @@ public enum AccessibilityPolicy {
     }
 
     public static func matcherFacts(for element: HeistElement) -> [AccessibilityMatcherFact] {
-        matcherFacts(
-            label: element.label,
-            identifier: element.identifier,
-            value: element.value,
-            traits: element.traits
+        let assertable = element.semantics.assertable
+        return matcherFacts(
+            label: assertable.label,
+            identifier: assertable.identifier,
+            value: assertable.value,
+            traits: assertable.traits
         )
     }
 
@@ -230,7 +248,7 @@ public enum AccessibilityPolicy {
     }
 
     public static var orderedMatcherStateTraits: [HeistTrait] {
-        orderedMatcherTraits(Array(transientTraits))
+        orderedMatcherTraits(Array(stateTraits))
     }
 
     private static func matcherTraitPriority(_ trait: HeistTrait) -> Int {
@@ -254,7 +272,7 @@ public enum AccessibilityPolicy {
     /// When comparing two parses that both contain a tab bar, the parser
     /// computes the fraction of non-tab-bar content labels that persist
     /// across the snapshots. If fewer than this fraction persist, the
-    /// transition is classified as a screen change by trace projection.
+    /// transition is classified as a screen change by observation projection.
     ///
     /// Locked at `0.4` by `AccessibilityPolicyTests`. Changes to this
     /// threshold alter screen-change semantics and should be made with a

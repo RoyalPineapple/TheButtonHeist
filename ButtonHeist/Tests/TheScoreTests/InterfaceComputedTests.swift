@@ -190,7 +190,7 @@ final class InterfaceComputedTests: XCTestCase {
 
         XCTAssertEqual(
             predicate.description,
-            #"exists(target(predicate(label="Done" traits=[button])))"#
+            #".exists(.element(.label("Done"), .traits([.button])))"#
         )
     }
 
@@ -203,7 +203,7 @@ final class InterfaceComputedTests: XCTestCase {
 
         XCTAssertEqual(
             result.description,
-            #"expectation(met=false expected=missing(target(predicate(identifier="spinner"))) actual="still visible")"#
+            #"expectation(met=false expected=.missing(.identifier("spinner")) actual="still visible")"#
         )
     }
 

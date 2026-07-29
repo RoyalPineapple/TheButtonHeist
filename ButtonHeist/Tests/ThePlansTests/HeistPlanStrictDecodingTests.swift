@@ -7,7 +7,7 @@ func `plan model rejects unknown top level fields`() {
     expectUnknownField("plan", contains: #"Unknown heist plan field "unexpected""#) {
         _ = try JSONDecoder().decode(HeistPlan.self, from: Data("""
         {
-          "version": 2,
+          "version": 3,
           "body": [
             { "type": "warn", "warn": { "message": "hello" } }
           ],
@@ -22,7 +22,7 @@ func `repeat until JSON rejects else body`() {
     expectUnknownField("repeat_until", contains: #"Unknown repeat_until step field "else_body""#) {
         _ = try JSONDecoder().decode(HeistPlan.self, from: Data("""
         {
-          "version": 2,
+          "version": 3,
           "body": [
             {
               "type": "repeat_until",
@@ -65,22 +65,13 @@ func `target parameter kind uses accessibility target spelling`() throws {
         #"{"target":{"ref":"row"},"type":"accessibility_target"}"#)
 }
 
+/// Geometry is observed but not assertable, so a plan that asserts on it is
+/// refused rather than accepted-and-ignored. A silently ignored `frame` would
+/// leave the plan reading as though it constrained something.
 @Test
-func `element update property checkers reject unknown fields`() {
-    expectUnknownField("frame match", contains: #"Unknown frame match field "unexpected""#) {
-        _ = try JSONDecoder().decode(ElementFrameMatch.self, from: Data("""
-        { "width": 1, "unexpected": true }
-        """.utf8))
-    }
-
-    expectUnknownField("activation point match", contains: #"Unknown activation point match field "unexpected""#) {
-        _ = try JSONDecoder().decode(ElementPointMatch.self, from: Data("""
-        { "x": 1, "unexpected": true }
-        """.utf8))
-    }
-
-    expectUnknownField("nested frame update", contains: #"Unknown frame match field "unexpected""#) {
-        _ = try JSONDecoder().decode(ChangeDeclaration.ElementAssertion.self, from: Data("""
+func `an updated assertion naming geometry does not decode`() {
+    for property in ["frame", "activationPoint"] {
+        let json = Data("""
         {
           "type": "updated",
           "target": {
@@ -88,28 +79,37 @@ func `element update property checkers reject unknown fields`() {
               { "kind": "label", "match": { "mode": "exact", "value": "Panel" } }
             ]
           },
-          "property": "frame",
-          "after": { "x": 1, "unexpected": true }
+          "property": "\(property)",
+          "after": { "x": 1 }
         }
-        """.utf8))
+        """.utf8)
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(ElementAssertion.self, from: json)
+        }
     }
 }
 
 @Test
-func `element update property registry excludes identity matchers`() {
-    #expect(ElementProperty.updateProperties == [
+func `the assertable vocabulary excludes identity matchers and geometry`() {
+    #expect(AssertableProperty.allCases == [
         .value,
         .traits,
         .hint,
         .actions,
-        .frame,
-        .activationPoint,
         .customContent,
         .rotors,
     ])
-    #expect(ElementProperty.allCases.filter(\.isUpdateProperty) == ElementProperty.updateProperties)
-    #expect(!ElementProperty.label.isUpdateProperty)
-    #expect(!ElementProperty.identifier.isUpdateProperty)
+    // Every assertable property is observable, and the two vocabularies agree on
+    // spelling, which is what keeps the wire format unchanged.
+    for assertable in AssertableProperty.allCases {
+        #expect(assertable.observed.rawValue == assertable.rawValue)
+        #expect(assertable.observed.assertable == assertable)
+    }
+    // The four ElementProperty cases with no assertable twin, and why.
+    #expect(ElementProperty.label.assertable == nil)
+    #expect(ElementProperty.identifier.assertable == nil)
+    #expect(ElementProperty.frame.assertable == nil)
+    #expect(ElementProperty.activationPoint.assertable == nil)
 }
 
 private func expectUnknownField(

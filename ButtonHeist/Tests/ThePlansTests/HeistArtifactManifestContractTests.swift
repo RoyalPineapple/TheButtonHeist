@@ -135,11 +135,11 @@ func `heist artifact validates manifest and plan versions`() throws {
             format: .buttonHeist,
             entry: "searchFlow",
             formatVersion: currentHeistArtifactFormatVersion,
-            planVersion: 3,
+            planVersion: 4,
             producer: .buttonHeist,
             createdAt: Date(timeIntervalSince1970: 0)
         ),
-        planJSON: Data(#"{"version":3,"body":[{"type":"warn","warn":{"message":"new version"}}]}"#.utf8)
+        planJSON: Data(#"{"version":4,"body":[{"type":"warn","warn":{"message":"new version"}}]}"#.utf8)
     ) { url in
         #expect(throws: HeistArtifactCodecError.self) {
             try HeistArtifactCodec.read(from: url)
@@ -150,13 +150,13 @@ func `heist artifact validates manifest and plan versions`() throws {
         named: "Mismatch.heist",
         in: temp.url,
         manifest: validArtifactManifest(),
-        planJSON: Data(#"{"version":3,"body":[{"type":"warn","warn":{"message":"mismatch"}}]}"#.utf8)
+        planJSON: Data(#"{"version":4,"body":[{"type":"warn","warn":{"message":"mismatch"}}]}"#.utf8)
     ) { url in
         do {
             _ = try HeistArtifactCodec.read(from: url)
             Issue.record("Expected version mismatch")
         } catch {
-            #expect(String(describing: error).contains("manifest planVersion 2 does not match plan version 3"))
+            #expect(String(describing: error).contains("manifest planVersion 3 does not match plan version 4"))
         }
     }
 }
@@ -237,7 +237,7 @@ func `heist artifact loading rejects standard definition cap`() throws {
     }.joined(separator: ",")
     let planJSON = Data("""
     {
-      "version": 2,
+      "version": 3,
       "name": "tooManyDefinitions",
       "definitions": [\(encodedDefinitions)],
       "body": [{ "type": "warn", "warn": { "message": "body" } }]

@@ -246,9 +246,9 @@ import Testing
         (
             "expect any element delta",
             try HeistPlan {
-                Activate(.label("Pay")).expect(.changed(.elements()))
+                Activate(.label("Pay")).expect(.elementsChanged)
             },
-            WaitStep(predicate: .changed(.elements()), timeout: 1)
+            WaitStep(predicate: .elementsChanged, timeout: 1)
         ),
         (
             "expect default timeout",
@@ -314,6 +314,32 @@ import Testing
             validatingSeconds: configuredMaximum.nextUp,
             maximumSeconds: configuredMaximum
         )
+    }
+}
+
+@Test func `heist timeout admits every finite positive duration without an upper cap`() throws {
+    #expect(HeistTimeout.default.seconds == 60)
+    #expect(try HeistTimeout(validatingSeconds: Double.greatestFiniteMagnitude).seconds ==
+        Double.greatestFiniteMagnitude)
+
+    for seconds in [0, -1, .nan, .infinity] {
+        #expect(throws: HeistTimeoutError.self) {
+            _ = try HeistTimeout(validatingSeconds: seconds)
+        }
+    }
+}
+
+@Test func `heist timeout codable contract is one admitted number`() throws {
+    let timeout = try HeistTimeout(validatingSeconds: 120.5)
+    let encoded = try JSONEncoder().encode(timeout)
+
+    #expect(String(bytes: encoded, encoding: .utf8) == "120.5")
+    #expect(try JSONDecoder().decode(HeistTimeout.self, from: encoded) == timeout)
+
+    for json in ["0", "-1", "null", #""60""#] {
+        #expect(throws: (any Error).self) {
+            _ = try JSONDecoder().decode(HeistTimeout.self, from: Data(json.utf8))
+        }
     }
 }
 

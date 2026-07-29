@@ -37,7 +37,7 @@ func `thePlans exposes no unchecked HeistPlan construction seam`() throws {
 func `JSONDecoder decode of heist plan still runs runtime safety validation`() {
     let unresolvedInvocation = Data("""
     {
-      "version": 2,
+      "version": 3,
       "body": [
         {
           "type": "invoke",
@@ -56,7 +56,7 @@ func `JSONDecoder decode of heist plan still runs runtime safety validation`() {
 
 @Test
 func `external plan version is rejected during root admission`() throws {
-    let data = Data(#"{"version":3,"body":[{"type":"warn","warn":{"message":"future"}}]}"#.utf8)
+    let data = Data(#"{"version":4,"body":[{"type":"warn","warn":{"message":"future"}}]}"#.utf8)
 
     #expect(throws: HeistPlanVersionAdmissionError.self) {
         _ = try JSONDecoder().decode(HeistPlan.self, from: data)
@@ -67,7 +67,7 @@ func `external plan version is rejected during root admission`() throws {
 func `JSONDecoder decode of nested collection loops is rejected by runtime safety validation`() throws {
     let nestedCollectionLoop = Data("""
     {
-      "version": 2,
+      "version": 3,
       "body": [
         {
           "type": "for_each_string",

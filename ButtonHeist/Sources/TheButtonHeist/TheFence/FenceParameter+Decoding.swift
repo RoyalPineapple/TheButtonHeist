@@ -8,7 +8,6 @@ extension TheFence {
         internal static let maxRunHeistRequestBytes = PublicJSONInputLimits.maxRequestBytes
         internal static let maxRunHeistNestingDepth = PublicJSONInputLimits.maxNestingDepth
         internal static let maxRunHeistObjectKeys = PublicJSONInputLimits.maxTotalObjectKeys
-        internal static let maxHeistResultRows = maxRunHeistSteps
         internal static let maxInlineScreenshotBase64Bytes = 1_000_000
     }
 }
@@ -108,6 +107,30 @@ extension FenceParameter where Value == GestureDuration {
             convertValue: { value in
                 guard let seconds = value.numberValue else { return nil }
                 return try GestureDuration(validatingSeconds: seconds)
+            },
+            encodeValue: { jsonSchemaNumber($0.seconds) }
+        )
+    }
+}
+
+extension FenceParameter where Value == HeistTimeout {
+    internal static func heistTimeout(
+        _ key: FenceParameterKey,
+        defaultValue: HeistTimeout
+    ) -> Self {
+        let spec = param(
+            key,
+            .number,
+            defaultValue: jsonSchemaNumber(defaultValue.seconds),
+            exclusiveMinimum: 0
+        )
+        return FenceParameter(
+            key: key,
+            spec: spec,
+            defaultValue: defaultValue,
+            convertValue: { value in
+                guard let seconds = value.numberValue else { return nil }
+                return try HeistTimeout(validatingSeconds: seconds)
             },
             encodeValue: { jsonSchemaNumber($0.seconds) }
         )

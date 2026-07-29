@@ -145,13 +145,13 @@ public struct RepeatUntilStep: Codable, Sendable, Equatable {
 
 package struct ResolvedRepeatUntilStep: Sendable, Equatable {
     package let predicateExpression: AccessibilityPredicate
-    package let predicate: ResolvedAccessibilityPredicate
+    package let predicate: ObservationPredicate
     package let timeout: WaitTimeout
     package let body: [HeistStep]
 
     package init(
         predicateExpression: AccessibilityPredicate,
-        predicate: ResolvedAccessibilityPredicate,
+        predicate: ObservationPredicate,
         timeout: WaitTimeout,
         body: [HeistStep]
     ) {

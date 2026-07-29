@@ -8,6 +8,7 @@ extension TheFence {
     struct RunHeistRequest {
         let plan: HeistPlan
         let argument: HeistArgument
+        let timeout: HeistTimeout
     }
 
     struct PerformRequest {
@@ -85,11 +86,18 @@ extension TheFence {
         let plan = try admitRuntimeSafeHeistPlanSource(
             from: arguments,
             commandName: Command.runHeist.rawValue,
-            droppingPlanKeys: [.argument]
+            droppingPlanKeys: [.argument, .timeout]
         )
         let argument = try decodeRootHeistArgument(from: arguments)
         try validateRootHeistArgument(argument, for: plan)
-        return RunHeistRequest(plan: plan, argument: argument)
+        return RunHeistRequest(
+            plan: plan,
+            argument: argument,
+            timeout: try arguments.value(
+                FenceParameters.heistTimeout,
+                defaultFrom: Command.runHeist.descriptor
+            )
+        )
     }
 
     func decodeValidateHeistRequest(_ arguments: CommandArgumentEnvelope) throws -> ValidateHeistRequest {

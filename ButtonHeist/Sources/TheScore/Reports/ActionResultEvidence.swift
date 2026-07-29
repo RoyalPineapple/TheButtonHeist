@@ -146,9 +146,9 @@ public enum ActionResultEvidence: Sendable, Equatable {
         }
     }
 
-    public var traceEvidence: AccessibilityTraceEvidence? { observation.traceEvidence }
-    public var accessibilityTrace: AccessibilityTrace? { observation.accessibilityTrace }
-    public var settlement: ActionSettlementEvidence? { observation.settlement }
+    public var observationEvidence: Observation.Evidence? {
+        observation.observationEvidence
+    }
     public var announcement: String? { observation.announcement }
 
     public var subjectEvidence: ActionSubjectEvidence? { body.subjectEvidence }

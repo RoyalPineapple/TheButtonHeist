@@ -149,7 +149,7 @@ final class DocumentationContractTests: XCTestCase {
             jsonBlock(
                 at: 0,
                 startingAt: "## Action Results",
-                endingAt: "## Traces, Facts, and Public Deltas",
+                endingAt: "## Observations, Events, and Public Deltas",
                 in: wireProtocol
             ),
         ]

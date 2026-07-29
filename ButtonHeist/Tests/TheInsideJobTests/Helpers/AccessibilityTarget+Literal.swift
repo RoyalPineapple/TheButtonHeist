@@ -1,3 +1,5 @@
+#if canImport(UIKit)
+#if DEBUG
 import ThePlans
 @testable import TheInsideJob
 
@@ -20,6 +22,9 @@ extension TheVault.TargetResolution {
 func resolvedPredicate(
     _ authored: AccessibilityPredicate,
     in environment: HeistExecutionEnvironment = .empty
-) throws -> ResolvedAccessibilityPredicate {
+) throws -> ObservationPredicate {
     try authored.resolve(in: environment)
 }
+
+#endif // DEBUG
+#endif // canImport(UIKit)

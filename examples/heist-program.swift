@@ -2,11 +2,11 @@ import ThePlans
 
 func heist() throws -> HeistPlan {
     try HeistPlan("searchFlow") {
-        TypeText("milk", into: .label("Search"))
-            .expect(.exists(.element(.label("Search"), .value("milk"))), timeout: 2)
+        TypeText("milk", into: .traits([.searchField]))
+            .expect(.exists(.element(.traits([.searchField]), .value("milk"))))
 
-        Activate(.label("Search"))
-            .expect(.changed(.screen([.exists(.label("Results"))])), timeout: 5)
+        Activate(.element(.label("Search"), traits: [.button]))
+            .expect(.screenChanged)
 
         WaitFor(.exists(.label("Results")), timeout: 5)
             .else {

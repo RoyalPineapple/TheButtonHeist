@@ -27,7 +27,6 @@ enum PublicHeistActionJSONFixture {
                     "kind": FixtureJSON.string("warn"),
                     "status": FixtureJSON.string("passed"),
                     "message": FixtureJSON.string("heads up"),
-                    "durationMs": FixtureJSON.int(1),
                     "evidence": FixtureJSON.object([
                         "warning": FixtureJSON.object([
                             "path": FixtureJSON.string("$.body[0]"),
@@ -68,56 +67,28 @@ enum PublicHeistActionJSONFixture {
         "invocation": FixtureJSON.object([
             "capability": FixtureJSON.string("Cart.checkout"),
             "argument": FixtureJSON.string(#"RunHeist("Cart.checkout", "Milk")"#),
-            "expectationResult": FixtureJSON.waitResult,
             "expectation": FixtureJSON.doneExpectation,
             "expectationEvidence": FixtureJSON.matchedWaitEvidence,
         ]),
     ])
 
     static let omissions = FixtureJSON.object([
-        "accessibilityTrace": FixtureJSON.object([
-            "reason": FixtureJSON.string("raw accessibility trace omitted from public heist report"),
-            "projectedAs": FixtureJSON.string("delta"),
-            "omittedCount": FixtureJSON.int(2),
-        ]),
         "subjectEvidence": FixtureJSON.object([
             "reason": FixtureJSON.string("raw subject evidence omitted from public heist report"),
         ]),
     ])
 
-    static func netDelta(beforeHash: String, afterHash: String) -> JSONValue {
-        FixtureJSON.object([
-            "kind": FixtureJSON.string("elementsChanged"),
-            "elementCount": FixtureJSON.int(1),
-            "captureEdge": FixtureJSON.object([
-                "before": FixtureJSON.object([
-                    "sequence": FixtureJSON.int(1),
-                    "hash": FixtureJSON.string(beforeHash),
-                ]),
-                "after": FixtureJSON.object([
-                    "sequence": FixtureJSON.int(2),
-                    "hash": FixtureJSON.string(afterHash),
+    static let netDelta = FixtureJSON.object([
+        "kind": FixtureJSON.string("elementsChanged"),
+        "elementCount": FixtureJSON.int(1),
+        "edits": FixtureJSON.object([
+            "added": FixtureJSON.array([
+                FixtureJSON.object([
+                    "traits": FixtureJSON.array([FixtureJSON.string("staticText")]),
+                    "label": FixtureJSON.string("Pay"),
+                    "identifier": FixtureJSON.string("pay"),
                 ]),
             ]),
-            "interactionDigest": FixtureJSON.object([
-                "nodeCountBefore": FixtureJSON.int(0),
-                "nodeCountAfter": FixtureJSON.int(1),
-                "nodeCountChanged": FixtureJSON.bool(true),
-                "elementSetChanged": FixtureJSON.bool(true),
-                "screenIdBefore": FixtureJSON.string("screen"),
-                "screenIdAfter": FixtureJSON.string("screen"),
-                "screenIdChanged": FixtureJSON.bool(false),
-                "firstResponderChanged": FixtureJSON.bool(false),
-            ]),
-            "edits": FixtureJSON.object([
-                "added": FixtureJSON.array([
-                    FixtureJSON.object([
-                        "traits": FixtureJSON.array([FixtureJSON.string("staticText")]),
-                        "label": FixtureJSON.string("Pay"),
-                        "identifier": FixtureJSON.string("pay"),
-                    ]),
-                ]),
-            ]),
-        ])
-    }
+        ]),
+    ])
 }

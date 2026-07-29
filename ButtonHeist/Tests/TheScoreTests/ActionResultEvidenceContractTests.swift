@@ -1,3 +1,4 @@
+import ButtonHeistTestSupport
 import XCTest
 import ThePlans
 @testable import TheScore
@@ -51,15 +52,13 @@ final class ActionResultEvidenceContractTests: XCTestCase {
     }
 
     func testEveryOutcomeRoundTripsWithEveryObservationCase() throws {
-        let trace = traceWithAnnouncement("Ready")
-        let complete = traceEvidence(trace, completeness: .complete)
-        let incomplete = traceEvidence(trace, completeness: .incomplete)
+        let complete = observationEvidenceWithAnnouncement("Ready", completeness: .complete)
+        let incomplete = observationEvidenceWithAnnouncement("Ready", completeness: .incomplete)
         let observations: [ActionResultObservationEvidence] = [
             .none,
             .announcement("Ready"),
-            .trace(complete),
-            .trace(incomplete),
-            .settledTrace(incomplete, .settled(duration: 12)),
+            .observed(complete),
+            .observed(incomplete),
         ]
 
         for observation in observations {
@@ -82,14 +81,13 @@ final class ActionResultEvidenceContractTests: XCTestCase {
     }
 
     func testSuccessEvidenceRoundTripsWithCanonicalShape() throws {
-        let trace = traceWithAnnouncement("Checkout")
-        let traceEvidence = traceEvidence(trace, completeness: .incomplete)
+        let observationEvidence = observationEvidenceWithAnnouncement(
+            "Checkout",
+            completeness: .incomplete
+        )
         let result = ActionResult.activationSuccess(
             message: "done",
-            observation: .settledTrace(
-                traceEvidence,
-                .settled(duration: 125, path: .uikitIdle)
-            ),
+            observation: .observed(observationEvidence),
             subjectEvidence: try weakActivationSubjectEvidence(),
             activationTrace: ActivationTrace(.activationPointFallback(
                 axActivateReturned: false,
@@ -103,8 +101,9 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
         let evidence = try XCTUnwrap(object["evidence"] as? [String: Any])
         let observation = try XCTUnwrap(evidence["observation"] as? [String: Any])
-        let encodedTraceEvidence = try XCTUnwrap(observation["traceEvidence"] as? [String: Any])
-        let settlement = try XCTUnwrap(observation["settlement"] as? [String: Any])
+        let encodedObservationEvidence = try XCTUnwrap(
+            observation["observationEvidence"] as? [String: Any]
+        )
         let timing = try XCTUnwrap(evidence["timing"] as? [String: Any])
 
         XCTAssertEqual(Set(object.keys), Set(["outcome", "method", "message", "evidence"]))
@@ -112,22 +111,19 @@ final class ActionResultEvidenceContractTests: XCTestCase {
             Set(evidence.keys),
             Set(["observation", "subjectEvidence", "activationTrace", "timing", "warning"])
         )
-        XCTAssertEqual(observation["kind"] as? String, "settledTrace")
-        XCTAssertEqual(Set(observation.keys), Set(["kind", "traceEvidence", "settlement"]))
-        XCTAssertEqual(Set(encodedTraceEvidence.keys), Set(["accessibilityTrace", "completeness"]))
-        XCTAssertNotNil(encodedTraceEvidence["accessibilityTrace"])
-        XCTAssertEqual(encodedTraceEvidence["completeness"] as? String, "incomplete")
+        XCTAssertEqual(observation["kind"] as? String, "observed")
+        XCTAssertEqual(Set(observation.keys), Set(["kind", "observationEvidence"]))
+        XCTAssertEqual(
+            Set(encodedObservationEvidence.keys),
+            Set(["baseline", "current", "events", "completeness"])
+        )
+        XCTAssertEqual(encodedObservationEvidence["completeness"] as? String, "incomplete")
         XCTAssertNil(observation["announcement"])
-        XCTAssertEqual(settlement["kind"] as? String, "settled")
-        XCTAssertEqual(settlement["durationMs"] as? Int, 125)
-        XCTAssertEqual(settlement["path"] as? String, "uikitIdle")
         XCTAssertEqual(timing["actionDispatchMs"] as? Int, 4)
-        XCTAssertNil(timing["settleMs"])
 
         let decoded = try JSONDecoder().decode(ActionResult.self, from: encoded)
         XCTAssertEqual(decoded, result)
         XCTAssertEqual(decoded.announcement, "Checkout")
-        XCTAssertEqual(decoded.settleTimeMs, 125)
         XCTAssertEqual(decoded.timing?.actionDispatchMs, 4)
         XCTAssertEqual(decoded.warning?.code, "activation_weak_affordance_evidence")
     }
@@ -143,7 +139,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
 
         XCTAssertEqual(decoded, result)
         XCTAssertEqual(decoded.outcome, .failure(.timeout))
-        XCTAssertNil(decoded.accessibilityTrace)
+        XCTAssertNil(decoded.observationEvidence)
         XCTAssertNil(decoded.announcement)
         XCTAssertNil(decoded.warning)
         XCTAssertNil(decoded.evidence.subjectEvidence)
@@ -190,18 +186,21 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         XCTAssertNil(object["announcement"])
         XCTAssertNil(evidence["announcement"])
         XCTAssertEqual(result.announcement, "Ready")
-        XCTAssertNil(result.accessibilityTrace)
+        XCTAssertNil(result.observationEvidence)
     }
 
-    func testTraceOwnsCapturedAnnouncement() {
-        let trace = traceWithAnnouncement("Checkout")
+    func testObservationEvidenceOwnsCapturedNotificationText() {
+        let observationEvidence = observationEvidenceWithAnnouncement(
+            "Checkout",
+            completeness: .incomplete
+        )
         let result = ActionResult.success(
             payload: .activate,
-            observation: .trace(traceEvidence(trace, completeness: .incomplete))
+            observation: .observed(observationEvidence)
         )
 
         XCTAssertEqual(result.announcement, "Checkout")
-        XCTAssertEqual(result.capturedAnnouncement, trace.capturedAnnouncements.first)
+        XCTAssertEqual(result.observationEvidence, observationEvidence)
     }
 
     func testObservationDiscriminatorRejectsFieldsFromAnotherCase() {
@@ -224,19 +223,6 @@ final class ActionResultEvidenceContractTests: XCTestCase {
           "evidence": {
             "observation": {"kind": "none"},
             "warning": {"code": "activation_weak_affordance_evidence"}
-          }
-        }
-        """)
-    }
-
-    func testEvidenceDecodingRejectsSettlementTimingOutsideObservation() {
-        assertActionResultRejects("""
-        {
-          "outcome": {"kind": "success"},
-          "method": "wait",
-          "evidence": {
-            "observation": {"kind": "none"},
-            "timing": {"settleMs": 5}
           }
         }
         """)
@@ -270,29 +256,13 @@ final class ActionResultEvidenceContractTests: XCTestCase {
                 "elapsed milliseconds must not be negative"
             )
         }
-        XCTAssertThrowsError(try JSONDecoder().decode(
-            ActionSettlementEvidence.self,
-            from: Data(#"{"kind":"settled","durationMs":-1}"#.utf8)
-        ))
-    }
-
-    func testTimedOutSettlementRejectsSuccessfulSettlementPath() {
-        XCTAssertThrowsError(try JSONDecoder().decode(
-            ActionSettlementEvidence.self,
-            from: Data(
-                #"{"kind":"timedOut","durationMs":125,"path":"uikitIdle"}"#.utf8
-            )
-        ))
     }
 
     func testActionPerformanceTimingRejectsEveryNegativeWireField() {
         for key in [
-            "beforeObservationMs",
             "targetResolutionMs",
             "actionDispatchMs",
             "interactionMs",
-            "finalSemanticEvidenceMs",
-            "resultAssemblyMs",
             "totalMs",
         ] {
             XCTAssertThrowsError(try JSONDecoder().decode(
@@ -314,28 +284,25 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         )
     }
 
-    private func traceWithAnnouncement(_ text: String) -> AccessibilityTrace {
-        let first = AccessibilityTrace.Capture(
-            sequence: 1,
-            interface: Interface(timestamp: Date(timeIntervalSince1970: 1), tree: [])
+    private func observationEvidenceWithAnnouncement(
+        _ text: String,
+        completeness: Observation.Evidence.Completeness
+    ) -> Observation.Evidence {
+        let baseline = makeTestObservationSnapshot(
+            elements: [],
+            timestamp: Date(timeIntervalSince1970: 1)
         )
-        let second = AccessibilityTrace.Capture(
-            sequence: 2,
-            interface: Interface(timestamp: Date(timeIntervalSince1970: 2), tree: []),
-            parentHash: first.hash,
-            transition: AccessibilityTrace.Transition(
-                accessibilityNotifications: [
-                    AccessibilityNotificationEvidence(
-                        sequence: 7,
-                        kind: .announcement,
-                        timestamp: Date(timeIntervalSince1970: 7),
-                        notificationData: .string(text),
-                        associatedElement: .none
-                    ),
-                ]
-            )
+        let current = makeTestObservationSnapshot(
+            elements: [],
+            timestamp: Date(timeIntervalSince1970: 2)
         )
-        return AccessibilityTrace(captures: [first, second])
+        let notification = Observation.Notification(text: text, element: nil)
+        return makeTestObservationEvidence(
+            baseline: baseline,
+            current: current,
+            events: notification.map { [.notification($0)] } ?? [],
+            completeness: completeness
+        )
     }
 
     private func weakActivationSubjectEvidence() throws -> ActionSubjectEvidence {
@@ -345,29 +312,13 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         return ActionSubjectEvidence(
             source: .resolvedSemanticTarget,
             target: target,
-            element: HeistElement(
+            element: makeTestHeistElement(
                 description: "Checkout",
                 label: "Checkout",
-                value: nil,
-                identifier: nil,
                 traits: [.staticText],
-                frameX: 0,
-                frameY: 0,
-                frameWidth: 100,
-                frameHeight: 44,
                 actions: []
             ),
             resolution: ActionSubjectResolution(origin: .visible)
         )
-    }
-
-    private func traceEvidence(
-        _ trace: AccessibilityTrace,
-        completeness: AccessibilityTraceEvidence.Completeness
-    ) -> AccessibilityTraceEvidence {
-        guard let evidence = AccessibilityTraceEvidence(trace: trace, completeness: completeness) else {
-            preconditionFailure("test trace evidence requires a current capture")
-        }
-        return evidence
     }
 }

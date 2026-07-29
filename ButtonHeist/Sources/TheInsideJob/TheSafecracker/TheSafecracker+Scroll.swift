@@ -126,13 +126,13 @@ extension TheSafecracker {
         return .moved
     }
 
-    func revealContentPoint(
-        _ contentPoint: ScrollContentPoint,
+    func revealViewPoint(
+        _ viewPoint: ViewPoint,
         in scrollView: UIScrollView
     ) -> ScrollPrimitiveOutcome {
         guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return .unavailable }
 
-        let point = contentPoint.cgPoint
+        let point = viewPoint.cgPoint
         let insets = scrollView.adjustedContentInset
         let visibleWidth = max(1, scrollView.bounds.width - insets.left - insets.right)
         let visibleHeight = max(1, scrollView.bounds.height - insets.top - insets.bottom)
@@ -162,8 +162,8 @@ extension TheSafecracker {
         fullVisibleRect: CGRect,
         in scrollView: UIScrollView
     ) -> CGRect {
-        let contentRect = scrollView.convert(screenRect, from: nil)
-        return fullVisibleRect.intersection(contentRect)
+        let viewRect = scrollView.convert(screenRect, from: nil)
+        return fullVisibleRect.intersection(viewRect)
     }
 
     private func visibleRect(in scrollView: UIScrollView, at offset: CGPoint) -> CGRect {
@@ -306,6 +306,12 @@ extension TheSafecracker {
         animated: Bool
     ) {
         scrollView.setContentOffset(contentOffset, animated: animated)
+        if !animated {
+            // An unanimated offset is set by the time that call returns, and
+            // the subviews it moves are laid out at the next layout pass. The
+            // scroll has landed once they have moved, so this is where it lands.
+            scrollView.layoutIfNeeded()
+        }
     }
 
     private func contentOffsetsEqual(_ lhs: CGPoint, _ rhs: CGPoint) -> Bool {

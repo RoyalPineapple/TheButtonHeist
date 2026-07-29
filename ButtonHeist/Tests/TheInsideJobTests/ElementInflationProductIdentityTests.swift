@@ -26,7 +26,6 @@ extension ElementInflationProductTests {
 
     func testAmbiguousSemanticActivateFailsBeforeGeometryOrAction() async throws {
         let fixture = try installAmbiguousActivationFixture()
-        defer { fixture.cleanup() }
 
         let result = await brains.executeRuntimeAction(
             try HeistActionCommand.activate(
@@ -47,7 +46,6 @@ extension ElementInflationProductTests {
 
     func testRefreshRetainsSelectedHeistIdWhenPredicateOrderingChanges() async throws {
         let fixture = try installAmbiguousActivationFixture()
-        defer { fixture.cleanup() }
         let target = try AccessibilityTarget.target(
             .element(.label("Duplicate"), traits: [.button]),
             ordinal: 0
@@ -62,7 +60,7 @@ extension ElementInflationProductTests {
 
         fixture.second.isHidden = false
         fixture.first.superview?.insertSubview(fixture.second, belowSubview: fixture.first)
-        fixture.window.layoutIfNeeded()
+        fixture.viewController.view.layoutIfNeeded()
         await brains.vault.installObservationForTesting(try observation(for: [fixture.second, fixture.first]))
         visibleObservationSource.useLiveCapture()
 
@@ -88,7 +86,6 @@ extension ElementInflationProductTests {
 
     func testRefreshFailsClosedWhenSelectedHeistIdIsRemoved() async throws {
         let fixture = try installAmbiguousActivationFixture()
-        defer { fixture.cleanup() }
         let target = try AccessibilityTarget.target(
             .element(.label("Duplicate"), traits: [.button]),
             ordinal: 0
@@ -128,7 +125,6 @@ extension ElementInflationProductTests {
             identifier: "reachable_duplicate_submit",
             label: "Duplicate Submit"
         )
-        defer { fixture.cleanup() }
         try await seedOffViewportTarget(fixture)
         await seedKnownUnreachableDuplicate(
             label: fixture.label,
@@ -155,7 +151,6 @@ extension ElementInflationProductTests {
 
     func testSemanticAdmissionKeepsDuplicateIdentityAcrossVisibilityAndCandidateOrder() async throws {
         let fixture = try installAmbiguousActivationFixture()
-        defer { fixture.cleanup() }
         let target = try AccessibilityTarget.element(
             .label("Duplicate"),
             .identifier("duplicate_first"),
@@ -170,7 +165,7 @@ extension ElementInflationProductTests {
         let before = try await admittedSemanticTarget(target, observation: firstOffscreen)
 
         fixture.first.superview?.insertSubview(fixture.second, belowSubview: fixture.first)
-        fixture.window.layoutIfNeeded()
+        fixture.viewController.view.layoutIfNeeded()
         let reorderedVisible = try observation(for: [fixture.second, fixture.first])
         let during = try await admittedSemanticTarget(target, observation: reorderedVisible)
         let after = try await admittedSemanticTarget(
@@ -190,7 +185,6 @@ extension ElementInflationProductTests {
     }
 
     private func installAmbiguousActivationFixture() throws -> AmbiguousActivationFixture {
-        let windowScene = try requireForegroundWindowScene()
         let viewController = UIViewController()
         viewController.view.backgroundColor = .white
         viewController.view.accessibilityViewIsModal = true
@@ -210,14 +204,13 @@ extension ElementInflationProductTests {
         viewController.view.addSubview(first)
         viewController.view.addSubview(second)
 
-        let window = UIWindow(windowScene: windowScene)
-        window.frame = UIScreen.main.bounds
-        window.windowLevel = .alert + 80
-        window.rootViewController = viewController
-        window.isHidden = false
-        window.layoutIfNeeded()
+        present(viewController, above: true)
 
-        return AmbiguousActivationFixture(window: window, first: first, second: second)
+        return AmbiguousActivationFixture(
+            viewController: viewController,
+            first: first,
+            second: second
+        )
     }
     private func seedKnownUnreachableDuplicate(
         label: String,
@@ -225,10 +218,16 @@ extension ElementInflationProductTests {
         heistId: HeistId
     ) async {
         let tree = brains.vault.interfaceTree
+        let unreachableElement = makeElement(label: label, identifier: identifier)
         let entry = InterfaceTree.Element(
             heistId: heistId,
             scrollMembership: nil,
-            element: makeElement(label: label, identifier: identifier)
+            geometry: testGeometry(
+                for: unreachableElement,
+                ownerPath: .root,
+                screen: .offscreen
+            ),
+            element: unreachableElement
         )
         var elements = tree.elements
         elements[heistId] = entry
@@ -279,16 +278,9 @@ extension ElementInflationProductTests {
 }
 
 private struct AmbiguousActivationFixture {
-    let window: UIWindow
+    let viewController: UIViewController
     let first: SemanticActivationView
     let second: SemanticActivationView
-
-    @MainActor
-    func cleanup() {
-        window.rootViewController?.view.accessibilityViewIsModal = false
-        window.isHidden = true
-        window.rootViewController = nil
-    }
 }
 
 #endif // canImport(UIKit)

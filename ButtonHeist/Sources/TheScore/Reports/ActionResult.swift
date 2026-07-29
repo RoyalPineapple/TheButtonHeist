@@ -28,123 +28,6 @@ extension ElapsedMilliseconds: ExpressibleByIntegerLiteral {
     }
 }
 
-/// The signal that proved an action's final accessibility observation settled.
-public enum ActionSettlementPath: String, Codable, Sendable, Equatable {
-    case semanticStability
-    case uikitIdle
-    case accessibilityQuietWindow
-}
-
-public struct ActionSettlementEvidence: Codable, Sendable, Equatable {
-    private enum State: Sendable, Equatable {
-        case settled
-        case timedOut
-        case observationHandoffTimedOut
-    }
-
-    private let state: State
-    public let durationMs: ElapsedMilliseconds
-    public let path: ActionSettlementPath?
-
-    private enum Kind: String, Codable {
-        case settled
-        case timedOut
-        case observationHandoffTimedOut
-    }
-
-    private enum CodingKeys: String, CodingKey, CaseIterable {
-        case kind
-        case durationMs
-        case path
-    }
-
-    public static func settled(
-        duration: ElapsedMilliseconds,
-        path: ActionSettlementPath? = nil
-    ) -> ActionSettlementEvidence {
-        ActionSettlementEvidence(state: .settled, duration: duration, path: path)
-    }
-
-    public static func timedOut(duration: ElapsedMilliseconds) -> ActionSettlementEvidence {
-        ActionSettlementEvidence(state: .timedOut, duration: duration, path: nil)
-    }
-
-    public static func observationHandoffTimedOut(
-        duration: ElapsedMilliseconds,
-        path: ActionSettlementPath
-    ) -> ActionSettlementEvidence {
-        ActionSettlementEvidence(state: .observationHandoffTimedOut, duration: duration, path: path)
-    }
-
-    public var settled: Bool {
-        if case .settled = state { return true }
-        return false
-    }
-
-    public var readinessEstablished: Bool {
-        switch state {
-        case .settled, .observationHandoffTimedOut:
-            true
-        case .timedOut:
-            false
-        }
-    }
-
-    public var observationHandoffCompleted: Bool {
-        if case .settled = state { return true }
-        return false
-    }
-
-    private init(state: State, duration: ElapsedMilliseconds, path: ActionSettlementPath?) {
-        self.state = state
-        durationMs = duration
-        self.path = path
-    }
-
-    public init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ActionSettlementEvidence")
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let duration = try container.decode(ElapsedMilliseconds.self, forKey: .durationMs)
-        let path = try container.decodeIfPresent(ActionSettlementPath.self, forKey: .path)
-        switch try container.decode(Kind.self, forKey: .kind) {
-        case .settled:
-            self.init(state: .settled, duration: duration, path: path)
-        case .timedOut:
-            guard path == nil else {
-                throw DecodingError.dataCorruptedError(
-                    forKey: .path,
-                    in: container,
-                    debugDescription: "timed-out settlement cannot carry a settlement path"
-                )
-            }
-            self.init(state: .timedOut, duration: duration, path: nil)
-        case .observationHandoffTimedOut:
-            guard let path else {
-                throw DecodingError.dataCorruptedError(
-                    forKey: .path,
-                    in: container,
-                    debugDescription: "observation handoff timeout requires an established readiness path"
-                )
-            }
-            self.init(state: .observationHandoffTimedOut, duration: duration, path: path)
-        }
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        switch state {
-        case .settled:
-            try container.encode(Kind.settled, forKey: .kind)
-        case .timedOut:
-            try container.encode(Kind.timedOut, forKey: .kind)
-        case .observationHandoffTimedOut:
-            try container.encode(Kind.observationHandoffTimedOut, forKey: .kind)
-        }
-        try container.encode(durationMs, forKey: .durationMs)
-        try container.encodeIfPresent(path, forKey: .path)
-    }
-}
-
 /// The result of executing an action command, including post-action diagnostics.
 public struct ActionResult: Codable, Sendable, Equatable {
     public enum Payload: Sendable, Equatable {
@@ -210,23 +93,10 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public let evidence: ActionResultEvidence
     public var warning: HeistActionWarning? { evidence.warning }
     public var announcement: String? { evidence.announcement }
-    public var capturedAnnouncement: CapturedAnnouncement? {
-        evidence.accessibilityTrace?.capturedAnnouncements.first
+    /// Canonical observations supporting this action result.
+    public var observationEvidence: Observation.Evidence? {
+        evidence.observationEvidence
     }
-    /// Source-of-truth accessibility capture evidence for this action.
-    public var accessibilityTrace: AccessibilityTrace? { evidence.accessibilityTrace }
-    /// Source-of-truth trace and observation-completeness evidence for this action.
-    public var traceEvidence: AccessibilityTraceEvidence? { evidence.traceEvidence }
-    /// True when the response represents a settled UI state — either the
-    /// AX tree reached multi-cycle stability, or a screen transition
-    /// preempted the settle loop and the new screen has been observed via
-    /// the existing repopulation pipeline. False *only* when the hard
-    /// settle timeout elapsed while the tree was still changing — the
-    /// endpoint delta projection may not be a final state.
-    public var settled: Bool? { evidence.settlement?.settled }
-    /// Wall-clock milliseconds from action start to settle decision
-    /// (settled, screen-changed, or timed out).
-    public var settleTimeMs: ElapsedMilliseconds? { evidence.settlement?.durationMs }
     /// Semantic subject the runtime resolved before dispatching the action.
     public var subjectEvidence: ActionSubjectEvidence? { evidence.subjectEvidence }
     /// Semantic activation dispatch-path diagnostics, present for `activate`.
@@ -546,18 +416,19 @@ public struct ActionResult: Codable, Sendable, Equatable {
         activationTrace: ActivationTrace?
     ) -> HeistActionWarning? {
         guard let element = subjectEvidence?.element else { return nil }
+        let assertable = element.semantics.assertable
         let evidence = ElementDiagnosticSummary(
-            label: element.label,
-            identifier: element.identifier,
-            traits: AccessibilityPolicy.orderedMatcherTraits(element.traits),
-            actions: element.actions.sorted { $0.description < $1.description }
+            label: assertable.label,
+            identifier: assertable.identifier,
+            traits: AccessibilityPolicy.orderedMatcherTraits(Array(assertable.traits)),
+            actions: assertable.orderedActions
         ).rendered(using: .activationAffordanceEvidence)
 
         switch method {
-        case .activate where !element.actions.contains(.activate)
+        case .activate where !assertable.actions.contains(.activate)
             && activationTrace?.implementsAccessibilityActivation == false:
             return .activationWeakAffordance(evidence: evidence)
-        case .typeText where !AccessibilityPolicy.supportsTextEntry(element.traits):
+        case .typeText where !AccessibilityPolicy.supportsTextEntry(assertable.traits):
             return .textEntryWeakAffordance(evidence: evidence)
         default:
             return nil

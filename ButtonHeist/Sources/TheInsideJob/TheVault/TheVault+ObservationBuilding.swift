@@ -1,6 +1,5 @@
 #if canImport(UIKit)
 #if DEBUG
-import CryptoKit
 import UIKit
 
 import TheScore
@@ -27,6 +26,7 @@ extension TheVault {
         let hierarchy = screenCoordinateHierarchy(from: result)
         let identityContext = buildIdentityContext(
             hierarchy: hierarchy,
+            viewHierarchy: result.hierarchy,
             scrollableContainerPaths: BuildFacts.scrollContextContainerPaths(
                 from: result
             )
@@ -51,6 +51,7 @@ extension TheVault {
     static func buildObservation(from result: CaptureResult, facts: BuildFacts) -> InterfaceObservation {
         let identityContext = buildIdentityContext(
             hierarchy: screenCoordinateHierarchy(from: result),
+            viewHierarchy: result.hierarchy,
             scrollableContainerPaths: facts.scroll.contextContainerPaths
         )
         let projection = buildObservationProjection(
@@ -80,7 +81,7 @@ extension TheVault {
         )
         let heistIdsByPath = Dictionary(
             uniqueKeysWithValues: entries.compactMap { entry in
-                entry.isInViewportCapture ? (entry.path, entry.heistId) : nil
+                entry.isInParserHierarchy ? (entry.path, entry.heistId) : nil
             }
         )
         let containersByPath = viewportContainers(
@@ -173,11 +174,11 @@ extension TheVault {
                     heistId: heistId,
                     path: candidate.path,
                     scrollMembership: candidate.scrollMembership(facts: facts),
-                    observedScrollContentActivationPoint: candidate.observedScrollContentActivationPoint(facts: facts),
+                    geometry: candidate.geometry(facts: facts),
                     element: candidate.element
                 ),
                 isFirstResponder: candidate.isFirstResponder(facts: facts),
-                isInViewportCapture: candidate.isInViewportCapture
+                isInParserHierarchy: candidate.isInParserHierarchy
             )
         }
     }
@@ -195,10 +196,9 @@ extension TheVault {
                         container: identity.container,
                         path: identity.path,
                         containerName: containerNamesByPath[identity.path],
-                        contentRect: identity.contentFrame,
+                        viewSpace: facts.scroll.containerViewSpacesByPath[identity.path]
+                            ?? identity.viewSpace,
                         scrollMembership: identity.scrollMembership,
-                        observedScrollContentActivationPoint: facts.scroll
-                            .containerObservedScrollContentActivationPointsByPath[identity.path],
                         scrollInventory: facts.scroll.inventoriesByPath[identity.path]
                     )
                 )
@@ -230,20 +230,37 @@ extension TheVault {
         }
     }
 
+    nonisolated static func onscreenSpace(
+        for element: AccessibilityElement
+    ) -> HeistElement.Geometry.ScreenSpace {
+        let frame = ScreenFrameEvidence(element.shape)
+        let activationPoint: ActivationPointEvidence
+        if element.usesDefaultActivationPoint {
+            if let rect = frame.rect,
+               let x = try? FiniteCoordinate(validating: rect.midX),
+               let y = try? FiniteCoordinate(validating: rect.midY) {
+                activationPoint = .defaultCenter(ScreenPoint(x: x, y: y))
+            } else {
+                activationPoint = .unavailable
+            }
+        } else if let x = try? FiniteCoordinate(validating: element.activationPoint.x),
+                  let y = try? FiniteCoordinate(validating: element.activationPoint.y) {
+            activationPoint = .explicit(ScreenPoint(x: x, y: y))
+        } else {
+            activationPoint = .unavailable
+        }
+        return .onscreen(frame: frame, activationPoint: activationPoint)
+    }
+
     // MARK: - Container Name Index
 
     private static func buildContainerNamesByPath(
         identityContext: IdentityContext
     ) -> [TreePath: ContainerName] {
         let candidates = identityContext.containers.map { identity in
-            let readableName = containerName(
-                for: identity.container,
-                contentFrame: identity.contentFrame
-            )
-            return ContainerNameCandidate(
+            ContainerNameCandidate(
                 path: identity.path,
-                node: identity.subtree,
-                readableName: readableName
+                readableName: containerName(for: identity.container)
             )
         }
 
@@ -255,60 +272,30 @@ extension TheVault {
 
         var byPath: [TreePath: ContainerName] = [:]
         for candidate in candidates {
-            let containerName: ContainerName
-            if duplicateReadableNames.contains(candidate.readableName) {
-                containerName = captureLocalContainerId(
-                    readableName: candidate.readableName,
-                    node: candidate.node,
-                    path: candidate.path
-                )
-            } else {
-                containerName = candidate.readableName
-            }
-            byPath[candidate.path] = containerName
+            byPath[candidate.path] = duplicateReadableNames.contains(candidate.readableName)
+                ? captureLocalContainerId(readableName: candidate.readableName, path: candidate.path)
+                : candidate.readableName
         }
         return byPath
     }
 
+    /// Disambiguate containers that expose the same values by their position in
+    /// the parsed tree. The tree path is what already makes container identity
+    /// path-distinct, it is an exact integer sequence rather than a measurement,
+    /// and it is the same for two parses of an unchanged screen — so unlike the
+    /// frame hash it replaces, this suffix cannot be moved by layout noise.
     static func captureLocalContainerId(
         readableName: ContainerName,
-        node: AccessibilityHierarchy,
         path: TreePath
     ) -> ContainerName {
-        ContainerName(stringLiteral: "\(readableName.rawValue)-\(containerHash(node: node, path: path))")
-    }
-
-    private static func containerHash(node: AccessibilityHierarchy, path: TreePath) -> String {
-        let data = stableContainerHashData(node: node, path: path)
-        return SHA256.hash(data: data).prefix(6).map { String(format: "%02x", $0) }.joined()
-    }
-
-    private static func stableContainerHashData(node: AccessibilityHierarchy, path: TreePath) -> Data {
-        let payload = ContainerIdentityPayload(path: path.indices, subtree: node)
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        encoder.nonConformingFloatEncodingStrategy = .convertToString(
-            positiveInfinity: "Infinity",
-            negativeInfinity: "-Infinity",
-            nan: "NaN"
+        ContainerName(
+            stringLiteral: "\(readableName.rawValue)-\(path.indices.map(String.init).joined(separator: "_"))"
         )
-        switch Result(catching: { try encoder.encode(payload) }) {
-        case .success(let data):
-            return data
-        case .failure(let error):
-            preconditionFailure("Failed to encode container identity payload: \(error)")
-        }
     }
 
     private struct ContainerNameCandidate {
         let path: TreePath
-        let node: AccessibilityHierarchy
         let readableName: ContainerName
-    }
-
-    private struct ContainerIdentityPayload: Encodable {
-        let path: [Int]
-        let subtree: AccessibilityHierarchy
     }
 
     private enum ObservationElementCandidate {
@@ -333,7 +320,7 @@ extension TheVault {
             }
         }
 
-        var isInViewportCapture: Bool {
+        var isInParserHierarchy: Bool {
             switch self {
             case .viewport:
                 true
@@ -354,15 +341,24 @@ extension TheVault {
             }
         }
 
-        func observedScrollContentActivationPoint(
+        func geometry(
             facts: BuildFacts
-        ) -> InterfaceTree.ObservedScrollContentActivationPoint? {
-            switch self {
+        ) -> HeistElement.Geometry {
+            let view = switch self {
             case .viewport(let identity):
-                facts.scroll.element(at: identity.path)?.observedScrollContentActivationPoint
+                facts.scroll.element(at: identity.path)?.viewSpace ?? identity.viewSpace
             case .offscreenScrollInventory(let element):
-                element.observedScrollContentActivationPoint
+                element.viewSpace
             }
+            let screen: HeistElement.Geometry.ScreenSpace = switch self {
+            case .viewport where element.visibility == .onscreen:
+                TheVault.onscreenSpace(for: element)
+            case .viewport:
+                .offscreen
+            case .offscreenScrollInventory:
+                .offscreen
+            }
+            return HeistElement.Geometry(screen: screen, view: view)
         }
 
         func isFirstResponder(facts: BuildFacts) -> Bool {
@@ -395,7 +391,7 @@ extension TheVault {
         let path: TreePath
         let treeElement: InterfaceTree.Element
         let isFirstResponder: Bool
-        let isInViewportCapture: Bool
+        let isInParserHierarchy: Bool
 
         var heistId: HeistId {
             treeElement.heistId
@@ -446,7 +442,7 @@ extension TheVault {
         }
 
         func elementRef(for entry: ObservationBuildEntry) -> LiveCapture.ElementRef? {
-            guard entry.isInViewportCapture else { return nil }
+            guard case .onscreen = entry.treeElement.geometry.screen else { return nil }
             let object = objectsByPath[entry.path]
             let scrollView = entry.treeElement.scrollMembership.flatMap { membership in
                 scrollViewsByPath[membership.containerPath]

@@ -82,16 +82,6 @@ import TheScore
         return properties
     }
 
-    internal var objectAdditionalProperties: Bool {
-        guard case .object(let object) = schema else { return false }
-        return object.additionalProperties ?? false
-    }
-
-    internal var arrayItemType: ParamType? {
-        guard case .array(let array) = schema else { return nil }
-        return array.items?.type
-    }
-
     public var arrayItemProperties: [FenceParameterSpec] {
         guard case .array(let array) = schema,
               case .object(let object)? = array.items,
@@ -99,14 +89,6 @@ import TheScore
             return []
         }
         return properties
-    }
-
-    internal var arrayItemAdditionalProperties: Bool {
-        guard case .array(let array) = schema,
-              case .object(let object)? = array.items else {
-            return false
-        }
-        return object.additionalProperties ?? false
     }
 
 }

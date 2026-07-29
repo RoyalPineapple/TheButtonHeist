@@ -8,32 +8,59 @@ import ThePlans
 import AccessibilitySnapshotParser
 
 extension Navigation {
+    /// Walk the whole screen and return the graph.
+    ///
+    /// No goal and no early exit: every scrollable container is scanned until
+    /// the knobs or the deadline stop it, and what comes back is everything
+    /// found along the way. Each page commits into the store as it is read, so
+    /// the result is the accumulation, not a tree assembled at the end.
+    ///
+    /// Always starts fresh: the first page replaces whatever we knew and every
+    /// page after it merges in.
+    ///
+    /// Searching is the other job — `exploreScreen(target:)` stops the moment
+    /// it finds one element, keeps interface memory, and deliberately does not
+    /// produce a full graph.
+    func fullGraph(
+        deadline: SemanticObservationDeadline? = nil,
+        maxScrollsPerContainer: Int? = nil,
+        maxScrollsPerDiscovery: Int? = nil
+    ) async -> InterfaceExplorationResult? {
+        await exploreScreen(
+            startingFresh: true,
+            exitPosition: .origin,
+            deadline: deadline,
+            maxScrollsPerContainer: maxScrollsPerContainer,
+            maxScrollsPerDiscovery: maxScrollsPerDiscovery
+        )
+    }
+
     func exploreScreen(
         target: ResolvedAccessibilityTarget? = nil,
-        baseline: ExplorationBaseline? = nil,
+        startingFresh: Bool = false,
         exitPosition: ViewportExitPosition = .origin,
         searchOrder: ViewportSearchOrder = .forwardFirst,
         deadline: SemanticObservationDeadline? = nil,
         maxScrollsPerContainer: Int? = nil,
         maxScrollsPerDiscovery: Int? = nil,
-        onObservation: ((Observation.SnapshotEvent) async -> ViewportExplorationDecision)? = nil,
+        onObservation: ((TheVault.State.Current) async -> ViewportExplorationDecision)? = nil,
     ) async -> InterfaceExplorationResult? {
         let explorer = ViewportExplorer(
             navigation: self,
             exploration: SemanticExploration(
-                baseline: baseline ?? .interfaceMemory(vault.interfaceMemoryBaseline()),
+                startingFresh: startingFresh,
                 deadline: deadline,
                 maxScrollsPerContainer: maxScrollsPerContainer ?? InterfaceExplorationProgress.maxScrollsPerContainer,
                 maxScrollsPerDiscovery: maxScrollsPerDiscovery ?? InterfaceExplorationProgress.maxScrollsPerDiscovery
             ),
             searchOrder: searchOrder,
         )
-        return await explorer.exploreViewports(exitPosition: exitPosition) { event in
-            if let decision = await onObservation?(event), decision == .goalSatisfied {
+        return await explorer.exploreViewports(exitPosition: exitPosition) { current in
+            if let decision = await onObservation?(current), decision == .goalSatisfied {
                 return .goalSatisfied
             }
             guard let target else { return .continue }
-            return vault.hasVisibleTerminalResolution(target, in: event.snapshot.observation.tree)
+            return vault.hasVisibleTerminalResolution(target, in: vault.latestObservation.tree)
                 ? .goalSatisfied
                 : .continue
         }
@@ -45,43 +72,37 @@ extension Navigation {
         deadline: SemanticObservationDeadline?,
         discoveryCommitPolicy: DiscoveryCommitPolicy,
         notificationWindow: AccessibilityNotificationScopeLease? = nil,
-        previousViewportHash: String? = nil
-    ) async -> Observation.SnapshotEvent? {
-        let afterViewportMovement = previousViewportHash != nil
+        afterViewportMovement: Bool = false
+    ) async -> TheVault.State.Current? {
         defer { notificationWindow?.cancel() }
         guard afterViewportMovement
                 || (!Task.isCancelled && hasTimeRemaining(before: deadline))
         else { return nil }
-        let timeoutMs = min(
-            SettleSession.viewportTransitionTimeoutMs,
-            deadline.map { max(1, Int(($0.remainingSeconds() * 1_000).rounded(.up))) } ?? .max
+        let timeout = min(
+            SemanticObservationTiming.defaultTimeout,
+            deadline?.remainingDuration() ?? .seconds(Int.max)
         )
-        let transitionDeadline = SemanticObservationDeadline(start: RuntimeElapsed.now, timeoutMs: timeoutMs)
+        let transitionDeadline = SemanticObservationDeadline(start: RuntimeElapsed.now, timeout: timeout)
         repeat {
-            let settleTimeoutMs = max(1, Int((transitionDeadline.remainingSeconds() * 1_000).rounded(.up)))
-            let settle = await SettleSession.viewportTransition(
-                vault: vault,
-                tripwire: tripwire,
-                timeoutMs: settleTimeoutMs
-            ).run(
-                start: RuntimeElapsed.now,
-                baselineTripwireSignal: tripwire.tripwireSignal()
+            // The tick only says time passed. The page still has to be re-read
+            // afterwards, or every iteration inspects the same observation the
+            // last one did and a scroll that is still settling looks like a
+            // scroll that never happened.
+            _ = await tripwire.waitForNextTick(
+                timeout: transitionDeadline.remainingDuration(at: RuntimeElapsed.now),
+                demand: .immediate
             )
+            vault.refreshLiveCapture()
             guard afterViewportMovement || !Task.isCancelled else { return nil }
-            let transitionCanSettleAgain = transitionDeadline.remainingSeconds() * 1_000
-                >= Double(SettleSession.viewportTransitionMinimumBudgetMs)
-            if let previousViewportHash,
-               settle.finalObservation?.observation.tree.interfaceHash == previousViewportHash,
-               transitionCanSettleAgain {
-                continue
-            }
-            if let event = await vault.semanticObservationStream.commitSettledDiscoveryObservation(
-                settle,
+            // This loop only waits for the caller's one dispatched scroll to
+            // land, so a page that still looks unmoved is mid-flight, not a
+            // failed scroll. Whether the reading counts as a change is the
+            // vault's question.
+            if let current = await vault.semanticObservationStream.commitDiscoveryObservation(
                 discoveryCommitPolicy: discoveryCommitPolicy,
-                afterViewportMovement: afterViewportMovement,
                 notificationBatch: notificationWindow?.capture()
-            )?.event {
-                return event
+            )?.current {
+                return current
             }
         } while transitionDeadline.hasTimeRemaining(at: RuntimeElapsed.now)
             && (afterViewportMovement || hasTimeRemaining(before: deadline))

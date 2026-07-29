@@ -9,8 +9,17 @@ import AccessibilitySnapshotParser
 
 internal enum ScreenContinuity: Sendable, Equatable {
     internal enum ReplacementEvidence: Sendable, Equatable {
+        internal enum InferenceReason: String, Sendable, Equatable {
+            case modalBoundaryChanged
+            case selectedTabChanged
+            case navigationMarkerChanged
+            case primaryHeaderChanged
+            case semanticIdentityDisjoint
+            case rootShapeChanged
+        }
+
         case screenChangedNotification
-        case inferred(AccessibilityObservationFallbackReason)
+        case inferred(InferenceReason)
     }
 
     case sameGeneration
@@ -21,17 +30,20 @@ internal enum ScreenContinuity: Sendable, Equatable {
         return false
     }
 
-    internal var fallbackReason: AccessibilityObservationFallbackReason? {
-        guard case .replacement(.inferred(let reason)) = self else { return nil }
-        return reason
-    }
 }
 
-/// Positive evidence that two captures belong to one screen generation.
+/// Why a reading differs from the one before it.
 ///
-/// This is produced only by the canonical viewport-movement pipeline after
-/// UIKit accepts a movement and the resulting viewport settles.
-internal enum ScreenLineageEvidence: Sendable, Equatable {
+/// Screen identity is compared over the viewport alone, so a screen read at a
+/// different scroll offset can share nothing with the last reading of itself.
+/// This is what separates that from an actual navigation, and every reading
+/// states one: "nothing moved" and "the viewport moved" are different facts,
+/// and a reading that says neither leaves the classifier to guess.
+internal enum ScreenLineage: Sendable, Equatable {
+    /// Nothing moved the tree between the two readings.
+    case resting
+    /// The viewport moved and settled, so the content on screen is expected to
+    /// differ while the screen stays the same.
     case viewportMovement
 }
 
@@ -149,13 +161,13 @@ enum ScreenClassifier {
         from previousTree: InterfaceTree?,
         to tree: InterfaceTree,
         notifications: [AccessibilityNotificationKind],
-        lineageEvidence: ScreenLineageEvidence? = nil
+        lineage: ScreenLineage
     ) -> ScreenContinuity {
         classify(
             before: previousTree.map(snapshot(of:)),
             after: snapshot(of: tree),
             notifications: notifications,
-            lineageEvidence: lineageEvidence
+            lineage: lineage
         )
     }
 
@@ -163,7 +175,7 @@ enum ScreenClassifier {
         before: Snapshot?,
         after: Snapshot,
         notifications: [AccessibilityNotificationKind],
-        lineageEvidence: ScreenLineageEvidence? = nil
+        lineage: ScreenLineage
     ) -> ScreenContinuity {
         if notifications.contains(where: {
             if case .screenChanged = $0 { return true }
@@ -171,17 +183,19 @@ enum ScreenClassifier {
         }) {
             return .replacement(.screenChangedNotification)
         }
+        if lineage == .viewportMovement {
+            return .sameGeneration
+        }
         guard let before else { return .sameGeneration }
 
         let beforeSignature = before.signature
         let afterSignature = after.signature
-        let directLineageIsProven = hasDirectLineageEvidence(
+        let sharedFirstResponder = sharesFirstResponder(
             before: before,
-            after: after,
-            lineageEvidence: lineageEvidence
+            after: after
         )
         let sharedScrollContainer = sharesSemanticScrollContainer(before: before, after: after)
-        let sameGenerationIsProven = directLineageIsProven || sharedScrollContainer
+        let sameGenerationIsProven = sharedFirstResponder || sharedScrollContainer
 
         if beforeSignature.modalMarkers != afterSignature.modalMarkers {
             return .replacement(.inferred(.modalBoundaryChanged))
@@ -193,7 +207,7 @@ enum ScreenClassifier {
             return .replacement(.inferred(.navigationMarkerChanged))
         }
         if beforeSignature.primaryHeader != afterSignature.primaryHeader,
-           !directLineageIsProven,
+           !sharedFirstResponder,
            !isScrollableContentHeaderChange(
                before: beforeSignature.primaryHeader,
                after: afterSignature.primaryHeader,
@@ -254,20 +268,14 @@ enum ScreenClassifier {
         }
     }
 
-    private static func hasDirectLineageEvidence(
+    private static func sharesFirstResponder(
         before: Snapshot,
-        after: Snapshot,
-        lineageEvidence: ScreenLineageEvidence?
+        after: Snapshot
     ) -> Bool {
-        if lineageEvidence == .viewportMovement {
-            return true
-        }
-        if let beforeResponder = before.firstResponderHeistId,
-           let afterResponder = after.firstResponderHeistId,
-           beforeResponder == afterResponder {
-            return true
-        }
-        return false
+        guard let beforeResponder = before.firstResponderHeistId,
+              let afterResponder = after.firstResponderHeistId
+        else { return false }
+        return beforeResponder == afterResponder
     }
 
     private static func sharesSemanticScrollContainer(

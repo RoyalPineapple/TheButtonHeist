@@ -66,7 +66,7 @@ public enum HeistDoctorError: Error, Sendable, Equatable, CustomStringConvertibl
     case missingActionEvidence(path: HeistExecutionPath)
     case missingTarget(path: HeistExecutionPath)
     case missingActionResult(path: HeistExecutionPath)
-    case missingTrace(path: HeistExecutionPath)
+    case missingObservationEvidence(path: HeistExecutionPath)
 
     public var description: String {
         switch self {
@@ -84,8 +84,8 @@ public enum HeistDoctorError: Error, Sendable, Equatable, CustomStringConvertibl
             return "action step at \(path) has no durable target"
         case .missingActionResult(let path):
             return "action step at \(path) has no action result"
-        case .missingTrace(let path):
-            return "action step at \(path) has no accessibility trace"
+        case .missingObservationEvidence(let path):
+            return "action step at \(path) has no observation evidence"
         }
     }
 

@@ -81,14 +81,15 @@ enum PublicHeistJSONFixtureValue {
         "actual": string("Ready visible"),
     ])
 
-    static let waitResult = actionResult(method: "wait", message: "waited")
-
     static let matchedWaitEvidence = object([
         "outcome": string("matched"),
-        "result": waitResult,
         "expectation": doneExpectation,
-        "baselineSummary": string("Loading"),
-        "finalSummary": string("Done visible"),
+        "baselineSummary": string("screen: Loading; interface: 0 elements"),
+        "finalSummary": string("screen: Done visible; interface: 0 elements"),
+        "delta": object([
+            "kind": string("noChange"),
+            "elementCount": int(0),
+        ]),
     ])
 }
 
@@ -103,8 +104,7 @@ enum PublicHeistExecutionJSONContractFixture {
                 met: true,
                 predicate: donePredicate,
                 actual: "Done visible"
-            ),
-            durationMs: 3
+            )
         )
     }
 
@@ -112,10 +112,9 @@ enum PublicHeistExecutionJSONContractFixture {
         let evidence = try waitEvidence()
         return .wait(
             path: "$.body[0]",
-            durationMs: 5,
             predicate: donePredicate,
             timeout: 1,
-            completion: .passed(evidence: try XCTUnwrap(HeistPassedWaitEvidence(evidence)))
+            completion: .passed(evidence: .matched(evidence))
         )
     }
 
@@ -126,7 +125,6 @@ enum PublicHeistExecutionJSONContractFixture {
         ]
         return .conditional(
             path: "$.body[0]",
-            durationMs: 4,
             completion: .passed(evidence: HeistCaseSelectionEvidence(
                 selection: .selectingFirstMatch(
                     cases: cases,
@@ -158,7 +156,6 @@ enum PublicHeistExecutionJSONContractFixture {
         )
         return .forEachString(
             path: "$.body[0]",
-            durationMs: 2,
             declaration: declaration,
             completion: .passed(
                 evidence: try XCTUnwrap(HeistPassedForEachStringEvidence(evidence)),
@@ -182,13 +179,11 @@ enum PublicHeistExecutionJSONContractFixture {
         ))
         let iteration = HeistExecutionStepResult.forEachElementIteration(
             path: "$.body[0].for_each_element.iterations[0]",
-            durationMs: 1,
             declaration: declaration,
             completion: .passed(evidence: try XCTUnwrap(HeistPassedForEachElementEvidence(evidence)))
         )
         return .forEachElement(
             path: "$.body[0]",
-            durationMs: 2,
             declaration: declaration,
             completion: .passed(
                 evidence: try XCTUnwrap(HeistPassedForEachElementEvidence(evidence)),
@@ -228,7 +223,6 @@ enum PublicHeistExecutionJSONContractFixture {
         let iterations = [
             HeistExecutionStepResult.repeatUntilIteration(
                 path: "$.body[0].repeat_until.iterations[0]",
-                durationMs: 1,
                 declaration: declaration,
                 completion: .passed(evidence: try XCTUnwrap(
                     HeistPassedRepeatUntilIterationEvidence(firstIterationEvidence)
@@ -236,7 +230,6 @@ enum PublicHeistExecutionJSONContractFixture {
             ),
             HeistExecutionStepResult.repeatUntilIteration(
                 path: "$.body[0].repeat_until.iterations[1]",
-                durationMs: 1,
                 declaration: declaration,
                 completion: .passed(evidence: try XCTUnwrap(
                     HeistPassedRepeatUntilIterationEvidence(secondIterationEvidence)
@@ -245,7 +238,6 @@ enum PublicHeistExecutionJSONContractFixture {
         ]
         return .repeatUntil(
             path: "$.body[0]",
-            durationMs: 6,
             declaration: declaration,
             completion: .passed(
                 evidence: try XCTUnwrap(HeistPassedRepeatUntilEvidence(evidence)),
@@ -255,10 +247,11 @@ enum PublicHeistExecutionJSONContractFixture {
     }
 
     static func invocation() throws -> HeistExecutionStepResult {
-        let evidence = HeistInvocationEvidence.completed(expectation: .wait(try waitEvidence()))
+        let evidence = HeistInvocationEvidence.completed(
+            expectation: .waitPassed(.matched(try waitEvidence()))
+        )
         return .invocation(
             path: "$.body[0]",
-            durationMs: 7,
             invocationPath: "Cart.checkout",
             argument: .string("Milk"),
             completion: .passed(evidence: try XCTUnwrap(HeistPassedInvocationEvidence(evidence)))
@@ -266,7 +259,7 @@ enum PublicHeistExecutionJSONContractFixture {
     }
 
     static func actionWithOmissions() throws -> HeistExecutionStepResult {
-        let trace = makeTestTrace(
+        let observation = makeObservationEvidence(
             before: makeTestInterface(elements: []),
             after: makeTestInterface(elements: [
                 makeTestHeistElement(label: "Pay", identifier: "pay"),
@@ -283,25 +276,25 @@ enum PublicHeistExecutionJSONContractFixture {
         )
         return HeistResultFixture.action(result: .success(
             payload: .activate,
-            observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)),
+            observation: .observed(observation),
             subjectEvidence: subjectEvidence
         ))
     }
 
     static func netDelta() -> PublicHeistNetDeltaFixture {
-        let trace = makeTestTrace(
+        let observation = makeObservationEvidence(
             before: makeTestInterface(elements: []),
             after: makeTestInterface(elements: [
                 makeTestHeistElement(label: "Pay", identifier: "pay"),
-            ])
+            ]),
+            completeness: .complete
         )
         let result = ActionResult.success(
             payload: .activate,
-            observation: .trace(makeTestTraceEvidence(trace, completeness: .complete))
+            observation: .observed(observation)
         )
         return PublicHeistNetDeltaFixture(
-            step: HeistResultFixture.action(result: result),
-            trace: trace
+            step: HeistResultFixture.action(result: result)
         )
     }
 
@@ -312,33 +305,39 @@ enum PublicHeistExecutionJSONContractFixture {
         )
     }
 
-    private static func waitEvidence() throws -> HeistSettlementEvidence {
+    private static func waitEvidence() throws -> HeistWaitMatchedEvidence {
         let expectation = ExpectationResult.Met(
             predicate: donePredicate,
             actual: "Done visible"
         )
-        let check = try XCTUnwrap(HeistSettlementEvidence.MatchedCheck(
-            actionResult: .success(payload: .wait, message: "waited"),
+        let interface = makeTestInterface(elements: [])
+        return HeistWaitMatchedEvidence(
+            observation: Observation.Evidence(
+                baseline: Observation.Snapshot(
+                    interface: interface,
+                    context: Observation.Context(screenId: "Loading")
+                ),
+                current: Observation.Snapshot(
+                    interface: interface,
+                    context: Observation.Context(screenId: "Done visible")
+                ),
+                events: [.noChange],
+                completeness: .complete
+            ),
             expectation: expectation
-        ))
-        return .matched(
-            check,
-            baselineSummary: "Loading",
-            finalSummary: "Done visible"
         )
     }
 }
 
 struct PublicHeistNetDeltaFixture {
     let step: HeistExecutionStepResult
-    let trace: AccessibilityTrace
 }
 
 func publicHeistExecutionJSON(
     step: HeistExecutionStepResult,
     profile: ProjectionProfile = .summary
 ) throws -> JSONProbe {
-    let result = try HeistResult(steps: [step], durationMs: step.durationMs)
+    let result = try HeistResult(steps: [step], durationMs: 1)
     let response = FenceResponse.heistExecution(
         plan: try HeistPlan(body: [.warn(WarnStep(message: "fixture"))]),
         report: HeistReport.project(result: result)

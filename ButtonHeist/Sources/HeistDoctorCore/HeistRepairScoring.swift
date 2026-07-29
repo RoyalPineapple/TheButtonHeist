@@ -19,7 +19,7 @@ enum RepairCandidateScorer {
         scoreOutcomeEvidence(element, context: context, into: &score)
         scoreActionRequirement(element, context: context, into: &score)
 
-        if context.failureKind == .wrongCapability, element == context.old {
+        if context.failureKind == .wrongCapability, element.semantics == context.old.semantics {
             score.add(-30)
         }
         guard score.value > 0 else { return nil }
@@ -49,8 +49,8 @@ enum RepairCandidateScorer {
         context: CandidateScoringContext,
         into score: inout CandidateScore
     ) {
-        guard let identifier = stableIdentifier(element.identifier),
-              let oldIdentifier = stableIdentifier(context.old.identifier),
+        guard let identifier = stableIdentifier(element.semantics.assertable.identifier),
+              let oldIdentifier = stableIdentifier(context.old.semantics.assertable.identifier),
               ElementPredicate.stringEquals(identifier, oldIdentifier)
         else { return }
         score.add(90, reason: .identifierUnchanged, signal: .identifier)
@@ -62,8 +62,8 @@ enum RepairCandidateScorer {
         into score: inout CandidateScore
     ) {
         scoreTextPair(
-            value: element.label,
-            oldValue: context.old.label,
+            value: element.semantics.assertable.label,
+            oldValue: context.old.semantics.assertable.label,
             exactPoints: 50,
             renamePoints: 35,
             exactReason: .labelUnchanged,
@@ -71,8 +71,8 @@ enum RepairCandidateScorer {
             into: &score
         )
         scoreTextPair(
-            value: element.value,
-            oldValue: context.old.value,
+            value: element.semantics.assertable.value,
+            oldValue: context.old.semantics.assertable.value,
             exactPoints: 20,
             renamePoints: 20,
             exactReason: .valueUnchanged,
@@ -114,13 +114,14 @@ enum RepairCandidateScorer {
             score.add(min(30, traitOverlap.count * 15), reason: .controlRoleTraitsCompatible)
         }
 
-        let actionOverlap = Set(context.old.actions).intersection(element.actions)
+        let actionOverlap = context.old.semantics.assertable.actions
+            .intersection(element.semantics.assertable.actions)
         if !actionOverlap.isEmpty {
             score.add(10, reason: .elementActionsCompatible)
         }
 
-        let oldRotors = Set(context.old.rotors ?? [])
-        let currentRotors = Set(element.rotors ?? [])
+        let oldRotors = context.old.semantics.assertable.rotors
+        let currentRotors = element.semantics.assertable.rotors
         let rotorOverlap = oldRotors.intersection(currentRotors)
         if !rotorOverlap.isEmpty {
             score.add(5, reason: .rotorCapabilityCompatible)
@@ -231,10 +232,10 @@ struct RepairSemanticEvidence: Sendable, Equatable {
 
     func matchesIdentityText(of element: HeistElement) -> Bool {
         let identityText = normalizedSet([
-            stableIdentifier(element.identifier),
-            element.label,
-            element.value,
-            element.hint,
+            stableIdentifier(element.semantics.assertable.identifier),
+            element.semantics.assertable.label,
+            element.semantics.assertable.value,
+            element.semantics.assertable.hint,
         ].compactMap { $0 })
         return !values.isDisjoint(with: identityText)
     }
@@ -302,7 +303,7 @@ enum CandidateContinuitySignal: Sendable, Hashable {
 }
 
 func stableTraits(_ element: HeistElement) -> Set<HeistTrait> {
-    Set(element.traits.filter { !AccessibilityPolicy.transientTraits.contains($0) })
+    element.semantics.assertable.traits.subtracting(AccessibilityPolicy.stateTraits)
 }
 
 func normalizedSet(_ values: [String]) -> Set<String> {
@@ -355,10 +356,10 @@ private func normalizedNonEmpty(_ value: String?) -> String? {
 
 private func semanticSortKey(_ element: HeistElement) -> String {
     [
-        stableIdentifier(element.identifier),
-        element.label,
-        element.value,
-        element.traits.map(\.rawValue).sorted().joined(separator: ","),
+        stableIdentifier(element.semantics.assertable.identifier),
+        element.semantics.assertable.label,
+        element.semantics.assertable.value,
+        element.semantics.assertable.traits.map(\.rawValue).sorted().joined(separator: ","),
     ]
     .compactMap { $0 }
     .joined(separator: "\u{1F}")

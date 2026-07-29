@@ -1,463 +1,160 @@
 #if canImport(UIKit)
-import ButtonHeistSupport
-import ButtonHeistTestSupport
 import XCTest
+
 @testable import AccessibilitySnapshotParser
 @_spi(ButtonHeistInternals) @testable import ThePlans
 @testable import TheInsideJob
 @_spi(ButtonHeistInternals) @testable import TheScore
 
-@MainActor
-extension TheBrainsActionTests {
-
-    func testHeistForEachWithZeroMatchesSucceedsWithoutIterations() async throws {
-        let matching = ElementPredicate.label("Delete")
-        var observedScopes: [SemanticObservationScope] = []
-        let runtime = heistRuntime(
-            observations: [
-                await observedState(labels: ["Keep"]),
-            ],
-            observedScopes: { observedScopes.append($0) }
-        )
-        let plan = try HeistPlan(body: [
-            .forEachElement(try ForEachElementStep(
-                matching: matching,
-                limit: 20,
-                parameter: "target",
-                body: [.warn(WarnStep(message: "delete one"))]
-            )),
+final class HeistMachineForEachTests: XCTestCase {
+    func testForEachElementWithNoMatchesCompletesWithoutIterations() throws {
+        let plan = try elementLoopPlan(body: [
+            .warn(WarnStep(message: "unreachable")),
         ])
+        var driver = try HeistMachineTestDriver(
+            plan: plan,
+            script: MachineRunScript(snapshots: [heistSnapshot(labels: ["Keep"])])
+        )
 
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heistResult = try XCTUnwrap(result.resultPayload)
-        let step = try XCTUnwrap(heistResult.steps.first)
-        let forEachResult = try XCTUnwrap(step.forEachElementEvidence)
+        let completion = try driver.run()
+        let loop = try XCTUnwrap(completion.steps.first)
 
-        XCTAssertTrue(result.outcome.isSuccess)
-        XCTAssertEqual(step.kind, .forEachElement)
-        XCTAssertEqual(step.status, .passed)
-        XCTAssertEqual(forEachResult.matchedCount, 0)
-        XCTAssertEqual(step.forEachElementDeclaration?.limit, 20)
-        XCTAssertEqual(forEachResult.iterationCount, 0)
-        XCTAssertNil(forEachResult.failureReason)
-        XCTAssertNil(step.failure)
-        XCTAssertTrue(step.children.isEmpty)
-        XCTAssertEqual(observedScopes, [.discovery])
+        XCTAssertEqual(loop.status, .passed)
+        XCTAssertEqual(loop.forEachElementEvidence?.matchedCount, 0)
+        XCTAssertEqual(loop.forEachElementEvidence?.iterationCount, 0)
+        XCTAssertTrue(loop.children.isEmpty)
+        XCTAssertEqual(driver.requests.compactMap(\.snapshotScope), [.discovery])
     }
 
-    func testHeistForEachStringChildFailureProducesExplicitLoopFailureOutcome() async throws {
-        let runtime = heistRuntime(observations: [])
-        let plan = try HeistPlan(body: [
-            .forEachString(try ForEachStringStep(
-                values: ["milk", "eggs"],
-                parameter: "item",
-                body: [.fail(FailStep(message: "stop loop"))]
-            )),
-            .warn(WarnStep(message: "should not run")),
+    func testForEachSnapshotRequestIDCannotBeConfusedWithTargetOrdinal() throws {
+        let snapshot = heistSnapshot(labels: ["Delete", "Delete"])
+        let plan = try elementLoopPlan(body: [
+            .warn(WarnStep(message: "iteration")),
         ])
+        var machine = try HeistExecution.Machine(plan: plan)
+        let firstRequest = try XCTUnwrap(machine.start().singleSnapshotRequest)
 
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heistResult = try XCTUnwrap(result.resultPayload)
-        let forEachStep = try XCTUnwrap(heistResult.steps.first)
-        let forEachResult = try XCTUnwrap(forEachStep.forEachStringEvidence)
-        let failedChildPath: HeistExecutionPath = "$.body[0].for_each_string.iterations[0].body[0]"
+        guard case .pending(.wait) = machine.advance(.currentSnapshot(
+            HeistExecution.RequestID(rawValue: 0),
+            snapshot
+        )) else {
+            return XCTFail("Target ordinal zero must not satisfy a snapshot request")
+        }
 
-        XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(heistResult.abortedAtPath, failedChildPath)
-        XCTAssertEqual(heistResult.steps.map(\.kind), [.forEachString, .warn, .action])
-        XCTAssertEqual(heistResult.steps.map(\.status), [.failed, .skipped, .passed])
-        XCTAssertEqual(forEachStep.status, .failed)
-        XCTAssertEqual(forEachStep.forEachStringDeclaration?.count, 2)
-        XCTAssertEqual(forEachResult.iterationCount, 1)
-        XCTAssertEqual(
-            forEachResult.failureReason,
-            "iteration 0 failed for value \"milk\" at \(failedChildPath)"
+        let secondRequest = try XCTUnwrap(
+            machine.advance(.currentSnapshot(firstRequest.id, snapshot))
+                .singleSnapshotRequest
         )
+        XCTAssertNotEqual(secondRequest.id, firstRequest.id)
+
+        guard case .complete(let completion) = machine.advance(.currentSnapshot(
+            secondRequest.id,
+            snapshot
+        )) else {
+            return XCTFail("The second typed snapshot request must complete the loop")
+        }
+        let loop = try XCTUnwrap(completion.steps.first)
         XCTAssertEqual(
-            forEachStep.failure?.observed,
-            "iteration 0 failed for value \"milk\" at \(failedChildPath)"
-        )
-        XCTAssertEqual(forEachStep.abortedAtChildPath, failedChildPath)
-        XCTAssertEqual(
-            forEachStep.children.first?.forEachStringEvidence?.failureReason,
-            "child failed at \(failedChildPath)"
+            loop.children.compactMap(\.forEachElementEvidence?.targetOrdinal),
+            [0, 1]
         )
     }
 
-    func testHeistForEachFailsBeforeMutationWhenMatchCountExceedsLimit() async throws {
-        let matching = ElementPredicate.label("Delete")
-        var executedCommands: [ResolvedHeistActionCommand] = []
-        let runtime = heistRuntime(
-            observations: [
-                await observedState(elements: [
-                    (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
-                    (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
-                ]),
-            ],
-            execute: { command in
-                executedCommands.append(command)
-                if case .takeScreenshot = command {
-                    return ActionResult.success(payload: .screenshot(nil))
-                }
-                return ActionResult.success(payload: .activate)
-            }
-        )
+    func testForEachElementLimitFailsBeforeRunningBody() throws {
         let plan = try HeistPlan(body: [
             .forEachElement(try ForEachElementStep(
-                matching: matching,
+                matching: .label("Delete"),
                 limit: 1,
                 parameter: "target",
-                body: [.action(ActionStep(command: .activate(.ref("target"))))]
+                body: [.fail(FailStep(message: "body must not run"))]
             )),
+            .warn(WarnStep(message: "later")),
         ])
+        var driver = try HeistMachineTestDriver(
+            plan: plan,
+            script: MachineRunScript(snapshots: [
+                heistSnapshot(labels: ["Delete", "Delete"]),
+            ])
+        )
 
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heistResult = try XCTUnwrap(result.resultPayload)
-        let step = try XCTUnwrap(heistResult.steps.first)
-        let forEachResult = try XCTUnwrap(step.forEachElementEvidence)
+        let completion = try driver.run()
+        let loop = try XCTUnwrap(completion.steps.first)
 
-        XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(executedCommands, [.takeScreenshot])
-        XCTAssertEqual(forEachResult.matchedCount, 2)
-        XCTAssertEqual(step.forEachElementDeclaration?.limit, 1)
-        XCTAssertEqual(forEachResult.iterationCount, 0)
-        XCTAssertEqual(forEachResult.failureReason, "matched 2 element(s), exceeding for_each_element limit 1")
-        XCTAssertTrue(step.children.isEmpty)
-        XCTAssertEqual(heistResult.steps.map(\.path), ["$.body[0]", "$.body[0].failure.actions[0]"])
-        XCTAssertEqual(heistResult.failureScreenshotStep?.actionCommand, .takeScreenshot)
+        XCTAssertEqual(loop.status, .failed)
+        XCTAssertEqual(loop.forEachElementEvidence?.matchedCount, 2)
+        XCTAssertEqual(loop.forEachElementEvidence?.iterationCount, 0)
+        XCTAssertTrue(loop.children.isEmpty)
+        XCTAssertEqual(completion.steps.last?.status, .skipped)
     }
 
-    func testHeistForEachCallsBodyWithOrdinalTargetForEachInitialMatchWithoutMutatingPlan() async throws {
-        let matching = ElementPredicate.label("Delete")
-        var executedCommands: [ResolvedHeistActionCommand] = []
-        var settlementCommands: [Settlement.Command] = []
-        let initialState = await observedState(elements: [
-            (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
-            (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
-            (makeElement(label: "Delete", identifier: "delete_third"), "delete_third"),
-        ])
-        let runtime = heistRuntime(
-            observations: [initialState, initialState, initialState],
-            execute: { command in
-                executedCommands.append(command)
-                return ActionResult.success(payload: .activate)
-            },
-            observedSettlementCommands: { settlementCommands.append($0) }
-        )
+    func testForEachStringPreservesAuthoredValueOrder() throws {
         let plan = try HeistPlan(body: [
-            .forEachElement(try ForEachElementStep(
-                matching: matching,
-                limit: 10,
-                parameter: "target",
-                body: [.action(ActionStep(command: .activate(.ref("target"))))]
+            .forEachString(try ForEachStringStep(
+                values: ["milk", "eggs", "bread"],
+                parameter: "item",
+                body: [.warn(WarnStep(message: "visited"))]
             )),
         ])
-        let originalBody = plan.body
+        var driver = try HeistMachineTestDriver(plan: plan)
 
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heistResult = try XCTUnwrap(result.resultPayload)
-        let step = try XCTUnwrap(heistResult.steps.first)
-        let forEachResult = try XCTUnwrap(step.forEachElementEvidence)
+        let completion = try driver.run()
+        let loop = try XCTUnwrap(completion.steps.first)
 
-        XCTAssertTrue(result.outcome.isSuccess)
-        XCTAssertEqual(forEachResult.matchedCount, 3)
-        XCTAssertEqual(forEachResult.iterationCount, 3)
-        let expectedCommands = try (0...2).map {
-            try HeistActionCommand.activate(.target(matching, ordinal: $0)).resolve(in: .empty)
-        }
-        XCTAssertEqual(executedCommands, expectedCommands)
+        XCTAssertEqual(loop.status, .passed)
+        XCTAssertEqual(loop.forEachStringEvidence?.iterationCount, 3)
         XCTAssertEqual(
-            settlementCommands,
-            Array(repeating: .currentState(scope: .discovery), count: 3)
+            loop.children.compactMap(\.forEachStringEvidence?.value),
+            ["milk", "eggs", "bread"]
         )
-        XCTAssertEqual(step.children.map(\.kind), [.forEachIteration, .forEachIteration, .forEachIteration])
-        XCTAssertEqual(step.children.flatMap(\.children).map(\.kind), [.action, .action, .action])
-        XCTAssertEqual(plan.body, originalBody)
+        XCTAssertEqual(loop.children.flatMap(\.children).map(\.kind), [
+            .warn,
+            .warn,
+            .warn,
+        ])
     }
 
-    func testHeistForEachPreservesCallerPredicateInsteadOfMinimumMatchers() async throws {
-        let matching = ElementPredicate(label: "Delete", traits: [.button])
-        var executedCommands: [ResolvedHeistActionCommand] = []
-        let initialState = await observedState(elements: [
-            (
-                makeElement(label: "Delete", value: "First", identifier: "delete_first", traits: [.button]),
-                "delete_first"
-            ),
-            (
-                makeElement(label: "Delete", value: "Second", identifier: "delete_second", traits: [.button]),
-                "delete_second"
-            ),
-        ])
-        let runtime = heistRuntime(
-            observations: [initialState, initialState],
-            execute: { command in
-                executedCommands.append(command)
-                return ActionResult.success(payload: .activate)
-            }
-        )
+    func testForEachFailureStopsRemainingIterationsAndRootSiblings() throws {
         let plan = try HeistPlan(body: [
-            .forEachElement(try ForEachElementStep(
-                matching: matching,
-                limit: 10,
-                parameter: "target",
-                body: [.action(ActionStep(command: .activate(.ref("target"))))]
-            )),
-        ])
-
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let forEachResult = try XCTUnwrap(result.resultPayload?.steps.first?.forEachElementEvidence)
-
-        XCTAssertTrue(result.outcome.isSuccess)
-        XCTAssertEqual(forEachResult.iterationCount, 2)
-        let expectedCommands = try (0...1).map {
-            try HeistActionCommand.activate(.target(matching, ordinal: $0)).resolve(in: .empty)
-        }
-        XCTAssertEqual(executedCommands, expectedCommands)
-    }
-
-    func testHeistForEachResetsOrdinalWhenMatchedCollectionIdentityChanges() async throws {
-        let matching = ElementPredicate.label("Delete")
-        var executedCommands: [ResolvedHeistActionCommand] = []
-        let initialState = await observedState(elements: [
-            (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
-            (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
-        ])
-        let afterFirstMutation = await observedState(elements: [
-            (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
-        ])
-        let runtime = heistRuntime(
-            observations: [initialState, afterFirstMutation],
-            execute: { command in
-                executedCommands.append(command)
-                return ActionResult.success(payload: .activate)
-            }
-        )
-        let plan = try HeistPlan(body: [
-            .forEachElement(try ForEachElementStep(
-                matching: matching,
-                limit: 10,
-                parameter: "target",
-                body: [.action(ActionStep(command: .activate(.ref("target"))))]
-            )),
-        ])
-
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heistResult = try XCTUnwrap(result.resultPayload)
-        let step = try XCTUnwrap(heistResult.steps.first)
-        let forEachResult = try XCTUnwrap(step.forEachElementEvidence)
-
-        XCTAssertTrue(result.outcome.isSuccess)
-        XCTAssertEqual(forEachResult.matchedCount, 2)
-        XCTAssertEqual(forEachResult.iterationCount, 2)
-        XCTAssertNil(forEachResult.failureReason)
-        let expectedCommand = try HeistActionCommand.activate(.target(matching, ordinal: 0)).resolve(in: .empty)
-        XCTAssertEqual(executedCommands, [expectedCommand, expectedCommand])
-    }
-
-    func testHeistForEachAdditionResetsOrdinalWithoutExtendingInitialIterationBudget() async throws {
-        let matching = ElementPredicate.label("Delete")
-        var executedCommands: [ResolvedHeistActionCommand] = []
-        let initialState = await observedState(elements: [
-            (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
-            (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
-        ])
-        let afterAddition = await observedState(elements: [
-            (makeElement(label: "Delete", identifier: "delete_new"), "delete_new"),
-            (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
-            (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
-        ])
-        let runtime = heistRuntime(
-            observations: [initialState, afterAddition],
-            execute: { command in
-                executedCommands.append(command)
-                return ActionResult.success(payload: .activate)
-            }
-        )
-        let plan = try HeistPlan(body: [
-            .forEachElement(try ForEachElementStep(
-                matching: matching,
-                limit: 10,
-                parameter: "target",
-                body: [.action(ActionStep(command: .activate(.ref("target"))))]
-            )),
-        ])
-
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let forEachResult = try XCTUnwrap(result.resultPayload?.steps.first?.forEachElementEvidence)
-
-        XCTAssertTrue(result.outcome.isSuccess)
-        XCTAssertEqual(forEachResult.matchedCount, 2)
-        XCTAssertEqual(forEachResult.iterationCount, 2)
-        let expectedCommand = try HeistActionCommand.activate(.target(matching, ordinal: 0)).resolve(in: .empty)
-        XCTAssertEqual(executedCommands, [expectedCommand, expectedCommand])
-    }
-
-    func testHeistForEachDoesNotResetOrdinalForStateOnlyMatchMutation() async throws {
-        let matching = ElementPredicate.label("Delete")
-        var executedCommands: [ResolvedHeistActionCommand] = []
-        let initialState = await observedState(elements: [
-            (makeElement(label: "Delete", identifier: "delete_first", traits: [.button]), "delete_first"),
-            (makeElement(label: "Delete", identifier: "delete_second", traits: [.button]), "delete_second"),
-        ])
-        let stateOnlyMutation = await observedState(elements: [
-            (makeElement(label: "Delete", identifier: "delete_first", traits: [.button, .selected]), "delete_first"),
-            (makeElement(label: "Delete", identifier: "delete_second", traits: [.button]), "delete_second"),
-        ])
-        let runtime = heistRuntime(
-            observations: [initialState, stateOnlyMutation],
-            execute: { command in
-                executedCommands.append(command)
-                return ActionResult.success(payload: .activate)
-            }
-        )
-        let plan = try HeistPlan(body: [
-            .forEachElement(try ForEachElementStep(
-                matching: matching,
-                limit: 10,
-                parameter: "target",
-                body: [.action(ActionStep(command: .activate(.ref("target"))))]
-            )),
-        ])
-
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let forEachResult = try XCTUnwrap(result.resultPayload?.steps.first?.forEachElementEvidence)
-
-        XCTAssertTrue(result.outcome.isSuccess)
-        XCTAssertEqual(forEachResult.matchedCount, 2)
-        XCTAssertEqual(forEachResult.iterationCount, 2)
-        let expectedCommands = try (0...1).map {
-            try HeistActionCommand.activate(.target(matching, ordinal: $0)).resolve(in: .empty)
-        }
-        XCTAssertEqual(executedCommands, expectedCommands)
-    }
-
-    func testHeistForEachBodyFailureStopsBeforeFollowingTopLevelSteps() async throws {
-        let matching = ElementPredicate.label("Delete")
-        let initialState = await observedState(elements: [
-            (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
-            (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
-        ])
-        let runtime = heistRuntime(
-            observations: [initialState],
-            execute: { _ in
-                ActionResult.failure(
-                    payload: .activate,
-                    failureKind: .actionFailed,
-                    message: "activate failed",
-                )
-            }
-        )
-        let plan = try HeistPlan(body: [
-            .forEachElement(try ForEachElementStep(
-                matching: matching,
-                limit: 10,
-                parameter: "target",
-                body: [.action(ActionStep(command: .activate(.ref("target"))))]
-            )),
-            .warn(WarnStep(message: "should not run")),
-        ])
-
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heistResult = try XCTUnwrap(result.resultPayload)
-        let forEachStep = try XCTUnwrap(heistResult.steps.first)
-        let forEachResult = try XCTUnwrap(forEachStep.forEachElementEvidence)
-        let failedActionPath: HeistExecutionPath = "$.body[0].for_each_element.iterations[0].body[0]"
-
-        XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(heistResult.abortedAtPath, failedActionPath)
-        XCTAssertEqual(heistResult.steps.map(\.kind), [.forEachElement, .warn])
-        XCTAssertEqual(heistResult.steps.map(\.status), [.failed, .skipped])
-        XCTAssertEqual(forEachStep.status, .failed)
-        XCTAssertEqual(forEachResult.matchedCount, 2)
-        XCTAssertEqual(forEachResult.iterationCount, 1)
-        XCTAssertEqual(forEachResult.failureReason, "iteration 0 failed at \(failedActionPath)")
-        XCTAssertEqual(forEachStep.failure?.observed, "iteration 0 failed at \(failedActionPath)")
-        XCTAssertEqual(forEachStep.abortedAtChildPath, failedActionPath)
-        XCTAssertEqual(forEachStep.children.map(\.kind), [.forEachIteration])
-        XCTAssertEqual(forEachStep.children.first?.children.map(\.kind), [.action])
-        XCTAssertEqual(
-            forEachStep.children.first?.forEachElementEvidence?.failureReason,
-            "child failed at \(failedActionPath)"
-        )
-    }
-
-    func testHeistForEachExpectationUsesCurrentSemanticTarget() async throws {
-        let matching = ElementPredicate.label("Delete")
-        var executedCommands: [ResolvedHeistActionCommand] = []
-        var waitedPredicates: [Settlement.Predicate] = []
-        let initialState = await observedState(elements: [
-            (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
-            (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
-        ])
-        let stillPresentState = await observedState(elements: [
-            (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
-        ])
-        let waitObservedState = await observedState(labels: ["Done"])
-        var currentStates = observationEvents(for: [initialState, stillPresentState])
-        let runtime = heistRuntime(
-            observations: [],
-            execute: { command in
-                executedCommands.append(command)
-                return ActionResult.success(
-                    payload: .activate,
-                    observation: .trace(makeTestTraceEvidence(
-                        AccessibilityTrace(capture: stillPresentState.moment.capture),
-                        completeness: .incomplete
-                    ))
-                )
-            },
-            settle: { command in
-                if case .currentState = command {
-                    return scriptedSettlement(command, observation: currentStates.removeFirst())
-                }
-                guard case .action(let action) = command,
-                      let predicate = action.predicate else {
-                    preconditionFailure("Attached expectation requires an action settlement")
-                }
-                waitedPredicates.append(predicate)
-                return scriptedSettlement(command, observation: waitObservedState)
-            }
-        )
-        let plan = try HeistPlan(body: [
-            .forEachElement(try ForEachElementStep(
-                matching: matching,
-                limit: 10,
-                parameter: "target",
+            .forEachString(try ForEachStringStep(
+                values: ["first", "second"],
+                parameter: "item",
                 body: [
-                    .action(ActionStep(
-                        command: .activate(.ref("target")),
-                        expectationPolicy: .expect(ActionExpectation(
-                            predicate: .missing(.ref("target")),
-                            timeout: 2
-                        )))),
+                    .fail(FailStep(message: "stop")),
+                    .warn(WarnStep(message: "nested later")),
                 ]
             )),
+            .warn(WarnStep(message: "root later")),
         ])
+        var driver = try HeistMachineTestDriver(plan: plan)
 
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heistResult = try XCTUnwrap(result.resultPayload)
-        let forEachResult = try XCTUnwrap(heistResult.steps.first?.forEachElementEvidence)
+        let completion = try driver.run()
+        let loop = try XCTUnwrap(completion.steps.first)
 
-        XCTAssertTrue(result.outcome.isSuccess)
-        XCTAssertEqual(forEachResult.iterationCount, 2)
-        let expectedCommand = try HeistActionCommand.activate(.target(matching, ordinal: 0)).resolve(in: .empty)
-        let authoredExpectation = AccessibilityPredicate.missing(.ref("target"))
-        let resolvedExpectation = try resolvedPredicate(.missing(.predicate(matching, ordinal: 0)))
-        XCTAssertEqual(executedCommands.first, expectedCommand)
-        XCTAssertEqual(waitedPredicates.first?.authored, authoredExpectation)
-        XCTAssertEqual(waitedPredicates.first?.resolved, resolvedExpectation)
-        XCTAssertEqual(executedCommands.last, expectedCommand)
-        XCTAssertEqual(waitedPredicates.last?.authored, authoredExpectation)
-        XCTAssertEqual(waitedPredicates.last?.resolved, resolvedExpectation)
-    }
-
-}
-
-private extension ActionResult {
-    var resultPayload: HeistResult? {
-        guard case .heist(let result) = payload else { return nil }
-        return result
+        XCTAssertEqual(loop.status, .failed)
+        XCTAssertEqual(loop.children.count, 1)
+        XCTAssertEqual(loop.children.first?.children.map(\.status), [.failed, .skipped])
+        XCTAssertEqual(completion.steps.last?.status, .skipped)
     }
 }
 
-#endif
+private extension HeistMachineForEachTests {
+    func elementLoopPlan(body: [HeistStep]) throws -> HeistPlan {
+        try HeistPlan(body: [
+            .forEachElement(try ForEachElementStep(
+                matching: .label("Delete"),
+                limit: 10,
+                parameter: "target",
+                body: body
+            )),
+        ])
+    }
+}
+
+private extension HeistExecution.MainActorRequest {
+    var snapshotScope: SemanticObservationScope? {
+        guard case .currentSnapshot(_, let scope) = self else { return nil }
+        return scope
+    }
+}
+
+#endif // canImport(UIKit)

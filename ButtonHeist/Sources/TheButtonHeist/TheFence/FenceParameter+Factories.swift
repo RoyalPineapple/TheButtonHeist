@@ -14,6 +14,10 @@ import TheScore
         defaultValue: .summary
     )
     public static let heistName = FenceParameter<String>.string(.heist, required: true)
+    public static let heistTimeout = FenceParameter<HeistTimeout>.heistTimeout(
+        .timeout,
+        defaultValue: .default
+    )
     public static let heistValidationLint = FenceParameter<HeistValidationLintMode>.enumValue(
         .lint,
         defaultValue: .compositionQuality
@@ -122,23 +126,6 @@ internal func arrayParam(
         key: key.rawValue,
         schema: .array(
             items: items,
-            constraints: FenceParameterArrayConstraints(minItems: minItems, maxItems: maxItems)
-        ),
-        required: required
-    )
-}
-
-internal func stringArrayParam(
-    _ key: FenceParameterKey,
-    required: Bool = false,
-    minItems: Int? = nil,
-    maxItems: Int? = nil
-) -> FenceParameterSpec {
-    FenceParameterSpec(
-        key: key.rawValue,
-        schema: .array(
-            kind: .stringArray,
-            items: .scalar(.string),
             constraints: FenceParameterArrayConstraints(minItems: minItems, maxItems: maxItems)
         ),
         required: required

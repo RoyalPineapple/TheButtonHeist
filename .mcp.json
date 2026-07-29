@@ -2,6 +2,10 @@
   "mcpServers": {
     "buttonheist": {
       "command": "./scripts/buttonheist-mcp.sh"
+    },
+    "xcodebuild": {
+      "command": "npx",
+      "args": ["-y", "xcodebuildmcp@latest", "mcp"]
     }
   }
 }

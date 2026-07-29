@@ -74,9 +74,8 @@ cyclomatic_complexity:
   # Large switch statements over enum cases are lookup tables, not complexity.
   ignores_case_statements: true
 
-blanket_disable_command:
-  allowed_rules:
-    - nesting
+nesting:
+  type_level: 3
 
 inclusive_language: {}
 

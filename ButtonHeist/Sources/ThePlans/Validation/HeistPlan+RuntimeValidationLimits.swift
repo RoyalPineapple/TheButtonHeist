@@ -6,7 +6,6 @@ package struct HeistPlanRuntimeSafetyLimits: Sendable, Equatable {
 
     package let maxTotalSteps: Int
     package let maxNestedStepDepth: Int
-    package let maxPredicateDepth: Int
     package let maxAllPredicateChildren: Int
     package let maxForEachStringValues: Int
     package let maxForEachElementLimit: Int
@@ -18,7 +17,6 @@ package struct HeistPlanRuntimeSafetyLimits: Sendable, Equatable {
     package init(
         maxTotalSteps: Int = 500,
         maxNestedStepDepth: Int = 16,
-        maxPredicateDepth: Int = 12,
         maxAllPredicateChildren: Int = 20,
         maxForEachStringValues: Int = 100,
         maxForEachElementLimit: Int = 100,
@@ -29,7 +27,6 @@ package struct HeistPlanRuntimeSafetyLimits: Sendable, Equatable {
     ) {
         self.maxTotalSteps = maxTotalSteps
         self.maxNestedStepDepth = maxNestedStepDepth
-        self.maxPredicateDepth = maxPredicateDepth
         self.maxAllPredicateChildren = maxAllPredicateChildren
         self.maxForEachStringValues = maxForEachStringValues
         self.maxForEachElementLimit = maxForEachElementLimit

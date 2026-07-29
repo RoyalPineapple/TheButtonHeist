@@ -12,12 +12,7 @@ extension TheVault {
 
     func resetInterfaceForLifecycle() async {
         latestObservation = .empty
-        latestFailedSettleDiagnosticEvidence = nil
-        await semanticObservationStream.clearCurrentInterface()
-    }
-
-    func invalidateSettledObservationFromTripwire() async {
-        await semanticObservationStream.invalidateLatestSettledObservation()
+        await semanticObservationStream.discardCurrentObservation()
     }
 
     /// Refresh the latest live viewport evidence. The returned value remains the raw
@@ -34,39 +29,10 @@ extension TheVault {
         sourceObservation _: InterfaceObservation
     ) {
         observeInterface(observation)
-        latestFailedSettleDiagnosticEvidence = nil
-    }
-
-    func recordFailedSettleDiagnosticEvidence(_ observation: InterfaceObservation?) async {
-        latestFailedSettleDiagnosticEvidence = observation
-        await semanticObservationStream.invalidateLatestSettledObservation()
     }
 
     func observeInterface(_ observation: InterfaceObservation) {
         latestObservation = observation
-    }
-
-    /// Starting value for page-by-page exploration. The tree's value-only
-    /// viewport capture is the evidence that belongs to this committed state;
-    /// a fresh parser read replaces it before exploration performs live work.
-    func interfaceMemoryBaseline() -> InterfaceObservation {
-        do {
-            return try InterfaceObservation.build(tree: interfaceTree)
-        } catch {
-            preconditionFailure("Exploration baseline failed validation: \(error)")
-        }
-    }
-
-    /// Starting value for public interface discovery after a visible settle.
-    ///
-    /// Public reads should describe the current screen. Discovery-only memory
-    /// from a prior screen can share generated container names with the current
-    /// screen, so command-owned interface exploration starts from visible
-    /// current-screen state and grows from there.
-    func visibleExplorationBaseline(
-        from viewportObservation: InterfaceObservation
-    ) -> InterfaceObservation {
-        viewportObservation.viewportOnly
     }
 
     func firstResponderInterfaceElement() -> InterfaceTree.Element? {

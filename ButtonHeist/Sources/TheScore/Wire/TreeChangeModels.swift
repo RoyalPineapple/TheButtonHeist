@@ -441,10 +441,6 @@ extension PropertyChange {
             return observed.satisfies(change, matches: Self.matchesTraits)
         case (.actions(let observed), .actions(let change)):
             return observed.satisfies(change, matches: Self.matchesActions)
-        case (.frame(let observed), .frame(let change)):
-            return observed.satisfies(change, matches: Self.matchesFrame)
-        case (.activationPoint(let observed), .activationPoint(let change)):
-            return observed.satisfies(change, matches: Self.matchesPoint)
         case (.customContent(let observed), .customContent(let change)):
             return observed.satisfies(change, matches: Self.matchesCustomContent)
         case (.rotors(let observed), .rotors(let change)):
@@ -464,20 +460,6 @@ extension PropertyChange {
         guard let value else { return false }
         return checker.include.isSubset(of: value.actions)
             && checker.exclude.isDisjoint(with: value.actions)
-    }
-
-    private static func matchesFrame(_ checker: ElementFrameMatch, _ value: ElementPropertyFrame?) -> Bool {
-        guard let value else { return false }
-        return checker.x.map { $0 == value.x } ?? true
-            && checker.y.map { $0 == value.y } ?? true
-            && checker.width.map { $0 == value.width } ?? true
-            && checker.height.map { $0 == value.height } ?? true
-    }
-
-    private static func matchesPoint(_ checker: ElementPointMatch, _ value: ElementPropertyPoint?) -> Bool {
-        guard let value else { return false }
-        return checker.x.map { $0 == value.x } ?? true
-            && checker.y.map { $0 == value.y } ?? true
     }
 
     private static func matchesCustomContent(

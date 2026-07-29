@@ -214,6 +214,20 @@ final class HeistResultTests: XCTestCase {
         XCTAssertEqual(capture.plan?.parameter, .string(name: "input"))
     }
 
+    func testInProcessHeistPropagatesWholeHeistTimeout() async throws {
+        let job = try TheInsideJob(token: "in-app-heist-timeout-test")
+        let capture = RuntimeCapture(job: job)
+        let timeout = try HeistTimeout(validatingSeconds: 123.5)
+
+        _ = try await Heist(
+            try HeistPlan { Warn("timeout") },
+            timeout: timeout,
+            runtime: capture.runtime
+        )
+
+        XCTAssertEqual(capture.timeout, timeout)
+    }
+
     func testRunHeistSwiftBoundaryBindsOneStringArgument() async throws {
         let heist = try await runHeist("addToCart", argument: "Milk") { _ in
             Warn("adding")
@@ -284,82 +298,6 @@ final class HeistResultTests: XCTestCase {
         XCTAssertEqual(capture.plan?.parameter, .accessibilityTarget(name: "input"))
     }
 
-    func testRepeatUntilSuccessResultDoesNotSynthesizeWaitActionResult() async throws {
-        let job = try TheInsideJob(token: "in-app-repeat-until-success-result-test")
-        let settlementScript = SettlementResultScript(states: [
-            await observedQuantityState(job: job, value: "0"),
-            await observedQuantityState(job: job, value: "2"),
-        ])
-        var incrementCount = 0
-        let runtime = repeatUntilRuntime(job: job, settlementScript: settlementScript) { command in
-            if case .increment = command {
-                incrementCount += 1
-            }
-            return ActionResult.success(payload: .increment)
-        }
-        let plan = try HeistPlan(body: [
-            .repeatUntil(try RepeatUntilStep(
-                predicate: .exists(.element(.identifier("quantity"), .value("2"))),
-                timeout: 1,
-                body: [
-                    .action(ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
-                ]
-            )),
-        ])
-
-        let result = await job.brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heistResult = try XCTUnwrap(result.resultPayload)
-        let step = try XCTUnwrap(heistResult.steps.first)
-        let evidence = try XCTUnwrap(step.repeatUntilEvidence)
-        let iterationEvidence = try XCTUnwrap(step.children.first?.repeatUntilEvidence)
-
-        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "repeat_until failed")
-        XCTAssertEqual(incrementCount, 1)
-        XCTAssertEqual(evidence.iterationCount, 1)
-        XCTAssertTrue(evidence.expectation.met)
-        XCTAssertNil(evidence.actionResult)
-        XCTAssertNil(iterationEvidence.actionResult)
-        XCTAssertNil(step.reportActionResult)
-    }
-
-    func testRepeatUntilTimeoutResultDoesNotSynthesizeWaitActionResult() async throws {
-        let job = try TheInsideJob(token: "in-app-repeat-until-timeout-result-test")
-        let settlementScript = SettlementResultScript(states: [
-            await observedQuantityState(job: job, value: "0"),
-        ])
-        var incrementCount = 0
-        let runtime = repeatUntilRuntime(job: job, settlementScript: settlementScript) { command in
-            if case .increment = command {
-                incrementCount += 1
-            }
-            return ActionResult.success(payload: .increment)
-        }
-        let plan = try HeistPlan(body: [
-            .repeatUntil(try RepeatUntilStep(
-                predicate: .exists(.element(.identifier("quantity"), .value("2"))),
-                timeout: .milliseconds(1),
-                body: [
-                    .action(ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
-                ]
-            )),
-        ])
-
-        let result = await job.brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heistResult = try XCTUnwrap(result.resultPayload)
-        let step = try XCTUnwrap(heistResult.steps.first)
-        let evidence = try XCTUnwrap(step.repeatUntilEvidence)
-
-        XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(incrementCount, 1)
-        XCTAssertEqual(step.status, .failed)
-        XCTAssertEqual(step.children.map(\.kind), [.repeatUntilIteration])
-        XCTAssertFalse(evidence.expectation.met)
-        XCTAssertEqual(evidence.outcome, .failed)
-        XCTAssertNil(evidence.actionResult)
-        XCTAssertNil(step.reportActionResult)
-        XCTAssertTrue(evidence.failureReason?.contains("timed out") == true)
-    }
-
     func testWarningsRollUpWithRuntimePath() async throws {
         enum Library {
             static let marker = HeistDef<Void>("Library.marker") {
@@ -412,12 +350,8 @@ final class HeistResultTests: XCTestCase {
                 respondsToUserInteraction: false
             ))
         }
-        let tree: [AccessibilityHierarchy] = elements.enumerated().map { index, element in
-            AccessibilityHierarchy.element(element, traversalIndex: index)
-        }
-        let interface = Interface(
-            timestamp: Date(timeIntervalSince1970: 0),
-            tree: tree
+        let interface = makeTestInterface(
+            nodes: elements.map { TestInterfaceNode.parsedElement($0, actions: []) }
         )
         let screenshot = ScreenPayload(
             pngData: "png",
@@ -456,7 +390,10 @@ final class HeistResultTests: XCTestCase {
         XCTAssertFalse(description.contains("... and 1 more"), description)
         XCTAssertTrue(description.contains("frame=(10,20,100,44) activation=(60,42)"), description)
         XCTAssertEqual(result.failureScreenshotPayload, screenshot)
-        XCTAssertEqual(result.failureDiagnosticInterface?.projectedElements.first?.label, "Actual Empty State")
+        XCTAssertEqual(
+            result.failureDiagnosticInterface?.projectedElements.first?.semantics.assertable.label,
+            "Actual Empty State"
+        )
     }
 
     func testFailureAbortsAtFirstFailedStepAndRestoresRuntime() async throws {
@@ -519,98 +456,24 @@ private final class RuntimeCapture {
     private let job: TheInsideJob
     private(set) var plan: HeistPlan?
     private(set) var argument: HeistArgument?
+    private(set) var timeout: HeistTimeout?
 
     init(job: TheInsideJob) {
         self.job = job
     }
 
     var runtime: InAppHeistRuntime {
-        InAppHeistRuntime { plan, argument in
+        InAppHeistRuntime { plan, argument, timeout in
             self.plan = plan
             self.argument = argument
-            return await self.job.executeInAppHeist(plan, argument: argument)
-        }
-    }
-}
-
-@MainActor
-private final class SettlementResultScript {
-    private var events: [Observation.SnapshotEvent]
-    private var previousCapture: AccessibilityTrace.Capture?
-    private var nextSequence: SettledObservationSequence = 0
-    private var log = Observation.Log(retentionLimit: Observation.Store.defaultRetentionLimit)
-
-    init(states: [Observation.SnapshotEvent]) {
-        events = states
-    }
-
-    func event(scope: SemanticObservationScope) -> Observation.SnapshotEvent? {
-        guard !events.isEmpty else { return nil }
-        let sourceEvent = events.removeFirst()
-        let capture = sourceEvent.moment.capture
-        nextSequence += 1
-        let trace = previousCapture.map {
-            AccessibilityTrace(capture: $0).appending(
-                capture.interface,
-                context: capture.context,
-                transition: capture.transition
+            self.timeout = timeout
+            return await self.job.executeInAppHeist(
+                plan,
+                argument: argument,
+                timeout: timeout
             )
-        } ?? AccessibilityTrace(capture: capture)
-        let snapshot = Observation.Snapshot(
-            sequence: nextSequence,
-            generation: .initial,
-            sourceScope: scope,
-            observation: sourceEvent.snapshot.observation,
-            semanticSignal: .empty,
-            notificationSequence: 0,
-            trace: trace
-        )
-        let event: Observation.SnapshotEvent
-        do {
-            event = try log.record(snapshot: snapshot, continuity: .sameGeneration)
-        } catch {
-            preconditionFailure("Wait result fixture produced an invalid observation transition: \(error)")
         }
-        previousCapture = trace.captures.last
-        return event
     }
-
-    func result(for command: Settlement.Command) -> Settlement.Result {
-        scriptedSettlement(command, observation: event(scope: command.observationScope))
-    }
-}
-
-@MainActor
-private func observedQuantityState(
-    job: TheInsideJob,
-    value: String
-) async -> Observation.SnapshotEvent {
-    let element = AccessibilityElement.make(
-        value: value,
-        identifier: "quantity",
-        traits: .staticText
-    )
-    return await job.brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
-        .makeForTests(elements: [(element, HeistId(rawValue: "quantity"))])
-    )
-}
-
-@MainActor
-private func repeatUntilRuntime(
-    job _: TheInsideJob,
-    settlementScript: SettlementResultScript,
-    execute: @escaping @MainActor (ResolvedHeistActionCommand) async -> ActionResult
-) -> TheBrains.HeistExecutionRuntime {
-    TheBrains.HeistExecutionRuntime(
-        execute: { command, _ in
-            RuntimeActionExecution(
-                result: await execute(command)
-            )
-        },
-        settle: { command in
-            settlementScript.result(for: command)
-        }
-    )
 }
 
 private extension ActionResult {

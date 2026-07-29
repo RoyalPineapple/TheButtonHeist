@@ -24,21 +24,21 @@ final class DeltaProjectionTests: XCTestCase {
             remaining.removeAll { $0 == removedIndex }
             interfaces.append(makeTestInterface(elements: remaining.map { allElements[$0] }))
         }
-        var trace = AccessibilityTrace(capture: AccessibilityTrace.Capture(
-            sequence: 1,
-            interface: interfaces[0],
-            context: AccessibilityTrace.Context(screenId: "rows")
-        ))
-        for interface in interfaces.dropFirst() {
-            trace = trace.appending(
-                interface,
-                context: AccessibilityTrace.Context(screenId: "rows")
+        let snapshots = interfaces.map { interface in
+            observationSnapshot(
+                interface: interface,
+                screenId: "rows"
             )
         }
+        let evidence = Observation.Evidence(
+            baseline: snapshots[0],
+            current: snapshots.last,
+            events: snapshots.dropFirst().map(Observation.Event.elementsChanged),
+            completeness: .incomplete
+        )
 
         let projection = try XCTUnwrap(DeltaProjection(
-            trace: trace,
-            isComplete: false,
+            evidence: evidence,
             profile: .full
         ))
         guard case .elementsChanged(let delta) = projection else {
@@ -48,12 +48,9 @@ final class DeltaProjectionTests: XCTestCase {
         XCTAssertEqual(delta.edits.added.elements, [])
         XCTAssertEqual(delta.edits.updated.updates, [])
         XCTAssertEqual(
-            delta.edits.removed.elements.compactMap(\.identifier),
+            delta.edits.removed.elements.compactMap(\.semantics.assertable.identifier),
             removalOrder.map { "row_\($0)" }
         )
-        XCTAssertEqual(delta.metadata.captureEdge?.before.sequence, 1)
-        XCTAssertEqual(delta.metadata.captureEdge?.after.sequence, interfaces.count)
-
         let compact = FenceResponse.compactDelta(projection, method: "activate")
         let expectedLines = ["activate: elements changed (4 elements)"] + removalOrder.map {
             "  - \"Row \($0)\" staticText id=\"row_\($0)\""
@@ -70,35 +67,36 @@ final class DeltaProjectionTests: XCTestCase {
         )
         try edits.assertMissing("added")
         try edits.assertMissing("updated")
-        try json.assertMissing("transient")
         try json.assertMissing("newInterface")
         try json.assertMissing("screen")
         try json.assertMissing("omitted")
     }
 
     func testDuplicateSemanticNodesProjectTheRecordAtTheFactPath() throws {
-        let duplicate = makeTestAccessibilityElement(makeTestHeistElement(
+        let duplicateElement = makeTestHeistElement(
             label: "Duplicate",
             identifier: "duplicate",
             traits: [.button]
-        ))
+        )
+        let duplicate = makeTestAccessibilityElement(duplicateElement)
         let firstPath = TreePath([0, 0, 0])
         let secondPath = TreePath([0, 1, 0])
         let before = duplicateInterface(
             duplicate: duplicate,
+            geometry: duplicateElement.geometry,
             firstPath: firstPath,
             secondPath: secondPath,
             includesSecond: true
         )
         let after = duplicateInterface(
             duplicate: duplicate,
+            geometry: duplicateElement.geometry,
             firstPath: firstPath,
             secondPath: secondPath,
             includesSecond: false
         )
         let projection = try XCTUnwrap(DeltaProjection(
-            trace: makeTestTrace(before: before, after: after),
-            isComplete: false,
+            evidence: makeObservationEvidence(before: before, after: after),
             profile: .full
         ))
         guard case .elementsChanged(let delta) = projection else {
@@ -107,8 +105,8 @@ final class DeltaProjectionTests: XCTestCase {
 
         let removed = try XCTUnwrap(delta.edits.removed.elements.first)
         XCTAssertEqual(delta.edits.removed.elements.count, 1)
-        XCTAssertEqual(removed.identifier, "duplicate")
-        XCTAssertEqual(removed.actions, [.custom("Archive")])
+        XCTAssertEqual(removed.semantics.assertable.identifier, "duplicate")
+        XCTAssertEqual(removed.semantics.assertable.actions, [.custom("Archive")])
         XCTAssertTrue(delta.edits.added.elements.isEmpty)
         XCTAssertTrue(delta.edits.updated.updates.isEmpty)
     }
@@ -123,32 +121,41 @@ final class DeltaProjectionTests: XCTestCase {
             makeTestHeistElement(label: "Checkout", identifier: "checkout", traits: [.header]),
             makeTestHeistElement(label: "Pay", identifier: "pay", traits: [.button]),
         ])
-        let trace = AccessibilityTrace(capture: AccessibilityTrace.Capture(
-            sequence: 1,
+        let baseline = observationSnapshot(
             interface: cart,
-            context: AccessibilityTrace.Context(screenId: "cart")
-        ))
-            .appending(
-                cartWithToast,
-                context: AccessibilityTrace.Context(screenId: "cart")
-            )
-            .appending(
-                checkout,
-                context: AccessibilityTrace.Context(screenId: "checkout"),
-                transition: makeTestScreenChangedTransition()
-            )
+            screenId: "cart"
+        )
+        let toastSnapshot = observationSnapshot(
+            interface: cartWithToast,
+            screenId: "cart"
+        )
+        let checkoutSnapshot = observationSnapshot(
+            interface: checkout,
+            screenId: "checkout"
+        )
+        let evidence = Observation.Evidence(
+            baseline: baseline,
+            current: checkoutSnapshot,
+            events: [
+                .elementsChanged(toastSnapshot),
+                .screenChanged(ScreenFacts(idAfter: "checkout")),
+                .elementsChanged(checkoutSnapshot),
+            ],
+            completeness: .incomplete
+        )
 
         let projection = try XCTUnwrap(DeltaProjection(
-            trace: trace,
-            isComplete: false,
+            evidence: evidence,
             profile: .full
         ))
         guard case .screenChanged(let delta) = projection else {
             return XCTFail("Expected screenChanged, got \(projection.kind)")
         }
 
-        XCTAssertEqual(delta.screen.elements.compactMap(\.identifier), ["checkout", "pay"])
-        XCTAssertEqual(delta.metadata.transient.elements.compactMap(\.identifier), ["saved"])
+        XCTAssertEqual(
+            delta.screen.elements.compactMap(\.semantics.assertable.identifier),
+            ["checkout", "pay"]
+        )
 
         let json = try publicDeltaJSON(projection)
         XCTAssertEqual(try json.string("kind"), "screenChanged")
@@ -160,6 +167,7 @@ final class DeltaProjectionTests: XCTestCase {
 
     private func duplicateInterface(
         duplicate: AccessibilityElement,
+        geometry: HeistElement.Geometry,
         firstPath: TreePath,
         secondPath: TreePath,
         includesSecond: Bool
@@ -178,17 +186,30 @@ final class DeltaProjectionTests: XCTestCase {
             ]),
         ]
         var annotations = [
-            InterfaceElementAnnotation(path: firstPath, actions: [.activate]),
+            InterfaceElementAnnotation(
+                path: firstPath,
+                actions: [.activate],
+                geometry: geometry
+            ),
         ]
         if includesSecond {
-            annotations.append(InterfaceElementAnnotation(path: secondPath, actions: [.custom("Archive")]))
+            annotations.append(InterfaceElementAnnotation(
+                path: secondPath,
+                actions: [.custom("Archive")],
+                geometry: geometry
+            ))
         }
         let annotationByPath = InterfaceAnnotations(elements: annotations).elementByPath
         return Interface(
             timestamp: Date(timeIntervalSince1970: includesSecond ? 1 : 2),
             projecting: tree,
             elementMetadata: { path, _, _ in
-                annotationByPath[path].map { InterfaceElementProjectionMetadata(actions: $0.actions) }
+                annotationByPath[path].map {
+                    InterfaceElementProjectionMetadata(
+                        actions: $0.actions,
+                        geometry: $0.geometry
+                    )
+                }
             },
             containerMetadata: { _, _ in nil }
         )

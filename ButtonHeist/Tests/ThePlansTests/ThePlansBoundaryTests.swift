@@ -41,8 +41,9 @@ func `representative heist plan encodes decodes validates and renders`() throws 
             .expect(.exists(.value("alex@example.com")), timeout: 1)
 
         Activate(.label("Submit"))
-            .expect(.changed(.screen()))
-            .expect(.exists(.label("Home")), timeout: 5)
+            .expect(.screenChanged, timeout: 5)
+
+        WaitFor(.exists(.label("Home")), timeout: 5)
 
         WaitFor(.missing(.label("Loading")), timeout: 1)
 

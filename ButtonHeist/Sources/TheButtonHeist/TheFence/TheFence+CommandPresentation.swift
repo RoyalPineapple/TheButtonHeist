@@ -35,10 +35,6 @@ public extension TheFence.Command {
 }
 
 private extension TheFence.Command {
-    static func inlineList(_ values: [String]) -> String {
-        values.map { inlineCode($0) }.joined(separator: ", ")
-    }
-
     static func inlineCode(_ value: String) -> String {
         "`\(value)`"
     }

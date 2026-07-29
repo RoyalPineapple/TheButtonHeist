@@ -10,7 +10,7 @@ import Testing
         ) {
             try JSONDecoder().decode(HeistPlan.self, from: Data("""
             {
-              "version": 2,
+              "version": 3,
               "body": [
                 {
                   "type": "invoke",
@@ -233,10 +233,10 @@ HeistPlan {
         """)
     }
     let json = Data("""
-    {"version":2,"body":[{"type":"conditional","conditional":{"cases":[{
+    {"version":3,"body":[{"type":"conditional","conditional":{"cases":[{
       "predicate":{"type":"exists","target":{"checks":[
         {"kind":"label","match":{"mode":"exact","value":"Home"}}]}},
-      "body":[{"type":"heist","heist":{"version":2,"body":[
+      "body":[{"type":"heist","heist":{"version":3,"body":[
         {"type":"invoke","invoke":{"path":"Missing"}}]}}]}]}}]}
     """.utf8)
     let jsonDiagnostic = try semanticDiagnostic {

@@ -13,10 +13,16 @@ extension TheBrainsScrollTests {
     func testSemanticRevealNoOpsWhenAlreadyVisible() async {
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let visibleElement = makeElement(label: "Visible")
         let visibleEntry = InterfaceTree.Element(
             heistId: "visible_element",
             scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: nil),
-            element: makeElement(label: "Visible")
+            geometry: testGeometry(
+                for: visibleElement,
+                ownerPath: TreePath([0]),
+                screen: TheVault.onscreenSpace(for: visibleElement)
+            ),
+            element: visibleElement
         )
         await installLiveScrollTarget(visibleEntry, scrollView: scrollView, containerName: "visible_scroll")
 
@@ -41,7 +47,7 @@ extension TheBrainsScrollTests {
             offscreen: .init(
                 makeElement(label: "Original Target", traits: .button),
                 heistId: targetId,
-                contentActivationPoint: CGPoint(x: 0, y: 1_200),
+                viewActivationPoint: CGPoint(x: 0, y: 1_200),
                 scrollView: scrollView
             )
         )
@@ -78,7 +84,7 @@ extension TheBrainsScrollTests {
             offscreen: OffViewportScrollTarget(
                 offscreen,
                 heistId: "settings_button",
-                contentActivationPoint: CGPoint(x: 0, y: 1_200),
+                viewActivationPoint: CGPoint(x: 0, y: 1_200),
                 scrollView: scrollView
             ),
             includeLiveScrollAncestor: false
@@ -107,13 +113,21 @@ extension TheBrainsScrollTests {
             offscreen: .init(
                 makeElement(label: "Settings", traits: .button),
                 heistId: "settings_button",
-                contentActivationPoint: observedPoint,
+                viewActivationPoint: observedPoint,
                 scrollView: scrollView
             )
         )
         let entry = try XCTUnwrap(brains.vault.interfaceTree.findElement(heistId: "settings_button"))
-        let currentEvent = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
-            brains.vault.latestObservation
+        let current = await brains.vault.semanticObservationStream
+            .commitDiscoveryObservationForTesting(brains.vault.latestObservation)
+            .current
+        XCTAssertEqual(current.scope, .discovery)
+        XCTAssertEqual(
+            Set(
+                current.snapshot.interface.projectedElements
+                    .compactMap(\.semantics.assertable.label)
+            ),
+            ["Visible", "Settings"]
         )
         let originalMoveViewport = brains.navigation.elementInflation.exploration.moveViewport
         var fallbackRequest: ElementInflation.SemanticTargetRevealRequest?
@@ -121,7 +135,7 @@ extension TheBrainsScrollTests {
             Navigation.ViewportTransition(
                 outcome: .moved,
                 previousVisibleIds: [],
-                event: currentEvent
+                current: current
             )
         }
         brains.navigation.elementInflation.exploration.revealKnownTarget = { request in
@@ -146,9 +160,9 @@ extension TheBrainsScrollTests {
             try resolvedTarget(.label("Settings"))
         )
         XCTAssertEqual(
-            fallbackRequest?.observedScrollContentActivationPoint,
-            InterfaceTree.ObservedScrollContentActivationPoint(
-                try ScrollContentPoint(validating: observedPoint),
+            fallbackRequest?.viewSpace,
+            viewSpace(
+                try ViewPoint(validating: observedPoint),
                 ownerPath: TreePath([0])
             )
         )
@@ -163,7 +177,7 @@ extension TheBrainsScrollTests {
             offscreen: .init(
                 makeElement(label: "Settings", traits: .button),
                 heistId: "settings_button",
-                contentActivationPoint: observedPoint,
+                viewActivationPoint: observedPoint,
                 scrollView: scrollView
             )
         )
@@ -175,9 +189,12 @@ extension TheBrainsScrollTests {
             heistId: matchingElement.heistId,
             path: matchingElement.path,
             scrollMembership: matchingElement.scrollMembership,
-            observedScrollContentActivationPoint: observedContentActivationPoint(
-                observedPoint,
-                ownerPath: TreePath([1])
+            geometry: HeistElement.Geometry(
+                screen: matchingElement.geometry.screen,
+                view: viewSpace(
+                    try ViewPoint(validating: observedPoint),
+                    ownerPath: TreePath([1])
+                )
             ),
             element: matchingElement.element
         )
@@ -191,10 +208,10 @@ extension TheBrainsScrollTests {
             liveCapture: matchingObservation.liveCapture
         )
         let sourceTarget = try resolvedTarget(.label("Settings").and(.traits([.button])))
-        var dispatchedPoints: [ScrollContentPoint] = []
+        var dispatchedPoints: [ViewPoint] = []
         var dispatchedOwnerPaths: [TreePath] = []
         brains.navigation.elementInflation.exploration.moveViewport = { intent in
-            if case .revealContentPoint(let point, let target) = intent {
+            if case .revealViewPoint(let point, let target) = intent {
                 dispatchedPoints.append(point)
                 dispatchedOwnerPaths.append(target.containerTarget.path)
             }
@@ -231,7 +248,7 @@ extension TheBrainsScrollTests {
             deadline: semanticRevealDeadline()
         )
 
-        XCTAssertEqual(dispatchedPoints, [try ScrollContentPoint(validating: observedPoint)])
+        XCTAssertEqual(dispatchedPoints, [try ViewPoint(validating: observedPoint)])
         XCTAssertEqual(dispatchedOwnerPaths, [TreePath([0])])
     }
 
@@ -262,15 +279,23 @@ extension TheBrainsScrollTests {
         let visibleEntry = InterfaceTree.Element(
             heistId: "visible_element",
             scrollMembership: .init(containerPath: ancestorPath, index: nil),
+            geometry: testGeometry(
+                for: visibleElement,
+                ownerPath: ancestorPath,
+                screen: TheVault.onscreenSpace(for: visibleElement)
+            ),
             element: visibleElement
         )
         let knownElement = makeElement(label: "Paged Target", traits: .button)
         let knownEntry = InterfaceTree.Element(
             heistId: "known_paged_target",
             scrollMembership: .init(containerPath: missingOwnerPath, index: nil),
-            observedScrollContentActivationPoint: observedContentActivationPoint(
-                innerContentPoint,
-                ownerPath: missingOwnerPath
+            geometry: HeistElement.Geometry(
+                screen: .offscreen,
+                view: viewSpace(
+                    try ViewPoint(validating: innerContentPoint),
+                    ownerPath: missingOwnerPath
+                )
             ),
             element: knownElement
         )
@@ -290,29 +315,18 @@ extension TheBrainsScrollTests {
             scrollableContainerViewsByPath: [ancestorPath: .init(view: scrollView)]
         )
         let revealedElement = makeElement(label: "Paged Target", traits: .button)
-        let revealedEntry = InterfaceTree.Element(
+        let revealed = revealedObservation(
+            element: revealedElement,
             heistId: knownEntry.heistId,
-            scrollMembership: .init(containerPath: ancestorPath, index: nil),
-            element: revealedElement
-        )
-        let revealedObservation = InterfaceObservation.makeForTests(
-            elements: [revealedEntry.heistId: revealedEntry],
-            hierarchy: [
-                .container(container, children: [
-                    .element(revealedElement, traversalIndex: 0),
-                ]),
-            ],
-            heistIdsByPath: [ancestorPath.appending(0): revealedEntry.heistId],
-            elementRefs: [revealedEntry.heistId: .init(object: retainedLiveObject(), scrollView: scrollView)],
-            containerRefsByPath: [ancestorPath: .init(object: scrollView)],
-            firstResponderHeistId: nil,
-            scrollableContainerViewsByPath: [ancestorPath: .init(view: scrollView)]
+            container: container,
+            ownerPath: ancestorPath,
+            scrollView: scrollView
         )
         await installSyntheticObservation(initialObservation)
         var movementTargets: [ObjectIdentifier] = []
         scrollView.onSetContentOffset = { scrollView in
             movementTargets.append(ObjectIdentifier(scrollView))
-            self.visibleObservationSource.observation = revealedObservation
+            self.visibleObservationSource.observation = revealed
         }
         let sourceTarget = try resolvedTarget(.label("Paged Target").and(.traits([.button])))
         guard case .admitted(let admittedTarget) = brains.navigation.elementInflation.admitSemanticTarget(
@@ -326,7 +340,7 @@ extension TheBrainsScrollTests {
             target: admittedTarget,
             revealRootScrollViewID: ObjectIdentifier(scrollView),
             deadline: semanticRevealDeadline(),
-            observedScrollContentActivationPoint: knownEntry.observedScrollContentActivationPoint
+            viewSpace: knownEntry.geometry.view
         ))
 
         guard case .revealed(_, let exploration) = result else {
@@ -343,7 +357,7 @@ extension TheBrainsScrollTests {
     }
 
     func testSiblingOwnerMismatchDoesNotDispatchSeed() async throws {
-        let fixture = siblingOwnerMismatchFixture()
+        let fixture = try siblingOwnerMismatchFixture()
         let window = try installModalWindow(rootView: fixture.rootView)
         defer {
             window.rootViewController?.view.accessibilityViewIsModal = false
@@ -369,7 +383,7 @@ extension TheBrainsScrollTests {
             target: admittedTarget,
             revealRootScrollViewID: ObjectIdentifier(fixture.ancestorScrollView),
             deadline: semanticRevealDeadline(),
-            observedScrollContentActivationPoint: fixture.targetEntry.observedScrollContentActivationPoint
+            viewSpace: fixture.targetEntry.geometry.view
         ))
 
         guard case .revealed(_, let exploration) = result else {
@@ -389,7 +403,7 @@ extension TheBrainsScrollTests {
     }
 
     func testLaterOwnerMatchConsumesStoredSeed() async throws {
-        let fixture = laterOwnerMatchFixture()
+        let fixture = try laterOwnerMatchFixture()
         await installSyntheticObservation(fixture.unavailableObservation)
         let sourceTarget = try resolvedTarget(
             .label("Later Owner Target").and(.traits([.button]))
@@ -405,7 +419,7 @@ extension TheBrainsScrollTests {
             target: admittedTarget,
             revealRootScrollViewID: ObjectIdentifier(fixture.ownerScrollView),
             deadline: semanticRevealDeadline(),
-            observedScrollContentActivationPoint: fixture.observedPoint
+            viewSpace: fixture.viewSpace
         ))
 
         guard case .unavailable = unavailableResult else {
@@ -423,7 +437,7 @@ extension TheBrainsScrollTests {
             target: admittedTarget,
             revealRootScrollViewID: ObjectIdentifier(fixture.ownerScrollView),
             deadline: semanticRevealDeadline(),
-            observedScrollContentActivationPoint: fixture.observedPoint
+            viewSpace: fixture.viewSpace
         ))
 
         guard case .revealed(let currentElement, let exploration) = result else {
@@ -521,7 +535,7 @@ extension TheBrainsScrollTests {
             offscreen: .init(
                 makeElement(label: "Settings"),
                 heistId: "settings_button",
-                contentActivationPoint: CGPoint(x: 0, y: 1_200),
+                viewActivationPoint: CGPoint(x: 0, y: 1_200),
                 scrollView: scrollView
             ),
             includeLiveScrollAncestor: false
@@ -561,7 +575,7 @@ extension TheBrainsScrollTests {
             offscreen: .init(
                 makeElement(label: "Settings"),
                 heistId: "settings_button",
-                contentActivationPoint: CGPoint(x: 0, y: 1_200),
+                viewActivationPoint: CGPoint(x: 0, y: 1_200),
                 scrollView: scrollView
             ),
             includeLiveScrollAncestor: false
@@ -647,7 +661,39 @@ extension TheBrainsScrollTests {
         let revealedObservation: InterfaceObservation
     }
 
-    private func siblingOwnerMismatchFixture() -> SiblingOwnerMismatchFixture {
+    private func revealedObservation(
+        element: AccessibilityElement,
+        heistId: HeistId,
+        container: AccessibilityContainer,
+        ownerPath: TreePath,
+        scrollView: RecordingScrollView
+    ) -> InterfaceObservation {
+        let entry = InterfaceTree.Element(
+            heistId: heistId,
+            scrollMembership: .init(containerPath: ownerPath, index: nil),
+            geometry: testGeometry(
+                for: element,
+                ownerPath: ownerPath,
+                screen: TheVault.onscreenSpace(for: element)
+            ),
+            element: element
+        )
+        return InterfaceObservation.makeForTests(
+            elements: [heistId: entry],
+            hierarchy: [
+                .container(container, children: [
+                    .element(element, traversalIndex: 0),
+                ]),
+            ],
+            heistIdsByPath: [ownerPath.appending(0): heistId],
+            elementRefs: [heistId: .init(object: retainedLiveObject(), scrollView: scrollView)],
+            containerRefsByPath: [ownerPath: .init(object: scrollView)],
+            firstResponderHeistId: nil,
+            scrollableContainerViewsByPath: [ownerPath: .init(view: scrollView)]
+        )
+    }
+
+    private func siblingOwnerMismatchFixture() throws -> SiblingOwnerMismatchFixture {
         let rootView = UIView()
         rootView.backgroundColor = .white
         let ancestorScrollView = RecordingScrollView(
@@ -677,9 +723,12 @@ extension TheBrainsScrollTests {
         let targetEntry = InterfaceTree.Element(
             heistId: "sibling_target",
             scrollMembership: .init(containerPath: siblingPath, index: nil),
-            observedScrollContentActivationPoint: observedContentActivationPoint(
-                storedInnerPoint,
-                ownerPath: storedOwnerPath
+            geometry: HeistElement.Geometry(
+                screen: .offscreen,
+                view: viewSpace(
+                    try ViewPoint(validating: storedInnerPoint),
+                    ownerPath: storedOwnerPath
+                )
             ),
             element: targetElement
         )
@@ -709,6 +758,11 @@ extension TheBrainsScrollTests {
         let revealedEntry = InterfaceTree.Element(
             heistId: targetEntry.heistId,
             scrollMembership: .init(containerPath: siblingPath, index: nil),
+            geometry: testGeometry(
+                for: targetElement,
+                ownerPath: siblingPath,
+                screen: TheVault.onscreenSpace(for: targetElement)
+            ),
             element: targetElement
         )
         let revealedObservation = InterfaceObservation.makeForTests(
@@ -746,14 +800,14 @@ extension TheBrainsScrollTests {
     private struct LaterOwnerMatchFixture {
         let ownerScrollView: RecordingScrollView
         let decoyScrollView: RecordingScrollView
-        let observedPoint: InterfaceTree.ObservedScrollContentActivationPoint
+        let viewSpace: HeistElement.Geometry.ViewSpace
         let targetEntry: InterfaceTree.Element
         let unavailableObservation: InterfaceObservation
         let matchingObservation: InterfaceObservation
         let revealedObservation: InterfaceObservation
     }
 
-    private func laterOwnerMatchFixture() -> LaterOwnerMatchFixture {
+    private func laterOwnerMatchFixture() throws -> LaterOwnerMatchFixture {
         let ownerPath = TreePath([0])
         let decoyPath = TreePath([1])
         let ownerScrollView = RecordingScrollView(
@@ -774,14 +828,14 @@ extension TheBrainsScrollTests {
         )
         let targetId: HeistId = "later_owner_target"
         let targetElement = makeElement(label: "Later Owner Target", traits: .button)
-        let observedPoint = observedContentActivationPoint(
-            CGPoint(x: 160, y: 1_200),
+        let viewSpace = viewSpace(
+            try ViewPoint(validating: CGPoint(x: 160, y: 1_200)),
             ownerPath: ownerPath
         )
         let targetEntry = InterfaceTree.Element(
             heistId: targetId,
             scrollMembership: .init(containerPath: ownerPath, index: nil),
-            observedScrollContentActivationPoint: observedPoint,
+            geometry: HeistElement.Geometry(screen: .offscreen, view: viewSpace),
             element: targetElement
         )
         let unavailableObservation = InterfaceObservation.makeForTests(
@@ -813,6 +867,11 @@ extension TheBrainsScrollTests {
         let visibleEntry = InterfaceTree.Element(
             heistId: targetId,
             scrollMembership: .init(containerPath: ownerPath, index: nil),
+            geometry: testGeometry(
+                for: targetElement,
+                ownerPath: ownerPath,
+                screen: TheVault.onscreenSpace(for: targetElement)
+            ),
             element: targetElement
         )
         let revealedObservation = InterfaceObservation.makeForTests(
@@ -834,7 +893,7 @@ extension TheBrainsScrollTests {
         return LaterOwnerMatchFixture(
             ownerScrollView: ownerScrollView,
             decoyScrollView: decoyScrollView,
-            observedPoint: observedPoint,
+            viewSpace: viewSpace,
             targetEntry: targetEntry,
             unavailableObservation: unavailableObservation,
             matchingObservation: matchingObservation,
@@ -855,7 +914,7 @@ extension TheBrainsScrollTests {
                     frame: CGRect(x: 40, y: 1_200, width: 240, height: 44)
                 ),
                 heistId: "initial_priority_one",
-                contentActivationPoint: CGPoint(x: 160, y: 1_200),
+                viewActivationPoint: CGPoint(x: 160, y: 1_200),
                 scrollView: scrollView
             )
         )
@@ -881,16 +940,24 @@ extension TheBrainsScrollTests {
         )
         brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in
             self.brains.vault.observeInterface(revealedObservation)
-            let event = await self.brains.vault.semanticObservationStream
+            let current = await self.brains.vault.semanticObservationStream
                 .commitDiscoveryObservationForTesting(revealedObservation)
+                .current
+            XCTAssertEqual(current.scope, .discovery)
+            XCTAssertEqual(
+                current.snapshot.interface.projectedElements
+                    .filter { $0.semantics.assertable.label == "Review PR" }
+                    .count,
+                2
+            )
             self.visibleObservationSource.observation = postRevealObservation
-            guard let current = self.brains.vault.interfaceElement(heistId: "current_priority_one") else {
+            guard let currentElement = self.brains.vault.interfaceElement(heistId: "current_priority_one") else {
                 return .unavailable
             }
             return .revealed(
-                current,
+                currentElement,
                 Navigation.InterfaceExplorationResult(
-                    event: event,
+                    current: current,
                     progress: .init(),
                     didMoveViewport: true,
                     viewportExit: .retained

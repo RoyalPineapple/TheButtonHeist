@@ -28,24 +28,53 @@ final class TheBrainsPipelineTests: XCTestCase {
         try await super.tearDown()
     }
 
-    func testDiscoveryObservationStateAndTraceUseCanonicalSemanticInterface() async throws {
+    func testDiscoveryProjectionFeedsCanonicalHistoryAndPredicateFold() throws {
         let viewportObservation = makeDiscoveryObservationProjectionFixture()
         let discoveryInterface = TheVault.WireConversion.discoveryProjection(
             from: viewportObservation.tree
         ).interface
-        let event = await brains.vault.semanticObservationStream
-            .commitDiscoveryObservationForTesting(viewportObservation)
-        let semanticInterface = event.moment.capture.interface
-
-        XCTAssertNotEqual(discoveryInterface.tree, semanticInterface.tree)
-        XCTAssertEqual(event.trace.captures.last?.interface.tree, semanticInterface.tree)
-        XCTAssertEqual(event.trace.captures.last?.interface.annotations, semanticInterface.annotations)
-        let predicate = AccessibilityPredicate.exists(.container(.identifier("OffscreenGroup")))
-        let resolved = try resolvedPredicate(predicate)
-        XCTAssertEqual(
-            Settlement.PredicateEvaluation.evaluate(resolved, expression: predicate, in: event),
-            ExpectationResult(met: true, predicate: predicate)
+        let snapshot = Observation.Snapshot(
+            interface: discoveryInterface,
+            context: .empty
         )
+        let event = Observation.Event.elementsChanged(snapshot)
+        var history = Observation.History(retentionLimit: 8)
+        _ = history.record([event], protectedBy: nil)
+        let predicate = AccessibilityPredicate.exists(.container(.identifier("OffscreenGroup")))
+        let resolved = try predicate.resolve(in: .empty)
+
+        XCTAssertEqual(Expectation([resolved], events: Array(history)).result, .satisfied)
+        XCTAssertEqual(history.endIndex, 1)
+        XCTAssertEqual(history[history.startIndex], event)
+    }
+
+    func testScreenGenerationIsDerivedFromHistoryPosition() {
+        var history = Observation.History(retentionLimit: 8)
+        _ = history.record([
+            .elementsChanged(heistSnapshot(labels: [])),
+            .screenChanged(ScreenFacts(idAfter: "Checkout")),
+            .elementsChanged(heistSnapshot(labels: ["Checkout"])),
+            .noChange,
+        ], protectedBy: nil)
+
+        XCTAssertEqual(history.screenGeneration(at: history.startIndex), 0)
+        XCTAssertEqual(history.screenGeneration(at: history.startIndex + 1), 0)
+        XCTAssertEqual(history.screenGeneration(at: history.startIndex + 2), 1)
+        XCTAssertEqual(history.screenGeneration(at: history.endIndex), 1)
+    }
+
+    func testObservationScopeDerivesFromCompiledProgramTargets() throws {
+        let visible = try AccessibilityPredicate.elementsChanged([
+            .appeared(.label("Ready")),
+        ]).resolve(in: .empty)
+        let discovery = try AccessibilityPredicate.elementsChanged([
+            .appeared(.container(.identifier("OffscreenGroup"))),
+        ]).resolve(in: .empty)
+        let notification = try AccessibilityPredicate.notification.resolve(in: .empty)
+
+        XCTAssertEqual(visible.observationScope, .visible)
+        XCTAssertEqual(discovery.observationScope, .discovery)
+        XCTAssertEqual(notification.observationScope, .visible)
     }
 
     // MARK: - Semantic Discovery Observation
@@ -55,7 +84,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         defer { brains.tripwire.stopPulse() }
         // Exploration seeds the local union from the interface tree and merges each
         // parse into it. The observation stream commits the completed union as
-        // settled discovery truth. There is no pruning — the union is the
+        // current discovery truth. There is no pruning — the union is the
         // canonical "all elements seen this cycle".
         // With no scrollable containers in the host hierarchy, semantic discovery
         // reduces to refresh-and-commit, and the seeded entry merges into the
@@ -64,11 +93,15 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(brains.vault.interfaceTree.elements.count, 1)
 
         await brains.startSemanticObservation()
-        let observation = await brains.vault.semanticObservationStream.settledEvent(scope: .discovery, after: nil, timeout: 2)
+        let observation = await brains.vault.semanticObservationStream.nextObservation(
+            scope: .discovery,
+            after: nil,
+            timeout: 2
+        )
 
         // Either the seed survives (no live parse landed and the union still
         // holds it) or it merges with new live entries — either way, the
-        // settled screen reflects the committed union, not the pre-explore
+        // current screen reflects the committed union, not the pre-explore
         // value alone.
         XCTAssertNotNil(observation)
         XCTAssertGreaterThanOrEqual(brains.vault.interfaceTree.elements.count, 1)
@@ -123,7 +156,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let nestedPath = TreePath([0, 0])
         let outerEntry = semanticContainer(outer, path: outerPath)
         let nestedEntry = semanticContainer(nested, path: nestedPath)
-        var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(.empty))
+        var exploration = Navigation.SemanticExploration(startingFresh: false)
         exploration.progress.addPendingContainers([outerEntry])
 
         exploration.markExplored(outerEntry)
@@ -152,7 +185,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             ],
             firstResponderHeistId: nil,
         )
-        var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(.empty))
+        var exploration = Navigation.SemanticExploration(startingFresh: false)
 
         exploration.recordCommittedObservation(
             continuity: .sameGeneration,
@@ -184,7 +217,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let outerPath = TreePath([0])
         let nestedPath = TreePath([0, 0])
         let outerEntry = semanticContainer(outer, path: outerPath)
-        var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(.empty))
+        var exploration = Navigation.SemanticExploration(startingFresh: false)
         exploration.progress.addPendingContainers([outerEntry])
         exploration.markExplored(outerEntry)
 
@@ -199,23 +232,21 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testSemanticExplorationFinishOwnsExplorationTimestamp() async {
-        var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(.empty))
-        let event = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(.empty)
+        var exploration = Navigation.SemanticExploration(startingFresh: false)
+        let current = await brains.vault.semanticObservationStream
+            .commitDiscoveryObservationForTesting(.empty)
+            .current
 
         let result = exploration.finish(
             startTime: CACurrentMediaTime() - 0.01,
-            event: event,
+            current: current,
             didMoveViewport: false,
             viewportExit: .restored
         )
 
         XCTAssertGreaterThan(result.progress.explorationTime, 0)
         XCTAssertFalse(result.didMoveViewport)
-        XCTAssertEqual(result.event.snapshot.observation.tree, InterfaceObservation.empty.tree)
-        XCTAssertEqual(
-            result.event.snapshot.observation.liveCapture.snapshot,
-            InterfaceObservation.empty.liveCapture.snapshot
-        )
+        XCTAssertEqual(result.current, current)
     }
 
     func testSemanticOnlyScrollableContainerIsQueuedForSwipeExploration() async {
@@ -227,7 +258,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             ),
             path: path
         )
-        var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(.empty))
+        var exploration = Navigation.SemanticExploration(startingFresh: false)
 
         exploration.recordCommittedObservation(
             continuity: .sameGeneration,
@@ -247,6 +278,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let rootContainer = AccessibilityContainer(
             type: .none,
             identifier: "RootViewController",
+            scrollableContentSize: AccessibilitySize(width: 320, height: 720),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
         )
         let offscreenContainer = AccessibilityContainer(
@@ -270,15 +302,28 @@ final class TheBrainsPipelineTests: XCTestCase {
                     "visible_button": InterfaceTree.Element(
                         heistId: "visible_button",
                         path: visiblePath,
-                        scrollMembership: nil,
+                        scrollMembership: InterfaceTree.ScrollMembership(
+                            containerPath: rootPath,
+                            index: 0
+                        ),
+                        geometry: testGeometry(
+                            for: visible,
+                            ownerPath: rootPath,
+                            screen: TheVault.onscreenSpace(for: visible)
+                        ),
                         element: visible
                     ),
                     "offscreen_button": InterfaceTree.Element(
                         heistId: "offscreen_button",
                         path: TreePath([0, 2, 0]),
                         scrollMembership: InterfaceTree.ScrollMembership(
-                            containerPath: offscreenContainerPath,
-                            index: 0
+                            containerPath: rootPath,
+                            index: 2
+                        ),
+                        geometry: testGeometry(
+                            for: offscreen,
+                            ownerPath: rootPath,
+                            screen: .offscreen
                         ),
                         element: offscreen
                     ),
@@ -288,16 +333,24 @@ final class TheBrainsPipelineTests: XCTestCase {
                         container: rootContainer,
                         path: rootPath,
                         containerName: "root",
-                        contentFrame: nil
+                        viewSpace: HeistElement.Geometry.ViewSpace(
+                            ownerPath: .root,
+                            frame: try? ViewRect(validating: rootContainer.frame.cgRect),
+                            activationPoint: nil
+                        )
                     ),
                     offscreenContainerPath: InterfaceTree.Container(
                         container: offscreenContainer,
                         path: offscreenContainerPath,
                         containerName: "offscreen_group",
-                        contentFrame: nil,
+                        viewSpace: HeistElement.Geometry.ViewSpace(
+                            ownerPath: rootPath,
+                            frame: try? ViewRect(validating: offscreenContainer.frame.cgRect),
+                            activationPoint: nil
+                        ),
                         scrollMembership: InterfaceTree.ScrollMembership(
                             containerPath: rootPath,
-                            index: 0
+                            index: 1
                         )
                     ),
                 ]
@@ -394,20 +447,6 @@ final class TheBrainsPipelineTests: XCTestCase {
         return .makeForTests(elements: pairs)
     }
 
-    func activationSubjectEvidence(
-        target: AccessibilityTarget,
-        element: AccessibilityElement,
-        settledObservationSequence: SettledObservationSequence?
-    ) throws -> ActionSubjectEvidence {
-        ActionSubjectEvidence(
-            source: .resolvedSemanticTarget,
-            target: try target.resolve(in: .empty),
-            element: TheVault.WireConversion.convert(element),
-            resolution: ActionSubjectResolution(origin: .visible),
-            settledObservationSequence: settledObservationSequence
-        )
-    }
-
     func makeScrollableContainer(frame: CGRect, contentSize: CGSize) -> AccessibilityContainer {
         AccessibilityContainer(
             type: .none, scrollableContentSize: AccessibilitySize(contentSize),
@@ -423,24 +462,13 @@ final class TheBrainsPipelineTests: XCTestCase {
             container: container,
             path: path,
             containerName: nil,
-            contentFrame: container.frame.cgRect
+            viewSpace: HeistElement.Geometry.ViewSpace(
+                ownerPath: path.parent ?? .root,
+                frame: try? ViewRect(validating: container.frame.cgRect),
+                activationPoint: nil
+            )
         )
     }
-
-    func settledResult(
-        finalScreen: InterfaceObservation?,
-        outcome: SettleOutcome = .settled(timeMs: 0)
-    ) -> SettleSession.Result {
-        if let finalScreen {
-            brains.vault.observeInterface(finalScreen)
-        }
-        return SettleSession.Result(
-            outcome: outcome,
-            finalObservation: finalScreen.map { SettleSessionFinalObservation(observation: $0) },
-            tripwireSignal: brains.vault.semanticObservationStream.currentTripwireSignal()
-        )
-    }
-
 }
 
 #endif

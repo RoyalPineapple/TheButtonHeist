@@ -3,88 +3,79 @@ import XCTest
 import TheScore
 
 final class ActionResultObservationWireTests: XCTestCase {
-    func testActionResultAccessibilityTraceWireShape() throws {
-        let interface = makeTestInterface(
-            elements: [
-                HeistElement(
-                    description: "Submit",
-                    label: "Submit",
-                    value: nil,
-                    identifier: "submit_button",
-                    traits: [.button],
-                    frameX: 10,
-                    frameY: 20,
-                    frameWidth: 100,
-                    frameHeight: 44,
-                    actions: [.activate]
-                ),
-            ]
+    func testObservedEvidenceUsesCanonicalWireShape() throws {
+        let snapshot = makeTestObservationSnapshot(elements: [
+            makeTestHeistElement(
+                description: "Submit",
+                label: "Submit",
+                identifier: "submit_button",
+                traits: [.button],
+                actions: [.activate]
+            ),
+        ])
+        let evidence = makeTestObservationEvidence(
+            current: snapshot,
+            events: [.elementsChanged(snapshot)],
+            completeness: .incomplete
         )
-        let trace = AccessibilityTrace(first: interface).appending(interface)
         let result = ActionResult.success(
             payload: .activate,
-                observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
-
+            observation: .observed(evidence)
         )
 
-        let data = try JSONEncoder().encode(result)
-        let json = try JSONProbe(data: data)
-        let traceEvidence = try json.object("evidence").object("observation").object("traceEvidence")
+        let json = try JSONProbe(data: JSONEncoder().encode(result))
+        let observation = try json.object("evidence").object("observation")
+        let encodedEvidence = try observation.object("observationEvidence")
 
-        XCTAssertEqual(try traceEvidence.string("completeness"), "incomplete")
-        _ = try traceEvidence.object("accessibilityTrace")
+        XCTAssertEqual(try observation.string("kind"), "observed")
+        XCTAssertEqual(try encodedEvidence.string("completeness"), "incomplete")
+        _ = try encodedEvidence.object("current")
+        _ = try encodedEvidence.array("events")
     }
 
-    func testActionResultHasNoTraceProjectionWithoutTrace() throws {
+    func testActionResultHasNoObservationProjectionWithoutEvidence() throws {
+        let result = ActionResult.success(payload: .activate)
+
+        let decoded = try JSONDecoder().decode(
+            ActionResult.self,
+            from: JSONEncoder().encode(result)
+        )
+
+        XCTAssertNil(decoded.observationEvidence)
+    }
+
+    func testCurrentScreenContextRoundTripsThroughObservationEvidence() throws {
+        let current = Observation.Snapshot(
+            interface: interfaceWithHeader("Current Screen", timestamp: 1),
+            context: Observation.Context(screenId: "current_screen")
+        )
+        let evidence = makeTestObservationEvidence(
+            current: current,
+            events: [.elementsChanged(current)],
+            completeness: .incomplete
+        )
         let result = ActionResult.success(
             payload: .activate,
+            observation: .observed(evidence)
         )
 
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
 
-        XCTAssertNil(decoded.accessibilityTrace)
-    }
-
-    func testActionResultScreenContextRoundTripsTraceProjection() throws {
-        let before = interfaceWithHeader("Before")
-        let after = interfaceWithHeader("Trace Screen", timestamp: 1)
-        let trace = AccessibilityTrace(first: before).appending(
-            after,
-            context: AccessibilityTrace.Context(screenId: "trace_screen")
-        )
-        let result = ActionResult.success(
-            payload: .activate,
-                observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
-
-        )
-
-        let data = try JSONEncoder().encode(result)
-        let json = try JSONProbe(data: data)
-        let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
-
-        XCTAssertNoThrow(try json.assertMissing("screenName"))
-        XCTAssertNoThrow(try json.assertMissing("screenId"))
-        XCTAssertEqual(decoded.accessibilityTrace?.endpointScreenName, "Trace Screen")
-        XCTAssertEqual(decoded.accessibilityTrace?.endpointScreenId, "trace_screen")
+        XCTAssertEqual(decoded.observationEvidence?.current, current)
+        XCTAssertEqual(decoded.observationEvidence?.current?.context.screenId, "current_screen")
     }
 
     private func interfaceWithHeader(
         _ label: String,
-        timestamp: TimeInterval = 0
+        timestamp: TimeInterval
     ) -> Interface {
         makeTestInterface(
             elements: [
-                HeistElement(
+                makeTestHeistElement(
                     description: label,
                     label: label,
-                    value: nil,
-                    identifier: nil,
                     traits: [.header],
-                    frameX: 0,
-                    frameY: 0,
-                    frameWidth: 100,
-                    frameHeight: 44,
                     actions: []
                 ),
             ],

@@ -29,8 +29,8 @@ final class TheBrains {
         vault.semanticObservationStream.isActive
     }
 
-    func capturedAnnouncements() -> AnnouncementListPayload {
-        AnnouncementListPayload(announcements: vault.accessibilityNotifications.announcements())
+    func notifications() -> [Observation.Notification] {
+        vault.semanticObservationStream.stateOwner.notifications()
     }
 
     enum InterfaceQueryResult {
@@ -101,14 +101,14 @@ final class TheBrains {
         self.interactionCoordinator = InteractionCoordinator(vault: vault)
     }
 
-    func treeUnavailableResult(payload: ActionResult.Payload) async -> ActionResult {
-        let message = await vault.semanticObservationStream.latestSettleFailureDiagnostic()
-            .map { "Could not observe accessibility tree; \($0)" }
-            ?? TheBrains.treeUnavailableMessage
+    func treeUnavailableResult(
+        payload: ActionResult.Payload,
+        failure: Observation.CaptureFailure
+    ) -> ActionResult {
         return .failure(
             payload: payload,
             failureKind: .accessibilityTreeUnavailable,
-            message: message
+            message: "Could not observe accessibility tree; \(failure.diagnostic)"
         )
     }
 
@@ -128,15 +128,11 @@ final class TheBrains {
         guard semanticObservationIsActive else {
             return .failure(.inactiveRuntime)
         }
-        guard let admittedVisibleObservation = await vault.semanticObservationStream.admittedVisibleObservation(timeout: 2.0),
-              let exploration = await navigation.exploreScreen(
-                baseline: .currentViewport(
-                    vault.visibleExplorationBaseline(
-                        from: admittedVisibleObservation.event.snapshot.observation
-                    )
-                ),
+        // Require visible semantic truth before exploration starts fresh.
+        guard await vault.semanticObservationStream.admittedVisibleObservation(timeout: 2.0) != nil,
+              let exploration = await navigation.fullGraph(
                 maxScrollsPerContainer: query.maxScrollsPerContainer?.value,
-                maxScrollsPerDiscovery: query.maxScrollsPerDiscovery?.value,
+                maxScrollsPerDiscovery: query.maxScrollsPerDiscovery?.value
               ) else {
             return .failure(.rootViewUnavailable)
         }
@@ -144,7 +140,7 @@ final class TheBrains {
         do {
             let interface = try vault.selectInterface(query)
             let diagnostics = exploration.progress.interfaceDiagnostics(
-                for: exploration.event.snapshot.observation,
+                for: vault.latestObservation,
                 includedElementCount: interface.projectedElements.count
             )
             return .success(interface

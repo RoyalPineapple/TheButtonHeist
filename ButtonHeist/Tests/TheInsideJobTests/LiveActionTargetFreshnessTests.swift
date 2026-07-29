@@ -15,14 +15,16 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
         let liveTarget = try await installTarget(
             in: vault,
             heistId: "checkout",
-            object: oldObject
+            object: oldObject,
+            fixture: try TargetGeometryFixture()
         )
         let originalCaptureToken = liveTarget.captureID
         let replacementObject = ActivationTrackingView()
         let replacement = try await installTarget(
             in: vault,
             heistId: "checkout",
-            object: replacementObject
+            object: replacementObject,
+            fixture: try TargetGeometryFixture()
         )
         XCTAssertNotEqual(replacement.captureID, originalCaptureToken)
 
@@ -52,12 +54,14 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
         let liveTarget = try await installTarget(
             in: vault,
             heistId: "checkout",
-            object: oldObject
+            object: oldObject,
+            fixture: try TargetGeometryFixture()
         )
         _ = try await installTarget(
             in: vault,
             heistId: "replacement",
-            object: ActivationTrackingView()
+            object: ActivationTrackingView(),
+            fixture: try TargetGeometryFixture()
         )
         var invoked = false
 
@@ -76,32 +80,46 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
 
     func testFreshDispatchReturnsOnlyReacquiredValueEvidence() async throws {
         let vault = TheVault(tripwire: TheTripwire())
-        let originalFrame = CGRect(x: 20, y: 40, width: 120, height: 44)
-        let replacementFrame = CGRect(x: 200, y: 300, width: 80, height: 60)
+        let original = try TargetGeometryFixture(
+            screenFrame: CGRect(x: 20, y: 40, width: 120, height: 44),
+            viewFrame: CGRect(x: 10, y: 20, width: 120, height: 44)
+        )
+        let replacement = try TargetGeometryFixture(
+            screenFrame: CGRect(x: 200, y: 300, width: 80, height: 60),
+            viewFrame: CGRect(x: 100, y: 150, width: 80, height: 60)
+        )
         let liveTarget = try await installTarget(
             in: vault,
             heistId: "checkout",
             object: ActivationTrackingView(),
-            frame: originalFrame
+            fixture: original
         )
-        let replacement = try await installTarget(
+        let replacementTarget = try await installTarget(
             in: vault,
             heistId: "checkout",
             object: ActivationTrackingView(),
-            frame: replacementFrame
+            fixture: replacement
         )
         let preparation = vault.dispatchOnFreshLiveActionTarget(liveTarget) { target in
             PreparedGeometryEvidence(
-                point: target.activationPoint,
+                geometry: target.treeElement.geometry,
+                liveFrame: target.frame,
+                liveActivationPoint: target.activationPoint,
                 captureID: target.captureID
             )
         }
 
         switch preparation {
         case .success(let evidence):
-            XCTAssertEqual(evidence.point, CGPoint(x: replacementFrame.midX, y: replacementFrame.midY))
-            XCTAssertNotEqual(evidence.point, CGPoint(x: originalFrame.midX, y: originalFrame.midY))
-            XCTAssertEqual(evidence.captureID, replacement.captureID)
+            XCTAssertEqual(evidence.geometry.screen, replacement.geometry.screen)
+            XCTAssertEqual(evidence.geometry.view, replacement.geometry.view)
+            XCTAssertNotEqual(evidence.geometry, original.geometry)
+            XCTAssertEqual(evidence.liveFrame, replacement.element.bhFrame)
+            XCTAssertEqual(
+                evidence.liveActivationPoint,
+                replacement.element.bhResolvedActivationPoint
+            )
+            XCTAssertEqual(evidence.captureID, replacementTarget.captureID)
         case .failure(let staleness):
             XCTFail("Expected current-geometry preparation, got \(staleness)")
         }
@@ -125,7 +143,8 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
         let dispatch = vault.dispatchOnFreshLiveContainerTarget(original) { current in
             ContainerDispatchEvidence(
                 objectID: ObjectIdentifier(current.object),
-                frame: current.frame,
+                viewSpace: current.containerTarget.viewSpace,
+                liveFrame: current.frame,
                 captureID: current.captureID
             )
         }
@@ -133,7 +152,10 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
         switch dispatch {
         case .success(let evidence):
             XCTAssertEqual(evidence.objectID, ObjectIdentifier(replacementObject))
-            XCTAssertEqual(evidence.frame, replacement.frame)
+            XCTAssertEqual(evidence.viewSpace, replacement.containerTarget.viewSpace)
+            XCTAssertNotEqual(evidence.viewSpace, original.containerTarget.viewSpace)
+            XCTAssertEqual(evidence.liveFrame, replacement.frame)
+            XCTAssertNotEqual(evidence.liveFrame, original.frame)
             XCTAssertEqual(evidence.captureID, replacement.captureID)
         case .failure(let staleness):
             XCTFail("Expected current-container reacquisition, got \(staleness)")
@@ -172,19 +194,28 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
         in vault: TheVault,
         heistId: HeistId,
         object: NSObject,
-        frame: CGRect = CGRect(x: 20, y: 40, width: 120, height: 44)
+        fixture: TargetGeometryFixture
     ) async throws -> TheVault.LiveActionTarget {
-        let element = AccessibilityElement.make(
-            label: "Checkout",
-            traits: .button,
-            frame: frame
+        let path = TreePath([0])
+        let treeElement = InterfaceTree.Element(
+            heistId: heistId,
+            path: path,
+            scrollMembership: nil,
+            geometry: fixture.geometry,
+            element: fixture.element
         )
-        await vault.installObservationForTesting(.makeForTests(
-            elements: [(element, heistId)],
-            objects: [heistId: object]
+        await vault.installObservationForTesting(InterfaceObservation.makeForTests(
+            tree: InterfaceTree(elements: [heistId: treeElement]),
+            liveCapture: LiveCapture.makeForTests(
+                hierarchy: [.element(fixture.element, traversalIndex: 0)],
+                heistIdsByPath: [path: heistId],
+                elementRefs: [heistId: .init(object: object, scrollView: nil)]
+            )
         ))
-        let treeElement = try XCTUnwrap(vault.latestObservation.tree.findElement(heistId: heistId))
-        guard case .resolved(let target) = vault.resolveLiveActionTarget(for: treeElement) else {
+        let installedElement = try XCTUnwrap(
+            vault.latestObservation.tree.findElement(heistId: heistId)
+        )
+        guard case .resolved(let target) = vault.resolveLiveActionTarget(for: installedElement) else {
             throw LiveActionTargetFixtureError.unavailable
         }
         return target
@@ -203,11 +234,16 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
             scrollableContentSize: AccessibilitySize(width: 320, height: 1_200),
             frame: AccessibilityRect(frame)
         )
+        let viewSpace = HeistElement.Geometry.ViewSpace(
+            ownerPath: .root,
+            frame: try ViewRect(validating: frame),
+            activationPoint: nil
+        )
         let semanticContainer = InterfaceTree.Container(
             container: container,
             path: path,
             containerName: identifier,
-            contentFrame: frame
+            viewSpace: viewSpace
         )
         vault.observeInterface(InterfaceObservation.makeForTests(
             tree: InterfaceTree(elements: [:], containers: [path: semanticContainer]),
@@ -216,7 +252,7 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
                 containerNamesByPath: [path: identifier],
                 elementRefs: [:],
                 containerRefsByPath: [path: .init(object: object)],
-                containerContentFramesByPath: [path: try ContentRect(validating: frame)],
+                containerViewSpacesByPath: [path: viewSpace],
                 firstResponderHeistId: nil
             )
         ))
@@ -228,14 +264,45 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
 }
 
 private struct PreparedGeometryEvidence: Sendable {
-    let point: CGPoint
+    let geometry: HeistElement.Geometry
+    let liveFrame: CGRect
+    let liveActivationPoint: CGPoint
     let captureID: InterfaceCaptureID
 }
 
 private struct ContainerDispatchEvidence: Sendable {
     let objectID: ObjectIdentifier
-    let frame: CGRect
+    let viewSpace: HeistElement.Geometry.ViewSpace
+    let liveFrame: CGRect
     let captureID: InterfaceCaptureID
+}
+
+private struct TargetGeometryFixture {
+    let element: AccessibilityElement
+    let geometry: HeistElement.Geometry
+
+    init(
+        screenFrame: CGRect = CGRect(x: 20, y: 40, width: 120, height: 44),
+        viewFrame: CGRect = CGRect(x: 20, y: 40, width: 120, height: 44)
+    ) throws {
+        let element = AccessibilityElement.make(
+            label: "Checkout",
+            traits: .button,
+            frame: screenFrame
+        )
+        self.element = element
+        self.geometry = HeistElement.Geometry(
+            screen: TheVault.onscreenSpace(for: element),
+            view: HeistElement.Geometry.ViewSpace(
+                ownerPath: .root,
+                frame: try ViewRect(validating: viewFrame),
+                activationPoint: try ViewPoint(validating: CGPoint(
+                    x: viewFrame.midX,
+                    y: viewFrame.midY
+                ))
+            )
+        )
+    }
 }
 
 private enum LiveActionTargetFixtureError: Error {

@@ -89,7 +89,7 @@ extension HeistCanonicalSwiftDSLRenderer {
 
     func renderSingleCaseBranches(
         callee: String,
-        predicate: ChangeDeclaration.ScreenAssertion,
+        predicate: PresenceCondition,
         timeout: WaitTimeout?,
         renderedBody: String,
         renderedElseBody: String?,

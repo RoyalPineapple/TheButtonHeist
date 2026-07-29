@@ -48,54 +48,12 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertFalse(response.isFailure)
     }
 
-    @ButtonHeistActor
-    func testObservationHandoffTimeoutAgreesAcrossPublicFormats() async throws {
-        let predicate = AccessibilityPredicate.announcement("Saved")
-        let traceEvidence = makeTestTraceEvidence(
-            AccessibilityTrace.noChangeForTests(elementCount: 0),
-            completeness: .incomplete
-        )
-        let settlement = ActionSettlementEvidence.observationHandoffTimedOut(
-            duration: 25,
-            path: .uikitIdle
-        )
-        let actionResult = ActionResult.failure(
-            payload: .dismiss,
-            failureKind: .timeout,
-            observation: .settledTrace(traceEvidence, settlement)
-        )
-        let step = HeistResultFixture.action(
-            command: .dismiss,
-            result: actionResult,
-            expectation: ExpectationResult(met: true, predicate: predicate, actual: "Saved"),
-            failure: HeistFailureDetail(
-                category: .wait,
-                contract: "observation handoff completes",
-                observed: "observation handoff timed out"
-            )
-        )
-        let report = HeistReport.project(result: try HeistResult(steps: [step], durationMs: 25))
-        let plan = try HeistPlan(body: [.action(ActionStep(command: .dismiss))])
-        let response = FenceResponse.heistExecution(plan: plan, report: report)
-        let node = try XCTUnwrap(try publicJSONProbe(response).object("report").array("nodes").first)
-        let projectedSettlement = try node.object("settlement")
-        let summary = "readiness uikitIdle; observation handoff timed out after 25ms"
-        let (fence, _) = makeConnectedFence()
-
-        XCTAssertEqual(try projectedSettlement.string("kind"), "observationHandoffTimedOut")
-        XCTAssertEqual(try projectedSettlement.string("path"), "uikitIdle")
-        XCTAssertEqual(try projectedSettlement.int("durationMs"), 25)
-        XCTAssertTrue(response.compactFormatted().contains(summary), response.compactFormatted())
-        XCTAssertTrue(response.humanFormatted().contains(summary), response.humanFormatted())
-        XCTAssertTrue(fence.junitXML(for: report, heistName: "handoff").contains(summary))
-    }
-
     func testHumanHeistFormattingCountsNestedProjectedExpectations() throws {
         let expected = AccessibilityPredicate.exists(.label("Done"))
         let childAction = try HeistStep.action(ActionStep(
             command: .activate(.predicate(ElementPredicate(label: .exact("Submit")))),
             expectationPolicy: .expect(ActionExpectation(predicate: expected, timeout: 1))))
-        let casePredicate = ChangeDeclaration.ScreenAssertion.exists(.label("Home"))
+        let casePredicate = PresenceCondition.exists(.label("Home"))
         let casePredicateRuntime = AccessibilityPredicate.exists(.label("Home"))
         let conditional = try ConditionalStep(cases: [
             PredicateCase(predicate: casePredicate, body: [childAction]),
@@ -120,7 +78,6 @@ extension TheFenceCompactFormattingContractTests {
                         ifNone: .noMatch,
                         elapsedMs: 1
                     ),
-                    durationMs: 3,
                     children: [childResult]
                 ),
             ],
@@ -191,13 +148,10 @@ extension TheFenceCompactFormattingContractTests {
                     command: command,
                     result: ActionResult.success(
                         payload: .activate,
-                        observation: .settledTrace(
-                            makeTestTraceEvidence(
-                                .noChangeForTests(elementCount: 0),
-                                completeness: .complete
-                            ),
-                            .settled(duration: 7)
-                        ),
+                        observation: .observed(makeObservationEvidence(
+                            before: makeTestInterface(elementCount: 0),
+                            completeness: .complete
+                        )),
                         timing: ActionPerformanceTiming(targetResolutionMs: 1, totalMs: 9)
                     ),
                     expectation: ExpectationResult(met: true, predicate: expected)
@@ -213,7 +167,6 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertEqual(metrics.measurements.map(MeasurementExpectation.init(measurement:)), [
             MeasurementExpectation(name: "heistDurationMs", valueMs: 12, path: nil),
             MeasurementExpectation(name: "actionPipeline.targetResolutionMs", valueMs: 1, path: "$.body[0]"),
-            MeasurementExpectation(name: "actionPipeline.settleMs", valueMs: 7, path: "$.body[0]"),
             MeasurementExpectation(name: "actionPipeline.totalMs", valueMs: 9, path: "$.body[0]"),
         ])
     }
@@ -247,9 +200,10 @@ extension TheFenceCompactFormattingContractTests {
         let plan = try HeistPlan(body: [
             .action(ActionStep(command: .activate(.predicate(ElementPredicate(label: "Pay"))))),
         ])
-        let trace = makeTestTrace(
+        let evidence = makeObservationEvidence(
             before: makeTestInterface(elementCount: 0),
-            after: makeTestInterface(elementCount: 2)
+            after: makeTestInterface(elementCount: 2),
+            completeness: .complete
         )
         let response = FenceResponse.heistExecution(
             plan: plan,
@@ -259,7 +213,7 @@ extension TheFenceCompactFormattingContractTests {
                         command: .activate(.predicate(ElementPredicate(label: "Pay"))),
                         result: ActionResult.success(
                             payload: .activate,
-                            observation: .trace(makeTestTraceEvidence(trace, completeness: .complete))
+                            observation: .observed(evidence)
                         )
                     ),
                 ],
@@ -320,9 +274,11 @@ extension TheFenceCompactFormattingContractTests {
         let plan = try HeistPlan(body: [
             .wait(WaitStep(predicate: predicate, timeout: 1)),
         ])
-        let step = HeistResultFixture.wait(
-            actionResult: .failure(payload: .wait, failureKind: .timeout, message: message),
-            expectation: ExpectationResult(met: false, predicate: predicate, actual: "element not found"),
+        let step = HeistResultFixture.failedWait(
+            expectation: ExpectationResult.Unmet(
+                predicate: predicate,
+                actual: "element not found"
+            ),
             failure: HeistFailureDetail(
                 category: .wait,
                 contract: "wait predicate is met before timeout",
@@ -360,7 +316,6 @@ extension TheFenceCompactFormattingContractTests {
                 HeistResultFixture.explicitFailure(path: "$.body[1]", message: "stop"),
                 .warning(
                     path: try HeistExecutionPath(validating: "$.body[2]"),
-                    durationMs: 0,
                     message: "after",
                     completion: .skipped()
                 ),
@@ -400,7 +355,7 @@ extension TheFenceCompactFormattingContractTests {
         let childAction = try HeistStep.action(ActionStep(
             command: .activate(.predicate(ElementPredicate(label: "Continue")))
         ))
-        let casePredicate = ChangeDeclaration.ScreenAssertion.exists(.label("Ready"))
+        let casePredicate = PresenceCondition.exists(.label("Ready"))
         let casePredicateRuntime = AccessibilityPredicate.exists(.label("Ready"))
         let conditional = try ConditionalStep(cases: [
             PredicateCase(predicate: casePredicate, body: [childAction]),
@@ -434,7 +389,6 @@ extension TheFenceCompactFormattingContractTests {
                         ifNone: .noMatch,
                         elapsedMs: 1
                     ),
-                    durationMs: 3,
                     failure: HeistFailureDetail(
                         category: .invocation,
                         contract: "selected case completes without failure",
@@ -476,7 +430,7 @@ extension TheFenceCompactFormattingContractTests {
         let elseStep = try HeistStep.action(ActionStep(
             command: .activate(.predicate(ElementPredicate(label: "Fallback")))
         ))
-        let predicate = ChangeDeclaration.ScreenAssertion.exists(.label("Home"))
+        let predicate = PresenceCondition.exists(.label("Home"))
         let runtimePredicate = AccessibilityPredicate.exists(.label("Home"))
         let conditional = try ConditionalStep(
             cases: [
@@ -509,7 +463,6 @@ extension TheFenceCompactFormattingContractTests {
                         elapsedMs: 1,
                         lastObservedSummary: nil
                     ).selectingElseBranch(),
-                    durationMs: 3,
                     children: [childResult]
                 ),
             ],
@@ -582,7 +535,6 @@ extension TheFenceCompactFormattingContractTests {
         let declaration = try XCTUnwrap(HeistForEachStringDeclaration(parameter: "item", count: 2))
         let loopResult = HeistExecutionStepResult.forEachString(
             path: try HeistExecutionPath(validating: "$.body[0]"),
-            durationMs: 30,
             declaration: declaration,
             completion: .childAborted(
                 evidence: failedLoopEvidence,

@@ -178,21 +178,106 @@ public indirect enum AccessibilityTarget: Codable, Sendable, Equatable, Hashable
 
 extension AccessibilityTarget: CustomStringConvertible {
     public var description: String {
+        CanonicalDSLDescription.render(self) { try $0.render(target: self, environment: $1) }
+    }
+}
+
+/// An authored target whose terminal node is always an accessibility element.
+///
+/// References remain authored until expression resolution, where their bound
+/// target must also have an element terminal.
+public indirect enum AccessibilityElementTarget: Codable, Sendable, Equatable, Hashable {
+    case predicate(ElementPredicate, ordinal: Int? = nil)
+    case ref(HeistReferenceName)
+    case within(container: ContainerPredicate, target: AccessibilityElementTarget)
+
+    public init(ref: HeistReferenceName) {
+        self = .ref(ref)
+    }
+
+    package init(admitting target: AccessibilityTarget) throws {
+        switch target {
+        case .predicate(let predicate, let ordinal):
+            self = .predicate(predicate, ordinal: ordinal)
+        case .container:
+            throw AccessibilityTargetGrammarError.elementTargetRequired
+        case .ref(let reference):
+            self = .ref(reference)
+        case .within(let container, let target):
+            self = .within(
+                container: container,
+                target: try Self(admitting: target)
+            )
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        do {
+            self = try Self(admitting: AccessibilityTarget(from: decoder))
+        } catch let error as AccessibilityTargetGrammarError {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: error.diagnosticDescription
+            ))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        try accessibilityTarget.encode(to: encoder)
+    }
+
+    package var accessibilityTarget: AccessibilityTarget {
         switch self {
         case .predicate(let predicate, let ordinal):
-            return CanonicalValueDescription.call("target", [
-                predicate.description,
-                CanonicalValueDescription.valueField("ordinal", ordinal),
-            ].compactMap { $0 })
-        case .container(let predicate, let ordinal):
-            return CanonicalValueDescription.call("container", [
-                predicate.description,
-                CanonicalValueDescription.valueField("ordinal", ordinal),
-            ].compactMap { $0 })
+            return .predicate(predicate, ordinal: ordinal)
         case .ref(let reference):
-            return CanonicalValueDescription.call("ref", [reference.description])
+            return .ref(reference)
         case .within(let container, let target):
-            return CanonicalValueDescription.call("within", [container.description, target.description])
+            return .within(
+                container: container,
+                target: target.accessibilityTarget
+            )
+        }
+    }
+
+    package func resolve(
+        in environment: HeistExecutionEnvironment
+    ) throws -> ResolvedAccessibilityElementTarget {
+        try ResolvedAccessibilityElementTarget(
+            admitting: accessibilityTarget.resolve(in: environment)
+        )
+    }
+
+    public func and(_ checks: ElementPredicateCheck...) -> Self {
+        appending(checks)
+    }
+
+    public func excluding(_ checks: ElementPredicateCheck...) -> Self {
+        appending(checks.map(ElementPredicateCheck.exclude))
+    }
+
+    private func appending(_ checks: [ElementPredicateCheck]) -> Self {
+        switch self {
+        case .predicate(let predicate, let ordinal):
+            return .predicate(
+                ElementPredicate(predicate.checks + checks),
+                ordinal: ordinal
+            )
+        case .ref:
+            return self
+        case .within(let container, let target):
+            return .within(
+                container: container,
+                target: target.appending(checks)
+            )
+        }
+    }
+}
+
+extension AccessibilityElementTarget: CustomStringConvertible {
+    public var description: String {
+        CanonicalDSLDescription.render(self) {
+            try $0.render(target: self, environment: $1)
         }
     }
 }
@@ -310,6 +395,76 @@ extension ResolvedAccessibilityTarget: CustomStringConvertible {
         case .within(let container, let target):
             return CanonicalValueDescription.call("within", [container.description, target.description])
         }
+    }
+}
+
+/// The resolved target currency for operations that require an element
+/// terminal. It projects into the general target matcher without introducing a
+/// second traversal pipeline.
+package indirect enum ResolvedAccessibilityElementTarget: Codable, Sendable, Equatable, Hashable {
+    case predicate(ResolvedElementPredicate, ordinal: Int? = nil)
+    case within(container: ResolvedContainerPredicate, target: ResolvedAccessibilityElementTarget)
+
+    package init(admitting target: ResolvedAccessibilityTarget) throws {
+        switch target {
+        case .predicate(let predicate, let ordinal):
+            self = .predicate(predicate, ordinal: ordinal)
+        case .container:
+            throw AccessibilityTargetGrammarError.elementTargetRequired
+        case .within(let container, let target):
+            self = .within(
+                container: container,
+                target: try Self(admitting: target)
+            )
+        }
+    }
+
+    package init(from decoder: Decoder) throws {
+        do {
+            self = try Self(admitting: ResolvedAccessibilityTarget(from: decoder))
+        } catch let error as AccessibilityTargetGrammarError {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: error.diagnosticDescription
+            ))
+        }
+    }
+
+    package func encode(to encoder: Encoder) throws {
+        try accessibilityTarget.encode(to: encoder)
+    }
+
+    package var accessibilityTarget: ResolvedAccessibilityTarget {
+        switch self {
+        case .predicate(let predicate, let ordinal):
+            return .predicate(predicate, ordinal: ordinal)
+        case .within(let container, let target):
+            return .within(
+                container: container,
+                target: target.accessibilityTarget
+            )
+        }
+    }
+
+    package func and(_ checks: [ResolvedElementPredicateCheck]) -> Self {
+        switch self {
+        case .predicate(let predicate, let ordinal):
+            return .predicate(
+                ResolvedElementPredicate(predicate.checks + checks),
+                ordinal: ordinal
+            )
+        case .within(let container, let target):
+            return .within(
+                container: container,
+                target: target.and(checks)
+            )
+        }
+    }
+}
+
+extension ResolvedAccessibilityElementTarget: CustomStringConvertible {
+    package var description: String {
+        accessibilityTarget.description
     }
 }
 

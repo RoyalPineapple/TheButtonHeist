@@ -14,6 +14,47 @@ private func requireValidTestValue<Value>(_ build: () throws -> Value) -> Value 
     }
 }
 
+private func testViewSpace(
+    for element: AccessibilityElement,
+    ownerPath: TreePath
+) -> HeistElement.Geometry.ViewSpace {
+    HeistElement.Geometry.ViewSpace(
+        ownerPath: ownerPath,
+        frame: try? ViewRect(validating: element.bhFrame),
+        activationPoint: try? ViewPoint(validating: element.bhResolvedActivationPoint)
+    )
+}
+
+func testGeometry(
+    for element: AccessibilityElement,
+    ownerPath: TreePath,
+    screen: HeistElement.Geometry.ScreenSpace
+) -> HeistElement.Geometry {
+    HeistElement.Geometry(
+        screen: screen,
+        view: testViewSpace(for: element, ownerPath: ownerPath)
+    )
+}
+
+private func inferredScrollMembership(
+    for path: TreePath,
+    in hierarchy: [AccessibilityHierarchy]
+) -> InterfaceTree.ScrollMembership? {
+    let scrollablePaths = Set(
+        hierarchy.pathIndexedContainers.compactMap { item in
+            item.container.isScrollable ? item.path : nil
+        }
+    )
+    var ancestor = path.parent
+    while let path = ancestor {
+        if scrollablePaths.contains(path) {
+            return InterfaceTree.ScrollMembership(containerPath: path, index: nil)
+        }
+        ancestor = path.parent
+    }
+    return nil
+}
+
 private func makeTestTree(
     snapshot: LiveCapture.Snapshot,
     elements: [HeistId: InterfaceTree.Element] = [:],
@@ -22,23 +63,58 @@ private func makeTestTree(
     let normalizedElements = snapshot.hierarchy.pathIndexedElements.reduce(into: elements) { result, item in
         guard let heistId = snapshot.heistIdsByPath[item.path] else { return }
         let supplied = elements[heistId]
+        let inferredMembership = inferredScrollMembership(
+            for: item.path,
+            in: snapshot.hierarchy
+        )
+        let scrollMembership = inferredMembership.map {
+            InterfaceTree.ScrollMembership(
+                containerPath: $0.containerPath,
+                index: supplied?.scrollMembership?.index
+            )
+        }
+        let suppliedGeometry = supplied?.geometry
         result[heistId] = InterfaceTree.Element(
             heistId: heistId,
             path: item.path,
-            scrollMembership: supplied?.scrollMembership,
-            observedScrollContentActivationPoint: supplied?.observedScrollContentActivationPoint,
+            scrollMembership: scrollMembership,
+            geometry: HeistElement.Geometry(
+                screen: suppliedGeometry?.screen
+                    ?? TheVault.onscreenSpace(for: item.element),
+                view: HeistElement.Geometry.ViewSpace(
+                    ownerPath: scrollMembership?.containerPath ?? .root,
+                    frame: suppliedGeometry?.view.frame
+                        ?? (try? ViewRect(validating: item.element.bhFrame)),
+                    activationPoint: suppliedGeometry?.view.activationPoint
+                        ?? (try? ViewPoint(validating: item.element.bhResolvedActivationPoint))
+                )
+            ),
             element: item.element
         )
     }
     let normalizedContainers = snapshot.hierarchy.pathIndexedContainers.reduce(into: containers) { result, item in
         let supplied = containers[item.path]
+        let inferredMembership = inferredScrollMembership(
+            for: item.path,
+            in: snapshot.hierarchy
+        )
+        let scrollMembership = inferredMembership.map {
+            InterfaceTree.ScrollMembership(
+                containerPath: $0.containerPath,
+                index: supplied?.scrollMembership?.index
+            )
+        }
         result[item.path] = InterfaceTree.Container(
             container: item.container,
             path: item.path,
             containerName: supplied?.containerName,
-            contentRect: supplied?.contentFrame,
-            scrollMembership: supplied?.scrollMembership,
-            observedScrollContentActivationPoint: supplied?.observedScrollContentActivationPoint,
+            viewSpace: HeistElement.Geometry.ViewSpace(
+                ownerPath: scrollMembership?.containerPath ?? .root,
+                frame: supplied?.viewSpace.frame
+                    ?? (try? ViewRect(validating: item.container.frame.cgRect)),
+                activationPoint: supplied?.viewSpace.activationPoint
+            ),
+            scrollMembership: scrollMembership,
             scrollInventory: supplied?.scrollInventory
         )
     }
@@ -56,10 +132,9 @@ extension LiveCapture {
         heistIdsByPath: [TreePath: HeistId] = [:],
         elementRefs: [HeistId: ElementRef] = [:],
         containerRefsByPath: [TreePath: ContainerRef] = [:],
-        containerContentFramesByPath: [TreePath: ContentRect] = [:],
         containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership] = [:],
-        containerObservedScrollContentActivationPointsByPath: [
-            TreePath: InterfaceTree.ObservedScrollContentActivationPoint
+        containerViewSpacesByPath: [
+            TreePath: HeistElement.Geometry.ViewSpace
         ] = [:],
         scrollInventoriesByPath: [TreePath: ScrollInventory] = [:],
         firstResponderHeistId: HeistId? = nil,
@@ -73,9 +148,13 @@ extension LiveCapture {
                         container: item.container,
                         path: item.path,
                         containerName: containerNamesByPath[item.path],
-                        contentRect: containerContentFramesByPath[item.path],
+                        viewSpace: containerViewSpacesByPath[item.path]
+                            ?? HeistElement.Geometry.ViewSpace(
+                                ownerPath: containerScrollMembershipsByPath[item.path]?.containerPath ?? .root,
+                                frame: try? ViewRect(validating: item.container.frame.cgRect),
+                                activationPoint: nil
+                            ),
                         scrollMembership: containerScrollMembershipsByPath[item.path],
-                        observedScrollContentActivationPoint: containerObservedScrollContentActivationPointsByPath[item.path],
                         scrollInventory: scrollInventoriesByPath[item.path]
                     )
                 )
@@ -145,10 +224,9 @@ extension InterfaceObservation {
         heistIdsByPath: [TreePath: HeistId] = [:],
         elementRefs: [HeistId: LiveCapture.ElementRef] = [:],
         containerRefsByPath: [TreePath: LiveCapture.ContainerRef] = [:],
-        containerContentFramesByPath: [TreePath: ContentRect] = [:],
         containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership] = [:],
-        containerObservedScrollContentActivationPointsByPath: [
-            TreePath: InterfaceTree.ObservedScrollContentActivationPoint
+        containerViewSpacesByPath: [
+            TreePath: HeistElement.Geometry.ViewSpace
         ] = [:],
         scrollInventoriesByPath: [TreePath: ScrollInventory] = [:],
         firstResponderHeistId: HeistId?,
@@ -162,9 +240,13 @@ extension InterfaceObservation {
                         container: item.container,
                         path: item.path,
                         containerName: containerNamesByPath[item.path],
-                        contentRect: containerContentFramesByPath[item.path],
+                        viewSpace: containerViewSpacesByPath[item.path]
+                            ?? HeistElement.Geometry.ViewSpace(
+                                ownerPath: containerScrollMembershipsByPath[item.path]?.containerPath ?? .root,
+                                frame: try? ViewRect(validating: item.container.frame.cgRect),
+                                activationPoint: nil
+                            ),
                         scrollMembership: containerScrollMembershipsByPath[item.path],
-                        observedScrollContentActivationPoint: containerObservedScrollContentActivationPointsByPath[item.path],
                         scrollInventory: scrollInventoriesByPath[item.path]
                     )
                 )
@@ -281,6 +363,11 @@ extension InterfaceObservation {
                 heistId: pair.heistId,
                 path: TreePath([index]),
                 scrollMembership: nil,
+                geometry: testGeometry(
+                    for: pair.element,
+                    ownerPath: .root,
+                    screen: TheVault.onscreenSpace(for: pair.element)
+                ),
                 element: pair.element
             )
             elementRefs[pair.heistId] = LiveCapture.ElementRef(
@@ -294,6 +381,11 @@ extension InterfaceObservation {
             treeElements[entry.heistId] = InterfaceTree.Element(
                 heistId: entry.heistId,
                 scrollMembership: entry.scrollMembership,
+                geometry: testGeometry(
+                    for: entry.element,
+                    ownerPath: entry.scrollMembership?.containerPath ?? .root,
+                    screen: .offscreen
+                ),
                 element: entry.element
             )
         }

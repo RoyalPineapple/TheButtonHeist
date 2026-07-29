@@ -92,8 +92,8 @@ struct PublicResponseModel: Encodable {
             try PublicDevicesResponse(devices: devices).encode(to: encoder)
         case .interface(let interface, let detail):
             try PublicInterfaceResponse(interface: interface, detail: detail, profile: profile).encode(to: encoder)
-        case .announcements(let announcements):
-            try PublicAnnouncementsResponse(announcements: announcements).encode(to: encoder)
+        case .notifications(let notifications):
+            try PublicNotificationsResponse(notifications: notifications).encode(to: encoder)
         case .action(let command, let result, let expectation):
             let expectationHint = expectation.flatMap {
                 FenceResponse.expectationFailureHint($0, command: command, result: result)
@@ -138,7 +138,18 @@ struct PublicResponseModel: Encodable {
     }
 }
 
-struct PublicAnnouncementsResponse: Encodable {
+struct PublicNotificationsResponse: Encodable {
     let status = PublicResponseStatus.ok
-    let announcements: [CapturedAnnouncement]
+    let notifications: [Observation.Notification]
+
+    private enum CodingKeys: String, CodingKey {
+        case status
+        case notifications
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(status, forKey: .status)
+        try container.encode(notifications, forKey: .notifications)
+    }
 }

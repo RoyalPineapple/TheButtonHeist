@@ -239,24 +239,74 @@ func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (The
     return (fence, mockConn)
 }
 
-func makeBackgroundElementsChangedTrace(elementCount: Int) -> AccessibilityTrace {
+func makeBackgroundElementsChangedEvidence(elementCount: Int) -> Observation.Evidence {
     let interface = makeTestInterface(elementCount: elementCount)
-    let beforeCapture = AccessibilityTrace.Capture(sequence: 1, interface: interface)
-    let afterCapture = AccessibilityTrace.Capture(
-        sequence: 2,
+    let before = observationSnapshot(interface: interface)
+    let after = observationSnapshot(
         interface: interface,
-        parentHash: beforeCapture.hash,
-        context: AccessibilityTrace.Context(screenId: "background-change")
+        screenId: "background-change"
     )
-    return AccessibilityTrace(captures: [beforeCapture, afterCapture])
+    return Observation.Evidence(
+        baseline: before,
+        current: after,
+        events: [.elementsChanged(after)],
+        completeness: .incomplete
+    )
 }
 
-func makeBackgroundScreenChangedTrace(elementCount: Int) -> AccessibilityTrace {
-    makeTestTrace(
+func makeBackgroundScreenChangedEvidence(elementCount: Int) -> Observation.Evidence {
+    makeObservationEvidence(
         before: makeTestInterface(elementCount: 0, prefix: "before"),
         after: makeTestInterface(elementCount: elementCount, prefix: "after"),
         beforeScreenId: "before",
-        afterScreenId: "after"
+        afterScreenId: "after",
+        screenChanged: true
+    )
+}
+
+func makeObservationEvidence(
+    before: Interface,
+    after: Interface? = nil,
+    beforeScreenId: String? = nil,
+    afterScreenId: String? = nil,
+    screenChanged: Bool = false,
+    completeness: Observation.Evidence.Completeness = .incomplete
+) -> Observation.Evidence {
+    let baseline = observationSnapshot(
+        interface: before,
+        screenId: beforeScreenId
+    )
+    let current = after.map {
+        observationSnapshot(
+            interface: $0,
+            screenId: afterScreenId
+        )
+    } ?? baseline
+    var events: [Observation.Event] = []
+    if screenChanged {
+        events.append(.screenChanged(ScreenFacts(idAfter: afterScreenId)))
+    }
+    if after != nil {
+        events.append(.elementsChanged(current))
+    }
+    if completeness == .complete {
+        events.append(.noChange)
+    }
+    return Observation.Evidence(
+        baseline: baseline,
+        current: current,
+        events: events,
+        completeness: completeness
+    )
+}
+
+func observationSnapshot(
+    interface: Interface,
+    screenId: String? = nil
+) -> Observation.Snapshot {
+    Observation.Snapshot(
+        interface: interface,
+        context: Observation.Context(screenId: screenId)
     )
 }
 

@@ -4,167 +4,191 @@ import Foundation
 import XCTest
 
 @testable import TheInsideJob
+@testable import ThePlans
 @testable import TheScore
 
 @MainActor
 final class SemanticObservationStoreTests: XCTestCase {
-    func testMomentIncludesSnapshotAndStartsAtFollowingLogFact() throws {
-        var store = Observation.Store()
-        let baseline = try commit(scope: .visible, in: &store)
-        let current = try commit(scope: .visible, in: &store)
+    func testHistoryOwnsOrderAndDerivesScreenGenerationFromPosition() throws {
+        var history = Observation.History(retentionLimit: 4)
+        let events: [Observation.Event] = [
+            .noChange,
+            .screenChanged(ScreenFacts(idAfter: "Checkout")),
+            .elementsChanged(snapshot()),
+        ]
 
-        XCTAssertEqual(baseline.moment.snapshot, baseline.snapshot)
-        XCTAssertEqual(store.log.events(since: baseline.moment), .events([.snapshot(current)]))
-        XCTAssertEqual(store.snapshotEvent(at: baseline.moment), baseline)
+        let recorded = history.record(events, protectedBy: nil)
+
+        XCTAssertEqual(recorded, 0..<3)
+        XCTAssertEqual(Array(history), events)
+        XCTAssertEqual(history.screenGeneration(at: 0), 0)
+        XCTAssertEqual(history.screenGeneration(at: 1), 0)
+        XCTAssertEqual(history.screenGeneration(at: 2), 1)
+        XCTAssertEqual(history.screenGeneration(at: history.endIndex), 1)
     }
 
-    func testReadsFromOneMomentDoNotShareProgress() throws {
-        var store = Observation.Store()
-        let baseline = try commit(scope: .visible, in: &store)
-        let first = try commit(scope: .visible, in: &store)
-        let second = try commit(scope: .visible, in: &store)
+    func testPruningRetainsDerivedScreenGeneration() {
+        var history = Observation.History(retentionLimit: 2)
+        _ = history.record([
+            .screenChanged(ScreenFacts(idAfter: "Checkout")),
+            .noChange,
+            .noChange,
+        ], protectedBy: nil)
 
-        let expected: Observation.EventsSince = .events([.snapshot(first), .snapshot(second)])
-        XCTAssertEqual(store.log.events(since: baseline.moment), expected)
-        XCTAssertEqual(store.log.events(since: baseline.moment), expected)
+        XCTAssertEqual(history.startIndex, 1)
+        XCTAssertEqual(Array(history), [.noChange, .noChange])
+        XCTAssertEqual(history.screenGeneration(at: history.startIndex), 1)
+        XCTAssertEqual(history.screenGeneration(at: history.endIndex), 1)
     }
 
-    func testEvictionReportsTypedExpiredHistory() throws {
-        var store = Observation.Store(retentionLimit: 2)
-        let baseline = try commit(scope: .visible, in: &store)
-        _ = try commit(scope: .visible, in: &store)
-        _ = try commit(scope: .visible, in: &store)
-        let current = try commit(scope: .visible, in: &store)
+    func testProtectedBoundaryPreventsEvictionUntilReleased() throws {
+        var state = TheVault.State(retentionLimit: 2)
+        _ = state.commitObservation(admission())
+        let boundary = state.history.endIndex
+        state.protectHistory(from: boundary)
 
+        _ = state.commitObservation(admission())
+        _ = state.commitObservation(admission())
+        _ = state.commitObservation(admission())
+
+        XCTAssertEqual(state.history.startIndex, boundary)
         XCTAssertEqual(
-            store.log.events(since: baseline.moment),
-            .expired(Observation.Gap(
-                reason: .historyEvicted,
-                baseline: baseline.moment,
-                current: current.moment
-            ))
-        )
-        XCTAssertEqual(store.latestCommittedEvent, current)
-    }
-
-    func testSourceScopeProjectsOneLogAcrossFulfilledScopes() throws {
-        var store = Observation.Store()
-        let discovery = try commit(scope: .discovery, in: &store)
-        let visible = try commit(scope: .visible, in: &store)
-
-        XCTAssertEqual(store.log.events(since: discovery.moment), .events([.snapshot(visible)]))
-        XCTAssertEqual(store.latestMoment(scope: .visible), visible.moment)
-        XCTAssertEqual(store.latestMoment(scope: .discovery), discovery.moment)
-    }
-
-    func testHistoryProjectionKeepsOnlyEventsThatFulfillTheRequestedScope() throws {
-        var store = Observation.Store()
-        let baseline = try commit(scope: .visible, in: &store)
-        _ = try commit(scope: .visible, in: &store)
-        let discovery = try commit(scope: .discovery, in: &store)
-
-        XCTAssertEqual(
-            store.log.events(since: baseline.moment).projected(for: .discovery),
-            .events([.snapshot(discovery)])
-        )
-    }
-
-    func testSettlementBoundaryDerivesAnnouncementCursorFromItsMoment() throws {
-        var log = Observation.Log(retentionLimit: 1)
-        let event = try log.record(
-            snapshot: snapshot(sequence: 4),
-            continuity: .sameGeneration
+            Array(try state.history.events(after: boundary)),
+            [.noChange, .noChange, .noChange]
         )
 
-        XCTAssertEqual(
-            Settlement.EvidenceBoundary(moment: event.moment).announcementCursor.sequence,
-            event.notificationSequence
-        )
-    }
+        state.releaseHistory(from: boundary)
 
-    func testLogConformsToCollectionWithOpaqueMonotonicIndices() throws {
-        var log = Observation.Log(retentionLimit: 3)
-        let first = try log.record(snapshot: snapshot(sequence: 1), continuity: .sameGeneration)
-        let second = try log.record(snapshot: snapshot(sequence: 2), continuity: .sameGeneration)
-
-        XCTAssertEqual(Array(log), [.snapshot(first), .snapshot(second)])
-        XCTAssertEqual(log.distance(from: log.startIndex, to: log.endIndex), 2)
-        XCTAssertEqual(log.distance(from: log.endIndex, to: log.startIndex), -2)
-        XCTAssertEqual(log[log.index(log.startIndex, offsetBy: 1)], .snapshot(second))
-    }
-
-    func testInvalidationPreservesLogButBlocksAdmittedRead() throws {
-        var store = Observation.Store()
-        let initial = try commit(scope: .visible, in: &store)
-
-        store.invalidateCurrentObservation()
-
-        XCTAssertTrue(store.latestSettledObservationInvalidated)
-        XCTAssertEqual(store.latestCommittedEvent, initial)
-        XCTAssertNil(store.admittedObservation(scope: .visible, after: nil))
-        XCTAssertEqual(store.latestCommittedEvent, initial)
-    }
-
-    func testStoreOwnerCommitsValueAdmissionFromStructuredChild() async throws {
-        let owner = Observation.StoreOwner()
-        let admission = admission(scope: .visible)
-
-        let delivery = try await withThrowingTaskGroup(
-            of: Observation.StoreOwner.CommittedDelivery.self
-        ) { group in
-            group.addTask {
-                try await owner.commitAdmission(admission)
-            }
-            return try await group.next()!
+        XCTAssertEqual(state.history.count, 2)
+        XCTAssertThrowsError(try state.history.events(after: boundary)) { error in
+            XCTAssertEqual(error as? Observation.History.ReadError, .rangeUnavailable)
         }
-
-        let latest = await owner.latestCommittedEvent()
-        XCTAssertEqual(delivery.committed.event.sequence, 1)
-        XCTAssertEqual(latest, delivery.committed.event)
     }
 
-    private func commit(
-        scope: SemanticObservationScope,
-        in store: inout Observation.Store
-    ) throws -> Observation.SnapshotEvent {
-        try store.commitObservation(admission(scope: scope)).event
+    func testEvictedRangeProducesIncompleteEvidence() {
+        var history = Observation.History(retentionLimit: 1)
+        _ = history.record([.noChange], protectedBy: nil)
+        _ = history.record([.noChange], protectedBy: nil)
+
+        let evidence = history.evidence(
+            in: 0..<history.endIndex,
+            baseline: snapshot(),
+            current: snapshot()
+        )
+
+        XCTAssertEqual(evidence.completeness, .incomplete)
+        XCTAssertTrue(evidence.events.isEmpty)
     }
 
-    private func admission(scope: SemanticObservationScope) -> Observation.Admission {
+    func testEqualSettledStateRecordsNoChange() {
+        var state = TheVault.State()
+        let first = state.commitObservation(admission())
+        let second = state.commitObservation(admission())
+
+        guard case .elementsChanged(let initial) = first.events.last else {
+            return XCTFail("The first parse must establish element truth")
+        }
+        XCTAssertEqual(initial, first.current.snapshot)
+        XCTAssertEqual(second.events, [.noChange])
+        XCTAssertEqual(Array(state.history), first.events + second.events)
+        XCTAssertEqual(state.current, second.current)
+    }
+
+    func testDiscardRecordsScreenReplacementSandwich() {
+        var state = TheVault.State()
+        _ = state.commitObservation(admission())
+        let boundary = state.history.endIndex
+
+        state.discardCurrentObservation()
+        let replacement = state.commitObservation(admission())
+
+        XCTAssertEqual(replacement.events.count, 3)
+        guard case .elementsChanged(let departure) = replacement.events[0],
+              case .screenChanged = replacement.events[1],
+              case .elementsChanged(let arrival) = replacement.events[2]
+        else {
+            return XCTFail("Expected departure, screen boundary, and arrival")
+        }
+        XCTAssertTrue(departure.interface.projectedElements.isEmpty)
+        XCTAssertEqual(arrival, replacement.current.snapshot)
+        XCTAssertEqual(state.history.screenGeneration(at: boundary + 1), 0)
+        XCTAssertEqual(state.history.screenGeneration(at: boundary + 2), 1)
+    }
+
+    func testNotificationPrecedesForcedElementChange() throws {
+        var state = TheVault.State()
+        _ = state.commitObservation(admission())
+        let notification = Observation.AdmittedNotification(
+            sequence: 1,
+            kind: .elementChanged(.layout),
+            text: "Updated",
+            element: nil
+        )
+
+        let publication = state.commitObservation(admission(notifications: [notification]))
+
+        XCTAssertEqual(
+            publication.events.first,
+            .notification(try XCTUnwrap(Observation.Notification(
+                text: "Updated",
+                element: nil
+            )))
+        )
+        guard case .elementsChanged(let snapshot) = publication.events.last else {
+            return XCTFail("Layout notification must force an element-change event")
+        }
+        XCTAssertEqual(snapshot, publication.current.snapshot)
+    }
+
+    func testCurrentAfterBoundaryUsesHistoryAvailability() {
+        var state = TheVault.State(retentionLimit: 1)
+        _ = state.commitObservation(admission())
+        let boundary = state.history.endIndex
+
+        XCTAssertEqual(
+            try state.current(after: boundary, scope: .visible).get(),
+            nil
+        )
+
+        let current = state.commitObservation(admission()).current
+
+        XCTAssertEqual(
+            try state.current(after: boundary, scope: .visible).get(),
+            current
+        )
+    }
+
+    private func admission(
+        scope: SemanticObservationScope = .visible,
+        notifications: [Observation.AdmittedNotification] = []
+    ) -> Observation.Admission {
         let observation = InterfaceObservation.makeForTests()
+        let through = notifications.map(\.sequence).max() ?? 0
         return Observation.Admission(
             tree: observation.tree,
-            captureID: observation.captureID,
             tripwireSignal: .empty,
             discoveryCommitPolicy: .mergeIntoInterface,
-            lineageEvidence: nil,
+            lineage: .resting,
             scope: scope,
             notificationAdmission: .action(.init(
-                evidence: [],
-                through: .origin,
-                scopedScreenChangedThrough: 0,
-                gap: nil
+                admittedNotifications: notifications,
+                through: AccessibilityNotificationCursor(sequence: through),
+                scopedScreenChangedThrough: 0
             )),
             keyboardVisible: nil,
-            timestamp: Date(timeIntervalSince1970: 0)
+            timestamp: Date(timeIntervalSince1970: 0),
+            viewportFrames: observation.tree.viewportFrames,
+            geometryTolerance: CoarseFrameComparison.currentGeometryTolerance
         )
     }
 
-    private func snapshot(sequence: UInt64) -> Observation.Snapshot {
-        let observation = InterfaceObservation.makeForTests()
-        let capture = AccessibilityTrace.Capture(
-            sequence: Int(sequence),
-            interface: Interface(timestamp: Date(timeIntervalSince1970: TimeInterval(sequence)), tree: []),
-            context: AccessibilityTrace.Context(screenId: "screen")
-        )
-        return Observation.Snapshot(
-            sequence: SettledObservationSequence(sequence),
-            generation: .initial,
-            sourceScope: .visible,
-            observation: observation,
-            semanticSignal: .empty,
-            notificationSequence: sequence,
-            trace: AccessibilityTrace(capture: capture)
+    private func snapshot() -> Observation.Snapshot {
+        Observation.Snapshot(
+            interface: Interface(
+                timestamp: Date(timeIntervalSince1970: 0),
+                tree: []
+            ),
+            context: .empty
         )
     }
 }

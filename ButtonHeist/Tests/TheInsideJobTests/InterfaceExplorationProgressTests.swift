@@ -30,7 +30,11 @@ final class InterfaceExplorationProgressTests: XCTestCase {
             container: container,
             path: path,
             containerName: containerName,
-            contentFrame: container.frame.cgRect
+            viewSpace: HeistElement.Geometry.ViewSpace(
+                ownerPath: path,
+                frame: try? ViewRect(validating: container.frame.cgRect),
+                activationPoint: nil
+            )
         )
     }
 

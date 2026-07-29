@@ -266,7 +266,6 @@ def test_command(
     suite: dict[str, object],
     paths: dict[str, Path],
     simulator: dict[str, str] | None,
-    selection: str,
     only_tests: Sequence[str] = (),
 ) -> list[str]:
     if suite["platform"] == "ios":
@@ -301,41 +300,26 @@ def test_command(
     test_options = ["-collect-test-diagnostics", "never"]
     if suite.get("serial"):
         test_options.extend(("-parallel-testing-enabled", "NO"))
-    if mode == "run":
-        command = [
-            "tuist",
-            "test",
-            name,
-            "--selective-testing" if selection == "selective" else "--no-selective-testing",
-            "--result-bundle-path",
-            str(paths["result_bundle"]),
-            "--",
-            "-destination",
-            test_destination,
-            "-derivedDataPath",
-            str(paths["derived"]),
-            *test_host_settings,
-            *test_options,
-            *only_testing,
-        ]
-    else:
-        command = [
-            "xcodebuild",
-            mode,
-            "-workspace",
-            str(WORKSPACE),
-            "-scheme",
-            name,
-            "-destination",
-            test_destination,
-            "-derivedDataPath",
-            str(paths["derived"]),
-            "-resultBundlePath",
-            str(paths["result_bundle"]),
-            *test_host_settings,
-            *test_options,
-            *only_testing,
-        ]
+    # Always plain xcodebuild. `tuist test` wraps the same invocation but
+    # swallows the failure: it prints "✖ Error" and a forum link where
+    # xcodebuild names the test that failed and its assertion.
+    command = [
+        "xcodebuild",
+        "test" if mode == "run" else mode,
+        "-workspace",
+        str(WORKSPACE),
+        "-scheme",
+        name,
+        "-destination",
+        test_destination,
+        "-derivedDataPath",
+        str(paths["derived"]),
+        "-resultBundlePath",
+        str(paths["result_bundle"]),
+        *test_host_settings,
+        *test_options,
+        *only_testing,
+    ]
     wrapper = [str(WRAPPER)]
     if suite["platform"] == "ios":
         wrapper.append("--ios-sandbox")
@@ -517,7 +501,6 @@ def execute(
         suite,
         paths,
         simulator,
-        args.selection,
         only_tests,
     )
     source = source_state()
@@ -587,7 +570,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("suites", nargs="*", choices=tuple(SUITES))
     parser.add_argument("--focus", action="append", choices=tuple(FOCUSES), default=[])
-    parser.add_argument("--selection", choices=("selective", "full"), default="selective")
+    # Passed through to -only-testing verbatim, so any depth xcodebuild accepts
+    # works: Target, Target/Suite, or Target/Suite/testMethod.
+    parser.add_argument("--test", action="append", default=[], metavar="IDENTIFIER")
     parser.add_argument("--simulator-name")
     parser.add_argument("--simulator-runtime")
     parser.add_argument("--retain-simulator", action="store_true")
@@ -606,6 +591,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         return args
     if bool(args.suites) == bool(args.focus):
         raise ValueError("select suites or focuses, but not both")
+    if args.test:
+        # A test identifier already names its target, so spreading one across
+        # several suites would ask each for tests that live in only one.
+        if args.focus:
+            raise ValueError("--test and --focus both select tests; use one")
+        if len(args.suites) != 1:
+            raise ValueError("--test requires exactly one suite")
     simulator_modes = ("run", "build-for-testing", "test-without-building")
     if args.retain_simulator and args.mode not in simulator_modes:
         raise ValueError(
@@ -643,7 +635,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.install_dependencies:
         subprocess.run(["tuist", "install"], check=True)
     runs = focus_runs(args.focus) if args.focus else {
-        name: () for name in args.suites
+        name: tuple(args.test) for name in args.suites
     }
     selected_simulators: list[dict[str, str]] = []
     status = 0

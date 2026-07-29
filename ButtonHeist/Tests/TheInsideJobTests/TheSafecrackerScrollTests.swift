@@ -289,8 +289,8 @@ final class TheSafecrackerScrollTests: XCTestCase {
             contentSize: CGSize(width: 2_000, height: 3_000)
         )
 
-        let result = safecracker.revealContentPoint(
-            ScrollContentPoint(x: 1_200, y: 1_200),
+        let result = safecracker.revealViewPoint(
+            ViewPoint(x: 1_200, y: 1_200),
             in: scrollView
         )
 
@@ -305,8 +305,8 @@ final class TheSafecrackerScrollTests: XCTestCase {
             contentSize: CGSize(width: 400, height: 1_000)
         )
 
-        let result = safecracker.revealContentPoint(
-            ScrollContentPoint(x: 200, y: 980),
+        let result = safecracker.revealViewPoint(
+            ViewPoint(x: 200, y: 980),
             in: scrollView
         )
 
@@ -321,8 +321,8 @@ final class TheSafecrackerScrollTests: XCTestCase {
         )
         scrollView.isPagingEnabled = true
 
-        let result = safecracker.revealContentPoint(
-            ScrollContentPoint(x: 900, y: 400),
+        let result = safecracker.revealViewPoint(
+            ViewPoint(x: 900, y: 400),
             in: scrollView
         )
 

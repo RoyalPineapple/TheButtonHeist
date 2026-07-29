@@ -43,7 +43,7 @@ let buttonHeistRules = RuleSet {
     exportedTupleContractRule
     Rules.memberReferenceOwnership(
         "commitAdmission",
-        allowed: .files([semanticObservationSettlementPath]),
+        allowed: .files([semanticObservationCaptureAdmissionPath]),
         id: "buttonheist.semantic_observation_commit_ownership"
     )
     Rules.memberReferenceOwnership(
@@ -52,9 +52,14 @@ let buttonHeistRules = RuleSet {
         id: "buttonheist.semantic_observation_store_mutation_ownership"
     )
     Rules.constructionOwnership(
-        "Settlement.Executor",
-        allowed: .files([settlementExecutionPath]),
-        id: "buttonheist.settlement_executor_ownership"
+        "HeistExecution.Machine",
+        allowed: .files([heistExecutionHostPath]),
+        id: "buttonheist.heist_execution_machine_ownership"
+    )
+    Rules.constructionOwnership(
+        "HeistExecution.Host",
+        allowed: .files([heistExecutionEntryPath]),
+        id: "buttonheist.heist_execution_host_ownership"
     )
     Rules.memberReferenceOwnership(
         "setContentOffset",
@@ -79,12 +84,14 @@ private let demoAccessibilityIdentifierResearchFixtures: Set<RelativeFilePath> =
     "TestApp/Sources/TraitValidationView.swift",
 ]
 
-private let semanticObservationSettlementPath: RelativeFilePath =
-    "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream+Settlement.swift"
+private let semanticObservationCaptureAdmissionPath: RelativeFilePath =
+    "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream+CaptureAdmission.swift"
 private let semanticObservationStoreOwnerPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStoreOwner.swift"
-private let settlementExecutionPath: RelativeFilePath =
-    "ButtonHeist/Sources/TheInsideJob/TheBrains/Settlement+Execution.swift"
+private let heistExecutionHostPath: RelativeFilePath =
+    "ButtonHeist/Sources/TheInsideJob/TheBrains/HeistExecution+Host.swift"
+private let heistExecutionEntryPath: RelativeFilePath =
+    "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistExecution.swift"
 private let scrollContentOffsetOwnerPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheSafecracker/TheSafecracker+Scroll.swift"
 private let transportEventOwnerPaths: Set<RelativeFilePath> = [

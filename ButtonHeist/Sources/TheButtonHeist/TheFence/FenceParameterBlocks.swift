@@ -2,7 +2,6 @@ import ThePlans
 import TheScore
 
 internal enum FenceParameterBlocks: Sendable {
-    private static let matcherFields = [predicateChecksParam(.checks)]
     internal static let inlineAccessibilityTargetFields = accessibilityTargetProperties()
 
     internal static let target: [FenceParameterSpec] = [
@@ -80,8 +79,6 @@ internal enum FenceParameterBlocks: Sendable {
         dragPointToPoint,
     ]
 
-    internal static let elementFilter = matcherFields
-
     internal static let interfaceSubtree: FenceParameterSpec = objectParam(
         .subtree,
         properties: inlineAccessibilityTargetFields,
@@ -105,6 +102,12 @@ internal enum FenceParameterBlocks: Sendable {
             enumValues: AccessibilityPredicate.wireTypeValues
         ),
         objectParam(.target, properties: inlineAccessibilityTargetFields, validation: .customPayload),
+        stringMatchParam(.text),
+        objectParam(
+            .element,
+            properties: [predicateChecksParam(.checks)],
+            validation: .customPayload
+        ),
         stringMatchParam(.match),
         param(.scope, .string, enumValues: ChangedScope.allCases.map(\.rawValue)),
         arrayParam(

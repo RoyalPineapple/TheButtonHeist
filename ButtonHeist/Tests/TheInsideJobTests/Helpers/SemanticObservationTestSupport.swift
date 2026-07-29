@@ -5,83 +5,68 @@ extension Observation.Stream {
     @discardableResult
     func commitVisibleObservationForTesting(
         _ observation: InterfaceObservation,
-        notificationBatch: AccessibilityNotificationBatch? = nil,
-        notificationIdentityObservation: InterfaceObservation? = nil
-    ) async -> Observation.SnapshotEvent {
-        let outcome = await commitSettledVisibleObservation(
-            .admittedForTesting(observation, tripwireSignal: currentTripwireSignal()),
-            notificationBatch: notificationBatch,
-            notificationIdentityObservation: notificationIdentityObservation
-        )
-        guard case .delivered(let event) = outcome else {
-            preconditionFailure("Test observation was superseded before publication")
-        }
-        return event
-    }
-
-    func commitVisibleObservationOutcomeForTesting(
-        _ observation: InterfaceObservation,
         notificationBatch: AccessibilityNotificationBatch? = nil
-    ) async -> Observation.PublicationOutcome {
-        await commitSettledVisibleObservation(
-            .admittedForTesting(observation, tripwireSignal: currentTripwireSignal()),
+    ) async -> Observation.Publication {
+        await commitVisibleObservation(
+            .admitCaptured(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
             notificationBatch: notificationBatch
         )
     }
 
     @discardableResult
-    func commitVisibleObservationAfterViewportMovementForTesting(
+    func commitVisibleEventForTesting(
         _ observation: InterfaceObservation,
-        notificationBatch: AccessibilityNotificationBatch? = nil,
-        notificationIdentityObservation: InterfaceObservation? = nil
-    ) async -> Observation.SnapshotEvent {
-        let outcome = await commitSettledVisibleObservation(
-            .admittedForTesting(
-                observation,
-                tripwireSignal: currentTripwireSignal(),
-                lineageEvidence: .viewportMovement
-            ),
-            notificationBatch: notificationBatch,
-            notificationIdentityObservation: notificationIdentityObservation
+        notificationBatch: AccessibilityNotificationBatch? = nil
+    ) async -> Observation.Event {
+        let publication = await commitVisibleObservation(
+            .admitCaptured(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
+            notificationBatch: notificationBatch
         )
-        guard case .delivered(let event) = outcome else {
-            preconditionFailure("Test observation was superseded before publication")
+        guard let event = publication.events.last else {
+            preconditionFailure("Test observation did not publish its committed event")
         }
         return event
+    }
+
+    @discardableResult
+    func commitVisibleObservationAfterViewportMovementForTesting(
+        _ observation: InterfaceObservation,
+        notificationBatch: AccessibilityNotificationBatch? = nil
+    ) async -> Observation.Publication {
+        await commitVisibleObservation(
+            .admitCaptured(
+                observation,
+                tripwireSignal: currentTripwireSignal(),
+                lineage: .viewportMovement
+            ),
+            notificationBatch: notificationBatch
+        )
     }
 
     @discardableResult
     func commitDiscoveryObservationForTesting(
         _ observation: InterfaceObservation,
         notificationBatch: AccessibilityNotificationBatch? = nil
-    ) async -> Observation.SnapshotEvent {
-        let outcome = await commitSettledDiscoveryObservation(
-            .admittedForTesting(observation, tripwireSignal: currentTripwireSignal()),
+    ) async -> Observation.Publication {
+        await commitDiscoveryObservation(
+            .admitCaptured(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
             notificationBatch: notificationBatch
         )
-        guard case .delivered(let event) = outcome else {
-            preconditionFailure("Test observation was superseded before publication")
-        }
-        return event
     }
 
     @discardableResult
     func commitDiscoveryObservationAfterViewportMovementForTesting(
         _ observation: InterfaceObservation,
         notificationBatch: AccessibilityNotificationBatch? = nil
-    ) async -> Observation.SnapshotEvent {
-        let outcome = await commitSettledDiscoveryObservation(
-            .admittedForTesting(
+    ) async -> Observation.Publication {
+        await commitDiscoveryObservation(
+            .admitCaptured(
                 observation,
                 tripwireSignal: currentTripwireSignal(),
-                lineageEvidence: .viewportMovement
+                lineage: .viewportMovement
             ),
             notificationBatch: notificationBatch
         )
-        guard case .delivered(let event) = outcome else {
-            preconditionFailure("Test observation was superseded before publication")
-        }
-        return event
     }
 }
 
@@ -136,7 +121,7 @@ final class TripwireInvalidationFixture {
         self.continuation = continuation
         invalidation = Task {
             for await _ in stream {
-                await vault.invalidateSettledObservationFromTripwire()
+                await vault.semanticObservationStream.invalidateCurrentAdmission()
                 break
             }
         }

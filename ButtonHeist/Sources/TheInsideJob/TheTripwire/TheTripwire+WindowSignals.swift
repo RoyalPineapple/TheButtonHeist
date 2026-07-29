@@ -10,6 +10,15 @@ extension TheTripwire {
         let windows: [SemanticWindowSignal]
     }
 
+    /// Where UIKit has the user: the topmost controller, the navigation state
+    /// and the window stack. Two readings taken under equal hierarchy signals
+    /// describe the same place.
+    struct HierarchySignal: Sendable, Equatable {
+        let topmostVC: ObjectIdentifier?
+        let navigation: NavigationSignal
+        let windowStack: WindowStackSignal
+    }
+
     struct SemanticWindowSignal: Sendable, Equatable {
         let level: Double
         let isKeyWindow: Bool
@@ -43,17 +52,17 @@ extension TheTripwire {
             self.accessibilityNotificationSequence = accessibilityNotificationSequence
         }
 
-        /// Whether this signal should reset an AX-tree settle baseline.
+        /// The structural half of this signal: where UIKit has the user.
         ///
-        /// Accessibility notifications are intentionally excluded. They are a
-        /// high-quality wake-up signal that should prompt another parse, but
-        /// they are not structural UIKit state. Treating a notification-only
-        /// sequence bump as a reset can starve the settle loop when UIKit posts
-        /// repeated layout/value notifications during a transition.
-        func requiresSettleBaselineReset(from previous: TripwireSignal) -> Bool {
-            topmostVC != previous.topmostVC
-                || navigation != previous.navigation
-                || windowStack != previous.windowStack
+        /// Accessibility notifications are the other half and stay out of it.
+        /// UIKit posts layout and value notifications throughout a transition,
+        /// so they say a parse is worth doing, not that anything moved.
+        var hierarchy: HierarchySignal {
+            HierarchySignal(
+                topmostVC: topmostVC,
+                navigation: navigation,
+                windowStack: windowStack
+            )
         }
 
         var semanticValue: SemanticSignal {

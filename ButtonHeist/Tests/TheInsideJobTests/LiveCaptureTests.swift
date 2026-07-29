@@ -59,6 +59,11 @@ struct LiveCaptureTests {
                     heistId: "save_button",
                     path: path,
                     scrollMembership: nil,
+                    geometry: testGeometry(
+                        for: element,
+                        ownerPath: .root,
+                        screen: TheVault.onscreenSpace(for: element)
+                    ),
                     element: element
                 )
             ],
@@ -101,7 +106,11 @@ struct LiveCaptureTests {
                     container: makeTestAccessibilityContainer(identifier: "different"),
                     path: path,
                     containerName: nil,
-                    contentFrame: nil
+                    viewSpace: HeistElement.Geometry.ViewSpace(
+                        ownerPath: .root,
+                        frame: nil,
+                        activationPoint: nil
+                    )
                 )
             ],
             viewportCapture: snapshot
@@ -129,6 +138,11 @@ struct LiveCaptureTests {
                     scrollMembership: InterfaceTree.ScrollMembership(
                         containerPath: missingContainerPath,
                         index: 0
+                    ),
+                    geometry: testGeometry(
+                        for: element,
+                        ownerPath: missingContainerPath,
+                        screen: TheVault.onscreenSpace(for: element)
                     ),
                     element: element
                 )
@@ -321,6 +335,11 @@ struct LiveCaptureTests {
                     heistId: "save_button",
                     path: treePath,
                     scrollMembership: nil,
+                    geometry: testGeometry(
+                        for: element,
+                        ownerPath: .root,
+                        screen: TheVault.onscreenSpace(for: element)
+                    ),
                     element: element
                 )
             ],
@@ -351,6 +370,11 @@ struct LiveCaptureTests {
                     heistId: "save_button",
                     path: path,
                     scrollMembership: nil,
+                    geometry: testGeometry(
+                        for: treeElement,
+                        ownerPath: .root,
+                        screen: TheVault.onscreenSpace(for: treeElement)
+                    ),
                     element: treeElement
                 )
             ],
@@ -556,6 +580,11 @@ struct LiveCaptureTests {
                     heistId: heistId,
                     path: path,
                     scrollMembership: nil,
+                    geometry: testGeometry(
+                        for: treeElement,
+                        ownerPath: .root,
+                        screen: TheVault.onscreenSpace(for: treeElement)
+                    ),
                     element: treeElement
                 )
             ],
@@ -586,23 +615,34 @@ struct LiveCaptureTests {
             into: [HeistId: InterfaceTree.Element]()
         ) { result, item in
             guard let heistId = snapshot.heistIdsByPath[item.path] else { return }
+            let scrollMembership = scrollMembershipsByHeistId[heistId]
             result[heistId] = InterfaceTree.Element(
                 heistId: heistId,
                 path: item.path,
-                scrollMembership: scrollMembershipsByHeistId[heistId],
+                scrollMembership: scrollMembership,
+                geometry: testGeometry(
+                    for: item.element,
+                    ownerPath: scrollMembership?.containerPath ?? .root,
+                    screen: TheVault.onscreenSpace(for: item.element)
+                ),
                 element: item.element
             )
         }
         let containers = Dictionary(
             uniqueKeysWithValues: snapshot.hierarchy.pathIndexedContainers.map { item in
-                (
+                let scrollMembership = containerScrollMembershipsByPath[item.path]
+                return (
                     item.path,
                     InterfaceTree.Container(
                         container: item.container,
                         path: item.path,
                         containerName: nil,
-                        contentFrame: nil,
-                        scrollMembership: containerScrollMembershipsByPath[item.path]
+                        viewSpace: HeistElement.Geometry.ViewSpace(
+                            ownerPath: scrollMembership?.containerPath ?? .root,
+                            frame: try? ViewRect(validating: item.container.frame.cgRect),
+                            activationPoint: nil
+                        ),
+                        scrollMembership: scrollMembership
                     )
                 )
             }

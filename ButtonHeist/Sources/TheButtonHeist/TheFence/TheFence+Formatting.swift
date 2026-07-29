@@ -26,8 +26,8 @@ extension FenceResponse {
             return formatDeviceList(devices)
         case .interface(let interface, let detail):
             return formatInterface(interface, detail: detail)
-        case .announcements(let announcements):
-            return formatAnnouncements(announcements)
+        case .notifications(let notifications):
+            return formatNotifications(notifications)
         case .action(let command, let result, let expectation):
             var text = formatActionResult(command: command, result: result)
             if result.outcome.isSuccess, let expectation {
@@ -40,9 +40,6 @@ extension FenceResponse {
                         text += "  [hint: \(hint)]"
                     }
                 }
-            }
-            if let settlement = result.evidence.settlement, !settlement.settled {
-                text += "  [settlement: \(Self.incompleteSettlementSummary(settlement))]"
             }
             return text
         case .screenshot(let path, let payload, let options):
@@ -72,13 +69,20 @@ extension FenceResponse {
         }
     }
 
-    private func formatAnnouncements(_ announcements: [CapturedAnnouncement]) -> String {
-        guard !announcements.isEmpty else { return "No announcements captured" }
-        let now = Date()
-        return announcements.enumerated().map { index, announcement in
-            let age = max(0, now.timeIntervalSince(announcement.timestamp))
-            return "[\(index)] \(String(format: "%.1f", age))s ago: \"\(announcement.text)\" (\(announcement.kind))"
-        }.joined(separator: "\n")
+    private func formatNotifications(
+        _ notifications: [Observation.Notification]
+    ) -> String {
+        guard !notifications.isEmpty else {
+            return "No accessibility notifications retained"
+        }
+        return notifications.enumerated().map { index, notification in
+            let facts = [
+                notification.text.map { "text=\"\($0)\"" },
+                notification.element.map { "element=\"\($0.spokenDescription)\"" },
+            ].compactMap { $0 }
+            return "[\(index)] " + facts.joined(separator: " ")
+        }
+        .joined(separator: "\n")
     }
 
     private static func formatSessionStateHuman(_ payload: SessionStatePayload) -> String {
@@ -107,10 +111,6 @@ extension FenceResponse {
         }
         if let expectations = report.summary.expectations {
             text += " [expectations: \(expectations.met)/\(expectations.checked) met]"
-        }
-        let incompleteSettlements = report.outputNodes.compactMap(\.settlement).filter { !$0.settled }
-        if let settlement = incompleteSettlements.first {
-            text += " [settlement: \(Self.incompleteSettlementSummary(settlement))]"
         }
         return text
     }
@@ -265,38 +265,50 @@ extension FenceResponse {
     }
 
     private func formatElement(_ element: HeistElement, displayIndex: Int, detail: InterfaceDetail) -> String {
+        let assertable = element.semantics.assertable
         var parts: [String] = [String(format: "[%2d]", displayIndex)]
-        var labelValue = Self.quotedString(Self.nonEmpty(element.label) ?? element.description)
-        if let value = Self.nonEmpty(element.value) {
+        var labelValue = Self.quotedString(
+            Self.nonEmpty(assertable.label) ?? element.semantics.spokenDescription
+        )
+        if let value = Self.nonEmpty(assertable.value) {
             labelValue += " value=\(Self.quotedString(value))"
         }
         parts.append(labelValue)
 
-        let traits = element.traits.filter { $0.rawValue != "none" }
+        let traits = assertable.orderedTraits.filter { $0.rawValue != "none" }
         if !traits.isEmpty {
             parts.append("traits=\(traits.map(\.rawValue).joined(separator: " | "))")
         }
-        if !element.actions.isEmpty {
-            parts.append("actions=\(element.actions.map(\.description).joined(separator: ", "))")
+        if !assertable.actions.isEmpty {
+            parts.append(
+                "actions=\(assertable.orderedActions.map(\.description).joined(separator: ", "))"
+            )
         }
-        if let rotors = element.rotors?.compactMap({ Self.nonEmpty($0.name) }), !rotors.isEmpty {
+        let rotors = assertable.orderedRotors.compactMap { Self.nonEmpty($0.name) }
+        if !rotors.isEmpty {
             parts.append("rotors=\(rotors.map(Self.quotedString).joined(separator: ", "))")
         }
-        if let hint = Self.nonEmpty(element.hint) {
+        if let hint = Self.nonEmpty(assertable.hint) {
             parts.append("hint=\(Self.quotedString(hint))")
         }
-        if let identifier = Self.nonEmpty(element.identifier) {
+        if let identifier = Self.nonEmpty(assertable.identifier) {
             parts.append("id=\(Self.quotedString(identifier))")
         }
-        if detail == .full {
-            if let frame = element.screenFrame {
+        if detail == .full,
+           case .onscreen(let frameEvidence, let activationPointEvidence) = element.geometry.screen {
+            if let frame = frameEvidence.rect {
                 parts.append(
                     "frame=(\(Self.geometryDescription(frame.x.value)),\(Self.geometryDescription(frame.y.value))," +
                         "\(Self.geometryDescription(frame.width.value)),\(Self.geometryDescription(frame.height.value)))"
                 )
             }
-            if let x = element.activationPointX, let y = element.activationPointY {
-                parts.append("activation=(\(Self.geometryDescription(x)),\(Self.geometryDescription(y)))")
+            let explicitPoint = activationPointEvidence.point
+            let x = explicitPoint?.x ?? frameEvidence.rect?.midX
+            let y = explicitPoint?.y ?? frameEvidence.rect?.midY
+            if let x, let y {
+                parts.append(
+                    "activation=(\(Self.geometryDescription(x)),\(Self.geometryDescription(y)))"
+                )
             }
         }
         return parts.joined(separator: " ")
@@ -415,7 +427,9 @@ extension FenceResponse {
         if case .rotor(let search) = projection.payload {
             output += "  rotor: \"\(search.rotor)\" \(search.direction.rawValue)"
             if let foundElement = search.foundElement {
-                output += " → \(foundElement.label ?? foundElement.description)"
+                let description = foundElement.semantics.assertable.label
+                    ?? foundElement.semantics.spokenDescription
+                output += " → \(description)"
             }
             if let textRange = search.textRange {
                 output += "  range: \(textRange.rangeDescription)"
@@ -443,11 +457,12 @@ extension FenceResponse {
     /// `activate` is implied by `.button`; `typeText` by text-input traits;
     /// `increment`/`decrement` by `.adjustable`.
     static func meaningfulActions(_ element: HeistElement) -> [ElementAction] {
-        element.actions.filter { action in
+        let assertable = element.semantics.assertable
+        return assertable.orderedActions.filter { action in
             switch action {
-            case .activate: return !element.traits.contains(.button)
-            case .typeText: return !AccessibilityPolicy.supportsTextEntry(element.traits)
-            case .increment, .decrement: return !element.traits.contains(.adjustable)
+            case .activate: return !assertable.traits.contains(.button)
+            case .typeText: return !AccessibilityPolicy.supportsTextEntry(assertable.traits)
+            case .increment, .decrement: return !assertable.traits.contains(.adjustable)
             case .custom: return true
             }
         }
@@ -462,13 +477,7 @@ extension FenceResponse {
     private func formatDelta(_ projection: DeltaProjection) -> String {
         switch projection {
         case .noChange(let metadata):
-            guard !metadata.transient.elements.isEmpty else {
-                return "[\(metadata.elementCount) elements, no change]"
-            }
-            let transients = metadata.transient.elements
-                .map { "+- \(Self.compactElementLine($0))" }
-                .joined(separator: "; ")
-            return "[\(metadata.elementCount) elements, no net change: \(transients)]"
+            return "[\(metadata.elementCount) elements, no change]"
         case .elementsChanged(let delta):
             var parts: [String] = ["\(delta.metadata.elementCount) elements"]
             if delta.edits.added.elements.count > 0 {
@@ -483,13 +492,7 @@ extension FenceResponse {
                 let updatedCount = delta.edits.updated.updates.count
                 parts.append("~\(updatedCount) updated")
             }
-            if !delta.metadata.accessibilityNotifications.isEmpty {
-                parts.append("\(delta.metadata.accessibilityNotifications.count) accessibility notification(s)")
-            }
-            let detail = Self.compactElementEditLines(
-                edits: delta.edits,
-                transient: delta.metadata.transient.elements
-            )
+            let detail = Self.compactElementEditLines(edits: delta.edits)
             guard !detail.isEmpty else {
                 return "[" + parts.joined(separator: ", ") + "]"
             }
@@ -502,35 +505,24 @@ extension FenceResponse {
         }
     }
 
-    private static func compactElementEditLines(edits: DeltaEditsProjection?, transient: [HeistElement]) -> [String] {
+    private static func compactElementEditLines(edits: DeltaEditsProjection?) -> [String] {
         var lines: [String] = []
         lines.append(contentsOf: edits?.added.elements.map { "+ \(compactElementLine($0))" } ?? [])
         lines.append(contentsOf: edits?.removed.elements.map { "- \(compactElementLine($0))" } ?? [])
         for update in edits?.updated.updates ?? [] {
-            let name = nonEmpty(update.after.label)
-                ?? nonEmpty(update.after.value)
-                ?? nonEmpty(update.after.identifier)
-                ?? update.after.description
+            let assertable = update.after.semantics.assertable
+            let name = nonEmpty(assertable.label)
+                ?? nonEmpty(assertable.value)
+                ?? nonEmpty(assertable.identifier)
+                ?? update.after.semantics.spokenDescription
             for change in update.changes where !change.property.isGeometry {
                 lines.append("~ \(name): \(change.property.rawValue) \"\(display(change.oldValue))\" -> \"\(display(change.newValue))\"")
             }
         }
-        lines.append(contentsOf: transient.map { "+- \(compactElementLine($0))" })
         return lines
     }
 
     private static func display(_ value: ElementPropertyValue?) -> String {
         value?.displayText ?? "nil"
-    }
-}
-
-extension FenceResponse {
-    static func incompleteSettlementSummary(_ settlement: ActionSettlementEvidence) -> String {
-        let duration = settlement.durationMs.milliseconds
-        if settlement.readinessEstablished {
-            let path = settlement.path.map(String.init(describing:)) ?? "unknown"
-            return "readiness \(path); observation handoff timed out after \(duration)ms"
-        }
-        return "readiness timed out after \(duration)ms"
     }
 }

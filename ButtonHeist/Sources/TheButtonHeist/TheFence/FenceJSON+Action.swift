@@ -25,7 +25,6 @@ private enum PublicActionResultCodingKey: String, CodingKey {
     case retryable
     case hint
     case expectation
-    case settlement
     case activationTrace
     case timing
     case omitted
@@ -60,10 +59,6 @@ enum PublicActionResultContext: Sendable, Equatable {
     case standaloneAction
     case heistReportEvidence
 
-    var includesExpectation: Bool {
-        self == .standaloneAction
-    }
-
     var includesOmissions: Bool {
         self == .heistReportEvidence
     }
@@ -96,7 +91,6 @@ extension ActionProjection: Encodable {
         try container.encodeIfPresent(screenId, forKey: .screenId)
         try encodeFailure(to: &container)
         try container.encodeIfPresent(expectation, forKey: .expectation)
-        try container.encodeIfPresent(incompleteSettlement, forKey: .settlement)
         try container.encodeIfPresent(activationTrace, forKey: .activationTrace)
         try container.encodeIfPresent(timing, forKey: .timing)
         if publicContext.includesOmissions {
@@ -225,14 +219,9 @@ struct PublicDelta: Encodable {
     private enum CodingKeys: String, CodingKey {
         case kind
         case elementCount
-        case captureEdge
-        case interactionDigest
-        case accessibilityNotifications
-        case transient
         case edits
         case newInterface
         case screen
-        case omitted
     }
 
     func encode(to encoder: Encoder) throws {
@@ -240,13 +229,11 @@ struct PublicDelta: Encodable {
         switch projection {
         case .noChange(let metadata):
             try encodeMetadata(metadata, kind: .noChange, to: &container)
-            try encodeTransientOmissions(metadata.transient, to: &container)
 
         case .elementsChanged(let delta):
             try encodeMetadata(delta.metadata, kind: .elementsChanged, to: &container)
             let edits = PublicElementEdits(projection: delta.edits)
             try container.encodeIfPresent(edits.isEmpty ? nil : edits, forKey: .edits)
-            try encodeTransientOmissions(delta.metadata.transient, to: &container)
 
         case .screenChanged(let delta):
             try encodeMetadata(delta.metadata, kind: .screenChanged, to: &container)
@@ -259,7 +246,6 @@ struct PublicDelta: Encodable {
             case .screenSummary:
                 try container.encode(PublicHeistScreenProjection(projection: delta.screen), forKey: .screen)
             }
-            try encodeTransientOmissions(delta.metadata.transient, to: &container)
         }
     }
 
@@ -270,25 +256,6 @@ struct PublicDelta: Encodable {
     ) throws {
         try container.encode(kind.rawValue, forKey: .kind)
         try container.encode(metadata.elementCount, forKey: .elementCount)
-        try container.encodeIfPresent(metadata.captureEdge, forKey: .captureEdge)
-        try container.encodeIfPresent(metadata.interactionDigest, forKey: .interactionDigest)
-        if !metadata.accessibilityNotifications.isEmpty {
-            try container.encode(metadata.accessibilityNotifications, forKey: .accessibilityNotifications)
-        }
-        try container.encodeIfPresent(Self.elements(metadata.transient.elements), forKey: .transient)
-    }
-
-    private func encodeTransientOmissions(
-        _ transient: ElementProjectionBucket,
-        to container: inout KeyedEncodingContainer<CodingKeys>
-    ) throws {
-        let transientOmissions = PublicHeistDeltaOmissions(projection: transient)
-        try container.encodeIfPresent(transientOmissions.isEmpty ? nil : transientOmissions, forKey: .omitted)
-    }
-
-    private static func elements(_ elements: [HeistElement]) -> [PublicElement]? {
-        guard !elements.isEmpty else { return nil }
-        return elements.map { PublicElement(element: $0, detail: .summary) }
     }
 }
 

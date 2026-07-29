@@ -28,7 +28,22 @@ extension TheFenceHandlerTests {
         XCTAssertEqual(plan.name, "agentFlow")
         XCTAssertEqual(mockConn.sent.sentHeistPlan, plan)
         XCTAssertEqual(mockConn.sent.sentHeistRun?.argument, HeistArgument.none)
+        XCTAssertEqual(mockConn.sent.sentHeistRun?.timeout, .default)
         XCTAssertEqual(report, HeistReport.project(result: scriptedResult))
+    }
+
+    @ButtonHeistActor
+    func testRunHeistPropagatesExplicitWholeHeistTimeout() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.responseScript = { _ in scriptedHeistResponse() }
+        fence.handoff.connect(to: TheFenceFixtures.testDevice)
+
+        _ = try await fence.execute(command: .runHeist, values: [
+            "plan": .string(Self.pureRuntimeHeistSource),
+            "timeout": .double(120),
+        ])
+
+        XCTAssertEqual(mockConn.sent.sentHeistRun?.timeout, 120)
     }
 
     @ButtonHeistActor
@@ -563,7 +578,7 @@ extension TheFenceHandlerTests {
 
     func testHeistExecutionResponseFailureDerivesFromTypedResult() throws {
         let result = HeistResultFixture.result(
-            steps: [HeistResultFixture.explicitFailure(message: "boom", durationMs: 5)],
+            steps: [HeistResultFixture.explicitFailure(message: "boom")],
             durationMs: 5
         )
         let response = FenceResponse.heistExecution(

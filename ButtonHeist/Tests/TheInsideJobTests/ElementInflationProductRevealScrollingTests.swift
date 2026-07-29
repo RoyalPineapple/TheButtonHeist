@@ -38,7 +38,6 @@ extension ElementInflationProductTests {
             identifier: "semantic_checkout_submit",
             label: "Submit Order"
         )
-        defer { fixture.cleanup() }
         try await seedOffViewportTarget(fixture)
 
         XCTAssertEqual(fixture.scrollView.contentOffset, .zero)
@@ -53,7 +52,10 @@ extension ElementInflationProductTests {
         guard result.outcome.isSuccess else { return }
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(result.subjectEvidence?.source, .resolvedSemanticTarget)
-        XCTAssertEqual(result.subjectEvidence?.element.identifier, fixture.knownHeistId.rawValue)
+        XCTAssertEqual(
+            result.subjectEvidence?.element.semantics.assertable.identifier,
+            fixture.knownHeistId.rawValue
+        )
         XCTAssertEqual(
             result.subjectEvidence?.resolution,
             ActionSubjectResolution(origin: .known, adjustments: [.semanticReveal])
@@ -67,7 +69,6 @@ extension ElementInflationProductTests {
             identifier: "direct_scroll_owner",
             label: "Direct Scroll Owner"
         )
-        defer { fixture.cleanup() }
 
         let screen = try XCTUnwrap(brains.vault.refreshLiveCapture())
         let paths = screen.liveCapture.scrollableContainerViewsByPath.compactMap { path, reference in
@@ -85,7 +86,6 @@ extension ElementInflationProductTests {
             label: "Confirm Payment",
             nestedInGroup: true
         )
-        defer { fixture.cleanup() }
         try await seedOffViewportTarget(fixture)
 
         let result = await brains.executeRuntimeAction(
@@ -112,15 +112,10 @@ extension ElementInflationProductTests {
         let keyboardImpl = ProductTextInputKeyboardImpl(textField: fixture.target) {
             invalidation.signal()
         }
-        brains.stopActionTestRuntime()
-        brains = TheBrains(
-            tripwire: TheTripwire(),
-            keyboardInput: SafecrackerKeyboardInput(
-                keyboardBridgeProvider: { keyboardImpl.bridge() }
-            ),
-            visibleObservationSource: visibleObservationSource.capture
+        keyboardInput = SafecrackerKeyboardInput(
+            keyboardBridgeProvider: { keyboardImpl.bridge() }
         )
-        await brains.startActionTestRuntime()
+        try await restartRuntime()
         try await seedOffViewportTextInputTarget(fixture)
 
         XCTAssertEqual(fixture.scrollView.contentOffset, .zero)
@@ -135,11 +130,13 @@ extension ElementInflationProductTests {
         await invalidation.wait()
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "semantic type_text failed")
-        XCTAssertEqual(result.settled, true)
         guard result.outcome.isSuccess else { return }
         XCTAssertEqual(result.method, .typeText)
         XCTAssertEqual(result.subjectEvidence?.source, .textInputTarget)
-        XCTAssertEqual(result.subjectEvidence?.element.identifier, fixture.knownHeistId.rawValue)
+        XCTAssertEqual(
+            result.subjectEvidence?.element.semantics.assertable.identifier,
+            fixture.knownHeistId.rawValue
+        )
         XCTAssertEqual(fixture.target.text, "leave at desk")
         XCTAssertTrue(fixture.target.isFirstResponder)
         XCTAssertTrue(fixture.scrollView.didReceiveRevealRequest)
@@ -155,6 +152,9 @@ extension ElementInflationProductTests {
             label: "Customer Name"
         )
         defer { fixture.cleanup() }
+        let visible = try XCTUnwrap(brains.vault.refreshLiveCapture())
+        _ = await brains.vault.semanticObservationStream
+            .commitVisibleObservationForTesting(visible)
 
         XCTAssertEqual(fixture.scrollView.contentOffset, .zero)
         XCTAssertFalse(fixture.target.isFirstResponder)
@@ -166,7 +166,10 @@ extension ElementInflationProductTests {
         )
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "visible text field activate failed")
-        XCTAssertEqual(result.subjectEvidence?.element.identifier, fixture.knownHeistId.rawValue)
+        XCTAssertEqual(
+            result.subjectEvidence?.element.semantics.assertable.identifier,
+            fixture.knownHeistId.rawValue
+        )
         XCTAssertEqual(
             result.subjectEvidence?.resolution,
             ActionSubjectResolution(origin: .visible)
@@ -183,7 +186,6 @@ extension ElementInflationProductTests {
             identifier: "nested_scroll_checkout_submit",
             label: "Confirm Nested Payment"
         )
-        defer { fixture.cleanup() }
         try await seedKnownNestedScrollTarget(fixture)
         var revealOrder: [ObjectIdentifier] = []
         fixture.outerScrollView.onFirstRevealRequest = {
@@ -208,7 +210,10 @@ extension ElementInflationProductTests {
         )
         guard result.outcome.isSuccess else { return }
         XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(result.subjectEvidence?.element.identifier, fixture.knownHeistId.rawValue)
+        XCTAssertEqual(
+            result.subjectEvidence?.element.semantics.assertable.identifier,
+            fixture.knownHeistId.rawValue
+        )
         XCTAssertEqual(fixture.target.activationCount, 1)
         XCTAssertEqual(revealOrder, [
             ObjectIdentifier(fixture.outerScrollView),
@@ -223,9 +228,7 @@ extension ElementInflationProductTests {
             identifier: "nested_scroll_with_decoy_submit",
             label: "Confirm Decoy Payment"
         )
-        defer { fixture.cleanup() }
         let decoy = try installScrollDecoyWindow(contentSize: fixture.innerScrollView.contentSize)
-        defer { decoy.cleanup() }
         try await seedKnownNestedScrollTarget(fixture, decoy: .separate(decoy.scrollView))
         XCTAssertTrue(brains.vault.scrollableContainerViewsByPath.values.contains { $0 === decoy.scrollView })
         let decoyRevealCount = decoy.scrollView.revealRequestCount
@@ -255,9 +258,7 @@ extension ElementInflationProductTests {
             identifier: "nested_scroll_duplicate_outer_path_submit",
             label: "Confirm Duplicate Path Payment"
         )
-        defer { fixture.cleanup() }
         let decoy = try installScrollDecoyWindow(contentSize: fixture.innerScrollView.contentSize)
-        defer { decoy.cleanup() }
         try await seedKnownNestedScrollTarget(
             fixture,
             decoy: .duplicateOuterReferenceAtDecoyPath(decoy.scrollView)
@@ -278,7 +279,10 @@ extension ElementInflationProductTests {
             nestedScrollFailureDescription(result, fixture: fixture)
         )
         guard result.outcome.isSuccess else { return }
-        XCTAssertEqual(result.subjectEvidence?.element.identifier, fixture.knownHeistId.rawValue)
+        XCTAssertEqual(
+            result.subjectEvidence?.element.semantics.assertable.identifier,
+            fixture.knownHeistId.rawValue
+        )
         XCTAssertEqual(fixture.target.activationCount, 1)
         XCTAssertTrue(fixture.outerScrollView.didReceiveRevealRequest)
         XCTAssertTrue(fixture.innerScrollView.didReceiveRevealRequest)
@@ -306,7 +310,6 @@ extension ElementInflationProductTests {
         identifier: String,
         label: String
     ) throws -> TextInputRevealFixture {
-        let windowScene = try requireForegroundWindowScene()
         let viewController = UIViewController()
         viewController.view.backgroundColor = .white
         viewController.view.accessibilityViewIsModal = true
@@ -335,15 +338,10 @@ extension ElementInflationProductTests {
         scrollView.updateAccessibilityVisibility()
         viewController.view.addSubview(scrollView)
 
-        let window = UIWindow(windowScene: windowScene)
-        window.frame = UIScreen.main.bounds
-        window.windowLevel = .alert + 80
-        window.rootViewController = viewController
-        window.isHidden = false
-        window.layoutIfNeeded()
+        present(viewController, above: true)
 
         return TextInputRevealFixture(
-            window: window,
+            viewController: viewController,
             scrollView: scrollView,
             target: target,
             identifier: identifier,
@@ -357,7 +355,6 @@ extension ElementInflationProductTests {
         identifier: String,
         label: String
     ) throws -> TextInputRevealFixture {
-        let windowScene = try requireForegroundWindowScene()
         let viewController = UIViewController()
         viewController.view.backgroundColor = .white
         viewController.view.accessibilityViewIsModal = true
@@ -378,15 +375,10 @@ extension ElementInflationProductTests {
 
         viewController.view.addSubview(scrollView)
 
-        let window = UIWindow(windowScene: windowScene)
-        window.frame = UIScreen.main.bounds
-        window.windowLevel = .alert + 80
-        window.rootViewController = viewController
-        window.isHidden = false
-        window.layoutIfNeeded()
+        present(viewController, above: true)
 
         return TextInputRevealFixture(
-            window: window,
+            viewController: viewController,
             scrollView: scrollView,
             target: target,
             identifier: identifier,
@@ -400,7 +392,6 @@ extension ElementInflationProductTests {
         identifier: String,
         label: String
     ) throws -> NestedScrollRevealFixture {
-        let windowScene = try requireForegroundWindowScene()
         let viewController = UIViewController()
         viewController.view.backgroundColor = .white
         viewController.view.accessibilityViewIsModal = true
@@ -442,15 +433,10 @@ extension ElementInflationProductTests {
         outerScrollView.updateAccessibilityVisibility()
         viewController.view.addSubview(outerScrollView)
 
-        let window = UIWindow(windowScene: windowScene)
-        window.frame = UIScreen.main.bounds
-        window.windowLevel = .alert + 80
-        window.rootViewController = viewController
-        window.isHidden = false
-        window.layoutIfNeeded()
+        present(viewController, above: true)
 
         return NestedScrollRevealFixture(
-            window: window,
+            viewController: viewController,
             outerScrollView: outerScrollView,
             innerScrollView: innerScrollView,
             target: target,
@@ -463,7 +449,6 @@ extension ElementInflationProductTests {
     }
 
     private func installScrollDecoyWindow(contentSize: CGSize) throws -> ScrollDecoyFixture {
-        let windowScene = try requireForegroundWindowScene()
         let viewController = UIViewController()
         viewController.view.backgroundColor = .clear
 
@@ -478,13 +463,8 @@ extension ElementInflationProductTests {
         scrollView.addSubview(anchor)
         viewController.view.addSubview(scrollView)
 
-        let window = UIWindow(windowScene: windowScene)
-        window.frame = UIScreen.main.bounds
-        window.windowLevel = .alert + 90
-        window.rootViewController = viewController
-        window.isHidden = false
-        window.layoutIfNeeded()
-        return ScrollDecoyFixture(window: window, scrollView: scrollView)
+        present(viewController, above: true)
+        return ScrollDecoyFixture(viewController: viewController, scrollView: scrollView)
     }
 
     private func seedOffViewportTextInputTarget(
@@ -504,7 +484,7 @@ extension ElementInflationProductTests {
                 size: fixture.target.bounds.size
             )
         )
-        let observedActivationPoint = try observedContentActivationPoint(
+        let viewSpace = try viewSpace(
             origin: fixture.frameOrigin,
             size: fixture.target.bounds.size,
             ownerPath: scrollContainerPath
@@ -512,7 +492,7 @@ extension ElementInflationProductTests {
         let entry = InterfaceTree.Element(
             heistId: fixture.knownHeistId,
             scrollMembership: InterfaceTree.ScrollMembership(containerPath: scrollContainerPath, index: nil),
-            observedScrollContentActivationPoint: observedActivationPoint,
+            geometry: HeistElement.Geometry(screen: .offscreen, view: viewSpace),
             element: element
         )
         var elements = screen.tree.elements
@@ -529,6 +509,7 @@ extension ElementInflationProductTests {
         _ fixture: NestedScrollRevealFixture,
         decoy: NestedScrollDecoy = .absent
     ) async throws {
+        await brains.tripwire.yieldFrames(2)
         let screen = try XCTUnwrap(brains.vault.refreshLiveCapture())
         let outerContainerPath = try XCTUnwrap(
             liveScrollableContainerPath(for: fixture.outerScrollView, in: screen),
@@ -558,12 +539,7 @@ extension ElementInflationProductTests {
         if let capturedName = capturedInnerContainer?.containerName {
             innerContainerName = capturedName
         } else {
-            innerContainerName = TheVault.containerName(
-                for: innerContainer,
-                contentFrame: try ContentRect(
-                    validating: CGRect(origin: .zero, size: fixture.innerScrollView.frame.size)
-                )
-            )
+            innerContainerName = TheVault.containerName(for: innerContainer)
         }
         let element = makeElement(
             label: fixture.label,
@@ -573,7 +549,7 @@ extension ElementInflationProductTests {
                 size: fixture.target.bounds.size
             )
         )
-        let observedTargetActivationPoint = try observedContentActivationPoint(
+        let targetViewSpace = try viewSpace(
             origin: fixture.targetFrameOrigin,
             size: fixture.target.bounds.size,
             ownerPath: innerContainerPath
@@ -581,15 +557,15 @@ extension ElementInflationProductTests {
         let entry = InterfaceTree.Element(
             heistId: fixture.knownHeistId,
             scrollMembership: InterfaceTree.ScrollMembership(containerPath: innerContainerPath, index: nil),
-            observedScrollContentActivationPoint: observedTargetActivationPoint,
+            geometry: HeistElement.Geometry(screen: .offscreen, view: targetViewSpace),
             element: element
         )
         var elements = screen.tree.elements
         elements[entry.heistId] = entry
 
         var containers = screen.tree.containers
-        let observedContainerActivationPoint = try capturedInnerContainer?.observedScrollContentActivationPoint
-            ?? observedContentActivationPoint(
+        let containerViewSpace = try capturedInnerContainer?.viewSpace
+            ?? viewSpace(
             origin: fixture.innerFrameOrigin,
             size: fixture.innerScrollView.frame.size,
             ownerPath: outerContainerPath
@@ -598,10 +574,10 @@ extension ElementInflationProductTests {
             container: innerContainer,
             path: innerContainerPath,
             containerName: innerContainerName,
-            contentFrame: CGRect(origin: .zero, size: fixture.innerScrollView.frame.size),
+            viewSpace: containerViewSpace,
             scrollMembership: capturedInnerContainer?.scrollMembership
                 ?? InterfaceTree.ScrollMembership(containerPath: outerContainerPath, index: nil),
-            observedScrollContentActivationPoint: observedContainerActivationPoint
+            scrollInventory: capturedInnerContainer?.scrollInventory
         )
 
         let liveCapture: LiveCapture
@@ -621,10 +597,11 @@ extension ElementInflationProductTests {
             )
         }
 
-        await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
-            tree: InterfaceTree(elements: elements, containers: containers),
-            liveCapture: liveCapture
-        ))
+        await brains.vault.semanticObservationStream
+            .commitDiscoveryObservationForTesting(InterfaceObservation.makeForTests(
+                tree: InterfaceTree(elements: elements, containers: containers),
+                liveCapture: liveCapture
+            ))
         visibleObservationSource.useLiveCapture()
     }
     private func nestedInnerScrollContainerPath(
@@ -643,7 +620,7 @@ extension ElementInflationProductTests {
 }
 
 private struct TextInputRevealFixture {
-    let window: UIWindow
+    let viewController: UIViewController
     let scrollView: RevealingScrollView
     let target: UITextField
     let identifier: String
@@ -651,17 +628,18 @@ private struct TextInputRevealFixture {
     let knownHeistId: HeistId
     let frameOrigin: CGPoint
 
+    /// Gives the keyboard back before the test ends.
+    ///
+    /// Focus is the app's, not the window's, so closing the window is not what
+    /// releases it.
     @MainActor
     func cleanup() {
         _ = target.resignFirstResponder()
-        window.rootViewController?.view.accessibilityViewIsModal = false
-        window.isHidden = true
-        window.rootViewController = nil
     }
 }
 
 private struct NestedScrollRevealFixture {
-    let window: UIWindow
+    let viewController: UIViewController
     let outerScrollView: RevealingScrollView
     let innerScrollView: RevealingScrollView
     let target: SemanticActivationView
@@ -670,13 +648,6 @@ private struct NestedScrollRevealFixture {
     let knownHeistId: HeistId
     let innerFrameOrigin: CGPoint
     let targetFrameOrigin: CGPoint
-
-    @MainActor
-    func cleanup() {
-        window.rootViewController?.view.accessibilityViewIsModal = false
-        window.isHidden = true
-        window.rootViewController = nil
-    }
 }
 
 private enum NestedScrollDecoy {
@@ -686,14 +657,8 @@ private enum NestedScrollDecoy {
 }
 
 private struct ScrollDecoyFixture {
-    let window: UIWindow
+    let viewController: UIViewController
     let scrollView: RevealingScrollView
-
-    @MainActor
-    func cleanup() {
-        window.isHidden = true
-        window.rootViewController = nil
-    }
 }
 private final class RefusingActivationTextField: UITextField {
     private(set) var resignationCount = 0

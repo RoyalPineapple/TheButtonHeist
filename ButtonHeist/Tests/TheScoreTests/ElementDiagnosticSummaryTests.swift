@@ -1,3 +1,4 @@
+import ButtonHeistTestSupport
 import XCTest
 import ThePlans
 @testable import TheScore
@@ -76,7 +77,7 @@ final class ElementDiagnosticSummaryTests: XCTestCase {
     }
 
     func testFailureInterfaceProfilePreservesDumpShape() {
-        let element = HeistElement(
+        let element = makeTestHeistElement(
             description: "Title",
             label: "Title",
             value: "Ready",

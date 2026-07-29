@@ -163,12 +163,12 @@ struct HeistSwiftCompilerTests {
 
     @Test
     func `compiler plan JSON maps typed version admission failure`() {
-        let data = Data(#"{"version":3,"body":[{"type":"warn","warn":{"message":"future"}}]}"#.utf8)
+        let data = Data(#"{"version":4,"body":[{"type":"warn","warn":{"message":"future"}}]}"#.utf8)
         let sourceURL = URL(fileURLWithPath: "/tmp/future-plan.swift")
 
         #expect(throws: HeistPlanJSONCodecError.unsupportedVersion(
             source: sourceURL.path,
-            observed: 3
+            observed: 4
         )) {
             _ = try HeistPlanJSONCodec.decodeValidatedPlan(data, sourceURL: sourceURL)
         }
@@ -302,7 +302,7 @@ struct HeistSwiftCompilerTests {
             func heist() throws -> HeistPlan {
                 try HeistPlan("TrustedFrontend") {
                     Activate(.label(payLabel()))
-                        .expect(.changed(.screen()))
+                        .expect(.screenChanged)
                 }
             }
             """
@@ -314,7 +314,7 @@ struct HeistSwiftCompilerTests {
         #expect(plan.body == [
             .action(ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 1)))),
+                expectationPolicy: .expect(ActionExpectation(predicate: .screenChanged, timeout: 1)))),
         ])
     }
 
@@ -356,7 +356,7 @@ struct HeistSwiftCompilerTests {
             #expect(error.diagnostics.allSatisfy { $0.path == "activate" })
             #expect(error.diagnostics.contains {
                 $0.message.contains("unsupported expectation composition")
-                    && $0.hint == "Use one canonical predicate per expectation, or add current-tree assertions inside .changed(.screen(...))."
+                    && $0.hint == "Use one predicate per expectation, or follow the action with a WaitFor."
             })
             #expect(error.diagnostics.contains {
                 $0.message.contains("multiple explicit expectation timeouts")
@@ -467,13 +467,10 @@ struct HeistSwiftCompilerTests {
                 try HeistPlan("PredicateComposition") {
                     WaitFor(.exists(.label("Receipt")))
                     WaitFor(.missing(.label("Loading")))
-                    WaitFor(.changed(.screen([
-                        .exists(.label("Receipt")),
-                        .missing(.label("Loading")),
-                    ])))
-                    WaitFor(.changed(.elements([
+                    WaitFor(.screenChanged("Receipt"))
+                    WaitFor(.elementsChanged([
                         .updated(.identifier("count"), .value("3")),
-                    ])))
+                    ]))
                 }
             }
             """

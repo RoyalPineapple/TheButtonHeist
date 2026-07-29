@@ -23,7 +23,7 @@ import TheScore
     @Test func `step encoding owns semantics and completion in one node`() throws {
         let object = try jsonObject(HeistResultFixture.warning(message: "notice"))
 
-        #expect(Set(object.keys) == ["path", "durationMs", "node"])
+        #expect(Set(object.keys) == ["path", "node"])
         let node = try #require(object["node"] as? [String: Any])
         #expect(node["type"] as? String == "warning")
         #expect(node["outcome"] as? String == "passed")
@@ -33,11 +33,11 @@ import TheScore
 
     @Test func `decode rejects unknown missing and incompatible node fields`() {
         let malformed = [
-            #"{"path":"$.body[0]","durationMs":1,"node":{"type":"warning","outcome":"passed","message":"notice","children":[],"extra":true}}"#,
-            #"{"path":"$.body[0]","durationMs":1,"node":{"type":"warning","outcome":"passed","children":[]}}"#,
-            #"{"path":"$.body[0]","durationMs":1,"node":{"type":"warning","outcome":"failed","message":"notice","failure":{"category":"explicitFailure","#
+            #"{"path":"$.body[0]","node":{"type":"warning","outcome":"passed","message":"notice","children":[],"extra":true}}"#,
+            #"{"path":"$.body[0]","node":{"type":"warning","outcome":"passed","children":[]}}"#,
+            #"{"path":"$.body[0]","node":{"type":"warning","outcome":"failed","message":"notice","failure":{"category":"explicitFailure","#
                 + #"contract":"x","observed":"y"},"children":[]}}"#,
-            #"{"path":"$.body[0]","durationMs":1,"node":{"type":"unknown","outcome":"passed","children":[]}}"#,
+            #"{"path":"$.body[0]","node":{"type":"unknown","outcome":"passed","children":[]}}"#,
         ]
 
         for result in malformed {
@@ -47,16 +47,12 @@ import TheScore
         }
     }
 
-    @Test func `decode rejects negative result and step durations`() {
-        let malformed = [
-            #"{"steps":[],"durationMs":-1}"#,
-            #"{"steps":[{"path":"$.body[0]","durationMs":-1,"node":{"type":"warning","outcome":"passed","message":"notice","children":[]}}],"durationMs":1}"#,
-        ]
-
-        for result in malformed {
-            #expect(throws: DecodingError.self) {
-                _ = try JSONDecoder().decode(HeistResult.self, from: Data(result.utf8))
-            }
+    @Test func `decode rejects negative result duration`() {
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(
+                HeistResult.self,
+                from: Data(#"{"steps":[],"durationMs":-1}"#.utf8)
+            )
         }
     }
 
@@ -152,7 +148,6 @@ import TheScore
             HeistResultFixture.action(command: .dismiss, result: .success(payload: .dismiss)),
             HeistExecutionStepResult.forEachString(
                 path: "$.body[1]",
-                durationMs: 1,
                 declaration: stringDeclaration,
                 completion: .passed(evidence: passedStringSummary)
             ),
@@ -167,25 +162,21 @@ import TheScore
             ),
             HeistExecutionStepResult.forEachElement(
                 path: "$.body[3]",
-                durationMs: 1,
                 declaration: elementDeclaration,
                 completion: .passed(evidence: passedElementSummary)
             ),
             HeistExecutionStepResult.forEachElementIteration(
                 path: "$.body[4].for_each_element.iterations[0]",
-                durationMs: 1,
                 declaration: elementDeclaration,
                 completion: .passed(evidence: passedElementIteration)
             ),
             HeistExecutionStepResult.repeatUntil(
                 path: "$.body[5]",
-                durationMs: 1,
                 declaration: repeatDeclaration,
                 completion: .passed(evidence: passedRepeatSummary)
             ),
             HeistExecutionStepResult.repeatUntilIteration(
                 path: "$.body[6].repeat_until.iterations[0]",
-                durationMs: 1,
                 declaration: repeatDeclaration,
                 completion: .passed(evidence: passedRepeatIteration)
             ),

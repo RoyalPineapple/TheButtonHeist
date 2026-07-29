@@ -10,8 +10,7 @@ import AccessibilitySnapshotParser
 /// Main-actor owner of Button Heist's current accessibility interface.
 ///
 /// The interface tree is the only target-resolution authority. The latest
-/// observation carries disposable UIKit evidence for actionability, while a
-/// failed observation may be retained only for diagnostics.
+/// observation carries disposable UIKit evidence for actionability.
 @MainActor
 final class TheVault {
 
@@ -49,10 +48,9 @@ final class TheVault {
     // MARK: - Interface State
 
     var interfaceTree: InterfaceTree {
-        semanticObservationStream.latestDeliveredInterfaceTree
+        semanticObservationStream.stateOwner.interfaceTree
     }
     var latestObservation: InterfaceObservation = .empty
-    var latestFailedSettleDiagnosticEvidence: InterfaceObservation?
 
     var currentLiveCapture: LiveCapture {
         latestObservation.liveCapture
@@ -73,9 +71,14 @@ final class TheVault {
     struct RotorCursor {
         let hostHeistId: HeistId
         let rotorName: RotorName
-        let generation: ScreenGeneration
+        let selectionHistoryIndex: Int
         let selectionHeistId: HeistId
         let textRange: TextRangeReference?
+    }
+
+    struct RotorHistoryAdmission {
+        let historyIndex: Int
+        let invalidatedCursor: RotorCursor?
     }
 
     /// Drop rotor mode. Called when any non-rotor interaction runs.

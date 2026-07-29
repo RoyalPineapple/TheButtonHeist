@@ -7,43 +7,30 @@ import ThePlans
 @_spi(ButtonHeistInternals) @testable import TheScore
 
 @MainActor
-final class ElementInflationProductTests: XCTestCase {
+final class ElementInflationProductTests: ButtonHeistRuntimeTestCase {
 
-    var brains: TheBrains!
     var visibleObservationSource: VisibleObservationSourceFixture!
 
-    override func setUp() async throws {
-        try await super.setUp()
+    /// The keyboard the runtime types through.
+    ///
+    /// A keyboard bound to a live text field cannot exist before the field does,
+    /// so a test that needs one sets it and calls `restartRuntime()`.
+    var keyboardInput = SafecrackerKeyboardInput()
+
+    override func beforeEach() async throws {
         visibleObservationSource = VisibleObservationSourceFixture()
-        brains = TheBrains(
-            tripwire: TheTripwire(),
+    }
+
+    override func makeBrains(tripwire: TheTripwire) throws -> TheBrains {
+        TheBrains(
+            tripwire: tripwire,
+            keyboardInput: keyboardInput,
             visibleObservationSource: visibleObservationSource.capture
         )
-        await brains.startActionTestRuntime()
     }
 
-    override func tearDown() async throws {
-        brains?.stopActionTestRuntime()
-        if let brains {
-            assertRuntimeStopped(brains)
-        }
-        brains = nil
+    override func afterEach() async throws {
         visibleObservationSource = nil
-        try await super.tearDown()
-    }
-
-    func assertRuntimeStopped(
-        _ brains: TheBrains,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) {
-        let observationStream = brains.vault.semanticObservationStream
-        XCTAssertFalse(brains.semanticObservationIsActive, file: file, line: line)
-        XCTAssertFalse(brains.tripwire.isPulseRunning, file: file, line: line)
-        XCTAssertFalse(brains.tripwire.uikitIdleTracker.isInstalled, file: file, line: line)
-        XCTAssertFalse(observationStream.isActive, file: file, line: line)
-        XCTAssertEqual(observationStream.observationWaiterCount, 0, file: file, line: line)
-        XCTAssertEqual(observationStream.activeObservationDemandCount, 0, file: file, line: line)
     }
 
     func installOffscreenActivationFixture(
@@ -51,7 +38,6 @@ final class ElementInflationProductTests: XCTestCase {
         label: String,
         nestedInGroup: Bool = false
     ) throws -> SemanticRevealFixture {
-        let windowScene = try requireForegroundWindowScene()
         let viewController = UIViewController()
         viewController.view.backgroundColor = .white
         viewController.view.accessibilityViewIsModal = true
@@ -92,15 +78,10 @@ final class ElementInflationProductTests: XCTestCase {
         scrollView.updateAccessibilityVisibility()
         viewController.view.addSubview(scrollView)
 
-        let window = UIWindow(windowScene: windowScene)
-        window.frame = UIScreen.main.bounds
-        window.windowLevel = .alert + 80
-        window.rootViewController = viewController
-        window.isHidden = false
-        window.layoutIfNeeded()
+        present(viewController, above: true)
 
         return SemanticRevealFixture(
-            window: window,
+            viewController: viewController,
             scrollView: scrollView,
             target: target,
             identifier: identifier,
@@ -119,6 +100,7 @@ final class ElementInflationProductTests: XCTestCase {
         refreshesFromUIKit: Bool = true
     ) async throws {
         let targetBrains = targetBrains ?? brains!
+        await targetBrains.tripwire.yieldFrames(2)
         let screen = try XCTUnwrap(targetBrains.vault.refreshLiveCapture())
         let identifier = semanticIdentifier ?? fixture.identifier
         let label = semanticLabel ?? fixture.label
@@ -139,7 +121,7 @@ final class ElementInflationProductTests: XCTestCase {
                 size: fixture.target.bounds.size
             )
         )
-        let observedActivationPoint = try observedContentActivationPoint(
+        let viewSpace = try viewSpace(
             origin: fixture.frameOrigin,
             size: fixture.target.bounds.size,
             ownerPath: scrollContainerPath
@@ -147,30 +129,35 @@ final class ElementInflationProductTests: XCTestCase {
         let entry = InterfaceTree.Element(
             heistId: fixture.knownHeistId,
             scrollMembership: InterfaceTree.ScrollMembership(containerPath: scrollContainerPath, index: nil),
-            observedScrollContentActivationPoint: observedActivationPoint,
+            geometry: HeistElement.Geometry(screen: .offscreen, view: viewSpace),
             element: element
         )
         var elements = screen.tree.elements
         elements[entry.heistId] = entry
 
-        await targetBrains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
-            tree: InterfaceTree(elements: elements, containers: screen.tree.containers),
-            liveCapture: screen.liveCapture
-        ))
+        await targetBrains.vault.semanticObservationStream
+            .commitDiscoveryObservationForTesting(InterfaceObservation.makeForTests(
+                tree: InterfaceTree(elements: elements, containers: screen.tree.containers),
+                liveCapture: screen.liveCapture
+            ))
         if refreshesFromUIKit, targetBrains === brains {
             visibleObservationSource.useLiveCapture()
         }
     }
 
-    func observedContentActivationPoint(
+    func viewSpace(
         origin: CGPoint,
         size: CGSize,
         ownerPath: TreePath
-    ) throws -> InterfaceTree.ObservedScrollContentActivationPoint {
-        try XCTUnwrap(InterfaceTree.ObservedScrollContentActivationPoint(CGPoint(
-            x: origin.x + size.width / 2,
-            y: origin.y + size.height / 2
-        ), ownerPath: ownerPath))
+    ) throws -> HeistElement.Geometry.ViewSpace {
+        HeistElement.Geometry.ViewSpace(
+            ownerPath: ownerPath,
+            frame: try ViewRect(validating: CGRect(origin: origin, size: size)),
+            activationPoint: try ViewPoint(validating: CGPoint(
+                x: origin.x + size.width / 2,
+                y: origin.y + size.height / 2
+            ))
+        )
     }
     func firstLiveScrollableContainerPath(in observation: InterfaceObservation) -> TreePath? {
         for item in observation.liveCapture.hierarchy.scrollablePathIndexedContainers {
@@ -222,20 +209,13 @@ final class ElementInflationProductTests: XCTestCase {
 }
 
 struct SemanticRevealFixture {
-    let window: UIWindow
+    let viewController: UIViewController
     let scrollView: RevealingScrollView
     let target: SemanticActivationView
     let identifier: String
     let label: String
     let knownHeistId: HeistId
     let frameOrigin: CGPoint
-
-    @MainActor
-    func cleanup() {
-        window.rootViewController?.view.accessibilityViewIsModal = false
-        window.isHidden = true
-        window.rootViewController = nil
-    }
 }
 final class SemanticActivationView: UIView {
     private(set) var activationCount = 0

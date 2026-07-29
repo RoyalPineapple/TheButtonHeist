@@ -12,8 +12,8 @@ extension TheFence.Command {
         Run one durable ButtonHeist DSL instruction from `step`: one action or one `WaitFor(...)` statement.
 
         Examples:
-        `Activate(.label("Pay")).expect(.changed(.screen()))`
-        `TypeText("milk", into: .label("Search")).expect(.changed(.elements()))`
+        `Activate(.label("Pay")).expect(.screenChanged)`
+        `TypeText("milk", into: .label("Search")).expect(.elementsChanged)`
         `Increment(.label("Quantity"))`
         `Decrement(.label("Quantity"))`
         `CustomAction("Archive", on: .label("Message"))`
@@ -42,9 +42,9 @@ extension TheFence.Command {
         Author plans as ButtonHeist source, not raw JSON IR:
         `HeistPlan("shop") { ... }`
         `HeistDef<String>("Cart.addItem", parameter: "item") { item in ... }`
-        `RunHeist("Cart.addItem", "Milk").expect(.changed(.elements([.appeared(.element(.label("subtotal"), .value(.contains("1 item"))))])))`
+        `RunHeist("Cart.addItem", "Milk").expect(.elementsChanged([.appeared(.element(.label("subtotal"), .value(.contains("1 item"))))]))`
         `If(.label("Pay")) { ... }.else { ... }`
-        `WaitFor(.changed(.screen()), timeout: 10).else { ... }`
+        `WaitFor(.screenChanged, timeout: 10).else { ... }`
         `ForEach("Milk", "Bread") { item in ... }`
         `ForEach(.element(.label(.prefix("Delete")), .traits([.button])), limit: 20) { target in ... }`
         `Warn("message")`

@@ -27,6 +27,14 @@ final class InterfaceTreeTests: XCTestCase {
             scrollMembership: scrollContainerPath.map {
                 InterfaceTree.ScrollMembership(containerPath: $0, index: scrollIndex)
             },
+            geometry: HeistElement.Geometry(
+                screen: .offscreen,
+                view: .init(
+                    ownerPath: scrollContainerPath ?? .root,
+                    frame: nil,
+                    activationPoint: nil
+                )
+            ),
             element: makeElement(label: label ?? heistId.description)
         )
     }
@@ -80,6 +88,22 @@ final class InterfaceTreeTests: XCTestCase {
         XCTAssertEqual(screen.tree.elementIDs, ["button_visible", "button_known"])
         XCTAssertEqual(screen.liveCapture.heistIds, ["button_visible"])
         XCTAssertEqual(screen.tree.findElement(heistId: "button_known")?.element.label, "Known")
+        XCTAssertEqual(
+            screen.tree.findElement(heistId: "button_known")?.geometry,
+            testGeometry(
+                for: offViewport,
+                ownerPath: TreePath([0]),
+                screen: .offscreen
+            )
+        )
+        XCTAssertEqual(
+            screen.tree.findElement(heistId: "button_visible")?.geometry,
+            testGeometry(
+                for: visible,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: visible)
+            )
+        )
         XCTAssertFalse(screen.liveCapture.contains(heistId: "button_known"))
     }
 
@@ -106,11 +130,21 @@ final class InterfaceTreeTests: XCTestCase {
                 "old": InterfaceTree.Element(
                     heistId: "old",
                     scrollMembership: nil,
+                    geometry: testGeometry(
+                        for: removed,
+                        ownerPath: .root,
+                        screen: TheVault.onscreenSpace(for: removed)
+                    ),
                     element: removed
                 ),
                 "kept": InterfaceTree.Element(
                     heistId: "kept",
                     scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([1]), index: nil),
+                    geometry: testGeometry(
+                        for: kept,
+                        ownerPath: TreePath([1]),
+                        screen: TheVault.onscreenSpace(for: kept)
+                    ),
                     element: kept
                 ),
             ],
@@ -145,12 +179,20 @@ final class InterfaceTreeTests: XCTestCase {
         XCTAssertEqual(pruned.tree.containers[TreePath([0])]?.containerName, "feed")
         XCTAssertNil(pruned.tree.containers[TreePath([1])])
         XCTAssertEqual(pruned.tree.elements["kept"]?.scrollMembership?.containerPath, TreePath([0]))
+        XCTAssertEqual(pruned.tree.elements["kept"]?.geometry.view.ownerPath, TreePath([0]))
+        XCTAssertEqual(
+            pruned.tree.elements["kept"]?.geometry.screen,
+            TheVault.onscreenSpace(for: kept)
+        )
         XCTAssertEqual(pruned.liveCapture.firstResponderHeistId, "kept")
         XCTAssertTrue(pruned.liveCapture.object(for: "kept") === keptObject)
         XCTAssertTrue(pruned.liveCapture.containerObject(forPath: TreePath([0])) === containerObject)
         XCTAssertTrue(pruned.liveCapture.scrollView(forContainerPath: TreePath([0])) === scrollView)
         XCTAssertEqual(interface.annotations.containerByPath[TreePath([0])]?.containerName, "feed")
-        XCTAssertNotNil(interface.annotations.elementByPath[TreePath([0, 0])])
+        XCTAssertEqual(
+            interface.annotations.elementByPath[TreePath([0, 0])]?.geometry,
+            pruned.tree.elements["kept"]?.geometry
+        )
         XCTAssertNil(interface.annotations.elementByPath[TreePath([1, 0])])
     }
 

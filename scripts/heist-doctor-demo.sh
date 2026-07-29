@@ -163,25 +163,33 @@ struct DoctorDemoFixture {
         before: Interface,
         after: Interface?
     ) throws -> HeistResult {
-        let trace = after
-            .map { AccessibilityTrace(first: before).appending($0) }
-            ?? AccessibilityTrace(first: before)
-        guard let traceEvidence = AccessibilityTraceEvidence(trace: trace, completeness: .complete) else {
-            throw FixtureError.message("failed to build trace evidence")
-        }
+        let baseline = Observation.Snapshot(
+            interface: before,
+            context: .empty
+        )
+        let current = Observation.Snapshot(
+            interface: after ?? before,
+            context: .empty
+        )
+        let observationEvidence = Observation.Evidence(
+            baseline: baseline,
+            current: current,
+            events: after == nil ? [.noChange] : [.elementsChanged(current)],
+            completeness: .complete
+        )
         let actionResult: ActionResult
         switch outcome {
         case .passed:
             actionResult = .success(
                 payload: .activate,
-                observation: .trace(traceEvidence)
+                observation: .observed(observationEvidence)
             )
         case .failed:
             actionResult = .failure(
                 payload: .activate,
                 failureKind: .elementNotFound,
                 message: "No element matching \(target)",
-                observation: .trace(traceEvidence)
+                observation: .observed(observationEvidence)
             )
         }
         let command = HeistActionCommand.activate(target)
@@ -203,7 +211,6 @@ struct DoctorDemoFixture {
         let fixture = ResultFixture(
             steps: [StepFixture(
                 path: "$.body[0]",
-                durationMs: 1,
                 node: node
             )],
             durationMs: 1
@@ -239,13 +246,24 @@ struct DoctorDemoFixture {
         var elementAnnotations: [InterfaceElementAnnotation] = []
         var containerAnnotations: [InterfaceContainerAnnotation] = []
 
-        func convert(_ node: FixtureNode, path: TreePath) throws -> AccessibilityHierarchy {
+        func convert(
+            _ node: FixtureNode,
+            path: TreePath,
+            ownerPath: TreePath
+        ) throws -> AccessibilityHierarchy {
             switch node {
             case .element(let element):
                 let index = traversalIndex
                 traversalIndex += 1
-                elementAnnotations.append(InterfaceElementAnnotation(path: path, actions: element.actions))
-                return .element(try accessibilityElement(element), traversalIndex: index)
+                elementAnnotations.append(InterfaceElementAnnotation(
+                    path: path,
+                    actions: element.actions,
+                    geometry: try geometry(
+                        for: element.accessibilityElement,
+                        ownerPath: ownerPath
+                    )
+                ))
+                return .element(element.accessibilityElement, traversalIndex: index)
             case .container(let container, let children):
                 containerAnnotations.append(InterfaceContainerAnnotation(path: path, containerName: nil))
                 return .container(
@@ -254,7 +272,7 @@ struct DoctorDemoFixture {
                         guard let childPath = path.appending(validating: offset) else {
                             throw FixtureError.message("invalid child tree path")
                         }
-                        return try convert(child, path: childPath)
+                        return try convert(child, path: childPath, ownerPath: path)
                     }
                 )
             }
@@ -264,7 +282,7 @@ struct DoctorDemoFixture {
             guard let path = TreePath.root.appending(validating: offset) else {
                 throw FixtureError.message("invalid root tree path")
             }
-            return try convert(node, path: path)
+            return try convert(node, path: path, ownerPath: .root)
         }
         return try Interface(
             timestamp: Date(timeIntervalSince1970: 0),
@@ -303,48 +321,58 @@ struct DoctorDemoFixture {
             x: try FiniteCoordinate(validating: frame.midX),
             y: try FiniteCoordinate(validating: frame.midY)
         )
-        return .element(HeistElement(
-            description: "\(label).",
-            label: label,
-            value: value,
-            identifier: nil,
-            traits: traits,
-            frameEvidence: .available(frame),
-            activationPointEvidence: .defaultCenter(activationPoint),
+        return .element(FixtureElement(
+            accessibilityElement: AccessibilityElement(
+                description: "\(label).",
+                label: label,
+                value: value,
+                traits: AccessibilityTraits.fromNames(traits.map(\.rawValue)),
+                identifier: nil,
+                hint: nil,
+                userInputLabels: nil,
+                shape: .frame(AccessibilityRect(
+                    x: frame.x.value,
+                    y: frame.y.value,
+                    width: frame.width.value,
+                    height: frame.height.value
+                )),
+                activationPoint: AccessibilityPoint(
+                    x: activationPoint.x,
+                    y: activationPoint.y
+                ),
+                usesDefaultActivationPoint: true,
+                customActions: [],
+                customContent: [],
+                customRotors: [],
+                accessibilityLanguage: nil,
+                respondsToUserInteraction: !actions.isEmpty
+            ),
             actions: actions
         ))
     }
 
-    private static func accessibilityElement(_ element: HeistElement) throws -> AccessibilityElement {
-        guard let frame = element.screenFrame,
-              let activationPoint = element.activationPointEvidence.point
-        else {
-            throw FixtureError.message("fixture element requires frame and activation-point evidence")
+    private static func geometry(
+        for element: AccessibilityElement,
+        ownerPath: TreePath
+    ) throws -> HeistElement.Geometry {
+        let frameEvidence = ScreenFrameEvidence(element.shape)
+        guard let frame = frameEvidence.rect else {
+            throw FixtureError.message("fixture element requires frame evidence")
         }
-        return AccessibilityElement(
-            description: element.description,
-            label: element.label,
-            value: element.value,
-            traits: AccessibilityTraits.fromNames(element.traits.map(\.rawValue)),
-            identifier: element.identifier,
-            hint: element.hint,
-            userInputLabels: nil,
-            shape: .frame(AccessibilityRect(
-                x: frame.x.value,
-                y: frame.y.value,
-                width: frame.width.value,
-                height: frame.height.value
-            )),
-            activationPoint: AccessibilityPoint(
-                x: activationPoint.x,
-                y: activationPoint.y
+        let activationPoint = ScreenPoint(
+            x: try FiniteCoordinate(validating: element.activationPoint.x),
+            y: try FiniteCoordinate(validating: element.activationPoint.y)
+        )
+        return HeistElement.Geometry(
+            screen: .onscreen(
+                frame: frameEvidence,
+                activationPoint: .defaultCenter(activationPoint)
             ),
-            usesDefaultActivationPoint: true,
-            customActions: [],
-            customContent: [],
-            customRotors: [],
-            accessibilityLanguage: nil,
-            respondsToUserInteraction: element.respondsToUserInteraction
+            view: HeistElement.Geometry.ViewSpace(
+                ownerPath: ownerPath,
+                frame: try ViewRect(validating: frame.cgRect),
+                activationPoint: try ViewPoint(validating: activationPoint.cgPoint)
+            )
         )
     }
 }
@@ -356,7 +384,6 @@ private struct ResultFixture: Encodable {
 
 private struct StepFixture: Encodable {
     let path: String
-    let durationMs: Int
     let node: ActionNodeFixture
 }
 
@@ -378,8 +405,13 @@ private struct ActionNodeFixture: Encodable {
     let children: [StepFixture] = []
 }
 
+private struct FixtureElement {
+    let accessibilityElement: AccessibilityElement
+    let actions: [ElementAction]
+}
+
 private enum FixtureNode {
-    case element(HeistElement)
+    case element(FixtureElement)
     case container(AccessibilityContainer, [FixtureNode])
 }
 

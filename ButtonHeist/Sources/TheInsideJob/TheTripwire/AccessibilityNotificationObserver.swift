@@ -15,7 +15,7 @@ typealias AccessibilityNotificationCallback = @MainActor (
 
 enum AccessibilityNotificationObserverLifecycleState: Equatable {
     case unsubscribed
-    case subscribed(callbackInstalled: Bool)
+    case subscribed(callbackInstalled: Bool, unitTestModeArmed: Bool)
 }
 
 private struct WeakAccessibilityNotificationSubscriber {
@@ -29,6 +29,9 @@ private struct WeakAccessibilityNotificationSubscriber {
 @MainActor
 final class AccessibilityNotificationObserver {
     private struct CallbackInstallation {
+        /// False when the private unit-test-mode SPI was missing: the callback
+        /// is installed but the runtime may never post notifications to it.
+        var unitTestModeArmed = true
         let uninstall: @MainActor () -> Void
     }
 
@@ -46,6 +49,11 @@ final class AccessibilityNotificationObserver {
             case .uninstalled, .installing, .installationUnavailable:
                 return false
             }
+        }
+
+        var unitTestModeArmed: Bool {
+            guard case .installed(_, let installation) = self else { return false }
+            return installation.unitTestModeArmed
         }
     }
 
@@ -74,18 +82,22 @@ final class AccessibilityNotificationObserver {
     var lifecycleState: AccessibilityNotificationObserverLifecycleState {
         reconcileRegistration()
         guard !subscribers.isEmpty else { return .unsubscribed }
-        return .subscribed(callbackInstalled: registrationPhase.isInstalled)
+        return .subscribed(
+            callbackInstalled: registrationPhase.isInstalled,
+            unitTestModeArmed: registrationPhase.unitTestModeArmed
+        )
     }
 
     private convenience init() {
         self.init { callback in
-            if !AccessibilityNotificationPrivateSPI.enableUnitTestModeIfAvailable() {
-                accessibilityNotificationLogger.debug("Private accessibility unit-test mode SPI is unavailable")
+            let armed = AccessibilityNotificationPrivateSPI.enableUnitTestModeIfAvailable()
+            if !armed {
+                accessibilityNotificationLogger.info("Private accessibility unit-test mode SPI is unavailable")
             }
             let callback = try AccessibilityNotificationPrivateSPI.installNotificationCallback(
                 callback
             )
-            return CallbackInstallation {
+            return CallbackInstallation(unitTestModeArmed: armed) {
                 callback.uninstall()
             }
         }
@@ -96,12 +108,14 @@ final class AccessibilityNotificationObserver {
     }
 
     convenience init(
-        installCallbackForTesting: @escaping @MainActor () -> Void,
-        uninstallCallbackForTesting: @escaping @MainActor () -> Void
+        installCallbackForTesting: @escaping @MainActor () throws -> Void,
+        uninstallCallbackForTesting: @escaping @MainActor () -> Void,
+        unitTestModeArmedForTesting: Bool = true
     ) {
         self.init { _ in
-            installCallbackForTesting()
+            try installCallbackForTesting()
             return CallbackInstallation(
+                unitTestModeArmed: unitTestModeArmedForTesting,
                 uninstall: uninstallCallbackForTesting
             )
         }
@@ -115,9 +129,7 @@ final class AccessibilityNotificationObserver {
     ) {
         self.init { callback in
             installCallbackForTesting(callback)
-            return CallbackInstallation(
-                uninstall: uninstallCallbackForTesting
-            )
+            return CallbackInstallation(uninstall: uninstallCallbackForTesting)
         }
     }
 

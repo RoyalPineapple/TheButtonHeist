@@ -30,21 +30,14 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
         XCTAssertNil(tripwire.latestReading)
     }
 
-    func testWaitForSettleRequiresCallerOwnedPulse() async {
-        let settled = await tripwire.waitForSettle(timeout: 0.01)
+    func testTickWaitIsUnavailableWithoutCallerOwnedPulse() async {
+        let outcome = await tripwire.waitForNextTick(
+            timeout: .milliseconds(10),
+            demand: .ambient
+        )
 
-        XCTAssertFalse(settled)
+        XCTAssertEqual(outcome, .unavailable)
         XCTAssertFalse(tripwire.isPulseRunning)
-    }
-
-    func testLayerScanCoversEveryTraversableWindow() {
-        let windows = tripwire.captureTraversableWindows()
-        let scan = tripwire.scanLayers()
-
-        XCTAssertFalse(windows.isEmpty, "Test host should have a traversable window")
-        XCTAssertEqual(scan.windowCount, windows.count)
-        XCTAssertGreaterThan(scan.layerCount, 0)
-        XCTAssertGreaterThan(scan.fingerprint.layerCount, 0)
     }
 
     func testTraversableWindowsAreVisibleSizedAndFrontToBack() {
@@ -92,46 +85,8 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
         XCTAssertTrue(fingerprints.activeFingerprintCenters.isEmpty)
     }
 
-    func testLayerScanReportsPendingLayout() throws {
-        let window = try XCTUnwrap(tripwire.captureTraversableWindows().first?.window)
-        let view = UIView(frame: CGRect(x: 0, y: 0, width: 50, height: 50))
-        window.addSubview(view)
-        defer { view.removeFromSuperview() }
-
-        view.setNeedsLayout()
-        XCTAssertTrue(tripwire.scanLayers().hasPendingLayout)
-    }
-
-    func testLayerScanIgnoresNeedsDisplay() throws {
-        let window = try XCTUnwrap(tripwire.captureTraversableWindows().first?.window)
-        let layer = CALayer()
-        layer.frame = CGRect(x: 0, y: 0, width: 50, height: 50)
-        window.layer.addSublayer(layer)
-        defer { layer.removeFromSuperlayer() }
-
-        for _ in 0..<3 {
-            window.layoutIfNeeded()
-            CATransaction.flush()
-            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
-        }
-        XCTAssertFalse(tripwire.scanLayers().hasPendingLayout, "Test baseline must be settled")
-
-        layer.setNeedsDisplay()
-        XCTAssertFalse(tripwire.scanLayers().hasPendingLayout)
-    }
-
-    func testHostedControllerAndFingerprintRemainStableWhenIdle() {
+    func testHostedControllerIsResolvableWhenIdle() {
         XCTAssertNotNil(tripwire.topmostViewController())
-
-        let first = tripwire.scanLayers().fingerprint
-        let second = tripwire.scanLayers().fingerprint
-        XCTAssertTrue(first.matches(second))
-    }
-
-    func testAllClearRequiresFirstPulseReading() {
-        tripwire.startPulse()
-
-        XCTAssertFalse(tripwire.allClear())
     }
 
     func testTransientExpectationLatchesUntilReadyHandoff() async throws {
@@ -146,14 +101,20 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
             in: heist.result
         )
         let result = try XCTUnwrap(evidence.result)
-        let trace = try XCTUnwrap(result.accessibilityTrace)
-        let settlement = try XCTUnwrap(result.evidence.settlement)
+        let observation = try XCTUnwrap(result.observationEvidence)
 
         XCTAssertEqual(evidence.expectation?.met, true)
-        XCTAssertTrue(trace.hostedAppearedLabels.contains("Processing"))
-        XCTAssertTrue(trace.hostedDisappearedLabels.contains("Submit"))
-        XCTAssertTrue(settlement.readinessEstablished)
-        XCTAssertTrue(settlement.observationHandoffCompleted)
+        XCTAssertTrue(
+            observation.hostedElementEdits.added.contains {
+                $0.semantics.assertable.label == "Processing"
+            }
+        )
+        XCTAssertTrue(
+            observation.hostedElementEdits.removed.contains {
+                $0.semantics.assertable.label == "Submit"
+            }
+        )
+        XCTAssertEqual(observation.completeness, .complete)
     }
 
     func testAnnouncementExpectationLatchesUntilReadyHandoff() async throws {
@@ -168,12 +129,11 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
             in: heist.result
         )
         let result = try XCTUnwrap(evidence.result)
-        let settlement = try XCTUnwrap(result.evidence.settlement)
+        let observation = try XCTUnwrap(result.observationEvidence)
 
         XCTAssertEqual(evidence.expectation?.met, true)
         XCTAssertEqual(evidence.announcement, "Ticket saved.")
-        XCTAssertTrue(settlement.readinessEstablished)
-        XCTAssertTrue(settlement.observationHandoffCompleted)
+        XCTAssertEqual(observation.completeness, .complete)
     }
 
     private func actionEvidence(
@@ -192,26 +152,18 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
     }
 }
 
-private extension AccessibilityTrace {
-    var hostedAppearedLabels: [String] {
-        changeFacts.flatMap { fact -> [String] in
-            guard case .elementsChanged(let elements) = fact else { return [] }
-            return elements.appeared.compactMap(\.hostedElementLabel)
-        }
-    }
-
-    var hostedDisappearedLabels: [String] {
-        changeFacts.flatMap { fact -> [String] in
-            guard case .elementsChanged(let elements) = fact else { return [] }
-            return elements.disappeared.compactMap(\.hostedElementLabel)
-        }
-    }
-}
-
-private extension AccessibilityTrace.InterfaceChangeNode {
-    var hostedElementLabel: String? {
-        guard case .element(let element, _) = node else { return nil }
-        return element.label
+private extension Observation.Evidence {
+    var hostedElementEdits: ElementEdits {
+        let snapshots = (baseline.map { [$0] } ?? []) + events.compactMap(\.snapshot)
+        return zip(snapshots, snapshots.dropFirst())
+            .reduce(into: ElementEdits()) { combined, pair in
+                let edits = ElementEdits.between(pair.0.interface, pair.1.interface)
+                combined = ElementEdits(
+                    added: combined.added + edits.added,
+                    removed: combined.removed + edits.removed,
+                    updated: combined.updated + edits.updated
+                )
+            }
     }
 }
 

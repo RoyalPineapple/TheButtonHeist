@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import UIKit
 import XCTest
 import ThePlans
 @testable import AccessibilitySnapshotParser
@@ -8,271 +9,188 @@ import ThePlans
 @MainActor
 extension TheVaultResolutionTests {
 
-    func testSettledSemanticObservationWaiterCompletesOnLaterObservation() async {
-        let first = InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(first)
-        let firstSequence = await bagman.semanticObservationStream.latestCommittedSnapshot()?.sequence
-
-        let waiter = Task {
-            await bagman.semanticObservationStream.settledEvent(scope: .visible, after: firstSequence, timeout: 1)
-        }
-
-        let second = InterfaceObservation.makeForTests(elements: [(element(label: "Second"), "second")])
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(second)
-
-        let observation = await waiter.value
-        XCTAssertEqual(observation?.sequence, 2)
-        XCTAssertEqual(observation?.snapshot.observation.tree.orderedElements.first?.element.label, "Second")
-    }
-
-    func testUnbaselinedSettledObservationWaiterRequiresNextObservation() async {
-        let first = InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(first)
-
-        let waiter = Task { @MainActor in
-            await bagman.semanticObservationStream.settledEvent(scope: .visible, after: nil, timeout: 1)
-        }
-
-        for _ in 0..<10 where bagman.semanticObservationStream.observationWaiterCount == 0 {
-            await Task.yield()
-        }
-        XCTAssertEqual(bagman.semanticObservationStream.observationWaiterCount, 1)
-
-        let second = InterfaceObservation.makeForTests(elements: [(element(label: "Second"), "second")])
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(second)
-
-        let observation = await waiter.value
-        XCTAssertEqual(observation?.sequence, 2)
-        XCTAssertEqual(observation?.snapshot.observation.tree.orderedElements.first?.element.label, "Second")
-    }
-
-    func testInvalidatedSettledObservationIsNotReturnedAsAdmittedTruth() async {
-        let first = InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(first)
-
-        let diagnostic = InterfaceObservation.makeForTests(elements: [(element(label: "Timeout"), "timeout")])
-        await bagman.recordFailedSettleDiagnosticEvidence(diagnostic)
-
-        let waiter = Task { @MainActor in
-            await bagman.semanticObservationStream.settledEvent(scope: .visible, after: nil, timeout: 1)
-        }
-
-        for _ in 0..<10 where bagman.semanticObservationStream.observationWaiterCount == 0 {
-            await Task.yield()
-        }
-        XCTAssertEqual(bagman.semanticObservationStream.observationWaiterCount, 1)
-
-        let second = InterfaceObservation.makeForTests(elements: [(element(label: "Second"), "second")])
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(second)
-
-        let observation = await waiter.value
-        XCTAssertEqual(observation?.sequence, 2)
-        XCTAssertEqual(observation?.snapshot.observation.tree.orderedElements.first?.element.label, "Second")
-    }
-
-    func testTargetResolutionAfterTimeoutUsesSettledWorldNotDiagnosticEvidence() async {
-        let settled = InterfaceObservation.makeForTests(elements: [(element(label: "Settled Action"), "settled_action")])
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(settled)
-
-        let diagnostic = InterfaceObservation.makeForTests(elements: [(element(label: "Timeout Action"), "timeout_action")])
-        await bagman.recordFailedSettleDiagnosticEvidence(diagnostic)
-
-        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Settled Action"))).resolvedElement)
-        XCTAssertNil(
-            bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Timeout Action"), ordinal: 0)).resolvedElement
+    func testVisibleWaiterCompletesWithLaterPublication() async {
+        let first = await vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
         )
-        XCTAssertEqual(bagman.interfaceTree.orderedElements.first?.element.label, "Settled Action")
-        XCTAssertEqual(
-            bagman.latestFailedSettleDiagnosticEvidence?.tree.orderedElements.first?.element.label,
-            "Timeout Action"
-        )
-    }
-
-    func testDiscoveryWaiterIgnoresVisibleObservation() async {
-        let first = InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(first)
-        let firstSequence = await bagman.semanticObservationStream.latestCommittedSnapshot()?.sequence
-
         let waiter = Task { @MainActor in
-            await bagman.semanticObservationStream.settledEvent(
-                scope: .discovery,
-                after: firstSequence,
-                timeout: nil
-            )
-        }
-
-        for _ in 0..<10 where bagman.semanticObservationStream.observationWaiterCount == 0 {
-            await Task.yield()
-        }
-        XCTAssertEqual(bagman.semanticObservationStream.observationWaiterCount, 1)
-
-        let visible = InterfaceObservation.makeForTests(elements: [(element(label: "Visible"), "visible")])
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(visible)
-        let visibleSequence = await bagman.semanticObservationStream.latestCommittedSnapshot()?.sequence
-        XCTAssertEqual(visibleSequence, 2)
-        XCTAssertEqual(bagman.semanticObservationStream.observationWaiterCount, 1)
-
-        let discovery = InterfaceObservation.makeForTests(elements: [(element(label: "Discovery"), "discovery")])
-        await bagman.semanticObservationStream.commitDiscoveryObservationForTesting(discovery)
-
-        let observation = await waiter.value
-        XCTAssertEqual(observation?.scope, .discovery)
-        XCTAssertEqual(observation?.sequence, 3)
-        XCTAssertEqual(observation?.snapshot.observation.tree.orderedElements.first?.element.label, "Discovery")
-    }
-
-    func testVisibleWaiterReceivesCanonicalGraphFromDiscoveryObservation() async {
-        let sharedHeader = element(label: "Catalog", traits: .header)
-        let first = InterfaceObservation.makeForTests(elements: [
-            (sharedHeader, "catalog"),
-            (element(label: "First"), "first"),
-        ])
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(first)
-        let firstSequence = await bagman.semanticObservationStream.latestCommittedSnapshot()?.sequence
-
-        let waiter = Task { @MainActor in
-            await bagman.semanticObservationStream.settledEvent(
+            await vault.semanticObservationStream.waitForObservation(
+                after: first.historyRange.upperBound,
                 scope: .visible,
-                after: firstSequence,
-                timeout: nil
+                deadline: nil
             )
         }
+        await waitForObservationWaiterCount(1)
 
-        for _ in 0..<10 where bagman.semanticObservationStream.observationWaiterCount == 0 {
-            await Task.yield()
+        let second = await vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(elements: [(element(label: "Second"), "second")])
+        )
+        let result = await waiter.value
+
+        XCTAssertEqual(result, .observation(second.current))
+        XCTAssertEqual(vault.semanticObservationStream.observationWaiterCount, 0)
+    }
+
+    func testInvalidatedCurrentTruthRequiresLaterPublication() async {
+        let first = await vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
+        )
+        await vault.semanticObservationStream.invalidateCurrentAdmission()
+
+        let admittedObservation = await vault.semanticObservationStream.admittedObservation(
+            scope: .visible,
+            after: nil
+        )
+        XCTAssertNil(admittedObservation)
+        XCTAssertEqual(vault.interfaceTree.findElement(heistId: "first")?.heistId, "first")
+
+        let waiter = Task { @MainActor in
+            await vault.semanticObservationStream.waitForObservation(
+                after: first.historyRange.upperBound,
+                scope: .visible,
+                deadline: nil
+            )
         }
-        XCTAssertEqual(bagman.semanticObservationStream.observationWaiterCount, 1)
+        await waitForObservationWaiterCount(1)
 
-        let visibleDiscovery = element(label: "Visible Discovery")
-        let knownDiscovery = element(label: "Known Discovery")
-        let discovery = InterfaceObservation.makeForTests(
-            elements: [
+        let second = await vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(elements: [(element(label: "Second"), "second")])
+        )
+        let result = await waiter.value
+
+        XCTAssertEqual(result, .observation(second.current))
+    }
+
+    func testDiscoveryWaiterIgnoresVisiblePublication() async {
+        let first = await vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
+        )
+        let waiter = Task { @MainActor in
+            await vault.semanticObservationStream.waitForObservation(
+                after: first.historyRange.upperBound,
+                scope: .discovery,
+                deadline: nil
+            )
+        }
+        await waitForObservationWaiterCount(1)
+
+        _ = await vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(elements: [(element(label: "Visible"), "visible")])
+        )
+        XCTAssertEqual(vault.semanticObservationStream.observationWaiterCount, 1)
+
+        let discovery = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+            InterfaceObservation.makeForTests(elements: [(element(label: "Discovery"), "discovery")])
+        )
+        let result = await waiter.value
+
+        XCTAssertEqual(result, .observation(discovery.current))
+        XCTAssertEqual(discovery.current.scope, .discovery)
+    }
+
+    func testVisibleWaiterReceivesCanonicalGraphFromDiscoveryPublication() async {
+        let sharedHeader = element(label: "Catalog", traits: .header)
+        let first = await vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(elements: [
                 (sharedHeader, "catalog"),
-                (visibleDiscovery, "visible_discovery"),
-            ],
-            offViewport: [
-                InterfaceObservation.OffViewportEntry(
-                    knownDiscovery,
-                    heistId: "known_discovery",
-                    scrollContainerPath: TreePath([0])
-                ),
-            ]
+                (element(label: "First"), "first"),
+            ])
         )
-        await bagman.semanticObservationStream.commitDiscoveryObservationForTesting(discovery)
+        let waiter = Task { @MainActor in
+            await vault.semanticObservationStream.waitForObservation(
+                after: first.historyRange.upperBound,
+                scope: .visible,
+                deadline: nil
+            )
+        }
+        await waitForObservationWaiterCount(1)
 
-        let observation = await waiter.value
-        XCTAssertEqual(observation?.scope, .discovery)
-        XCTAssertEqual(observation?.sequence, 2)
+        let discovery = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+            InterfaceObservation.makeForTests(
+                elements: [
+                    (sharedHeader, "catalog"),
+                    (element(label: "Visible Discovery"), "visible_discovery"),
+                ],
+                offViewport: [
+                    InterfaceObservation.OffViewportEntry(
+                        element(label: "Known Discovery"),
+                        heistId: "known_discovery",
+                        scrollContainerPath: TreePath([0])
+                    ),
+                ]
+            )
+        )
+        let result = await waiter.value
+
+        XCTAssertEqual(result, .observation(discovery.current))
         XCTAssertEqual(
-            observation?.snapshot.observation.tree.orderedElements.compactMap { $0.element.label },
+            discovery.current.snapshot.interface.projectedElements
+                .compactMap(\.semantics.assertable.label),
             ["Catalog", "Visible Discovery", "First", "Known Discovery"]
         )
         XCTAssertEqual(
-            observation?.trace.captures.last?.interface.projectedElements.compactMap { $0.label },
-            ["Catalog", "Visible Discovery", "First", "Known Discovery"]
-        )
-        let committedScope = await bagman.semanticObservationStream.latestCommittedEvent()?.scope
-        XCTAssertEqual(committedScope, .discovery)
-        XCTAssertEqual(
-            bagman.interfaceElementIDs,
+            vault.interfaceElementIDs,
             ["catalog", "first", "known_discovery", "visible_discovery"]
         )
-        XCTAssertEqual(bagman.semanticObservationStream.observationWaiterCount, 0)
+        XCTAssertEqual(vault.semanticObservationStream.observationWaiterCount, 0)
     }
 
-    func testCommittedVisibleEventAfterDiscoveryCarriesCanonicalGraph() async {
+    func testDiscoveryPublicationsRetainOrderedHistoryAndAccumulatedGraph() async {
+        let start = await vault.semanticObservationStream.stateOwner.historyEndIndex()
         let sharedHeader = element(label: "Catalog", traits: .header)
-        let first = InterfaceObservation.makeForTests(elements: [
-            (sharedHeader, "catalog"),
-            (element(label: "First"), "first"),
-        ])
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(first)
-        let firstSequence = await bagman.semanticObservationStream.latestCommittedSnapshot()?.sequence
-
-        let visibleDiscovery = element(label: "Visible Discovery")
-        let knownDiscovery = element(label: "Known Discovery")
-        let discovery = InterfaceObservation.makeForTests(
-            elements: [
-                (sharedHeader, "catalog"),
-                (visibleDiscovery, "visible_discovery"),
-            ],
-            offViewport: [
-                InterfaceObservation.OffViewportEntry(
-                    knownDiscovery,
-                    heistId: "known_discovery",
-                    scrollContainerPath: TreePath([0])
-                ),
-            ]
+        let first = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+            InterfaceObservation.makeForTests(
+                elements: [
+                    (sharedHeader, "catalog"),
+                    (element(label: "First Visible"), "first_visible"),
+                ],
+                offViewport: [
+                    InterfaceObservation.OffViewportEntry(
+                        element(label: "First Known"),
+                        heistId: "first_known",
+                        scrollContainerPath: TreePath([0])
+                    ),
+                ]
+            )
         )
-        await bagman.semanticObservationStream.commitDiscoveryObservationForTesting(discovery)
-
-        let observation = await bagman.semanticObservationStream.settledEvent(
-            scope: .visible,
-            after: firstSequence,
-            timeout: nil
+        let second = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+            InterfaceObservation.makeForTests(
+                elements: [
+                    (sharedHeader, "catalog"),
+                    (element(label: "Second Visible"), "second_visible"),
+                ],
+                offViewport: [
+                    InterfaceObservation.OffViewportEntry(
+                        element(label: "Second Known"),
+                        heistId: "second_known",
+                        scrollContainerPath: TreePath([0])
+                    ),
+                ]
+            )
         )
 
-        XCTAssertEqual(observation?.scope, .discovery)
-        XCTAssertEqual(observation?.sequence, 2)
         XCTAssertEqual(
-            observation?.snapshot.observation.tree.orderedElements.compactMap { $0.element.label },
-            ["Catalog", "Visible Discovery", "First", "Known Discovery"]
-        )
-        XCTAssertEqual(
-            observation?.trace.captures.last?.interface.projectedElements.compactMap { $0.label },
-            ["Catalog", "Visible Discovery", "First", "Known Discovery"]
-        )
-    }
-
-    func testDiscoveryProjectionMaintainsFullTrace() async throws {
-        let sharedHeader = element(label: "Catalog", traits: .header)
-        let firstVisible = element(label: "First Visible")
-        let firstKnown = element(label: "First Known")
-        let first = InterfaceObservation.makeForTests(
-            elements: [
-                (sharedHeader, "catalog"),
-                (firstVisible, "first_visible"),
-            ],
-            offViewport: [
-                InterfaceObservation.OffViewportEntry(
-                    firstKnown,
-                    heistId: "first_known",
-                    scrollContainerPath: TreePath([0])
-                ),
-            ]
-        )
-        let firstEvent = await bagman.semanticObservationStream.commitDiscoveryObservationForTesting(first)
-
-        let secondVisible = element(label: "Second Visible")
-        let secondKnown = element(label: "Second Known")
-        let second = InterfaceObservation.makeForTests(
-            elements: [
-                (sharedHeader, "catalog"),
-                (secondVisible, "second_visible"),
-            ],
-            offViewport: [
-                InterfaceObservation.OffViewportEntry(
-                    secondKnown,
-                    heistId: "second_known",
-                    scrollContainerPath: TreePath([0])
-                ),
-            ]
-        )
-        let event = await bagman.semanticObservationStream.commitDiscoveryObservationForTesting(second)
-
-        XCTAssertEqual(event.scope, .discovery)
-        XCTAssertEqual(event.generation, firstEvent.generation)
-        XCTAssertEqual(event.trace.captures.count, 2)
-        XCTAssertEqual(
-            try XCTUnwrap(event.trace.captures.first).interface.projectedElements.compactMap(\.label).sorted(),
+            first.current.snapshot.interface.projectedElements
+                .compactMap(\.semantics.assertable.label).sorted(),
             ["Catalog", "First Known", "First Visible"]
         )
         XCTAssertEqual(
-            try XCTUnwrap(event.trace.captures.last).interface.projectedElements.compactMap(\.label).sorted(),
+            second.current.snapshot.interface.projectedElements
+                .compactMap(\.semantics.assertable.label).sorted(),
             ["Catalog", "First Known", "First Visible", "Second Known", "Second Visible"]
         )
+        guard case .success(let events) =
+            await vault.semanticObservationStream.stateOwner.events(after: start)
+        else {
+            return XCTFail("Expected retained discovery history")
+        }
+        XCTAssertEqual(events, first.events + second.events)
+        XCTAssertFalse(events.contains { event in
+            if case .screenChanged = event { return true }
+            return false
+        })
         XCTAssertEqual(
-            bagman.interfaceElementIDs,
+            vault.interfaceElementIDs,
             ["catalog", "first_known", "first_visible", "second_known", "second_visible"]
         )
     }
@@ -284,20 +202,34 @@ extension TheVaultResolutionTests {
             frame: CGRect(x: 0, y: 0, width: 100, height: 44)
         )
         let containerPath = TreePath([0])
+        let repeatedGeometry = testGeometry(
+            for: repeated,
+            ownerPath: containerPath,
+            screen: TheVault.onscreenSpace(for: repeated)
+        )
         let scrollContainer = AccessibilityContainer(
-            type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 1_000),
+            type: .none,
+            scrollableContentSize: AccessibilitySize(width: 320, height: 1_000),
             frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 480)
         )
-        await bagman.installObservationForTesting(InterfaceObservation.makeForTests(
+        await vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [
                 "repeat_button_1": InterfaceTree.Element(
                     heistId: "repeat_button_1",
-                    scrollMembership: InterfaceTree.ScrollMembership(containerPath: containerPath, index: 100),
+                    scrollMembership: InterfaceTree.ScrollMembership(
+                        containerPath: containerPath,
+                        index: 100
+                    ),
+                    geometry: repeatedGeometry,
                     element: repeated
                 ),
                 "repeat_button_2": InterfaceTree.Element(
                     heistId: "repeat_button_2",
-                    scrollMembership: InterfaceTree.ScrollMembership(containerPath: containerPath, index: 500),
+                    scrollMembership: InterfaceTree.ScrollMembership(
+                        containerPath: containerPath,
+                        index: 500
+                    ),
+                    geometry: repeatedGeometry,
                     element: repeated
                 ),
             ],
@@ -311,163 +243,159 @@ extension TheVaultResolutionTests {
                 TreePath([0, 0]): "repeat_button_1",
                 TreePath([0, 1]): "repeat_button_2",
             ],
-            firstResponderHeistId: nil,
+            firstResponderHeistId: nil
         ))
 
         XCTAssertEqual(
-            bagman.interfaceTree.findElement(heistId: "repeat_button_1")?.scrollMembership?.index,
+            vault.interfaceTree.findElement(heistId: "repeat_button_1")?.scrollMembership?.index,
             100
         )
         XCTAssertEqual(
-            bagman.interfaceTree.findElement(heistId: "repeat_button_2")?.scrollMembership?.index,
+            vault.interfaceTree.findElement(heistId: "repeat_button_2")?.scrollMembership?.index,
             500
         )
     }
 
-    func testTimeoutZeroTurnsObservationCycleBeforeReturningAdmittedLatest() async {
-        let first = InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
-        await bagman.semanticObservationStream.commitDiscoveryObservationForTesting(first)
-        let firstSequence = await bagman.semanticObservationStream.latestCommittedSnapshot()?.sequence
-
+    func testZeroTimeoutTurnsDiscoveryCycleBeforeReturningCurrentSnapshot() async {
+        _ = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+            InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
+        )
         let second = InterfaceObservation.makeForTests(elements: [(element(label: "Second"), "second")])
         var discoveryCount = 0
-        await bagman.semanticObservationStream.start {
+        await vault.semanticObservationStream.start {
             discoveryCount += 1
-            self.bagman.observeInterface(second)
-            let event = await self.bagman.semanticObservationStream
+            self.vault.observeInterface(second)
+            let publication = await self.vault.semanticObservationStream
                 .commitDiscoveryObservationForTesting(second)
             return Navigation.InterfaceExplorationResult(
-                event: event,
+                current: publication.current,
                 progress: .init(),
                 viewportExit: .restored
             )
         }
 
-        let observation = await bagman.semanticObservationStream.settledEvent(
+        let current = await vault.semanticObservationStream.nextObservation(
             scope: .discovery,
             after: nil,
             timeout: 0
         )
 
         XCTAssertGreaterThanOrEqual(discoveryCount, 1)
-        XCTAssertGreaterThan(observation?.sequence ?? 0, firstSequence ?? 0)
-        XCTAssertEqual(observation?.snapshot.observation.tree.orderedElements.first?.element.label, "Second")
+        XCTAssertEqual(
+            current?.snapshot.interface.projectedElements
+                .compactMap(\.semantics.assertable.label),
+            ["Second"]
+        )
     }
 
-    func testPassiveObservationLeaseDoesNotRunDiscoveryWithoutDiscoveryDemand() async {
-        let discovery = InterfaceObservation.makeForTests(elements: [(element(label: "Discovery"), "discovery")])
+    func testDiscoveryDemandWidensPassiveObservationScopeForOneCycle() async {
+        let discovery = InterfaceObservation.makeForTests(
+            elements: [(element(label: "Discovery"), "discovery")]
+        )
         var discoveryCount = 0
-        await bagman.semanticObservationStream.start {
+        await vault.semanticObservationStream.start {
             discoveryCount += 1
-            self.bagman.observeInterface(discovery)
-            let event = await self.bagman.semanticObservationStream
+            self.vault.observeInterface(discovery)
+            let publication = await self.vault.semanticObservationStream
                 .commitDiscoveryObservationForTesting(discovery)
             return Navigation.InterfaceExplorationResult(
-                event: event,
+                current: publication.current,
                 progress: .init(),
                 viewportExit: .restored
             )
         }
 
-        XCTAssertEqual(bagman.semanticObservationStream.subscribedObservationScope(), .visible)
+        XCTAssertEqual(vault.semanticObservationStream.subscribedObservationScope(), .visible)
         await Task.yield()
-        let discoveryCountBeforeDemand = discoveryCount
-        XCTAssertEqual(discoveryCountBeforeDemand, 0)
+        let countBeforeDemand = discoveryCount
+        XCTAssertEqual(countBeforeDemand, 0)
 
-        let observation = await bagman.semanticObservationStream.settledEvent(
+        let current = await vault.semanticObservationStream.nextObservation(
             scope: .discovery,
             after: nil,
             timeout: 0
         )
 
-        XCTAssertGreaterThanOrEqual(discoveryCount, discoveryCountBeforeDemand + 1)
-        XCTAssertEqual(observation?.scope, .discovery)
-        XCTAssertEqual(observation?.snapshot.observation.tree.orderedElements.first?.element.label, "Discovery")
+        XCTAssertGreaterThanOrEqual(discoveryCount, countBeforeDemand + 1)
+        XCTAssertEqual(current?.scope, .discovery)
+        XCTAssertEqual(
+            current?.snapshot.interface.projectedElements
+                .compactMap(\.semantics.assertable.label),
+            ["Discovery"]
+        )
     }
 
-    func testTimeoutZeroDoesNotInvokeDiscoveryWithoutPassiveObserver() async {
-        let observation = await bagman.semanticObservationStream.settledEvent(
+    func testZeroTimeoutDoesNotRunDiscoveryOnStoppedStream() async {
+        let current = await vault.semanticObservationStream.nextObservation(
             scope: .discovery,
             after: nil,
             timeout: 0
         )
 
-        XCTAssertNil(observation)
+        XCTAssertNil(current)
     }
 
-    func testCancelledSettledObservationWaiterUnregisters() async {
+    func testCancelledVisibleWaiterUnregisters() async {
+        let start = await vault.semanticObservationStream.stateOwner.historyEndIndex()
         let waiter = Task { @MainActor in
-            await bagman.semanticObservationStream.settledEvent(scope: .visible, after: nil, timeout: 10)
+            await vault.semanticObservationStream.waitForObservation(
+                after: start,
+                scope: .visible,
+                deadline: nil
+            )
         }
-
-        for _ in 0..<20 where bagman.semanticObservationStream.observationWaiterCount == 0 {
-            await Task.yield()
-        }
-        XCTAssertEqual(bagman.semanticObservationStream.observationWaiterCount, 1)
+        await waitForObservationWaiterCount(1)
 
         waiter.cancel()
-        for _ in 0..<20 where bagman.semanticObservationStream.observationWaiterCount != 0 {
-            await Task.yield()
-        }
+        let result = await waiter.value
 
-        let observation = await waiter.value
-        XCTAssertNil(observation)
-        XCTAssertEqual(bagman.semanticObservationStream.observationWaiterCount, 0)
-
-        let late = InterfaceObservation.makeForTests(elements: [(element(label: "Late"), "late")])
-        await bagman.semanticObservationStream.commitVisibleObservationForTesting(late)
-        XCTAssertEqual(bagman.semanticObservationStream.observationWaiterCount, 0)
+        XCTAssertEqual(result, .cancelled)
+        XCTAssertEqual(vault.semanticObservationStream.observationWaiterCount, 0)
+        _ = await vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(elements: [(element(label: "Late"), "late")])
+        )
+        XCTAssertEqual(vault.semanticObservationStream.observationWaiterCount, 0)
     }
 
-    func testCancelledDiscoveryObservationWaiterUnregisters() async {
+    func testCancelledDiscoveryWaiterUnregisters() async {
         var discoveryContinuation: CheckedContinuation<Void, Never>?
-        var discoveryObservation: InterfaceObservation?
-        func resumeDiscovery(returning observation: InterfaceObservation?) {
-            discoveryObservation = observation
-            let continuation = discoveryContinuation
-            discoveryContinuation = nil
-            continuation?.resume()
-        }
-
-        await bagman.semanticObservationStream.start {
+        await vault.semanticObservationStream.start {
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
                 discoveryContinuation = continuation
             }
-            let observation = discoveryObservation
-            discoveryObservation = nil
-            guard let observation else { return nil }
-            self.bagman.observeInterface(observation)
-            let event = await self.bagman.semanticObservationStream
-                .commitDiscoveryObservationForTesting(observation)
-            return Navigation.InterfaceExplorationResult(
-                event: event,
-                progress: .init(),
-                viewportExit: .restored
+            return nil
+        }
+        defer {
+            discoveryContinuation?.resume()
+            discoveryContinuation = nil
+        }
+
+        let start = await vault.semanticObservationStream.stateOwner.historyEndIndex()
+        let waiter = Task { @MainActor in
+            await vault.semanticObservationStream.waitForObservation(
+                after: start,
+                scope: .discovery,
+                deadline: nil
             )
         }
-        defer { resumeDiscovery(returning: nil) }
-
-        let waiter = Task { @MainActor in
-            await bagman.semanticObservationStream.settledEvent(scope: .discovery, after: nil, timeout: 0)
-        }
-
-        for _ in 0..<20 where bagman.semanticObservationStream.observationWaiterCount == 0 {
-            await Task.yield()
-        }
-        XCTAssertEqual(bagman.semanticObservationStream.observationWaiterCount, 1)
+        await waitForObservationWaiterCount(1)
 
         waiter.cancel()
-        for _ in 0..<20 where bagman.semanticObservationStream.observationWaiterCount != 0 {
-            await Task.yield()
-        }
-        XCTAssertEqual(bagman.semanticObservationStream.observationWaiterCount, 0)
+        let result = await waiter.value
 
-        resumeDiscovery(returning: InterfaceObservation.makeForTests(elements: [(element(label: "Discovery"), "discovery")]))
-        let observation = await waiter.value
-        XCTAssertNil(observation)
-        XCTAssertEqual(bagman.semanticObservationStream.observationWaiterCount, 0)
+        XCTAssertEqual(result, .cancelled)
+        XCTAssertEqual(vault.semanticObservationStream.observationWaiterCount, 0)
     }
 
+    private func waitForObservationWaiterCount(_ expectedCount: Int) async {
+        for _ in 0..<1_000 {
+            guard vault.semanticObservationStream.observationWaiterCount != expectedCount else {
+                return
+            }
+            await Task.yield()
+        }
+        XCTFail("Timed out waiting for \(expectedCount) observation waiters")
+    }
 }
 
 #endif

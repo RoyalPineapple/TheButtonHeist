@@ -1,3 +1,5 @@
+#if canImport(UIKit)
+#if DEBUG
 import ButtonHeistTestSupport
 import XCTest
 import Network
@@ -592,3 +594,6 @@ private func clientDeliveryCallbacks(counter: ClientDeliveryTestCounter) -> Clie
         }
     )
 }
+
+#endif // DEBUG
+#endif // canImport(UIKit)

@@ -126,7 +126,7 @@ or repaired by loops, validation, or rendering.
 
 TheInsideJob is the iOS framework embedded in the target app. In debug builds
 it auto-starts through the ObjC load hook, reads environment and Info.plist
-configuration, starts a TLS TCP listener, and maintains settle-driven
+configuration, starts a TLS TCP listener, and maintains event-driven
 accessibility captures.
 
 ### Configuration
@@ -166,7 +166,7 @@ Fingerprints are enabled by default and can also be disabled from code with
 ### Lifecycle
 
 `TheInsideJob.shared` owns the listener, Bonjour advertisement when enabled,
-session state, current accessibility state, and settle-driven change detection.
+session state, current accessibility state, and event-driven change detection.
 Manual `configure`, `start`, and `stop` calls are available for explicit
 startup, but normal integrations link the framework and let auto-start do the
 work.
@@ -239,7 +239,7 @@ identifiers and test fixtures, but invisible to every accessibility user. An
 element that can only be found by its identifier is an accessibility finding,
 not a targeting success; the fix is better accessibility, not a better
 identifier. Minimum matcher utilities can derive portable suggestions from
-settled captures without depending on transient handles or coordinates.
+admitted snapshots without depending on transient handles or coordinates.
 
 String selector fields match exact-or-miss: case-insensitive equality after
 typography folding (curly quotes, long dashes, ellipsis, and typographic spaces
@@ -254,63 +254,55 @@ for the full matching contract.
 
 ## Captures, Change Facts, and Public Deltas
 
-`Observation.Store` is the runtime semantic owner. It atomically commits the
-current tree, one retained `Observation.Log`, generation and sequence lineage,
-notification position, and admitted-read state. `Observation.Stream` publishes
-the same committed event afterward; readers can never observe an event whose
-snapshot is not current Store truth.
+`TheVault.State` is the runtime semantic owner. It atomically commits the
+current snapshot and interface tree, appends exact `Observation.Event` values
+to one retained `Observation.History`, and advances notification admission.
+`Observation.Stream` publishes only the events returned by that commit; readers
+cannot receive an event before its snapshot is current Vault truth.
 
-`Observation.Log` is a private `RandomAccessCollection` of snapshot and
-announcement events. `Observation.Moment` pairs one immutable snapshot with its
-private Log index and is passed directly to `events(since:)`. Active settlement
-boundaries protect required entries from pruning; an expired or unavailable
-read is typed incomplete evidence. Callers cannot manipulate indices or retain
-a second temporal window.
+`Observation.History` is the Vault-owned ordered event array. An active heist
+protects the history it may still need, and each action or wait establishes its
+own private baseline and history position when observation begins.
+`Observation.Evidence` is the immutable bounded projection retained by a
+result. Events and snapshots carry no cursors, operation identity, or replay
+state, and callers cannot supply a temporal boundary.
 
-Actions, waits, and heist control flow use one internal `Settlement.Command`
-algebra. `currentState` captures one exact settled snapshot. `observation`
-evaluates a predicate without dispatch. `action` dispatches one resolved action
-with an optional expectation. Timed commands capture or derive a baseline Moment
-and announcement position, arm all event channels, and only then dispatch or
-observe. Invocation and repeat commands derive their temporal baseline from a
-prior `currentState` result; the same executor replays retained events after
-that boundary before continuing with live delivery.
+One internal `HeistExecution.Machine` advances the complete heist. Its returned
+state is either `.pending(.perform(requests))`, `.pending(.wait)`, or
+`.complete(completion)`. The MainActor host performs typed capture, dispatch,
+exploration, and screenshot requests and feeds their typed outcomes back to the
+machine. Actions, waits, invocation expectations, loops, and conditional
+selection are private machine progress rather than separate executors.
 
-Current-state predicates such as `exists` and `missing` must hold in the exact
-post-readiness handoff snapshot returned by settlement. Positive transitions
-such as `appeared`, `disappeared`, and `updated` consume ordered Log events
-strictly after the baseline and latch their first qualifying fact. Announcements
-likewise latch only after the invocation boundary. `noChange` requires complete
-retained history. A standalone `waitFor` creates its own boundaries and cannot
-consume evidence from an earlier action or heist.
+Current predicates such as `exists` and `missing` may match the baseline
+snapshot immediately. Temporal predicates such as `appeared`, `disappeared`,
+and `updated` consume each later history event once in order. Notifications
+likewise match only after the active leaf's boundary. A standalone `waitFor`
+therefore cannot consume evidence from an earlier action or heist.
 
 A screen boundary emits three ordered facts: all old-tree nodes disappear, the
 screen marker occurs, then all new-tree nodes appear. Element updates exist only
 between captures in the same screen generation. A scoped `screenChanged`
-notification is authoritative replacement evidence. `elementChanged` and
-announcement notifications remain typed facts but do not veto replacement
-inference from the settled snapshots. A typed snapshot fallback records its
-reason in the trace.
+notification is authoritative replacement evidence. Element-change
+notifications and normalized notification payloads remain typed facts but do
+not veto replacement inference from parsed snapshots.
 Notifications are best-effort UIKit evidence, not a delivery guarantee; their
 absence does not by itself prove replacement or stability.
 
-Incomplete Log history cannot prove `noChange`. Complete history may span
-multiple events and retains fast intermediate changes until evaluation.
-An action-settlement diagnostic trace is result evidence only and cannot bypass
-the settled observation window.
+Retained history may span multiple events and retains fast intermediate changes
+until evaluation.
 
 On timeout, the runtime retains a bounded set of semantic candidates from the
 observations the wait already evaluated. Exact predicate mismatches are appended
 to the existing timeout failure message and report. This diagnostic reduction
-schedules no additional capture, settlement, reveal, discovery, polling, or
+performs no additional capture, reveal, discovery, polling, or
 predicate work. It has no public opt-in, continuity token, or result field.
 
 Responses may include compact public deltas named `noChange`,
 `elementsChanged`, or `screenChanged`. This `delta` is a one-way temporal fold:
 it stacks the ordered facts, squashes them into endpoint-friendly edits, and
-lets a screen marker dominate the final kind. It may retain bounded transient
-evidence, but it cannot preserve the ordered history it folded, so predicates
-never consume it. The full model
+lets a screen marker dominate the final kind. It cannot preserve the ordered
+history it folded, so predicates never consume it. The full model
 is drawn in the [observation pipeline diagram](diagrams/observation-pipeline.md).
 
 ## Interface Rendering Metadata
@@ -400,7 +392,8 @@ surfaces are projected from the Fence command descriptors.
 - `perform` accepts one durable ButtonHeist DSL instruction.
 - `run_heist` accepts a durable source plan string or generated `.heist`
   package at public boundaries; execution uses the typed `HeistPlan` contract
-  after source/package loading.
+  after source/package loading. Its whole-heist `timeout` is optional and
+  defaults to 60 seconds.
 - Root names, definition paths, and invocation paths enter core logic as
   `HeistPlanName`, `HeistDefinitionPath`, and `HeistInvocationPath`. Literals
   are typed authoring sugar; dynamic JSON, source, and CLI strings are
@@ -502,6 +495,14 @@ Common environment variables:
 
 Flags take precedence over environment variables.
 
+### Notifications
+
+`buttonheist get_notifications` reads the ordered
+`[Observation.Notification]` projection retained in the Vault's canonical
+history. Each notification contains normalized `text`, element `semantics`, or
+both. The response does not expose observer health, raw UIKit notification
+kinds, ingress sequence values, timestamps, or unresolved UIKit objects.
+
 ## Data Model Notes
 
 ### ButtonHeistTesting and XCTest Failures
@@ -509,6 +510,11 @@ Flags take precedence over environment variables.
 Async `runHeist` APIs throw. XCTest-facing synchronous helpers preserve the
 caller's file and line and route every reported failure through the single
 `recordHeistXCTestIssue` path, whose only XCTest emission is `XCTFail`.
+
+Every in-process `Heist` and `runHeist` entry point accepts a typed
+`HeistTimeout`. The default is 60 seconds. Finite positive values have no policy
+maximum. The same value crosses the device wire for CLI and MCP execution; the
+client derives only transport headroom around that app-owned deadline.
 
 ### Interface
 
@@ -529,13 +535,13 @@ message, and outcome-bound evidence. Each payload case determines its action
 method and carries only the command-specific value legal for that method;
 custom `Codable` projects that value directly to the public `method` plus
 an optional `payload` value. There is no separate semantic or wire payload
-wrapper. The app-side settlement path records one `ActionDispatchResult` and
-the predicate, readiness, and handoff evidence in one `Settlement.Result`;
-`Settlement.ResultProjector` derives the public action result without a
-post-action wait or parallel result shape. Failures carry
+wrapper. The pure heist machine records one `ActionDispatchResult` and the
+ordered observation evidence for its active leaf. The result projector derives
+the public action result from that machine-owned truth without a post-action
+wait or parallel result shape. Failures carry
 their typed action failure inside `outcome.failureKind`. Fence result projections
 add an expectation result when requested and derive a public delta from the
-same trace evidence.
+same observation evidence.
 
 Source construction uses `ActionResult.success` and `ActionResult.failure`,
 passing `observation`, `subjectEvidence`, and performance `timing` directly.
@@ -549,16 +555,16 @@ durations carry `ElapsedMilliseconds`; dynamic values enter
 through their throwing validating initializers, while valid literals remain
 concise. `ServerError` likewise accepts `ServerErrorMessage` and an optional
 `ServerErrorRecoveryHint`. These typed values reject empty text and negative
-settlement durations before result construction without changing their JSON
+durations before result construction without changing their JSON
 string and integer shapes.
 
-Successful action settlement may also report the optional typed `path` that
-proved the result: `semanticStability`, `uikitIdle`, or
-`accessibilityQuietWindow`. `timedOut` has no path.
-`observationHandoffTimedOut` identifies the narrower case where readiness was
-proved, but no eligible observation was admitted for that readiness generation
-before the deadline; it retains the readiness path and reports `settled ==
-false`.
+Wait results are not actions and never embed `ActionResult`. Matched wait facts
+carry `Observation.Evidence` and `ExpectationResult.Met`; unmatched wait facts
+carry the same observation evidence and the unmet `ExpectationResult`.
+`HeistWaitCompletion` owns whether the wait passed, failed, or was aborted by
+an else-body child. Passed evidence is the closed `matched` or `handledElse`
+enum, while failed and child-aborted completions carry unmatched facts
+directly.
 
 For `elementsChanged`, public responses include concrete semantic edits under
 `delta.edits.added`, `delta.edits.removed`, and `delta.edits.updated` when
@@ -566,22 +572,31 @@ present. For `screenChanged`, public responses include the destination
 `delta.newInterface`. Agents should inspect those payloads before deciding
 whether the action achieved its intended state or merely observed scroll/loading
 churn. Compact text is progressive: successful heist steps summarize the delta
-kind, while failed steps include concrete evidence lines when trace evidence is
+kind, while failed steps include concrete evidence lines when observation evidence is
 available.
 
 ### Expectations
 
-Expectations use the concrete `AccessibilityPredicate` root and
-`ChangeDeclaration` assertion types. At the root, the valid forms are `exists`,
-`missing`, `changed`, `no_change`, and `announcement`. `changed` has exactly one
-scope and always carries an `assertions` array:
+Expectations use the concrete `AccessibilityPredicate` root with the
+`ScreenPredicate` and `ElementAssertion` types. At the root, the valid forms are
+`exists`, `missing`, `notification`, and `changed`. `notification` carries only
+optional `text` and `element` fields. `changed` requires a `scope`: `screen`
+carries an optional `match`, while `elements` carries an `assertions` array:
 
 ```json
-{"type":"changed","scope":"screen","assertions":[{"type":"exists","target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Receipt"}}]}}]}
+{"type":"notification","text":{"mode":"contains","value":"Payment complete"},"element":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Receipt"}}]}}
 ```
 
-Screen assertions permit only current-tree `exists` and `missing`. Elements
-assertions additionally permit `appeared`, `disappeared`, and `updated`.
+```json
+{"type":"changed","scope":"screen","match":{"mode":"exact","value":"Receipt"}}
+```
+
+```json
+{"type":"changed","scope":"elements","assertions":[{"type":"appeared","target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Receipt"}}]}}]}
+```
+
+Elements assertions permit current-tree `exists` and `missing` plus temporal
+`appeared`, `disappeared`, and `updated`.
 Current-tree predicates use the same `AccessibilityTarget` object as actions and
 subtree queries. Both `WaitFor` and action `.expect` therefore accept element,
 container, or descendant-scoped presence targets. Container presence uses a

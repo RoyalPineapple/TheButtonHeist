@@ -28,7 +28,7 @@ extension Interface {
                 annotations: annotations,
                 diagnostics: diagnostics,
                 screenActions: screenActions,
-                traceIdentities: .empty
+                observationIdentities: .empty
             )
         } catch {
             throw DecodingError.dataCorrupted(.init(

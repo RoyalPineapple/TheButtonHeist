@@ -184,7 +184,7 @@ final class ScreenClassifierTests: XCTestCase {
             classify(
                 before: viewport(header: "Starters", row: "Greek Salad"),
                 after: viewport(header: "Desserts", row: "Crème Brûlée"),
-                lineageEvidence: .viewportMovement
+                lineage: .viewportMovement
             ),
             .sameGeneration
         )
@@ -586,13 +586,13 @@ final class ScreenClassifierTests: XCTestCase {
         before: InterfaceObservation,
         after: InterfaceObservation,
         notifications: [AccessibilityNotificationKind] = [],
-        lineageEvidence: ScreenLineageEvidence? = nil
+        lineage: ScreenLineage = .resting
     ) -> ScreenContinuity {
         ScreenClassifier.classify(
             before: ScreenClassifier.snapshot(of: before.tree),
             after: ScreenClassifier.snapshot(of: after.tree),
             notifications: notifications,
-            lineageEvidence: lineageEvidence
+            lineage: lineage
         )
     }
 
@@ -638,7 +638,13 @@ final class ScreenClassifierTests: XCTestCase {
                     heistId,
                     InterfaceTree.Element(
                         heistId: heistId,
+                        path: item.path,
                         scrollMembership: nil,
+                        geometry: testGeometry(
+                            for: item.element,
+                            ownerPath: .root,
+                            screen: TheVault.onscreenSpace(for: item.element)
+                        ),
                         element: item.element
                     )
                 )

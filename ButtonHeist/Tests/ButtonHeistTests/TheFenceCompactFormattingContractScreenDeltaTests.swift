@@ -12,18 +12,18 @@ extension TheFenceCompactFormattingContractTests {
             makeTestHeistElement(label: "Checkout", identifier: "checkout_title", traits: [.header]),
             makeTestHeistElement(label: "Pay", identifier: "pay_button", traits: [.button], actions: [.activate]),
         ])
-        let trace = makeTestTrace(
+        let evidence = makeObservationEvidence(
             before: makeTestInterface(elements: [makeTestHeistElement(label: "Cart", identifier: "cart_title")]),
             after: destination,
             beforeScreenId: "cart",
             afterScreenId: "checkout",
-            afterTransition: makeTestScreenChangedTransition()
+            screenChanged: true
         )
         let response = FenceResponse.action(
             command: .activate,
             result: ActionResult.success(
                 payload: .activate,
-                observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
+                observation: .observed(evidence)
             )
         )
 
@@ -41,7 +41,7 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertTrue(human.contains(#""Checkout" header id="checkout_title""#), human)
     }
 
-    func testLaterScreenChangeDominatesEarlierElementFactsAndDeduplicatesTransitionEvidence() throws {
+    func testLaterScreenChangeDominatesEarlierElementFacts() throws {
         let toast = makeTestHeistElement(label: "Saved", identifier: "saved_toast", traits: [.staticText])
         let cart = makeTestInterface(elements: [
             makeTestHeistElement(label: "Cart", identifier: "cart_title", traits: [.header]),
@@ -50,38 +50,39 @@ extension TheFenceCompactFormattingContractTests {
         let checkout = makeTestInterface(elements: [
             makeTestHeistElement(label: "Checkout", identifier: "checkout_title", traits: [.header]),
         ])
-        let before = AccessibilityTrace.Capture(
-            sequence: 1,
+        let before = observationSnapshot(
             interface: cart,
-            context: AccessibilityTrace.Context(screenId: "cart")
+            screenId: "cart"
         )
-        let elementChange = AccessibilityTrace.Capture(
-            sequence: 2,
+        let elementChange = observationSnapshot(
             interface: cartWithToast,
-            parentHash: before.hash,
-            context: AccessibilityTrace.Context(screenId: "cart")
+            screenId: "cart"
         )
-        let after = AccessibilityTrace.Capture(
-            sequence: 3,
+        let after = observationSnapshot(
             interface: checkout,
-            parentHash: elementChange.hash,
-            context: AccessibilityTrace.Context(screenId: "checkout"),
-            transition: makeTestScreenChangedTransition(sequence: 9)
+            screenId: "checkout"
         )
-        let trace = AccessibilityTrace(captures: [before, elementChange, after])
+        let evidence = Observation.Evidence(
+            baseline: before,
+            current: after,
+            events: [
+                .elementsChanged(elementChange),
+                .screenChanged(ScreenFacts(idAfter: "checkout")),
+                .elementsChanged(after),
+            ],
+            completeness: .incomplete
+        )
         let response = FenceResponse.action(
             command: .activate,
             result: ActionResult.success(
                 payload: .activate,
-                observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
+                observation: .observed(evidence)
             )
         )
 
         let delta = try publicJSONProbe(response).object("delta")
 
         XCTAssertEqual(try delta.string("kind"), "screenChanged")
-        XCTAssertEqual(try delta.array("transient").count, 1)
-        XCTAssertEqual(try delta.array("transient").first?.string("identifier"), "saved_toast")
         try delta.assertMissing("edits")
     }
 }

@@ -19,47 +19,73 @@ public struct Heist: Sendable {
     @MainActor
     public init(
         _ plan: HeistPlan,
-        argument: HeistArgument = .none
+        argument: HeistArgument = .none,
+        timeout: HeistTimeout = .default
     ) async throws {
-        self.result = try await Self.execute(plan, argument: argument, runtime: .shared)
+        self.result = try await Self.execute(
+            plan,
+            argument: argument,
+            timeout: timeout,
+            runtime: .shared
+        )
     }
 
     @MainActor
     init(
         _ plan: HeistPlan,
         argument: HeistArgument = .none,
+        timeout: HeistTimeout = .default,
         runtime: InAppHeistRuntime
     ) async throws {
-        self.result = try await Self.execute(plan, argument: argument, runtime: runtime)
+        self.result = try await Self.execute(
+            plan,
+            argument: argument,
+            timeout: timeout,
+            runtime: runtime
+        )
     }
 
     @MainActor
     public init(
+        timeout: HeistTimeout = .default,
         @HeistBuilder _ content: () throws -> HeistContent
     ) async throws {
         let plan = try HeistPlan(content)
-        self.result = try await Self.execute(plan, argument: .none, runtime: .shared)
+        self.result = try await Self.execute(
+            plan,
+            argument: .none,
+            timeout: timeout,
+            runtime: .shared
+        )
     }
 
     @MainActor
     init(
         runtime: InAppHeistRuntime,
+        timeout: HeistTimeout = .default,
         @HeistBuilder _ content: () throws -> HeistContent
     ) async throws {
         let plan = try HeistPlan(content)
-        self.result = try await Self.execute(plan, argument: .none, runtime: runtime)
+        self.result = try await Self.execute(
+            plan,
+            argument: .none,
+            timeout: timeout,
+            runtime: runtime
+        )
     }
 
     @MainActor
     public init(
         _ input: String,
         parameter: HeistReferenceName = "input",
+        timeout: HeistTimeout = .default,
         @HeistBuilder _ content: (HeistReferenceName) throws -> HeistContent
     ) async throws {
         let plan = try HeistPlan(parameter: parameter, content)
         self.result = try await Self.execute(
             plan,
             argument: .string(input),
+            timeout: timeout,
             runtime: .shared
         )
     }
@@ -69,12 +95,14 @@ public struct Heist: Sendable {
         _ input: String,
         parameter: HeistReferenceName = "input",
         runtime: InAppHeistRuntime,
+        timeout: HeistTimeout = .default,
         @HeistBuilder _ content: (HeistReferenceName) throws -> HeistContent
     ) async throws {
         let plan = try HeistPlan(parameter: parameter, content)
         self.result = try await Self.execute(
             plan,
             argument: .string(input),
+            timeout: timeout,
             runtime: runtime
         )
     }
@@ -83,12 +111,14 @@ public struct Heist: Sendable {
     public init(
         _ input: AccessibilityTarget,
         parameter: HeistReferenceName = "input",
+        timeout: HeistTimeout = .default,
         @HeistBuilder _ content: (AccessibilityTarget) throws -> HeistContent
     ) async throws {
         try await self.init(
             input,
             parameter: parameter,
             runtime: .shared,
+            timeout: timeout,
             content
         )
     }
@@ -98,12 +128,14 @@ public struct Heist: Sendable {
         _ input: AccessibilityTarget,
         parameter: HeistReferenceName = "input",
         runtime: InAppHeistRuntime,
+        timeout: HeistTimeout = .default,
         @HeistBuilder _ content: (AccessibilityTarget) throws -> HeistContent
     ) async throws {
         let plan = try HeistPlan(targetParameter: parameter, content)
         self.result = try await Self.execute(
             plan,
             argument: .accessibilityTarget(input),
+            timeout: timeout,
             runtime: runtime
         )
     }
@@ -112,9 +144,10 @@ public struct Heist: Sendable {
     private static func execute(
         _ plan: HeistPlan,
         argument: HeistArgument,
+        timeout: HeistTimeout,
         runtime: InAppHeistRuntime
     ) async throws -> HeistResult {
-        let actionResult = await runtime.execute(plan, argument)
+        let actionResult = await runtime.execute(plan, argument, timeout)
         guard case .heist(let result?) = actionResult.payload else {
             throw RuntimeError(actionResult: actionResult)
         }
@@ -190,7 +223,7 @@ public extension Heist {
 }
 
 struct InAppHeistRuntime {
-    let execute: @MainActor (HeistPlan, HeistArgument) async -> ActionResult
+    let execute: @MainActor (HeistPlan, HeistArgument, HeistTimeout) async -> ActionResult
 
     @MainActor
     static var shared: InAppHeistRuntime {
@@ -199,8 +232,12 @@ struct InAppHeistRuntime {
 
     @MainActor
     static func insideJob(_ job: TheInsideJob) -> InAppHeistRuntime {
-        InAppHeistRuntime { plan, argument in
-            await job.executeInAppHeist(plan, argument: argument)
+        InAppHeistRuntime { plan, argument, timeout in
+            await job.executeInAppHeist(
+                plan,
+                argument: argument,
+                timeout: timeout
+            )
         }
     }
 }
@@ -209,10 +246,15 @@ struct InAppHeistRuntime {
 extension TheInsideJob {
     func executeInAppHeist(
         _ plan: HeistPlan,
-        argument: HeistArgument = .none
+        argument: HeistArgument = .none,
+        timeout: HeistTimeout = .default
     ) async -> ActionResult {
         switch await brains.executeInAppRequest({ [self] in
-            await executeAdmittedInAppHeist(plan, argument: argument)
+            await executeAdmittedInAppHeist(
+                plan,
+                argument: argument,
+                timeout: timeout
+            )
         }) {
         case .completed(let result):
             return result
@@ -241,11 +283,11 @@ extension TheInsideJob {
 
     private func executeAdmittedInAppHeist(
         _ plan: HeistPlan,
-        argument: HeistArgument
+        argument: HeistArgument,
+        timeout: HeistTimeout
     ) async -> ActionResult {
         let shouldRestoreRuntime = !brains.semanticObservationIsActive
         if shouldRestoreRuntime {
-            tripwire.uikitIdleTracker.installIfAvailable()
             tripwire.startPulse()
             await brains.startSemanticObservation()
             brains.safecracker.startKeyboardObservation()
@@ -254,7 +296,6 @@ extension TheInsideJob {
             if shouldRestoreRuntime {
                 brains.stopSemanticObservation()
                 tripwire.stopPulse()
-                tripwire.uikitIdleTracker.uninstallIfNeeded()
                 brains.safecracker.stopKeyboardObservation()
             }
         }
@@ -263,12 +304,17 @@ extension TheInsideJob {
         // previous run's settled semantic world when the app is already on
         // another screen.
         await brains.vault.resetInterfaceForLifecycle()
-        _ = await brains.interactionCoordinator.admittedVisibleObservation(
-            timeout: SemanticObservationTiming.defaultTimeout
+        _ = await brains.interactionCoordinator.admittedVisibleObservation()
+        let result = await brains.executeHeistPlan(
+            plan,
+            argument: argument,
+            timeout: timeout
         )
-        let result = await brains.executeHeistPlan(plan, argument: argument)
         if shouldRestoreRuntime {
-            _ = await tripwire.waitForAllClear(timeout: SemanticObservationTiming.defaultTimeout)
+            _ = await tripwire.waitForNextTick(
+                timeout: SemanticObservationTiming.defaultTimeout,
+                demand: .ambient
+            )
         }
         return result
     }

@@ -66,6 +66,7 @@ public enum HeistFailureCategory: String, Codable, Sendable, Equatable {
     case action
     case expectation
     case wait
+    case timeout
     case invocation
     case loop
     case explicitFailure

@@ -22,6 +22,14 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testNotificationsCommandUsesCanonicalFenceDescriptor() async throws {
+        let descriptor = try await GetNotificationsCommand.parse([]).runnerDescriptor()
+
+        XCTAssertEqual(descriptor.fenceDescriptor.command, .getNotifications)
+        XCTAssertEqual(GetNotificationsCommand.configuration.commandName, "get_notifications")
+    }
+
+    @ButtonHeistActor
     func testOneShotDescriptorsOwnConnectedAndLocalLifecycleModes() async throws {
         let connected = try await PingCommand.parse([]).runnerDescriptor()
         let local = try await ListDevicesCommand.parse([]).runnerDescriptor()
@@ -76,10 +84,11 @@ final class CLICommandSyncTests: XCTestCase {
         let screen = try WaitCommand.parse(["--change", "screen"]).requestArguments()
         let elements = try WaitCommand.parse(["--change", "elements"]).requestArguments()
 
+        // A screen predicate names the arrived-at screen and carries no
+        // assertions: element assertions are a sibling, not payload.
         XCTAssertEqual(screen.value(for: .predicate), .object([
             "type": .string("changed"),
             "scope": .string("screen"),
-            "assertions": .array([]),
         ]))
         XCTAssertEqual(elements.value(for: .predicate), .object([
             "type": .string("changed"),

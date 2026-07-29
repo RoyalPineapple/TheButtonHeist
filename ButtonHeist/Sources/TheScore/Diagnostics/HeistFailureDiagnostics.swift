@@ -69,11 +69,12 @@ public enum HeistFailureDiagnostics {
     }
 
     private static func meaningfulActions(_ element: HeistElement) -> [ElementAction] {
-        element.actions.filter { action in
+        let assertable = element.semantics.assertable
+        return assertable.orderedActions.filter { action in
             switch action {
-            case .activate: return !element.traits.contains(.button)
-            case .typeText: return !AccessibilityPolicy.supportsTextEntry(element.traits)
-            case .increment, .decrement: return !element.traits.contains(.adjustable)
+            case .activate: return !assertable.traits.contains(.button)
+            case .typeText: return !AccessibilityPolicy.supportsTextEntry(assertable.traits)
+            case .increment, .decrement: return !assertable.traits.contains(.adjustable)
             case .custom: return true
             }
         }
@@ -85,13 +86,13 @@ public extension HeistResult {
         failureScreenshotStep?.screenshotPayload
     }
 
-    package var settledInterfaceAtFailure: Interface? {
-        firstFailedStep?.settledInterfaceAtStep
+    package var observedInterfaceAtFailure: Interface? {
+        firstFailedStep?.observedInterfaceAtStep
     }
 
     /// Failure evidence for diagnostic rendering, not current semantic interface state.
     package var failureDiagnosticInterface: Interface? {
-        failureScreenshotPayload?.interface ?? settledInterfaceAtFailure
+        failureScreenshotPayload?.interface ?? observedInterfaceAtFailure
     }
 
     var failureScreenshotSummary: String? {
@@ -115,8 +116,8 @@ public extension HeistResult {
 }
 
 public extension HeistExecutionStepResult {
-    package var settledInterfaceAtStep: Interface? {
-        reportActionResult?.accessibilityTrace?.captures.last?.interface
+    package var observedInterfaceAtStep: Interface? {
+        reportActionResult?.observationEvidence?.current?.interface
     }
 
     package var screenshotPayload: ScreenPayload? {

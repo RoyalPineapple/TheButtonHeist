@@ -20,19 +20,33 @@ final class AccessibilityNotificationIdentityTests: XCTestCase {
         }
     }
 
-    func testCapturedAnnouncementPreservesNormalizedIdentity() throws {
+    func testUIKitAnnouncementEvidencePreservesNormalizedKindAndPayload() {
         let event = PendingAccessibilityNotificationEvent(
             sequence: 1,
-            rawCode: 1005,
+            rawCode: 1008,
             timestamp: Date(timeIntervalSince1970: 1),
             notificationData: .string("Updated"),
             associatedElement: .none,
             provenance: .scoped
         )
 
-        let announcement = try XCTUnwrap(event.capturedAnnouncement)
+        XCTAssertEqual(event.kind, .announcement)
+        guard case .string(let text) = event.notificationData else {
+            return XCTFail("Expected UIKit announcement text")
+        }
+        XCTAssertEqual(text, "Updated")
+    }
 
-        XCTAssertEqual(announcement.kind, .elementChanged(.value))
+    func testOnlyElementChangeKindsAdmitAssociatedElementContent() {
+        XCTAssertFalse(AccessibilityNotificationKind.screenChanged.admitsAssociatedElement)
+        XCTAssertTrue(
+            AccessibilityNotificationKind.elementChanged(.layout).admitsAssociatedElement
+        )
+        XCTAssertTrue(
+            AccessibilityNotificationKind.elementChanged(.value).admitsAssociatedElement
+        )
+        XCTAssertFalse(AccessibilityNotificationKind.announcement.admitsAssociatedElement)
+        XCTAssertFalse(AccessibilityNotificationKind.unknown(4002).admitsAssociatedElement)
     }
 
     private func event(rawCode: UInt32) -> PendingAccessibilityNotificationEvent {

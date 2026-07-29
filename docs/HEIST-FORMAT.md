@@ -61,7 +61,7 @@ package from Swift/DSL source when crossing public artifact boundaries.
   "entry": "purchaseFlow",
   "format": "com.royalpineapple.buttonheist.heist",
   "formatVersion": 1,
-  "planVersion": 2,
+  "planVersion": 3,
   "producer": {
     "name": "buttonheist"
   }
@@ -73,7 +73,7 @@ package from Swift/DSL source when crossing public artifact boundaries.
 | `entry` | `HeistPlanName` as one JSON string | Required root plan identity. Must equal `plan.json.name`. |
 | `format` | `HeistArtifactFormat` as one JSON string | Closed vocabulary with the sole canonical value `com.royalpineapple.buttonheist.heist`. |
 | `formatVersion` | `Int` | Package/container schema version. Current value is `1`. |
-| `planVersion` | `Int` | Must match `plan.json.version`. Current value is `2`. |
+| `planVersion` | `Int` | Must match `plan.json.version`. Current value is `3`. |
 | `producer` | `HeistArtifactProducer` | Tool that generated the artifact. |
 | `createdAt` | `Date` | Artifact creation timestamp. |
 
@@ -119,7 +119,7 @@ The root shape is:
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "name": "purchaseFlow",
   "parameter": { "type": "none" },
   "definitions": [],
@@ -148,7 +148,7 @@ plan contract.
 
 Three version numbers exist, and they answer different questions:
 
-- **`formatVersion`** (currently `1`) and **`planVersion`** (currently `2`)
+- **`formatVersion`** (currently `1`) and **`planVersion`** (currently `3`)
   govern artifacts. The runtime accepts only plan versions it supports and rejects
   others at load with a diagnostic; it never guesses at an unsupported shape.
 - **`buttonHeistVersion`** encodes the typed `ButtonHeistVersion` used by the
@@ -181,7 +181,7 @@ It is Swift-shaped, but it is the source language accepted by MCP and
 
 The generated plan uses one `AccessibilityTarget` shape for action targets and
 predicate targets. Expectations use one context-typed predicate tree:
-`exists`, `missing`, `changed`, `no_change`, and `announcement` at the root;
+`exists`, `missing`, `changed`, and `announcement` at the root;
 `changed.screen` accepts current-tree `exists`/`missing`; `changed.elements`
 also accepts `appeared`, `disappeared`, and `updated`. The generated wire form
 is strict: `{"type":"changed","scope":"screen|elements","assertions":[]}`.
@@ -193,10 +193,10 @@ HeistPlan("purchaseFlow") {
         .expect(.exists(.element(.label("Search Items"), .value("milk"))))
 
     Activate(.label("Milk"))
-        .expect(.changed(.elements([.appeared(.element(
+        .expect(.elementsChanged([.appeared(.element(
             .label(.prefix("Milk")),
             .identifier(.contains("cart"))
-        ))])))
+        ))]))
 
     WaitFor(.missing(.label("Loading")), timeout: 5)
         .else {
@@ -213,10 +213,10 @@ HeistDef<String>("addToCart", parameter: "item") { item in
         .expect(.exists(.element(.label("Search Items"), .value(item))))
 
     Activate(.label(item))
-        .expect(.changed(.elements([.appeared(.element(
+        .expect(.elementsChanged([.appeared(.element(
             .label(.prefix(item)),
             .identifier(.contains("cart"))
-        ))])))
+        ))]))
 }
 
 HeistPlan("cartFlow") {
@@ -227,7 +227,7 @@ HeistPlan("cartFlow") {
     If {
             Case(.label("Checkout")) {
                 Activate(.label("Checkout"))
-                    .expect(.changed(.screen([.exists(.label("Receipt"))])))
+                    .expect(.screenChanged([.exists(.label("Receipt"))]))
             }
 
         Else {
@@ -280,8 +280,8 @@ edit, render it as canonical DSL.
 ## Runtime contract
 
 Normal heists express semantic intent and semantic outcomes. The Button Heist owns
-reveal, element inflation, settlement, live geometry, and diagnostics while the
-plan runs.
+viewport reveal, element inflation, observation, live geometry, deadline
+enforcement, and diagnostics while the plan runs.
 
 Runtime validation rejects non-executable plans before dispatch: unresolved
 refs, invalid payloads, oversized loops, excessive depth, noncanonical

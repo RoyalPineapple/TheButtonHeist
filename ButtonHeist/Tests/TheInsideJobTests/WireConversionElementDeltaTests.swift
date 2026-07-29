@@ -12,25 +12,23 @@ extension WireConverterTests {
 
     func testIdenticalSnapshotsReturnNoChange() throws {
         let elements = [makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button])]
-        let delta = computeDelta(
-            before: elements, after: elements, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: elements, after: elements, afterTree: []
         )
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertTrue(delta.changeFacts.isEmpty)
-        XCTAssertDeltaElementCount(delta, 1)
-        XCTAssertNil(delta.testEdits.addedOptional)
-        XCTAssertNil(delta.testEdits.removedOptional)
-        XCTAssertNil(delta.testEdits.updatedOptional)
+        XCTAssertTrue(delta.edits.isEmpty)
+        XCTAssertEqual(delta.after.projectedElements.count, 1)
+        XCTAssertTrue(delta.edits.added.isEmpty)
+        XCTAssertTrue(delta.edits.removed.isEmpty)
+        XCTAssertTrue(delta.edits.updated.isEmpty)
     }
 
     func testEmptySnapshotsReturnNoChange() throws {
         let empty: [InterfaceTree.Element] = []
-        let delta = computeDelta(
-            before: empty, after: empty, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: empty, after: empty, afterTree: []
         )
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertTrue(delta.changeFacts.isEmpty)
-        XCTAssertDeltaElementCount(delta, 0)
+        XCTAssertTrue(delta.edits.isEmpty)
+        XCTAssertEqual(delta.after.projectedElements.count, 0)
     }
 
     // MARK: - Delta: Element Added
@@ -40,14 +38,13 @@ extension WireConverterTests {
         let added = makeScreenElement(heistId: "button_cancel", label: "Cancel", traits: [.button])
         let after = before + [added]
 
-        let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: before, after: after, afterTree: []
         )
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertFalse(delta.changeFacts.isEmpty)
-        XCTAssertEqual(delta.testEdits.addedOptional?.count, 1)
-        XCTAssertEqual(delta.testEdits.addedOptional?.first?.label, "Cancel")
-        XCTAssertNil(delta.testEdits.removedOptional)
+        XCTAssertFalse(delta.edits.isEmpty)
+        XCTAssertEqual(delta.edits.added.count, 1)
+        XCTAssertEqual(delta.edits.added.first?.semantics.assertable.label, "Cancel")
+        XCTAssertTrue(delta.edits.removed.isEmpty)
     }
 
     // MARK: - Delta: Element Removed
@@ -59,13 +56,13 @@ extension WireConverterTests {
         ]
         let after = [before[0]]
 
-        let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: before, after: after, afterTree: []
         )
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertFalse(delta.changeFacts.isEmpty)
-        XCTAssertEqual(delta.testEdits.removedOptional, ["Cancel"])
-        XCTAssertNil(delta.testEdits.addedOptional)
+        XCTAssertFalse(delta.edits.isEmpty)
+        XCTAssertEqual(delta.edits.removed.count, 1)
+        XCTAssertEqual(delta.edits.removed.first?.semantics.assertable.label, "Cancel")
+        XCTAssertTrue(delta.edits.added.isEmpty)
     }
 
     // MARK: - Delta: Property Changes
@@ -74,106 +71,111 @@ extension WireConverterTests {
         let before = [makeScreenElement(heistId: "slider", value: "50%")]
         let after = [makeScreenElement(heistId: "slider", value: "75%")]
 
-        let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: before, after: after, afterTree: []
         )
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertFalse(delta.changeFacts.isEmpty)
-        XCTAssertEqual(delta.testEdits.updatedOptional?.count, 1)
-        let change = delta.testEdits.updatedOptional?.first?.changes.first
+        XCTAssertFalse(delta.edits.isEmpty)
+        XCTAssertEqual(delta.edits.updated.count, 1)
+        let update = delta.edits.updated.first
+        let change = update?.changes.first
         XCTAssertEqual(change?.property, .value)
-        XCTAssertEqual(change?.oldDisplayText, "50%")
-        XCTAssertEqual(change?.newDisplayText, "75%")
+        XCTAssertEqual(update?.before.semantics.assertable.value, "50%")
+        XCTAssertEqual(update?.after.semantics.assertable.value, "75%")
     }
 
     func testTraitsChangeProducesUpdate() throws {
         let before = [makeScreenElement(heistId: "btn", traits: [.button])]
         let after = [makeScreenElement(heistId: "btn", traits: [.button, .selected])]
 
-        let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: before, after: after, afterTree: []
         )
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertFalse(delta.changeFacts.isEmpty)
-        let change = delta.testEdits.updatedOptional?.first?.changes.first
+        XCTAssertFalse(delta.edits.isEmpty)
+        let update = delta.edits.updated.first
+        let change = update?.changes.first
         XCTAssertEqual(change?.property, .traits)
-        XCTAssertEqual(change?.oldDisplayText, "button")
-        XCTAssertEqual(change?.newDisplayText, "button, selected")
+        XCTAssertEqual(update?.before.semantics.assertable.traits, [.button])
+        XCTAssertEqual(update?.after.semantics.assertable.traits, [.button, .selected])
     }
 
     func testHintChangeProducesUpdate() throws {
         let before = [makeScreenElement(heistId: "btn", hint: "Tap to continue")]
         let after = [makeScreenElement(heistId: "btn", hint: "Tap to go back")]
 
-        let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: before, after: after, afterTree: []
         )
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertFalse(delta.changeFacts.isEmpty)
-        let change = delta.testEdits.updatedOptional?.first?.changes.first
+        XCTAssertFalse(delta.edits.isEmpty)
+        let update = delta.edits.updated.first
+        let change = update?.changes.first
         XCTAssertEqual(change?.property, .hint)
-        XCTAssertEqual(change?.oldDisplayText, "Tap to continue")
-        XCTAssertEqual(change?.newDisplayText, "Tap to go back")
+        XCTAssertEqual(update?.before.semantics.assertable.hint, "Tap to continue")
+        XCTAssertEqual(update?.after.semantics.assertable.hint, "Tap to go back")
     }
 
     func testActionsChangeProducesUpdate() throws {
-        // Same identity (label/identifier/non-transient traits unchanged) so the
+        // Same identity (label/identifier/identity traits unchanged) so the
         // elements pair; toggling interactivity flips the `.activate` action,
         // producing an `.actions` update rather than a remove+add.
         let before = [makeScreenElement(heistId: "slider", label: "Row", respondsToUserInteraction: true)]
         let after = [makeScreenElement(heistId: "slider", label: "Row", respondsToUserInteraction: false)]
 
-        let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: before, after: after, afterTree: []
         )
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertFalse(delta.changeFacts.isEmpty)
-        XCTAssertNotNil(delta.testEdits.updatedOptional)
-        let change = delta.testEdits.updatedOptional?.first?.changes.first
+        XCTAssertFalse(delta.edits.isEmpty)
+        let update = delta.edits.updated.first
+        let change = update?.changes.first
         XCTAssertEqual(change?.property, .actions)
+        XCTAssertEqual(update?.before.semantics.assertable.actions, [.activate])
+        XCTAssertEqual(update?.after.semantics.assertable.actions, [])
     }
 
     func testFrameChangeProducesUpdate() throws {
         let before = [makeScreenElement(heistId: "box", frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 50)]
         let after = [makeScreenElement(heistId: "box", frameX: 10, frameY: 20, frameWidth: 100, frameHeight: 50)]
 
-        let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: before, after: after, afterTree: []
         )
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertFalse(delta.changeFacts.isEmpty)
-        let change = delta.testEdits.updatedOptional?.first?.changes.first
+        XCTAssertFalse(delta.edits.isEmpty)
+        let update = delta.edits.updated.first
+        let change = update?.changes.first
         XCTAssertEqual(change?.property, .frame)
-        XCTAssertEqual(change?.oldDisplayText, "0,0,100,50")
-        XCTAssertEqual(change?.newDisplayText, "10,20,100,50")
+        XCTAssertEqual(update?.before.geometry.screen, TheVault.onscreenSpace(for: before[0].element))
+        XCTAssertEqual(update?.after.geometry.screen, TheVault.onscreenSpace(for: after[0].element))
     }
 
     func testActivationPointChangeProducesUpdate() throws {
         let before = [makeScreenElement(heistId: "btn", activationPoint: CGPoint(x: 50, y: 25))]
         let after = [makeScreenElement(heistId: "btn", activationPoint: CGPoint(x: 75, y: 40))]
 
-        let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: before, after: after, afterTree: []
         )
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertFalse(delta.changeFacts.isEmpty)
-        let change = delta.testEdits.updatedOptional?.first?.changes.first
+        XCTAssertFalse(delta.edits.isEmpty)
+        let update = delta.edits.updated.first
+        let change = update?.changes.first
         XCTAssertEqual(change?.property, .activationPoint)
-        XCTAssertEqual(change?.oldDisplayText, "50,25")
-        XCTAssertEqual(change?.newDisplayText, "75,40")
+        XCTAssertEqual(update?.before.geometry.screen, TheVault.onscreenSpace(for: before[0].element))
+        XCTAssertEqual(update?.after.geometry.screen, TheVault.onscreenSpace(for: after[0].element))
     }
 
     func testMultiplePropertyChangesOnSameElement() throws {
         let before = [makeScreenElement(heistId: "slider", value: "50%", hint: "Volume")]
         let after = [makeScreenElement(heistId: "slider", value: "75%", hint: "Music Volume")]
 
-        let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: before, after: after, afterTree: []
         )
-        XCTAssertEqual(delta.testEdits.updatedOptional?.first?.changes.count, 2)
-        let properties = delta.testEdits.updatedOptional?.first?.changes.map(\.property)
-        XCTAssertTrue(properties?.contains(.value) == true)
-        XCTAssertTrue(properties?.contains(.hint) == true)
+        let update = delta.edits.updated.first
+        XCTAssertEqual(update?.changes.count, 2)
+        XCTAssertEqual(update?.before.semantics.assertable.value, "50%")
+        XCTAssertEqual(update?.after.semantics.assertable.value, "75%")
+        XCTAssertEqual(update?.before.semantics.assertable.hint, "Volume")
+        XCTAssertEqual(update?.after.semantics.assertable.hint, "Music Volume")
+        XCTAssertTrue(update?.changes.contains { $0.property == .value } == true)
+        XCTAssertTrue(update?.changes.contains { $0.property == .hint } == true)
     }
 
     // MARK: - Delta: Label Change = Add + Remove
@@ -182,61 +184,13 @@ extension WireConverterTests {
         let before = [makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button])]
         let after = [makeScreenElement(heistId: "button_done", label: "Done", traits: [.button])]
 
-        let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: before, after: after, afterTree: []
         )
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertFalse(delta.changeFacts.isEmpty)
-        XCTAssertEqual(delta.testEdits.removedOptional, ["OK"])
-        XCTAssertEqual(delta.testEdits.addedOptional?.first?.label, "Done")
-        XCTAssertNil(delta.testEdits.updatedOptional)
-    }
-
-    // MARK: - Delta: InterfaceObservation Change
-
-    func testScreenChangeReturnsFull() throws {
-        let before = [makeScreenElement(heistId: "button_ok")]
-        let afterElement = makeScreenElement(heistId: "header_settings", label: "Settings", traits: [.header])
-        let after = [afterElement]
-        // The new wire shape derives newInterface from the screen's tree, not
-        // the flat snapshot — so the tree must reflect after.
-        let afterTree = [wireLeaf(afterElement)]
-
-        let delta = computeDelta(
-            before: before, after: after, afterTree: afterTree, isScreenChange: true
-        )
-        XCTAssertEqual(
-            delta.changeFacts.map(\.kind),
-            [.elementsChanged, .screenChanged, .elementsChanged]
-        )
-        XCTAssertEqual(delta.current?.projectedElements.count, 1)
-    }
-
-    func testTreeOnlyChangeProducesDeliveredNodeLifecycleFacts() throws {
-        let element = makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button])
-        let beforeTree = [wireLeaf(element)]
-        let afterTree = [
-            wireContainer(
-                containerName: "list_0",
-                type: .list,
-                frame: CGRect(x: 0, y: 0, width: 320, height: 100),
-                children: [wireLeaf(element)]
-            )
-        ]
-
-        let delta = computeDelta(
-            before: [element],
-            after: [element],
-            beforeTree: beforeTree,
-            afterTree: afterTree,
-            isScreenChange: false
-        )
-
-        XCTAssertNotScreenChanged(delta)
-        guard case .elementsChanged(let fact) = delta.changeFacts.single else {
-            return XCTFail("Expected delivered-node lifecycle fact")
-        }
-        XCTAssertTrue(fact.appeared.contains { $0.kind == .container })
+        XCTAssertFalse(delta.edits.isEmpty)
+        XCTAssertEqual(delta.edits.removed.first?.semantics.assertable.label, "OK")
+        XCTAssertEqual(delta.edits.added.first?.semantics.assertable.label, "Done")
+        XCTAssertTrue(delta.edits.updated.isEmpty)
     }
 
     func testTreeReorderDoesNotProduceExistenceOrUpdateFacts() throws {
@@ -251,20 +205,17 @@ extension WireConverterTests {
             wireLeaf(first),
         ]
 
-        let delta = computeDelta(
+        let delta = compareInterfaces(
             before: [first, second],
             after: [second, first],
             beforeTree: beforeTree,
-            afterTree: afterTree,
-            isScreenChange: false
+            afterTree: afterTree
         )
-
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertTrue(delta.changeFacts.isEmpty)
+        XCTAssertTrue(delta.edits.isEmpty)
     }
 
     func testMovedIdenticalElementWithSiblingReorderReportsFrameUpdate() throws {
-        // Same content (label + non-transient `.button`), only the frame and
+        // Same content (label + identity trait `.button`), only the frame and
         // activation point move. Under content-signature pairing these elements
         // pair instead of churning, so the move surfaces as a `.frame` update on
         // a single element — not a remove+add, and not suppressed by move
@@ -293,21 +244,21 @@ extension WireConverterTests {
             wireLeaf(afterElement),
         ]
 
-        let delta = computeDelta(
+        let delta = compareInterfaces(
             before: [beforeElement, other],
             after: [other, afterElement],
             beforeTree: beforeTree,
-            afterTree: afterTree,
-            isScreenChange: false
+            afterTree: afterTree
         )
-
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertFalse(delta.changeFacts.isEmpty)
-        XCTAssertNil(delta.testEdits.addedOptional)
-        XCTAssertNil(delta.testEdits.removedOptional)
-        XCTAssertEqual(delta.testEdits.updatedOptional?.count, 1)
-        let update = delta.testEdits.updatedOptional?.first
-        XCTAssertEqual(update?.after.label, "Telescope, Far Light, 3:32")
+        XCTAssertFalse(delta.edits.isEmpty)
+        XCTAssertTrue(delta.edits.added.isEmpty)
+        XCTAssertTrue(delta.edits.removed.isEmpty)
+        XCTAssertEqual(delta.edits.updated.count, 1)
+        let update = delta.edits.updated.first
+        XCTAssertEqual(update?.after.semantics.assertable.label, "Telescope, Far Light, 3:32")
+        XCTAssertEqual(update?.before.geometry.screen, TheVault.onscreenSpace(for: beforeElement.element))
+        XCTAssertEqual(update?.after.geometry.screen, TheVault.onscreenSpace(for: afterElement.element))
+        XCTAssertEqual(update?.before.semantics.semanticHash, update?.after.semantics.semanticHash)
         XCTAssertTrue(update?.changes.contains { $0.property == .frame } == true)
     }
 
@@ -338,21 +289,27 @@ extension WireConverterTests {
             wireLeaf(afterElement),
         ]
 
-        let delta = computeDelta(
+        let delta = compareInterfaces(
             before: [beforeElement, other],
             after: [other, afterElement],
             beforeTree: beforeTree,
-            afterTree: afterTree,
-            isScreenChange: false
+            afterTree: afterTree
         )
-
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertFalse(delta.changeFacts.isEmpty)
-        XCTAssertNil(delta.testEdits.addedOptional)
-        XCTAssertNil(delta.testEdits.removedOptional)
-        let update = delta.testEdits.updatedOptional?.first { $0.after.label == "Favorite" }
+        XCTAssertFalse(delta.edits.isEmpty)
+        XCTAssertTrue(delta.edits.added.isEmpty)
+        XCTAssertTrue(delta.edits.removed.isEmpty)
+        let update = delta.edits.updated.first {
+            $0.after.semantics.assertable.label == "Favorite"
+        }
         XCTAssertNotNil(update)
-        XCTAssertTrue(update?.changes.contains { $0.property == .value && $0.oldDisplayText == "0" && $0.newDisplayText == "1" } == true)
+        XCTAssertEqual(update?.before.semantics.assertable.value, "0")
+        XCTAssertEqual(update?.after.semantics.assertable.value, "1")
+        XCTAssertEqual(update?.before.semantics.assertable.traits, [.button])
+        XCTAssertEqual(update?.after.semantics.assertable.traits, [.button, .selected])
+        XCTAssertEqual(update?.before.geometry.screen, TheVault.onscreenSpace(for: beforeElement.element))
+        XCTAssertEqual(update?.after.geometry.screen, TheVault.onscreenSpace(for: afterElement.element))
+        XCTAssertNotEqual(update?.before.semantics.semanticHash, update?.after.semantics.semanticHash)
+        XCTAssertTrue(update?.changes.contains { $0.property == .value } == true)
         XCTAssertTrue(update?.changes.contains { $0.property == .traits } == true)
     }
 
@@ -377,21 +334,21 @@ extension WireConverterTests {
         let beforeTree = [wireLeaf(beforeElement)]
         let afterTree = [wireLeaf(afterElement)]
 
-        let delta = computeDelta(
+        let delta = compareInterfaces(
             before: [beforeElement],
             after: [afterElement],
             beforeTree: beforeTree,
-            afterTree: afterTree,
-            isScreenChange: false
+            afterTree: afterTree
         )
-
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertFalse(delta.changeFacts.isEmpty)
-        XCTAssertNil(delta.testEdits.addedOptional)
-        XCTAssertNil(delta.testEdits.removedOptional)
-        XCTAssertEqual(delta.testEdits.updatedOptional?.count, 1)
-        let update = delta.testEdits.updatedOptional?.first
-        XCTAssertEqual(update?.after.label, "Telescope, Far Light, 3:32")
+        XCTAssertFalse(delta.edits.isEmpty)
+        XCTAssertTrue(delta.edits.added.isEmpty)
+        XCTAssertTrue(delta.edits.removed.isEmpty)
+        XCTAssertEqual(delta.edits.updated.count, 1)
+        let update = delta.edits.updated.first
+        XCTAssertEqual(update?.after.semantics.assertable.label, "Telescope, Far Light, 3:32")
+        XCTAssertEqual(update?.before.geometry.screen, TheVault.onscreenSpace(for: beforeElement.element))
+        XCTAssertEqual(update?.after.geometry.screen, TheVault.onscreenSpace(for: afterElement.element))
+        XCTAssertEqual(update?.before.semantics.semanticHash, update?.after.semantics.semanticHash)
         XCTAssertTrue(update?.changes.contains { $0.property == .frame } == true)
     }
 
@@ -404,17 +361,15 @@ extension WireConverterTests {
         ]
         let afterTree = [wireLeaf(first)]
 
-        let delta = computeDelta(
+        let delta = compareInterfaces(
             before: [first, second],
             after: [first],
             beforeTree: beforeTree,
-            afterTree: afterTree,
-            isScreenChange: false
+            afterTree: afterTree
         )
-
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertFalse(delta.changeFacts.isEmpty)
-        XCTAssertEqual(delta.testEdits.removedOptional, ["Second"])
+        XCTAssertFalse(delta.edits.isEmpty)
+        XCTAssertEqual(delta.edits.removed.count, 1)
+        XCTAssertEqual(delta.edits.removed.first?.semantics.assertable.label, "Second")
     }
 
     // MARK: - Delta: Duplicate heistId Pairing
@@ -429,14 +384,15 @@ extension WireConverterTests {
             makeScreenElement(heistId: "cell_1", value: "Y"),
         ]
 
-        let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: before, after: after, afterTree: []
         )
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertFalse(delta.changeFacts.isEmpty)
-        XCTAssertEqual(delta.testEdits.updatedOptional?.count, 2)
-        XCTAssertNil(delta.testEdits.addedOptional)
-        XCTAssertNil(delta.testEdits.removedOptional)
+        XCTAssertFalse(delta.edits.isEmpty)
+        XCTAssertEqual(delta.edits.updated.count, 2)
+        XCTAssertEqual(delta.edits.updated.map(\.before.semantics.assertable.value), ["A", "B"])
+        XCTAssertEqual(delta.edits.updated.map(\.after.semantics.assertable.value), ["X", "Y"])
+        XCTAssertTrue(delta.edits.added.isEmpty)
+        XCTAssertTrue(delta.edits.removed.isEmpty)
     }
 
     func testDuplicateHeistIdExcessGoesToAddedRemoved() throws {
@@ -449,13 +405,14 @@ extension WireConverterTests {
             makeScreenElement(heistId: "cell", value: "X"),
         ]
 
-        let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: before, after: after, afterTree: []
         )
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertFalse(delta.changeFacts.isEmpty)
-        XCTAssertEqual(delta.testEdits.updatedOptional?.count, 1)
-        XCTAssertEqual(delta.testEdits.removedOptional?.count, 2)
+        XCTAssertFalse(delta.edits.isEmpty)
+        XCTAssertEqual(delta.edits.updated.count, 1)
+        XCTAssertEqual(delta.edits.updated.first?.before.semantics.assertable.value, "A")
+        XCTAssertEqual(delta.edits.updated.first?.after.semantics.assertable.value, "X")
+        XCTAssertEqual(delta.edits.removed.map(\.semantics.assertable.value), ["B", "C"])
     }
 
     // MARK: - Delta: Empty Diff Coerced to noChange
@@ -463,11 +420,10 @@ extension WireConverterTests {
     func testNoDifferencesCoercedToNoChange() throws {
         let treeElement = makeScreenElement(heistId: "btn", label: "OK", traits: [.button])
 
-        let delta = computeDelta(
-            before: [treeElement], after: [treeElement], afterTree: [], isScreenChange: false
+        let delta = compareInterfaces(
+            before: [treeElement], after: [treeElement], afterTree: []
         )
-        XCTAssertNotScreenChanged(delta)
-        XCTAssertTrue(delta.changeFacts.isEmpty)
+        XCTAssertTrue(delta.edits.isEmpty)
     }
 
 }

@@ -10,58 +10,50 @@ import UIKit
 @MainActor
 extension TheBrainsPipelineTests {
 
-    func testScopedScreenChangedStartsNewScreenGeneration() async throws {
-        let oldScreenEvent = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+    func testScopedScreenChangedPublishesBoundaryThenNoChange() async {
+        let oldScreen = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Checkout", .header, "checkout_header")])
         )
-        let newScreenEvent = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let boundary = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Checkout", .header, "checkout_header")]),
             notificationBatch: notificationBatch(kind: .screenChanged)
         )
-        let oldBaseline = try XCTUnwrap(oldScreenEvent.moment)
-        let transitionTrace = AccessibilityTrace(captures: [
-            oldBaseline.capture,
-            newScreenEvent.moment.capture,
-        ])
 
-        XCTAssertNotEqual(newScreenEvent.generation, oldScreenEvent.generation)
-        XCTAssertNil(newScreenEvent.trace.captures.last?.transition.fallbackReason)
         XCTAssertEqual(
-            newScreenEvent.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
-            [.screenChanged]
-        )
-        XCTAssertEqual(
-            transitionTrace.changeFacts.map(\.kind),
+            boundary.events.map(\.testKind),
             [.elementsChanged, .screenChanged, .elementsChanged]
         )
-        let boundaryElementFacts = transitionTrace.changeFacts.compactMap { fact -> AccessibilityTrace.ElementsChangeFact? in
-            guard case .elementsChanged(let elements) = fact else { return nil }
-            return elements
+        guard case .elementsChanged(let departure) = boundary.events[0],
+              case .screenChanged(let screen) = boundary.events[1],
+              case .elementsChanged(let arrival) = boundary.events[2] else {
+            return XCTFail("Expected departure, screen boundary, and arrival")
         }
-        XCTAssertEqual(boundaryElementFacts.count, 2)
-        XCTAssertFalse(boundaryElementFacts[0].disappeared.isEmpty)
-        XCTAssertTrue(boundaryElementFacts[0].appeared.isEmpty)
-        XCTAssertFalse(boundaryElementFacts[1].appeared.isEmpty)
-        XCTAssertTrue(boundaryElementFacts[1].disappeared.isEmpty)
-        XCTAssertTrue(boundaryElementFacts.allSatisfy(\.updated.isEmpty))
+        XCTAssertTrue(departure.interface.projectedElements.isEmpty)
+        XCTAssertEqual(screen.idAfter, "Checkout")
+        XCTAssertEqual(arrival, boundary.current.snapshot)
+        XCTAssertEqual(
+            ElementEdits.between(oldScreen.current.snapshot.interface, departure.interface)
+                .removed.compactMap(\.semantics.assertable.label),
+            ["Checkout"]
+        )
+        XCTAssertEqual(
+            ElementEdits.between(departure.interface, arrival.interface)
+                .added.compactMap(\.semantics.assertable.label),
+            ["Checkout"]
+        )
 
-        let newBaseline = try XCTUnwrap(newScreenEvent.moment)
-        let nextEvent = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let next = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Checkout", .header, "checkout_header")])
         )
 
-        XCTAssertEqual(nextEvent.generation, newScreenEvent.generation)
-        let history = await brains.vault.semanticObservationStream.storeOwner.readLog {
-            $0.events(since: newBaseline)
-        }
-        XCTAssertEqual(history, .events([.snapshot(nextEvent)]))
+        XCTAssertEqual(next.events, [.noChange])
     }
 
     func testPassiveCommitConsumesScopedScreenChangedSinceLastCommit() async {
         let notifications = brains.vault.accessibilityNotifications
         let heistScope = notifications.beginHeistScope()
         defer { heistScope.cancel() }
-        let before = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        _ = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Checkout", .header, "checkout_header")])
         )
 
@@ -70,16 +62,15 @@ extension TheBrainsPipelineTests {
             makeScreen(elements: [("Checkout", .header, "checkout_header")])
         )
 
-        XCTAssertNotEqual(after.generation, before.generation)
         XCTAssertEqual(
-            after.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
-            [.screenChanged]
+            after.events.map(\.testKind),
+            [.elementsChanged, .screenChanged, .elementsChanged]
         )
     }
 
     func testPassiveCommitIgnoresAmbientScreenChangedBetweenHeistScopes() async {
         let notifications = brains.vault.accessibilityNotifications
-        let before = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        _ = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Checkout", .header, "checkout_header")])
         )
         let firstScope = notifications.beginHeistScope()
@@ -92,13 +83,11 @@ extension TheBrainsPipelineTests {
             makeScreen(elements: [("Checkout", .header, "checkout_header")])
         )
 
-        XCTAssertEqual(after.generation, before.generation)
-        XCTAssertTrue(after.trace.captures.last?.transition.accessibilityNotifications.isEmpty == true)
-        XCTAssertTrue(after.trace.changeFacts.isEmpty)
+        XCTAssertEqual(after.events, [.noChange])
     }
 
-    func testElementChangedNotificationDoesNotSuppressSnapshotFallback() async throws {
-        let before = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+    func testElementChangedNotificationDoesNotSuppressSnapshotScreenClassification() async {
+        _ = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Menu", .header, "menu_header")])
         )
         let after = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
@@ -106,20 +95,14 @@ extension TheBrainsPipelineTests {
             notificationBatch: notificationBatch(kind: .elementChanged(.layout))
         )
 
-        XCTAssertNotEqual(after.generation, before.generation)
-        XCTAssertEqual(after.trace.captures.last?.transition.fallbackReason, .primaryHeaderChanged)
         XCTAssertEqual(
-            after.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
-            [.elementChanged(.layout)]
-        )
-        XCTAssertEqual(
-            after.trace.changeFacts.map(\.kind),
+            after.events.map(\.testKind),
             [.elementsChanged, .screenChanged, .elementsChanged]
         )
     }
 
-    func testNotificationGapFallsBackToSnapshotClassification() async throws {
-        let before = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+    func testNotificationGapStillClassifiesSnapshotScreenBoundary() async {
+        _ = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Menu", .header, "menu_header")])
         )
         let after = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
@@ -130,19 +113,21 @@ extension TheBrainsPipelineTests {
             )
         )
 
-        XCTAssertNotEqual(after.generation, before.generation)
-        XCTAssertEqual(after.trace.captures.last?.transition.fallbackReason, .primaryHeaderChanged)
+        XCTAssertEqual(
+            after.events.map(\.testKind),
+            [.elementsChanged, .screenChanged, .elementsChanged]
+        )
     }
 
     func testScreenChangedReplacesDiscoveryOnlyTargetableTruthBeforePublication() async {
-        await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        _ = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [
                 ("Checkout", .header, "checkout_header"),
                 ("Old offscreen row", .staticText, "old_offscreen_row"),
             ])
         )
 
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        _ = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             makeScreen(elements: [
                 ("Checkout", .header, "checkout_header"),
                 ("New visible row", .staticText, "new_visible_row"),
@@ -155,14 +140,14 @@ extension TheBrainsPipelineTests {
     }
 
     func testScreenChangedReplacesDiscoveryCommitInsteadOfMergingOldTruth() async {
-        await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        _ = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [
                 ("Checkout", .header, "checkout_header"),
                 ("Old discovered row", .staticText, "old_discovered_row"),
             ])
         )
 
-        await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        _ = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [
                 ("Checkout", .header, "checkout_header"),
                 ("New discovered row", .staticText, "new_discovered_row"),
@@ -175,14 +160,14 @@ extension TheBrainsPipelineTests {
     }
 
     func testExplicitScreenChangedPublishesSettledCandidateExactly() async {
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        _ = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             makeScreen(elements: [
                 ("Home", .header, "home_header"),
                 ("Old control", .button, "old_control"),
             ])
         )
 
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        let boundary = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             makeScreen(elements: [
                 ("Old control", .button, "old_control"),
                 ("Details", .header, "details_header"),
@@ -191,13 +176,15 @@ extension TheBrainsPipelineTests {
             notificationBatch: notificationBatch(kind: .screenChanged)
         )
 
-        XCTAssertNotNil(brains.vault.interfaceTree.elements["old_control"])
-        XCTAssertNotNil(brains.vault.interfaceTree.elements["details_header"])
-        XCTAssertNotNil(brains.vault.interfaceTree.elements["persistent_status"])
+        XCTAssertEqual(
+            boundary.current.snapshot.interface.projectedElements
+                .compactMap(\.semantics.assertable.label),
+            ["Old control", "Details", "Persistent status"]
+        )
     }
 
-    func testUnknownNotificationRequiresExplicitSnapshotFallbackForScreenChange() async throws {
-        let before = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+    func testUnknownNotificationUsesSnapshotScreenClassification() async {
+        _ = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Menu", .header, "menu_header")])
         )
         let after = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
@@ -205,65 +192,78 @@ extension TheBrainsPipelineTests {
             notificationBatch: notificationBatch(kind: .unknown(4_002))
         )
 
-        XCTAssertNotEqual(after.generation, before.generation)
-        XCTAssertEqual(after.trace.captures.last?.transition.fallbackReason, .primaryHeaderChanged)
         XCTAssertEqual(
-            after.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
-            [.unknown(4_002)]
+            after.events.map(\.testKind),
+            [.elementsChanged, .screenChanged, .elementsChanged]
         )
-        XCTAssertEqual(after.trace.changeFacts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
     }
 
-    func testChangePredicatesReadScreenAndElementFactsSeparately() async throws {
-        _ = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+    func testChangePredicatesReadScreenAndElementEventsSeparately() async throws {
+        let oldScreen = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Menu", .header, "menu_header")])
         )
-        let newScreenEvent = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let screenBoundary = await brains.vault.semanticObservationStream.stateOwner
+            .observationBoundary(scope: .discovery)
+        let newScreen = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Checkout", .header, "checkout_header")]),
             notificationBatch: notificationBatch(kind: .screenChanged)
         )
-        let screenEvidence = try XCTUnwrap(AccessibilityTraceEvidence(
-            trace: newScreenEvent.trace,
-            completeness: .complete
-        ))
+        let screenEvidence = await brains.vault.semanticObservationStream.stateOwner
+            .evidence(after: screenBoundary)
 
-        let screenExpression = AccessibilityPredicate.changed(.screen())
-        let elementExpression = AccessibilityPredicate.changed(.elements())
-        let screenPredicate = ExpectationResult(
-            try resolvedPredicate(screenExpression).evaluate(in: screenEvidence),
-            predicate: screenExpression
+        XCTAssertEqual(screenEvidence.baseline, oldScreen.current.snapshot)
+        XCTAssertEqual(screenEvidence.current, newScreen.current.snapshot)
+        XCTAssertEqual(screenEvidence.events, newScreen.events)
+        XCTAssertTrue(
+            try resolvedPredicate(.screenChanged).evaluate(in: screenEvidence).met
         )
-        let elementPredicateAgainstScreen = ExpectationResult(
-            try resolvedPredicate(elementExpression).evaluate(in: screenEvidence),
-            predicate: elementExpression
+        XCTAssertTrue(
+            try resolvedPredicate(.elementsChanged).evaluate(in: screenEvidence).met
         )
-        XCTAssertTrue(screenPredicate.met)
-        XCTAssertTrue(elementPredicateAgainstScreen.met)
 
-        _ = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let oldVolume = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
-        let elementCurrentEvent = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let elementBoundary = await brains.vault.semanticObservationStream.stateOwner
+            .observationBoundary(scope: .discovery)
+        let newVolume = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "60%")
         )
-        let elementEvidence = try XCTUnwrap(AccessibilityTraceEvidence(
-            trace: elementCurrentEvent.trace,
-            completeness: .complete
-        ))
+        let elementEvidence = await brains.vault.semanticObservationStream.stateOwner
+            .evidence(after: elementBoundary)
 
-        let elementPredicate = ExpectationResult(
-            try resolvedPredicate(elementExpression).evaluate(in: elementEvidence),
-            predicate: elementExpression
+        XCTAssertEqual(elementEvidence.baseline, oldVolume.current.snapshot)
+        XCTAssertEqual(elementEvidence.current, newVolume.current.snapshot)
+        XCTAssertEqual(elementEvidence.events, newVolume.events)
+        XCTAssertTrue(
+            try resolvedPredicate(.elementsChanged).evaluate(in: elementEvidence).met
         )
-        let screenPredicateAgainstElement = ExpectationResult(
-            try resolvedPredicate(screenExpression).evaluate(in: elementEvidence),
-            predicate: screenExpression
+        XCTAssertFalse(
+            try resolvedPredicate(.screenChanged).evaluate(in: elementEvidence).met
         )
-        XCTAssertTrue(elementPredicate.met)
-        XCTAssertFalse(screenPredicateAgainstElement.met)
-        XCTAssertEqual(screenPredicateAgainstElement.actual, "elementsChanged")
+    }
+}
+
+private extension Observation.Event {
+    enum TestKind: Equatable {
+        case elementsChanged
+        case screenChanged
+        case notification
+        case noChange
     }
 
+    var testKind: TestKind {
+        switch self {
+        case .elementsChanged:
+            .elementsChanged
+        case .screenChanged:
+            .screenChanged
+        case .notification:
+            .notification
+        case .noChange:
+            .noChange
+        }
+    }
 }
 
 #endif

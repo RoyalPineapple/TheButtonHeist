@@ -29,11 +29,11 @@ extension TheFence {
         return .action(command: .getPasteboard, result: result)
     }
 
-    func handleGetAnnouncements(timeout: TimeInterval) async throws -> FenceResponse {
-        let payload = try await sendAndAwaitAnnouncements(
+    func handleGetNotifications(timeout: TimeInterval) async throws -> FenceResponse {
+        let notifications = try await sendAndAwaitNotifications(
             timeout: timeout
         )
-        return .announcements(payload.announcements)
+        return .notifications(notifications)
     }
 
     // MARK: - Direct Action Execution

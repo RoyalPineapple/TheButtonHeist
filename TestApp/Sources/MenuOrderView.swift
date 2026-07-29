@@ -253,12 +253,17 @@ struct MenuOrderView: View {
                     checkoutPhase = .processing
                     pendingTask?.cancel()
                     pendingTask = Task {
+                        // A real payment takes an unpredictable amount of time,
+                        // which is the thing a heist has to survive. The spread
+                        // is what matters, not its size: it stays wide enough
+                        // that no wait can be tuned to it, and short enough that
+                        // the slowest roll still fits one timeout.
                         let roll = Int.random(in: 1...100)
                         let delay: Double = switch roll {
-                        case 1...80:  2.5
-                        case 81...90: 5.0
-                        case 91...95: 7.0
-                        default:      10.0
+                        case 1...80:  0.4
+                        case 81...90: 0.8
+                        case 91...95: 1.2
+                        default:      1.6
                         }
                         do {
                             try await Task.sleep(for: .seconds(delay))

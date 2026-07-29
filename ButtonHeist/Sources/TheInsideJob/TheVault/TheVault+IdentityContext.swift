@@ -14,19 +14,15 @@ extension TheVault {
     struct ContainerIdentity {
         let path: TreePath
         let container: AccessibilityContainer
-        let children: [AccessibilityHierarchy]
-        let contentFrame: ContentRect?
+        let viewSpace: HeistElement.Geometry.ViewSpace
         let scrollMembership: InterfaceTree.ScrollMembership?
-
-        var subtree: AccessibilityHierarchy {
-            .container(container, children: children)
-        }
     }
 
     struct ElementIdentity {
         let path: TreePath
         let element: AccessibilityElement
         let traversalIndex: Int
+        let viewSpace: HeistElement.Geometry.ViewSpace
         let scrollMembership: InterfaceTree.ScrollMembership?
     }
 
@@ -49,9 +45,9 @@ extension TheVault {
         let containers: [ContainerIdentity]
         let elements: [ElementIdentity]
 
-        var contentFramesByPath: [TreePath: ContentRect] {
-            Dictionary(uniqueKeysWithValues: containers.compactMap { identity in
-                identity.contentFrame.map { (identity.path, $0) }
+        var viewSpacesByPath: [TreePath: HeistElement.Geometry.ViewSpace] {
+            Dictionary(uniqueKeysWithValues: containers.map { identity in
+                (identity.path, identity.viewSpace)
             })
         }
 
@@ -70,8 +66,16 @@ extension TheVault {
 
     static func buildIdentityContext(
         hierarchy: [AccessibilityHierarchy],
+        viewHierarchy: [AccessibilityHierarchy]? = nil,
         scrollableContainerPaths: Set<TreePath> = []
     ) -> IdentityContext {
+        let viewHierarchy = viewHierarchy ?? hierarchy
+        let viewElementsByPath = Dictionary(
+            uniqueKeysWithValues: viewHierarchy.pathIndexedElements.map { ($0.path, $0.element) }
+        )
+        let viewContainersByPath = Dictionary(
+            uniqueKeysWithValues: viewHierarchy.pathIndexedContainers.map { ($0.path, $0.container) }
+        )
         var accumulator = IdentityAccumulator()
         for (rootIndex, root) in hierarchy.enumerated() {
             root.foldedPreorder(
@@ -81,11 +85,13 @@ extension TheVault {
                 ),
                 into: &accumulator,
                 onElement: { element, traversalIndex, context, accumulator in
+                    let viewElement = viewElementsByPath[context.path] ?? element
                     accumulator.elements.append(
                         ElementIdentity(
                             path: context.path,
                             element: element,
                             traversalIndex: traversalIndex,
+                            viewSpace: rootViewSpace(for: viewElement),
                             scrollMembership: context.parentScrollContainerPath.map {
                                 InterfaceTree.ScrollMembership(containerPath: $0, index: nil)
                             }
@@ -93,20 +99,16 @@ extension TheVault {
                     )
                     return true
                 },
-                onContainer: { container, children, context, accumulator in
+                onContainer: { container, _, context, accumulator in
                     let membership = context.parentScrollContainerPath.map {
                         InterfaceTree.ScrollMembership(containerPath: $0, index: nil)
                     }
-                    let frame = container.frame.cgRect
-                    let contentFrame = try? ContentRect(validating: membership == nil
-                        ? frame
-                        : CGRect(origin: .zero, size: frame.size))
+                    let viewContainer = viewContainersByPath[context.path] ?? container
                     accumulator.containers.append(
                         ContainerIdentity(
                             path: context.path,
                             container: container,
-                            children: children,
-                            contentFrame: contentFrame,
+                            viewSpace: rootViewSpace(for: viewContainer),
                             scrollMembership: membership
                         )
                     )
@@ -139,47 +141,62 @@ extension TheVault {
         )
     }
 
+    private static func rootViewSpace(
+        for element: AccessibilityElement
+    ) -> HeistElement.Geometry.ViewSpace {
+        HeistElement.Geometry.ViewSpace(
+            ownerPath: .root,
+            frame: try? ViewRect(validating: element.bhFrame),
+            activationPoint: try? ViewPoint(validating: element.bhResolvedActivationPoint)
+        )
+    }
+
+    private static func rootViewSpace(
+        for container: AccessibilityContainer
+    ) -> HeistElement.Geometry.ViewSpace {
+        let frame = container.frame.cgRect
+        return HeistElement.Geometry.ViewSpace(
+            ownerPath: .root,
+            frame: try? ViewRect(validating: frame),
+            activationPoint: try? ViewPoint(validating: CGPoint(x: frame.midX, y: frame.midY))
+        )
+    }
+
     // MARK: - Container Naming
 
     /// Compute a readable generated name prefix for a parser container, derived
-    /// from its own exposed values. Container names are capture-local tree
-    /// projections; `buildContainerNameIndex` appends a deterministic
-    /// subtree hash when multiple containers share this prefix in one parse.
-    static func containerName(
-        for container: AccessibilityContainer,
-        contentFrame: ContentRect?
-    ) -> ContainerName {
-        let frameHash = contentFrame.map { coarseFrameHash($0.cgRect) } ?? "unavailable"
+    /// from the values the container itself exposes — role, identifier, semantic
+    /// label — and never from its frame. A name is a single value with nothing to
+    /// compare against, so the tolerance that makes frame *comparison* safe
+    /// cannot make a frame-derived *name* safe: a container parked on a bucket
+    /// edge would be renamed by a third of a point of layout noise. Container
+    /// names are capture-local tree projections; `buildContainerNamesByPath`
+    /// appends the container's tree path when several share this prefix in one
+    /// parse.
+    static func containerName(for container: AccessibilityContainer) -> ContainerName {
         let facts = container.containerPredicateFacts
+        let identifierSuffix = facts.identifier.map { "_\($0)" } ?? ""
         switch facts.role {
         case .none where facts.isScrollable:
-            return ContainerName(stringLiteral: "scrollable_\(frameHash)")
+            return ContainerName(stringLiteral: "scrollable\(identifierSuffix)")
         case .none:
-            let identifierSlug = facts.identifier ?? "anon"
-            return ContainerName(stringLiteral: "container_\(identifierSlug)_\(frameHash)")
+            return ContainerName(stringLiteral: "container_\(facts.identifier ?? "anon")")
         case .semanticGroup(let label, let value):
             let labelSlug = TheScore.slugify(label) ?? "anon"
             let valueSlug = TheScore.slugify(value) ?? ""
             let identifierSlug = facts.identifier ?? ""
             return ContainerName(stringLiteral: "semantic_\(identifierSlug)_\(labelSlug)_\(valueSlug)")
         case .list:
-            return ContainerName(stringLiteral: "list_\(frameHash)")
+            return ContainerName(stringLiteral: "list\(identifierSuffix)")
         case .landmark:
-            return ContainerName(stringLiteral: "landmark_\(frameHash)")
+            return ContainerName(stringLiteral: "landmark\(identifierSuffix)")
         case .tabBar:
-            return ContainerName(stringLiteral: "tabBar_\(frameHash)")
+            return ContainerName(stringLiteral: "tabBar\(identifierSuffix)")
         case .series:
-            return ContainerName(stringLiteral: "series_\(frameHash)")
+            return ContainerName(stringLiteral: "series\(identifierSuffix)")
         case .dataTable(let rows, let columns):
-            return ContainerName(stringLiteral: "table_\(rows)x\(columns)_\(frameHash)")
+            return ContainerName(stringLiteral: "table_\(rows)x\(columns)\(identifierSuffix)")
         }
-    }
-
-    /// Coarse frame hash used when deriving generated container names. The
-    /// bucket is device-dependent so iPad layouts get the same tolerance used
-    /// by settle fingerprinting.
-    static func coarseFrameHash(_ frame: CGRect) -> String {
-        CoarseFrameComparison.hashFragment(for: frame)
     }
 
 }

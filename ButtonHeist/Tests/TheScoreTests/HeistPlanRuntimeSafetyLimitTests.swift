@@ -7,7 +7,6 @@ func runtimeSafetyEnforcesBounds() throws {
     let limits = HeistPlanRuntimeSafetyLimits(
         maxTotalSteps: 2,
         maxNestedStepDepth: 2,
-        maxPredicateDepth: 2,
         maxAllPredicateChildren: 1,
         maxForEachStringValues: 1,
         maxForEachElementLimit: 1,
@@ -15,10 +14,10 @@ func runtimeSafetyEnforcesBounds() throws {
         maxTotalStringBytes: 10,
         maxParameterBytes: 4
     )
-    let deepPredicate = AccessibilityPredicate.changed(.elements([
+    let deepPredicate = AccessibilityPredicate.elementsChanged([
         .exists(.label("Nested")),
         .exists(.label("Sibling")),
-    ]))
+    ])
     let raw = try HeistPlan(body: [
         .wait(WaitStep(predicate: deepPredicate, timeout: 0.5)),
         .forEachElement(try ForEachElementStep(
@@ -37,7 +36,6 @@ func runtimeSafetyEnforcesBounds() throws {
     let contracts = runtimeSafetyFailures(for: raw, limits: limits).map(\.contract)
 
     #expect(contracts.contains("max total heist steps"))
-    #expect(contracts.contains("max predicate depth"))
     #expect(contracts.contains("max .all child count"))
     #expect(contracts.contains("max for_each_element limit"))
     #expect(contracts.contains("max for_each_string values"))

@@ -3,8 +3,7 @@ import Foundation
 /// Complete typed result of one heist-plan execution.
 public struct HeistResult: Codable, Sendable, Equatable {
     public let steps: [HeistExecutionStepResult]
-    /// End-to-end wall-clock observation for the heist. Child durations can
-    /// overlap this interval and are not additive inputs to it.
+    /// End-to-end wall-clock duration for the complete heist run.
     public let durationMs: ElapsedMilliseconds
 
     public var outcome: HeistExecutionOutcome {

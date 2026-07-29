@@ -46,7 +46,7 @@ extension ElementInflation {
 
         let treeElement = liveTarget.treeElement
         let description = Navigation.ScrollTargetDescription(treeElement).description
-        let settledSequence = await vault.semanticObservationStream.latestCommittedEvent()?.sequence
+        let historyIndex = await vault.semanticObservationStream.stateOwner.historyEndIndex()
         let admittedTarget: Result<AdmittedSemanticTarget, SemanticTargetResolutionFailure>
         if let admitted = inflatedTarget.identity.admittedSemanticTarget {
             admittedTarget = .success(admitted)
@@ -88,7 +88,7 @@ extension ElementInflation {
                 sourceTarget: inflatedTarget.target,
                 pinnedElement: treeElement,
                 method: method,
-                after: settledSequence,
+                after: historyIndex,
                 deadline: inflatedTarget.deadline,
                 resolution: inflatedTarget.resolution.adding(.activationPointPlacement)
             ) {
@@ -243,9 +243,9 @@ extension ElementInflation {
 
         while deadline.hasTimeRemaining(at: geometryEnvironment.now()) {
             let remaining = deadline.remainingDuration(at: geometryEnvironment.now())
-            let heartbeat = await geometryEnvironment.awaitFrame(remaining)
-            guard heartbeat == .observed, !Task.isCancelled else {
-                let event: LiveGeometryStabilizationEvent = heartbeat == .cancelled || Task.isCancelled
+            let tick = await geometryEnvironment.awaitFrame(remaining)
+            guard tick == .observed, !Task.isCancelled else {
+                let event: LiveGeometryStabilizationEvent = tick == .cancelled || Task.isCancelled
                     ? .cancelled
                     : .deadlineExpired
                 return stateAfterGeometryReduction(

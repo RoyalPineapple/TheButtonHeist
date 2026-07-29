@@ -123,9 +123,6 @@ extension HeistJUnitXML {
                 lines.append(interfaceDump)
             }
         }
-        if let settlement = node.settlement, !settlement.settled {
-            lines.append(FenceResponse.incompleteSettlementSummary(settlement))
-        }
         return lines.joined(separator: "\n")
     }
 
@@ -142,6 +139,8 @@ extension HeistJUnitXML {
              .loop,
              .explicitFailure:
             return "commandError"
+        case .timeout:
+            return ActionFailure.Kind.timeout.rawValue
         case .action, .expectation, .wait, .none:
             return nil
         }

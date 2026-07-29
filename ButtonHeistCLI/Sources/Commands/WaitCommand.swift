@@ -18,7 +18,7 @@ struct WaitCommand: ConnectedOneShotCLICommand {
               buttonheist wait --exists -l "Welcome"
               buttonheist wait --missing -l "Loading" -t 5
               buttonheist wait --change screen
-              buttonheist wait --predicate '{"type":"no_change"}'
+              buttonheist wait --predicate '{"type":"changed","scope":"screen"}'
             """
     )
 
@@ -139,9 +139,9 @@ private extension WaitChangeKind {
     func predicate() -> AccessibilityPredicate {
         switch self {
         case .screen:
-            return .changed(.screen())
+            return .screenChanged
         case .elements:
-            return .changed(.elements())
+            return .elementsChanged
         }
     }
 }

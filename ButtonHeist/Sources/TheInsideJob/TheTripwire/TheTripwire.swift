@@ -4,7 +4,7 @@ import UIKit
 
 /// Detects UIKit tripwire triggers without touching the accessibility tree.
 ///
-/// TheTripwire monitors UIKit signals via one persistent CADisplayLink heartbeat.
+/// TheTripwire monitors UIKit signals via one persistent CADisplayLink tick.
 /// Ambient observation runs at a low rate; immediate one-shot demand temporarily
 /// raises that same link to the active screen's maximum refresh rate. Every tick runs the
 /// full set of checks: layer scan (presentation fingerprint and layout), VC
@@ -19,7 +19,6 @@ import UIKit
 final class TheTripwire {
 
     var pulsePhase: PulsePhase = .idle
-    let uikitIdleTracker = UIKitIdleTracker()
 
     var runningContext: RunningContext? {
         if case .running(let context) = pulsePhase { return context }

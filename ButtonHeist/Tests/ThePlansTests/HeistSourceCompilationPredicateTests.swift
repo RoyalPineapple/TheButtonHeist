@@ -44,19 +44,26 @@ import Testing
     #expect(plan == expected)
 }
 
-@Test func `runtime parser accepts announcement predicates`() throws {
+@Test func `runtime parser accepts notification predicates`() throws {
     let plan = try HeistSourceCompilation.compile(root("""
-    Activate(.label("Delete")).expect(.announcement("Item deleted"))
-    WaitFor(.announcement(.contains("processed")), timeout: 5)
-    WaitFor(.announcement)
+    Activate(.label("Delete")).expect(.notification("Item deleted"))
+    WaitFor(.notification(.contains("processed")), timeout: 5)
+    WaitFor(.notification)
+    WaitFor(.notification(element: .label("Saved")))
+    WaitFor(.notification(text: .contains("saved"), element: .element(.label("Saved"), .traits([.staticText]))))
     """))
     let expected = try HeistPlan(body: [
         .action(ActionStep(
             command: .activate(.predicate(.label("Delete"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .announcement("Item deleted"), timeout: 1))
+            expectationPolicy: .expect(ActionExpectation(predicate: .notification("Item deleted"), timeout: 1))
         )),
-        .wait(WaitStep(predicate: .announcement(.contains("processed")), timeout: 5)),
-        .wait(WaitStep(predicate: .announcement)),
+        .wait(WaitStep(predicate: .notification(.contains("processed")), timeout: 5)),
+        .wait(WaitStep(predicate: .notification)),
+        .wait(WaitStep(predicate: .notification(element: .label("Saved")))),
+        .wait(WaitStep(predicate: .notification(
+            text: .contains("saved"),
+            element: .element(.label("Saved"), .traits([.staticText]))
+        ))),
     ])
 
     #expect(plan == expected)
@@ -101,6 +108,10 @@ import Testing
         (#"Activate(.actions([.custom("")]))"#, "custom action name must not be blank"),
         ("Activate(.rotors([]))", "rotors predicate payload must not be empty"),
         ("Activate(.customContent(.init()))", "customContent match must include label, value, or isImportant"),
+        (
+            "WaitFor(.notification(element: .element()))",
+            ".element(...) requires at least one non-empty predicate check"
+        ),
         (#"WaitFor(.exists(.container(.identifier("Screen"), ordinal: -1)))"#, "ordinal must be non-negative"),
     ]
 

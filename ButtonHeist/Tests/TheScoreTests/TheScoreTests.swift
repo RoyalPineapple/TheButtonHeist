@@ -73,7 +73,10 @@ final class MessageIntegrationTests: XCTestCase {
 
         if case .interface(let decodedPayload) = decoded {
             XCTAssertEqual(decodedPayload.projectedElements.count, 100)
-            XCTAssertEqual(decodedPayload.projectedElements[50].label, "Label 50")
+            XCTAssertEqual(
+                decodedPayload.projectedElements[50].semantics.assertable.label,
+                "Label 50"
+            )
         } else {
             XCTFail("Expected interface message")
         }
@@ -157,11 +160,9 @@ final class MessageIntegrationTests: XCTestCase {
         decoder.dateDecodingStrategy = .iso8601
 
         for i in 0..<5 {
-            let element = HeistElement(
+            let element = makeTestHeistElement(
                 description: "Update \(i)",
                 label: "Label \(i)",
-                value: nil,
-                identifier: nil,
                 frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
                 actions: []
             )
@@ -172,7 +173,10 @@ final class MessageIntegrationTests: XCTestCase {
             let decoded = try decoder.decode(ServerMessage.self, from: data)
 
             if case .interface(let decodedPayload) = decoded {
-                XCTAssertEqual(decodedPayload.projectedElements[0].label, "Label \(i)")
+                XCTAssertEqual(
+                    decodedPayload.projectedElements[0].semantics.assertable.label,
+                    "Label \(i)"
+                )
             } else {
                 XCTFail("Expected interface update \(i)")
             }

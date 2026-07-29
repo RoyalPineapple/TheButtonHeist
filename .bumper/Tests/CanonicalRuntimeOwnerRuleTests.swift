@@ -11,8 +11,8 @@ struct CanonicalRuntimeOwnerRuleTests {
         let report = try evaluateButtonHeistRules(
             path: path,
             component: .runtime,
-            source: "func commit(_ owner: Observation.StoreOwner, _ admission: Observation.Admission) " +
-                "async throws { try await owner.commitAdmission(admission) }"
+            source: "func commit(_ owner: TheVault.StateOwner, _ admission: Observation.Admission) " +
+                "async { _ = await owner.commitAdmission(admission) }"
         )
 
         #expect(report.contains(ViolationMatcher(
@@ -24,25 +24,26 @@ struct CanonicalRuntimeOwnerRuleTests {
     @Test
     func streamOwnerMayCommitAnObservationAdmission() throws {
         let path: RelativeFilePath =
-            "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream+Settlement.swift"
+            "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream+CaptureAdmission.swift"
         let report = try evaluateButtonHeistRules(
             path: path,
             component: .runtime,
-            source: "func commit(_ owner: Observation.StoreOwner, _ admission: Observation.Admission) " +
-                "async throws { try await owner.commitAdmission(admission) }"
+            source: "func commit(_ owner: TheVault.StateOwner, _ admission: Observation.Admission) " +
+                "async { _ = await owner.commitAdmission(admission) }"
         )
 
         #expect(report.violations.isEmpty)
     }
 
     @Test
-    func rawStoreMutationOutsideStoreOwnerIsRejected() throws {
+    func rawVaultStateMutationOutsideStateOwnerIsRejected() throws {
         let path: RelativeFilePath =
             "ButtonHeist/Sources/TheInsideJob/TheVault/CompetingStoreOwner.swift"
         let report = try evaluateButtonHeistRules(
             path: path,
             component: .runtime,
-            source: "func commit(_ store: inout Observation.Store, _ admission: Observation.Admission) throws { try store.commitObservation(admission) }"
+            source: "func commit(_ state: inout TheVault.State, _ admission: Observation.Admission) {" +
+                " _ = state.commitObservation(admission) }"
         )
 
         #expect(report.contains(ViolationMatcher(
@@ -52,43 +53,73 @@ struct CanonicalRuntimeOwnerRuleTests {
     }
 
     @Test
-    func storeOwnerMayMutateTheObservationStore() throws {
+    func stateOwnerMayMutateVaultState() throws {
         let path: RelativeFilePath =
             "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStoreOwner.swift"
         let report = try evaluateButtonHeistRules(
             path: path,
             component: .runtime,
-            source: "func commit(_ store: inout Observation.Store, _ admission: Observation.Admission) throws { try store.commitObservation(admission) }"
+            source: "func commit(_ state: inout TheVault.State, _ admission: Observation.Admission) {" +
+                " _ = state.commitObservation(admission) }"
         )
 
         #expect(report.violations.isEmpty)
     }
 
     @Test
-    func settlementExecutionFileMayConstructTheExecutor() throws {
+    func heistHostMayConstructTheExecutionMachine() throws {
         let path: RelativeFilePath =
-            "ButtonHeist/Sources/TheInsideJob/TheBrains/Settlement+Execution.swift"
+            "ButtonHeist/Sources/TheInsideJob/TheBrains/HeistExecution+Host.swift"
         let report = try evaluateButtonHeistRules(
             path: path,
             component: .runtime,
-            source: "func execute<Boundary>(_ boundary: Boundary) { _ = Settlement.Executor(boundary: boundary) }"
+            source: "func execute(_ plan: HeistPlan) throws { _ = try HeistExecution.Machine(plan: plan) }"
         )
 
         #expect(report.violations.isEmpty)
     }
 
     @Test
-    func competingSettlementExecutorOwnerIsRejected() throws {
+    func competingHeistExecutionMachineOwnerIsRejected() throws {
         let path: RelativeFilePath =
-            "ButtonHeist/Sources/TheInsideJob/TheBrains/CompetingSettlement.swift"
+            "ButtonHeist/Sources/TheInsideJob/TheBrains/CompetingHeistExecutor.swift"
         let report = try evaluateButtonHeistRules(
             path: path,
             component: .runtime,
-            source: "func execute<Boundary>(_ boundary: Boundary) { _ = Settlement.Executor(boundary: boundary) }"
+            source: "func execute(_ plan: HeistPlan) throws { _ = try HeistExecution.Machine(plan: plan) }"
         )
 
         #expect(report.contains(ViolationMatcher(
-            id: "buttonheist.settlement_executor_ownership",
+            id: "buttonheist.heist_execution_machine_ownership",
+            path: path
+        )))
+    }
+
+    @Test
+    func canonicalHeistEntryMayConstructTheHost() throws {
+        let path: RelativeFilePath =
+            "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistExecution.swift"
+        let report = try evaluateButtonHeistRules(
+            path: path,
+            component: .runtime,
+            source: "func execute(_ brains: TheBrains) { _ = HeistExecution.Host(brains: brains) }"
+        )
+
+        #expect(report.violations.isEmpty)
+    }
+
+    @Test
+    func competingHeistHostOwnerIsRejected() throws {
+        let path: RelativeFilePath =
+            "ButtonHeist/Sources/TheInsideJob/TheBrains/CompetingHeistEntry.swift"
+        let report = try evaluateButtonHeistRules(
+            path: path,
+            component: .runtime,
+            source: "func execute(_ brains: TheBrains) { _ = HeistExecution.Host(brains: brains) }"
+        )
+
+        #expect(report.contains(ViolationMatcher(
+            id: "buttonheist.heist_execution_host_ownership",
             path: path
         )))
     }

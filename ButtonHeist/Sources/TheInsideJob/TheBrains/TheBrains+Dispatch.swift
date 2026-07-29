@@ -4,45 +4,17 @@ import Foundation
 import ThePlans
 import TheScore
 
-internal struct RuntimeActionExecution: Sendable, Equatable {
-    internal let evidence: HeistActionEvidence
-
-    internal var result: ActionResult {
-        guard let result = evidence.result else {
-            preconditionFailure("runtime action execution requires action result evidence")
-        }
-        return result
-    }
-
-    internal init(evidence: HeistActionEvidence) {
-        guard evidence.result != nil else {
-            preconditionFailure("runtime action execution requires action result evidence")
-        }
-        self.evidence = evidence
-    }
-
-    internal init(result: ActionResult) {
-        self.evidence = .completed(result: result, expectation: nil)
-    }
-}
-
 struct ActionTiming {
     enum Phase {
-        case beforeObservation
         case targetResolution
         case actionDispatch
         case interaction
-        case finalSemanticEvidence
-        case resultAssembly
     }
 
     private let actionStart: RuntimeElapsed.Instant
-    private var beforeObservation: ElapsedMilliseconds?
     private var targetResolution: ElapsedMilliseconds?
     private var actionDispatch: ElapsedMilliseconds?
     private var interaction: ElapsedMilliseconds?
-    private var finalSemanticEvidence: ElapsedMilliseconds?
-    private var resultAssembly: ElapsedMilliseconds?
 
     init(startedAt: RuntimeElapsed.Instant = RuntimeElapsed.now) {
         actionStart = startedAt
@@ -55,23 +27,17 @@ struct ActionTiming {
     ) {
         let duration = RuntimeElapsed.milliseconds(since: start, endedAt: endedAt)
         switch phase {
-        case .beforeObservation: Self.record(duration, in: &beforeObservation)
         case .targetResolution: Self.record(duration, in: &targetResolution)
         case .actionDispatch: Self.record(duration, in: &actionDispatch)
         case .interaction: Self.record(duration, in: &interaction)
-        case .finalSemanticEvidence: Self.record(duration, in: &finalSemanticEvidence)
-        case .resultAssembly: Self.record(duration, in: &resultAssembly)
         }
     }
 
     func freeze(endedAt: RuntimeElapsed.Instant = RuntimeElapsed.now) -> ActionPerformanceTiming {
         ActionPerformanceTiming(
-            beforeObservationMs: beforeObservation,
             targetResolutionMs: targetResolution,
             actionDispatchMs: actionDispatch,
             interactionMs: interaction,
-            finalSemanticEvidenceMs: finalSemanticEvidence,
-            resultAssemblyMs: resultAssembly,
             totalMs: RuntimeElapsed.milliseconds(since: actionStart, endedAt: endedAt)
         )
     }
@@ -84,30 +50,37 @@ struct ActionTiming {
 
 extension TheBrains {
     func executeRuntimeAction(_ command: ResolvedHeistActionCommand) async -> ActionResult {
-        await executeRuntimeActionForHeist(command, expectation: nil).result
-    }
-
-    func executeRuntimeActionForHeist(
-        _ command: ResolvedHeistActionCommand,
-        expectation: Settlement.ActionExpectation?
-    ) async -> RuntimeActionExecution {
         guard semanticObservationIsActive else {
-            return RuntimeActionExecution(
-                result: runtimeInactiveResult(payload: command.actionResultPayload)
-            )
+            return runtimeInactiveResult(payload: command.actionResultPayload)
         }
-        let settlementCommand = Settlement.Command.action(.init(
-            command: command,
-            predicate: expectation?.predicate,
-            allowances: .init(
-                readiness: .milliseconds(Int64(SettleSession.defaultTimeoutMs)),
-                expectation: expectation?.allowance
-            ),
-            baseline: .capture
-        ))
-        let result = await executeSettlementCommand(settlementCommand)
-        return RuntimeActionExecution(
-            evidence: Settlement.ResultProjector.projectAction(result)
+        let observationBoundary = await vault.semanticObservationStream.stateOwner
+            .observationBoundary(scope: .visible)
+        let dispatch = await dispatchRuntimeAction(command)
+        let observation: ActionResultObservationEvidence
+        switch await vault.semanticObservationStream.refreshVisibleObservation() {
+        case .committed:
+            observation = .observed(
+                await vault.semanticObservationStream.stateOwner
+                    .evidence(after: observationBoundary)
+            )
+        case .unavailable:
+            observation = .none
+        }
+        let outcome: ActionResultOutcome = switch dispatch.outcome {
+        case .success:
+            .success
+        case .failure(let failure):
+            .failure(Self.actionFailureKind(for: failure))
+        }
+        return ActionResult(
+            outcome: outcome,
+            payload: dispatch.payload,
+            message: dispatch.message,
+            observation: observation,
+            subjectEvidence: dispatch.subjectEvidence,
+            activationTrace: dispatch.activationTrace,
+            screenActionHandler: dispatch.screenActionHandler,
+            timing: dispatch.timing
         )
     }
 
@@ -174,7 +147,7 @@ extension TheBrains {
     }
 
     func executeSemanticDiscovery() async -> Navigation.InterfaceExplorationResult? {
-        await navigation.exploreScreen(exitPosition: .origin)
+        await navigation.fullGraph()
     }
 
     private func clearRotorCursorBeforeNonRotorAction(_ command: ResolvedHeistActionCommand) {
@@ -200,9 +173,9 @@ extension TheBrains {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(payload: .wait)
         }
-        let resolved: ResolvedWaitStep
         do {
-            resolved = try step.resolve(in: .empty)
+            let plan = try HeistPlan(body: [.wait(step)])
+            return await executeSingleStepPlan(plan, fallbackPayload: .wait)
         } catch {
             return .failure(
                 payload: .wait,
@@ -210,12 +183,22 @@ extension TheBrains {
                 message: "could not resolve wait predicate: \(error)"
             )
         }
-        let result = await executeSettlementCommand(Settlement.Command(
-            observing: step.predicate,
-            resolved: resolved.predicate,
-            timeout: resolved.timeout
-        ))
-        return Settlement.ResultProjector.projectWait(result).actionResult
+    }
+
+    func executeSingleStepPlan(
+        _ plan: HeistPlan,
+        fallbackPayload: ActionResult.Payload
+    ) async -> ActionResult {
+        let execution = await executeHeistPlan(plan)
+        guard case .heist(let result?) = execution.payload,
+              let actionResult = result.steps.first?.reportActionResult else {
+            return .failure(
+                payload: fallbackPayload,
+                failureKind: execution.outcome.failureKind ?? .actionFailed,
+                message: execution.message ?? "single-step heist produced no action result"
+            )
+        }
+        return actionResult
     }
 
     nonisolated static func actionFailureKind(

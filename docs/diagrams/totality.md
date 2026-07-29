@@ -3,7 +3,13 @@
 Why every heist halts. Termination rests on two independent halves: structural guarantees enforced at admission (the plan cannot express an unbounded computation) and watchdog guarantees enforced at runtime (everything that waits has a mandatory timeout). This diagram answers "what stops a heist from running forever?"
 
 **Illustrates:** [SWIFT-HEIST-AUTHORING.md](../SWIFT-HEIST-AUTHORING.md), [HEIST-LANGUAGE-SPEC.md](../HEIST-LANGUAGE-SPEC.md)
-**Source of truth:** `ButtonHeist/Sources/ThePlans/HeistCallGraph.swift`, `ButtonHeist/Sources/ThePlans/HeistPlan+RuntimeValidationTraversal.swift`, `ButtonHeist/Sources/ThePlans/HeistPlan+RuntimeValidationLimits.swift`, `ButtonHeist/Sources/ThePlans/LoopSteps.swift`, `ButtonHeist/Sources/ThePlans/WaitStep.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift`
+**Source of truth:** `ButtonHeist/Sources/ThePlans/Model/HeistCallGraph.swift`,
+`ButtonHeist/Sources/ThePlans/Validation/HeistPlan+RuntimeValidationTraversal.swift`,
+`ButtonHeist/Sources/ThePlans/Validation/HeistPlan+RuntimeValidationLimits.swift`,
+`ButtonHeist/Sources/ThePlans/Model/LoopSteps.swift`,
+`ButtonHeist/Sources/ThePlans/Model/WaitStep.swift`,
+`ButtonHeist/Sources/ThePlans/Model/TextAndWaitCommandPayloads.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheBrains/HeistExecution+Host.swift`
 
 ```mermaid
 flowchart TD
@@ -19,7 +25,11 @@ flowchart TD
     subgraph watchdog["Watchdog termination"]
         WAITT["WaitStep.timeout mandatory<br/>default 30 s · maximum 60 s or BUTTONHEIST_MAX_WAIT_TIMEOUT"]
         REPEATT["RepeatUntilStep.timeout mandatory<br/>same configured WaitTimeout maximum"]
-        SETTLET["settle hard timeout:<br/>SettleSession.defaultTimeoutMs 5000 —<br/>ends in SettleOutcome.timedOut, never blocks"]
+        HEISTT["HeistTimeout at runtime boundary<br/>default 60 s · finite and positive<br/>no policy maximum"]
+        HOST["HeistExecution.Host<br/>one task for the earlier active-leaf<br/>or whole-heist absolute deadline"]
+        HEISTT --> HOST
+        WAITT --> HOST
+        REPEATT --> HOST
     end
 
     structural --> HALT

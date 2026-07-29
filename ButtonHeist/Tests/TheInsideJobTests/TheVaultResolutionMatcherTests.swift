@@ -14,7 +14,7 @@ extension TheVaultResolutionTests {
         let element = element(label: "Save", traits: .button)
         await register(element, heistId: "button_save", index: 0)
 
-        let result = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save")))
+        let result = vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save")))
         guard let resolved = result.resolvedElement else {
             XCTFail("Expected .resolved, got \(result)")
             return
@@ -28,7 +28,7 @@ extension TheVaultResolutionTests {
         await register(save, heistId: "button_save", index: 0)
         await register(cancel, heistId: "button_cancel", index: 1)
 
-        let result = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Cancel")))
+        let result = vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Cancel")))
         guard let resolved = result.resolvedElement else {
             XCTFail("Expected .resolved, got \(result)")
             return
@@ -58,18 +58,28 @@ extension TheVaultResolutionTests {
         let cartPay = element(label: "Pay", traits: .button)
         let checkoutPath = TreePath([0, 0, 0])
         let cartPath = TreePath([1, 0, 0])
-        await bagman.installObservationForTesting(InterfaceObservation.makeForTests(
+        await vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [
                 "checkout_pay": InterfaceTree.Element(
                     heistId: "checkout_pay",
                     path: checkoutPath,
                     scrollMembership: nil,
+                    geometry: testGeometry(
+                        for: checkoutPay,
+                        ownerPath: .root,
+                        screen: TheVault.onscreenSpace(for: checkoutPay)
+                    ),
                     element: checkoutPay
                 ),
                 "cart_pay": InterfaceTree.Element(
                     heistId: "cart_pay",
                     path: cartPath,
                     scrollMembership: nil,
+                    geometry: testGeometry(
+                        for: cartPay,
+                        ownerPath: .root,
+                        screen: TheVault.onscreenSpace(for: cartPay)
+                    ),
                     element: cartPay
                 ),
             ],
@@ -88,7 +98,7 @@ extension TheVaultResolutionTests {
             firstResponderHeistId: nil
         ))
 
-        let result = bagman.resolveTarget(try resolvedTarget(
+        let result = vault.resolveTarget(try resolvedTarget(
             .within(
                 container: .label("Checkout"),
                 .within(container: .identifier("checkout_actions"), .label("Pay"))
@@ -113,6 +123,11 @@ extension TheVaultResolutionTests {
                         heistId: "review_sale",
                         path: staleElementPath,
                         scrollMembership: InterfaceTree.ScrollMembership(containerPath: containerPath, index: 0),
+                        geometry: testGeometry(
+                            for: reviewSale,
+                            ownerPath: containerPath,
+                            screen: TheVault.onscreenSpace(for: reviewSale)
+                        ),
                         element: reviewSale
                     ),
                 ],
@@ -121,20 +136,24 @@ extension TheVaultResolutionTests {
                         container: container,
                         path: containerPath,
                         containerName: "order_entry_container",
-                        contentFrame: nil
+                        viewSpace: HeistElement.Geometry.ViewSpace(
+                            ownerPath: .root,
+                            frame: try ViewRect(validating: container.frame.cgRect),
+                            activationPoint: nil
+                        )
                     ),
                 ]
             ),
             liveCapture: LiveCapture.makeForTests()
         )
-        await bagman.installObservationForTesting(observation)
+        await vault.installObservationForTesting(observation)
         let target = AccessibilityTarget.within(
             container: .identifier("order_entry_container"),
             .identifier("review_sale")
         )
         let resolvedTarget = try resolvedTarget(target)
 
-        XCTAssertEqual(bagman.resolveTarget(resolvedTarget).resolvedElement?.heistId, "review_sale")
+        XCTAssertEqual(vault.resolveTarget(resolvedTarget).resolvedElement?.heistId, "review_sale")
     }
 
     func testMatcherAmbiguousReturnsCandidates() async {
@@ -143,7 +162,7 @@ extension TheVaultResolutionTests {
         await register(save1, heistId: "button_save_1", index: 0)
         await register(save2, heistId: "button_save_2", index: 1)
 
-        let result = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save")))
+        let result = vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save")))
         guard case .ambiguous(let facts) = result else {
             XCTFail("Expected .ambiguous, got \(result)")
             return
@@ -162,7 +181,7 @@ extension TheVaultResolutionTests {
         await register(save1, heistId: "save1", index: 0)
         await register(save2, heistId: "save2", index: 1)
 
-        let result = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save")))
+        let result = vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save")))
         guard case .ambiguous(let facts) = result else {
             XCTFail("Expected .ambiguous, got \(result)")
             return
@@ -184,7 +203,7 @@ extension TheVaultResolutionTests {
         let element = element(label: "OK", traits: .button)
         await register(element, heistId: "button_ok", index: 0)
 
-        let result = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Cancel")))
+        let result = vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Cancel")))
         guard case .notFound(let facts) = result else {
             XCTFail("Expected .notFound, got \(result)")
             return
@@ -200,7 +219,7 @@ extension TheVaultResolutionTests {
         let element = element(label: "Save", value: "draft")
         await register(element, heistId: "button_save", index: 0)
 
-        let result = bagman.resolveTarget(try resolvedTarget(
+        let result = vault.resolveTarget(try resolvedTarget(
             AccessibilityTarget.label("Save").and(.value("final"))
         ))
         guard case .notFound(let facts) = result else {
@@ -219,7 +238,7 @@ extension TheVaultResolutionTests {
         await register(visible, heistId: "button_visible", index: 0)
         await registerOffScreen(offscreen, heistId: "long_list_button")
 
-        let result = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Long")))
+        let result = vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Long")))
         guard case .notFound(let facts) = result else {
             XCTFail("Expected .notFound, got \(result)")
             return
@@ -237,7 +256,7 @@ extension TheVaultResolutionTests {
     // MARK: - TargetResolution Algebra
 
     func testMissingTargetIsNotFound() async {
-        let result = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("nope")))
+        let result = vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("nope")))
         guard case .notFound = result else {
             return XCTFail("Expected .notFound, got \(result)")
         }
@@ -249,7 +268,7 @@ extension TheVaultResolutionTests {
         await register(save1, heistId: "button_save_1", index: 0)
         await register(save2, heistId: "button_save_2", index: 1)
 
-        let result = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save")))
+        let result = vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save")))
         guard case .ambiguous = result else {
             return XCTFail("Expected .ambiguous, got \(result)")
         }
@@ -259,7 +278,7 @@ extension TheVaultResolutionTests {
         let element = element(label: "OK", traits: .button)
         await register(element, heistId: "button_ok", index: 0)
 
-        let result = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("OK")))
+        let result = vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("OK")))
         XCTAssertEqual(result.diagnostics, "")
     }
 
@@ -271,12 +290,12 @@ extension TheVaultResolutionTests {
         await register(save1, heistId: "button_save_1", index: 0)
         await register(save2, heistId: "button_save_2", index: 1)
 
-        let result = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save")))
+        let result = vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save")))
         XCTAssertTrue(result.diagnostics.contains("2 elements match"), "Should return ambiguous message: \(result.diagnostics)")
     }
 
     func testEmptyScreenReturnsCompactSummary() async {
-        let result = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Anything")))
+        let result = vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Anything")))
         guard case .notFound(let facts) = result else {
             XCTFail("Expected .notFound, got \(result)")
             return
@@ -297,13 +316,13 @@ extension TheVaultResolutionTests {
         await register(save2, heistId: "button_save_2", index: 1)
         await register(save3, heistId: "button_save_3", index: 2)
 
-        let result0 = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save"), ordinal: 0))
+        let result0 = vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save"), ordinal: 0))
         XCTAssertEqual(result0.resolvedElement?.element.value, "draft")
 
-        let result1 = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save"), ordinal: 1))
+        let result1 = vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save"), ordinal: 1))
         XCTAssertEqual(result1.resolvedElement?.element.value, "final")
 
-        let result2 = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save"), ordinal: 2))
+        let result2 = vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save"), ordinal: 2))
         XCTAssertEqual(result2.resolvedElement?.element.value, "archive")
     }
 
@@ -313,7 +332,7 @@ extension TheVaultResolutionTests {
         await register(save1, heistId: "button_save_1", index: 0)
         await register(save2, heistId: "button_save_2", index: 1)
 
-        let result = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save"), ordinal: 5))
+        let result = vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save"), ordinal: 5))
         guard case .notFound(let facts) = result else {
             XCTFail("Expected .notFound, got \(result)")
             return
@@ -332,7 +351,7 @@ extension TheVaultResolutionTests {
         await register(save1, heistId: "button_save_1", index: 0)
         await register(save2, heistId: "button_save_2", index: 1)
 
-        let result = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save")))
+        let result = vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save")))
         guard case .ambiguous(let facts) = result else {
             XCTFail("Expected .ambiguous, got \(result)")
             return
@@ -352,7 +371,7 @@ extension TheVaultResolutionTests {
             )
         }
 
-        let result = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Duplicate")))
+        let result = vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Duplicate")))
         guard case .ambiguous(let facts) = result else {
             XCTFail("Expected .ambiguous, got \(result)")
             return
@@ -367,13 +386,13 @@ extension TheVaultResolutionTests {
         let element = element(label: "Save", traits: .button)
         await register(element, heistId: "button_save", index: 0)
 
-        let result = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save"), ordinal: 0))
+        let result = vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Save"), ordinal: 0))
         XCTAssertNotNil(result.resolvedElement)
         XCTAssertEqual(result.resolvedElement?.element.label, "Save")
     }
 
     func testOrdinalZeroOnNoMatchReturnsNotFound() async {
-        let result = bagman.resolveTarget(literalTarget(ResolvedElementPredicate.label("Nonexistent"), ordinal: 0))
+        let result = vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Nonexistent"), ordinal: 0))
         guard case .notFound(let facts) = result else {
             XCTFail("Expected .notFound, got \(result)")
             return

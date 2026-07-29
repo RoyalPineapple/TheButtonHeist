@@ -16,7 +16,7 @@ flowchart TD
     BINDING["HeistPlanSourceBinding<br/>string · target"]
     SCOPE["HeistPlanSourceScope<br/>stringRefs · targetRefs"]
     PARSER["HeistPlanSourceParser"]
-    VALUES["Concrete canonical values<br/><br/>StringMatch: exact · contains · prefix · suffix · isEmpty<br/>ElementPredicateCheck: label · identifier · value · traits · hint · actions · customContent · rotors · exclude<br/>ElementPredicate<br/>AccessibilityTarget: predicate · container · ref · within<br/>target sugar: label · identifier · value · hint · traits · actions · customContent · rotors · exclude · element · target<br/>AccessibilityPredicate: exists · missing · announcement · changed · noChange<br/>ChangeDeclaration: screen · elements<br/>WaitStep · ActionExpectationPolicy<br/>ActionStep · HeistActionCommand<br/>HeistStep: action · wait · conditional · forEachElement · forEachString · repeatUntil · warn · fail · heist · invoke"]
+    VALUES["Concrete canonical values<br/><br/>StringMatch: exact · contains · prefix · suffix · isEmpty<br/>ElementPredicateCheck: label · identifier · value · traits · hint · actions · customContent · rotors · exclude<br/>ElementPredicate<br/>AccessibilityTarget: predicate · container · ref · within<br/>target sugar: label · identifier · value · hint · traits · actions · customContent · rotors · exclude · element · target<br/>AccessibilityPredicate: exists · missing · announcement · screenChanged · elementsChanged<br/>ScreenPredicate · ElementAssertion<br/>WaitStep · ActionExpectationPolicy<br/>ActionStep · HeistActionCommand<br/>HeistStep: action · wait · conditional · forEachElement · forEachString · repeatUntil · warn · fail · heist · invoke"]
     ASSEMBLY["Private file-local recursive assembly<br/>definitions · nested HeistPlan · scoped HeistStep arrays"]
     ADMISSION["One parseProgram root admission<br/>HeistPlanRuntimeSafetyValidator.validate(root)"]
     PLAN["HeistPlan<br/>canonical admitted plan"]
@@ -41,10 +41,11 @@ The concrete predicate path is shared everywhere:
 - Standalone `WaitFor` and action `.expect(...)` both carry
   `AccessibilityPredicate`. Expectation chaining has one composition owner and
   finishes as `WaitStep` and `ActionExpectationPolicy`.
-- `ChangeDeclaration.ScreenAssertion` permits `exists` and `missing`;
-  `ChangeDeclaration.ElementAssertion` additionally permits `appeared`,
-  `disappeared`, and `updated`. Current-tree assertions use the resolved target
-  directly; transition assertions use observation-window evidence.
+- `.screenChanged` carries a `ScreenPredicate`, which matches the arrived-at
+  screen and names no elements. `.elementsChanged` carries `ElementAssertion`,
+  which permits `exists`, `missing`, `appeared`, `disappeared`, and `updated`.
+  Current-tree assertions use the resolved target directly; transition
+  assertions use `Observation.Evidence`.
 
 The supported public action constructors are:
 

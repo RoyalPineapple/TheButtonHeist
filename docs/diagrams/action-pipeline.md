@@ -1,45 +1,45 @@
 # Action Pipeline
 
-One action end to end: resolve typed syntax, establish an evidence boundary,
-arm settlement, dispatch exactly once, and return one projection of the
-canonical `Settlement.Result`.
-Reducer state, event ordering, phase deadlines, handoff, and cleanup are owned
-by the [settlement loop](settle-loop.md).
+One durable action is a leaf in the complete-heist machine. The machine opens
+observation before dispatch, evaluates every admitted event in order, and
+returns one typed result.
 
 **Illustrates:** [ARCHITECTURE.md](../ARCHITECTURE.md), [API.md](../API.md),
 [WIRE-PROTOCOL.md](../WIRE-PROTOCOL.md)
 
 **Source of truth:**
-`ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistActionExecution.swift`,
-`ButtonHeist/Sources/TheInsideJob/TheBrains/Settlement.swift`,
-`ButtonHeist/Sources/TheInsideJob/TheBrains/Settlement+Execution.swift`,
-`ButtonHeist/Sources/TheInsideJob/TheBrains/Settlement+Reducer.swift`,
-`ButtonHeist/Sources/TheInsideJob/TheBrains/Settlement+ResultProjection.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheBrains/HeistExecution.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheBrains/HeistExecution+Leaf.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheBrains/HeistExecution+Host.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheSafecracker/ActionDispatchResult.swift`,
-`ButtonHeist/Sources/TheInsideJob/TheTripwire/AccessibilityNotificationBus.swift`,
 `ButtonHeist/Sources/TheScore/Reports/ActionResult.swift`
 
 ```mermaid
 sequenceDiagram
-    participant Client as CLI or MCP
-    participant Fence as TheFence
-    participant Brains as TheBrains
-    participant Settlement as Settlement.Executor
-    participant Evidence as Observation + notification + readiness
+    participant Machine as HeistExecution.Machine
+    participant Host as MainActor Host
+    participant Vault as TheVault
     participant Safecracker as TheSafecracker
 
-    Client->>Fence: canonical command plus arguments
-    Fence->>Fence: parse and admit typed syntax
-    Fence->>Brains: heist plan or runtime action
-    Brains->>Brains: resolve target, action, and optional predicate
-    Brains->>Settlement: Settlement.Command.action
-    Settlement->>Evidence: capture baseline and arm channels
-    Settlement->>Safecracker: dispatch resolved action exactly once
-    Safecracker-->>Settlement: ActionDispatchResult
-    Evidence-->>Settlement: ordered settlement evidence
-    Settlement->>Settlement: execute active reducer loop
-    Settlement-->>Brains: one absorbing Settlement.Result
-    Brains->>Brains: project canonical action response
-    Brains-->>Fence: canonical projection
-    Fence-->>Client: action result
+    Machine-->>Host: beginObservation(scope, leaf timeout)
+    Host->>Vault: capture baseline and open history boundary
+    Vault-->>Machine: observationBegan(boundary)
+    Vault-->>Machine: noChange
+    Machine-->>Host: currentSnapshot(scope)
+    Host-->>Machine: currentSnapshot(snapshot)
+    Machine-->>Host: dispatch(resolved command)
+    Host->>Safecracker: dispatch exactly once
+    Safecracker-->>Machine: dispatchCompleted(outcome)
+    loop until predicate and noChange
+        Vault-->>Machine: ordered Observation.Event
+    end
+    Machine-->>Host: finishObservation(exit position)
+    Host->>Vault: final capture and evidence projection
+    Vault-->>Machine: observationFinished(evidence, outcome)
+    Machine-->>Host: next heist State
 ```
+
+The action leaf owns predicate progress but performs no effects. The host owns
+capture, dispatch, viewport work, cancellation, and deadlines. The Vault owns
+current truth and history. `ActionResult` is projected once from dispatch truth
+plus immutable observation evidence.

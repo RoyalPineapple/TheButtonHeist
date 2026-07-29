@@ -182,7 +182,7 @@ extension TheFenceHandlerTests {
             TheFence.CommandArgumentEnvelope(values: [
                 "plan": .string("""
                 HeistPlan {
-                    Activate(.label("Pay")).expect(.changed(.screen()))
+                    Activate(.label("Pay")).expect(.screenChanged)
                 }
                 """),
             ])
@@ -191,7 +191,7 @@ extension TheFenceHandlerTests {
         XCTAssertEqual(request.plan.body, [
             .action(ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 1)))),
+                expectationPolicy: .expect(ActionExpectation(predicate: .screenChanged, timeout: 1)))),
         ])
     }
 

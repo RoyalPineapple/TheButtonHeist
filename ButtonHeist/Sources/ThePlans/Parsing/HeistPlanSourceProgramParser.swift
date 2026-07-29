@@ -325,7 +325,7 @@ private extension HeistPlanSourceParser {
 
     mutating func parseIf() throws -> HeistStep {
         if consumeSymbol("(") {
-            let predicate = try parseScreenAssertion()
+            let predicate = try parsePresenceCondition()
             try expectSymbol(")")
             return .conditional(try parseSinglePredicateBranches(predicate: predicate, chainContext: "If"))
         }
@@ -492,7 +492,7 @@ private extension HeistPlanSourceParser {
                     throw error(token, "Case must appear before Else")
                 }
                 try expectSymbol("(")
-                let predicate = try parseScreenAssertion()
+                let predicate = try parsePresenceCondition()
                 try expectSymbol(")")
                 cases.append(PredicateCase(
                     predicate: predicate,
@@ -511,7 +511,7 @@ private extension HeistPlanSourceParser {
     }
 
     mutating func parseSinglePredicateBranches(
-        predicate: ChangeDeclaration.ScreenAssertion,
+        predicate: PresenceCondition,
         chainContext: String
     ) throws -> ConditionalStep {
         let body = try parseHeistBlock()

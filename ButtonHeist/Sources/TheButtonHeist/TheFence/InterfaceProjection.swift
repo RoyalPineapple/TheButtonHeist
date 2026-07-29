@@ -34,10 +34,10 @@ struct InterfaceNavigationProjection: Sendable {
     init(screenTitle: String?, elements: [HeistElement]) {
         self.screenTitle = screenTitle
         backButton = elements
-            .first(where: { $0.traits.contains(.backButton) })
+            .first(where: { $0.semantics.assertable.traits.contains(.backButton) })
             .map(NavigationItemProjection.init(element:))
         tabBarItems = elements
-            .filter { $0.traits.contains(.tabBarItem) }
+            .filter { $0.semantics.assertable.traits.contains(.tabBarItem) }
             .map(TabBarItemProjection.init(element:))
     }
 }
@@ -47,8 +47,8 @@ struct NavigationItemProjection: Sendable {
     let value: String?
 
     init(element: HeistElement) {
-        label = element.label
-        value = element.value
+        label = element.semantics.assertable.label
+        value = element.semantics.assertable.value
     }
 }
 
@@ -58,9 +58,9 @@ struct TabBarItemProjection: Sendable {
     let selected: Bool
 
     init(element: HeistElement) {
-        label = element.label
-        value = element.value
-        selected = element.traits.contains(.selected)
+        label = element.semantics.assertable.label
+        value = element.semantics.assertable.value
+        selected = element.semantics.assertable.traits.contains(.selected)
     }
 }
 
@@ -116,8 +116,9 @@ struct InterfaceProjection: Sendable {
     }
 
     init(interface: Interface, profile: ProjectionProfile) {
-        let projectedElementRecords = interface.projectedElementRecords
-        let projectedElements = projectedElementRecords.map(\.element)
+        let graph = interface.graph
+        let elementRecords = graph.elementsInTraversalOrder
+        let projectedElements = elementRecords.map(\.interfaceProjectionElement)
         let screenTitle = InterfaceSummary.screenTitle(forProjectedElements: projectedElements)
 
         timestamp = interface.timestamp
@@ -127,10 +128,10 @@ struct InterfaceProjection: Sendable {
         screenActions = interface.screenActions
         diagnostics = interface.diagnostics
         navigation = InterfaceNavigationProjection(screenTitle: screenTitle, elements: projectedElements)
-        elementCount = projectedElementRecords.count
+        elementCount = elementRecords.count
 
         var reducer = InterfaceProjectionReducer(
-            graph: interface.graph,
+            graph: graph,
             detail: detail,
             visibleElementBudget: profile.limits.visibleElementBudget,
             totalNodeBudget: profile.limits.totalNodeBudget
@@ -217,7 +218,7 @@ private struct InterfaceProjectionReducer {
         }
         accumulator.recordRenderedElement()
         append(.element(InterfaceElementProjection(
-            element: record.projectedElement,
+            element: record.interfaceProjectionElement,
             detail: detail,
             order: order
         )))
@@ -303,6 +304,24 @@ private struct InterfaceProjectionReducer {
             precondition(!containerFrames.isEmpty, "top-level projection budget must be unbounded")
             containerFrames[containerFrames.count - 1].remainingElementBudget = newValue
         }
+    }
+}
+
+private extension InterfaceGraphElementRecord {
+    var interfaceProjectionElement: HeistElement {
+        let geometry = annotation?.geometry ?? HeistElement.Geometry(
+            screen: .offscreen,
+            view: HeistElement.Geometry.ViewSpace(
+                ownerPath: path.parent ?? .root,
+                frame: nil,
+                activationPoint: nil
+            )
+        )
+        return HeistElement(
+            accessibilityElement: accessibilityElement,
+            actions: annotation?.actions ?? [],
+            geometry: geometry
+        )
     }
 }
 

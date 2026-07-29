@@ -225,7 +225,7 @@ extension WireTypeRoundTripTests {
     // MARK: - AccessibilityHierarchy
 
     func testAccessibilityHierarchyLeafRoundTrip() throws {
-        let element = HeistElement(
+        let element = makeTestHeistElement(
             description: "Button", label: "OK", value: nil, identifier: nil,
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44, actions: [.activate]
         )
@@ -236,11 +236,11 @@ extension WireTypeRoundTripTests {
     }
 
     func testAccessibilityHierarchyContainerRoundTrip() throws {
-        let elementA = HeistElement(
+        let elementA = makeTestHeistElement(
             description: "A", label: "A", value: nil, identifier: nil,
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44, actions: []
         )
-        let elementB = HeistElement(
+        let elementB = makeTestHeistElement(
             description: "B", label: "B", value: nil, identifier: nil,
             frameX: 0, frameY: 50, frameWidth: 100, frameHeight: 44, actions: []
         )
@@ -273,11 +273,6 @@ extension WireTypeRoundTripTests {
         XCTAssertEqual(decoded.value, "$9.99")
         XCTAssertTrue(decoded.isImportant)
     }
-
-    // MARK: - AccessibilityTrace.ChangeFact
-    //
-    // Coverage lives in AccessibilityTraceChangeFactRoundTripTests.swift; this file's
-    // generic round-trip suite is for shapes without per-case Codable.
 
     // MARK: - PropertyChange / ElementUpdate
 
@@ -355,7 +350,7 @@ extension WireTypeRoundTripTests {
     }
 
     func testElementUpdateRoundTrip() throws {
-        let before = HeistElement(
+        let before = makeTestHeistElement(
             description: "Button",
             label: "Button",
             value: "A",
@@ -363,7 +358,7 @@ extension WireTypeRoundTripTests {
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
             actions: []
         )
-        let after = HeistElement(
+        let after = makeTestHeistElement(
             description: "Button",
             label: "Button",
             value: "B",

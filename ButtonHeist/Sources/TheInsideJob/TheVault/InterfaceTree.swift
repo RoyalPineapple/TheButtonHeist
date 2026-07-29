@@ -39,7 +39,10 @@ struct InterfaceTree: Sendable, Equatable {
     }
 
     var viewportElementIDs: Set<HeistId> {
-        viewportCapture.heistIds
+        Set(elements.values.compactMap { element in
+            guard case .onscreen = element.geometry.screen else { return nil }
+            return element.heistId
+        })
     }
 
     var firstResponderHeistId: HeistId? {
@@ -52,6 +55,29 @@ struct InterfaceTree: Sendable, Equatable {
 
     func findElement(heistId: HeistId) -> Element? {
         elements[heistId]
+    }
+
+    /// Where every visible element sits, for asking whether the tree moved.
+    ///
+    /// Geometry is not in `interfaceHash` and must not be: a predicate asks
+    /// about labels and values, and a scroll that reveals nothing new is not a
+    /// semantic change. But an element sliding into place *is* movement, and a
+    /// reading taken mid-slide is not a still one — so stillness needs a second
+    /// question that the semantic hash cannot answer.
+    ///
+    /// Only viewport elements carry live geometry, so only they are asked.
+    /// Frames are exact here; the comparison that reads them applies a
+    /// touch-target tolerance, which is what keeps sub-pixel layout noise from
+    /// preventing a `.noChange` event forever. See `CoarseFrameComparison`.
+    var viewportFrames: [HeistId: CGRect] {
+        var frames: [HeistId: CGRect] = [:]
+        for element in elements.values {
+            guard case .onscreen(let frame, _) = element.geometry.screen,
+                  let rect = frame.rect
+            else { continue }
+            frames[element.heistId] = rect.cgRect
+        }
+        return frames
     }
 
     /// Hash of semantic accessibility state. Deliberately excludes
@@ -134,8 +160,15 @@ struct InterfaceTree: Sendable, Equatable {
     }
 
     func merging(_ other: InterfaceTree) -> InterfaceTree {
-        InterfaceTree(
-            elements: elements.merging(other.elements) { _, new in new },
+        let nextVisible = other.viewportElementIDs
+        let retainedElements = elements.mapValues { element in
+            guard case .onscreen = element.geometry.screen,
+                  !nextVisible.contains(element.heistId)
+            else { return element }
+            return element.withScreenSpace(.offscreen)
+        }
+        return InterfaceTree(
+            elements: retainedElements.merging(other.elements) { _, new in new },
             containers: containers.merging(other.containers) { _, new in new },
             viewportCapture: other.viewportCapture
         )
@@ -171,37 +204,11 @@ struct InterfaceTree: Sendable, Equatable {
         let index: Int?
     }
 
-    /// Scroll-content coordinate captured whenever the parser delivers an
-    /// element under its scroll view, including off-viewport elements.
-    ///
-    /// This is reveal evidence only. It is not current screen geometry, and it
-    /// must not be projected into wire `frame` / `activationPoint` fields for
-    /// off-viewport elements.
-    struct ObservedScrollContentActivationPoint: Sendable, Equatable {
-        let point: ScrollContentPoint
-        let ownerPath: TreePath
-
-        init?(_ point: CGPoint, ownerPath: TreePath) {
-            guard let point = try? ScrollContentPoint(validating: point) else { return nil }
-            self.point = point
-            self.ownerPath = ownerPath
-        }
-
-        init(_ point: ScrollContentPoint, ownerPath: TreePath) {
-            self.point = point
-            self.ownerPath = ownerPath
-        }
-
-        func admit(ownerPath: TreePath) -> ScrollContentPoint? {
-            ownerPath == self.ownerPath ? point : nil
-        }
-    }
-
     struct Element: Sendable, Equatable {
         let heistId: HeistId
         let path: TreePath
         let scrollMembership: ScrollMembership?
-        let observedScrollContentActivationPoint: ObservedScrollContentActivationPoint?
+        let geometry: HeistElement.Geometry
         /// Parsed accessibility identity/value retained in the interface tree.
         /// Do not treat its frame or activation point as live action geometry.
         let element: AccessibilityElement
@@ -218,14 +225,29 @@ struct InterfaceTree: Sendable, Equatable {
             heistId: HeistId,
             path: TreePath = .root,
             scrollMembership: ScrollMembership?,
-            observedScrollContentActivationPoint: ObservedScrollContentActivationPoint? = nil,
+            geometry: HeistElement.Geometry,
             element: AccessibilityElement
         ) {
             self.heistId = heistId
             self.path = path
             self.scrollMembership = scrollMembership
-            self.observedScrollContentActivationPoint = observedScrollContentActivationPoint
+            self.geometry = geometry
             self.element = element
+        }
+
+        func withScreenSpace(
+            _ screen: HeistElement.Geometry.ScreenSpace
+        ) -> Self {
+            Self(
+                heistId: heistId,
+                path: path,
+                scrollMembership: scrollMembership,
+                geometry: HeistElement.Geometry(
+                    screen: screen,
+                    view: geometry.view
+                ),
+                element: element
+            )
         }
     }
 
@@ -239,93 +261,42 @@ struct InterfaceTree: Sendable, Equatable {
         let container: AccessibilityContainer
         let path: TreePath
         let containerName: ContainerName?
-        let contentFrame: ContentRect?
+        let viewSpace: HeistElement.Geometry.ViewSpace
         let scrollMembership: ScrollMembership?
-        let observedScrollContentActivationPoint: ObservedScrollContentActivationPoint?
         let scrollInventory: ScrollInventory?
 
         init(
             container: AccessibilityContainer,
             path: TreePath,
             containerName: ContainerName?,
-            contentFrame: CGRect?,
+            viewSpace: HeistElement.Geometry.ViewSpace,
             scrollMembership: ScrollMembership? = nil,
-            observedScrollContentActivationPoint: ObservedScrollContentActivationPoint? = nil,
-            scrollInventory: ScrollInventory? = nil
-        ) {
-            self.init(
-                container: container,
-                path: path,
-                containerName: containerName,
-                contentRect: contentFrame.flatMap { try? ContentRect(validating: $0) },
-                scrollMembership: scrollMembership,
-                observedScrollContentActivationPoint: observedScrollContentActivationPoint,
-                scrollInventory: scrollInventory
-            )
-        }
-
-        init(
-            container: AccessibilityContainer,
-            path: TreePath,
-            containerName: ContainerName?,
-            contentRect: ContentRect?,
-            scrollMembership: ScrollMembership? = nil,
-            observedScrollContentActivationPoint: ObservedScrollContentActivationPoint? = nil,
             scrollInventory: ScrollInventory? = nil
         ) {
             self.container = container
             self.path = path
             self.containerName = containerName
-            self.contentFrame = contentRect
+            self.viewSpace = viewSpace
             self.scrollMembership = scrollMembership
-            self.observedScrollContentActivationPoint = observedScrollContentActivationPoint
             self.scrollInventory = scrollInventory
         }
     }
 
     // MARK: - Fingerprint
 
-    private struct SemanticElementFingerprint: Codable, Hashable {
+    private struct SemanticFingerprintEntry: Codable, Hashable {
         let heistId: HeistId
-        let description: String
-        let label: String?
-        let value: String?
-        let identifier: String?
-        let hint: String?
-        let traits: [String]
-        let respondsToUserInteraction: Bool
-        let customContent: [SemanticCustomContentFingerprint]
-        let rotors: [String]
+        let semantics: HeistElement.Semantics
     }
 
-    private struct SemanticCustomContentFingerprint: Codable, Hashable {
-        let label: String
-        let value: String
-        let isImportant: Bool
-    }
-
-    private static func semanticElementFingerprint(_ entry: Element) -> SemanticElementFingerprint {
-        let element = entry.element
-        let customContent = element.customContent
-            .filter { !$0.label.isEmpty || !$0.value.isEmpty }
-            .map {
-                SemanticCustomContentFingerprint(
-                    label: $0.label,
-                    value: $0.value,
-                    isImportant: $0.isImportant
-                )
-            }
-        return SemanticElementFingerprint(
+    private static func semanticElementFingerprint(_ entry: Element) -> SemanticFingerprintEntry {
+        let element = TheVault.WireConversion.convert(
+            entry.element,
+            geometry: entry.geometry
+        )
+        return SemanticFingerprintEntry(
             heistId: entry.heistId,
-            description: element.description,
-            label: element.label,
-            value: element.value,
-            identifier: element.identifier,
-            hint: element.hint,
-            traits: element.traits.heistTraitNames,
-            respondsToUserInteraction: element.respondsToUserInteraction,
-            customContent: customContent,
-            rotors: element.customRotors.map(\.name).filter { !$0.isEmpty }
+            semantics: element.semantics
         )
     }
 

@@ -11,42 +11,30 @@ struct PublicElement: Encodable {
     let identifier: String?
     let hint: String?
     let customContent: PublicCustomContent?
-    let frameX: Double?
-    let frameY: Double?
-    let frameWidth: Double?
-    let frameHeight: Double?
-    let activationPointX: Double?
-    let activationPointY: Double?
+    let geometry: HeistElement.Geometry?
     let order: Int?
 
     init(element: HeistElement, detail: InterfaceDetail, order: Int? = nil) {
-        self.traits = element.traits.map(\.rawValue)
+        let assertable = element.semantics.assertable
+        self.traits = assertable.orderedTraits.map(\.rawValue)
         let meaningfulActions = FenceResponse.meaningfulActions(element)
         self.actions = meaningfulActions.isEmpty ? nil : meaningfulActions.map(\.description)
-        self.rotors = element.rotors?.isEmpty == false ? element.rotors?.map { $0.name } : nil
-        self.label = element.label
-        self.value = element.value
-        self.identifier = element.identifier
+        self.rotors = assertable.rotors.isEmpty ? nil : assertable.orderedRotors.map(\.name)
+        self.label = assertable.label
+        self.value = assertable.value
+        self.identifier = assertable.identifier
         self.order = order
         guard detail == .full else {
             self.hint = nil
             self.customContent = nil
-            self.frameX = nil
-            self.frameY = nil
-            self.frameWidth = nil
-            self.frameHeight = nil
-            self.activationPointX = nil
-            self.activationPointY = nil
+            self.geometry = nil
             return
         }
-        self.hint = element.hint
-        self.customContent = element.customContent.map { PublicCustomContent(items: $0) }
-        self.frameX = element.screenFrame?.x.value
-        self.frameY = element.screenFrame?.y.value
-        self.frameWidth = element.screenFrame?.width.value
-        self.frameHeight = element.screenFrame?.height.value
-        self.activationPointX = element.activationPointX
-        self.activationPointY = element.activationPointY
+        self.hint = assertable.hint
+        self.customContent = assertable.customContent.isEmpty
+            ? nil
+            : PublicCustomContent(items: assertable.orderedCustomContent)
+        self.geometry = element.geometry
     }
 }
 

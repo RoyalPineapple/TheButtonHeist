@@ -80,27 +80,31 @@ package struct ElementDiagnosticSummary: Equatable, Sendable {
         availability: Availability? = nil,
         liveObjectState: String? = nil
     ) {
-        let geometry: Geometry? = element.screenFrame.flatMap { frame in
-            guard let activationPointX = element.activationPointX,
-                  let activationPointY = element.activationPointY
-            else { return nil }
-            return Geometry(
+        let screen = element.geometry.screen
+        let geometry: Geometry? = if case .onscreen(
+            let frameEvidence,
+            let activationPointEvidence
+        ) = screen, let frame = frameEvidence.rect {
+            Geometry(
                 frameX: frame.x.value,
                 frameY: frame.y.value,
                 frameWidth: frame.width.value,
                 frameHeight: frame.height.value,
-                activationPointX: activationPointX,
-                activationPointY: activationPointY
+                activationPointX: activationPointEvidence.point?.x ?? frame.midX,
+                activationPointY: activationPointEvidence.point?.y ?? frame.midY
             )
+        } else {
+            nil
         }
+        let assertable = element.semantics.assertable
         self.init(
-            label: element.label,
-            identifier: element.identifier,
-            value: element.value,
-            hint: element.hint,
-            traits: element.traits,
-            actions: actions ?? element.actions,
-            rotors: element.rotors?.compactMap { Self.nonEmpty($0.name) } ?? [],
+            label: assertable.label,
+            identifier: assertable.identifier,
+            value: assertable.value,
+            hint: assertable.hint,
+            traits: assertable.orderedTraits,
+            actions: actions ?? assertable.orderedActions,
+            rotors: assertable.orderedRotors.compactMap { Self.nonEmpty($0.name) },
             geometry: geometry,
             availability: availability,
             liveObjectState: liveObjectState

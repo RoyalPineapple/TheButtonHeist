@@ -14,10 +14,8 @@ import TheScore
                 ("Milk", "Delete"),
                 ("Bread", "Archive"),
             ]),
-            changeFacts: changeFacts(
-                before: makeTestInterface(elements: [element(label: "Milk", traits: [.staticText])]),
-                after: makeTestInterface(elements: [])
-            )
+            observedChanges: [.semanticElementsRemoved],
+            semanticEvidence: ["Milk"]
         )
         let current = failedEvidence(
             target: target,
@@ -31,7 +29,7 @@ import TheScore
 
         #expect(suggestion.failureKind == .missingTarget)
         #expect(suggestion.newTarget == .predicate(ElementPredicate(label: "Remove")))
-        #expect(suggestion.newResolvedElement.element.label == "Remove")
+        #expect(suggestion.newResolvedElement.element.semantics.assertable.label == "Remove")
         #expect(suggestion.newResolvedElement.siblingText == ["Milk"])
         #expect(suggestion.confidence == .medium)
         #expect(suggestion.reasons.contains(.scoring(.siblingRowContextPreserved)))
@@ -124,7 +122,7 @@ import TheScore
         let suggestion = try #require(HeistDoctor.diagnosis(for: request(last, current)).suggestions.first)
 
         #expect(suggestion.failureKind == .missingTarget)
-        #expect(suggestion.newResolvedElement.element.label == "Remove")
+        #expect(suggestion.newResolvedElement.element.semantics.assertable.label == "Remove")
         #expect(suggestion.newResolvedElement.siblingText == ["Milk"])
         #expect(suggestion.reasons.contains(.scoring(.siblingRowContextPreserved)))
         #expect(resolvedCount(suggestion.newTarget, in: current.beforeSnapshot) == 1)
@@ -184,7 +182,7 @@ import TheScore
         let suggestion = try #require(HeistDoctor.diagnosis(for: request(last, current)).suggestions.first)
 
         #expect(suggestion.newTarget == .predicate(ElementPredicate(label: "Go to Checkout")))
-        #expect(suggestion.newResolvedElement.element.label == "Go to Checkout")
+        #expect(suggestion.newResolvedElement.element.semantics.assertable.label == "Go to Checkout")
         #expect(suggestion.reasons.contains(.scoring(.labelSemanticRename)))
     }
 
@@ -283,8 +281,8 @@ import TheScore
         #expect(resolvedCount(suggestion.newTarget, in: current.beforeSnapshot) == 1)
     }
 
-    @Test("Ordered change facts explain value changes without requiring full after snapshot")
-    func changeFactsExplainValueChangesWithoutRequiringFullAfterSnapshot() throws {
+    @Test("Ordered observations explain value changes without requiring a full after snapshot")
+    func observationsExplainValueChangesWithoutRequiringFullAfterSnapshot() throws {
         let target = AccessibilityTarget.predicate(ElementPredicate(label: "Quantity"))
         let quantityBefore = element(
             label: "Quantity",
@@ -292,19 +290,11 @@ import TheScore
             traits: [.button],
             actions: [.activate]
         )
-        let changed = element(
-            label: "Quantity",
-            value: "2",
-            traits: [.button],
-            actions: [.activate]
-        )
         let last = passedEvidence(
             target: target,
             before: makeTestInterface(elements: [quantityBefore]),
-            changeFacts: changeFacts(
-                before: makeTestInterface(elements: [quantityBefore]),
-                after: makeTestInterface(elements: [changed])
-            ),
+            observedChanges: [.valueChange(old: "1", new: "2")],
+            semanticEvidence: ["Quantity", "1", "2"],
             expectation: ExpectationResult(met: true, predicate: nil)
         )
         let current = failedEvidence(
@@ -312,7 +302,7 @@ import TheScore
             before: makeTestInterface(elements: [
                 element(label: "Amount", value: "1", traits: [.button], actions: [.activate]),
             ]),
-            changeFacts: [],
+            observedChanges: [],
             expectation: ExpectationResult(met: false, predicate: nil, actual: "Quantity stayed 1")
         )
 
@@ -338,18 +328,12 @@ import TheScore
         let last = passedEvidence(
             target: target,
             before: oldScreen,
-            changeFacts: changeFacts(
-                before: oldScreen,
-                after: newScreen,
-                beforeContext: AccessibilityTrace.Context(
-                    screenId: "cart",
-                    observationGeneration: 1
-                ),
-                afterContext: AccessibilityTrace.Context(
-                    screenId: "checkout",
-                    observationGeneration: 2
-                )
-            )
+            observedChanges: [
+                .semanticElementsRemoved,
+                .screenChange,
+                .semanticElementsAdded,
+            ],
+            semanticEvidence: ["Delete", "Remove"]
         )
         let current = failedEvidence(target: target, before: newScreen)
 
@@ -374,14 +358,14 @@ import TheScore
             before: listInterface(rows: [
                 ("Milk", "Delete"),
             ]),
-            changeFacts: []
+            observedChanges: []
         )
         let current = failedEvidence(
             target: target,
             before: listInterface(rows: [
                 ("Milk", "Remove"),
             ]),
-            changeFacts: []
+            observedChanges: []
         )
 
         let suggestion = try #require(HeistDoctor.diagnosis(for: request(last, current)).suggestions.first)
@@ -389,24 +373,6 @@ import TheScore
         #expect(suggestion.newTarget == .predicate(ElementPredicate(label: "Remove")))
         #expect(suggestion.reasons.contains(.changeFact(.lastSuccess, .noSemanticChange)))
         #expect(suggestion.caveats.isEmpty)
-    }
-
-    private func changeFacts(
-        before: Interface,
-        after: Interface,
-        beforeContext: AccessibilityTrace.Context = .empty,
-        afterContext: AccessibilityTrace.Context = .empty
-    ) -> [AccessibilityTrace.ChangeFact] {
-        AccessibilityTrace(capture: AccessibilityTrace.Capture(
-            sequence: 1,
-            interface: before,
-            context: beforeContext
-        ))
-        .appending(
-            after,
-            context: afterContext
-        )
-        .changeFacts
     }
 
     private func broadMenuInterface(primaryAction: String?) -> Interface {

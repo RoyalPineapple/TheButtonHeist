@@ -1,221 +1,106 @@
 #if canImport(UIKit)
 #if DEBUG
 
-extension Observation {
-    internal actor StoreOwner {
-        private var store: Store
-        private var deliveryGeneration = DeliveryGeneration.initial
-        private var nextDeliveryOrder: UInt64 = 0
-        private var latestDeliveryToken: DeliveryToken?
+extension TheVault {
+    @MainActor
+    internal final class StateOwner {
+        private var state: State
 
-        internal init(store: Store = Store()) {
-            self.store = store
+        internal init(state: State = State()) {
+            self.state = state
         }
 
-        internal func latestCommittedEvent() -> SnapshotEvent? {
-            store.latestCommittedEvent
+        internal func current() async -> State.Current? {
+            state.current
         }
 
-        internal func latestCommittedSnapshot() -> Snapshot? {
-            store.latestCommittedSnapshot
+        internal func notificationIndex() async -> AccessibilityNotificationCursor {
+            state.notificationIndex
         }
 
-        internal func latestCommittedMoment() -> Moment? {
-            store.latestCommittedMoment
+        internal func historyEndIndex() async -> Int {
+            state.history.endIndex
         }
 
-        internal func latestSettledObservationInvalidated() -> Bool {
-            store.latestSettledObservationInvalidated
+        internal func notifications() -> [Observation.Notification] {
+            state.notifications
         }
 
-        internal func latestSettleFailureDiagnostic() -> String? {
-            store.settleFailureDiagnostic
+        internal func scopedScreenChangedSequence() async -> UInt64 {
+            state.scopedScreenChangedSequence
         }
 
-        internal func notificationIndex() -> AccessibilityNotificationCursor {
-            store.notificationIndex
+        internal var interfaceTree: InterfaceTree {
+            state.interfaceTree
         }
 
-        internal func sequence() -> SettledObservationSequence {
-            store.sequence
+        internal func discardCurrentObservation() async {
+            state.discardCurrentObservation()
         }
 
-        internal func scopedScreenChangedSequence() -> UInt64 {
-            store.scopedScreenChangedSequence
+        internal func invalidateCurrentAdmission() async {
+            state.invalidateCurrentAdmission()
         }
 
-        internal func interfaceTree() -> InterfaceTree {
-            store.interfaceTree
-        }
-
-        @discardableResult
-        internal func invalidateCurrentObservation() -> DeliveryGeneration {
-            store.invalidateCurrentObservation()
-            return advanceDeliveryGeneration()
-        }
-
-        @discardableResult
-        internal func invalidateIfSignalChanged(
-            to signal: TheTripwire.TripwireSignal
-        ) -> DeliveryGeneration? {
-            guard store.invalidateIfSignalChanged(to: signal) else { return nil }
-            return advanceDeliveryGeneration()
+        internal func invalidateAdmissionIfSignalChanged(to signal: TheTripwire.TripwireSignal) async {
+            state.invalidateAdmissionIfSignalChanged(to: signal)
         }
 
         internal func admittedObservation(
             scope: SemanticObservationScope,
-            after sequence: SettledObservationSequence?
-        ) -> Store.AdmittedObservation? {
-            store.admittedObservation(scope: scope, after: sequence)
+            after historyIndex: Int?
+        ) async -> Result<State.Current?, Observation.History.ReadError> {
+            state.admittedObservation(scope: scope, after: historyIndex)
         }
 
-        internal func readSnapshot(
-            since moment: Moment?,
+        internal func current(
+            after historyIndex: Int?,
             scope: SemanticObservationScope
-        ) -> SnapshotRead {
-            store.readSnapshot(since: moment, scope: scope)
+        ) async -> Result<State.Current?, Observation.History.ReadError> {
+            state.current(after: historyIndex, scope: scope)
         }
 
-        internal func latestMoment(scope: SemanticObservationScope) -> Moment? {
-            store.latestMoment(scope: scope)
-        }
-
-        internal func moment(
-            scope: SemanticObservationScope,
-            at sequence: SettledObservationSequence
-        ) -> Moment? {
-            store.moment(scope: scope, at: sequence)
-        }
-
-        internal func settledWaitBaseline(
-            scope: SemanticObservationScope,
-            after sequence: SettledObservationSequence?
-        ) -> SettledWaitBaseline {
-            if let sequence {
-                return SettledWaitBaseline(
-                    requiredSequence: sequence,
-                    moment: store.moment(scope: scope, at: sequence)
-                )
+        internal func events(
+            after historyIndex: Int
+        ) async -> Result<[Observation.Event], Observation.History.ReadError> {
+            do {
+                return .success(Array(
+                    try state.history.events(after: historyIndex)
+                ))
+            } catch {
+                return .failure(error)
             }
-            let moment = store.latestMoment(scope: scope)
-            return SettledWaitBaseline(
-                requiredSequence: moment?.sequence,
-                moment: moment
-            )
         }
 
-        internal func readLog<Value: Sendable>(
-            _ read: @Sendable (Log) -> Value
-        ) -> Value {
-            read(store.log)
+        internal func evidence(
+            after boundary: State.HistoryBoundary
+        ) async -> Observation.Evidence {
+            state.evidence(after: boundary)
         }
 
-        internal func commitAdmission(_ admission: Admission) throws -> CommittedDelivery {
-            let committed = try store.commitObservation(admission)
-            nextDeliveryOrder += 1
-            let token = DeliveryToken(
-                generation: deliveryGeneration,
-                order: nextDeliveryOrder
-            )
-            latestDeliveryToken = token
-            return CommittedDelivery(token: token, committed: committed)
+        internal func observationBoundary(
+            scope: SemanticObservationScope
+        ) async -> State.HistoryBoundary {
+            state.observationBoundary(scope: scope)
         }
 
-        internal func resolveDelivery(
-            for token: DeliveryToken,
-            readmitting admission: Admission?
-        ) throws -> DeliveryResolution {
-            if token.generation == deliveryGeneration,
-               token.order > 0,
-               token.order <= nextDeliveryOrder,
-               let latestDeliveryToken {
-                return .current(DeliveryAdmission(currentCommitOrder: latestDeliveryToken.order))
-            }
-            guard token.generation != deliveryGeneration,
-                  nextDeliveryOrder == 0,
-                  let admission else { return .superseded }
-            return .readmitted(try commitAdmission(admission))
+        internal func commitAdmission(
+            _ admission: Observation.Admission
+        ) async -> Observation.Publication {
+            state.commitObservation(admission)
         }
 
-        internal func settlementDidArm(at moment: Moment) {
-            store.settlementDidArm(at: moment)
+        internal func protectHistory(from index: Int) async {
+            state.protectHistory(from: index)
         }
 
-        internal func settlementDidFinish(at moment: Moment) {
-            store.settlementDidFinish(at: moment)
+        internal func releaseHistory(from index: Int) async {
+            state.releaseHistory(from: index)
         }
 
-        @discardableResult
-        internal func requireReplacement() -> DeliveryGeneration {
-            store.requireReplacement()
-            return advanceDeliveryGeneration()
+        internal func reset(retentionLimit: Int = State.defaultRetentionLimit) async {
+            state = State(retentionLimit: retentionLimit)
         }
-
-        @discardableResult
-        internal func clearCurrentInterface() -> DeliveryGeneration {
-            store.clearCurrentInterface()
-            return advanceDeliveryGeneration()
-        }
-
-        internal func recordSettleFailure(_ diagnostic: String?) {
-            store.recordSettleFailure(diagnostic)
-        }
-
-        @discardableResult
-        internal func reset(
-            retentionLimit: Int = Store.defaultRetentionLimit
-        ) -> DeliveryGeneration {
-            store = Store(retentionLimit: retentionLimit)
-            return advanceDeliveryGeneration()
-        }
-
-        private func advanceDeliveryGeneration() -> DeliveryGeneration {
-            deliveryGeneration = deliveryGeneration.advanced()
-            nextDeliveryOrder = 0
-            latestDeliveryToken = nil
-            return deliveryGeneration
-        }
-    }
-}
-
-extension Observation.StoreOwner {
-    internal struct DeliveryGeneration: RawRepresentable, Sendable, Equatable, Hashable, Comparable {
-        internal static let initial = DeliveryGeneration(rawValue: 0)
-
-        internal let rawValue: UInt64
-
-        fileprivate func advanced() -> DeliveryGeneration {
-            DeliveryGeneration(rawValue: rawValue + 1)
-        }
-
-        internal static func < (lhs: DeliveryGeneration, rhs: DeliveryGeneration) -> Bool {
-            lhs.rawValue < rhs.rawValue
-        }
-    }
-
-    internal struct DeliveryToken: Sendable, Equatable, Hashable {
-        internal let generation: DeliveryGeneration
-        internal let order: UInt64
-    }
-
-    internal struct CommittedDelivery: Sendable {
-        internal let token: DeliveryToken
-        internal let committed: Observation.Store.CommittedObservation
-    }
-
-    internal struct DeliveryAdmission: Sendable {
-        internal let currentCommitOrder: UInt64
-    }
-
-    internal enum DeliveryResolution: Sendable {
-        case current(DeliveryAdmission)
-        case readmitted(CommittedDelivery)
-        case superseded
-    }
-
-    internal struct SettledWaitBaseline: Sendable {
-        internal let requiredSequence: SettledObservationSequence?
-        internal let moment: Observation.Moment?
     }
 }
 

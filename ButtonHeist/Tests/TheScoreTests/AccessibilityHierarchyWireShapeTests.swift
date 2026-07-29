@@ -407,9 +407,7 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
     }
 
     func testPublicNumericEvidenceRejectsMalformedValues() throws {
-        XCTAssertNil(ScrollInventory(totalElementCount: -1, visibleIndices: []))
-        XCTAssertNil(ScrollInventory(totalElementCount: 2, visibleIndices: [2]))
-        XCTAssertNil(ScrollInventory(totalElementCount: 3, visibleIndices: [1, 1]))
+        XCTAssertNil(ScrollInventory(totalElementCount: -1))
         XCTAssertNil(InterfaceDiscoveryDiagnostics(
             state: .complete,
             includedElementCount: -1,
@@ -440,7 +438,7 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
             omittedContainers: []
         ))
 
-        let negativeInventory = #"{"totalElementCount":-1,"visibleIndices":[]}"#
+        let negativeInventory = #"{"totalElementCount":-1}"#
         let negativeDiagnostics = """
         {
           "state":"complete",
@@ -489,7 +487,7 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
 
         XCTAssertThrowsError(try decoder.decode(ScreenRect.self, from: Data(negative.utf8)))
         XCTAssertThrowsError(try nonFiniteDecoder.decode(ScreenRect.self, from: Data(nonFinite.utf8)))
-        XCTAssertThrowsError(try decoder.decode(ContentRect.self, from: Data(negative.utf8)))
+        XCTAssertThrowsError(try decoder.decode(ViewRect.self, from: Data(negative.utf8)))
     }
 
     private func encodeInterfacePayload(_ interface: Interface) throws -> JSONProbe {

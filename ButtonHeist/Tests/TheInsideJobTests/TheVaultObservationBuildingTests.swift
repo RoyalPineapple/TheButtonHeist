@@ -110,6 +110,15 @@ final class TheVaultObservationBuildingTests: XCTestCase {
         XCTAssertFalse(observation.liveCapture.contains(heistId: "offscreen_button"))
         XCTAssertEqual(observation.viewportOnly.tree.elementIDs, ["visible_button"])
         XCTAssertNotNil(observation.tree.findElement(heistId: "offscreen_button"))
+        guard let visibleGeometry = observation.tree.elements["visible_button"]?.geometry.screen,
+              let offscreenGeometry = observation.tree.elements["offscreen_button"]?.geometry.screen
+        else {
+            return XCTFail("Expected canonical geometry for both retained elements")
+        }
+        guard case .onscreen = visibleGeometry else {
+            return XCTFail("Viewport-captured element must carry visible screen geometry")
+        }
+        XCTAssertEqual(offscreenGeometry, .offscreen)
     }
 
     func testBuildObservationAdmitsScrollInventoryOffscreenElementsAsKnownOnly() throws {
@@ -126,11 +135,10 @@ final class TheVaultObservationBuildingTests: XCTestCase {
             activationPoint: CGPoint(x: 150, y: 1_142),
             visibility: .offscreen
         )
-        let observedPoint = try XCTUnwrap(
-            InterfaceTree.ObservedScrollContentActivationPoint(
-                CGPoint(x: 150, y: 1_142),
-                ownerPath: scrollContainerPath
-            )
+        let viewSpace = HeistElement.Geometry.ViewSpace(
+            ownerPath: scrollContainerPath,
+            frame: try? ViewRect(validating: CGRect(x: 40, y: 1_120, width: 220, height: 44)),
+            activationPoint: try? ViewPoint(validating: CGPoint(x: 150, y: 1_142))
         )
         let result = TheVault.CaptureResult(
             hierarchy: [
@@ -147,7 +155,7 @@ final class TheVaultObservationBuildingTests: XCTestCase {
                     scrollContainerPath: scrollContainerPath,
                     scrollIndex: 4,
                     element: offscreen,
-                    observedScrollContentActivationPoint: observedPoint
+                    viewSpace: viewSpace
                 ),
             ])
         )
@@ -162,14 +170,19 @@ final class TheVaultObservationBuildingTests: XCTestCase {
             target.scrollMembership,
             InterfaceTree.ScrollMembership(containerPath: scrollContainerPath, index: 4)
         )
-        XCTAssertEqual(target.observedScrollContentActivationPoint, observedPoint)
+        XCTAssertEqual(target.geometry.view, viewSpace)
+        XCTAssertEqual(target.geometry.screen, .offscreen)
         XCTAssertFalse(observation.tree.viewportElementIDs.contains(target.heistId))
         XCTAssertFalse(observation.liveCapture.contains(heistId: target.heistId))
         XCTAssertNil(observation.liveCapture.object(for: target.heistId))
         XCTAssertEqual(observation.viewportOnly.tree.elementIDs, ["visible_button"])
 
         let interface = TheVault.WireConversion.discoveryProjection(from: observation.tree).interface
-        XCTAssertEqual(interface.projectedElements.compactMap(\.label), ["Visible", "Far Target"])
+        XCTAssertEqual(
+            interface.projectedElements.compactMap(\.semantics.assertable.label),
+            ["Visible", "Far Target"]
+        )
+        XCTAssertEqual(interface.projectedElements.last?.geometry.screen, .offscreen)
         guard case .container(_, let children) = interface.tree.first,
               case .element(let projectedOffscreen, _) = children.last
         else {
@@ -177,6 +190,60 @@ final class TheVaultObservationBuildingTests: XCTestCase {
         }
         XCTAssertEqual(projectedOffscreen.label, "Far Target")
         XCTAssertEqual(projectedOffscreen.visibility, .offscreen)
+    }
+
+    func testLaterViewportCaptureReplacesOffscreenScreenGeometry() throws {
+        let containerPath = TreePath([0])
+        let inventoryPath = containerPath.appending(1_000_000)
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let offscreen = makeElement(
+            label: "Target",
+            traits: .button,
+            frame: CGRect(x: 20, y: 900, width: 120, height: 44),
+            visibility: .offscreen
+        )
+        let viewSpace = HeistElement.Geometry.ViewSpace(
+            ownerPath: containerPath,
+            frame: try ViewRect(validating: CGRect(x: 20, y: 900, width: 120, height: 44)),
+            activationPoint: try ViewPoint(validating: CGPoint(x: 80, y: 922))
+        )
+        let retained = TheVault.buildObservation(from: TheVault.CaptureResult(
+            hierarchy: [.container(makeScrollableContainer(), children: [])],
+            containerObjectsByPath: [containerPath: scrollView],
+            scrollViewsByPath: [containerPath: scrollView],
+            inventoryEnumeration: .init(offscreenElements: [
+                .init(
+                    path: inventoryPath,
+                    scrollContainerPath: containerPath,
+                    scrollIndex: 0,
+                    element: offscreen,
+                    viewSpace: viewSpace
+                ),
+            ])
+        ))
+        let retainedElement = try XCTUnwrap(retained.tree.orderedElements.first)
+        XCTAssertEqual(retainedElement.geometry.screen, .offscreen)
+
+        let visible = makeElement(
+            label: "Target",
+            traits: .button,
+            frame: CGRect(x: 20, y: 120, width: 120, height: 44)
+        )
+        let refreshed = TheVault.buildObservation(from: TheVault.CaptureResult(
+            hierarchy: [
+                .container(makeScrollableContainer(), children: [
+                    .element(visible, traversalIndex: 0),
+                ]),
+            ],
+            scrollViewsByPath: [containerPath: scrollView]
+        ))
+        let merged = retained.tree.merging(refreshed.tree)
+        let refreshedElement = try XCTUnwrap(merged.elements[retainedElement.heistId])
+
+        guard case .onscreen = refreshedElement.geometry.screen else {
+            return XCTFail("A later viewport capture must replace offscreen screen geometry")
+        }
     }
 
     func testScrollInventoryDuplicateIdsFollowScrollMembershipAcrossViewportReordering() throws {
@@ -456,16 +523,20 @@ final class TheVaultObservationBuildingTests: XCTestCase {
 
         let observation = TheVault.buildObservation(from: result)
         let element = try XCTUnwrap(observation.liveCapture.hierarchy.sortedElements.first)
-        let projected = TheVault.WireConversion.convert(element)
+        let treeElement = try XCTUnwrap(observation.tree.orderedElements.first)
+        let projected = TheVault.WireConversion.convert(
+            element,
+            geometry: treeElement.geometry
+        )
 
         XCTAssertEqual(element.shape.frame, screenFrame)
         XCTAssertEqual(element.bhResolvedActivationPoint, screenActivationPoint)
-        XCTAssertEqual(projected.frameX, screenFrame.origin.x)
-        XCTAssertEqual(projected.frameY, screenFrame.origin.y)
-        XCTAssertEqual(projected.frameWidth, screenFrame.size.width)
-        XCTAssertEqual(projected.frameHeight, screenFrame.size.height)
-        XCTAssertEqual(projected.activationPointX, screenActivationPoint.x)
-        XCTAssertEqual(projected.activationPointY, screenActivationPoint.y)
+        guard case .onscreen(let frame, let activationPoint) = projected.geometry.screen else {
+            return XCTFail("Expected restored screen geometry")
+        }
+        XCTAssertEqual(frame.rect?.cgRect, screenFrame)
+        XCTAssertEqual(activationPoint.point?.cgPoint, screenActivationPoint)
+        XCTAssertEqual(projected.geometry, treeElement.geometry)
     }
 
     func testBuildObservationRestoresPathGeometryFromParseRootOffset() throws {
@@ -551,18 +622,18 @@ final class TheVaultObservationBuildingTests: XCTestCase {
 
     // MARK: - Scroll membership
 
-    func testObservedScrollContentActivationPointAdmitsOnlyMatchingOwner() throws {
+    func testViewSpaceActivationPointAdmitsOnlyMatchingOwner() throws {
         let ownerPath = TreePath([0, 1])
-        let point = try XCTUnwrap(
-            InterfaceTree.ObservedScrollContentActivationPoint(
-                CGPoint(x: 120, y: 640),
-                ownerPath: ownerPath
-            )
+        let point = try ViewPoint(validating: CGPoint(x: 120, y: 640))
+        let viewSpace = HeistElement.Geometry.ViewSpace(
+            ownerPath: ownerPath,
+            frame: nil,
+            activationPoint: point
         )
 
-        XCTAssertEqual(point.admit(ownerPath: ownerPath), point.point)
-        XCTAssertNil(point.admit(ownerPath: TreePath([0])))
-        XCTAssertNil(point.admit(ownerPath: TreePath([0, 2])))
+        XCTAssertEqual(viewSpace.activationPoint(ownedBy: ownerPath), point)
+        XCTAssertNil(viewSpace.activationPoint(ownedBy: TreePath([0])))
+        XCTAssertNil(viewSpace.activationPoint(ownedBy: TreePath([0, 2])))
     }
 
     func testObservedContentPointsCarryProducingContainerPath() throws {
@@ -591,8 +662,8 @@ final class TheVaultObservationBuildingTests: XCTestCase {
             budget: 1
         )
         XCTAssertEqual(inventory.offscreenElements.count, 1)
-        let offscreenPoint = try XCTUnwrap(
-            inventory.offscreenElements.first?.observedScrollContentActivationPoint
+        let offscreenViewSpace = try XCTUnwrap(
+            inventory.offscreenElements.first?.viewSpace
         )
         let result = TheVault.CaptureResult(
             hierarchy: [
@@ -614,15 +685,15 @@ final class TheVaultObservationBuildingTests: XCTestCase {
 
         let observation = TheVault.buildObservation(from: result)
         let viewportHeistId = try XCTUnwrap(observation.liveCapture.heistId(forPath: viewportElementPath))
-        let viewportPoint = try XCTUnwrap(
-            observation.tree.elements[viewportHeistId]?.observedScrollContentActivationPoint
+        let viewportViewSpace = try XCTUnwrap(
+            observation.tree.elements[viewportHeistId]?.geometry.view
         )
-        let nestedPoint = try XCTUnwrap(
-            observation.tree.containers[nestedPath]?.observedScrollContentActivationPoint
+        let nestedViewSpace = try XCTUnwrap(
+            observation.tree.containers[nestedPath]?.viewSpace
         )
-        XCTAssertEqual(viewportPoint.ownerPath, outerPath)
-        XCTAssertEqual(nestedPoint.ownerPath, outerPath)
-        XCTAssertEqual(offscreenPoint.ownerPath, nestedPath)
+        XCTAssertEqual(viewportViewSpace.ownerPath, outerPath)
+        XCTAssertEqual(nestedViewSpace.ownerPath, outerPath)
+        XCTAssertEqual(offscreenViewSpace.ownerPath, nestedPath)
     }
 
     func testPropagatesScrollMembershipForScrollableContainerChild() {
@@ -683,20 +754,18 @@ final class TheVaultObservationBuildingTests: XCTestCase {
             traits: .button,
             frame: CGRect(x: 10, y: 160, width: 120, height: 44)
         )
-        let observedElementPoint = try XCTUnwrap(
-            InterfaceTree.ObservedScrollContentActivationPoint(
-                CGPoint(x: 70, y: 180),
-                ownerPath: scrollPath
-            )
+        let elementViewSpace = HeistElement.Geometry.ViewSpace(
+            ownerPath: scrollPath,
+            frame: try ViewRect(validating: child.bhFrame),
+            activationPoint: try ViewPoint(validating: CGPoint(x: 70, y: 180))
         )
-        let observedContainerPoint = try XCTUnwrap(
-            InterfaceTree.ObservedScrollContentActivationPoint(
-                CGPoint(x: 160, y: 200),
-                ownerPath: scrollPath
-            )
+        let containerViewSpace = HeistElement.Geometry.ViewSpace(
+            ownerPath: scrollPath,
+            frame: try ViewRect(validating: nestedContainer.frame.cgRect),
+            activationPoint: try ViewPoint(validating: CGPoint(x: 160, y: 200))
         )
         let inventory = try XCTUnwrap(
-            ScrollInventory(totalElementCount: 20, visibleIndices: [7])
+            ScrollInventory(totalElementCount: 20)
         )
         let result = TheVault.CaptureResult(
             hierarchy: [
@@ -714,11 +783,11 @@ final class TheVaultObservationBuildingTests: XCTestCase {
                     childPath: TheVault.ElementScrollFacts(
                         containerPath: scrollPath,
                         index: 7,
-                        observedScrollContentActivationPoint: observedElementPoint
+                        viewSpace: elementViewSpace
                     ),
                 ],
-                containerObservedScrollContentActivationPointsByPath: [
-                    nestedContainerPath: observedContainerPoint,
+                containerViewSpacesByPath: [
+                    nestedContainerPath: containerViewSpace,
                 ],
                 inventoriesByPath: [scrollPath: inventory]
             )
@@ -732,15 +801,15 @@ final class TheVaultObservationBuildingTests: XCTestCase {
             element.scrollMembership,
             InterfaceTree.ScrollMembership(containerPath: scrollPath, index: 7)
         )
-        XCTAssertEqual(element.observedScrollContentActivationPoint, observedElementPoint)
+        XCTAssertEqual(element.geometry.view, elementViewSpace)
         XCTAssertEqual(observation.tree.containers[scrollPath]?.scrollInventory, inventory)
         XCTAssertEqual(
             observation.tree.containers[nestedContainerPath]?.scrollMembership,
             InterfaceTree.ScrollMembership(containerPath: scrollPath, index: nil)
         )
         XCTAssertEqual(
-            observation.tree.containers[nestedContainerPath]?.observedScrollContentActivationPoint,
-            observedContainerPoint
+            observation.tree.containers[nestedContainerPath]?.viewSpace,
+            containerViewSpace
         )
     }
 
@@ -798,7 +867,11 @@ final class TheVaultObservationBuildingTests: XCTestCase {
             scrollContainerPath: containerPath,
             scrollIndex: index,
             element: element,
-            observedScrollContentActivationPoint: nil
+            viewSpace: HeistElement.Geometry.ViewSpace(
+                ownerPath: containerPath,
+                frame: try? ViewRect(validating: element.bhFrame),
+                activationPoint: try? ViewPoint(validating: element.bhResolvedActivationPoint)
+            )
         )
     }
 

@@ -9,10 +9,10 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     func render(
-        predicate: ChangeDeclaration.ScreenAssertion,
+        predicate: PresenceCondition,
         environment: RenderEnvironment
     ) throws -> String {
-        try render(screenAssertion: predicate, environment: environment)
+        try render(presence: predicate, environment: environment)
     }
 
     private func render(
@@ -22,18 +22,40 @@ extension HeistCanonicalSwiftDSLRenderer {
         switch value {
         case .presence(let presence):
             return try render(presence: presence, environment: environment)
-        case .announcement(let announcement):
-            guard let match = announcement.match else { return ".announcement" }
-            return try ".announcement(\(renderStringArgument(match, environment: environment)))"
-        case .changed(let declaration):
-            return try ".changed(\(render(change: declaration, environment: environment)))"
-        case .noChange:
-            return ".noChange"
+        case .notification(let notification):
+            return try render(notification: notification, environment: environment)
+        case .screenChanged(let predicate):
+            guard let match = predicate.match else { return ".screenChanged" }
+            return try ".screenChanged(\(renderStringArgument(match, environment: environment)))"
+        case .elementsChanged(let assertions):
+            guard !assertions.isEmpty else { return ".elementsChanged" }
+            let rendered = try assertions.map {
+                try render(elementAssertion: $0, environment: environment)
+            }
+            return ".elementsChanged([\(rendered.joined(separator: ", "))])"
         }
     }
 
     private func render(
-        presence: AccessibilityPredicate.Presence,
+        notification: NotificationPredicate,
+        environment: RenderEnvironment
+    ) throws -> String {
+        switch (notification.text, notification.element) {
+        case (nil, nil):
+            return ".notification"
+        case (.some(let text), nil):
+            return try ".notification(\(renderStringArgument(text, environment: environment)))"
+        case (nil, .some(let element)):
+            return try ".notification(element: \(render(predicate: element, environment: environment)))"
+        case (.some(let text), .some(let element)):
+            return try ".notification("
+                + "text: \(renderStringArgument(text, environment: environment)), "
+                + "element: \(render(predicate: element, environment: environment)))"
+        }
+    }
+
+    private func render(
+        presence: PresenceCondition,
         environment: RenderEnvironment
     ) throws -> String {
         switch presence {
@@ -44,40 +66,8 @@ extension HeistCanonicalSwiftDSLRenderer {
         }
     }
 
-    private func render(
-        change: ChangeDeclaration,
-        environment: RenderEnvironment
-    ) throws -> String {
-        switch change {
-        case .screen(let assertions):
-            guard !assertions.isEmpty else { return ".screen()" }
-            let rendered = try assertions.map {
-                try render(screenAssertion: $0, environment: environment)
-            }
-            return ".screen([\(rendered.joined(separator: ", "))])"
-        case .elements(let assertions):
-            guard !assertions.isEmpty else { return ".elements()" }
-            let rendered = try assertions.map {
-                try render(elementAssertion: $0, environment: environment)
-            }
-            return ".elements([\(rendered.joined(separator: ", "))])"
-        }
-    }
-
-    private func render(
-        screenAssertion assertion: ChangeDeclaration.ScreenAssertion,
-        environment: RenderEnvironment
-    ) throws -> String {
-        switch assertion {
-        case .exists(let target):
-            return try ".exists(\(render(target: target, environment: environment)))"
-        case .missing(let target):
-            return try ".missing(\(render(target: target, environment: environment)))"
-        }
-    }
-
-    private func render(
-        elementAssertion assertion: ChangeDeclaration.ElementAssertion,
+    func render(
+        elementAssertion assertion: ElementAssertion,
         environment: RenderEnvironment
     ) throws -> String {
         switch assertion {
@@ -122,20 +112,6 @@ extension HeistCanonicalSwiftDSLRenderer {
                 before: change.before,
                 after: change.after,
                 render: render(actionSet:)
-            )
-        case .frame(let change):
-            return renderPropertyChange(
-                "frame",
-                before: change.before,
-                after: change.after,
-                render: render(frame:)
-            )
-        case .activationPoint(let change):
-            return renderPropertyChange(
-                "activationPoint",
-                before: change.before,
-                after: change.after,
-                render: render(point:)
             )
         case .customContent(let change):
             return try renderPropertyChange(
@@ -206,24 +182,6 @@ extension HeistCanonicalSwiftDSLRenderer {
             include: match.include.isEmpty ? nil : renderActionArray(match.include),
             exclude: match.exclude.isEmpty ? nil : renderActionArray(match.exclude)
         )
-        return ".init(\(fields))"
-    }
-
-    private func render(frame match: ElementFrameMatch) -> String {
-        let fields = renderIntegerFields([
-            ("x", match.x),
-            ("y", match.y),
-            ("width", match.width),
-            ("height", match.height),
-        ])
-        return ".init(\(fields))"
-    }
-
-    private func render(point match: ElementPointMatch) -> String {
-        let fields = renderIntegerFields([
-            ("x", match.x),
-            ("y", match.y),
-        ])
         return ".init(\(fields))"
     }
 

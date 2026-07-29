@@ -20,14 +20,7 @@ extension InterfaceTreeTests {
         )
         let before = InterfaceObservation.makeForTests(elements: [(top, "chicken_tikka_button")])
         let after = InterfaceObservation.makeForTests(elements: [(scrolled, "chicken_tikka_button")])
-        let beforeInterfaceHash = AccessibilityTrace.Capture.hash(
-            TheVault.WireConversion.toSemanticInterface(from: before.tree)
-        )
-        let afterInterfaceHash = AccessibilityTrace.Capture.hash(
-            TheVault.WireConversion.toSemanticInterface(from: after.tree)
-        )
 
-        XCTAssertEqual(beforeInterfaceHash, afterInterfaceHash)
         XCTAssertEqual(before.tree.interfaceHash, after.tree.interfaceHash)
     }
 

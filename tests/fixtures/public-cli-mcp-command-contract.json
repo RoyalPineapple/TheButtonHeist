@@ -4,7 +4,7 @@
       "cliExposure" : "directCommand",
       "description" : "Perform primary accessibility activation on a semantic UI element, or one of its named accessibility actions.",
       "family" : "semanticAction",
-      "inputSchemaSHA256" : "22edaab0fd328b0a17ffb3b4531a654577d9f859b7388d1d6ef085f11cf99f7c",
+      "inputSchemaSHA256" : "65df06b86e66248ba3af5c44cdd9a3978ad1f159d8cebd83506e3b1f95b94904",
       "mcpExposure" : "notExposed",
       "name" : "activate",
       "requiresConnectionBeforeDispatch" : true,
@@ -46,7 +46,7 @@
       "cliExposure" : "directCommand",
       "description" : "Dismiss the on-screen keyboard through the current first responder or keyboard action path.",
       "family" : "semanticAction",
-      "inputSchemaSHA256" : "04ffdc5bb139e52fa2f79e1ac5f034f7bc1e76c0cf5c81b2bbfc8153c3f90af6",
+      "inputSchemaSHA256" : "ce176408f9456d852f039e4639a0f85efffa2cb737a17cbdd702f212c5378c0f",
       "mcpExposure" : "notExposed",
       "name" : "dismiss_keyboard",
       "requiresConnectionBeforeDispatch" : true,
@@ -60,7 +60,7 @@
       "cliExposure" : "directCommand",
       "description" : "Explicit spatial drag action using exactly one typed intent: elementToPoint (activation point or unit start override) or pointToPoint.",
       "family" : "spatialAction",
-      "inputSchemaSHA256" : "2357ec08cc5950270eaa1284846d495c4e98958dd7111d4a10e89d8f4cd2c891",
+      "inputSchemaSHA256" : "4607e8437785bf3a56a208d246e0b3077aec6a4e429cc7d281c1f7508a74db0e",
       "mcpExposure" : "notExposed",
       "name" : "drag",
       "requiresConnectionBeforeDispatch" : true,
@@ -74,7 +74,7 @@
       "cliExposure" : "directCommand",
       "description" : "Perform an edit action on the current first responder.",
       "family" : "semanticAction",
-      "inputSchemaSHA256" : "d711d34b74042914d8c6f2774c38bad33f25ec26b6a9416ddeefed02d61ba732",
+      "inputSchemaSHA256" : "1900390a278fade4f20d545bbd7f37fd3baf3972354b9a80c703b926a1e6f743",
       "mcpExposure" : "notExposed",
       "name" : "edit_action",
       "requiresConnectionBeforeDispatch" : true,
@@ -82,24 +82,6 @@
         "base" : "standardAction",
         "kind" : "singleStepAction",
         "seconds" : 15
-      }
-    },
-    {
-      "cliExposure" : "directCommand",
-      "description" : "Read recent spoken accessibility text captured from announcement, elementChanged, valueChanged, or screenChanged notifications.",
-      "family" : "observation",
-      "inputSchemaSHA256" : "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
-      "mcpAnnotations" : {
-        "idempotentHint" : true,
-        "readOnlyHint" : true
-      },
-      "mcpExposure" : "directTool",
-      "name" : "get_announcements",
-      "requiresConnectionBeforeDispatch" : true,
-      "timeout" : {
-        "base" : "health",
-        "kind" : "fixed",
-        "seconds" : 3
       }
     },
     {
@@ -118,6 +100,24 @@
         "base" : "explore",
         "kind" : "fixed",
         "seconds" : 60
+      }
+    },
+    {
+      "cliExposure" : "directCommand",
+      "description" : "Read the ordered accessibility notifications retained by observation history, including spoken text and attached element semantics.",
+      "family" : "observation",
+      "inputSchemaSHA256" : "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "mcpAnnotations" : {
+        "idempotentHint" : true,
+        "readOnlyHint" : true
+      },
+      "mcpExposure" : "directTool",
+      "name" : "get_notifications",
+      "requiresConnectionBeforeDispatch" : true,
+      "timeout" : {
+        "base" : "health",
+        "kind" : "fixed",
+        "seconds" : 3
       }
     },
     {
@@ -223,7 +223,7 @@
       "cliExposure" : "directCommand",
       "description" : "Explicit spatial longPress action. Element targets dispatch at their activation point unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate.",
       "family" : "spatialAction",
-      "inputSchemaSHA256" : "d55e29beebc26e4ee5587d1323fad2de413a30b673119ddd1b002a0b7369b43b",
+      "inputSchemaSHA256" : "5bf0e79aec261c84166c053e3a8b4d6d8faa4c48029ab84623042093d3c78b18",
       "mcpExposure" : "notExposed",
       "name" : "long_press",
       "requiresConnectionBeforeDispatch" : true,
@@ -237,7 +237,7 @@
       "cliExposure" : "directCommand",
       "description" : "Explicit spatial oneFingerTap action. Element targets dispatch at their activation point unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate. Use activate for ordinary accessible controls.",
       "family" : "spatialAction",
-      "inputSchemaSHA256" : "6ef23f829a4acfe015cc31161318ea50e863ad44e3561cd0a4db9bc525b96d0e",
+      "inputSchemaSHA256" : "23d2d3f28867f554d5d8db86bad4ec4bd60bd6c8d28bfc0b9cc4285de6586d12",
       "mcpExposure" : "notExposed",
       "name" : "one_finger_tap",
       "requiresConnectionBeforeDispatch" : true,
@@ -249,7 +249,7 @@
     },
     {
       "cliExposure" : "notExposed",
-      "description" : "Run one durable ButtonHeist DSL instruction from `step`: one action or one `WaitFor(...)` statement.\n\nExamples:\n`Activate(.label(\"Pay\")).expect(.changed(.screen()))`\n`TypeText(\"milk\", into: .label(\"Search\")).expect(.changed(.elements()))`\n`Increment(.label(\"Quantity\"))`\n`Decrement(.label(\"Quantity\"))`\n`CustomAction(\"Archive\", on: .label(\"Message\"))`\n`Rotor(\"Headings\", on: .label(\"Article\"))`\n`ScreenActions.Dismiss()`\n`ScreenActions.MagicTap()`\n`SetPasteboard(\"hello\")`\n`Edit(.paste)`\n`dismissKeyboard()`\n`oneFingerTap(.label(\"Map\"))`\n`oneFingerTap(ScreenPoint(x: 888, y: 372))`\n`oneFingerTap(.label(\"Map\"), at: UnitPoint(x: 0.5, y: 0.25))`\n`longPress(.label(\"Message\"), at: UnitPoint(x: 0.5, y: 0.5))`\n`swipe(.label(\"Carousel\"), .left)`\n`drag(.label(\"Slider\"), to: ScreenPoint(x: 200, y: 40))`\n`WaitFor(.label(\"Checkout\"), timeout: 5)`\n\nUse `perform` when one line is enough. Use `run_heist` when the job needs\nmultiple instructions, reusable heists, `RunHeist`, `If`,\n`WaitFor(...).else { ... }`, `ForEach`, `Warn`, or `Fail`.",
+      "description" : "Run one durable ButtonHeist DSL instruction from `step`: one action or one `WaitFor(...)` statement.\n\nExamples:\n`Activate(.label(\"Pay\")).expect(.screenChanged)`\n`TypeText(\"milk\", into: .label(\"Search\")).expect(.elementsChanged)`\n`Increment(.label(\"Quantity\"))`\n`Decrement(.label(\"Quantity\"))`\n`CustomAction(\"Archive\", on: .label(\"Message\"))`\n`Rotor(\"Headings\", on: .label(\"Article\"))`\n`ScreenActions.Dismiss()`\n`ScreenActions.MagicTap()`\n`SetPasteboard(\"hello\")`\n`Edit(.paste)`\n`dismissKeyboard()`\n`oneFingerTap(.label(\"Map\"))`\n`oneFingerTap(ScreenPoint(x: 888, y: 372))`\n`oneFingerTap(.label(\"Map\"), at: UnitPoint(x: 0.5, y: 0.25))`\n`longPress(.label(\"Message\"), at: UnitPoint(x: 0.5, y: 0.5))`\n`swipe(.label(\"Carousel\"), .left)`\n`drag(.label(\"Slider\"), to: ScreenPoint(x: 200, y: 40))`\n`WaitFor(.label(\"Checkout\"), timeout: 5)`\n\nUse `perform` when one line is enough. Use `run_heist` when the job needs\nmultiple instructions, reusable heists, `RunHeist`, `If`,\n`WaitFor(...).else { ... }`, `ForEach`, `Warn`, or `Fail`.",
       "family" : "heistRuntime",
       "inputSchemaSHA256" : "160bda4f9f66a3802a1026a26581c31999c01d489db5c8fb76adc30f8661ad74",
       "mcpExposure" : "directTool",
@@ -281,7 +281,7 @@
       "cliExposure" : "directCommand",
       "description" : "Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor.",
       "family" : "semanticAction",
-      "inputSchemaSHA256" : "e62a07d272c04881cb3ca5ecf95fdd8c6b895114a0e810c3e29c4bb14bf7a501",
+      "inputSchemaSHA256" : "16f5b677c7afab5d17aefa6515a1fc32a5fe03916d09da7e1eed6bba444c5a0b",
       "mcpExposure" : "notExposed",
       "name" : "rotor",
       "requiresConnectionBeforeDispatch" : true,
@@ -293,23 +293,21 @@
     },
     {
       "cliExposure" : "directCommand",
-      "description" : "Run a durable heist from a ButtonHeist source plan in `plan`, or from a generated `.heist` package at `path`.\n\nAuthor plans as ButtonHeist source, not raw JSON IR:\n`HeistPlan(\"shop\") { ... }`\n`HeistDef<String>(\"Cart.addItem\", parameter: \"item\") { item in ... }`\n`RunHeist(\"Cart.addItem\", \"Milk\").expect(.changed(.elements([.appeared(.element(.label(\"subtotal\"), .value(.contains(\"1 item\"))))])))`\n`If(.label(\"Pay\")) { ... }.else { ... }`\n`WaitFor(.changed(.screen()), timeout: 10).else { ... }`\n`ForEach(\"Milk\", \"Bread\") { item in ... }`\n`ForEach(.element(.label(.prefix(\"Delete\")), .traits([.button])), limit: 20) { target in ... }`\n`Warn(\"message\")`\n`Fail(\"message\")`\n\nProvide exactly one source: `path` or `plan`. Use `argument` when the root\nheist takes a string or accessibility target. Runtime source is restricted\nButtonHeist DSL, not arbitrary Swift.",
+      "description" : "Run a durable heist from a ButtonHeist source plan in `plan`, or from a generated `.heist` package at `path`.\n\nAuthor plans as ButtonHeist source, not raw JSON IR:\n`HeistPlan(\"shop\") { ... }`\n`HeistDef<String>(\"Cart.addItem\", parameter: \"item\") { item in ... }`\n`RunHeist(\"Cart.addItem\", \"Milk\").expect(.elementsChanged([.appeared(.element(.label(\"subtotal\"), .value(.contains(\"1 item\"))))]))`\n`If(.label(\"Pay\")) { ... }.else { ... }`\n`WaitFor(.screenChanged, timeout: 10).else { ... }`\n`ForEach(\"Milk\", \"Bread\") { item in ... }`\n`ForEach(.element(.label(.prefix(\"Delete\")), .traits([.button])), limit: 20) { target in ... }`\n`Warn(\"message\")`\n`Fail(\"message\")`\n\nProvide exactly one source: `path` or `plan`. Use `argument` when the root\nheist takes a string or accessibility target. Runtime source is restricted\nButtonHeist DSL, not arbitrary Swift.",
       "family" : "heistRuntime",
-      "inputSchemaSHA256" : "6aa76922c485bc436fb81792a67c687e2398c363b5f6d62d987c40863302ac92",
+      "inputSchemaSHA256" : "b14b985f2d1258ac3ef7ab1d1b12fb5c7cb0e33585b5e47d0fb5517e1f3e3f61",
       "mcpExposure" : "directTool",
       "name" : "run_heist",
       "requiresConnectionBeforeDispatch" : true,
       "timeout" : {
-        "base" : "longAction",
-        "kind" : "fixed",
-        "seconds" : 30
+        "kind" : "heist"
       }
     },
     {
       "cliExposure" : "directCommand",
       "description" : "Explicit viewport/debug operation: scroll one page in the visible viewport, within a semantic target's owning scroll ancestor, or for direct debug requests, within a current containerName.",
       "family" : "viewportDebug",
-      "inputSchemaSHA256" : "7835685680309328600a3185ff39f81d4ee6aeb569c93726db48a4152b4e4d1d",
+      "inputSchemaSHA256" : "32097e5203aa67e74d0440d45179a8b6867b15621048f483c857eaf204ef9f9b",
       "mcpExposure" : "notExposed",
       "name" : "scroll",
       "requiresConnectionBeforeDispatch" : true,
@@ -323,7 +321,7 @@
       "cliExposure" : "directCommand",
       "description" : "Explicit viewport/debug operation: scroll the visible viewport, a semantic target's owning scroll ancestor, or for direct debug requests, a current containerName, to a requested edge.",
       "family" : "viewportDebug",
-      "inputSchemaSHA256" : "663c408be838ffec261e558ae97ef95a811c99898e9669d0fcbc2951d08b463e",
+      "inputSchemaSHA256" : "de75ea2162b2a74f8d5b7cefba174244f53b229f3775987deeb02ae5180413f5",
       "mcpExposure" : "notExposed",
       "name" : "scroll_to_edge",
       "requiresConnectionBeforeDispatch" : true,
@@ -337,7 +335,7 @@
       "cliExposure" : "directCommand",
       "description" : "Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry.",
       "family" : "viewportDebug",
-      "inputSchemaSHA256" : "149c9ff8ca384a697e832452770a1989f4359f35d840f161eae2b996e0399426",
+      "inputSchemaSHA256" : "04d25d8dfbf3b559ceb8b307568136838829762c836c118b218eb2e27c8fdc3a",
       "mcpExposure" : "notExposed",
       "name" : "scroll_to_visible",
       "requiresConnectionBeforeDispatch" : true,
@@ -351,7 +349,7 @@
       "cliExposure" : "directCommand",
       "description" : "Write text to the general pasteboard from within the app.",
       "family" : "semanticAction",
-      "inputSchemaSHA256" : "c0569798d32b35e081a8249296b1c23f8915619a97905fd3d654763b01fba43a",
+      "inputSchemaSHA256" : "b57108543ad8b430aa21f799835c19b3fb0dfb871adf1a0e10420ea10e16d7bb",
       "mcpExposure" : "notExposed",
       "name" : "set_pasteboard",
       "requiresConnectionBeforeDispatch" : true,
@@ -365,7 +363,7 @@
       "cliExposure" : "directCommand",
       "description" : "Explicit spatial swipe action using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection.",
       "family" : "spatialAction",
-      "inputSchemaSHA256" : "2d804ad98a7c642c6034487a5a248a863b424afaa8d5fe247ff97225eec2cd0e",
+      "inputSchemaSHA256" : "bb11c2093282c3e99a2710952892663b7ed099a6f31499de062679a7ed1c9821",
       "mcpExposure" : "notExposed",
       "name" : "swipe",
       "requiresConnectionBeforeDispatch" : true,
@@ -379,7 +377,7 @@
       "cliExposure" : "directCommand",
       "description" : "Type text. Replace mode clears the focused field before typing.",
       "family" : "semanticAction",
-      "inputSchemaSHA256" : "a52eeda25659cfbaab5e060f9055824de0234695df695ff5588a36a3a61b984e",
+      "inputSchemaSHA256" : "422362787107c1bbe3d7802dc52ba9b1a3160e758fd8a489cb41746b1ad7422f",
       "mcpExposure" : "notExposed",
       "name" : "type_text",
       "requiresConnectionBeforeDispatch" : true,
@@ -409,7 +407,7 @@
       "cliExposure" : "directCommand",
       "description" : "Assert that an accessibility predicate is satisfied within timeout by evaluating settled accessibility state.",
       "family" : "assertion",
-      "inputSchemaSHA256" : "3c01fd25ab35752b4369a5927eb0f5a82f6d172a233bd770fd67f589d0bfc27e",
+      "inputSchemaSHA256" : "1978bb825bfaf91b3e6dac3a9a4146435bf2bf2105e84b7ba53a2a532f801248",
       "mcpAnnotations" : {
         "readOnlyHint" : true
       },

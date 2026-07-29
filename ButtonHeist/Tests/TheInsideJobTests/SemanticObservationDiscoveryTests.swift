@@ -11,12 +11,45 @@ import ButtonHeistTestSupport
 
 @MainActor
 final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase {
-    func testPathOnlyScrollReplacementDiscardsPriorDiscoveryAndLiveEvidence() async {
+    func testTripwireChangeInvalidatesAdmissionWithoutDiscardingDiscoveryTruth() async {
+        let initialSignal = tripwireSignal(sequence: 1)
+        vault.semanticObservationStream.readTripwireSignal = { initialSignal }
+        _ = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+            InterfaceObservation.makeForTests(
+                elements: [(AccessibilityElement.make(label: "Visible"), "visible")],
+                offViewport: [InterfaceObservation.OffViewportEntry(
+                    AccessibilityElement.make(label: "Known"),
+                    heistId: "known",
+                    scrollContainerPath: TreePath([0])
+                )]
+            )
+        )
+
+        let changedSignal = tripwireSignal(sequence: 2)
+        vault.semanticObservationStream.readTripwireSignal = { changedSignal }
+        let staleAdmission = await vault.semanticObservationStream.admittedObservation(
+            scope: .visible,
+            after: nil
+        )
+
+        XCTAssertNil(staleAdmission)
+        XCTAssertNotNil(vault.interfaceTree.findElement(heistId: "known"))
+
+        let refreshed = await vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(
+                elements: [(AccessibilityElement.make(label: "Visible"), "visible")]
+            )
+        )
+        XCTAssertNotNil(vault.interfaceTree.findElement(heistId: "known"))
+        XCTAssertEqual(refreshed.current.continuity, .sameGeneration)
+    }
+
+    func testPathOnlyScrollReplacementDiscardsPriorDiscoveryAndLiveEvidence() async throws {
         let oldHeader = NSObject()
         let oldRow = NSObject()
         let newHeader = NSObject()
         let newRow = NSObject()
-        let firstEvent = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let firstPublication = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             scrollObservation(
                 headerId: "old_header",
                 rowLabel: "Orders",
@@ -25,7 +58,7 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
                 rowObject: oldRow
             )
         )
-        let secondEvent = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let secondPublication = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             scrollObservation(
                 headerId: "new_header",
                 rowLabel: "Products",
@@ -34,11 +67,18 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
                 rowObject: newRow
             )
         )
+        let replacementEvents = try await retainedEvents(
+            after: firstPublication.historyRange.upperBound
+        )
 
-        XCTAssertEqual(secondEvent.generation, firstEvent.generation.advanced())
         XCTAssertEqual(
-            secondEvent.continuity,
+            secondPublication.current.continuity,
             .replacement(.inferred(.semanticIdentityDisjoint))
+        )
+        XCTAssertEqual(replacementEvents, secondPublication.events)
+        XCTAssertEqual(
+            replacementEvents.filter(\.isScreenChanged).count,
+            1
         )
         XCTAssertNil(vault.interfaceTree.findElement(heistId: "old_row"))
         XCTAssertNotNil(vault.interfaceTree.findElement(heistId: "new_row"))
@@ -52,17 +92,22 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
         let discovery = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(first)
         let visible = await vault.semanticObservationStream.commitVisibleObservationForTesting(second)
 
-        let history = await vault.semanticObservationStream.storeOwner.readLog {
-            $0.events(since: discovery.moment)
+        let events = try await retainedEvents(after: discovery.historyRange.upperBound)
+        XCTAssertEqual(discovery.historyRange.upperBound, visible.historyRange.lowerBound)
+        XCTAssertEqual(events, visible.events)
+        XCTAssertEqual(events.count, 3)
+        guard case .elementsChanged(let departure) = events[0],
+              case .screenChanged = events[1],
+              case .elementsChanged(let arrival) = events[2] else {
+            return XCTFail("Expected departure, screen boundary, and arrival")
         }
-        let visibleMoment = await vault.semanticObservationStream.latestCommittedObservationMoment(scope: .visible)
-        let discoveryMoment = await vault.semanticObservationStream.latestCommittedObservationMoment(scope: .discovery)
-        XCTAssertEqual(history, .events([.snapshot(visible)]))
-        XCTAssertEqual(visibleMoment, visible.moment)
-        XCTAssertEqual(discoveryMoment, discovery.moment)
+        XCTAssertTrue(departure.interface.projectedElements.isEmpty)
+        XCTAssertEqual(arrival, visible.current.snapshot)
+        XCTAssertEqual(discovery.current.scope, .discovery)
+        XCTAssertEqual(visible.current.scope, .visible)
     }
 
-    func testDiscoveryPublicationCarriesCanonicalGraphAndEvidenceAcrossFulfilledScopes() async throws {
+    func testDiscoveryPublicationCarriesCanonicalSnapshotAndEvents() async throws {
         let visible = AccessibilityElement.make(label: "Visible", traits: .header)
         let offViewport = AccessibilityElement.make(label: "Off Viewport", traits: .button)
         let observation = InterfaceObservation.makeForTests(
@@ -70,46 +115,45 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
             offViewport: [.init(offViewport, heistId: "off_viewport")]
         )
 
-        let discoveryEvent = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(observation)
-        let visibleEvent = discoveryEvent
+        let publication = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(observation)
+        let snapshot = publication.current.snapshot
+        let retained = try await retainedEvents(
+            after: publication.historyRange.lowerBound
+        )
 
-        XCTAssertEqual(discoveryEvent.snapshot.observation.tree.elementIDs, ["visible", "off_viewport"])
-        XCTAssertEqual(discoveryEvent.snapshot.observation.captureID, observation.captureID)
         XCTAssertEqual(
-            discoveryEvent.trace.captures.last?.interface.projectedElements.compactMap(\.label),
+            snapshot.interface.projectedElements.compactMap(\.semantics.assertable.label),
             ["Visible", "Off Viewport"]
         )
-        XCTAssertEqual(visibleEvent.snapshot.observation.tree.elementIDs, ["visible", "off_viewport"])
-        XCTAssertEqual(visibleEvent.snapshot.observation.captureID, observation.captureID)
-        XCTAssertEqual(
-            visibleEvent.trace.captures.last?.interface.projectedElements.compactMap(\.label),
-            ["Visible", "Off Viewport"]
-        )
-        XCTAssertEqual(visibleEvent, discoveryEvent)
-        XCTAssertEqual(vault.latestObservation.captureID, observation.captureID)
+        XCTAssertEqual(publication.current.scope, .discovery)
+        XCTAssertEqual(publication.events.compactMap(\.snapshot), [snapshot])
+        XCTAssertEqual(retained, publication.events)
     }
 
-    func testDiscoverySettlementRejectsTripwireChangeBeforeCommit() async {
+    func testDiscoverySettlementRejectsHierarchyChangeBeforeCommit() async {
         let observation = observation(label: "Candidate", heistId: "candidate")
         vault.observeInterface(observation)
-        let settledSignal = tripwireSignal(sequence: 1)
-        let currentSignal = tripwireSignal(sequence: 2)
+        let currentSignal = TheTripwire.TripwireSignal(
+            topmostVC: ObjectIdentifier(vault),
+            navigation: .empty,
+            windowStack: .empty,
+            accessibilityNotificationSequence: 1
+        )
         vault.semanticObservationStream.readTripwireSignal = { currentSignal }
-        let event = await vault.semanticObservationStream.commitSettledDiscoveryObservation(
-            settleResult(
-                .settled(timeMs: 1),
-                observation: observation,
-                tripwireSignal: settledSignal
-            ),
+        let admission = await vault.semanticObservationStream.admitCurrentObservation(
+            vault: vault,
+            tripwireSignal: tripwireSignal(sequence: 1),
             discoveryCommitPolicy: .mergeIntoInterface,
-            afterViewportMovement: true
+            lineage: .viewportMovement
         )
 
-        XCTAssertNil(event)
+        guard case .failure(.hierarchyChangedDuringCapture) = admission else {
+            return XCTFail("Expected hierarchy-changed capture failure")
+        }
         XCTAssertNil(vault.interfaceTree.findElement(heistId: "candidate"))
     }
 
-    func testDiscoveryAfterVisibleReplacementUsesGlobalGenerationAndPredecessor() async throws {
+    func testDiscoveryAfterVisibleReplacementContinuesOneOrderedHistory() async throws {
         let initialDiscovery = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             observation(label: "First Screen", heistId: "first_screen")
         )
@@ -121,22 +165,50 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
             observation(label: "Second Screen", heistId: "second_screen")
         )
 
-        XCTAssertEqual(replacementVisible.generation, initialDiscovery.generation.advanced())
-        XCTAssertEqual(replacementDiscovery.generation, replacementVisible.generation)
-        XCTAssertEqual(replacementDiscovery.previousMoment, replacementVisible.moment)
         XCTAssertEqual(
-            replacementDiscovery.trace.captures.first?.hash,
-            replacementVisible.trace.captures.last?.hash
+            replacementVisible.current.continuity,
+            .replacement(.screenChangedNotification)
+        )
+        XCTAssertEqual(replacementDiscovery.current.continuity, .sameGeneration)
+        XCTAssertEqual(
+            initialDiscovery.historyRange.upperBound,
+            replacementVisible.historyRange.lowerBound
+        )
+        XCTAssertEqual(
+            replacementVisible.historyRange.upperBound,
+            replacementDiscovery.historyRange.lowerBound
         )
 
-        let history = await vault.semanticObservationStream.storeOwner.readLog {
-            $0.events(since: initialDiscovery.moment)
+        let events = try await retainedEvents(after: initialDiscovery.historyRange.upperBound)
+        XCTAssertEqual(events, replacementVisible.events + replacementDiscovery.events)
+        XCTAssertEqual(events.count, 4)
+        guard case .elementsChanged(let departure) = events[0] else {
+            return XCTFail("Expected departure before the screen boundary")
         }
-        XCTAssertEqual(history, .events([.snapshot(replacementVisible), .snapshot(replacementDiscovery)]))
-        guard case .sameGeneration(let previous) = replacementDiscovery.transition else {
-            return XCTFail("Expected the skipped discovery scope to cross the retained screen boundary")
+        guard case .screenChanged = events[1] else {
+            return XCTFail("Expected the screen boundary between departure and arrival")
         }
-        XCTAssertEqual(previous, replacementVisible.moment)
+        guard case .elementsChanged(let arrival) = events[2] else {
+            return XCTFail("Expected arrival after the screen boundary")
+        }
+        XCTAssertTrue(departure.interface.projectedElements.isEmpty)
+        XCTAssertEqual(arrival, replacementVisible.current.snapshot)
+        XCTAssertEqual(events[3], .noChange)
+        XCTAssertEqual(
+            replacementVisible.current.snapshot.interface.projectedElements
+                .map(\.semantics.semanticHash)
+                .sorted(),
+            replacementDiscovery.current.snapshot.interface.projectedElements
+                .map(\.semantics.semanticHash)
+                .sorted()
+        )
+    }
+}
+
+private extension Observation.Event {
+    var isScreenChanged: Bool {
+        if case .screenChanged = self { return true }
+        return false
     }
 }
 #endif // DEBUG

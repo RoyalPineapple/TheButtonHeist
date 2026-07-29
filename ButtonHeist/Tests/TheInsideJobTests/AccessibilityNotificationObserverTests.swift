@@ -3,7 +3,6 @@ import ButtonHeistSupport
 import UIKit
 import XCTest
 
-import ThePlans
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
 @_spi(ButtonHeistInternals) @testable import TheScore
@@ -24,10 +23,12 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         AccessibilityNotificationObserver.shared.subscribe(bus)
         let installed = AccessibilityNotificationObserver.shared.isInstalled
-        XCTAssertEqual(
-            AccessibilityNotificationObserver.shared.lifecycleState,
-            .subscribed(callbackInstalled: installed)
-        )
+        guard case .subscribed(let callbackInstalled, _) =
+            AccessibilityNotificationObserver.shared.lifecycleState
+        else {
+            return XCTFail("Expected the shared observer to report a subscribed lifecycle")
+        }
+        XCTAssertEqual(callbackInstalled, installed)
 
         AccessibilityNotificationObserver.shared.unsubscribe(bus)
 
@@ -52,7 +53,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         XCTAssertTrue(observer.hasSubscribers)
         XCTAssertTrue(observer.isInstalled)
-        XCTAssertEqual(observer.lifecycleState, .subscribed(callbackInstalled: true))
+        XCTAssertEqual(observer.lifecycleState, .subscribed(callbackInstalled: true, unitTestModeArmed: true))
         XCTAssertTrue(harness.isInstalled)
         XCTAssertEqual(harness.installCount, 2)
         XCTAssertEqual(harness.uninstallCount, 1)
@@ -306,7 +307,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertTrue(scoped.events.isEmpty)
     }
 
-    func testAnnouncementWaitOutcomeReportsRetainedHistoryGap() async throws {
+    func testNotificationCheckpointReportsRetainedHistoryGap() async {
         let bus = AccessibilityNotificationBus()
         let cursor = bus.cursor()
         for index in 0..<65 {
@@ -319,19 +320,17 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             )
         }
 
-        let outcome = await bus.waitForAnnouncement(
-            after: cursor,
-            matching: try AnnouncementPredicate("Expected announcement").resolve(in: .empty)
-        )
+        let batch = bus.checkpoint(after: cursor, selection: .all)
 
         XCTAssertEqual(
-            outcome,
-            .historyUnavailable(AccessibilityNotificationGap(droppedThroughSequence: 1))
+            batch.gap,
+            AccessibilityNotificationGap(droppedThroughSequence: 1)
         )
-        XCTAssertEqual(bus.announcementWaiterCount, 0)
+        XCTAssertEqual(batch.events.map(\.sequence), Array(UInt64(2)...UInt64(65)))
+        XCTAssertEqual(batch.events.map(\.kind), Array(repeating: .announcement, count: 64))
     }
 
-    func testAnnouncementWaitOutcomePrefersRetainedMatchOverEarlierGap() async throws {
+    func testNotificationCheckpointPreservesRetainedPayloadOrderAcrossGap() async {
         let bus = AccessibilityNotificationBus()
         let cursor = bus.cursor()
         for index in 0..<64 {
@@ -351,19 +350,21 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             associatedElement: .none
         )
 
-        let outcome = await bus.waitForAnnouncement(
-            after: cursor,
-            matching: try AnnouncementPredicate("Expected announcement").resolve(in: .empty)
-        )
-
-        guard case .matched(let announcement) = outcome else {
-            return XCTFail("Expected the retained announcement to match")
+        let batch = bus.checkpoint(after: cursor, selection: .all)
+        let retainedText = batch.events.compactMap { event -> String? in
+            guard case .string(let text) = event.notificationData else { return nil }
+            return text
         }
-        XCTAssertEqual(announcement.text, "Expected announcement")
-        XCTAssertEqual(bus.announcementWaiterCount, 0)
+
+        XCTAssertEqual(retainedText.last, "Expected announcement")
+        XCTAssertEqual(batch.events.map(\.sequence), Array(UInt64(2)...UInt64(65)))
+        XCTAssertEqual(
+            batch.gap,
+            AccessibilityNotificationGap(droppedThroughSequence: 1)
+        )
     }
 
-    func testStoppingSemanticObservationDoesNotClearNotificationHistory() async {
+    func testStoppingSemanticObservationDoesNotClearRetainedIngress() async {
         let vault = TheVault(tripwire: TheTripwire())
         let heist = vault.accessibilityNotifications.beginHeistScope()
         vault.accessibilityNotifications.recordForTesting(
@@ -396,7 +397,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertNil(batch.gap)
     }
 
-    func testStringPayloadsFromPublicNotificationsAreCapturedAsAnnouncements() async {
+    func testStringPayloadsFromPublicNotificationsAreCapturedInIngressOrder() async {
         let bus = AccessibilityNotificationBus()
 
         bus.recordForTesting(
@@ -415,48 +416,23 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             associatedElement: .none
         )
 
-        let announcements = bus.announcements()
-        XCTAssertEqual(announcements.map(\.text), ["Item deleted", "3 items selected", "Checkout"])
-        XCTAssertEqual(announcements.map(\.kind), [.announcement, .elementChanged(.layout), .screenChanged])
-    }
-
-    func testAnnouncementWaiterMatchesLayoutChangedStringPayload() async throws {
-        let bus = AccessibilityNotificationBus()
-        let cursor = bus.cursor()
-        let announcementPredicate = try AnnouncementPredicate(
-            match: .contains("selected")
-        ).resolve(in: .empty)
-
-        async let result = bus.waitForAnnouncement(
-            after: cursor,
-            matching: announcementPredicate
-        )
-        bus.recordForTesting(
-            code: 1001,
-            notificationData: CapturedAccessibilityNotificationPayload("3 items selected" as NSString),
-            associatedElement: .none
-        )
-
-        guard case .matched(let announcement) = await result else {
-            return XCTFail("Expected the layout announcement to match")
+        let events = bus.checkpoint(after: .origin, selection: .all).events
+        let text = events.compactMap { event -> String? in
+            guard case .string(let value) = event.notificationData else { return nil }
+            return value
         }
-        XCTAssertEqual(announcement.text, "3 items selected")
-        XCTAssertEqual(announcement.kind, .elementChanged(.layout))
+        XCTAssertEqual(text, ["Item deleted", "3 items selected", "Checkout"])
+        XCTAssertEqual(
+            events.map(\.kind),
+            [.announcement, .elementChanged(.layout), .screenChanged]
+        )
     }
 
-    func testOverlappingConsumersProjectTheSameRetainedEvents() async throws {
+    func testOverlappingWindowsReadTheSameRetainedEventsFromTheirCursors() async throws {
         let bus = AccessibilityNotificationBus()
         let heist = bus.beginHeistScope()
         let action = bus.beginActionWindow()
-        let announcementCursor = bus.cursor()
-        let announcementPredicate = try AnnouncementPredicate("Done").resolve(in: .empty)
-        let announcementTask = Task {
-            await bus.waitForAnnouncement(
-                after: announcementCursor,
-                matching: announcementPredicate
-            )
-        }
-        await waitForAnnouncementWaiterCount(1, in: bus)
+        let observerCursor = bus.cursor()
 
         bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
         bus.recordForTesting(code: 1005, notificationData: .none, associatedElement: .none)
@@ -466,10 +442,9 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             associatedElement: .none
         )
 
-        let announcementOutcome = await announcementTask.value
         let actionBatch = try XCTUnwrap(action.capture())
         let heistBatch = bus.checkpoint(after: heist.cursor)
-        let announcementProjection = bus.announcements(after: announcementCursor)
+        let observerBatch = bus.checkpoint(after: observerCursor, selection: .all)
         action.cancel()
         heist.cancel()
 
@@ -480,33 +455,12 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         ]
         XCTAssertEqual(actionBatch.events.map(\.kind), expectedKinds)
         XCTAssertEqual(heistBatch.events.map(\.kind), expectedKinds)
-        guard case .matched(let announcement) = announcementOutcome else {
-            return XCTFail("Expected the retained announcement to match")
-        }
-        XCTAssertEqual(announcement.sequence, 3)
-        XCTAssertEqual(announcementProjection.map(\.sequence), [3])
+        XCTAssertEqual(observerBatch.events.map(\.kind), expectedKinds)
+        XCTAssertEqual(observerBatch.events.map(\.sequence), [1, 2, 3])
         XCTAssertEqual(
             bus.checkpoint(after: .origin, selection: .all).events.map(\.kind),
             expectedKinds
         )
-    }
-
-    func testCancellingAnnouncementWaitRemovesOnlyItsWaiter() async throws {
-        let bus = AccessibilityNotificationBus()
-        let announcementPredicate = try AnnouncementPredicate("Never").resolve(in: .empty)
-        let task = Task {
-            await bus.waitForAnnouncement(
-                after: bus.cursor(),
-                matching: announcementPredicate
-            )
-        }
-        await waitForAnnouncementWaiterCount(1, in: bus)
-
-        task.cancel()
-        let result = await task.value
-
-        XCTAssertEqual(result, .cancelled)
-        XCTAssertEqual(bus.announcementWaiterCount, 0)
     }
 
     func testObserverPublishesOneMonotonicPayloadSequenceToEverySubscriber() async throws {
@@ -632,112 +586,6 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(batch.events.map(\.sequence), [2])
         XCTAssertEqual(batch.events.map(\.provenance), [.scoped])
         XCTAssertEqual(batch.through.sequence, 3)
-        XCTAssertEqual(bus.announcements().count, 0)
-    }
-
-    // MARK: - Settled Observation Invalidation
-
-    func testScreenChangedAfterCommitInvalidatesStaleServedObservation() async {
-        let visibleObservationSource = VisibleObservationSourceFixture()
-        let brains = TheBrains(
-            tripwire: TheTripwire(),
-            visibleObservationSource: visibleObservationSource.capture
-        )
-        brains.tripwire.startPulse()
-        await brains.startSemanticObservation()
-        defer {
-            brains.stopSemanticObservation()
-            brains.tripwire.stopPulse()
-        }
-
-        let staleScreen = InterfaceObservation.makeForTests([
-            InterfaceObservation.TestEntry(
-                AccessibilityElement.make(label: "Overview", traits: .header),
-                heistId: "overview_header"
-            )
-        ])
-        let staleEvent = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(staleScreen)
-
-        // The completion notification lands after the commit, inside an
-        // action's attribution window: the settled overview has already been
-        // replaced and must not be served to the next read.
-        let actionWindow = brains.vault.accessibilityNotifications.beginActionWindow()
-        defer { actionWindow.cancel() }
-        brains.vault.accessibilityNotifications.recordForTesting(
-            code: 1000,
-            notificationData: .none,
-            associatedElement: .none
-        )
-        let freshScreen = InterfaceObservation.makeForTests([
-            InterfaceObservation.TestEntry(
-                AccessibilityElement.make(label: "Destination", traits: .header),
-                heistId: "destination_header"
-            )
-        ])
-        visibleObservationSource.observation = freshScreen
-
-        let served = await brains.vault.semanticObservationStream.settledEvent(
-            scope: .visible,
-            after: staleEvent.sequence > 0 ? staleEvent.sequence - 1 : nil,
-            timeout: 3.0
-        )
-
-        XCTAssertNotNil(served)
-        XCTAssertGreaterThan(
-            served?.sequence ?? 0,
-            staleEvent.sequence,
-            "A screenChanged recorded after the settled commit must invalidate it, not serve it from cache"
-        )
-    }
-
-    func testAmbientScreenChangedAfterCommitDoesNotInvalidateLaterScopedRead() async {
-        let visibleObservationSource = VisibleObservationSourceFixture()
-        let brains = TheBrains(
-            tripwire: TheTripwire(),
-            visibleObservationSource: visibleObservationSource.capture
-        )
-        let tripwireSignal = brains.tripwire.tripwireSignal()
-        brains.vault.semanticObservationStream.readTripwireSignal = { tripwireSignal }
-        brains.tripwire.startPulse()
-        await brains.startSemanticObservation()
-        defer {
-            brains.stopSemanticObservation()
-            brains.tripwire.stopPulse()
-        }
-
-        let staleScreen = InterfaceObservation.makeForTests([
-            InterfaceObservation.TestEntry(
-                AccessibilityElement.make(label: "Overview", traits: .header),
-                heistId: "overview_header"
-            )
-        ])
-        let staleEvent = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(staleScreen)
-
-        brains.vault.accessibilityNotifications.recordForTesting(
-            code: 1000,
-            notificationData: .none,
-            associatedElement: .none
-        )
-        let actionWindow = brains.vault.accessibilityNotifications.beginActionWindow()
-        defer { actionWindow.cancel() }
-        visibleObservationSource.observation = InterfaceObservation.makeForTests([
-            InterfaceObservation.TestEntry(
-                AccessibilityElement.make(label: "Destination", traits: .header),
-                heistId: "destination_header"
-            )
-        ])
-
-        let served = await brains.vault.semanticObservationStream.settledEvent(
-            scope: .visible,
-            after: staleEvent.sequence > 0 ? staleEvent.sequence - 1 : nil,
-            timeout: 0.25
-        )
-
-        XCTAssertEqual(
-            served?.sequence,
-            staleEvent.sequence,
-            "A screenChanged recorded outside command scope must not poison the next scoped settled read."
-        )
     }
 
     func testHeistScopeKeepsActionClaimsInBoundedTaggedStreamAfterScopeEnds() async {
@@ -791,17 +639,6 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         throw WaitError.timedOut(kind)
     }
 
-    private func waitForAnnouncementWaiterCount(
-        _ expectedCount: Int,
-        in bus: AccessibilityNotificationBus
-    ) async {
-        for _ in 0..<1_000 {
-            guard bus.announcementWaiterCount != expectedCount else { return }
-            await Task.yield()
-        }
-        XCTFail("Timed out waiting for \(expectedCount) announcement waiters")
-    }
-
     @MainActor
     private final class CallbackRegistrationHarness {
         weak var observer: AccessibilityNotificationObserver?
@@ -826,6 +663,87 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             subscriberAddedDuringUninstall = nil
             observer?.subscribe(subscriber)
         }
+    }
+}
+
+/// Which screen changes reach past a settled commit.
+///
+/// A settled observation describes the screen it was taken on, so a screen
+/// change after it means the observation describes a screen we are no longer
+/// looking at. Scope is what decides whether a given change says that: one
+/// recorded inside an action's attribution window belongs to the command and
+/// counts, one recorded outside it is the host app talking to itself and does
+/// not.
+///
+/// What the reader consults is the bus's scoped-screenChanged sequence against
+/// the cursor the commit absorbed, so that pair is what these assert. A commit
+/// takes the cursor up to the scoped changes it already knows about, which makes
+/// "the bus is ahead" precisely "a scoped screen change arrived since". Neither
+/// side moves on a clock, and neither is touched by the other invalidation
+/// sources sharing the store's flag.
+@MainActor
+final class ScreenChangeCursorAdmissionTests: ButtonHeistObservationTestCase {
+
+    private var visibleObservationSource = VisibleObservationSourceFixture()
+
+    override func makeBrains(tripwire: TheTripwire) throws -> TheBrains {
+        TheBrains(
+            tripwire: tripwire,
+            visibleObservationSource: visibleObservationSource.capture
+        )
+    }
+
+    func testScreenChangedInsideCommandScopeOutrunsTheCommittedCursor() async {
+        await commitOverview()
+
+        let actionWindow = brains.vault.accessibilityNotifications.beginActionWindow()
+        defer { actionWindow.cancel() }
+        recordScreenChanged()
+
+        let committed = await committedScopedScreenChangedCursor()
+        XCTAssertGreaterThan(
+            brains.vault.accessibilityNotifications.latestScopedScreenChangedSequence,
+            committed,
+            "A screenChanged inside command scope must outrun the commit, so the next read invalidates it"
+        )
+    }
+
+    func testScreenChangedOutsideCommandScopeLeavesTheCommittedCursorAhead() async {
+        await commitOverview()
+
+        recordScreenChanged()
+        let actionWindow = brains.vault.accessibilityNotifications.beginActionWindow()
+        defer { actionWindow.cancel() }
+
+        let committed = await committedScopedScreenChangedCursor()
+        XCTAssertLessThanOrEqual(
+            brains.vault.accessibilityNotifications.latestScopedScreenChangedSequence,
+            committed,
+            "A screenChanged outside command scope must not outrun the commit, so the next read serves it"
+        )
+    }
+
+    private func commitOverview() async {
+        _ = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests([
+                InterfaceObservation.TestEntry(
+                    AccessibilityElement.make(label: "Overview", traits: .header),
+                    heistId: "overview_header"
+                )
+            ])
+        )
+    }
+
+    private func recordScreenChanged() {
+        brains.vault.accessibilityNotifications.recordForTesting(
+            code: 1000,
+            notificationData: .none,
+            associatedElement: .none
+        )
+    }
+
+    private func committedScopedScreenChangedCursor() async -> UInt64 {
+        await brains.vault.semanticObservationStream.stateOwner.scopedScreenChangedSequence()
     }
 }
 

@@ -50,8 +50,26 @@ final class ActionResultPayloadWireTests: XCTestCase {
             rotor: "Errors",
             direction: .next,
             foundElement: HeistElement(
-                description: "Email", label: "Email", value: nil, identifier: nil,
-                frameX: 0, frameY: 0, frameWidth: 0, frameHeight: 0, actions: []
+                semantics: HeistElement.Semantics(
+                    spokenDescription: "Email",
+                    assertable: HeistElement.Semantics.AssertableProperties(
+                        label: "Email",
+                        value: nil,
+                        identifier: nil
+                    ),
+                    respondsToUserInteraction: true
+                ),
+                geometry: HeistElement.Geometry(
+                    screen: .onscreen(
+                        frame: .available(ScreenRect(x: 0, y: 0, width: 0, height: 0)),
+                        activationPoint: .unavailable
+                    ),
+                    view: HeistElement.Geometry.ViewSpace(
+                        ownerPath: .root,
+                        frame: ViewRect(x: 0, y: 0, width: 0, height: 0),
+                        activationPoint: nil
+                    )
+                )
             ),
             textRange: RotorTextRange(text: "@maria", startOffset: 10, endOffset: 16, rangeDescription: "[10..<16]")
         )
@@ -62,7 +80,10 @@ final class ActionResultPayloadWireTests: XCTestCase {
         XCTAssertEqual(try payload.string("rotor"), "Errors")
         XCTAssertEqual(try payload.string("direction"), "next")
         let foundElement = try payload.object("foundElement")
-        XCTAssertEqual(try foundElement.string("label"), "Email")
+        let semantics = try foundElement.object("semantics")
+        let assertable = try semantics.object("assertable")
+        XCTAssertEqual(try assertable.string("label"), "Email")
+        _ = try foundElement.object("geometry")
         XCTAssertNoThrow(try foundElement.assertMissing("heistId"), "heistId must never appear on the wire")
         let textRange = try payload.object("textRange")
         XCTAssertEqual(try textRange.string("text"), "@maria")

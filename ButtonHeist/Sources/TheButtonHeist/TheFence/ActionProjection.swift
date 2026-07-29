@@ -115,10 +115,9 @@ struct ActionProjection: Sendable {
     }
 
     var delta: DeltaProjection? {
-        result.traceEvidence.flatMap {
+        result.observationEvidence.flatMap {
             DeltaProjection(
-                trace: $0.trace,
-                isComplete: $0.isComplete,
+                evidence: $0,
                 profile: profile,
                 includeScreenInterface: true
             )
@@ -126,11 +125,15 @@ struct ActionProjection: Sendable {
     }
 
     var screenName: String? {
-        result.accessibilityTrace?.endpointScreenName
+        result.observationEvidence?.current.map {
+            InterfaceSummary.screenDescription(for: $0.interface)
+        }
     }
 
     var screenId: String? {
-        result.accessibilityTrace?.endpointScreenId
+        result.observationEvidence?.current.flatMap {
+            $0.context.screenId ?? InterfaceSummary.screenId(for: $0.interface)
+        }
     }
 
     var failure: ActionFailureProjection? {
@@ -143,11 +146,6 @@ struct ActionProjection: Sendable {
         }
     }
 
-    var incompleteSettlement: ActionSettlementEvidence? {
-        guard let settlement = result.evidence.settlement, !settlement.settled else { return nil }
-        return settlement
-    }
-
     var activationTrace: ActivationTrace? { result.activationTrace }
 
     var timing: ActionPerformanceTiming? { result.timing }
@@ -158,17 +156,9 @@ struct ActionProjection: Sendable {
 }
 
 struct ActionResultOmissionsProjection: Encodable, Sendable {
-    let accessibilityTrace: ProjectionOmission?
     let subjectEvidence: ProjectionOmission?
 
     init(result: ActionResult) {
-        accessibilityTrace = result.accessibilityTrace.map {
-            ProjectionOmission(
-                reason: .rawAccessibilityTrace,
-                projectedAs: "delta",
-                omittedCount: $0.captures.count
-            )
-        }
         subjectEvidence = result.subjectEvidence.map { _ in
             ProjectionOmission(
                 reason: .rawSubjectEvidence,
@@ -179,7 +169,7 @@ struct ActionResultOmissionsProjection: Encodable, Sendable {
     }
 
     var isEmpty: Bool {
-        accessibilityTrace == nil && subjectEvidence == nil
+        subjectEvidence == nil
     }
 }
 

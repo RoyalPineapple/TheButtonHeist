@@ -32,7 +32,7 @@ final class EvidenceMinimumMatcherTests: XCTestCase {
             subject: button,
             before: [button],
             after: [button],
-            settled: false
+            complete: false
         )
 
         XCTAssertNil(EvidenceMinimumMatcher.minimumTarget(actionResult: actionResult))
@@ -46,26 +46,20 @@ private func semanticActionResult(
     subject: HeistElement,
     before: [HeistElement],
     after: [HeistElement],
-    settled: Bool = true
+    complete: Bool = true
 ) throws -> ActionResult {
     ActionResult.success(
         payload: payload,
-        observation: .settledTrace(
-            makeTestTraceEvidence(
-                makeTestTrace(
-                    before: makeTestInterface(elements: before),
-                    after: makeTestInterface(elements: after)
-                ),
-                completeness: settled ? .complete : .incomplete
-            ),
-            settled ? .settled(duration: 0) : .timedOut(duration: 0)
-        ),
+        observation: .observed(makeObservationEvidence(
+            before: makeTestInterface(elements: before),
+            after: makeTestInterface(elements: after),
+            completeness: complete ? .complete : .incomplete
+        )),
         subjectEvidence: ActionSubjectEvidence(
             source: source,
             target: try target.resolve(in: .empty),
             element: subject,
-            resolution: ActionSubjectResolution(origin: .visible),
-            settledObservationSequence: 1
+            resolution: ActionSubjectResolution(origin: .visible)
         )
     )
 }

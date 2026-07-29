@@ -70,7 +70,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testAccessibilityPredicateWireContractValuesStayStable() {
         XCTAssertEqual(
             AccessibilityPredicate.wireTypeValues,
-            ["exists", "missing", "announcement", "changed", "no_change"]
+            ["exists", "missing", "notification", "changed"]
         )
     }
 

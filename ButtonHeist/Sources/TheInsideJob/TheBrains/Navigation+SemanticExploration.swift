@@ -10,20 +10,6 @@ import ThePlans
 
 extension Navigation {
 
-    enum ExplorationBaseline {
-        case interfaceMemory(InterfaceObservation)
-        case currentViewport(InterfaceObservation)
-
-        var discoveryCommitPolicy: DiscoveryCommitPolicy {
-            switch self {
-            case .interfaceMemory:
-                .mergeIntoInterface
-            case .currentViewport:
-                .replaceInterface
-            }
-        }
-    }
-
     enum DiscoveryCommitPolicy: Equatable, Sendable {
         case mergeIntoInterface
         case replaceInterface
@@ -95,18 +81,18 @@ extension Navigation {
     }
 
     struct InterfaceExplorationResult {
-        let event: Observation.SnapshotEvent
+        let current: TheVault.State.Current
         let progress: InterfaceExplorationProgress
         let didMoveViewport: Bool
         let viewportExit: ViewportExit.Outcome
 
         internal init(
-            event: Observation.SnapshotEvent,
+            current: TheVault.State.Current,
             progress: InterfaceExplorationProgress,
             didMoveViewport: Bool = false,
             viewportExit: ViewportExit.Outcome
         ) {
-            self.event = event
+            self.current = current
             self.progress = progress
             self.didMoveViewport = didMoveViewport
             self.viewportExit = viewportExit
@@ -119,12 +105,14 @@ extension Navigation {
         let deadline: SemanticObservationDeadline?
 
         init(
-            baseline: ExplorationBaseline,
+            startingFresh: Bool,
             deadline: SemanticObservationDeadline? = nil,
             maxScrollsPerContainer: Int = InterfaceExplorationProgress.maxScrollsPerContainer,
             maxScrollsPerDiscovery: Int = InterfaceExplorationProgress.maxScrollsPerDiscovery
         ) {
-            discoveryCommitPolicy = baseline.discoveryCommitPolicy
+            // Only the first page can replace: everything after it merges,
+            // which is what `recordCommittedObservation` latches.
+            discoveryCommitPolicy = startingFresh ? .replaceInterface : .mergeIntoInterface
             self.deadline = deadline
             progress = InterfaceExplorationProgress(
                 maxScrollsPerContainer: maxScrollsPerContainer,
@@ -166,13 +154,13 @@ extension Navigation {
 
         mutating func finish(
             startTime: CFTimeInterval,
-            event: Observation.SnapshotEvent,
+            current: TheVault.State.Current,
             didMoveViewport: Bool,
             viewportExit: ViewportExit.Outcome
         ) -> InterfaceExplorationResult {
             progress.explorationTime = CACurrentMediaTime() - startTime
             return InterfaceExplorationResult(
-                event: event,
+                current: current,
                 progress: progress,
                 didMoveViewport: didMoveViewport,
                 viewportExit: viewportExit
@@ -186,27 +174,23 @@ extension Navigation {
         stopWhen: @escaping @MainActor () -> Bool
     ) async -> ViewportExit.Outcome {
         guard deadline.hasTimeRemaining(at: RuntimeElapsed.now) else { return .restored }
+        // Knowing where the element is makes it a seed, not a different search.
+        // Inflation goes straight there and reports whether it landed; the
+        // exhaustive pass below is what answers the question when it did not.
         if let target,
            target.isElementTarget,
-           case .resolved(.element) = vault.resolveTarget(target) {
-            let inflation = await elementInflation.inflate(
-                for: target,
-                method: .scrollToVisible,
-                operationDeadline: deadline
-            )
-            switch inflation {
-            case .inflated:
-                return .retained
-            case .failed:
-                return .restored
-            }
+           case .resolved(.element) = vault.resolveTarget(target),
+           case .inflated = await elementInflation.inflate(
+               for: target,
+               method: .scrollToVisible,
+               operationDeadline: deadline
+           ) {
+            return .retained
         }
 
         guard let exploration = await exploreScreen(
             target: target,
-            baseline: .currentViewport(
-                vault.visibleExplorationBaseline(from: vault.latestObservation)
-            ),
+            startingFresh: true,
             exitPosition: .origin,
             deadline: deadline,
             onObservation: { _ in

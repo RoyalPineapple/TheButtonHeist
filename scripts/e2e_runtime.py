@@ -219,6 +219,7 @@ class DemoApp:
         result = terminate_app(self.sim)
         try:
             wait_port(self.port, open_expected=False, timeout=close_timeout)
+            self.pid = None
             return True
         except TimeoutError:
             if require_stopped:
@@ -228,3 +229,13 @@ class DemoApp:
                     + f"stdout={result.stdout.strip()!r} stderr={result.stderr.strip()!r}"
                 )
             return False
+
+    def restart(
+        self,
+        *,
+        close_timeout: float = 8,
+        attempts: int = 1,
+        wait_timeout: float = 45,
+    ) -> int | None:
+        self.terminate(require_stopped=True, close_timeout=close_timeout)
+        return self.launch(attempts=attempts, wait_timeout=wait_timeout)

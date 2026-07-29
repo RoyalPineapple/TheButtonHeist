@@ -7,16 +7,19 @@ extension TheFence {
 
     // MARK: - Heist Execution and Session State
 
-    func handleRunHeist(_ request: RunHeistRequest, timeout: TimeInterval) async throws -> FenceResponse {
+    func handleRunHeist(_ request: RunHeistRequest) async throws -> FenceResponse {
         try await runHeistPlan(
             request.plan,
             argument: request.argument,
-            timeout: timeout
+            timeout: request.timeout
         )
     }
 
     func handlePerform(_ request: PerformRequest) async throws -> FenceResponse {
-        try await runHeistPlan(request.plan, timeout: performTimeout(for: request.step))
+        try await runHeistPlan(
+            request.plan,
+            timeout: try HeistTimeout(validatingSeconds: performTimeout(for: request.step))
+        )
     }
 
     func handleListHeists(_ request: ListHeistsRequest) -> FenceResponse {
@@ -33,12 +36,13 @@ extension TheFence {
     func runHeistPlan(
         _ plan: HeistPlan,
         argument: HeistArgument = .none,
-        timeout: TimeInterval
+        timeout: HeistTimeout
     ) async throws -> FenceResponse {
         let result = try await sendAndAwaitHeistExecution(
             plan,
             argument: argument,
-            timeout: timeout
+            timeout: timeout,
+            transportHeadroom: config.postActionExpectationTimeoutBuffer
         )
         HeistResultRecording.recordIfEnabled(result, plan: plan)
         return .heistExecution(
@@ -74,7 +78,7 @@ extension TheFence {
     func executeSingleStepHeist(_ execution: SingleStepHeistExecution) async throws -> FenceResponse {
         try await runHeistPlan(
             singleStepHeistPlan(for: execution),
-            timeout: singleStepTimeout(for: execution)
+            timeout: try HeistTimeout(validatingSeconds: singleStepTimeout(for: execution))
         )
     }
 

@@ -1,28 +1,26 @@
 import AccessibilitySnapshotModel
 import ThePlans
 
-extension HeistElement: PredicateSelectionSubject {
+extension HeistElement.Semantics: ElementPredicateSubject {
     /// Known trait values. Used to reject unknown traits in predicate queries.
     private static let knownTraits = Set(HeistTrait.allCases)
 
-    package var predicateLabel: String? { label }
-    package var predicateIdentifier: String? { identifier }
-    package var predicateValue: String? { value }
-    package var predicateHint: String? { hint }
+    package var predicateLabel: String? { assertable.label }
+    package var predicateIdentifier: String? { assertable.identifier }
+    package var predicateValue: String? { assertable.value }
+    package var predicateHint: String? { assertable.hint }
 
     package func satisfiesRequiredTraits(_ required: Set<HeistTrait>) -> Bool {
         for trait in required where !Self.knownTraits.contains(trait) { return false }
-        let traitSet = Set(traits)
-        return required.allSatisfy { traitSet.contains($0) }
+        return required.isSubset(of: assertable.traits)
     }
 
     package func satisfiesRequiredActions(_ required: Set<ElementAction>) -> Bool {
-        required.isSubset(of: Set(actions))
+        required.isSubset(of: assertable.actions)
     }
 
     package func containsCustomContent(matching match: ResolvedCustomContentMatch) -> Bool {
-        guard let customContent else { return false }
-        return customContent.contains { content in
+        assertable.customContent.contains { content in
             match.label.matches(content.label)
                 && match.value.matches(content.value)
                 && (match.isImportant.map { $0 == content.isImportant } ?? true)
@@ -30,11 +28,19 @@ extension HeistElement: PredicateSelectionSubject {
     }
 
     package func satisfiesRequiredRotors(_ required: [ResolvedStringMatch]) -> Bool {
-        let names = rotors?.map(\.name) ?? []
+        let names = assertable.rotors.map(\.name)
         return required.allSatisfy { match in
             names.contains { match.matches($0) }
         }
     }
+
+    package func matches(_ predicate: ResolvedElementPredicate) -> Bool {
+        predicate.matches(self)
+    }
+}
+
+extension HeistElement: PredicateSelectionSubject, ElementPredicateSubjectBacked {
+    package var predicateSubject: Semantics { semantics }
 
     package var predicateMatcherFacts: [AccessibilityMatcherFact] {
         AccessibilityPolicy.matcherFacts(for: self)
@@ -49,13 +55,6 @@ extension HeistElement: PredicateSelectionSubject {
 private extension Optional where Wrapped == ResolvedStringMatch {
     func matches(_ text: String) -> Bool {
         map { $0.matches(text) } ?? true
-    }
-}
-
-package extension ResolvedElementPredicate {
-    /// Whether any observed element in the collection satisfies this predicate.
-    func anyMatch(in elements: [HeistElement]) -> Bool {
-        !AccessibilityTargetMatchGraph(elements: elements).resolve(self).isEmpty
     }
 }
 
@@ -257,7 +256,7 @@ where Subject: ElementPredicateSubject & Sendable & Equatable {
             let matches = predicateGraph.resolve(predicate).matches.map(\.subject)
             return AccessibilityTargetMatchSet(elements: AccessibilityTargetElementMatchSet(matches))
         case .container(let predicate, _):
-            return AccessibilityTargetMatchSet(containerPaths: containers.paths(matching: predicate))
+            return AccessibilityTargetMatchSet(containers: containers.filter { predicate.matches($0.facts) })
         case .within(let container, let nestedTarget):
             return scoped(to: container).matches(for: nestedTarget)
         }
@@ -325,17 +324,18 @@ where Subject: ElementPredicateSubject & Sendable & Equatable {
     package static var empty: Self { Self() }
 
     package let elements: AccessibilityTargetElementMatchSet<Subject>
-    package let containerPaths: [TreePath]
+    package let containers: [AccessibilityTargetContainerMatch]
 
     package init(
         elements: AccessibilityTargetElementMatchSet<Subject> = .empty,
-        containerPaths: [TreePath] = []
+        containers: [AccessibilityTargetContainerMatch] = []
     ) {
         self.elements = elements
-        self.containerPaths = containerPaths
+        self.containers = containers
     }
 
-    package var isEmpty: Bool { elements.isEmpty && containerPaths.isEmpty }
+    package var containerPaths: [TreePath] { containers.map(\.path) }
+    package var isEmpty: Bool { elements.isEmpty && containers.isEmpty }
     package var paths: Set<TreePath> { Set(elements.orderedPaths).union(containerPaths) }
     package var orderedPaths: [TreePath] { elements.isEmpty ? containerPaths : elements.orderedPaths }
 
@@ -345,13 +345,7 @@ where Subject: ElementPredicateSubject & Sendable & Equatable {
             guard elements.matches.indices.contains(ordinal) else { return .empty }
             return Self(elements: AccessibilityTargetElementMatchSet([elements.matches[ordinal]]))
         }
-        guard containerPaths.indices.contains(ordinal) else { return .empty }
-        return Self(containerPaths: [containerPaths[ordinal]])
-    }
-}
-
-private extension Array where Element == AccessibilityTargetContainerMatch {
-    func paths(matching predicate: ResolvedContainerPredicate) -> [TreePath] {
-        [TreePath](lazy.filter { predicate.matches($0.facts) }.map { $0.path })
+        guard containers.indices.contains(ordinal) else { return .empty }
+        return Self(containers: [containers[ordinal]])
     }
 }

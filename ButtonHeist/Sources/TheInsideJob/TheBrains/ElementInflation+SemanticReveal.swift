@@ -142,9 +142,9 @@ extension ElementInflation {
             transaction: transaction
         ) {
         case .resolved(let scrollView):
-            if let observedPoint = initialElement.observedScrollContentActivationPoint {
+            if initialElement.geometry.view.activationPoint != nil {
                 switch await moveToObservedContentPoint(
-                    observedPoint,
+                    initialElement.geometry.view,
                     in: scrollView,
                     target: target,
                     deadline: deadline,
@@ -176,7 +176,7 @@ extension ElementInflation {
             target: target,
             revealRootScrollViewID: revealRootScrollViewID,
             deadline: deadline,
-            observedScrollContentActivationPoint: initialElement.observedScrollContentActivationPoint
+            viewSpace: initialElement.geometry.view
         )) else {
             return semanticRevealInterruption(deadline: deadline)
                 ?? .failed(.noLiveScrollableAncestor)
@@ -292,11 +292,11 @@ extension ElementInflation {
         case .unavailable:
             return .unavailable
         }
-        guard let observedPoint = container.observedScrollContentActivationPoint else {
+        guard container.viewSpace.activationPoint != nil else {
             return .unavailable
         }
         switch await moveToObservedContentPoint(
-            observedPoint,
+            container.viewSpace,
             in: parent,
             target: target,
             deadline: deadline,
@@ -316,7 +316,7 @@ extension ElementInflation {
     }
 
     private func moveToObservedContentPoint(
-        _ observedPoint: InterfaceTree.ObservedScrollContentActivationPoint,
+        _ viewSpace: HeistElement.Geometry.ViewSpace,
         in scrollView: UIScrollView,
         target: AdmittedSemanticTarget,
         deadline: SemanticObservationDeadline,
@@ -326,12 +326,12 @@ extension ElementInflation {
         guard let scrollTarget = Navigation.ScrollableTarget.programmatic(scrollView, in: vault) else {
             return .unavailable
         }
-        guard let point = observedPoint.admit(ownerPath: scrollTarget.containerTarget.path) else {
+        guard let point = viewSpace.activationPoint(ownedBy: scrollTarget.containerTarget.path) else {
             return .unavailable
         }
         transaction.record(scrollView)
         let transition = await exploration.moveViewport(
-            .revealContentPoint(point, in: scrollTarget)
+            .revealViewPoint(point, in: scrollTarget)
         )
         guard semanticRevealInterruption(deadline: deadline) == nil else { return .unavailable }
         switch transition.outcome {
@@ -340,8 +340,8 @@ extension ElementInflation {
         case .unchanged:
             break
         case .moved:
-            guard let event = transition.event,
-                  !event.continuity.isReplacement else { return .unavailable }
+            guard let current = transition.current,
+                  !current.continuity.isReplacement else { return .unavailable }
         }
         switch resolveAdmittedSemanticTarget(target) {
         case .success(let element):

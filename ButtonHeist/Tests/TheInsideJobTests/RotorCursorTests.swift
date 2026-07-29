@@ -45,7 +45,8 @@ final class RotorCursorTests: XCTestCase {
             let outcome = vault.performRotor(
                 selection: .named("Items"),
                 direction: .next,
-                on: try rotorLiveTarget(hostHeistId: hostHeistId)
+                on: try rotorLiveTarget(hostHeistId: hostHeistId),
+                history: await vault.admitRotorHistory()
             )
             guard case .succeeded = outcome else {
                 return XCTFail("Expected initial rotor result, got \(outcome)")
@@ -78,7 +79,8 @@ final class RotorCursorTests: XCTestCase {
         let outcome = vault.performRotor(
             selection: .named("Items"),
             direction: .next,
-            on: try rotorLiveTarget(hostHeistId: hostHeistId)
+            on: try rotorLiveTarget(hostHeistId: hostHeistId),
+            history: await vault.admitRotorHistory()
         )
 
         guard case .succeeded = outcome else {
@@ -103,7 +105,7 @@ final class RotorCursorTests: XCTestCase {
             resultHeistId: resultHeistId,
             resultObject: result
         )
-        try expectSuccessfulStep(hostHeistId: hostHeistId, rotorName: "Items")
+        try await expectSuccessfulStep(hostHeistId: hostHeistId, rotorName: "Items")
 
         let replacementHost = UIView()
         var searchCount = 0
@@ -123,7 +125,8 @@ final class RotorCursorTests: XCTestCase {
         let outcome = vault.performRotor(
             selection: .named("Items"),
             direction: .next,
-            on: try rotorLiveTarget(hostHeistId: hostHeistId)
+            on: try rotorLiveTarget(hostHeistId: hostHeistId),
+            history: await vault.admitRotorHistory()
         )
 
         guard case .currentItemUnavailable(let unavailableHeistId) = outcome else {
@@ -152,9 +155,9 @@ final class RotorCursorTests: XCTestCase {
             resultHeistId: resultHeistId,
             resultObject: result
         )
-        try expectSuccessfulStep(hostHeistId: hostHeistId, rotorName: "Items")
+        try await expectSuccessfulStep(hostHeistId: hostHeistId, rotorName: "Items")
 
-        await vault.semanticObservationStream.requireScreenReplacement()
+        await vault.semanticObservationStream.discardCurrentObservation()
         await installRotorScreen(
             hostHeistId: hostHeistId,
             hostObject: host,
@@ -164,7 +167,8 @@ final class RotorCursorTests: XCTestCase {
         let outcome = vault.performRotor(
             selection: .named("Items"),
             direction: .next,
-            on: try rotorLiveTarget(hostHeistId: hostHeistId)
+            on: try rotorLiveTarget(hostHeistId: hostHeistId),
+            history: await vault.admitRotorHistory()
         )
 
         guard case .continuationInvalidated = outcome else {
@@ -205,8 +209,8 @@ final class RotorCursorTests: XCTestCase {
             resultObject: textField
         )
 
-        try expectSuccessfulStep(hostHeistId: hostHeistId, rotorName: "Words")
-        try expectSuccessfulStep(hostHeistId: hostHeistId, rotorName: "Words")
+        try await expectSuccessfulStep(hostHeistId: hostHeistId, rotorName: "Words")
+        try await expectSuccessfulStep(hostHeistId: hostHeistId, rotorName: "Words")
 
         XCTAssertEqual(invocation, 2)
         XCTAssertEqual(receivedOffsets, TextRangeReference(startOffset: 1, endOffset: 4))
@@ -236,7 +240,8 @@ final class RotorCursorTests: XCTestCase {
         let outcome = vault.performRotor(
             selection: .named("Words"),
             direction: .next,
-            on: try rotorLiveTarget(hostHeistId: hostHeistId)
+            on: try rotorLiveTarget(hostHeistId: hostHeistId),
+            history: await vault.admitRotorHistory()
         )
 
         guard case .continuationTextRangeUnavailable = outcome else {
@@ -263,10 +268,10 @@ final class RotorCursorTests: XCTestCase {
             resultHeistId: resultHeistId,
             resultObject: result
         )
-        try expectSuccessfulStep(hostHeistId: hostHeistId, rotorName: "Items")
+        try await expectSuccessfulStep(hostHeistId: hostHeistId, rotorName: "Items")
 
         vault.clearRotorCursor()
-        try expectSuccessfulStep(hostHeistId: hostHeistId, rotorName: "Items")
+        try await expectSuccessfulStep(hostHeistId: hostHeistId, rotorName: "Items")
 
         XCTAssertEqual(receivedCurrentItems.count, 2)
         XCTAssertNil(receivedCurrentItems[0])
@@ -307,11 +312,15 @@ final class RotorCursorTests: XCTestCase {
         return liveTarget
     }
 
-    private func expectSuccessfulStep(hostHeistId: HeistId, rotorName: RotorName) throws {
+    private func expectSuccessfulStep(
+        hostHeistId: HeistId,
+        rotorName: RotorName
+    ) async throws {
         let outcome = vault.performRotor(
             selection: .named(rotorName),
             direction: .next,
-            on: try rotorLiveTarget(hostHeistId: hostHeistId)
+            on: try rotorLiveTarget(hostHeistId: hostHeistId),
+            history: await vault.admitRotorHistory()
         )
         guard case .succeeded = outcome else {
             throw RotorCursorTestError.unexpectedOutcome(String(describing: outcome))

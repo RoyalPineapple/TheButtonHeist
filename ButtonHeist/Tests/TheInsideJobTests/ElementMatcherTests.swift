@@ -144,8 +144,18 @@ final class ElementMatcherTests: XCTestCase {
         ]
 
         for source in sources {
-            let delivered = TheVault.WireConversion.convert(source)
-            XCTAssertEqual(delivered.actions, source.projectedActionSet.orderedActions)
+            let delivered = TheVault.WireConversion.convert(
+                source,
+                geometry: testGeometry(
+                    for: source,
+                    ownerPath: .root,
+                    screen: TheVault.onscreenSpace(for: source)
+                )
+            )
+            XCTAssertEqual(
+                delivered.semantics.assertable.orderedActions,
+                source.projectedActionSet.orderedActions
+            )
             for predicate in predicates {
                 XCTAssertEqual(predicate.matches(source), delivered.matches(predicate))
             }
@@ -171,11 +181,23 @@ final class ElementMatcherTests: XCTestCase {
             .customContent(.init(label: .isEmpty))
         )
         let hostCandidates = sources.indices.filter { predicate.matches(sources[$0]) }
-        let delivered = sources.map { TheVault.WireConversion.convert($0) }
+        let delivered = sources.map { source in
+            TheVault.WireConversion.convert(
+                source,
+                geometry: testGeometry(
+                    for: source,
+                    ownerPath: .root,
+                    screen: TheVault.onscreenSpace(for: source)
+                )
+            )
+        }
         let deliveredCandidates = delivered.indices.filter { predicate.matches(delivered[$0]) }
 
         for index in sources.indices {
-            XCTAssertEqual(delivered[index].customContent ?? [], sources[index].projectedCustomContent)
+            XCTAssertEqual(
+                delivered[index].semantics.assertable.orderedCustomContent,
+                sources[index].projectedCustomContent
+            )
         }
         XCTAssertEqual(hostCandidates, [1])
         XCTAssertEqual(hostCandidates, deliveredCandidates)

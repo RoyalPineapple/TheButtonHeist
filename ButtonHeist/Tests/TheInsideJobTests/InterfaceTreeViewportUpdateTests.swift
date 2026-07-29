@@ -8,20 +8,60 @@ extension InterfaceTreeTests {
     func testViewportUpdateRetainsElementsThatMoveOffscreenInFullTreeCapture() throws {
         let visibleTarget = makeElement(label: "Target", traits: .button)
         let anchor = makeElement(label: "Anchor", traits: .staticText)
+        let offscreenTarget = AccessibilityElement.make(
+            label: "Target",
+            traits: .button,
+            visibility: .offscreen
+        )
         let initial = InterfaceObservation.makeForTests(elements: [
             (visibleTarget, "target"),
             (anchor, "anchor"),
         ])
-        let refreshed = InterfaceObservation.makeForTests(elements: [
-            (.make(label: "Target", traits: .button, visibility: .offscreen), "target"),
-            (anchor, "anchor"),
-        ])
+        let refreshed = InterfaceObservation.makeForTests(
+            elements: [
+                "target": InterfaceTree.Element(
+                    heistId: "target",
+                    path: TreePath([0]),
+                    scrollMembership: nil,
+                    geometry: testGeometry(
+                        for: offscreenTarget,
+                        ownerPath: .root,
+                        screen: .offscreen
+                    ),
+                    element: offscreenTarget
+                ),
+                "anchor": InterfaceTree.Element(
+                    heistId: "anchor",
+                    path: TreePath([1]),
+                    scrollMembership: nil,
+                    geometry: testGeometry(
+                        for: anchor,
+                        ownerPath: .root,
+                        screen: TheVault.onscreenSpace(for: anchor)
+                    ),
+                    element: anchor
+                ),
+            ],
+            hierarchy: [
+                .element(offscreenTarget, traversalIndex: 0),
+                .element(anchor, traversalIndex: 1),
+            ],
+            heistIdsByPath: [
+                TreePath([0]): "target",
+                TreePath([1]): "anchor",
+            ],
+            firstResponderHeistId: nil
+        )
 
         let updated = initial.tree.updatingViewport(with: refreshed.tree)
 
         XCTAssertEqual(updated.viewportElementIDs, ["anchor"])
         XCTAssertEqual(updated.elementIDs, ["anchor", "target"])
-        XCTAssertEqual(updated.findElement(heistId: "target")?.element.visibility, .offscreen)
+        XCTAssertEqual(updated.findElement(heistId: "target")?.geometry.screen, .offscreen)
+        XCTAssertEqual(
+            updated.findElement(heistId: "target")?.geometry.view,
+            refreshed.tree.findElement(heistId: "target")?.geometry.view
+        )
         XCTAssertNoThrow(try InterfaceObservation.build(tree: updated))
     }
 
@@ -44,7 +84,7 @@ extension InterfaceTreeTests {
             firstResponderHeistId: "button_visible"
         )
 
-        let updated = updateViewport(of: screen.tree, with: refresh)
+        let updated = screen.tree.updatingViewport(with: refresh.tree)
 
         XCTAssertEqual(updated.elementIDs, ["button_visible", "button_known"])
         XCTAssertEqual(updated.viewportElementIDs, ["button_visible"])
@@ -54,6 +94,11 @@ extension InterfaceTreeTests {
             "button_visible"
         )
         XCTAssertEqual(updated.findElement(heistId: "button_known")?.element.label, "Known")
+        XCTAssertEqual(updated.findElement(heistId: "button_known")?.geometry.screen, .offscreen)
+        XCTAssertEqual(
+            updated.findElement(heistId: "button_known")?.geometry.view.ownerPath,
+            TreePath([0])
+        )
     }
 
     func testInterfaceTreeViewportUpdateSlotsVisibleUpdatesWithoutTouchingDiscoveryMemory() {
@@ -72,10 +117,11 @@ extension InterfaceTreeTests {
         )
         let refresh = InterfaceObservation.makeForTests(elements: [(updatedCounter, "total_staticText")])
 
-        let updated = updateViewport(of: screen.tree, with: refresh)
+        let updated = screen.tree.updatingViewport(with: refresh.tree)
 
         XCTAssertEqual(updated.findElement(heistId: "total_staticText")?.element.value, "$8.00")
         XCTAssertEqual(updated.findElement(heistId: "below_fold_button")?.element.value, "old")
+        XCTAssertEqual(updated.findElement(heistId: "below_fold_button")?.geometry.screen, .offscreen)
         XCTAssertEqual(updated.viewportElementIDs, ["total_staticText"])
         XCTAssertEqual(updated.elementIDs, ["below_fold_button", "total_staticText"])
     }
@@ -96,11 +142,16 @@ extension InterfaceTreeTests {
         )
         let refresh = InterfaceObservation.makeForTests(elements: [(freshVisible, "stale_below_fold")])
 
-        let updated = updateViewport(of: screen.tree, with: refresh)
+        let updated = screen.tree.updatingViewport(with: refresh.tree)
 
         XCTAssertEqual(updated.viewportElementIDs, ["stale_below_fold"])
         XCTAssertEqual(updated.elementIDs, ["stale_below_fold"])
         XCTAssertEqual(updated.findElement(heistId: "stale_below_fold")?.element.label, "Fresh Visible")
+        guard let refreshedGeometry = updated.findElement(heistId: "stale_below_fold")?.geometry,
+              case .onscreen = refreshedGeometry.screen
+        else {
+            return XCTFail("Expected the refreshed element to carry onscreen geometry")
+        }
     }
 
     func testInterfaceTreeViewportUpdatePreservesDiscoveryMemoryFromOffViewportBaseline() {
@@ -111,11 +162,12 @@ extension InterfaceTreeTests {
         )
         let refresh = InterfaceObservation.makeForTests(elements: [(visible, "button_visible")])
 
-        let updated = updateViewport(of: screen.tree, with: refresh)
+        let updated = screen.tree.updatingViewport(with: refresh.tree)
 
         XCTAssertEqual(updated.viewportElementIDs, ["button_visible"])
         XCTAssertEqual(updated.elementIDs, ["below_fold_button", "button_visible"])
         XCTAssertEqual(updated.findElement(heistId: "below_fold_button")?.element.label, "Below Fold")
+        XCTAssertEqual(updated.findElement(heistId: "below_fold_button")?.geometry.screen, .offscreen)
     }
 
     func testInterfaceTreeViewportUpdatePreservesDiscoveryMemoryWhenCommittedViewportAddsElement() {
@@ -131,11 +183,12 @@ extension InterfaceTreeTests {
             (added, "button_added")
         ])
 
-        let updated = updateViewport(of: screen.tree, with: refresh)
+        let updated = screen.tree.updatingViewport(with: refresh.tree)
 
         XCTAssertEqual(updated.viewportElementIDs, ["button_added", "button_visible"])
         XCTAssertEqual(updated.elementIDs, ["below_fold_button", "button_added", "button_visible"])
         XCTAssertEqual(updated.findElement(heistId: "below_fold_button")?.element.label, "Below Fold")
+        XCTAssertEqual(updated.findElement(heistId: "below_fold_button")?.geometry.screen, .offscreen)
     }
 
     func testInterfaceTreeViewportUpdateDropsDisappearedVisibleNonScrollElements() {
@@ -149,7 +202,7 @@ extension InterfaceTreeTests {
         )
         let refresh = InterfaceObservation.makeForTests(elements: [(visible, "button_visible")])
 
-        let updated = updateViewport(of: screen.tree, with: refresh)
+        let updated = screen.tree.updatingViewport(with: refresh.tree)
 
         XCTAssertEqual(updated.elementIDs, ["button_visible"])
         XCTAssertNil(updated.findElement(heistId: "disappearing_staticText"))
@@ -167,12 +220,24 @@ extension InterfaceTreeTests {
             elements: [
                 "button_scrolled_away": InterfaceTree.Element(
                     heistId: "button_scrolled_away",
+                    path: TreePath([0, 0]),
                     scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: nil),
+                    geometry: testGeometry(
+                        for: scrolledAway,
+                        ownerPath: TreePath([0]),
+                        screen: TheVault.onscreenSpace(for: scrolledAway)
+                    ),
                     element: scrolledAway
                 ),
                 "button_visible": InterfaceTree.Element(
                     heistId: "button_visible",
+                    path: TreePath([1]),
                     scrollMembership: nil,
+                    geometry: testGeometry(
+                        for: visible,
+                        ownerPath: .root,
+                        screen: TheVault.onscreenSpace(for: visible)
+                    ),
                     element: visible
                 )
             ],
@@ -190,7 +255,7 @@ extension InterfaceTreeTests {
         )
         let refresh = InterfaceObservation.makeForTests(elements: [(visible, "button_visible")])
 
-        let updated = updateViewport(of: screen.tree, with: refresh)
+        let updated = screen.tree.updatingViewport(with: refresh.tree)
 
         XCTAssertEqual(updated.elementIDs, ["button_visible"])
         XCTAssertEqual(updated.viewportElementIDs, ["button_visible"])
@@ -209,17 +274,18 @@ extension InterfaceTreeTests {
         )
         let refresh = InterfaceObservation.makeForTests(elements: [(replacement, "button_replacement")])
 
-        let updated = updateViewport(of: screen.tree, with: refresh)
+        let updated = screen.tree.updatingViewport(with: refresh.tree)
 
         XCTAssertEqual(updated.elementIDs, ["button_known", "button_replacement"])
         XCTAssertEqual(updated.findElement(heistId: "button_known")?.element.label, "Known")
+        XCTAssertEqual(updated.findElement(heistId: "button_known")?.geometry.screen, .offscreen)
     }
 
     func testInterfaceTreeViewportUpdateReplacesInterfaceTreeForEmptyRefresh() {
         let old = makeElement(label: "Old", traits: .button)
         let screen = InterfaceObservation.makeForTests(elements: [(old, "button_old")])
 
-        let updated = updateViewport(of: screen.tree, with: .empty)
+        let updated = screen.tree.updatingViewport(with: .empty)
 
         XCTAssertTrue(updated.elementIDs.isEmpty)
         XCTAssertTrue(updated.viewportElementIDs.isEmpty)

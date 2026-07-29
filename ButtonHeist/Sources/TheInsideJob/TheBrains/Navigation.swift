@@ -20,17 +20,16 @@ final class Navigation {
         exploration: ElementInflation.Exploration(
             settleForDiscovery: { [weak self] in
                 guard let self else { return }
-                _ = await self.tripwire.waitForAllClear(
-                    timeout: SemanticObservationTiming.defaultTimeout
+                _ = await self.tripwire.waitForNextTick(
+                    timeout: SemanticObservationTiming.defaultTimeout,
+                    demand: .ambient
                 )
             },
             discoverTarget: { [weak self] target in
                 guard let self else { return nil }
                 return await self.exploreScreen(
                     target: target,
-                    baseline: .interfaceMemory(self.vault.interfaceMemoryBaseline()),
                     exitPosition: .current,
-                    searchOrder: .backwardFirst,
                 )
             },
             revealKnownTarget: { [weak self] request in

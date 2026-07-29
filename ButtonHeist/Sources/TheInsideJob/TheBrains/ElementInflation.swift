@@ -91,19 +91,7 @@ internal final class ElementInflation {
         internal let target: AdmittedSemanticTarget
         internal let revealRootScrollViewID: ObjectIdentifier
         internal let deadline: SemanticObservationDeadline
-        internal let observedScrollContentActivationPoint: InterfaceTree.ObservedScrollContentActivationPoint?
-
-        internal init(
-            target: AdmittedSemanticTarget,
-            revealRootScrollViewID: ObjectIdentifier,
-            deadline: SemanticObservationDeadline,
-            observedScrollContentActivationPoint: InterfaceTree.ObservedScrollContentActivationPoint? = nil
-        ) {
-            self.target = target
-            self.revealRootScrollViewID = revealRootScrollViewID
-            self.deadline = deadline
-            self.observedScrollContentActivationPoint = observedScrollContentActivationPoint
-        }
+        internal let viewSpace: HeistElement.Geometry.ViewSpace
     }
 
     internal typealias MoveViewport = @MainActor (
@@ -125,7 +113,7 @@ internal final class ElementInflation {
         internal let now: @MainActor () -> RuntimeElapsed.Instant
         internal let awaitFrame: @MainActor (
             Duration
-        ) async -> TheTripwire.HeartbeatWaitOutcome
+        ) async -> TheTripwire.TickWaitOutcome
     }
 
     internal struct CommittedElementTarget {
@@ -165,7 +153,7 @@ internal final class ElementInflation {
         geometryEnvironment = GeometryEnvironment(
             now: { RuntimeElapsed.now },
             awaitFrame: { timeout in
-                await tripwire.waitForNextHeartbeat(timeout: timeout, demand: .immediate)
+                await tripwire.waitForNextTick(timeout: timeout, demand: .immediate)
             }
         )
     }
@@ -336,7 +324,7 @@ internal final class ElementInflation {
         let tickCount = Self.handoffTickCount(for: treeElement, in: vault.interfaceTree)
         return SemanticObservationDeadline(
             start: geometryEnvironment.now(),
-            timeoutSeconds: Double(tickCount) * SemanticObservationTiming.defaultTimeout
+            timeout: SemanticObservationTiming.defaultTimeout * tickCount
         )
     }
 

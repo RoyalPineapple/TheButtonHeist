@@ -97,7 +97,9 @@ extension TheFence {
                         return
                     }
 
-                    response.armTimeout(after: .seconds(timeout)) { [weak self] in
+                    response.armTimeout(
+                        after: .saturatingSeconds(timeout)
+                    ) { [weak self] in
                         await self?.finish(
                             requestID: requestId,
                             expectedOwner: owner,
@@ -218,10 +220,10 @@ extension TheFence.PendingResponseExpectation where Response == ScreenPayload {
     }
 }
 
-extension TheFence.PendingResponseExpectation where Response == AnnouncementListPayload {
-    static var announcements: Self {
-        Self(responseName: "announcements") { message in
-            guard case .announcements(let result) = message else { return nil }
+extension TheFence.PendingResponseExpectation where Response == [Observation.Notification] {
+    static var notifications: Self {
+        Self(responseName: "notifications") { message in
+            guard case .notifications(let result) = message else { return nil }
             return result
         }
     }
@@ -253,8 +255,8 @@ private extension ServerMessage {
             return "action"
         case .screen:
             return "screen"
-        case .announcements:
-            return "announcements"
+        case .notifications:
+            return "notifications"
         case .serverHello,
              .protocolMismatch,
              .authRequired,

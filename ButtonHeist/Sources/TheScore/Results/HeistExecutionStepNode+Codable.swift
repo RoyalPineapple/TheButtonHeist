@@ -55,7 +55,7 @@ extension HeistExecutionStepNode {
             self = .wait(
                 predicate: try container.decode(AccessibilityPredicate.self, forKey: .predicate),
                 timeout: try container.decode(WaitTimeout.self, forKey: .timeout),
-                completion: try Self.decodeCompletion(
+                completion: try Self.decodeWaitCompletion(
                     from: container,
                     semanticKeys: [.type, .predicate, .timeout],
                     typeName: type.rawValue
@@ -300,10 +300,81 @@ extension HeistExecutionStepNode {
         }
     }
 
+    private static func decodeWaitCompletion(
+        from container: KeyedDecodingContainer<CodingKeys>,
+        semanticKeys: Set<CodingKeys>,
+        typeName: String
+    ) throws -> HeistWaitCompletion {
+        switch try container.decode(Outcome.self, forKey: .outcome) {
+        case .passed:
+            try container.rejectIncompatibleFields(
+                allowing: semanticKeys.union([.outcome, .evidence, .children]),
+                typeName: "passed \(typeName) result node"
+            )
+            return .passed(
+                evidence: try container.decode(HeistPassedWaitEvidence.self, forKey: .evidence),
+                children: try container.decode(HeistPassingChildren.self, forKey: .children)
+            )
+        case .failed:
+            try container.rejectIncompatibleFields(
+                allowing: semanticKeys.union([.outcome, .evidence, .failure, .children]),
+                typeName: "failed \(typeName) result node"
+            )
+            return .failed(
+                evidence: try container.decode(HeistWaitUnmatchedEvidence.self, forKey: .evidence),
+                failure: try container.decode(HeistFailureDetail.self, forKey: .failure),
+                children: try container.decode(HeistPassingChildren.self, forKey: .children)
+            )
+        case .childAborted:
+            try container.rejectIncompatibleFields(
+                allowing: semanticKeys.union([.outcome, .evidence, .failure, .children]),
+                typeName: "child-aborted \(typeName) result node"
+            )
+            return .childAborted(
+                evidence: try container.decode(HeistWaitUnmatchedEvidence.self, forKey: .evidence),
+                failure: try container.decode(HeistFailureDetail.self, forKey: .failure),
+                children: try container.decode(HeistAbortedChildren.self, forKey: .children)
+            )
+        case .skipped:
+            try container.rejectIncompatibleFields(
+                allowing: semanticKeys.union([.outcome, .children]),
+                typeName: "skipped \(typeName) result node"
+            )
+            return .skipped(
+                children: try container.decode(HeistSkippedChildren.self, forKey: .children)
+            )
+        }
+    }
+
     private static func encode<Passed, Failed, Aborted>(
         _ completion: HeistExecutionCompletion<Passed, Failed, Aborted>,
         to container: inout KeyedEncodingContainer<CodingKeys>
     ) throws where Passed: Codable, Failed: Codable, Aborted: Codable {
+        switch completion {
+        case .passed(let evidence, let children):
+            try container.encode(Outcome.passed, forKey: .outcome)
+            try container.encode(evidence, forKey: .evidence)
+            try container.encode(children, forKey: .children)
+        case .failed(let evidence, let failure, let children):
+            try container.encode(Outcome.failed, forKey: .outcome)
+            try container.encode(evidence, forKey: .evidence)
+            try container.encode(failure, forKey: .failure)
+            try container.encode(children, forKey: .children)
+        case .childAborted(let evidence, let failure, let children):
+            try container.encode(Outcome.childAborted, forKey: .outcome)
+            try container.encode(evidence, forKey: .evidence)
+            try container.encode(failure, forKey: .failure)
+            try container.encode(children, forKey: .children)
+        case .skipped(let children):
+            try container.encode(Outcome.skipped, forKey: .outcome)
+            try container.encode(children, forKey: .children)
+        }
+    }
+
+    private static func encode(
+        _ completion: HeistWaitCompletion,
+        to container: inout KeyedEncodingContainer<CodingKeys>
+    ) throws {
         switch completion {
         case .passed(let evidence, let children):
             try container.encode(Outcome.passed, forKey: .outcome)

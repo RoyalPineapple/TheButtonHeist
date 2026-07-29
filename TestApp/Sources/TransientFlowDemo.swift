@@ -1,16 +1,14 @@
 import SwiftUI
 import UIKit
 
-/// Multi-step transition flow used to verify auto-settle and transient
-/// capture end-to-end:
+/// Multi-step transition flow used to verify auto-settle end-to-end:
 ///   tap Submit → loading spinner → success indicator → confirmation
 ///   panel with two option buttons → auto-dismiss back to the original
 ///   screen ~3.5s later.
 ///
-/// A caller using auto-settle should see one response with `settled: true`
-/// and an `accessibilityDelta` whose `transient` array carries the loading,
-/// success, and confirmation elements — even though the visible state at
-/// response time is identical to the pre-action state.
+/// A caller using auto-settle should see one response with `settled: true`,
+/// even though the visible state at response time is identical to the
+/// pre-action state.
 struct TransientFlowDemo: View {
 
     enum Phase: Equatable {

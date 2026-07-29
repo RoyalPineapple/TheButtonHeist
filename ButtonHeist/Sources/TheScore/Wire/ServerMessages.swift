@@ -66,8 +66,8 @@ public enum ServerMessage: Codable, Sendable {
     /// Screen capture response with PNG data
     case screen(ScreenPayload)
 
-    /// Recent spoken accessibility text captured from public AX notifications.
-    case announcements(AnnouncementListPayload)
+    /// Canonical accessibility notifications retained by observation history.
+    case notifications([Observation.Notification])
 
     /// Session is locked by another driver (sent before disconnect)
     case sessionLocked(SessionLockedPayload)
