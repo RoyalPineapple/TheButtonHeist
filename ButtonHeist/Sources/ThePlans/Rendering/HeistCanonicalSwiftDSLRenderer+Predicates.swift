@@ -12,7 +12,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         predicate: PresenceCondition,
         environment: RenderEnvironment
     ) throws -> String {
-        try render(presenceCondition: predicate, environment: environment)
+        try render(presence: predicate, environment: environment)
     }
 
     private func render(
@@ -55,22 +55,10 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     private func render(
-        presence: AccessibilityPredicate.Presence,
+        presence: PresenceCondition,
         environment: RenderEnvironment
     ) throws -> String {
         switch presence {
-        case .exists(let target):
-            return try ".exists(\(render(target: target, environment: environment)))"
-        case .missing(let target):
-            return try ".missing(\(render(target: target, environment: environment)))"
-        }
-    }
-
-    private func render(
-        presenceCondition assertion: PresenceCondition,
-        environment: RenderEnvironment
-    ) throws -> String {
-        switch assertion {
         case .exists(let target):
             return try ".exists(\(render(target: target, environment: environment)))"
         case .missing(let target):

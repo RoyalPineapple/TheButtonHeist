@@ -33,11 +33,6 @@ public enum ElementAssertion: Codable, Sendable, Equatable {
 }
 
 public struct AccessibilityPredicate: Codable, Sendable, Equatable {
-    package enum Presence: Sendable, Equatable {
-        case exists(AccessibilityTarget)
-        case missing(AccessibilityTarget)
-    }
-
     /// What a caller can ask of a run.
     ///
     /// Each case is a question about one kind of evidence. Stillness is not
@@ -48,7 +43,7 @@ public struct AccessibilityPredicate: Codable, Sendable, Equatable {
     /// against whatever tree is current, and it is also the leg the element
     /// assertions decompose into.
     package enum Value: Sendable, Equatable {
-        case presence(Presence)
+        case presence(PresenceCondition)
         case notification(NotificationPredicate)
         case screenChanged(ScreenPredicate)
         case elementsChanged([ElementAssertion])
@@ -109,10 +104,8 @@ public struct AccessibilityPredicate: Codable, Sendable, Equatable {
 
     package func resolve(in environment: HeistExecutionEnvironment) throws -> ObservationPredicate {
         switch core {
-        case .presence(.exists(let target)):
-            return .elementsChanged([.exists(try target.resolve(in: environment))])
-        case .presence(.missing(let target)):
-            return .elementsChanged([.missing(try target.resolve(in: environment))])
+        case .presence(let condition):
+            return try condition.resolve(in: environment).rootPredicate
         case .notification(let predicate):
             return .notification(try predicate.resolve(in: environment))
         case .screenChanged(let predicate):
@@ -296,18 +289,12 @@ private enum AccessibilityPredicateWireCodec {
                 valid: PresencePredicateWireType.allCases.map(\.rawValue)
             )
         }
-        switch try decodePresence(type, from: decoder, container: container) {
-        case .exists(let target): return .exists(target)
-        case .missing(let target): return .missing(target)
-        }
+        return try decodePresence(type, from: decoder, container: container)
     }
 
     static func encodePresenceCondition(_ condition: PresenceCondition, to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: AccessibilityPredicateCodingKeys.self)
-        switch condition {
-        case .exists(let target): try encodePresence(.exists, target: target, to: &container)
-        case .missing(let target): try encodePresence(.missing, target: target, to: &container)
-        }
+        try encodePresence(condition, to: &container)
     }
 
     static func decodeElementAssertion(from decoder: Decoder) throws -> ElementAssertion {
@@ -354,10 +341,8 @@ private enum AccessibilityPredicateWireCodec {
     static func encodeRoot(_ root: AccessibilityPredicate.Value, to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: AccessibilityPredicateCodingKeys.self)
         switch root {
-        case .presence(.exists(let target)):
-            try encodePresence(.exists, target: target, to: &container)
-        case .presence(.missing(let target)):
-            try encodePresence(.missing, target: target, to: &container)
+        case .presence(let condition):
+            try encodePresence(condition, to: &container)
         case .notification(let notification):
             try container.encode(RootPredicateWireType.notification.rawValue, forKey: .type)
             try container.encodeIfPresent(notification.text, forKey: .text)
@@ -399,12 +384,24 @@ private enum AccessibilityPredicateWireCodec {
         _ type: PresencePredicateWireType,
         from decoder: Decoder,
         container: KeyedDecodingContainer<AccessibilityPredicateCodingKeys>
-    ) throws -> AccessibilityPredicate.Presence {
+    ) throws -> PresenceCondition {
         try decoder.rejectUnknownKeys(allowed: ["type", "target"], typeName: "\(type.rawValue) predicate")
         let target = try container.decode(AccessibilityTarget.self, forKey: .target)
         switch type {
         case .exists: return .exists(target)
         case .missing: return .missing(target)
+        }
+    }
+
+    private static func encodePresence(
+        _ condition: PresenceCondition,
+        to container: inout KeyedEncodingContainer<AccessibilityPredicateCodingKeys>
+    ) throws {
+        switch condition {
+        case .exists(let target):
+            try encodePresence(.exists, target: target, to: &container)
+        case .missing(let target):
+            try encodePresence(.missing, target: target, to: &container)
         }
     }
 

@@ -301,7 +301,7 @@ extension HeistExecution {
                     return
                 }
                 if case .pending(.perform(let requests)) = state,
-                   requests.allSatisfy(\.isTerminalEvidenceRequest) {
+                   requests.allSatisfy(\.completesAfterDeadline) {
                     performNext(requests, afterDeadline: true)
                     return
                 }
@@ -831,7 +831,7 @@ extension HeistExecution {
                 if case .complete = state {
                     terminalState = state
                 } else if case .pending(.perform(let requests)) = state,
-                          requests.allSatisfy(\.isTerminalEvidenceRequest) {
+                          requests.allSatisfy(\.completesAfterDeadline) {
                     terminalState = state
                 } else {
                     terminalState = session.machine.finishAfterHeistTimeout()
@@ -1038,9 +1038,6 @@ private extension HeistExecution.MainActorRequest {
         return true
     }
 
-    var isTerminalEvidenceRequest: Bool {
-        completesAfterDeadline
-    }
 }
 
 @MainActor

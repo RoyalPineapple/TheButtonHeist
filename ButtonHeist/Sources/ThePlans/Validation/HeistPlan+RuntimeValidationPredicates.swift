@@ -8,7 +8,7 @@ extension HeistPlanRuntimeSafetyValidator {
     ) {
         switch predicate.core {
         case .presence(let presence):
-            validatePresence(presence, path: path, scope: scope)
+            validatePredicate(presence, path: path, scope: scope)
         case .notification(let notification):
             if let text = notification.text {
                 validateString(text, path: path.child(.text), scope: scope)
@@ -45,28 +45,6 @@ extension HeistPlanRuntimeSafetyValidator {
         scope: HeistReferenceScope
     ) {
         switch predicate {
-        case .exists(let target), .missing(let target):
-            validateTarget(target, path: path.child(.target), scope: scope)
-        }
-    }
-
-    private mutating func validatePresence(
-        _ presence: AccessibilityPredicate.Presence,
-        path: HeistPlanPath,
-        scope: HeistReferenceScope
-    ) {
-        switch presence {
-        case .exists(let target), .missing(let target):
-            validateTarget(target, path: path.child(.target), scope: scope)
-        }
-    }
-
-    private mutating func validatePresenceCondition(
-        _ assertion: PresenceCondition,
-        path: HeistPlanPath,
-        scope: HeistReferenceScope
-    ) {
-        switch assertion {
         case .exists(let target), .missing(let target):
             validateTarget(target, path: path.child(.target), scope: scope)
         }

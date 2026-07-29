@@ -55,10 +55,6 @@ extension HeistExecution {
         internal let abortedAtPath: HeistExecutionPath?
     }
 
-    internal struct PendingFailureScreenshot {
-        internal let id: RequestID
-        internal let children: HeistExecutedChildren
-    }
 }
 
 extension HeistExecution {

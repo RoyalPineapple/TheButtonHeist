@@ -8,7 +8,10 @@ extension HeistExecution {
         private enum Progress {
             case ready
             case running
-            case awaitingFailureScreenshot(PendingFailureScreenshot)
+            case awaitingFailureScreenshot(
+                id: RequestID,
+                children: HeistExecutedChildren
+            )
             case complete(Completion)
         }
 
@@ -61,18 +64,18 @@ extension HeistExecution {
                     return advanceActiveLeaf(input)
                 }
                 return advanceControlFlow(input)
-            case .awaitingFailureScreenshot(let pending):
+            case .awaitingFailureScreenshot(let expectedID, let children):
                 guard case .failureScreenshotCaptured(let id, let screenshot) = input,
-                      id == pending.id else {
+                      id == expectedID else {
                     return state
                 }
-                var steps = pending.children.values
+                var steps = children.values
                 if let screenshot {
                     steps.append(screenshot)
                 }
                 return complete(
                     steps: steps,
-                    abortedAtPath: pending.children.abortedAtPath
+                    abortedAtPath: children.abortedAtPath
                 )
             case .ready, .complete:
                 return state
@@ -105,10 +108,10 @@ extension HeistExecution {
                 )
             }
             let id = nextID()
-            progress = .awaitingFailureScreenshot(.init(
+            progress = .awaitingFailureScreenshot(
                 id: id,
                 children: children
-            ))
+            )
             return .pending(.perform([
                 .captureFailureScreenshot(
                     id,
@@ -131,12 +134,12 @@ extension HeistExecution {
         }
 
         internal mutating func finishWithoutFailureScreenshot() -> State {
-            guard case .awaitingFailureScreenshot(let pending) = progress else {
+            guard case .awaitingFailureScreenshot(_, let children) = progress else {
                 return state
             }
             return complete(
-                steps: pending.children.values,
-                abortedAtPath: pending.children.abortedAtPath
+                steps: children.values,
+                abortedAtPath: children.abortedAtPath
             )
         }
     }
