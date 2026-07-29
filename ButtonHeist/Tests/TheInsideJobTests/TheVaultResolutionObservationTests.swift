@@ -49,7 +49,7 @@ extension TheVaultResolutionTests {
             )
             let batch = try XCTUnwrap(action.capture())
             let publication = await publishVisible(observation, notificationBatch: batch)
-            action.cancel()
+            action.admitCaptured()
 
             let notifications: [Observation.Notification] = publication.events.compactMap { event in
                 guard case .notification(let notification) = event else { return nil }
@@ -77,7 +77,7 @@ extension TheVaultResolutionTests {
         )
         let batch = try XCTUnwrap(action.capture())
         let publication = await publishVisible(observation, notificationBatch: batch)
-        action.cancel()
+        action.admitCaptured()
 
         XCTAssertFalse(publication.events.contains { event in
             if case .notification = event { return true }
@@ -124,7 +124,7 @@ extension TheVaultResolutionTests {
         )
         let batch = try XCTUnwrap(action.capture())
         let publication = await publishVisible(observation, notificationBatch: batch)
-        action.cancel()
+        action.admitCaptured()
 
         XCTAssertEqual(publication.events.count, 2)
         XCTAssertEqual(
@@ -142,6 +142,50 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(evidence.current, publication.current.snapshot)
         XCTAssertEqual(evidence.notificationTexts, ["Saved"])
         XCTAssertEqual(evidence.coverage, .complete)
+    }
+
+    func testActionIngressBeyondAmbientLimitAdmitsCompleteOrderedHistoryBeforeRelease() async throws {
+        await vault.semanticObservationStream.stateOwner.reset(retentionLimit: 128)
+        let observation = InterfaceObservation.makeForTests(elements: [
+            (element(label: "Stable"), "stable"),
+        ])
+        _ = await publishVisible(observation)
+        let boundary = await vault.semanticObservationStream.stateOwner.observationBoundary(
+            scope: .visible
+        )
+        let action = vault.accessibilityNotifications.beginActionWindow()
+        let expectedText = (0..<65).map { "Action announcement \($0)" }
+        for text in expectedText {
+            vault.accessibilityNotifications.recordForTesting(
+                code: 1008,
+                notificationData: CapturedAccessibilityNotificationPayload(text as NSString),
+                associatedElement: .none
+            )
+        }
+
+        let batch = try XCTUnwrap(action.capture())
+        _ = await publishVisible(observation, notificationBatch: batch)
+        let evidence = await vault.semanticObservationStream.stateOwner.evidence(after: boundary)
+
+        XCTAssertNil(batch.gap)
+        XCTAssertEqual(evidence.notificationTexts, expectedText)
+        XCTAssertEqual(evidence.coverage, .complete)
+        XCTAssertEqual(
+            vault.accessibilityNotifications.checkpoint(
+                after: .origin,
+                selection: .all
+            ).events.map(\.sequence),
+            Array(UInt64(1)...UInt64(65))
+        )
+
+        action.admitCaptured()
+
+        XCTAssertTrue(
+            vault.accessibilityNotifications.checkpoint(
+                after: .origin,
+                selection: .all
+            ).events.isEmpty
+        )
     }
 
     func testNotificationProjectionReadsOrderedCanonicalHistory() async throws {
@@ -172,7 +216,7 @@ extension TheVaultResolutionTests {
         )
         let batch = try XCTUnwrap(action.capture())
         _ = await publishVisible(observation, notificationBatch: batch)
-        action.cancel()
+        action.admitCaptured()
 
         let notifications = vault.semanticObservationStream.stateOwner.notifications()
 
@@ -199,7 +243,7 @@ extension TheVaultResolutionTests {
             )
             let batch = try XCTUnwrap(action.capture())
             _ = await publishVisible(observation, notificationBatch: batch)
-            action.cancel()
+            action.admitCaptured()
         }
 
         XCTAssertEqual(
@@ -225,7 +269,7 @@ extension TheVaultResolutionTests {
         )
         let batch = try XCTUnwrap(action.capture())
         let publication = await publishVisible(after, notificationBatch: batch)
-        action.cancel()
+        action.admitCaptured()
 
         guard case .elementsChanged(let snapshot)? = publication.events.last else {
             return XCTFail("Expected the value notification to trigger semantic rereading")
@@ -253,7 +297,7 @@ extension TheVaultResolutionTests {
             (element(label: "Checkout", traits: .header), "checkout"),
         ])
         let replacement = await publishVisible(second, notificationBatch: batch)
-        action.cancel()
+        action.admitCaptured()
 
         XCTAssertEqual(replacement.events.count, 2)
         guard case .screenChanged(let screen) = replacement.events[0],

@@ -921,7 +921,7 @@ extension HeistExecution {
 
         private func release(_ observation: ActiveObservation) {
             observation.scopeSubscription.cancel()
-            observation.notificationWindow.consume()
+            observation.notificationWindow.admitCaptured()
         }
 
         private func evidence(
@@ -1032,7 +1032,7 @@ extension HeistExecution {
                 if let observation = session.activeObservation {
                     release(observation)
                 }
-                session.notificationScope.consume()
+                session.notificationScope.admitCaptured()
             case .failure:
                 if let observation = session.activeObservation {
                     observation.scopeSubscription.cancel()
