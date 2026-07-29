@@ -54,25 +54,6 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
         )
     }
 
-    func testHistoryBoundaryReturnsOneMatchingCurrentSnapshotAndEventSuffix() async {
-        let owner = TheVault.StateOwner()
-        let first = await owner.commitAdmission(hostAdmission(label: "Before"))
-        let boundary = await owner.observationBoundary(scope: .visible)
-        let second = await owner.commitAdmission(hostAdmission(label: "After"))
-
-        let evidence = await owner.evidence(after: boundary)
-
-        XCTAssertEqual(boundary.baseline, first.current.snapshot)
-        XCTAssertEqual(evidence.current, second.current.snapshot)
-        XCTAssertEqual(evidence.events, second.events)
-        XCTAssertEqual(evidence.completeness, .complete)
-        if case .elementsChanged(let finalSnapshot)? = evidence.events.last {
-            XCTAssertEqual(finalSnapshot, evidence.current)
-        } else {
-            XCTFail("The final event must carry the evidence current snapshot")
-        }
-    }
-
     func testUnavailableCaptureCannotProduceCompletedWaitEvidence() async throws {
         let observation = hostObservation(label: "Home")
         let source = HostVisibleObservationSource(nil)
@@ -240,25 +221,6 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
         ])
     }
 
-    private func hostAdmission(label: String) -> Observation.Admission {
-        let observation = hostObservation(label: label)
-        return Observation.Admission(
-            tree: observation.tree,
-            tripwireSignal: .empty,
-            discoveryCommitPolicy: .mergeIntoInterface,
-            lineage: .resting,
-            scope: .visible,
-            notificationAdmission: .action(.init(
-                admittedNotifications: [],
-                through: .origin,
-                scopedScreenChangedThrough: 0
-            )),
-            keyboardVisible: nil,
-            timestamp: Date(timeIntervalSince1970: label == "Before" ? 1 : 2),
-            viewportFrames: observation.tree.viewportFrames,
-            geometryTolerance: CoarseFrameComparison.currentGeometryTolerance
-        )
-    }
 }
 
 @MainActor

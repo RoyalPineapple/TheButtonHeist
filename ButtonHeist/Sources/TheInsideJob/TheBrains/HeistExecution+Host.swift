@@ -194,11 +194,6 @@ extension HeistExecution {
             }
         }
 
-        private enum Resolution {
-            case success(Completion)
-            case failure(any Error)
-        }
-
         private enum BoundaryError: Error {
             case observationHistoryUnavailable
         }
@@ -601,7 +596,8 @@ extension HeistExecution {
             }
             let evidence = await evidence(for: observation)
             guard case .running(let session) = phase,
-                  session.activeObservation?.id == id else {
+                  session.activeObservation?.id == id,
+                  session.machine.activeLeaf?.isFinishingObservation == true else {
                 return
             }
             let outcome: LeafOutcome
@@ -992,7 +988,7 @@ extension HeistExecution {
             resolve(.failure(CancellationError()))
         }
 
-        private func resolve(_ resolution: Resolution) {
+        private func resolve(_ resolution: Result<Completion, any Error>) {
             guard case .running(let session) = phase else { return }
             phase = .cleaning
             session.deadlines.cancelTimer()

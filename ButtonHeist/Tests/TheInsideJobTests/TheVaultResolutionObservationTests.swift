@@ -299,7 +299,7 @@ extension TheVaultResolutionTests {
         notificationBatch: AccessibilityNotificationBatch? = nil
     ) async -> Observation.Publication {
         await vault.semanticObservationStream.commitVisibleObservation(
-            .admittedForTesting(
+            .admitCaptured(
                 observation,
                 tripwireSignal: vault.tripwire.tripwireSignal(),
                 lineage: .resting

@@ -109,6 +109,72 @@ final class HeistMachineExpectationTests: XCTestCase {
         )
     }
 
+    func testWaitRequiresNoChangeAfterMatchingEvent() throws {
+        let events: [Observation.Event] = [
+            .noChange,
+            heistNotification("Saved"),
+            .noChange,
+        ]
+        let plan = try HeistPlan(body: [
+            .wait(WaitStep(
+                predicate: .notification("Saved"),
+                timeout: try .seconds(1)
+            )),
+        ])
+        var driver = try HeistMachineTestDriver(
+            plan: plan,
+            script: MachineRunScript(events: events)
+        )
+
+        let completion = try driver.run()
+
+        XCTAssertEqual(completion.steps.first?.status, .passed)
+        XCTAssertEqual(Array(driver.history), events)
+    }
+
+    func testSubstantiveEventDuringFinalCaptureReopensObservation() throws {
+        let plan = try HeistPlan(body: [
+            .wait(WaitStep(
+                predicate: .notification("Saved"),
+                timeout: try .seconds(1)
+            )),
+        ])
+        var machine = try HeistExecution.Machine(plan: plan)
+        guard case .pending(.perform(let beginRequests)) = machine.start(),
+              beginRequests.count == 1,
+              case .beginObservation(let id, _) = beginRequests[0] else {
+            return XCTFail("The wait must begin one observation")
+        }
+        let boundary = TheVault.State.HistoryBoundary(
+            baseline: heistSnapshot(labels: []),
+            historyIndex: 0
+        )
+        guard case .pending(.wait) = machine.advance(.observationBegan(id, boundary)),
+              case .pending(.wait) = machine.advance(.event(heistNotification("Saved"))),
+              case .pending(.perform(let firstFinish)) = machine.advance(.event(.noChange)),
+              firstFinish.count == 1,
+              case .finishObservation(let firstFinishID, _) = firstFinish[0] else {
+            return XCTFail("A matched, unchanged wait must request final evidence")
+        }
+        XCTAssertEqual(firstFinishID, id)
+
+        guard case .pending(.wait) = machine.advance(
+            .event(.elementsChanged(heistSnapshot(labels: ["Late Change"])))
+        ) else {
+            return XCTFail("A final-capture change must reopen observation")
+        }
+        XCTAssertEqual(machine.activeLeaf?.isFinishingObservation, false)
+
+        guard case .pending(.perform(let secondFinish)) = machine.advance(
+            .event(.noChange)
+        ),
+              secondFinish.count == 1,
+              case .finishObservation(let secondFinishID, _) = secondFinish[0] else {
+            return XCTFail("Fresh stillness must request final evidence again")
+        }
+        XCTAssertEqual(secondFinishID, id)
+    }
+
     func testIncompleteHistoryCannotManufactureSuccessfulEvidence() throws {
         var history = Observation.History(retentionLimit: 1)
         let baseline = heistSnapshot(labels: ["Before"])

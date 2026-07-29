@@ -255,7 +255,7 @@ private extension HeistExecution.Machine {
             }
             return .pending(.wait)
         case .observing:
-            leaf.expectation = actionExpectation(
+            leaf.expectation = expectation(
                 leaf.expectation,
                 evaluating: event
             )
@@ -275,7 +275,7 @@ private extension HeistExecution.Machine {
             }
             return finish(action: leaf, exitPosition: .current)
         case .exploring:
-            leaf.expectation = actionExpectation(
+            leaf.expectation = expectation(
                 leaf.expectation,
                 evaluating: event
             )
@@ -284,7 +284,13 @@ private extension HeistExecution.Machine {
                 return .pending(.wait)
             }
             return finish(action: leaf, exitPosition: .current)
-        case .beginningObservation, .finishingObservation:
+        case .finishingObservation:
+            guard case .noChange = event else {
+                leaf.phase = .observing
+                return observe(action: leaf, event: event)
+            }
+            return .pending(.wait)
+        case .beginningObservation:
             return .pending(.wait)
         }
     }
@@ -328,10 +334,22 @@ private extension HeistExecution.Machine {
         event: Observation.Event
     ) -> HeistExecution.State {
         var leaf = leaf
-        guard leaf.phase == .observing || leaf.phase == .exploring else {
+        switch leaf.phase {
+        case .finishingObservation:
+            guard case .noChange = event else {
+                leaf.phase = .observing
+                return observe(wait: leaf, event: event)
+            }
+            return .pending(.wait)
+        case .observing, .exploring:
+            break
+        case .beginningObservation, .dispatching:
             return .pending(.wait)
         }
-        leaf.expectation = leaf.expectation.evaluating(event)
+        leaf.expectation = expectation(
+            leaf.expectation,
+            evaluating: event
+        )
         guard leaf.expectation.result == .satisfied else {
             if leaf.phase == .observing,
                shouldExplore(after: event, for: leaf.predicate) {
@@ -375,7 +393,7 @@ private extension HeistExecution.Machine {
         return true
     }
 
-    func actionExpectation(
+    func expectation(
         _ expectation: Expectation,
         evaluating event: Observation.Event
     ) -> Expectation {

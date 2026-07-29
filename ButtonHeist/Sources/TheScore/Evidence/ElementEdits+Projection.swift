@@ -57,26 +57,11 @@ public extension ElementEdits {
         ElementEditProjection.projectElementEdits(beforeElements: [before], afterElements: [after])
     }
 
-    /// Compare two flat root element lists.
-    static func between(_ before: [HeistElement], _ after: [HeistElement]) -> ElementEdits {
-        ElementEditProjection.projectElementEdits(beforeElements: before, afterElements: after)
-    }
-
     /// Compare two full interfaces.
     static func between(_ before: Interface, _ after: Interface) -> ElementEdits {
         ElementEditProjection.projectElementEdits(
             beforeRecords: before.projectedElementRecords.map(ElementDiffRecord.init),
             afterRecords: after.projectedElementRecords.map(ElementDiffRecord.init)
-        )
-    }
-
-    static func between(
-        beforeElements: [HeistElement],
-        afterElements: [HeistElement]
-    ) -> ElementEdits {
-        ElementEditProjection.projectElementEdits(
-            beforeElements: beforeElements,
-            afterElements: afterElements
         )
     }
 

@@ -211,6 +211,15 @@ extension HeistExecution {
                 leaf.expectation.result == .satisfied
             }
         }
+
+        internal var isFinishingObservation: Bool {
+            switch self {
+            case .action(let leaf):
+                leaf.phase == .finishingObservation
+            case .wait(let leaf):
+                leaf.phase == .finishingObservation
+            }
+        }
     }
 
     internal struct ActionLeaf: Sendable {

@@ -131,18 +131,6 @@ internal struct CommittableInterfaceObservation {
         self.lineage = lineage
     }
 
-    internal static func admittedForTesting(
-        _ observation: InterfaceObservation,
-        tripwireSignal: TheTripwire.TripwireSignal,
-        lineage: ScreenLineage
-    ) -> Self {
-        admitCaptured(
-            observation,
-            tripwireSignal: tripwireSignal,
-            lineage: lineage
-        )
-    }
-
     internal static func admitCaptured(
         _ observation: InterfaceObservation,
         tripwireSignal: TheTripwire.TripwireSignal,

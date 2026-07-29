@@ -8,7 +8,7 @@ extension Observation.Stream {
         notificationBatch: AccessibilityNotificationBatch? = nil
     ) async -> Observation.Publication {
         await commitVisibleObservation(
-            .admittedForTesting(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
+            .admitCaptured(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
             notificationBatch: notificationBatch
         )
     }
@@ -19,7 +19,7 @@ extension Observation.Stream {
         notificationBatch: AccessibilityNotificationBatch? = nil
     ) async -> Observation.Event {
         let publication = await commitVisibleObservation(
-            .admittedForTesting(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
+            .admitCaptured(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
             notificationBatch: notificationBatch
         )
         guard let event = publication.events.last else {
@@ -34,7 +34,7 @@ extension Observation.Stream {
         notificationBatch: AccessibilityNotificationBatch? = nil
     ) async -> Observation.Publication {
         await commitVisibleObservation(
-            .admittedForTesting(
+            .admitCaptured(
                 observation,
                 tripwireSignal: currentTripwireSignal(),
                 lineage: .viewportMovement
@@ -49,7 +49,7 @@ extension Observation.Stream {
         notificationBatch: AccessibilityNotificationBatch? = nil
     ) async -> Observation.Publication {
         await commitDiscoveryObservation(
-            .admittedForTesting(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
+            .admitCaptured(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
             notificationBatch: notificationBatch
         )
     }
@@ -60,7 +60,7 @@ extension Observation.Stream {
         notificationBatch: AccessibilityNotificationBatch? = nil
     ) async -> Observation.Publication {
         await commitDiscoveryObservation(
-            .admittedForTesting(
+            .admitCaptured(
                 observation,
                 tripwireSignal: currentTripwireSignal(),
                 lineage: .viewportMovement

@@ -8,11 +8,12 @@ struct ButtonHeistImportContract {
 
     static func makePlan() throws -> HeistPlan {
         let payTarget: AccessibilityTarget = .label("Pay")
+        let payElementTarget: AccessibilityElementTarget = .label("Pay")
         let checkoutContainer: AccessibilityTarget = .container(.label("Checkout"))
         let currentPredicate: AccessibilityPredicate = .exists(payTarget)
         let containerPredicate: AccessibilityPredicate = .exists(checkoutContainer)
         let updatedPredicate: ElementAssertion = .updated(
-            payTarget,
+            payElementTarget,
             .value("Paid")
         )
         let changedPredicate: AccessibilityPredicate = .elementsChanged([updatedPredicate])

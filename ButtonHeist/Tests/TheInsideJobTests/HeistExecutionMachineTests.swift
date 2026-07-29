@@ -81,30 +81,6 @@ final class HeistExecutionMachineTests: XCTestCase {
         XCTAssertEqual(lateCompletion.abortedAtPath, completion.abortedAtPath)
     }
 
-    func testDriverRecordsEveryMachineEventInOneHistory() throws {
-        let plan = try HeistPlan(body: [
-            .wait(WaitStep(
-                predicate: .notification("Saved"),
-                timeout: try .seconds(1)
-            )),
-        ])
-        var driver = try HeistMachineTestDriver(
-            plan: plan,
-            script: MachineRunScript(events: [
-                heistNotification("Saved"),
-                .noChange,
-            ])
-        )
-
-        let completion = try driver.run()
-
-        XCTAssertEqual(completion.steps.map(\.status), [.passed])
-        XCTAssertEqual(Array(driver.history), [
-            heistNotification("Saved"),
-            .noChange,
-        ])
-    }
-
     func testElementWaitRestartsDiscoveryAfterScreenReplacementAndSubstantiveEvents() throws {
         let plan = try HeistPlan(body: [
             .wait(WaitStep(
