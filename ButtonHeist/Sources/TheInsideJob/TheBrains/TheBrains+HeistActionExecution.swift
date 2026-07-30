@@ -34,7 +34,7 @@ extension HeistExecution.Machine {
                 observationTimeout = HeistExecution.duration(resolved.timeout)
             } else {
                 predicate = nil
-                observationTimeout = SemanticObservationTiming.defaultTimeout
+                observationTimeout = HeistExecution.duration(actionExpectationTimeoutPolicy.standard)
             }
         } catch {
             return resume(afterCompletedLeaf: HeistExecution.ResultProjector.expectationResolutionFailure(

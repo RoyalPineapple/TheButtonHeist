@@ -4,9 +4,6 @@ import Foundation
 import ButtonHeistSupport
 
 enum SemanticObservationTiming {
-    /// Default budget for action leaves and external observation requests.
-    static let defaultTimeout: Duration = .seconds(1)
-
     /// Below this there is no point starting a viewport transition: the move
     /// would not have time to be read before the budget ran out.
     static let viewportTransitionMinimumBudgetMs = 32

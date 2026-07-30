@@ -11,7 +11,8 @@ import XCTest
 
 @MainActor
 final class HeistExecutionHostTests: ButtonHeistTestCase {
-    func testDirectActionUsesCanonicalPlanAndPassesActiveLeafDeadline() async throws {
+    func testDirectActionUsesCanonicalPlanAndInjectedStandardPolicyReachesActiveLeafDeadline() async throws {
+        let policy = ActionExpectationTimeoutPolicy(standard: 3, screenTransition: 12)
         let source = HostVisibleObservationSource(hostObservation(label: "Home"))
         let brains = TheBrains(
             tripwire: TheTripwire(),
@@ -31,17 +32,19 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
             action,
             timeout: try .seconds(5)
         )
+        dispatchedDeadline = nil
         let planned = try await HeistExecution.Host(brains: brains).execute(
             HeistPlan(body: [
                 .action(ActionStep(command: action)),
             ]),
-            timeout: try .seconds(5)
+            timeout: try .seconds(5),
+            actionExpectationTimeoutPolicy: policy
         )
 
         let deadline = try XCTUnwrap(dispatchedDeadline)
         XCTAssertEqual(
             deadline.timeoutSeconds,
-            SemanticObservationTiming.defaultTimeout / .seconds(1)
+            policy.standard.seconds
         )
         let directStep = try XCTUnwrap(direct.steps.first)
         let plannedStep = try XCTUnwrap(planned.steps.first)

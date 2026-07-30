@@ -8,17 +8,25 @@ import XCTest
 @_spi(ButtonHeistInternals) @testable import TheScore
 
 final class HeistMachineStepExecutionTests: XCTestCase {
-    func testBareActionUsesOneTypedRequestPipeline() throws {
+    func testBareActionUsesStandardPolicyBudgetAndOneTypedRequestPipeline() throws {
+        let policy = ActionExpectationTimeoutPolicy(standard: 3, screenTransition: 12)
         let plan = try HeistPlan(body: [
             .action(ActionStep(command: .dismiss)),
         ])
-        var machine = try HeistExecution.Machine(plan: plan)
+        var machine = try HeistExecution.Machine(
+            plan: plan,
+            actionExpectationTimeoutPolicy: policy
+        )
         let observation = try XCTUnwrap(machine.start().singleBeginObservationRequest)
 
-        XCTAssertEqual(observation.request.timeout, SemanticObservationTiming.defaultTimeout)
+        XCTAssertEqual(
+            observation.request.timeout,
+            .seconds(policy.standard.seconds)
+        )
 
         var driver = try HeistMachineTestDriver(
             plan: plan,
+            actionExpectationTimeoutPolicy: policy,
             script: MachineRunScript(events: [.noChange])
         )
 
