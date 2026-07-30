@@ -152,7 +152,7 @@ extension TheBrainsScrollTests {
         return true
     }
 
-    func testOffViewportTargetWithoutLiveScrollParentFailsNoRevealPath() async throws {
+    func testOffViewportTargetWithoutLiveScrollParentTimesOutWithoutRevealPath() async throws {
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
@@ -174,14 +174,15 @@ extension TheBrainsScrollTests {
         )
 
         guard case .failed(let failure) = result else {
-            return XCTFail("Expected no-reveal-path inflation failure, got \(result)")
+            return XCTFail("Expected timeout while awaiting a reveal path, got \(result)")
         }
         XCTAssertEqual(
             failure.failedStep,
-            ElementInflation.ElementInflationFailureStep.noRevealPath,
+            ElementInflation.ElementInflationFailureStep.timedOut,
             failure.message
         )
-        XCTAssertTrue(failure.message.contains("element inflation failed [noRevealPath]"))
+        XCTAssertEqual(failure.failureKind, .timeout)
+        XCTAssertTrue(failure.message.contains("element inflation failed [timedOut]"))
         XCTAssertTrue(failure.message.contains("no live scrollable ancestor"))
         XCTAssertTrue(failure.message.contains("expectedScrollContainerPath=[0]"), failure.message)
         XCTAssertTrue(failure.message.contains("available live scroll containers: path=[0]"), failure.message)
@@ -281,7 +282,7 @@ extension TheBrainsScrollTests {
         XCTAssertTrue(failure.message.contains("element inflation failed [geometryNotActionable]"))
     }
 
-    func testElementActionsConsumeElementInflationFailureBeforeDispatch() async throws {
+    func testElementActionsConsumeElementInflationTimeoutBeforeDispatch() async throws {
         let visible = makeElement(label: "Visible")
         let offscreen = makeElement(label: "Offscreen")
         await installScreenWithOffViewportEntry(
@@ -305,7 +306,8 @@ extension TheBrainsScrollTests {
         XCTAssertFalse(didDispatch)
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, ActionMethod.activate)
-        XCTAssertTrue(result.message?.contains("element inflation failed [noRevealPath]") == true)
+        XCTAssertEqual(result.failureKind, .timeout)
+        XCTAssertTrue(result.message?.contains("element inflation failed [timedOut]") == true)
     }
 
     func testElementActionPreservesFinalDispatchSubjectResolution() async throws {

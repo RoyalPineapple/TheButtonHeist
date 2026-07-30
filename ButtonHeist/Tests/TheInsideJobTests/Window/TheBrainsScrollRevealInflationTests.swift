@@ -628,7 +628,7 @@ extension TheBrainsScrollTests {
         XCTAssertFalse(result.message?.contains("get_interface") == true)
     }
 
-    func testElementInflationNamesNoRevealPathFailure() async throws {
+    func testElementInflationTimesOutWhenNoRevealPathAppears() async throws {
         let visible = makeElement(label: "Visible")
         let offscreen = makeElement(label: "Offscreen")
         await installScreenWithOffViewportEntry(
@@ -643,14 +643,15 @@ extension TheBrainsScrollTests {
         )
 
         guard case .failed(let failure) = result else {
-            return XCTFail("Expected element inflation failure, got \(result)")
+            return XCTFail("Expected element inflation timeout, got \(result)")
         }
         XCTAssertEqual(
             failure.failedStep,
-            ElementInflation.ElementInflationFailureStep.noRevealPath,
+            ElementInflation.ElementInflationFailureStep.timedOut,
             failure.message
         )
-        XCTAssertTrue(failure.message.contains("element inflation failed [noRevealPath]"))
+        XCTAssertEqual(failure.failureKind, .timeout)
+        XCTAssertTrue(failure.message.contains("element inflation failed [timedOut]"))
     }
 
     private struct SiblingOwnerMismatchFixture {
