@@ -108,7 +108,24 @@ enum PublicHeistJSONFixtureValue {
 }
 
 enum PublicHeistExecutionJSONContractFixture {
+    struct ExpectationGapCase {
+        let gap: Observation.Gap
+        let publicCode: String
+    }
+
     static let donePredicate = AccessibilityPredicate.exists(.label("Done"))
+
+    static let expectationGaps: [ExpectationGapCase] = [
+        ExpectationGapCase(
+            gap: .notificationIngress(
+                .init(afterSequence: 4, throughSequence: 7),
+                additional: []
+            ),
+            publicCode: "notification_ingress"
+        ),
+        ExpectationGapCase(gap: .captureUnavailable, publicCode: "capture_unavailable"),
+        ExpectationGapCase(gap: .historyUnavailable, publicCode: "history_unavailable"),
+    ]
 
     static func actionWithExpectation() -> HeistExecutionStepResult {
         let current = makeTestObservationSnapshot(elements: [
@@ -289,6 +306,27 @@ enum PublicHeistExecutionJSONContractFixture {
         ))
     }
 
+    static func failedWait(expectationGap: Observation.Gap) -> HeistExecutionStepResult {
+        let current = makeTestObservationSnapshot(elements: [])
+        return HeistResultFixture.failedWait(
+            evidence: HeistResultFixture.expectationEvidence(
+                predicate: donePredicate,
+                observation: Observation.Evidence(
+                    baseline: nil,
+                    events: [],
+                    current: current,
+                    coverage: .incomplete(expectationGap)
+                ),
+                terminalCause: .deadline
+            ),
+            failure: HeistFailureDetail(
+                category: .timeout,
+                contract: "wait predicate is met",
+                observed: "deadline expired"
+            )
+        )
+    }
+
     static var oneVisibleCaseProfile: ProjectionProfile {
         ProjectionProfile(
             kind: .summary,
@@ -325,13 +363,19 @@ func publicHeistExecutionJSON(
     step: HeistExecutionStepResult,
     profile: ProjectionProfile = .summary
 ) throws -> JSONProbe {
+    let response = try publicHeistExecutionResponse(step: step)
+    let data = try JSONEncoder().encode(PublicResponseModel(response: response, profile: profile))
+    return try JSONProbe(data: data)
+}
+
+func publicHeistExecutionResponse(
+    step: HeistExecutionStepResult
+) throws -> FenceResponse {
     let result = try HeistResult(steps: [step], durationMs: 1)
-    let response = FenceResponse.heistExecution(
+    return FenceResponse.heistExecution(
         plan: try HeistPlan(body: [.warn(WarnStep(message: "fixture"))]),
         report: HeistReport.project(result: result)
     )
-    let data = try JSONEncoder().encode(PublicResponseModel(response: response, profile: profile))
-    return try JSONProbe(data: data)
 }
 
 func publicHeistExecutionNodeJSON(

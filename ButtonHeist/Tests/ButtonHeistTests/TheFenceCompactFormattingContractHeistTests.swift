@@ -48,6 +48,21 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertFalse(response.isFailure)
     }
 
+    func testCompactHeistExpectationGapIsTotalForEveryObservationGap() throws {
+        for expectationGap in PublicHeistExecutionJSONContractFixture.expectationGaps {
+            let response = try publicHeistExecutionResponse(
+                step: PublicHeistExecutionJSONContractFixture.failedWait(
+                    expectationGap: expectationGap.gap
+                )
+            )
+
+            XCTAssertTrue(
+                response.compactFormatted().contains(" ?"),
+                expectationGap.publicCode
+            )
+        }
+    }
+
     func testHumanHeistFormattingCountsNestedProjectedExpectations() throws {
         let expected = AccessibilityPredicate.exists(.label("Done"))
         let childAction = try HeistStep.action(ActionStep(

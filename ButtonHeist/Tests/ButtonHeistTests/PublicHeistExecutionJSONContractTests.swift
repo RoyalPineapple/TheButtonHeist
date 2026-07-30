@@ -44,6 +44,23 @@ final class PublicHeistExecutionJSONContractTests: XCTestCase {
         )
     }
 
+    func testExpectationGapContractIsTotalForEveryObservationGap() throws {
+        for expectationGap in PublicHeistExecutionJSONContractFixture.expectationGaps {
+            let node = try publicHeistExecutionNodeJSON(
+                step: PublicHeistExecutionJSONContractFixture.failedWait(
+                    expectationGap: expectationGap.gap
+                )
+            )
+
+            XCTAssertEqual(
+                try node.string("expectationGap"),
+                expectationGap.publicCode
+            )
+            try node.assertPresent("failure")
+            try node.assertMissing("expectation")
+        }
+    }
+
     func testWaitEvidenceContract() throws {
         let evidence = try evidence(
             for: PublicHeistExecutionJSONContractFixture.wait()

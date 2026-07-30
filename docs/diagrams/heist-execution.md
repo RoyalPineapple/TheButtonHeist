@@ -50,8 +50,8 @@ sequenceDiagram
     Caller->>Host: execute complete HeistPlan
     Host->>Machine: start()
     loop until State.complete
-        alt Action.perform(requests)
-            Machine-->>Host: typed MainActor requests
+        alt Action.perform(request)
+            Machine-->>Host: typed MainActor request
             alt capture or observation boundary
                 Host->>Vault: capture / read current truth
                 Vault-->>Host: Snapshot, history position, or Evidence

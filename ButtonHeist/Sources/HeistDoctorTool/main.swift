@@ -17,15 +17,15 @@ enum HeistDoctorToolOutput {
 struct HeistDoctorCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "heist-doctor",
-        abstract: "Alpha: suggest offline heist target repairs from two execution results",
+        abstract: "Alpha: suggest offline heist target repairs from two HeistResult recordings",
         discussion: """
             heist-doctor is an alpha, suggestion-only offline tool.
 
-            heist-doctor reads durable HeistResult JSON results. It
-            compares a last passing run with a new failing run and prints repair
-            candidates for the failed action step. It never connects to an app,
-            reruns a heist, edits a plan, or changes playback behavior.
-            Result inputs may be plain JSON or gzip-compressed JSON.
+            heist-doctor reads canonical HeistResultRecording JSON/JSON.gz
+            artifacts, not raw HeistResult or public run_heist JSON. It compares
+            a last passing run with a new failing run and prints repair candidates
+            for the failed action step. It never connects to an app, reruns a
+            heist, edits a plan, or changes playback behavior.
 
             Examples:
               heist-doctor --last-pass last-pass.json --new-fail new-fail.json
@@ -36,16 +36,22 @@ struct HeistDoctorCommand: ParsableCommand {
             """
     )
 
-    @Option(name: .long, help: "Path to the last passing HeistResult JSON or JSON.gz result.")
+    @Option(
+        name: .long,
+        help: "Path to the canonical last-passing HeistResultRecording JSON/JSON.gz artifact."
+    )
     var lastPass: String?
 
-    @Option(name: .long, help: "Path to the new failing HeistResult JSON or JSON.gz result.")
+    @Option(
+        name: .long,
+        help: "Path to the canonical new-failing HeistResultRecording JSON/JSON.gz artifact."
+    )
     var newFail: String?
 
-    @Option(name: .long, help: "Directory containing passed HeistResult recordings.")
+    @Option(name: .long, help: "Directory containing passed HeistResultRecording artifacts.")
     var lastPassDir: String?
 
-    @Option(name: .long, help: "Directory containing failed HeistResult recordings.")
+    @Option(name: .long, help: "Directory containing failed HeistResultRecording artifacts.")
     var newFailDir: String?
 
     @Option(name: .long, help: "Optional action step path to compare instead of the first failed step.")
@@ -134,11 +140,20 @@ struct HeistDoctorCommand: ParsableCommand {
         do {
             return try HeistResultCodec.decode(contentsOf: url).result
         } catch let error as DecodingError {
-            throw ValidationError("failed to decode HeistResult at \(url.path): \(error)")
+            throw ValidationError(
+                "failed to decode canonical HeistResultRecording JSON/JSON.gz "
+                    + "at \(url.path): \(error)"
+            )
         } catch let error as HeistResultCodecError {
-            throw ValidationError("failed to decompress HeistResult at \(url.path): \(error)")
+            throw ValidationError(
+                "failed to decompress canonical HeistResultRecording JSON.gz "
+                    + "at \(url.path): \(error)"
+            )
         } catch {
-            throw ValidationError("failed to read result at \(url.path): \(error)")
+            throw ValidationError(
+                "failed to read canonical HeistResultRecording JSON/JSON.gz "
+                    + "at \(url.path): \(error)"
+            )
         }
     }
 

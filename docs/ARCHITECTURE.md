@@ -158,7 +158,7 @@ enum HeistExecution.State {
 }
 
 enum HeistExecution.Action {
-    case perform([MainActorRequest])
+    case perform(MainActorRequest)
     case wait
 }
 ```
@@ -167,8 +167,8 @@ One `HeistExecution` machine runs one complete heist from its first step to its
 final `Completion`. It privately retains every execution detail needed to
 advance the plan: control-flow stack, environments, accumulated step results,
 active expectation progress, and transient observation bookkeeping. `State`
-is not that bookkeeping. It is only the machine's next answer: perform typed
-MainActor requests, wait for another admitted input, or complete.
+is not that bookkeeping. It is only the machine's next answer: perform a typed
+MainActor request, wait for another admitted input, or complete.
 
 The Vault reducer accepts admitted snapshots and normalized notification
 payloads and deterministically produces ordered `Observation.Event` values.
@@ -749,7 +749,7 @@ flowchart TD
     Capture --> Reduce["TheVault reduction<br/>Snapshot + notification payloads<br/>to ordered Observation.Event values"]
     Reduce --> Vault["TheVault<br/>commit current Snapshot + one History"]
     Vault --> Machine
-    Machine --> Perform["pending(.perform(requests))"]
+    Machine --> Perform["pending(.perform(request))"]
     Machine --> Wait["pending(.wait)"]
     Machine --> Complete["complete(Completion)"]
     Perform --> Host
