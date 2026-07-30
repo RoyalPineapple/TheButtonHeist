@@ -574,8 +574,8 @@ predicate. Wait steps own the same evidence shape.
 `HeistReport.project(result:)` resolves the authored predicate through those
 bindings, replays the derived predicate over the retained evidence, and attaches
 the authored predicate to the derived `ExpectationResult`; invalid bindings are
-rejected during decoding and incomplete evidence propagates its typed
-`Observation.Gap`. Live and decoded results therefore derive identical
+rejected during decoding and incomplete evidence becomes the report node's
+typed `Observation.Gap`. Live and decoded results therefore derive identical
 predicate truth instead of trusting a stored boolean or copied expectation.
 `ActionResultSuccessEvidence` and
 `ActionResultFailureEvidence` are output projections backed by one common body,

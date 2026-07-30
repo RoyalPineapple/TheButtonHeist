@@ -79,21 +79,20 @@ final class SemanticObservationStreamTests: XCTestCase {
         let stream = vault.semanticObservationStream
         let before = await stream.commitVisibleObservationForTesting(.empty)
         var received: [Observation.Event] = []
-        var historyError: Observation.History.ReadError?
 
-        let subscription = stream.subscribe(
+        let installation = stream.subscribe(
             scope: .visible,
             replayingAfter: 0,
-            receive: { received.append($0) },
-            historyUnavailable: { historyError = $0 }
+            receive: { received.append($0) }
         )
+        let subscription = installation.subscription
+        received.append(contentsOf: try installation.replay.get())
         stream.discardCurrentObservation()
         let during = await stream.commitVisibleObservationForTesting(.empty)
         let expected = before.events + during.events
         let current = stream.current()
         let history = try stream.events(after: 0).get()
 
-        XCTAssertNil(historyError)
         XCTAssertEqual(received, expected)
         XCTAssertEqual(
             during.historyRange,

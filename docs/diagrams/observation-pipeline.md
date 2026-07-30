@@ -15,7 +15,7 @@ flowchart LR
     Stream -->|"commit Snapshot + Event"| Vault["TheVault<br/>current truth + Observation.History"]
     Vault -->|"record, then publish"| Host["MainActor host"]
     Host -->|"admit ordered input"| Machine["one HeistExecution machine<br/>advance private progress"]
-    Machine --> Perform["pending(.perform(requests))"]
+    Machine --> Perform["pending(.perform(request))"]
     Machine --> Wait["pending(.wait)"]
     Machine --> Complete["complete(Completion)"]
     Perform --> Host
@@ -34,8 +34,8 @@ each event and records it before delivery. A snapshot is current truth, an event
 is one ordered fact, history is the Vault-owned retained event array, and
 evidence is immutable result data. UIKit objects remain at the boundary.
 
-The host interprets pending actions. For `.perform`, it performs the typed
-MainActor requests and admits their results. For `.wait`, it waits for the next
+The host interprets pending actions. For `.perform`, it performs the one typed
+MainActor request and admits its result. For `.wait`, it waits for the next
 ordered `Observation.Event`. The machine is deterministic and
 replayable from its initial heist and ordered admitted inputs.
 
