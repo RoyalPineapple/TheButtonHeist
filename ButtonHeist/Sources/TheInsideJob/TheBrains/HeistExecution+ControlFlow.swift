@@ -547,14 +547,23 @@ private extension HeistExecution.Machine {
             ))
         }
 
-        let signature = ForEachMatchSignature(
-            matching: loop.resolvedMatching,
+        let identities = AccessibilityTargetMatchGraph(
             elements: snapshot.interface.projectedElements
         )
+        .resolve(loop.resolvedMatching)
+        .elements
+        .map(AccessibilityPolicy.matcherIdentityFacts(for:))
+        var hasher = Hasher()
+        for identity in identities {
+            for fact in identity {
+                hasher.combine(accessibilityFact: fact)
+            }
+        }
+        let matchHash = hasher.finalize()
         let initialSelection = previousMatchHash == nil
             && loop.iterationIndex == 0
             && loop.iterations.values.isEmpty
-        let matchedCount = initialSelection ? signature.count : loop.matchedCount
+        let matchedCount = initialSelection ? identities.count : loop.matchedCount
         guard matchedCount <= loop.step.limit else {
             return resume(afterCompletedLeaf: forEachElementLimitFailure(
                 loop.step,
@@ -574,7 +583,7 @@ private extension HeistExecution.Machine {
 
         let previousOrdinal = loop.iterations.values.last?
             .forEachElementEvidence?.targetOrdinal ?? -1
-        let ordinal = initialSelection || signature.hash != previousMatchHash
+        let ordinal = initialSelection || matchHash != previousMatchHash
             ? 0
             : previousOrdinal + 1
         let target = ResolvedAccessibilityTarget.predicate(
@@ -592,7 +601,7 @@ private extension HeistExecution.Machine {
             iterationIndex: loop.iterationIndex,
             progress: .executing(
                 targetOrdinal: ordinal,
-                matchHash: signature.hash
+                matchHash: matchHash
             ),
             iterations: loop.iterations
         )))
@@ -917,26 +926,6 @@ private extension HeistExecution.Machine {
                 expected: "at most \(step.limit) element(s)"
             ))
         )
-    }
-}
-
-private struct ForEachMatchSignature {
-    let count: Int
-    let hash: SemanticHash
-
-    init(matching: ResolvedElementPredicate, elements: [HeistElement]) {
-        let identities = AccessibilityTargetMatchGraph(elements: elements)
-            .resolve(matching)
-            .elements
-            .map(AccessibilityPolicy.matcherIdentityFacts(for:))
-        count = identities.count
-        var hasher = Hasher()
-        for identity in identities {
-            for fact in identity {
-                hasher.combine(accessibilityFact: fact)
-            }
-        }
-        hash = hasher.finalize()
     }
 }
 

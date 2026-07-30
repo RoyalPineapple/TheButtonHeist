@@ -161,11 +161,6 @@ extension HeistExecution {
             }
         }
 
-        private enum Resolution {
-            case success(Completion)
-            case cancelled
-        }
-
         private let brains: TheBrains
         private var phase = Phase.idle
         private var nextDeadlineTimerSequence: UInt64 = 0
@@ -1044,10 +1039,12 @@ extension HeistExecution {
 
         private func cancel() {
             guard case .running = phase else { return }
-            resolve(.cancelled)
+            resolve(.failure(CancellationError()))
         }
 
-        private func resolve(_ resolution: Resolution) {
+        private func resolve(
+            _ resolution: Result<Completion, CancellationError>
+        ) {
             guard case .running(let session) = phase else { return }
             phase = .cleaning
             session.deadlines.cancelTimer()
@@ -1062,7 +1059,7 @@ extension HeistExecution {
                 observation.scopeSubscription.cancel()
                 observation.notificationWindow.cancel()
             }
-            if case .cancelled = resolution {
+            if case .failure = resolution {
                 session.notificationScope.cancel()
             }
 
@@ -1074,7 +1071,7 @@ extension HeistExecution {
                 switch resolution {
                 case .success:
                     await self.admitTerminalNotifications(session.notificationScope)
-                case .cancelled:
+                case .failure:
                     break
                 }
                 session.observationDemand.cancel()
@@ -1084,8 +1081,8 @@ extension HeistExecution {
                 switch resolution {
                 case .success(let completion):
                     session.continuation.resume(returning: completion)
-                case .cancelled:
-                    session.continuation.resume(throwing: CancellationError())
+                case .failure(let error):
+                    session.continuation.resume(throwing: error)
                 }
             }
         }
