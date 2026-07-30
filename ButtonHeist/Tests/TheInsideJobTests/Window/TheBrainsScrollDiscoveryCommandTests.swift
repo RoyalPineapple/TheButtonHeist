@@ -419,6 +419,9 @@ extension TheBrainsScrollTests {
 
         XCTAssertEqual(cleanup.outcome, .moved)
         XCTAssertEqual(Navigation.visualOrigin(in: fixture.scrollView).y, 0, accuracy: 0.01)
+        XCTAssertTrue(cleanup.current?.snapshot.interface.projectedElements.contains {
+            $0.semantics.assertable.label == "Origin"
+        } == true)
     }
 
     func testExpiredBusinessDeadlineStillCompletesViewportRestoration() async throws {
@@ -431,12 +434,14 @@ extension TheBrainsScrollTests {
             scrollView: fixture.scrollView
         ))
 
+        let deadline = SemanticObservationDeadline(
+            start: RuntimeElapsed.now,
+            timeoutSeconds: 0
+        )
         let cleanup = await brains.navigation.performViewportTransition(
             .restoreVisualOrigin(.zero, in: .original(fixture.scrollView)),
-            deadline: SemanticObservationDeadline(
-                start: RuntimeElapsed.now,
-                timeoutSeconds: 0
-            ),
+            deadline: deadline,
+            observationBoundary: .externalDeadline(deadline),
             discoveryCommitPolicy: .replaceInterface
         )
 
@@ -509,6 +514,56 @@ extension TheBrainsScrollTests {
         XCTAssertEqual(exploration.viewportExit, .restored)
         XCTAssertGreaterThanOrEqual(fixture.scrollView.requestedContentOffsets.count, 2)
         XCTAssertEqual(Navigation.visualOrigin(in: fixture.scrollView).y, 0, accuracy: 0.01)
+    }
+
+    func testRestorationRetriesAfterTransientUnavailableCapture() async throws {
+        let fixture = try await explorationViewport()
+        defer { fixture.close() }
+        fixture.scrollView.onSetContentOffset = { [unowned self] scrollView in
+            let requestedY = scrollView.requestedContentOffsets.last?.y
+                ?? scrollView.contentOffset.y
+            self.visibleObservationSource.observation = self.explorationObservation(
+                label: requestedY > 0 ? "Scrolled" : "Origin Restored",
+                scrollView: scrollView
+            )
+            if requestedY == 0 {
+                self.visibleObservationSource.failNextCapture()
+            }
+        }
+
+        guard let exploration = await exploreViewport(onObservation: { _ in
+            fixture.scrollView.contentOffset.y > 0 ? .goalSatisfied : .continue
+        }) else {
+            return XCTFail("Expected restoration to survive one unavailable capture")
+        }
+
+        XCTAssertEqual(exploration.viewportExit, .restored)
+        XCTAssertEqual(Navigation.visualOrigin(in: fixture.scrollView).y, 0, accuracy: 0.01)
+        XCTAssertEqual(
+            exploration.current.snapshot.interface.projectedElements.first?
+                .semantics.assertable.label,
+            "Origin Restored"
+        )
+    }
+
+    func testRestorationRetryEndsWhenCallerIsCancelled() async throws {
+        let fixture = try await explorationViewport()
+        defer { fixture.close() }
+        fixture.scrollView.setContentOffset(CGPoint(x: 0, y: 300), animated: false)
+        visibleObservationSource.observation = nil
+
+        let cleanup = Task { @MainActor in
+            await brains.navigation.performViewportTransition(
+                .restoreVisualOrigin(.zero, in: .original(fixture.scrollView))
+            )
+        }
+        await waitForSettledSemanticWaiter()
+        cleanup.cancel()
+        let transition = await cleanup.value
+
+        XCTAssertEqual(transition.outcome, .unavailable)
+        XCTAssertEqual(Navigation.visualOrigin(in: fixture.scrollView).y, 0, accuracy: 0.01)
+        XCTAssertEqual(brains.vault.semanticObservationStream.observationWaiterCount, 0)
     }
 
     func testRestorationUsesCurrentViewForUnchangedSemanticContainer() async throws {

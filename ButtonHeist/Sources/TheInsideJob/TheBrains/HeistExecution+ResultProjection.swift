@@ -257,8 +257,6 @@ private extension HeistExecution.ResultProjector {
         case .timedOut, .heistTimedOut:
             resultOutcome = .failure(.timeout)
             message = timeoutMessage(
-                predicate: leaf.predicate,
-                evidence: evidence,
                 outstanding: leaf.expectation.result.outstandingDescription
             )
         case .completed:
@@ -273,8 +271,6 @@ private extension HeistExecution.ResultProjector {
                 } else {
                     resultOutcome = .failure(.timeout)
                     message = timeoutMessage(
-                        predicate: leaf.predicate,
-                        evidence: evidence,
                         outstanding: leaf.expectation.result.outstandingDescription
                     )
                 }
@@ -313,29 +309,10 @@ private extension HeistExecution.ResultProjector {
         )
     }
 
-    static func timeoutMessage(
-        predicate: HeistExecution.Predicate?,
-        evidence: Observation.Evidence,
-        outstanding: String?
-    ) -> String {
+    static func timeoutMessage(outstanding: String?) -> String {
         var message = "timed out"
         if let outstanding {
-            message += " while waiting on \(outstanding)"
-        }
-        if let predicate, let current = evidence.current {
-            message += "; expected: \(predicate.authored)"
-            message += "; interface: \(current.interface.projectedElements.count) elements"
-        }
-        let lanes = evidence.events.map { event in
-            switch event {
-            case .elementsChanged: "elements"
-            case .screenChanged: "screen"
-            case .notification: "notification"
-            case .noChange: "still"
-            }
-        }
-        if !lanes.isEmpty {
-            message += "; events [\(lanes.joined(separator: ", "))]"
+            message += " while waiting for \(outstanding)"
         }
         return message
     }
@@ -349,10 +326,7 @@ private extension HeistExecution.ResultProjector {
                 ? .targetResolution
                 : .action,
             contract: "action dispatch succeeds",
-            observed: [
-                result.message,
-                result.outcome.failureKind.map { "failureKind=\($0.rawValue)" },
-            ].compactMap { $0 }.joined(separator: "; "),
+            observed: result.message ?? "action dispatch failed",
             expected: command.reportTarget.map(String.init(describing:))
         )
     }
@@ -368,14 +342,17 @@ private extension HeistExecution.ResultProjector {
         } catch {
             expectationActual = nil
         }
+        var observed = result?.message
+            ?? expectationActual
+            ?? "post-action expectation was not met"
+        if let expectationActual,
+           expectationActual != observed {
+            observed += "; replay: \(expectationActual)"
+        }
         return HeistFailureDetail(
             category: .expectation,
             contract: "post-action expectation is met",
-            observed: [
-                expectationActual,
-                result?.message,
-                result?.outcome.failureKind.map { "failureKind=\($0.rawValue)" },
-            ].compactMap { $0 }.joined(separator: "; "),
+            observed: observed,
             expected: step.expectationPolicy.expectedExpectation?.predicate.description
         )
     }

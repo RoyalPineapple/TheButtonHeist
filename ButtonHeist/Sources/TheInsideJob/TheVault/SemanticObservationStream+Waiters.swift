@@ -31,7 +31,8 @@ extension Observation.Stream {
         scope: SemanticObservationScope,
         boundary: SemanticObservationWaitBoundary
     ) async -> SemanticObservationWaitResult {
-        if Task.isCancelled {
+        if Task.isCancelled,
+           boundary != .observationCycle {
             return .cancelled
         }
         if case .externalDeadline(let deadline) = boundary,
@@ -44,25 +45,56 @@ extension Observation.Stream {
         let subscription = subscribe(scope: scope)
         defer { subscription.cancel() }
 
+        if case .observationCycle = boundary {
+            return await withCheckedContinuation { continuation in
+                guard oneShot.register(continuation) else {
+                    continuation.resume(returning: .cancelled)
+                    return
+                }
+                registerObservationWaiter(
+                    oneShot,
+                    id: waiterID,
+                    historyIndex: historyIndex,
+                    scope: scope,
+                    boundary: boundary
+                )
+            }
+        }
         return await oneShot.wait(
             cancellationValue: .cancelled,
             onRegistered: { oneShot in
-                observationWaiters.insert(SemanticObservationWaiter(
+                registerObservationWaiter(
+                    oneShot,
+                    id: waiterID,
                     historyIndex: historyIndex,
                     scope: scope,
-                    boundary: boundary,
-                    oneShot: oneShot
-                ), id: waiterID)
-                observationWaiterDidRegister()
-                Task { @MainActor in
-                    resolveObservationWaiterIfAvailable(waiterID)
-                }
-                armObservationDeadline(boundary, waiterID: waiterID, oneShot: oneShot)
+                    boundary: boundary
+                )
             },
             onFinished: {
                 observationWaiters.remove(id: waiterID)?.oneShot.cancelTimeout()
             }
         )
+    }
+
+    private func registerObservationWaiter(
+        _ oneShot: TimedOneShot<SemanticObservationWaitResult>,
+        id: UInt64,
+        historyIndex: Int,
+        scope: SemanticObservationScope,
+        boundary: SemanticObservationWaitBoundary
+    ) {
+        observationWaiters.insert(SemanticObservationWaiter(
+            historyIndex: historyIndex,
+            scope: scope,
+            boundary: boundary,
+            oneShot: oneShot
+        ), id: id)
+        observationWaiterDidRegister()
+        Task { @MainActor in
+            resolveObservationWaiterIfAvailable(id)
+        }
+        armObservationDeadline(boundary, waiterID: id, oneShot: oneShot)
     }
 
     internal func nextObservation(

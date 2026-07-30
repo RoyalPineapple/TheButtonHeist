@@ -63,8 +63,9 @@ final class HeistInAppExecutionTests: XCTestCase {
             options.issueMatcher = { issue in
                 issue.type == .assertionFailure
                     && issue.compactDescription.contains(
-                        "Heist failed path=$.body[0].invoke.body[0] kind=fail message=stop"
+                        "Heist failed at $.body[0].invoke.body[0] (fail)"
                     )
+                    && issue.compactDescription.contains("Cause: stop")
                     && issue.sourceCodeContext.location?.fileURL.path == expectedFile
                     && issue.sourceCodeContext.location?.lineNumber == Int(expectedLine)
             }

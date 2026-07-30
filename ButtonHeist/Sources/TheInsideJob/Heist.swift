@@ -168,7 +168,8 @@ public extension Heist {
             let failedStep = result.firstFailedStep
             self.failedStepPath = failedStep?.path ?? "$"
             self.failedStepKind = failedStep?.kind ?? .fail
-            self.message = failedStep?.reportFailureMessage
+            self.message = failedStep?.reportActionResult?.message
+                ?? failedStep?.reportFailureMessage
                 ?? failedStep?.reportMessage
                 ?? "heist failed"
             self.diagnostic = failedStep?.failure.map(Self.diagnostic)
@@ -178,23 +179,44 @@ public extension Heist {
         public var errorDescription: String? { description }
 
         public var description: String {
-            var parts = [
-                "Heist failed",
-                "path=\(failedStepPath)",
-                "kind=\(failedStepKind.rawValue)",
-                "message=\(message)",
+            var lines = [
+                "Heist failed at \(failedStepPath) (\(failedStepKind.rawValue))",
+                "Cause: \(message)",
             ]
-            if let diagnostic {
-                parts.append("diagnostic=\(diagnostic)")
+            if let failure = result.firstFailedStep?.failure {
+                if !failure.contract.isEmpty,
+                   failure.contract != message {
+                    lines.append("Contract: \(failure.contract)")
+                }
+                if let expected = failure.expected, !expected.isEmpty {
+                    lines.append("\(expectedLabel(for: failure)): \(expected)")
+                }
             }
-            var text = parts.joined(separator: " ")
             if let screenshot = result.failureScreenshotSummary {
-                text += "\n\(screenshot)"
+                lines.append(screenshot)
             }
             if let interfaceDump = result.failureInterfaceDump(elementLimit: .max) {
-                text += "\n\(interfaceDump)"
+                lines.append(interfaceDump)
             }
-            return text
+            return lines.joined(separator: "\n")
+        }
+
+        private func expectedLabel(for failure: HeistFailureDetail) -> String {
+            guard failedStepKind == .action else { return "Expected" }
+            switch failure.category {
+            case .action, .targetResolution:
+                return "Target"
+            case .explicitFailure,
+                 .internalInvariant,
+                 .invocation,
+                 .loop,
+                 .runtimeUnavailable,
+                 .timeout,
+                 .validation,
+                 .expectation,
+                 .wait:
+                return "Expected"
+            }
         }
 
         private static func diagnostic(_ failure: HeistFailureDetail) -> String {
