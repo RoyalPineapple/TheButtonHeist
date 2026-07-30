@@ -18,6 +18,35 @@ extension TheVault {
             let continuity: ScreenContinuity
         }
 
+        private struct PendingDepartureEvidence {
+            let timestamp: Date
+            let context: Observation.Context
+
+            init(snapshot: Observation.Snapshot) {
+                timestamp = snapshot.interface.timestamp
+                context = snapshot.context
+            }
+
+            func snapshot() -> Observation.Snapshot {
+                Observation.Snapshot(
+                    interface: Interface(timestamp: timestamp, tree: []),
+                    context: context
+                )
+            }
+        }
+
+        private enum ReplacementRequirement {
+            case newBaseline
+            case pendingDeparture(PendingDepartureEvidence)
+
+            var departureEvidence: PendingDepartureEvidence? {
+                guard case .pendingDeparture(let evidence) = self else {
+                    return nil
+                }
+                return evidence
+            }
+        }
+
         internal private(set) var history: Observation.History
         internal private(set) var currentSnapshot: Observation.Snapshot?
         internal private(set) var interfaceTree: InterfaceTree = .empty
@@ -26,7 +55,7 @@ extension TheVault {
         private var navigationAdmission: NavigationAdmission?
         private var admittedTripwireSignal: TheTripwire.TripwireSignal?
         private var notificationCursor = AccessibilityNotificationCursor.origin
-        private var replacementRequired = false
+        private var replacementRequirement: ReplacementRequirement?
         private var protectedHistoryIndex: Int?
 
         internal var current: Current? {
@@ -56,11 +85,28 @@ extension TheVault {
         }
 
         internal mutating func discardCurrentObservation() {
+            discardCurrentObservation(
+                requiring: replacementRequirement ?? .newBaseline
+            )
+        }
+
+        internal mutating func invalidateCurrentObservationForScreenChange() {
+            guard let currentSnapshot else { return }
+            discardCurrentObservation(
+                requiring: .pendingDeparture(
+                    PendingDepartureEvidence(snapshot: currentSnapshot)
+                )
+            )
+        }
+
+        private mutating func discardCurrentObservation(
+            requiring requirement: ReplacementRequirement
+        ) {
             currentSnapshot = nil
             navigationAdmission = nil
             interfaceTree = .empty
             admittedTripwireSignal = nil
-            replacementRequired = true
+            replacementRequirement = requirement
         }
 
         internal mutating func invalidateCurrentAdmission() {
@@ -189,7 +235,7 @@ extension TheVault {
             }
 
             let continuity: ScreenContinuity
-            if replacementRequired {
+            if replacementRequirement != nil {
                 continuity = .replacement(.screenChangedNotification)
             } else {
                 continuity = ScreenClassifier.classify(
@@ -209,10 +255,13 @@ extension TheVault {
                 Observation.Notification(text: $0.text, element: $0.element)
                     .map(Observation.Event.notification)
             }
+            let departureEvidence = replacementRequirement?.departureEvidence
+                ?? currentSnapshot.map { PendingDepartureEvidence(snapshot: $0) }
             let events = Self.events(
                 notificationEvents: notificationEvents,
                 admittedNotifications: admittedNotifications,
                 currentSnapshot: currentSnapshot,
+                departureEvidence: departureEvidence,
                 snapshot: snapshot,
                 continuity: continuity,
                 geometryTolerance: admission.geometryTolerance
@@ -244,7 +293,7 @@ extension TheVault {
                 scopedScreenChangedSequence,
                 admission.notifications.scopedScreenChangedThrough
             )
-            next.replacementRequired = false
+            next.replacementRequirement = nil
             next.admittedTripwireSignal = admission.tripwireSignal
             self = next
             return Observation.Publication(
@@ -284,19 +333,20 @@ extension TheVault {
             notificationEvents: [Observation.Event],
             admittedNotifications: [Observation.AdmittedNotification],
             currentSnapshot: Observation.Snapshot?,
+            departureEvidence: PendingDepartureEvidence?,
             snapshot: Observation.Snapshot,
             continuity: ScreenContinuity,
             geometryTolerance: CGFloat
         ) -> [Observation.Event] {
             if continuity.isReplacement {
-                let departure = Observation.Snapshot(
-                    interface: Interface(
-                        timestamp: currentSnapshot?.interface.timestamp
-                            ?? snapshot.interface.timestamp,
-                        tree: []
-                    ),
-                    context: currentSnapshot?.context ?? .empty
-                )
+                let departure = departureEvidence?.snapshot()
+                    ?? Observation.Snapshot(
+                        interface: Interface(
+                            timestamp: snapshot.interface.timestamp,
+                            tree: []
+                        ),
+                        context: .empty
+                    )
                 return notificationEvents + [
                     .elementsChanged(departure),
                     .screenChanged(ScreenFacts(

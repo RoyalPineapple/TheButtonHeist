@@ -293,7 +293,7 @@ extension Observation.Stream {
               vault.accessibilityNotifications.latestScopedScreenChangedSequence
               > state.scopedScreenChangedSequence
         else { return }
-        discardCurrentObservation()
+        state.invalidateCurrentObservationForScreenChange()
     }
 
     /// Admits the tree as it stands right now.

@@ -175,12 +175,12 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertTrue(bus.checkpoint(after: .origin, selection: .all).events.isEmpty)
     }
 
-    func testActiveActionWindowRetainsMoreThanAmbientLimitUntilCycleAcknowledgment() throws {
+    func testNotificationStormRetainsScopedEvidenceAndBoundsAmbientOwnership() throws {
         let bus = AccessibilityNotificationBus()
         let action = bus.beginActionWindow()
-        defer { action.cancel() }
+        let scopedEventCount = 1_024
 
-        for index in 0..<65 {
+        for index in 0..<scopedEventCount {
             bus.recordForTesting(
                 code: 1008,
                 notificationData: CapturedAccessibilityNotificationPayload(
@@ -189,22 +189,43 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
                 associatedElement: .none
             )
         }
+        action.cancel()
+
+        for _ in 0..<65 {
+            bus.recordForTesting(
+                code: 1008,
+                notificationData: .none,
+                associatedElement: .none
+            )
+        }
 
         let retained = bus.checkpoint(after: .origin, selection: .all)
-        let retainedText = retained.events.compactMap { event -> String? in
-            guard case .string(let text) = event.notificationData else { return nil }
-            return text
-        }
-        XCTAssertNil(retained.gap)
-        XCTAssertEqual(retained.through.sequence, 65)
-        XCTAssertEqual(retained.events.map(\.sequence), Array(UInt64(1)...UInt64(65)))
+        let scoped = bus.checkpoint(after: .origin)
         XCTAssertEqual(
-            retainedText,
-            (0..<65).map { "Action announcement \($0)" }
+            retained.gap,
+            AccessibilityNotificationGap(
+                droppedThroughSequence: UInt64(scopedEventCount + 1)
+            )
+        )
+        XCTAssertEqual(retained.through.sequence, UInt64(scopedEventCount + 65))
+        XCTAssertEqual(scoped.events.count, scopedEventCount)
+        XCTAssertEqual(
+            scoped.events.map(\.sequence),
+            Array(UInt64(1)...UInt64(scopedEventCount))
+        )
+        XCTAssertTrue(scoped.events.allSatisfy { $0.provenance == .scoped })
+        XCTAssertNil(scoped.gap)
+        XCTAssertEqual(
+            retained.events.count(where: { $0.provenance == .ambient }),
+            64
         )
 
         let claim = try XCTUnwrap(bus.freezeObservationCycleClaim())
-        XCTAssertEqual(claim.batch.events.map(\.sequence), Array(UInt64(1)...UInt64(65)))
+        XCTAssertEqual(claim.batch.events.count, scopedEventCount + 64)
+        XCTAssertEqual(
+            claim.batch.events.prefix(scopedEventCount).map(\.sequence),
+            Array(UInt64(1)...UInt64(scopedEventCount))
+        )
         XCTAssertTrue(claim.acknowledgeObservationCycle())
         XCTAssertTrue(bus.checkpoint(after: .origin, selection: .all).events.isEmpty)
     }
@@ -693,8 +714,45 @@ final class ScreenChangeObservationAdmissionTests: ButtonHeistObservationTestCas
         XCTAssertNotNil(brains.vault.semanticObservationStream.current())
     }
 
-    private func commitOverview() async {
-        _ = await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+    func testAdmissionReadPreservesBaselineDepartureEvidenceForReplacementCapture() async throws {
+        let baseline = await commitOverview()
+        let actionWindow = brains.vault.accessibilityNotifications.beginActionWindow()
+        defer { actionWindow.cancel() }
+        recordScreenChanged()
+
+        XCTAssertNil(brains.vault.semanticObservationStream.admittedObservation(
+            scope: .visible,
+            after: nil
+        ))
+
+        let replacement = await brains.vault.semanticObservationStream
+            .commitVisibleObservationForTesting(
+                InterfaceObservation.makeForTests([
+                    InterfaceObservation.TestEntry(
+                        AccessibilityElement.make(label: "Checkout", traits: .header),
+                        heistId: "checkout_header"
+                    )
+                ])
+            )
+
+        guard case .elementsChanged(let departure) = replacement.events[0],
+              case .screenChanged = replacement.events[1],
+              case .elementsChanged(let arrival) = replacement.events[2]
+        else {
+            return XCTFail("Expected baseline departure, screen boundary, and replacement capture")
+        }
+        XCTAssertTrue(departure.interface.tree.isEmpty)
+        XCTAssertEqual(
+            departure.interface.timestamp,
+            baseline.current.snapshot.interface.timestamp
+        )
+        XCTAssertEqual(departure.context, baseline.current.snapshot.context)
+        XCTAssertEqual(arrival, replacement.current.snapshot)
+    }
+
+    @discardableResult
+    private func commitOverview() async -> Observation.Publication {
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             InterfaceObservation.makeForTests([
                 InterfaceObservation.TestEntry(
                     AccessibilityElement.make(label: "Overview", traits: .header),
