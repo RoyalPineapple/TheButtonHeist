@@ -99,6 +99,7 @@ final class VisibleObservationSourceFixture {
     }
 
     private var source: Source = .liveCapture
+    private var unavailableCapturesRemaining = 0
     private(set) var captureCount = 0
 
     var observation: InterfaceObservation? {
@@ -113,6 +114,10 @@ final class VisibleObservationSourceFixture {
 
     func capture(from vault: TheVault) -> InterfaceObservation? {
         captureCount += 1
+        if unavailableCapturesRemaining > 0 {
+            unavailableCapturesRemaining -= 1
+            return nil
+        }
         switch source {
         case .liveCapture:
             return TheVault.captureVisibleObservation(from: vault)
@@ -123,6 +128,10 @@ final class VisibleObservationSourceFixture {
 
     func useLiveCapture() {
         source = .liveCapture
+    }
+
+    func failNextCapture() {
+        unavailableCapturesRemaining = 1
     }
 }
 

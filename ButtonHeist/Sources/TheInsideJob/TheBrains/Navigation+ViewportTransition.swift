@@ -85,14 +85,10 @@ extension Navigation {
         case .moved:
             let current: TheVault.State.Current?
             if case .restoreVisualOrigin = intent {
-                current = await Task { @MainActor in
-                    await self.settledExplorationPage(
-                        deadline: nil,
-                        observationBoundary: .observationCycle,
-                        discoveryCommitPolicy: discoveryCommitPolicy,
-                        afterViewportMovement: true
-                    )
-                }.value
+                current = await observeRestoredViewport(
+                    boundary: observationBoundary,
+                    discoveryCommitPolicy: discoveryCommitPolicy
+                )
             } else {
                 current = await settledExplorationPage(
                     deadline: deadline,
@@ -121,6 +117,30 @@ extension Navigation {
         case .unavailable:
             return .unavailable(previousVisibleIds: previousVisibleIds)
         }
+    }
+
+    private func observeRestoredViewport(
+        boundary: SemanticObservationWaitBoundary,
+        discoveryCommitPolicy: DiscoveryCommitPolicy
+    ) async -> TheVault.State.Current? {
+        let effectiveBoundary: SemanticObservationWaitBoundary = Task.isCancelled
+            ? .observationCycle
+            : boundary
+        if let current = await settledExplorationPage(
+            deadline: nil,
+            observationBoundary: effectiveBoundary,
+            discoveryCommitPolicy: discoveryCommitPolicy,
+            afterViewportMovement: true
+        ) {
+            return current
+        }
+        guard effectiveBoundary != .observationCycle else { return nil }
+        return await settledExplorationPage(
+            deadline: nil,
+            observationBoundary: .observationCycle,
+            discoveryCommitPolicy: discoveryCommitPolicy,
+            afterViewportMovement: true
+        )
     }
 
     private func dispatchViewportMovement(
