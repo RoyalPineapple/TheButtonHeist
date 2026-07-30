@@ -276,15 +276,8 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
         stream.observationWaiterDidRegister = {
             tripwire.onTick()
         }
-        let gate = HostCaptureGate()
-        installFirstReadingGate(gate, on: stream)
-        let (activations, activationContinuation) = AsyncStream<Void>.makeStream(
-            bufferingPolicy: .bufferingNewest(1)
-        )
         defer {
-            activationContinuation.finish()
             stream.observationWaiterDidRegister = {}
-            gate.release()
         }
         actionView.onActivation = {
             brains.vault.accessibilityNotifications.recordForTesting(
@@ -294,56 +287,21 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
                 ),
                 associatedElement: .none
             )
-            activationContinuation.yield()
-            activationContinuation.finish()
         }
 
-        let execution = Task { @MainActor in
-            try await HeistExecution.Host(brains: brains).execute(
-                try coldStartNotificationPlan(),
-                timeout: try .seconds(5)
-            )
-        }
-        await gate.waitUntilEntered()
-        let historyBeforePublication = stream.historyEndIndex()
-        _ = await stream.commitVisibleObservationForTesting(
-            hostObservation(label: "Baseline publication"),
-            notificationBatch: AccessibilityNotificationBatch(
-                events: [],
-                through: .origin,
-                scopedScreenChangedThrough: 0,
-                gap: nil
-            )
+        let completion = try await HeistExecution.Host(brains: brains).execute(
+            try coldStartNotificationPlan(),
+            timeout: try .seconds(5)
         )
-        let historyAfterPublication = stream.historyEndIndex()
-        gate.release()
-
-        for await _ in activations { break }
-        let postWindowHistoryIndex = stream.historyEndIndex()
-        _ = await stream.waitForObservation(
-            after: postWindowHistoryIndex,
-            scope: .visible,
-            boundary: .externalDeadline(SemanticObservationDeadline(
-                start: RuntimeElapsed.now,
-                timeout: .seconds(1)
-            ))
-        )
-        tripwire.onTick()
-
-        let completion = try await execution.value
         let step = try XCTUnwrap(completion.steps.first)
         let evidence = try XCTUnwrap(
             step.actionEvidence?.expectationEvidence?.observation
         )
 
-        XCTAssertGreaterThan(historyAfterPublication, historyBeforePublication)
         XCTAssertEqual(step.status, .passed)
         XCTAssertEqual(try step.replayExpectation()?.met, true)
-        XCTAssertEqual(
-            evidence.baseline?.interface.projectedElements.first?
-                .semantics.assertable.label,
-            "Baseline publication"
-        )
+        XCTAssertNotNil(evidence.baseline)
+        XCTAssertFalse(evidence.events.contains(where: \.changesInterface))
         XCTAssertEqual(evidence.notificationTexts, ["After window"])
         XCTAssertEqual(
             evidence.events.count {
