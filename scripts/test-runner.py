@@ -228,22 +228,22 @@ def write_run_record(
     )
 
 
-def select_simulator(
+def prepare_simulator(
     mode: str,
-    suite: dict[str, object],
     requested_name: str | None,
     requested_runtime: str | None = None,
-) -> dict[str, str] | None:
-    if suite["platform"] != "ios":
-        return None
+) -> dict[str, str]:
     name = requested_name or os.environ.get("BUTTONHEIST_TEST_SIMULATOR_NAME")
     with tempfile.TemporaryDirectory() as directory:
         output = Path(directory) / "simulator.env"
+        ignored_github_environment = Path(directory) / "github.env"
         command = [
             sys.executable,
             str(SELECTOR),
             "--preferred-device",
             IOS_DEVICE,
+            "--github-env",
+            str(ignored_github_environment),
             "--github-output",
             str(output),
         ]
@@ -264,8 +264,9 @@ def select_simulator(
         "name": values["sim_name"],
         "device": values["sim_device_type"],
         "os": values["sim_os"],
+        "sdk": values["sim_sdk"],
     }
-    sdk_version = values["sim_sdk"]
+    sdk_version = simulator["sdk"]
     if VERSION_KEY(simulator["os"]) > VERSION_KEY(sdk_version):
         cleanup_failed = not delete_simulator(simulator)
         raise RuntimeError(
@@ -273,6 +274,17 @@ def select_simulator(
             + ("; cleanup failed to delete selected simulator" if cleanup_failed else "")
         )
     return simulator
+
+
+def select_simulator(
+    mode: str,
+    suite: dict[str, object],
+    requested_name: str | None,
+    requested_runtime: str | None = None,
+) -> dict[str, str] | None:
+    if suite["platform"] != "ios":
+        return None
+    return prepare_simulator(mode, requested_name, requested_runtime)
 
 
 def test_command(
@@ -360,6 +372,23 @@ def test_command(
     ]
 
 
+def simulator_environment(simulator: dict[str, str]) -> dict[str, str]:
+    return {
+        "SIM_UDID": simulator["udid"],
+        "SIM_NAME": simulator["name"],
+        "SIM_DEVICE_TYPE": simulator["device"],
+        "SIM_OS": simulator["os"],
+        "SIM_SDK": simulator["sdk"],
+    }
+
+
+def publish_environment(values: dict[str, str]) -> None:
+    os.environ.update(values)
+    if os.environ.get("GITHUB_ENV"):
+        with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as output:
+            output.writelines(f"{key}={value}\n" for key, value in values.items())
+
+
 def publish(paths: dict[str, Path], simulator: dict[str, str] | None) -> None:
     values = {
         "BUTTONHEIST_TEST_RESULT_BUNDLE": str(paths["result_bundle"]),
@@ -368,18 +397,8 @@ def publish(paths: dict[str, Path], simulator: dict[str, str] | None) -> None:
         "BUTTONHEIST_TEST_DERIVED_DATA": str(paths["derived"]),
     }
     if simulator:
-        values.update(
-            {
-                "SIM_UDID": simulator["udid"],
-                "SIM_NAME": simulator["name"],
-                "SIM_DEVICE_TYPE": simulator["device"],
-                "SIM_OS": simulator["os"],
-            }
-        )
-    os.environ.update(values)
-    if os.environ.get("GITHUB_ENV"):
-        with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as output:
-            output.writelines(f"{key}={value}\n" for key, value in values.items())
+        values.update(simulator_environment(simulator))
+    publish_environment(values)
 
 
 def collect(
@@ -591,6 +610,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "build-for-testing",
             "test-without-building",
             "collect",
+            "prepare-simulator",
             "cleanup",
             "catalog",
         ),
@@ -609,6 +629,20 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     if args.mode == "catalog":
         if args.suites or args.focus:
             raise ValueError("catalog does not accept suites or focuses")
+        return args
+    if args.mode == "prepare-simulator":
+        if args.suites or args.focus:
+            raise ValueError("prepare-simulator does not accept suites or focuses")
+        if not args.simulator_name:
+            raise ValueError("prepare-simulator requires --simulator-name")
+        if args.test:
+            raise ValueError("prepare-simulator does not accept --test")
+        if args.retain_simulator:
+            raise ValueError("prepare-simulator does not accept --retain-simulator")
+        if args.install_dependencies:
+            raise ValueError(
+                "prepare-simulator does not accept --install-dependencies"
+            )
         return args
     if args.mode == "cleanup":
         if args.suites or args.focus:
@@ -645,6 +679,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     if args.mode == "catalog":
         print(json.dumps(catalog_manifest(), indent=2, sort_keys=False))
+        return 0
+    if args.mode == "prepare-simulator":
+        simulator = prepare_simulator(
+            args.mode,
+            args.simulator_name,
+            args.simulator_runtime,
+        )
+        try:
+            publish_environment(simulator_environment(simulator))
+        except BaseException:
+            delete_simulator(simulator)
+            raise
         return 0
     if args.mode == "cleanup":
         name = (

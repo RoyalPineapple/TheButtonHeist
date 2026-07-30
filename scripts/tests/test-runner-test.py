@@ -16,6 +16,7 @@ SIMULATOR = {
     "name": "test-simulator",
     "device": "iPhone 16 Pro",
     "os": "26.3",
+    "sdk": "26.5",
 }
 SELECTOR_OUTPUT = (
     "sim_udid=TEST-UDID\nsim_name=test-simulator\n"
@@ -83,6 +84,48 @@ class TestRunnerTests(unittest.TestCase):
             "26.3",
         ])
         self.assertEqual(args.simulator_runtime, "26.3")
+
+    def test_prepare_simulator_requires_one_explicit_name_and_no_suite(self) -> None:
+        args = RUNNER["parse_args"]([
+            "prepare-simulator",
+            "--simulator-name",
+            "buttonheist-ci-adversarial-123-1",
+            "--simulator-runtime",
+            "26.3",
+        ])
+
+        self.assertEqual(args.suites, [])
+        self.assertEqual(
+            args.simulator_name,
+            "buttonheist-ci-adversarial-123-1",
+        )
+        self.assertEqual(args.simulator_runtime, "26.3")
+        with self.assertRaisesRegex(
+            ValueError,
+            "prepare-simulator requires --simulator-name",
+        ):
+            RUNNER["parse_args"](["prepare-simulator"])
+        with self.assertRaisesRegex(
+            ValueError,
+            "prepare-simulator does not accept suites",
+        ):
+            RUNNER["parse_args"]([
+                "prepare-simulator",
+                "TheInsideJobLogicTests",
+                "--simulator-name",
+                "buttonheist-ci-adversarial-123-1",
+            ])
+        with self.assertRaisesRegex(
+            ValueError,
+            "prepare-simulator does not accept --test",
+        ):
+            RUNNER["parse_args"]([
+                "prepare-simulator",
+                "--simulator-name",
+                "buttonheist-ci-adversarial-123-1",
+                "--test",
+                "AnyTarget/AnySuite/anyMethod",
+            ])
 
     def test_arguments_preserve_arbitrary_test_identifiers_without_selection_api(self) -> None:
         identifier = "AnyTarget/AnySuite/anyMethod"
@@ -194,6 +237,38 @@ class TestRunnerTests(unittest.TestCase):
 
         delete.assert_called_once()
         self.assertEqual(delete.call_args.args[0]["udid"], "TOO-NEW")
+
+    def test_prepare_simulator_publishes_the_resolved_ci_environment(self) -> None:
+        prepare = mock.Mock(return_value=SIMULATOR)
+        publish = mock.Mock()
+        with mock.patch.dict(
+            RUNNER["main"].__globals__,
+            {
+                "prepare_simulator": prepare,
+                "publish_environment": publish,
+            },
+        ):
+            status = RUNNER["main"]([
+                "prepare-simulator",
+                "--simulator-name",
+                "buttonheist-ci-adversarial-123-1",
+            ])
+
+        self.assertEqual(status, 0)
+        prepare.assert_called_once_with(
+            "prepare-simulator",
+            "buttonheist-ci-adversarial-123-1",
+            None,
+        )
+        publish.assert_called_once_with(
+            {
+                "SIM_UDID": "TEST-UDID",
+                "SIM_NAME": "test-simulator",
+                "SIM_DEVICE_TYPE": "iPhone 16 Pro",
+                "SIM_OS": "26.3",
+                "SIM_SDK": "26.5",
+            }
+        )
 
     def test_focus_expansion_merges_tests_per_suite_without_duplicates(self) -> None:
         selected = RUNNER["focus_runs"]([

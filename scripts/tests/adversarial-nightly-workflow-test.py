@@ -26,6 +26,33 @@ class AdversarialNightlyWorkflowTests(unittest.TestCase):
         self.assertEqual(WORKFLOW.count("if: failure()"), 2)
         self.assertNotIn("git submodule update", WORKFLOW)
 
+    def test_runner_owns_named_simulator_preparation_and_cleanup(self) -> None:
+        simulator_name = (
+            "buttonheist-ci-adversarial-${{ github.run_id }}-"
+            "${{ github.run_attempt }}"
+        )
+        prepare = (
+            "scripts/test-runner.py prepare-simulator \\\n"
+            '            --simulator-name "$BUTTONHEIST_TEST_SIMULATOR_NAME"'
+        )
+        cleanup = (
+            'run: scripts/test-runner.py cleanup --simulator-name '
+            '"$BUTTONHEIST_TEST_SIMULATOR_NAME"'
+        )
+
+        self.assertEqual(
+            WORKFLOW.count(
+                f"BUTTONHEIST_TEST_SIMULATOR_NAME: {simulator_name}"
+            ),
+            1,
+        )
+        self.assertEqual(WORKFLOW.count(prepare), 1)
+        self.assertEqual(WORKFLOW.count(cleanup), 1)
+        self.assertLess(WORKFLOW.index(prepare), WORKFLOW.index(cleanup))
+        cleanup_step = WORKFLOW[WORKFLOW.index("- name: Clean up adversarial simulator"):]
+        self.assertIn("if: always()", cleanup_step)
+        self.assertNotIn("select-ios-ci-simulator.py", WORKFLOW)
+
 
 if __name__ == "__main__":
     unittest.main()
