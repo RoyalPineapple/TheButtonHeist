@@ -8,7 +8,7 @@ extension HeistExecution.Machine {
     internal mutating func begin(
         wait step: WaitStep,
         context: HeistExecution.StepContext
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         let predicate: HeistExecution.Predicate
         do {
             predicate = try HeistExecution.Predicate(
@@ -32,13 +32,11 @@ extension HeistExecution.Machine {
             context: context,
             phase: .beginningObservation
         ))
-        return .pending(.perform(
-            .beginObservation(
-                id,
-                HeistExecution.ObservationRequest(
-                    scope: predicate.observationScope,
-                    timeout: timeout
-                )
+        return .perform(.beginObservation(
+            id,
+            HeistExecution.ObservationRequest(
+                scope: predicate.observationScope,
+                timeout: timeout
             )
         ))
     }

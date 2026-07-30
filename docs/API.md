@@ -268,8 +268,8 @@ result. Events and snapshots carry no cursors, operation identity, or replay
 state, and callers cannot supply a temporal boundary.
 
 One internal `HeistExecution.Machine` advances the complete heist. Its returned
-state is either `.pending(.perform(request))`, `.pending(.wait)`, or
-`.complete(completion)`. The MainActor host performs the typed capture,
+decision is either `.perform(request)`, `.wait`, or `.complete(completion)`.
+The MainActor host performs the typed capture,
 dispatch, exploration, or screenshot request and feeds its typed outcome back
 to the machine. Actions, waits, invocation expectations, loops, and conditional
 selection are private machine progress rather than separate executors.

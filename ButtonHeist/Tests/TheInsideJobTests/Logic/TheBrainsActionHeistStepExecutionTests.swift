@@ -94,26 +94,26 @@ final class HeistMachineStepExecutionTests: XCTestCase {
                 baseline: nil
             )).singleDispatchRequest
         )
-        guard case .pending(.wait) = machine.advance(.observationBegan(
+        guard case .wait = machine.advance(.observationBegan(
             observation.id,
             baseline: makeTestObservationSnapshot(labels: ["Late"])
         )) else {
             return XCTFail("A duplicate observation receipt must be ignored")
         }
 
-        guard case .pending(.wait) = machine.advance(.dispatchCompleted(
+        guard case .wait = machine.advance(.dispatchCompleted(
             HeistExecution.RequestID(rawValue: dispatchRequest.id.rawValue + 1),
             .success(payload: .dismiss)
         )) else {
             return XCTFail("A stale dispatch completion must be ignored")
         }
-        guard case .pending(.wait) = machine.advance(.dispatchCompleted(
+        guard case .wait = machine.advance(.dispatchCompleted(
             dispatchRequest.id,
             .success(payload: .dismiss)
         )) else {
             return XCTFail("The admitted dispatch completion must await settlement")
         }
-        guard case .pending(.wait) = machine.advance(.dispatchCompleted(
+        guard case .wait = machine.advance(.dispatchCompleted(
             dispatchRequest.id,
             .failure(.dismiss, message: "duplicate")
         )) else {
@@ -212,7 +212,7 @@ final class HeistMachineStepExecutionTests: XCTestCase {
             failureCaptureMode: .raw
         )
 
-        guard case .pending(.perform(let request)) = machine.start(),
+        guard case .perform(let request) = machine.start(),
               case let .captureFailureScreenshot(
                   id,
                   failedPath: failedPath,
@@ -222,29 +222,19 @@ final class HeistMachineStepExecutionTests: XCTestCase {
         }
         XCTAssertEqual(failedPath.description, "$.body[0]")
 
-        let screenshot = HeistResultFixture.action(
-            path: "$.body[0].failure.actions[0]",
-            command: .takeScreenshot,
-            result: .success(payload: .screenshot(nil))
+        let screenshot = ScreenPayload(
+            pngData: "png",
+            width: 1,
+            height: 1
         )
         guard case .complete(let completion) = machine.advance(
-            .failureScreenshotCaptured(id, screenshot)
+            .failureScreenshotCaptured(id, .captured(screenshot))
         ) else {
             return XCTFail("The screenshot completion must finish the same machine")
         }
-        XCTAssertEqual(
-            completion.steps.map(\.kind),
-            [HeistExecutionStepKind.fail, .action]
-        )
-        XCTAssertEqual(
-            completion.steps.map(\.status),
-            [HeistExecutionStepStatus.failed, .passed]
-        )
-        XCTAssertEqual(completion.steps.last?.actionCommand, .takeScreenshot)
-        XCTAssertEqual(
-            completion.steps.last?.path.description,
-            "$.body[0].failure.actions[0]"
-        )
+        XCTAssertEqual(completion.steps.map(\.kind), [.fail])
+        XCTAssertEqual(completion.steps.map(\.status), [.failed])
+        XCTAssertEqual(completion.failureCapture, .captured(screenshot))
         XCTAssertEqual(completion.abortedAtPath, completion.steps.first?.path)
     }
 }
@@ -280,9 +270,9 @@ private extension HeistExecution.MainActorRequest {
     }
 }
 
-extension HeistExecution.State {
+extension HeistExecution.Decision {
     var singleBeginObservationRequest: BeginObservationRequest? {
-        guard case .pending(.perform(let action)) = self,
+        guard case .perform(let action) = self,
               case .beginObservation(let id, let request) = action else {
             return nil
         }
@@ -290,7 +280,7 @@ extension HeistExecution.State {
     }
 
     var singleDispatchRequest: DispatchRequest? {
-        guard case .pending(.perform(let request)) = self,
+        guard case .perform(let request) = self,
               case .dispatch(let id, _) = request else {
             return nil
         }

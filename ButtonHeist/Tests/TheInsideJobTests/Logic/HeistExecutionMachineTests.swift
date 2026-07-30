@@ -10,7 +10,7 @@ import XCTest
 @_spi(ButtonHeistInternals) @testable import TheScore
 
 final class HeistExecutionMachineTests: XCTestCase {
-    func testMachineVocabularyIsPendingPerformPendingWaitOrComplete() throws {
+    func testMachineVocabularyIsPerformWaitOrComplete() throws {
         let plan = try HeistPlan(body: [
             .wait(WaitStep(
                 predicate: .notification("Saved"),
@@ -19,12 +19,12 @@ final class HeistExecutionMachineTests: XCTestCase {
         ])
         var machine = try HeistExecution.Machine(plan: plan)
 
-        guard case .pending(.perform(let request)) = machine.start(),
+        guard case .perform(let request) = machine.start(),
               case .beginObservation = request else {
             return XCTFail("A wait must begin one observation")
         }
 
-        guard case .pending(.wait) = machine.advance(.observationBegan(
+        guard case .wait = machine.advance(.observationBegan(
             HeistExecution.RequestID(rawValue: 1),
             baseline: nil
         )) else {
@@ -73,7 +73,7 @@ final class HeistExecutionMachineTests: XCTestCase {
         let state = machine.start()
         let request = try XCTUnwrap(state.singleSnapshotRequest)
 
-        guard case .pending(.wait) = machine.advance(.currentSnapshot(
+        guard case .wait = machine.advance(.currentSnapshot(
             HeistExecution.RequestID(rawValue: request.id.rawValue + 1),
             makeTestObservationSnapshot(labels: ["Home"])
         )) else {
@@ -118,37 +118,37 @@ final class HeistExecutionMachineTests: XCTestCase {
         ])
         var machine = try HeistExecution.Machine(plan: plan)
 
-        guard case .pending(.perform(let beginRequest)) = machine.start(),
+        guard case .perform(let beginRequest) = machine.start(),
               case .beginObservation(let id, _) = beginRequest else {
             return XCTFail("The wait must begin one observation")
         }
-        guard case .pending(.perform(let firstExploration)) = machine.advance(
+        guard case .perform(let firstExploration) = machine.advance(
             .observationBegan(id, baseline: makeTestObservationSnapshot(labels: []))
         ),
               case .explore(id, _) = firstExploration else {
             return XCTFail("An unresolved element wait must explore")
         }
 
-        guard case .pending(.perform(let restartedExploration)) = machine.advance(
+        guard case .perform(let restartedExploration) = machine.advance(
             .viewportExited(id, .superseded)
         ),
               case .explore(id, _) = restartedExploration else {
             return XCTFail("A screen replacement must restart the unfinished discovery")
         }
-        guard case .pending(.wait) = machine.advance(.viewportExited(id, .restored)) else {
+        guard case .wait = machine.advance(.viewportExited(id, .restored)) else {
             return XCTFail("A completed unmatched discovery must wait for new evidence")
         }
 
-        guard case .pending(.perform(let eventExploration)) = machine.advance(
+        guard case .perform(let eventExploration) = machine.advance(
             .event(.elementsChanged(makeTestObservationSnapshot(labels: ["Other"])))
         ),
               case .explore(id, _) = eventExploration else {
             return XCTFail("A substantive unmatched event must request one new discovery")
         }
-        guard case .pending(.wait) = machine.advance(.viewportExited(id, .restored)) else {
+        guard case .wait = machine.advance(.viewportExited(id, .restored)) else {
             return XCTFail("The second completed discovery must return to waiting")
         }
-        guard case .pending(.wait) = machine.advance(.event(.noChange)) else {
+        guard case .wait = machine.advance(.event(.noChange)) else {
             return XCTFail("Stillness must not start another discovery")
         }
     }
@@ -161,17 +161,17 @@ final class HeistExecutionMachineTests: XCTestCase {
             )),
         ])
         var machine = try HeistExecution.Machine(plan: plan)
-        guard case .pending(.perform(let beginRequest)) = machine.start(),
+        guard case .perform(let beginRequest) = machine.start(),
               case .beginObservation(let id, _) = beginRequest else {
             return XCTFail("The wait must begin one observation")
         }
-        guard case .pending(.wait) = machine.advance(.observationBegan(
+        guard case .wait = machine.advance(.observationBegan(
             id,
             baseline: makeTestObservationSnapshot(labels: ["Target"])
         )) else {
             return XCTFail("Current visible truth must satisfy existence without discovery")
         }
-        guard case .pending(.perform(let request)) = machine.advance(.event(.noChange)),
+        guard case .perform(let request) = machine.advance(.event(.noChange)),
               case .finishObservation = request else {
             return XCTFail("Settled current truth must finish the wait")
         }
@@ -297,10 +297,10 @@ struct HeistMachineTestDriver {
             switch state {
             case .complete(let completion):
                 return completion
-            case .pending(.perform(let request)):
+            case .perform(let request):
                 requests.append(request)
                 state = fulfill(request)
-            case .pending(.wait):
+            case .wait:
                 if !script.events.isEmpty {
                     let event = script.events.removeFirst()
                     record(event)
@@ -326,7 +326,7 @@ struct HeistMachineTestDriver {
 
     private mutating func fulfill(
         _ request: HeistExecution.MainActorRequest
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         switch request {
         case .currentSnapshot(let id, _):
             let snapshot = nextSnapshot()
@@ -355,7 +355,7 @@ struct HeistMachineTestDriver {
             _
         ):
             guard let start = observationStarts[observationID] else {
-                return machine.state
+                return machine.decision
             }
             return machine.advance(.observationFinished(
                 source: .request(requestID),
@@ -366,7 +366,10 @@ struct HeistMachineTestDriver {
             ))
 
         case .captureFailureScreenshot(let id, _, _):
-            return machine.advance(.failureScreenshotCaptured(id, nil))
+            return machine.advance(.failureScreenshotCaptured(
+                id,
+                .unavailable(kind: .actionFailed, message: "capture unavailable")
+            ))
         }
     }
 
@@ -408,9 +411,9 @@ enum MachineDriverFailure: Error {
     case transitionLimitExceeded
 }
 
-extension HeistExecution.State {
+extension HeistExecution.Decision {
     var singleSnapshotRequest: SnapshotRequest? {
-        guard case .pending(.perform(let request)) = self,
+        guard case .perform(let request) = self,
               case .currentSnapshot(let id, let scope) = request else {
             return nil
         }

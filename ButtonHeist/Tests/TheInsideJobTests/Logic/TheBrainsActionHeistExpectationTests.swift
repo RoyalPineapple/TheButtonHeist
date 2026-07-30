@@ -178,16 +178,16 @@ final class HeistMachineExpectationTests: XCTestCase {
             )),
         ])
         var machine = try HeistExecution.Machine(plan: plan)
-        guard case .pending(.perform(let beginRequest)) = machine.start(),
+        guard case .perform(let beginRequest) = machine.start(),
               case .beginObservation(let id, _) = beginRequest else {
             return XCTFail("The wait must begin one observation")
         }
         let baseline = makeTestObservationSnapshot(labels: [])
-        guard case .pending(.wait) = machine.advance(
+        guard case .wait = machine.advance(
             .observationBegan(id, baseline: baseline)
         ),
-              case .pending(.wait) = machine.advance(.event(heistNotification("Saved"))),
-              case .pending(.perform(let firstFinish)) = machine.advance(.event(.noChange)),
+              case .wait = machine.advance(.event(heistNotification("Saved"))),
+              case .perform(let firstFinish) = machine.advance(.event(.noChange)),
               case .finishObservation(
                 let firstFinishID,
                 let firstObservationID,
@@ -200,7 +200,7 @@ final class HeistMachineExpectationTests: XCTestCase {
             machine.activeLeaf?.admits(.request(firstFinishID)) == true
         )
 
-        guard case .pending(.wait) = machine.advance(
+        guard case .wait = machine.advance(
             .event(.elementsChanged(makeTestObservationSnapshot(labels: ["Late Change"])))
         ) else {
             return XCTFail("A final-capture change must reopen observation")
@@ -210,7 +210,7 @@ final class HeistMachineExpectationTests: XCTestCase {
             machine.activeLeaf?.admits(.request(firstFinishID)) == true
         )
 
-        guard case .pending(.perform(let secondFinish)) = machine.advance(
+        guard case .perform(let secondFinish) = machine.advance(
             .event(.noChange)
         ),
               case .finishObservation(
@@ -243,7 +243,7 @@ final class HeistMachineExpectationTests: XCTestCase {
             baseline: baseline,
             current: lateChange
         )
-        guard case .pending(.wait) = machine.advance(.observationFinished(
+        guard case .wait = machine.advance(.observationFinished(
             source: .request(firstFinishID),
             observationID: id,
             evidence: evidence,

@@ -386,7 +386,7 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
         )
     }
 
-    func testWholeHeistTimeoutStillCapturesAndAdmitsFailureScreenshot() async throws {
+    func testWholeHeistTimeoutCapturesFailureScreenshotOutsideExecutionSteps() async throws {
         let source = HostVisibleObservationSource(hostObservation(label: "Home"))
         let brains = TheBrains(
             tripwire: TheTripwire(),
@@ -405,14 +405,12 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
 
         let completion = try await execution.value
         let failedStep = try XCTUnwrap(completion.steps.first)
-        let screenshotStep = try XCTUnwrap(completion.steps.last)
 
+        XCTAssertEqual(completion.steps.count, 1)
         XCTAssertEqual(failedStep.status, .failed)
         XCTAssertEqual(failedStep.failure?.category, .timeout)
-        XCTAssertEqual(screenshotStep.actionCommand, .takeScreenshot)
-        XCTAssertEqual(screenshotStep.reportActionResult?.method, .takeScreenshot)
+        XCTAssertNotNil(completion.failureCapture?.payload)
         XCTAssertEqual(completion.abortedAtPath, failedStep.path)
-        XCTAssertNotEqual(screenshotStep.path, completion.abortedAtPath)
     }
 
     func testFailureScreenshotBoundaryStopsAfterOneUnavailableObservationCycle() async {

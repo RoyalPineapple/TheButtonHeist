@@ -8,14 +8,10 @@ import ThePlans
 internal enum HeistExecution {}
 
 extension HeistExecution {
-    internal enum State {
-        case pending(Action)
-        case complete(Completion)
-    }
-
-    internal enum Action {
+    internal enum Decision {
         case perform(MainActorRequest)
         case wait
+        case complete(Completion)
     }
 
     internal enum MainActorRequest {
@@ -48,11 +44,12 @@ extension HeistExecution {
             outcome: LeafOutcome,
             timing: HeistExpectationTiming
         )
-        case failureScreenshotCaptured(RequestID, HeistExecutionStepResult?)
+        case failureScreenshotCaptured(RequestID, HeistFailureCapture)
     }
 
     internal struct Completion {
         internal let steps: [HeistExecutionStepResult]
+        internal let failureCapture: HeistFailureCapture?
         internal let abortedAtPath: HeistExecutionPath?
     }
 

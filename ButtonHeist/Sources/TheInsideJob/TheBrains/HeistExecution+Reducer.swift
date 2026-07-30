@@ -10,7 +10,7 @@ extension HeistExecution {
             case action(ActionStep)
         }
 
-        private enum Progress {
+        private enum State {
             case ready
             case running
             case awaitingFailureScreenshot(
@@ -27,7 +27,7 @@ extension HeistExecution {
         internal var activeLeaf: ActiveLeaf?
         internal var rootChildren = HeistExecutedChildren.empty
         internal var nextRequestID: UInt64 = 0
-        private var progress = Progress.ready
+        private var state = State.ready
 
         internal init(
             plan: HeistPlan,
@@ -67,9 +67,9 @@ extension HeistExecution {
             continuations = []
         }
 
-        internal mutating func start() -> State {
-            guard case .ready = progress else { return state }
-            progress = .running
+        internal mutating func start() -> Decision {
+            guard case .ready = state else { return decision }
+            state = .running
             switch root {
             case .plan:
                 return advanceExecution()
@@ -82,35 +82,32 @@ extension HeistExecution {
             }
         }
 
-        internal mutating func advance(_ input: Input) -> State {
-            switch progress {
+        internal mutating func advance(_ input: Input) -> Decision {
+            switch state {
             case .running:
                 if activeLeaf != nil {
                     return advanceActiveLeaf(input)
                 }
                 return advanceControlFlow(input)
             case .awaitingFailureScreenshot(let expectedID, let children):
-                guard case .failureScreenshotCaptured(let id, let screenshot) = input,
+                guard case .failureScreenshotCaptured(let id, let failureCapture) = input,
                       id == expectedID else {
-                    return state
-                }
-                var steps = children.values
-                if let screenshot {
-                    steps.append(screenshot)
+                    return decision
                 }
                 return complete(
-                    steps: steps,
+                    steps: children.values,
+                    failureCapture: failureCapture,
                     abortedAtPath: children.abortedAtPath
                 )
             case .ready, .complete:
-                return state
+                return decision
             }
         }
 
-        internal var state: State {
-            switch progress {
+        internal var decision: Decision {
+            switch state {
             case .ready, .running, .awaitingFailureScreenshot:
-                .pending(.wait)
+                .wait
             case .complete(let completion):
                 .complete(completion)
             }
@@ -123,7 +120,7 @@ extension HeistExecution {
 
         internal mutating func finish(
             children: HeistExecutedChildren
-        ) -> State {
+        ) -> Decision {
             rootChildren = children
             guard let failedPath = children.abortedAtPath,
                   let failureCaptureMode else {
@@ -133,28 +130,28 @@ extension HeistExecution {
                 )
             }
             let id = nextID()
-            progress = .awaitingFailureScreenshot(
+            state = .awaitingFailureScreenshot(
                 id: id,
                 children: children
             )
-            return .pending(.perform(
-                .captureFailureScreenshot(
-                    id,
-                    failedPath: failedPath,
-                    mode: failureCaptureMode
-                )
+            return .perform(.captureFailureScreenshot(
+                id,
+                failedPath: failedPath,
+                mode: failureCaptureMode
             ))
         }
 
         private mutating func complete(
             steps: [HeistExecutionStepResult],
+            failureCapture: HeistFailureCapture? = nil,
             abortedAtPath: HeistExecutionPath?
-        ) -> State {
+        ) -> Decision {
             let completion = Completion(
                 steps: steps,
+                failureCapture: failureCapture,
                 abortedAtPath: abortedAtPath
             )
-            progress = .complete(completion)
+            state = .complete(completion)
             return .complete(completion)
         }
     }
@@ -167,7 +164,7 @@ extension HeistExecution.Machine {
     /// Leaf and control-flow extensions implement the exhaustive frame
     /// transitions. This root owns the loop and therefore prevents another
     /// executor from becoming a competing source of heist progress.
-    internal mutating func advanceExecution() -> HeistExecution.State {
+    internal mutating func advanceExecution() -> HeistExecution.Decision {
         guard !continuations.isEmpty else {
             return finish(children: rootChildren)
         }

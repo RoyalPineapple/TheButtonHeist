@@ -35,7 +35,7 @@ final class HeistMachineForEachTests: XCTestCase {
         var machine = try HeistExecution.Machine(plan: plan)
         let firstRequest = try XCTUnwrap(machine.start().singleSnapshotRequest)
 
-        guard case .pending(.wait) = machine.advance(.currentSnapshot(
+        guard case .wait = machine.advance(.currentSnapshot(
             HeistExecution.RequestID(rawValue: 0),
             snapshot
         )) else {

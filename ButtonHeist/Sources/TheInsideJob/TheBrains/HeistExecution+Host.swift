@@ -290,19 +290,19 @@ extension HeistExecution {
 
         private func advance(_ input: Input) {
             guard case .running(var session) = phase else { return }
-            let state = session.machine.advance(input)
+            let decision = session.machine.advance(input)
             phase = .running(session)
-            returnToDeadlineScope(state)
+            returnToDeadlineScope(decision)
         }
 
-        private func returnToDeadlineScope(_ state: State) {
+        private func returnToDeadlineScope(_ decision: Decision) {
             guard case .running(let session) = phase else { return }
             if let expiration = session.deadlines.expiration {
-                if case .complete(let completion) = state {
+                if case .complete(let completion) = decision {
                     resolve(.success(completion))
                     return
                 }
-                if case .pending(.perform(let request)) = state,
+                if case .perform(let request) = decision,
                    request.completesAfterDeadline {
                     performRequest(request, afterDeadline: true)
                     return
@@ -311,20 +311,20 @@ extension HeistExecution {
                 collectTerminalEvidence(expiration)
                 return
             }
-            interpret(state)
+            interpret(decision)
         }
 
-        private func interpret(_ state: State) {
+        private func interpret(_ decision: Decision) {
             guard case .running(var session) = phase else { return }
-            switch state {
+            switch decision {
             case .complete(let completion):
                 resolve(.success(completion))
 
-            case .pending(.wait):
+            case .wait:
                 phase = .running(session)
                 armDeadline()
 
-            case .pending(.perform(let request)):
+            case .perform(let request):
                 switch session.interaction {
                 case .idle:
                     phase = .running(session)
@@ -953,56 +953,21 @@ extension HeistExecution {
         }
 
         private func failureScreenshot(
-            failedPath: HeistExecutionPath,
+            failedPath _: HeistExecutionPath,
             mode: ScreenCaptureMode
-        ) async -> HeistExecutionStepResult? {
-            let result: ActionResult
+        ) async -> HeistFailureCapture {
             switch await brains.captureScreenPayload(
                 mode: mode,
                 observationBoundary: .observationCycle
             ) {
             case .success(let payload):
-                result = .success(
-                    payload: .screenshot(payload),
-                    message: "Captured screenshot "
-                        + "\(Int(payload.width))x\(Int(payload.height))"
-                )
+                return .captured(payload)
             case .failure(let failure):
-                result = .failure(
-                    payload: .screenshot(nil),
-                    failureKind: failure.actionFailureKind,
+                return .unavailable(
+                    kind: failure.actionFailureKind,
                     message: failure.message
                 )
             }
-
-            let command = HeistActionCommand.takeScreenshot
-            let evidence = HeistActionEvidence.completed(
-                result: result,
-                expectation: nil
-            )
-            let execution: HeistActionExecution
-            switch result.outcome {
-            case .success:
-                execution = .passed(
-                    command: command,
-                    evidence: .init(admitted: evidence)
-                )
-            case .failure:
-                execution = .failed(
-                    command: command,
-                    evidence: .init(admitted: evidence),
-                    failure: HeistFailureDetail(
-                        category: .action,
-                        contract: "failure screenshot action captures visible screen",
-                        observed: result.message ?? "screenshot action failed",
-                        expected: HeistActionCommandType.takeScreenshot.rawValue
-                    )
-                )
-            }
-            return .action(
-                path: failedPath.failureAction(at: 0),
-                execution: execution
-            )
         }
 
         private func cancel() {
