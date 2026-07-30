@@ -92,7 +92,8 @@ public extension HeistResult {
 
     /// Failure evidence for diagnostic rendering, not current semantic interface state.
     package var failureDiagnosticInterface: Interface? {
-        failureScreenshotPayload?.interface ?? observedInterfaceAtFailure
+        let interface = failureScreenshotPayload?.interface ?? observedInterfaceAtFailure
+        return interface?.projectedElements.isEmpty == false ? interface : nil
     }
 
     var failureScreenshotSummary: String? {
@@ -118,7 +119,7 @@ public extension HeistResult {
 
 public extension HeistExecutionStepResult {
     package var observedInterfaceAtStep: Interface? {
-        reportActionResult?.observationEvidence?.current?.interface
+        (actionEvidence?.result?.observationEvidence ?? waitEvidence?.observation)?.current?.interface
     }
 
     package var screenshotPayload: ScreenPayload? {

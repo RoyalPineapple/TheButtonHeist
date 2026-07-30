@@ -169,7 +169,6 @@ public extension Heist {
             self.failedStepPath = failedStep?.path ?? "$"
             self.failedStepKind = failedStep?.kind ?? .fail
             self.message = failedStep?.reportActionResult?.message
-                ?? failedStep?.reportFailureMessage
                 ?? failedStep?.reportMessage
                 ?? "heist failed"
             self.diagnostic = failedStep?.failure.map(Self.diagnostic)

@@ -42,7 +42,6 @@ final class ActionResultEvidenceContractTests: XCTestCase {
             (.scroll, .scroll),
             (.scrollToVisible, .scrollToVisible),
             (.scrollToEdge, .scrollToEdge),
-            (.wait, .wait),
         ]
 
         for (payload, method) in cases {
@@ -62,11 +61,11 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         for observation in observations {
             let results = [
                 ActionResult.success(
-                    payload: .wait,
+                    payload: .activate,
                     observation: observation
                 ),
                 ActionResult.failure(
-                    payload: .wait,
+                    payload: .activate,
                     failureKind: .timeout,
                     observation: observation
                 ),
@@ -130,7 +129,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
 
     func testFailureEvidenceRoundTripsWithExplicitAbsence() throws {
         let result = ActionResult.failure(
-            payload: .wait,
+            payload: .activate,
             failureKind: .timeout,
             message: "timed out",
         )
@@ -144,6 +143,20 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         XCTAssertNil(decoded.warning)
         XCTAssertNil(decoded.evidence.subjectEvidence)
         XCTAssertNil(decoded.evidence.timing)
+    }
+
+    func testLegacyWaitActionResultRoundTripsForReceiptCompatibility() throws {
+        let result = ActionResult.failure(
+            payload: .wait,
+            failureKind: .timeout,
+            message: "timed out"
+        )
+
+        let decoded = try JSONDecoder().decode(ActionResult.self, from: JSONEncoder().encode(result))
+
+        XCTAssertEqual(decoded, result)
+        XCTAssertEqual(decoded.method, .wait)
+        XCTAssertEqual(decoded.payload, .wait)
     }
 
     func testScreenActionHandlerIsSuccessEvidence() throws {

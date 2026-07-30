@@ -25,6 +25,8 @@ public enum ActionMethod: String, Codable, Sendable {
     case scroll
     case scrollToVisible
     case scrollToEdge
+    /// Legacy wire value retained for decoding historical action-result receipts.
+    /// Runtime wait evidence is reported directly and never constructs an `ActionResult`.
     case wait
 }
 

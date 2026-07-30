@@ -652,11 +652,11 @@ extension TheBrainsActionTests {
             await brains.executeHeistPlan(plan)
         }
         let heist = try execution.get()
-        let result = try XCTUnwrap(heist.steps.first?.reportActionResult)
+        let result = try XCTUnwrap(heist.steps.first)
 
-        XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(result.method, .wait)
-        XCTAssertEqual(result.outcome.failureKind, .accessibilityTreeUnavailable)
+        XCTAssertEqual(result.status, .failed)
+        XCTAssertNil(result.reportActionResult)
+        XCTAssertEqual(result.failure?.category, .runtimeUnavailable)
     }
 
     func testActionsExecuteIncrementFailsWhenSemanticTargetHasNoLiveGeometry() async throws {

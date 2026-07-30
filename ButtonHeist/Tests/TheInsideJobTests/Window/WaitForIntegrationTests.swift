@@ -94,7 +94,7 @@ final class WaitForIntegrationTests: XCTestCase {
         target: AccessibilityTarget,
         absent: Bool = false,
         timeout: WaitTimeout? = nil
-    ) async throws -> ActionResult? {
+    ) async throws -> HeistExecutionStepResult? {
         let predicate: AccessibilityPredicate = absent
             ? .missing(target)
             : .exists(target)
@@ -103,27 +103,25 @@ final class WaitForIntegrationTests: XCTestCase {
             predicate: waitTarget.predicate,
             timeout: waitTarget.resolvedTimeout
         )
-        return try await executeHeistStep(.wait(step))
+        return try await executeWaitStep(step)
     }
 
     private func waitFor(
         expectation: AccessibilityPredicate,
         timeout: Double? = nil
-    ) async -> ActionResult {
-        do {
-            let waitTimeout = try WaitTimeout.seconds(timeout ?? 5.0)
-            return try await executeHeistStep(.wait(WaitStep(
-                predicate: expectation,
-                timeout: waitTimeout
-            )))
-        } catch {
-            XCTFail("Could not execute wait plan: \(error)")
-            return .failure(
-                payload: .wait,
-                failureKind: .validationError,
-                message: String(describing: error)
-            )
-        }
+    ) async throws -> HeistExecutionStepResult {
+        let waitTimeout = try WaitTimeout.seconds(timeout ?? 5.0)
+        return try await executeWaitStep(WaitStep(
+            predicate: expectation,
+            timeout: waitTimeout
+        ))
+    }
+
+    private func executeWaitStep(_ step: WaitStep) async throws -> HeistExecutionStepResult {
+        let result = try await insideJob.brains.executeHeistPlan(
+            try HeistPlan(body: [.wait(step)])
+        ).get()
+        return try XCTUnwrap(result.steps.first, "Expected one wait result")
     }
 
     private func executeHeistStep(_ step: HeistStep) async throws -> ActionResult {
@@ -164,15 +162,42 @@ final class WaitForIntegrationTests: XCTestCase {
     private func assertPredicate(
         _ predicate: AccessibilityPredicate,
         isMet expected: Bool,
+        in result: HeistExecutionStepResult,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        try assertPredicate(
+            predicate,
+            isMet: expected,
+            in: XCTUnwrap(result.waitEvidence?.observation, file: file, line: line),
+            file: file,
+            line: line
+        )
+    }
+
+    private func assertPredicate(
+        _ predicate: AccessibilityPredicate,
+        isMet expected: Bool,
         in result: ActionResult,
         file: StaticString = #filePath,
         line: UInt = #line
     ) throws {
-        let evidence = try XCTUnwrap(
-            result.observationEvidence,
+        try assertPredicate(
+            predicate,
+            isMet: expected,
+            in: XCTUnwrap(result.observationEvidence, file: file, line: line),
             file: file,
             line: line
         )
+    }
+
+    private func assertPredicate(
+        _ predicate: AccessibilityPredicate,
+        isMet expected: Bool,
+        in evidence: Observation.Evidence,
+        file: StaticString,
+        line: UInt
+    ) throws {
         XCTAssertEqual(
             evidence.coverage,
             .complete,
@@ -245,7 +270,6 @@ final class WaitForIntegrationTests: XCTestCase {
         let result = try XCTUnwrap(response)
 
         XCTAssertTrue(result.outcome.isSuccess)
-        XCTAssertEqual(result.method, .wait)
         XCTAssertNil(result.outcome.failureKind)
         try assertPredicate(
             .exists(.label("WaitFor-AlreadyPresent")),
@@ -310,7 +334,6 @@ final class WaitForIntegrationTests: XCTestCase {
         )
         let result = try XCTUnwrap(response)
         XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.outcome.failureKind, .timeout)
         try assertPredicate(
             .exists(.label("WaitFor-Missing-Target")),
@@ -409,7 +432,6 @@ final class WaitForIntegrationTests: XCTestCase {
         let result = try XCTUnwrap(response)
 
         XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.outcome.failureKind, .timeout)
         try assertPredicate(
             .missing(.label("WaitFor-StillHere")),
@@ -467,7 +489,6 @@ final class WaitForIntegrationTests: XCTestCase {
         let result = try XCTUnwrap(response)
 
         XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.outcome.failureKind, .timeout)
         try assertPredicate(
             .exists(.label("WaitFor-Offscreen-StillHere")),
@@ -492,7 +513,6 @@ final class WaitForIntegrationTests: XCTestCase {
         let result = try XCTUnwrap(response)
 
         XCTAssertTrue(result.outcome.isSuccess)
-        XCTAssertEqual(result.method, .wait)
         XCTAssertNil(result.outcome.failureKind)
         try assertPredicate(
             .missing(.label("WaitFor-NeverExisted")),
@@ -518,14 +538,13 @@ final class WaitForIntegrationTests: XCTestCase {
             delayedLabel = self.addLabel("WaitForChange-Delayed")
             self.insideJob.brains.vault.semanticObservationStream.invalidateCurrentAdmission()
         }
-        let result = await waitFor(
+        let result = try await waitFor(
             expectation: .exists(.label("WaitForChange-Delayed")),
             timeout: 5.0
         )
         await mutationTask.value
 
         XCTAssertTrue(result.outcome.isSuccess)
-        XCTAssertEqual(result.method, .wait)
         try assertPredicate(
             .exists(.label("WaitForChange-Delayed")),
             isMet: true,
@@ -552,14 +571,13 @@ final class WaitForIntegrationTests: XCTestCase {
                 label.removeFromSuperview()
             }
         }
-        let result = await waitFor(
+        let result = try await waitFor(
             expectation: .missing(.label("WaitForChange-Removed")),
             timeout: 5.0
         )
         await mutationTask.value
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "missing wait message")
-        XCTAssertEqual(result.method, .wait)
         try assertPredicate(
             .missing(.label("WaitForChange-Removed")),
             isMet: true,
@@ -573,13 +591,12 @@ final class WaitForIntegrationTests: XCTestCase {
         let didObserveBaseline = await waitForVisibleObservation()
         XCTAssertTrue(didObserveBaseline)
 
-        let result = await waitFor(
+        let result = try await waitFor(
             expectation: .elementsChanged,
             timeout: 0.2
         )
 
         XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.outcome.failureKind, .timeout)
         try assertPredicate(.elementsChanged, isMet: false, in: result)
     }
@@ -588,12 +605,11 @@ final class WaitForIntegrationTests: XCTestCase {
         let label = addLabel("WaitForChange-ScreenChangedTimeout")
         defer { label.removeFromSuperview() }
 
-        let result = await waitFor(
+        let result = try await waitFor(
             expectation: .screenChanged,
             timeout: 0.2
         )
         XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.outcome.failureKind, .timeout)
         try assertPredicate(.screenChanged, isMet: false, in: result)
         let evidence = try XCTUnwrap(result.observationEvidence)
@@ -608,7 +624,7 @@ final class WaitForIntegrationTests: XCTestCase {
         label.accessibilityValue = "Ready"
         defer { label.removeFromSuperview() }
 
-        let result = await waitFor(
+        let result = try await waitFor(
             expectation: .elementsChanged([.updated(
                 .label("WaitForChange-UpdateOldValue"),
                 .value(before: "Loading", after: "Ready")
@@ -617,7 +633,6 @@ final class WaitForIntegrationTests: XCTestCase {
         )
 
         XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.outcome.failureKind, .timeout)
         try assertPredicate(
             .elementsChanged([.updated(
@@ -629,5 +644,31 @@ final class WaitForIntegrationTests: XCTestCase {
         )
     }
 
+}
+
+private extension HeistExecutionStepResult {
+    var outcome: ActionResultOutcome {
+        guard status != .passed else { return .success }
+        let kind: ActionFailure.Kind = switch failure?.category {
+        case .timeout: .timeout
+        case .runtimeUnavailable: .accessibilityTreeUnavailable
+        case .targetResolution: .elementNotFound
+        case .validation: .validationError
+        case .internalInvariant,
+             .action,
+             .expectation,
+             .wait,
+             .invocation,
+             .loop,
+             .explicitFailure,
+             .none:
+            .actionFailed
+        }
+        return .failure(kind)
+    }
+
+    var message: String? { reportMessage }
+
+    var observationEvidence: Observation.Evidence? { waitEvidence?.observation }
 }
 #endif

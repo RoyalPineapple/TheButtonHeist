@@ -135,6 +135,41 @@ import ThePlans
         #expect(report.failure?.detail.category == .timeout)
     }
 
+    @Test func reportProjectsWaitEvidenceWithoutAnActionResult() throws {
+        let predicate = AccessibilityPredicate.exists(.label("Done"))
+        let evidence = try expectationEvidence(
+            predicate: predicate,
+            current: makeTestObservationSnapshot(elements: [
+                makeTestHeistElement(label: "Done"),
+            ])
+        )
+        let step = HeistResultFixture.wait(evidence: evidence)
+
+        let report = HeistReport.project(result: HeistResultFixture.result(steps: [step]))
+        let node = try #require(report.nodes.first)
+        let replay = try evidence.replay()
+
+        #expect(step.reportActionResult == nil)
+        #expect(node.command == nil)
+        #expect(node.message == replay.actual ?? "matched")
+        #expect(node.expectation == replay)
+    }
+
+    @Test func failedWaitReportRetainsTimeoutClassificationWithoutAnActionResult() throws {
+        let step = HeistResultFixture.failedWait(failure: HeistFailureDetail(
+            category: .timeout,
+            contract: "wait predicate is met",
+            observed: "deadline expired"
+        ))
+
+        let report = HeistReport.project(result: HeistResultFixture.result(steps: [step]))
+        let node = try #require(report.nodes.first)
+
+        #expect(step.reportActionResult == nil)
+        #expect(node.failure?.actionKind == .timeout)
+        #expect(node.message == "deadline expired")
+    }
+
     @Test func cancelledTerminalCauseCannotReplayAsMatched() throws {
         let predicate = AccessibilityPredicate.exists(.label("Done"))
         let current = makeTestObservationSnapshot(elements: [
