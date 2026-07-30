@@ -100,6 +100,75 @@ extension ElementInflationProductTests {
         XCTAssertGreaterThan(fixture.scrollView.revealRequestCount, 0)
     }
 
+    func testRevealRollbackRestoresOriginalViewAfterSemanticContainerBecomesUnavailable() async throws {
+        let fixture = try installOffscreenActivationFixture(
+            identifier: "rollback_original_view",
+            label: "Rollback Original View"
+        )
+        _ = try await publishedVisibleObservation()
+        let transaction = ElementInflation.RevealTransaction(vault: brains.vault)
+        transaction.captureScrollableHierarchy()
+        fixture.scrollView.setContentOffset(CGPoint(x: 0, y: 600), animated: false)
+        await brains.vault.semanticObservationStream
+            .commitVisibleObservationForTesting(.empty)
+        var restoredOriginalView = false
+
+        let outcome = await transaction.rollBack(
+            using: { intent, _ in
+                guard case .restoreVisualOrigin(
+                    let origin,
+                    .original(let scrollView)
+                ) = intent else {
+                    return .unavailable()
+                }
+                restoredOriginalView = scrollView === fixture.scrollView
+                scrollView.setContentOffset(origin, animated: false)
+                return Navigation.ViewportTransition(
+                    outcome: .moved,
+                    previousVisibleIds: [],
+                    current: nil
+                )
+            },
+            deadline: SemanticObservationDeadline(
+                start: RuntimeElapsed.now,
+                timeoutSeconds: 10
+            )
+        )
+
+        XCTAssertEqual(outcome, .restored)
+        XCTAssertTrue(restoredOriginalView)
+        XCTAssertEqual(fixture.scrollView.contentOffset, .zero)
+    }
+
+    func testRevealRollbackIgnoresUnadmittedDescendantScrollView() async throws {
+        let fixture = try installOffscreenActivationFixture(
+            identifier: "rollback_ignores_unadmitted",
+            label: "Rollback Ignores Unadmitted"
+        )
+        _ = try await publishedVisibleObservation()
+        let unadmittedScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
+        unadmittedScrollView.contentSize = CGSize(width: 100, height: 300)
+        fixture.scrollView.addSubview(unadmittedScrollView)
+        let transaction = ElementInflation.RevealTransaction(vault: brains.vault)
+        transaction.captureScrollableHierarchy()
+        unadmittedScrollView.contentOffset = CGPoint(x: 0, y: 100)
+        var requestedRestore = false
+
+        let outcome = await transaction.rollBack(
+            using: { _, _ in
+                requestedRestore = true
+                return .unavailable()
+            },
+            deadline: SemanticObservationDeadline(
+                start: RuntimeElapsed.now,
+                timeoutSeconds: 10
+            )
+        )
+
+        XCTAssertEqual(outcome, .restored)
+        XCTAssertFalse(requestedRestore)
+    }
+
     func testSemanticActivateRevealsOffscreenScrollTargetWithoutManualPreScroll() async throws {
         let fixture = try installOffscreenActivationFixture(
             identifier: "semantic_checkout_submit",

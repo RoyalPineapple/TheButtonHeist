@@ -13,7 +13,7 @@ private enum RevealTransactionPhase {
 }
 
 private struct RevealMovement {
-    let target: Navigation.ScrollableTarget
+    let scrollView: UIScrollView
     let visualOrigin: CGPoint
 }
 
@@ -58,9 +58,9 @@ extension ElementInflation {
             guard case .active = phase else { return }
             let identifier = ObjectIdentifier(scrollView)
             guard movements[identifier] == nil else { return }
-            guard let target = Navigation.ScrollableTarget.programmatic(scrollView, in: vault) else { return }
+            guard Navigation.ScrollableTarget.programmatic(scrollView, in: vault) != nil else { return }
             movements[identifier] = RevealMovement(
-                target: target,
+                scrollView: scrollView,
                 visualOrigin: Navigation.visualOrigin(in: scrollView)
             )
             movementOrder.append(identifier)
@@ -72,10 +72,8 @@ extension ElementInflation {
         }
 
         internal var didMove: Bool {
-            movements.values.contains { movement in
-                movement.target.dispatchOnFreshScrollView(in: vault) { scrollView in
-                    Navigation.visualOrigin(in: scrollView) != movement.visualOrigin
-                } ?? false
+            movements.values.contains {
+                Navigation.visualOrigin(in: $0.scrollView) != $0.visualOrigin
             }
         }
 
@@ -97,17 +95,11 @@ extension ElementInflation {
             var restored = true
             for identifier in movementOrder.reversed() {
                 guard let movement = movements[identifier] else { continue }
-                guard let currentOrigin = movement.target.dispatchOnFreshScrollView(
-                    in: vault,
-                    operation: Navigation.visualOrigin
-                ) else {
-                    restored = false
-                    continue
-                }
+                let currentOrigin = Navigation.visualOrigin(in: movement.scrollView)
                 guard currentOrigin != movement.visualOrigin else { continue }
                 let transition = await moveViewport(.restoreVisualOrigin(
                     movement.visualOrigin,
-                    in: .semantic(movement.target)
+                    in: .original(movement.scrollView)
                 ), deadline)
                 if transition.outcome == .unavailable {
                     restored = false

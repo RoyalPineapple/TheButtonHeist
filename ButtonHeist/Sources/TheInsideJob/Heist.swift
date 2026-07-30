@@ -168,7 +168,8 @@ public extension Heist {
             let failedStep = result.firstFailedStep
             self.failedStepPath = failedStep?.path ?? "$"
             self.failedStepKind = failedStep?.kind ?? .fail
-            self.message = failedStep?.reportFailureMessage
+            self.message = failedStep?.reportActionResult?.message
+                ?? failedStep?.reportFailureMessage
                 ?? failedStep?.reportMessage
                 ?? "heist failed"
             self.diagnostic = failedStep?.failure.map(Self.diagnostic)
@@ -183,11 +184,12 @@ public extension Heist {
                 "Cause: \(message)",
             ]
             if let failure = result.firstFailedStep?.failure {
-                if !failure.contract.isEmpty, failure.contract != message {
+                if !failure.contract.isEmpty,
+                   failure.contract != message {
                     lines.append("Contract: \(failure.contract)")
                 }
                 if let expected = failure.expected, !expected.isEmpty {
-                    lines.append("Expected: \(expected)")
+                    lines.append("\(expectedLabel(for: failure)): \(expected)")
                 }
             }
             if let screenshot = result.failureScreenshotSummary {
@@ -197,6 +199,24 @@ public extension Heist {
                 lines.append(interfaceDump)
             }
             return lines.joined(separator: "\n")
+        }
+
+        private func expectedLabel(for failure: HeistFailureDetail) -> String {
+            guard failedStepKind == .action else { return "Expected" }
+            switch failure.category {
+            case .action, .targetResolution:
+                return "Target"
+            case .explicitFailure,
+                 .internalInvariant,
+                 .invocation,
+                 .loop,
+                 .runtimeUnavailable,
+                 .timeout,
+                 .validation,
+                 .expectation,
+                 .wait:
+                return "Expected"
+            }
         }
 
         private static func diagnostic(_ failure: HeistFailureDetail) -> String {

@@ -305,6 +305,85 @@ final class HeistResultTests: XCTestCase {
         )
     }
 
+    func testFailureDescriptionLabelsDispatchTarget() throws {
+        let target = #".element(.label("Fallback field"), .traits([.textEntry]))"#
+        let result = try HeistResult(
+            steps: [
+                HeistResultFixture.action(
+                    path: "$.body[0]",
+                    result: HeistResultFixture.actionResult(
+                        succeeded: false,
+                        message: "timed out while waiting for .exists(.value(\"fallback typed\"))",
+                        failureKind: .timeout
+                    ),
+                    failure: HeistFailureDetail(
+                        category: .action,
+                        contract: "action dispatch succeeds",
+                        observed: "timed out while waiting for .exists(.value(\"fallback typed\"))",
+                        expected: target
+                    )
+                ),
+            ],
+            durationMs: 2
+        )
+
+        let description = Heist.Failure(result).description
+
+        XCTAssertTrue(description.contains("Target: \(target)"), description)
+        XCTAssertFalse(description.contains("Expected:"), description)
+        XCTAssertTrue(description.contains("Contract: action dispatch succeeds"), description)
+    }
+
+    func testFailureDescriptionLabelsWaitPredicateAsExpected() throws {
+        let expected = #".exists(.label("Order placed"))"#
+        let result = try HeistResult(
+            steps: [
+                HeistResultFixture.failedWait(
+                    failure: HeistFailureDetail(
+                        category: .action,
+                        contract: "wait predicate is met before timeout",
+                        observed: "Could not restore the accessibility viewport after observation",
+                        expected: expected
+                    )
+                ),
+            ],
+            durationMs: 2
+        )
+
+        let description = Heist.Failure(result).description
+
+        XCTAssertTrue(description.contains("Expected: \(expected)"), description)
+        XCTAssertFalse(description.contains("Target:"), description)
+    }
+
+    func testFailureDescriptionIncludesValidationContract() throws {
+        let result = try HeistResult(
+            steps: [
+                HeistResultFixture.action(
+                    path: "$.body[0]",
+                    result: HeistResultFixture.actionResult(
+                        succeeded: false,
+                        message: "invalid expectation",
+                        failureKind: .validationError
+                    ),
+                    failure: HeistFailureDetail(
+                        category: .validation,
+                        contract: "action expectation predicate resolves before evaluation",
+                        observed: "invalid expectation"
+                    )
+                ),
+            ],
+            durationMs: 2
+        )
+
+        let description = Heist.Failure(result).description
+
+        XCTAssertTrue(
+            description.contains("Contract: action expectation predicate resolves before evaluation"),
+            description
+        )
+    }
+
 }
 
 @MainActor
