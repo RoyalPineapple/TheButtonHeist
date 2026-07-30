@@ -12,7 +12,7 @@ flowchart LR
     Link["TheTripwire CADisplayLink"] -->|"pulse while demanded"| Stream
     Notice["AccessibilityNotificationBus<br/>ordered ingress"] -->|"freeze exact claim"| Stream
     UIKit["UIKit hierarchy"] -->|"capture + parse once"| Stream
-    Stream -->|"commit Snapshot + Event"| Vault["TheVault<br/>current truth + Observation.History"]
+    Stream -->|"commit Snapshot + Event"| Vault["TheVault<br/>current phase + Observation.History"]
     Vault -->|"record, then publish"| Host["MainActor host"]
     Host -->|"admit ordered input"| Machine["one HeistExecution machine<br/>advance private progress"]
     Machine --> Perform["pending(.perform(request))"]

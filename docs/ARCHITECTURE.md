@@ -479,6 +479,13 @@ The approved long-lived owners are:
   discards an admitted terminal result.
 - Artifact stores: `.heist` package files and screenshot bytes on disk.
 
+The Vault's current semantic truth has one phase: vacant with an optional
+replacement requirement, committed with snapshot/tree/continuity/signal, or
+invalidated with the same readable committed truth. Only committed truth is
+admissible to waiters. History, notification cursors, and reader protection
+remain independent because they intentionally survive current-truth
+replacement.
+
 `LiveCapture` is an ephemeral index. Its per-path maps exist to disambiguate a
 single capture and must not become stable identity. Transport registries and
 auth registries may share a client key, but they stay separate: transport does
