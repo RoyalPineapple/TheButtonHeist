@@ -212,9 +212,10 @@ public struct HeistResult: Codable, Sendable, Equatable {
              .repeatUntilIteration,
              .warn,
              .fail,
-             .heist,
-             .invoke:
+             .heist:
             break
+        case .invoke:
+            try admitInvocationEvidence(step)
         }
     }
 
@@ -284,6 +285,39 @@ public struct HeistResult: Codable, Sendable, Equatable {
                 "repeat_until evidence iterationCount \(evidence.iterationCount) "
                     + "does not match \(iterationCount) iteration child node(s)"
             )
+        }
+    }
+
+    private static func admitInvocationEvidence(_ step: HeistExecutionStepResult) throws {
+        switch step.status {
+        case .passed:
+            // Passed invocation completion already admits only `.completed` evidence.
+            return
+        case .skipped:
+            return
+        case .failed:
+            guard let abortedAtChildPath = step.abortedAtChildPath else {
+                guard step.invocationEvidence?.childFailedPath == nil else {
+                    throw incoherent(
+                        step,
+                        "intrinsic failed invocation must not carry child-failure evidence"
+                    )
+                }
+                return
+            }
+            guard let observedPath = step.invocationEvidence?.childFailedPath else {
+                throw incoherent(
+                    step,
+                    "child-aborted invocation must observe child-failure evidence at \(abortedAtChildPath)"
+                )
+            }
+            guard observedPath == abortedAtChildPath else {
+                throw incoherent(
+                    step,
+                    "child-aborted invocation evidence path \(observedPath) "
+                        + "does not match aborted child path \(abortedAtChildPath)"
+                )
+            }
         }
     }
 

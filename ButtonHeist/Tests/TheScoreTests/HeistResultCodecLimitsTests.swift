@@ -492,6 +492,165 @@ import ThePlans
         )
     }
 
+    @Test func `invocation aggregate admission and decode reject contradictory completion evidence`() throws {
+        let abortedChildPath = executionPath("$.body[0].invocation.body[0]")
+        let differentChildPath = executionPath("$.body[0].invocation.body[1]")
+        let child = HeistResultFixture.explicitFailure(
+            path: abortedChildPath.description,
+            message: "stop"
+        )
+        let abortedChildren = try #require(HeistAbortedChildren([child]))
+        let mismatchedEvidence = try #require(HeistFailedInvocationEvidence(
+            .childFailed(path: differentChildPath)
+        ))
+        let childFailureEvidence = try #require(HeistFailedInvocationEvidence(
+            .childFailed(path: abortedChildPath)
+        ))
+        let malformed = [
+            (
+                step: HeistExecutionStepResult.invocation(
+                    path: "$.body[0]",
+                    invocationPath: "Checkout",
+                    argument: .none,
+                    completion: .childAborted(
+                        evidence: .unavailable,
+                        failure: invocationFailureDetail(observed: "child failed"),
+                        children: abortedChildren
+                    )
+                ),
+                reason: "child-aborted invocation must observe child-failure evidence at \(abortedChildPath)"
+            ),
+            (
+                step: HeistExecutionStepResult.invocation(
+                    path: "$.body[0]",
+                    invocationPath: "Checkout",
+                    argument: .none,
+                    completion: .childAborted(
+                        evidence: .observed(mismatchedEvidence),
+                        failure: invocationFailureDetail(observed: "child failed"),
+                        children: abortedChildren
+                    )
+                ),
+                reason: "child-aborted invocation evidence path \(differentChildPath) "
+                    + "does not match aborted child path \(abortedChildPath)"
+            ),
+            (
+                step: HeistExecutionStepResult.invocation(
+                    path: "$.body[0]",
+                    invocationPath: "Checkout",
+                    argument: .none,
+                    completion: .failed(
+                        evidence: .observed(childFailureEvidence),
+                        failure: invocationFailureDetail(observed: "invocation failed")
+                    )
+                ),
+                reason: "intrinsic failed invocation must not carry child-failure evidence"
+            ),
+        ]
+
+        for fixture in malformed {
+            try expectAggregateAdmissionError(
+                steps: [fixture.step],
+                containing: [fixture.reason]
+            )
+            try expectResultDecodeError(
+                resultData(steps: [fixture.step]),
+                format: .json,
+                limits: .default,
+                containing: [fixture.reason]
+            )
+        }
+    }
+
+    @Test func `coherent invocation completion evidence preserves current wire`() throws {
+        let abortedChildPath = executionPath("$.body[0].invocation.body[0]")
+        let child = HeistResultFixture.explicitFailure(
+            path: abortedChildPath.description,
+            message: "stop"
+        )
+        let childFailureEvidence = try #require(HeistFailedInvocationEvidence(
+            .childFailed(path: abortedChildPath)
+        ))
+        let fixtures: [(step: HeistExecutionStepResult, outcome: String, evidence: [String: String]?)] = [
+            (
+                step: .invocation(
+                    path: "$.body[0]",
+                    invocationPath: "Checkout",
+                    argument: .none,
+                    completion: .passed(
+                        evidence: try #require(HeistPassedInvocationEvidence(.completed))
+                    )
+                ),
+                outcome: "passed",
+                evidence: ["type": "completed"]
+            ),
+            (
+                step: .invocation(
+                    path: "$.body[0]",
+                    invocationPath: "Checkout",
+                    argument: .none,
+                    completion: .childAborted(
+                        evidence: .observed(childFailureEvidence),
+                        failure: invocationFailureDetail(observed: "child failed"),
+                        children: try #require(HeistAbortedChildren([child]))
+                    )
+                ),
+                outcome: "child_aborted",
+                evidence: ["type": "child_failed", "path": abortedChildPath.description]
+            ),
+            (
+                step: .invocation(
+                    path: "$.body[0]",
+                    invocationPath: "Checkout",
+                    argument: .none,
+                    completion: .failed(
+                        evidence: .unavailable,
+                        failure: invocationFailureDetail(observed: "invocation failed")
+                    )
+                ),
+                outcome: "failed",
+                evidence: nil
+            ),
+            (
+                step: .invocation(
+                    path: "$.body[0]",
+                    invocationPath: "Checkout",
+                    argument: .none,
+                    completion: .skipped()
+                ),
+                outcome: "skipped",
+                evidence: nil
+            ),
+        ]
+
+        for fixture in fixtures {
+            let result = try HeistResult(steps: [fixture.step], durationMs: 1)
+            let decoded = try HeistResultCodec.decode(
+                resultData(steps: [fixture.step]),
+                format: .json
+            ).result
+            let object = try #require(
+                JSONSerialization.jsonObject(with: JSONEncoder().encode(fixture.step))
+                    as? [String: Any]
+            )
+            let node = try #require(object["node"] as? [String: Any])
+
+            #expect(decoded == result)
+            #expect(node["outcome"] as? String == fixture.outcome)
+            if let expectedEvidence = fixture.evidence {
+                let evidence = try #require(node["evidence"] as? [String: Any])
+                #expect(Set(evidence.keys) == Set(expectedEvidence.keys))
+                for (key, value) in expectedEvidence {
+                    #expect(evidence[key] as? String == value)
+                }
+            } else if fixture.outcome == "failed" {
+                #expect(node["evidence"] is NSNull)
+            } else {
+                #expect(node["evidence"] == nil)
+            }
+        }
+    }
+
     @Test func `aggregate duration is the sole wall clock observation`() throws {
         let result = try HeistResultCodec.decode(nestedResultData()).result
 
@@ -724,6 +883,14 @@ import ThePlans
         HeistFailureDetail(
             category: .explicitFailure,
             contract: "explicit heist failure",
+            observed: observed
+        )
+    }
+
+    private func invocationFailureDetail(observed: String) -> HeistFailureDetail {
+        HeistFailureDetail(
+            category: .invocation,
+            contract: "invocation completes coherently",
             observed: observed
         )
     }
