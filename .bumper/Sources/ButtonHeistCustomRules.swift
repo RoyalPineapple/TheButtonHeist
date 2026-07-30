@@ -43,6 +43,17 @@ let buttonHeistRules = RuleSet {
     exportedTupleContractRule
     semanticObservationCycleOwnershipRule
     Rules.constructionOwnership(
+        "Observation.History",
+        allowed: .files([observationHistoryConstructionOwnerPath]),
+        id: "buttonheist.observation_history_construction_ownership"
+    )
+    Rules.memberReferenceOwnership(
+        "commitObservation",
+        allowed: .files([observationCaptureAdmissionOwnerPath]),
+        id: "buttonheist.semantic_observation_commit_ownership"
+    )
+    directVisibleObservationCaptureOwnershipRule
+    Rules.constructionOwnership(
         "CADisplayLink",
         allowed: .files([observationPulseClockPath]),
         id: "buttonheist.observation_pulse_clock_ownership"
@@ -87,6 +98,10 @@ private let demoAccessibilityIdentifierResearchFixtures: Set<RelativeFilePath> =
 
 private let semanticObservationStreamPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream.swift"
+private let observationHistoryConstructionOwnerPath: RelativeFilePath =
+    "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStore.swift"
+private let observationCaptureAdmissionOwnerPath: RelativeFilePath =
+    "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream+CaptureAdmission.swift"
 private let observationPulseClockPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheTripwire/TheTripwire+Pulse.swift"
 private let heistExecutionHostPath: RelativeFilePath =
@@ -108,6 +123,29 @@ private let semanticObservationCycleMemberNames: Set<String> = [
     "setObservationPulseDemand",
     "stopObservingPulses",
 ]
+
+private let directVisibleObservationCaptureOwnershipRule = Rules.files(
+    "buttonheist.semantic_observation_live_capture_ownership",
+    severity: .error,
+    summary: "Raw visible observation capture enters through the canonical observation cycle.",
+    scope: runtimeScope
+) { file in
+    guard file.path != observationCaptureAdmissionOwnerPath else { return [] }
+    return functionCalls()
+        .filter { match in
+            match.node.calleeBaseName == "captureVisibleObservation"
+        }
+        .matches(in: file)
+        .map { match in
+            match.failure(
+                message: "raw visible observation capture outside the observation cycle",
+                evidence: ViolationEvidence(
+                    observed: match.node.trimmedDescription,
+                    expectation: "request a semantic observation publication from Observation.Stream"
+                )
+            )
+        }
+}
 
 private let semanticObservationCycleOwnershipRule = Rules.files(
     "buttonheist.semantic_observation_cycle_ownership",

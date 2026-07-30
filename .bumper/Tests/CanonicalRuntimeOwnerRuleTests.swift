@@ -69,6 +69,22 @@ struct CanonicalRuntimeOwnerRuleTests {
     }
 
     @Test
+    func visibleObservationSourceReferenceDoesNotPerformRawCapture() throws {
+        let path: RelativeFilePath =
+            "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains.swift"
+        let report = try evaluateButtonHeistRules(
+            path: path,
+            component: .runtime,
+            source: """
+            let source: TheVault.VisibleObservationSource =
+                TheVault.captureVisibleObservation
+            """
+        )
+
+        #expect(report.violations.isEmpty)
+    }
+
+    @Test
     func safecrackerOwnsContentOffsetDispatch() throws {
         let path: RelativeFilePath =
             "ButtonHeist/Sources/TheInsideJob/TheSafecracker/TheSafecracker+Scroll.swift"
@@ -147,6 +163,28 @@ struct CanonicalRuntimeOwnerRuleTests {
 }
 
 private let runtimeOwnershipFixtures: [RuntimeOwnershipFixture] = [
+    RuntimeOwnershipFixture(
+        id: "buttonheist.observation_history_construction_ownership",
+        ownerPath: "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStore.swift",
+        competingPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/CompetingObservationHistory.swift",
+        source: "_ = Observation.History(retentionLimit: 256)"
+    ),
+    RuntimeOwnershipFixture(
+        id: "buttonheist.semantic_observation_commit_ownership",
+        ownerPath: "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream+CaptureAdmission.swift",
+        competingPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/CompetingObservationCommit.swift",
+        source: """
+        func commit(_ state: inout TheVault.State, _ admission: Observation.Admission) {
+            _ = state.commitObservation(admission)
+        }
+        """
+    ),
+    RuntimeOwnershipFixture(
+        id: "buttonheist.semantic_observation_live_capture_ownership",
+        ownerPath: "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream+CaptureAdmission.swift",
+        competingPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/CompetingVisibleObservationCapture.swift",
+        source: "func capture(_ vault: TheVault) { _ = vault.captureVisibleObservation() }"
+    ),
     RuntimeOwnershipFixture(
         id: "buttonheist.observation_pulse_clock_ownership",
         ownerPath: "ButtonHeist/Sources/TheInsideJob/TheTripwire/TheTripwire+Pulse.swift",
