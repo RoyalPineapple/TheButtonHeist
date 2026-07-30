@@ -190,7 +190,7 @@ final class TheGetaway {
             )
         case .requestScreen(let payload):
             await sendScreen(
-                mode: payload.mode,
+                payload,
                 requestId: requestId,
                 respond: respond,
                 generation: generation
@@ -204,13 +204,19 @@ final class TheGetaway {
                 generation: generation
             )
         case .heistPlan(let run):
-            let actionResult = await brains.executeHeistPlan(
+            let message: ServerMessage = switch await brains.executeHeistPlan(
                 run.plan,
                 argument: run.argument,
-                timeout: run.timeout
-            )
-            await sendActionResult(
-                actionResult: actionResult,
+                timeout: run.timeout,
+                actionExpectationTimeoutPolicy: run.actionExpectationTimeoutPolicy
+            ) {
+            case .success(let result):
+                .heistResult(result)
+            case .failure(let failure):
+                .error(failure.serverError)
+            }
+            await sendMessage(
+                message,
                 requestId: requestId,
                 respond: respond,
                 generation: generation
@@ -219,69 +225,17 @@ final class TheGetaway {
     }
 
     func executeDirectRuntimeAction(_ command: HeistActionCommand) async -> ActionResult {
-        let payload = actionPayload(for: command)
         guard command.durableHeistActionFailure != nil else {
             return .failure(
-                payload: payload,
+                payload: command.actionResultPayload,
                 failureKind: .validationError,
                 message: "Direct runtimeAction accepts only transient non-durable commands; durable commands must run as heistPlan"
             )
         }
         guard brains.semanticObservationIsActive else {
-            return brains.runtimeInactiveResult(payload: payload)
+            return brains.runtimeInactiveResult(payload: command.actionResultPayload)
         }
-        do {
-            return await brains.executeRuntimeAction(try command.resolve(in: .empty))
-        } catch {
-            return .failure(
-                payload: payload,
-                failureKind: .validationError,
-                message: "Could not resolve direct runtime action: \(error)"
-            )
-        }
-    }
-
-    private func actionPayload(for command: HeistActionCommand) -> ActionResult.Payload {
-        switch command {
-        case .activate:
-            return .activate
-        case .increment:
-            return .increment
-        case .decrement:
-            return .decrement
-        case .customAction:
-            return .customAction
-        case .rotor:
-            return .rotor(nil)
-        case .typeText:
-            return .typeText(nil)
-        case .oneFingerTap:
-            return .oneFingerTap
-        case .longPress:
-            return .longPress
-        case .swipe:
-            return .swipe
-        case .drag:
-            return .drag
-        case .scroll:
-            return .scroll
-        case .scrollToVisible:
-            return .scrollToVisible
-        case .scrollToEdge:
-            return .scrollToEdge
-        case .dismiss:
-            return .dismiss
-        case .magicTap:
-            return .magicTap
-        case .editAction:
-            return .editAction
-        case .setPasteboard:
-            return .setPasteboard(nil)
-        case .takeScreenshot:
-            return .screenshot(nil)
-        case .dismissKeyboard:
-            return .dismissKeyboard
-        }
+        return await brains.executeRuntimeAction(command)
     }
 
     private func sendActionResult(
@@ -332,12 +286,19 @@ final class TheGetaway {
     // MARK: - InterfaceObservation Capture
 
     func sendScreen(
-        mode: ScreenCaptureMode = .raw,
+        _ request: ScreenRequestPayload,
         requestId: RequestID? = nil,
         respond: @escaping SocketResponseHandler,
         generation: ClientDelivery.Generation
     ) async {
-        switch await brains.captureScreenPayload(mode: mode) {
+        let deadline = SemanticObservationDeadline(
+            start: RuntimeElapsed.now,
+            timeout: .seconds(request.timeout.seconds)
+        )
+        switch await brains.captureScreenPayload(
+            mode: request.mode,
+            observationBoundary: .externalDeadline(deadline)
+        ) {
         case .success(let payload):
             await sendMessage(
                 .screen(payload),

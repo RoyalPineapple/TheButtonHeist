@@ -278,7 +278,7 @@ public struct HeistInvocationContent {
             [.invoke(HeistInvocationStep(
                 path: path,
                 argument: argument,
-                expectation: expectation.waitStep
+                expectation: expectation.policy.expectedExpectation
             ))],
             definitions: definitions,
             diagnostics: expectation.diagnostics.map {

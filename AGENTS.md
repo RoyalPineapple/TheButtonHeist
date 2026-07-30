@@ -165,7 +165,8 @@ Recommended commands:
 
 ```bash
 scripts/test-runner.py run MacFrameworkTests
-scripts/test-runner.py run TheInsideJobTests
+scripts/test-runner.py run TheInsideJobLogicTests
+scripts/test-runner.py run TheInsideJobWindowTests
 scripts/test-runner.py run TheInsideJobIntegrationTests
 scripts/test-runner.py run HostedBehaviorTests
 ```
@@ -334,7 +335,8 @@ Before pushing any commit, verify the following:
 - **All existing tests must pass.** Run the test suite:
   ```bash
   scripts/test-runner.py run MacFrameworkTests
-  scripts/test-runner.py run TheInsideJobTests
+  scripts/test-runner.py run TheInsideJobLogicTests
+  scripts/test-runner.py run TheInsideJobWindowTests
   scripts/test-runner.py run TheInsideJobIntegrationTests
   scripts/test-runner.py run HostedBehaviorTests
   ```
@@ -366,8 +368,9 @@ Before pushing any commit, verify the following:
 `scripts/test-runner.py` is the one true way to run tests in this repository.
 
 - `TheScoreTests` and `ButtonHeistTests` are canonical portable suites. `MacFrameworkTests` is the real aggregate scheme used by the consolidated CI lane.
-- The hosted iOS suite has three canonical schemes: core `TheInsideJobTests`, isolated `TheInsideJobIntegrationTests`, and aggregate `HostedBehaviorTests`, which owns the dogfood and adversarial targets.
-- All three hosted schemes run via the `BH Demo` test host. The runner resolves and records their explicit simulator destination; running only `TheInsideJobTests` skips integration and hosted behavior.
+- `TheInsideJobLogicTests` is the unhosted deterministic iOS logic suite.
+- `BH Demo`-hosted coverage is split across foreground-window `TheInsideJobWindowTests`, isolated `TheInsideJobIntegrationTests`, and aggregate `HostedBehaviorTests`. The aggregate owns the hosted behavior, dogfood, and adversarial targets and excludes the window target through the runner's canonical projection.
+- The runner resolves and records an explicit simulator destination for every iOS suite. Running one suite does not cover the other three.
 - Treat `swift test` as a package-debugging tool, not as the source of truth for CI-style verification.
 
 ### Test Framework
@@ -577,7 +580,7 @@ Two type families are the currency for referring to UI elements. Use them everyw
 
 `synthesizeBaseId(_:)` in `TheVault.IdAssignment` produces deterministic heistIds derived from element content. **Synthesis is wire format.** Modifications are equivalent to changes to the JSON schema — they break fixture references and the agent's predict-the-heistId pattern that benchmarks rely on. Treat any change to the synthesis rule like a wire-protocol bump.
 
-The contract is locked by `SynthesisDeterminismTests` (property test across 200+ random permutations, plus a regression table of known input → known output). If you find yourself wanting to "improve" the heistId format, run the core `TheInsideJobTests` scheme first — that test exists to make the contract auditable. Any change requires updating the regression table in the same PR.
+The contract is locked by `SynthesisDeterminismTests` (property test across 200+ random permutations, plus a regression table of known input → known output). If you find yourself wanting to "improve" the heistId format, run the core `TheInsideJobLogicTests` scheme first — that test exists to make the contract auditable. Any change requires updating the regression table in the same PR.
 
 ## Versioning and Releases
 

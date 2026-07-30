@@ -40,6 +40,7 @@ let project = Project(
             resources: ["Resources/**"],
             scripts: [copyResourceBundleScript],
             dependencies: [
+                .project(target: "ThePlans", path: ".."),
                 .project(target: "TheScore", path: ".."),
                 .project(target: "TheInsideJob", path: ".."),
             ],

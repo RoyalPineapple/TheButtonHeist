@@ -182,7 +182,7 @@ extension TheVault {
     func ids(in scope: InterfaceElementScope) -> Set<HeistId> {
         switch scope {
         case .viewport:
-            return latestObservation.tree.viewportElementIDs
+            return interfaceTree.viewportElementIDs
         case .interface:
             return interfaceTree.elementIDs
         }
@@ -191,12 +191,15 @@ extension TheVault {
     /// Looks up an element by heistId in the selected scope.
     ///
     /// `.interface` reads the full interface tree, including any exploration union.
-    /// `.viewport` reads the latest observed parser output and only returns ids
-    /// backed by the latest live hierarchy parse.
+    /// `.viewport` returns canonical interface semantics only when the current
+    /// live capture aliases the same viewport identity.
     func treeElement(heistId: HeistId, in scope: InterfaceElementScope) -> InterfaceTree.Element? {
         switch scope {
         case .viewport:
-            return liveInterfaceElement(heistId: heistId)
+            guard let semanticElement = interfaceTree.findElement(heistId: heistId) else {
+                return nil
+            }
+            return visibleLiveElementAliasing(semanticElement)
         case .interface:
             return interfaceElement(heistId: heistId)
         }

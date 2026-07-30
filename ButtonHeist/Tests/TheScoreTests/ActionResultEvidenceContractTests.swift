@@ -39,7 +39,6 @@ final class ActionResultEvidenceContractTests: XCTestCase {
             (.getPasteboard("text"), .getPasteboard),
             (.screenshot(nil), .takeScreenshot),
             (.rotor(nil), .rotor),
-            (.heist(nil), .heistPlan),
             (.scroll, .scroll),
             (.scrollToVisible, .scrollToVisible),
             (.scrollToEdge, .scrollToEdge),
@@ -52,11 +51,10 @@ final class ActionResultEvidenceContractTests: XCTestCase {
     }
 
     func testEveryOutcomeRoundTripsWithEveryObservationCase() throws {
-        let complete = observationEvidenceWithAnnouncement("Ready", completeness: .complete)
-        let incomplete = observationEvidenceWithAnnouncement("Ready", completeness: .incomplete)
+        let complete = observationEvidenceWithAnnouncement("Ready", coverage: .complete)
+        let incomplete = observationEvidenceWithAnnouncement("Ready", coverage: .incomplete(.historyUnavailable))
         let observations: [ActionResultObservationEvidence] = [
             .none,
-            .announcement("Ready"),
             .observed(complete),
             .observed(incomplete),
         ]
@@ -83,7 +81,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
     func testSuccessEvidenceRoundTripsWithCanonicalShape() throws {
         let observationEvidence = observationEvidenceWithAnnouncement(
             "Checkout",
-            completeness: .incomplete
+            coverage: .incomplete(.historyUnavailable)
         )
         let result = ActionResult.activationSuccess(
             message: "done",
@@ -115,10 +113,12 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         XCTAssertEqual(Set(observation.keys), Set(["kind", "observationEvidence"]))
         XCTAssertEqual(
             Set(encodedObservationEvidence.keys),
-            Set(["baseline", "current", "events", "completeness"])
+            Set(["baseline", "current", "events", "coverage"])
         )
-        XCTAssertEqual(encodedObservationEvidence["completeness"] as? String, "incomplete")
-        XCTAssertNil(observation["announcement"])
+        let coverage = try XCTUnwrap(encodedObservationEvidence["coverage"] as? [String: Any])
+        let incomplete = try XCTUnwrap(coverage["incomplete"] as? [String: Any])
+        let gap = try XCTUnwrap(incomplete["_0"] as? [String: Any])
+        XCTAssertNotNil(gap["historyUnavailable"] as? [String: Any])
         XCTAssertEqual(timing["actionDispatchMs"] as? Int, 4)
 
         let decoded = try JSONDecoder().decode(ActionResult.self, from: encoded)
@@ -170,29 +170,10 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         XCTAssertEqual(decoded.screenActionHandler, "UINavigationController")
     }
 
-    func testStandaloneAnnouncementIsTheOnlyAnnouncementFact() throws {
-        let result = ActionResult.success(
-            payload: .wait,
-            observation: .announcement("Ready")
-        )
-
-        let encoded = try JSONEncoder().encode(result)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-        let evidence = try XCTUnwrap(object["evidence"] as? [String: Any])
-        let observation = try XCTUnwrap(evidence["observation"] as? [String: Any])
-
-        XCTAssertEqual(observation["kind"] as? String, "announcement")
-        XCTAssertEqual(observation["announcement"] as? String, "Ready")
-        XCTAssertNil(object["announcement"])
-        XCTAssertNil(evidence["announcement"])
-        XCTAssertEqual(result.announcement, "Ready")
-        XCTAssertNil(result.observationEvidence)
-    }
-
     func testObservationEvidenceOwnsCapturedNotificationText() {
         let observationEvidence = observationEvidenceWithAnnouncement(
             "Checkout",
-            completeness: .incomplete
+            coverage: .incomplete(.historyUnavailable)
         )
         let result = ActionResult.success(
             payload: .activate,
@@ -201,18 +182,6 @@ final class ActionResultEvidenceContractTests: XCTestCase {
 
         XCTAssertEqual(result.announcement, "Checkout")
         XCTAssertEqual(result.observationEvidence, observationEvidence)
-    }
-
-    func testObservationDiscriminatorRejectsFieldsFromAnotherCase() {
-        assertActionResultRejects("""
-        {
-          "outcome": {"kind": "success"},
-          "method": "wait",
-          "evidence": {
-            "observation": {"kind": "none", "announcement": "Ready"}
-          }
-        }
-        """)
     }
 
     func testFailureEvidenceRejectsSuccessOnlyWarning() {
@@ -226,27 +195,6 @@ final class ActionResultEvidenceContractTests: XCTestCase {
           }
         }
         """)
-    }
-
-    func testAnnouncementAdmissionRejectsEmptySourceAndJSONValues() throws {
-        XCTAssertThrowsError(try ActionAnnouncementText(validating: "")) { error in
-            XCTAssertEqual(String(describing: error), "action announcement must not be empty")
-        }
-        let json = """
-        {
-          "outcome": {"kind": "success"},
-          "method": "wait",
-          "evidence": {
-            "observation": {"kind": "announcement", "announcement": ""}
-          }
-        }
-        """
-
-        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
-            guard case DecodingError.dataCorrupted = error else {
-                return XCTFail("Expected DecodingError.dataCorrupted, got \(error)")
-            }
-        }
     }
 
     func testElapsedMillisecondsAdmissionRejectsNegativeSourceAndJSONValues() {
@@ -286,7 +234,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
 
     private func observationEvidenceWithAnnouncement(
         _ text: String,
-        completeness: Observation.Evidence.Completeness
+        coverage: Observation.Coverage
     ) -> Observation.Evidence {
         let baseline = makeTestObservationSnapshot(
             elements: [],
@@ -301,7 +249,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
             baseline: baseline,
             current: current,
             events: notification.map { [.notification($0)] } ?? [],
-            completeness: completeness
+            coverage: coverage
         )
     }
 

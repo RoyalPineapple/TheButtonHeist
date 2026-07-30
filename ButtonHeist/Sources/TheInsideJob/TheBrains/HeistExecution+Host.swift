@@ -9,42 +9,53 @@ extension HeistExecution {
     internal final class Host {
         private enum Phase {
             case idle
-            case installing(Installation)
             case running(Session)
             case cleaning
             case finished
         }
 
-        private struct Installation {
-            var machine: Machine
-            let wholeDeadline: SemanticObservationDeadline
-            let protectedHistoryIndex: Int
-            let observationDemand: SemanticObservationDemand
-            let notificationScope: AccessibilityNotificationScopeLease
-            var bufferedEvents: [Observation.Event]
-            var historyError: Observation.History.ReadError?
-        }
-
         private struct Session {
             var machine: Machine
             let continuation: CheckedContinuation<Completion, any Error>
-            let protectedHistoryIndex: Int
+            var protectedHistoryIndex: Int
             let eventSubscription: SemanticObservationSubscription
             let observationDemand: SemanticObservationDemand
             let notificationScope: AccessibilityNotificationScopeLease
-            var activeObservation: ActiveObservation?
-            var bufferedObservationEvents: [Observation.Event]?
+            var observation: ObservationPhase
             var interaction: Interaction
             var deadlines: DeadlineState
         }
 
         private struct ActiveObservation {
             let id: RequestID
-            let request: ObservationRequest
             var boundary: TheVault.State.HistoryBoundary
             let scopeSubscription: SemanticObservationSubscription
             let notificationWindow: AccessibilityNotificationScopeLease
+            let deadline: SemanticObservationDeadline
+            var lastTreeChangeAt: RuntimeElapsed.Instant?
             var viewportStatus: ViewportStatus
+        }
+
+        private enum ObservationPhase {
+            case idle
+            case establishing
+            case active(ActiveObservation)
+
+            var active: ActiveObservation? {
+                guard case .active(let observation) = self else { return nil }
+                return observation
+            }
+        }
+
+        private struct ObservationCloseResult {
+            let evidence: Observation.Evidence
+            let timing: HeistExpectationTiming
+            let viewportStatus: ViewportStatus
+        }
+
+        private enum ObservationCloseCapture {
+            case coverage
+            case singleCycle
         }
 
         private enum ViewportStatus {
@@ -53,14 +64,14 @@ extension HeistExecution {
             case failed(Navigation.ViewportExit.Failure)
 
             mutating func record(_ outcome: Navigation.ViewportExit.Outcome?) {
-                guard case .available = self else { return }
-                switch outcome {
+                if case .failed = self { return }
+                self = switch outcome {
                 case .restored?, .retained?, .superseded?:
-                    break
+                    .available
                 case .failed(let failure)?:
-                    self = .failed(failure)
+                    .failed(failure)
                 case nil:
-                    self = .unavailable
+                    .unavailable
                 }
             }
         }
@@ -70,7 +81,7 @@ extension HeistExecution {
             case running(
                 InteractionID,
                 task: Task<Void, Never>,
-                deferred: [MainActorRequest],
+                deferred: MainActorRequest?,
                 completesAfterDeadline: Bool
             )
         }
@@ -149,11 +160,7 @@ extension HeistExecution {
             }
         }
 
-        private enum BoundaryError: Error {
-            case observationHistoryUnavailable
-        }
-
-        private unowned let brains: TheBrains
+        private let brains: TheBrains
         private var phase = Phase.idle
         private var nextDeadlineTimerSequence: UInt64 = 0
         private var nextInteractionSequence: UInt64 = 0
@@ -165,17 +172,37 @@ extension HeistExecution {
         internal func execute(
             _ plan: HeistPlan,
             argument: HeistArgument = .none,
-            timeout: HeistTimeout
+            timeout: HeistTimeout,
+            actionExpectationTimeoutPolicy: ActionExpectationTimeoutPolicy = .default
         ) async throws -> Completion {
-            guard case .idle = phase else {
-                preconditionFailure("A heist host executes exactly one complete plan")
-            }
-
             let machine = try Machine(
                 plan: plan,
                 argument: argument,
+                failureCaptureMode: brains.failureEvidencePolicy.captureMode,
+                actionExpectationTimeoutPolicy: actionExpectationTimeoutPolicy
+            )
+            return try await execute(machine, timeout: timeout)
+        }
+
+        internal func execute(
+            _ action: HeistActionCommand,
+            timeout: HeistTimeout
+        ) async throws -> Completion {
+            let machine = Machine(
+                action: action,
                 failureCaptureMode: brains.failureEvidencePolicy.captureMode
             )
+            return try await execute(machine, timeout: timeout)
+        }
+
+        private func execute(
+            _ machine: Machine,
+            timeout: HeistTimeout
+        ) async throws -> Completion {
+            guard case .idle = phase else {
+                preconditionFailure("A heist host executes exactly one command")
+            }
+
             let wholeDeadline = SemanticObservationDeadline(
                 start: RuntimeElapsed.now,
                 timeout: .seconds(timeout.seconds)
@@ -184,76 +211,53 @@ extension HeistExecution {
             return try await withTaskCancellationHandler {
                 try Task.checkCancellation()
                 let stream = brains.vault.semanticObservationStream
-                let historyIndex = await stream.stateOwner.historyEndIndex()
-                await stream.stateOwner.protectHistory(from: historyIndex)
-
-                phase = .installing(Installation(
-                    machine: machine,
-                    wholeDeadline: wholeDeadline,
-                    protectedHistoryIndex: historyIndex,
-                    observationDemand: stream.beginActiveObservationDemand(),
-                    notificationScope: brains.vault.accessibilityNotifications
-                        .beginHeistScope(),
-                    bufferedEvents: [],
-                    historyError: nil
-                ))
-
-                let subscription = await stream.subscribe(
+                let historyIndex = stream.historyEndIndex()
+                stream.protectHistory(from: historyIndex)
+                let observationDemand = stream.beginActiveObservationDemand()
+                let notificationScope = brains.vault.accessibilityNotifications
+                    .beginHeistScope()
+                let eventInstallation = stream.subscribe(
                     scope: .visible,
                     replayingAfter: historyIndex,
                     receive: { [weak self] event in
                         self?.receive(event)
-                    },
-                    historyUnavailable: { [weak self] error in
-                        self?.recordHistoryError(error)
                     }
                 )
 
+                let replay: [Observation.Event]
                 do {
+                    replay = try eventInstallation.replay.get()
                     try Task.checkCancellation()
-                    guard case .installing(let installation) = phase else {
-                        subscription.cancel()
-                        throw CancellationError()
-                    }
-                    if installation.historyError != nil {
-                        subscription.cancel()
-                        await clean(installation)
-                        throw BoundaryError.observationHistoryUnavailable
-                    }
-
-                    return try await withCheckedThrowingContinuation { continuation in
-                        var session = Session(
-                            machine: installation.machine,
-                            continuation: continuation,
-                            protectedHistoryIndex: installation.protectedHistoryIndex,
-                            eventSubscription: subscription,
-                            observationDemand: installation.observationDemand,
-                            notificationScope: installation.notificationScope,
-                            activeObservation: nil,
-                            bufferedObservationEvents: nil,
-                            interaction: .idle,
-                            deadlines: .unscheduled(.whole(
-                                installation.wholeDeadline
-                            ))
-                        )
-                        phase = .running(session)
-                        armDeadline()
-
-                        guard case .running(var current) = phase else { return }
-                        let state = current.machine.start()
-                        session = current
-                        phase = .running(session)
-                        interpret(state)
-                        for event in installation.bufferedEvents {
-                            receive(event)
-                        }
-                    }
                 } catch {
-                    if case .installing(let installation) = phase {
-                        subscription.cancel()
-                        await clean(installation)
-                    }
+                    eventInstallation.subscription.cancel()
+                    observationDemand.cancel()
+                    notificationScope.cancel()
+                    stream.releaseHistory(from: historyIndex)
                     throw error
+                }
+                return try await withCheckedThrowingContinuation { continuation in
+                    var session = Session(
+                        machine: machine,
+                        continuation: continuation,
+                        protectedHistoryIndex: historyIndex,
+                        eventSubscription: eventInstallation.subscription,
+                        observationDemand: observationDemand,
+                        notificationScope: notificationScope,
+                        observation: .idle,
+                        interaction: .idle,
+                        deadlines: .unscheduled(.whole(wholeDeadline))
+                    )
+                    phase = .running(session)
+                    armDeadline()
+
+                    guard case .running(var current) = phase else { return }
+                    let state = current.machine.start()
+                    session = current
+                    phase = .running(session)
+                    interpret(state)
+                    for event in replay {
+                        receive(event)
+                    }
                 }
             } onCancel: {
                 Task { @MainActor [weak self] in
@@ -264,26 +268,24 @@ extension HeistExecution {
 
         private func receive(_ event: Observation.Event) {
             switch phase {
-            case .installing(var installation):
-                installation.bufferedEvents.append(event)
-                phase = .installing(installation)
             case .running(var session):
-                guard var bufferedEvents = session.bufferedObservationEvents else {
+                switch session.observation {
+                case .idle:
+                    phase = .running(session)
                     advance(.event(event))
-                    return
+                case .establishing:
+                    phase = .running(session)
+                case .active(var observation):
+                    if event.changesInterface {
+                        observation.lastTreeChangeAt = RuntimeElapsed.now
+                        session.observation = .active(observation)
+                    }
+                    phase = .running(session)
+                    advance(.event(event))
                 }
-                bufferedEvents.append(event)
-                session.bufferedObservationEvents = bufferedEvents
-                phase = .running(session)
             case .idle, .cleaning, .finished:
                 break
             }
-        }
-
-        private func recordHistoryError(_ error: Observation.History.ReadError) {
-            guard case .installing(var installation) = phase else { return }
-            installation.historyError = error
-            phase = .installing(installation)
         }
 
         private func advance(_ input: Input) {
@@ -300,9 +302,9 @@ extension HeistExecution {
                     resolve(.success(completion))
                     return
                 }
-                if case .pending(.perform(let requests)) = state,
-                   requests.allSatisfy(\.completesAfterDeadline) {
-                    performNext(requests, afterDeadline: true)
+                if case .pending(.perform(let request)) = state,
+                   request.completesAfterDeadline {
+                    performRequest(request, afterDeadline: true)
                     return
                 }
                 guard case .idle = session.interaction else { return }
@@ -322,17 +324,17 @@ extension HeistExecution {
                 phase = .running(session)
                 armDeadline()
 
-            case .pending(.perform(let requests)):
+            case .pending(.perform(let request)):
                 switch session.interaction {
                 case .idle:
                     phase = .running(session)
                     armDeadline()
-                    performNext(requests)
+                    performRequest(request)
                 case .running(let id, let task, _, let completesAfterDeadline):
                     session.interaction = .running(
                         id,
                         task: task,
-                        deferred: requests,
+                        deferred: request,
                         completesAfterDeadline: completesAfterDeadline
                     )
                     phase = .running(session)
@@ -341,16 +343,14 @@ extension HeistExecution {
             }
         }
 
-        private func performNext(
-            _ requests: [MainActorRequest],
+        private func performRequest(
+            _ request: MainActorRequest,
             afterDeadline: Bool = false
         ) {
-            guard let request = requests.first,
-                  case .running(var session) = phase,
+            guard case .running(var session) = phase,
                   afterDeadline || session.deadlines.expiration == nil else {
                 return
             }
-            let remaining = Array(requests.dropFirst())
             let interactionID = nextInteractionID()
             let task = Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -360,7 +360,7 @@ extension HeistExecution {
             session.interaction = .running(
                 interactionID,
                 task: task,
-                deferred: remaining,
+                deferred: nil,
                 completesAfterDeadline: request.completesAfterDeadline
             )
             phase = .running(session)
@@ -374,13 +374,6 @@ extension HeistExecution {
             case .currentSnapshot(let id, let scope):
                 let snapshot = await brains.captureHeistCurrentState(scope: scope)?
                     .snapshot
-                let historyIndex = await brains.vault.semanticObservationStream
-                    .stateOwner.historyEndIndex()
-                retainCurrentSnapshotAsBaseline(
-                    snapshot,
-                    historyIndex: historyIndex,
-                    for: id
-                )
                 complete(interactionID, input: .currentSnapshot(id, snapshot))
 
             case .beginObservation(let id, let request):
@@ -391,7 +384,24 @@ extension HeistExecution {
                 )
 
             case .dispatch(let id, let command):
-                let result = await brains.dispatchRuntimeAction(command)
+                guard let deadline = activeLeafDeadline(id: id) else {
+                    complete(
+                        interactionID,
+                        input: .dispatchCompleted(
+                            id,
+                            .failure(
+                                command.actionResultPayload,
+                                message: "action dispatch has no active leaf deadline",
+                                failureKind: .actionFailed
+                            )
+                        )
+                    )
+                    return
+                }
+                let result = await brains.dispatchRuntimeAction(
+                    command,
+                    deadline: deadline
+                )
                 complete(interactionID, input: .dispatchCompleted(id, result))
 
             case .explore(let id, let predicate):
@@ -409,12 +419,12 @@ extension HeistExecution {
                     outcome = .failed(.originUnavailable)
                 }
                 guard case .running(var session) = phase,
-                      var observation = session.activeObservation,
+                      case .active(var observation) = session.observation,
                       observation.id == id else {
                     return
                 }
                 observation.viewportStatus.record(outcome)
-                session.activeObservation = observation
+                session.observation = .active(observation)
                 phase = .running(session)
                 complete(interactionID, input: .viewportExited(id, outcome))
 
@@ -446,26 +456,6 @@ extension HeistExecution {
             }
         }
 
-        private func retainCurrentSnapshotAsBaseline(
-            _ snapshot: Observation.Snapshot?,
-            historyIndex: Int,
-            for observationID: RequestID
-        ) {
-            guard let snapshot,
-                  case .running(var session) = phase,
-                  var observation = session.activeObservation,
-                  observation.id == observationID,
-                  observation.boundary.baseline == nil else {
-                return
-            }
-            observation.boundary = TheVault.State.HistoryBoundary(
-                baseline: snapshot,
-                historyIndex: historyIndex
-            )
-            session.activeObservation = observation
-            phase = .running(session)
-        }
-
         private func beginObservation(
             id: RequestID,
             request: ObservationRequest,
@@ -476,21 +466,14 @@ extension HeistExecution {
                   current == interactionID else {
                 return
             }
-            precondition(
-                initialSession.activeObservation == nil,
-                "Only one leaf may observe at a time"
-            )
-            precondition(
-                initialSession.bufferedObservationEvents == nil,
-                "Only one observation boundary may be established at a time"
-            )
-            initialSession.bufferedObservationEvents = []
+            guard case .idle = initialSession.observation else {
+                preconditionFailure("Only one observation boundary may be active")
+            }
+            initialSession.observation = .establishing
             phase = .running(initialSession)
 
             let stream = brains.vault.semanticObservationStream
             let scope = stream.subscribe(scope: request.scope)
-            let notificationWindow = brains.vault.accessibilityNotifications
-                .beginActionWindow()
             let leafDeadline = SemanticObservationDeadline(
                 start: RuntimeElapsed.now,
                 timeout: request.timeout
@@ -499,67 +482,60 @@ extension HeistExecution {
                   case .running(let current, _, _, _) = armedSession.interaction,
                   current == interactionID else {
                 scope.cancel()
-                notificationWindow.cancel()
                 return
             }
             phase = .running(armedSession)
 
-            let boundary = await stream.stateOwner.observationBoundary(
-                scope: request.scope
-            )
-            guard case .running(var session) = phase,
-                  case .running(let current, _, _, _) = session.interaction,
-                  current == interactionID else {
-                scope.cancel()
-                notificationWindow.cancel()
-                return
-            }
-            session.activeObservation = ActiveObservation(
-                id: id,
-                request: request,
-                boundary: boundary,
-                scopeSubscription: scope,
-                notificationWindow: notificationWindow,
-                viewportStatus: .available
-            )
-            session.deadlines.cancelTimer()
-            session.deadlines = .unscheduled(.leaf(
-                whole: session.deadlines.targets.whole,
-                leaf: leafDeadline
-            ))
-            phase = .running(session)
-            armDeadline()
-
             let viewportOutcome: Navigation.ViewportExit.Outcome?
             switch request.scope {
             case .visible:
-                viewportOutcome = await brains.captureHeistCurrentState(
+                let current = await brains.captureHeistCurrentState(
                     scope: .visible
-                ) == nil ? nil : .retained
+                )
+                viewportOutcome = current == nil ? nil : .retained
             case .discovery:
-                viewportOutcome = await brains.navigation.fullGraph(
-                    deadline: activeLeafDeadline(id: id)
-                )?.viewportExit
+                let exploration = await brains.navigation.fullGraph(
+                    deadline: leafDeadline
+                )
+                viewportOutcome = exploration?.viewportExit
             }
+            let capturedBoundary = stream.observationBoundary(
+                scope: request.scope
+            )
 
             guard case .running(var capturedSession) = phase,
                   case .running(let capturedInteractionID, _, _, _) = capturedSession.interaction,
                   capturedInteractionID == interactionID,
-                  var observation = capturedSession.activeObservation,
-                  observation.id == id,
-                  let bufferedEvents = capturedSession.bufferedObservationEvents else {
+                  case .establishing = capturedSession.observation else {
                 scope.cancel()
-                notificationWindow.cancel()
                 return
             }
-            observation.viewportStatus.record(viewportOutcome)
-            capturedSession.activeObservation = observation
-            capturedSession.bufferedObservationEvents = nil
+            let notificationWindow = brains.vault.accessibilityNotifications
+                .beginActionWindow()
+            var viewportStatus = ViewportStatus.available
+            viewportStatus.record(viewportOutcome)
+            capturedSession.observation = .active(ActiveObservation(
+                id: id,
+                boundary: capturedBoundary,
+                scopeSubscription: scope,
+                notificationWindow: notificationWindow,
+                deadline: leafDeadline,
+                lastTreeChangeAt: nil,
+                viewportStatus: viewportStatus
+            ))
+            capturedSession.deadlines.cancelTimer()
+            capturedSession.deadlines = .unscheduled(.leaf(
+                whole: capturedSession.deadlines.targets.whole,
+                leaf: leafDeadline
+            ))
             phase = .running(capturedSession)
-            complete(interactionID, input: .observationBegan(id, boundary))
-            for event in bufferedEvents {
-                receive(event)
-            }
+            complete(
+                interactionID,
+                input: .observationBegan(
+                    id,
+                    baseline: capturedBoundary.baseline
+                )
+            )
         }
 
         private func finishObservation(
@@ -569,61 +545,22 @@ extension HeistExecution {
             interactionID: InteractionID
         ) async {
             guard case .running(let initialSession) = phase,
-                  let observation = initialSession.activeObservation,
+                  case .active(let observation) = initialSession.observation,
                   observation.id == observationID else {
                 return
             }
 
-            var viewportStatus = observation.viewportStatus
-            switch exitPosition {
-            case .current:
-                break
-            case .origin:
-                let exploration = await brains.navigation.fullGraph(
-                    deadline: activeLeafDeadline(id: observationID)
-                )
-                viewportStatus.record(exploration?.viewportExit)
-            }
-            await awaitNotificationIngressTurn()
-            if await captureVisibleObservation(
-                window: observation.notificationWindow
-            ) == nil {
-                viewportStatus.record(nil)
-            }
-            let evidence = await evidence(for: observation)
-            guard case .running(let session) = phase,
-                  session.activeObservation?.id == observationID,
-                  session.machine.activeLeaf?.finishingObservationRequestID == requestID else {
-                return
-            }
-            let outcome: LeafOutcome
-            if let expiration = session.deadlines.expiration {
-                outcome = observationOutcome(
-                    viewportStatus: viewportStatus,
-                    expiration: expiration
-                )
-                if outcome == .heistTimedOut {
-                    markTerminalCollection(expiration)
-                }
-            } else if Task.isCancelled {
-                outcome = .cancelled
-            } else {
-                outcome = observationOutcome(
-                    viewportStatus: viewportStatus,
-                    expiration: nil
-                )
-            }
-            releaseActiveObservation(
-                preservingDeadline: outcome == .heistTimedOut
+            let result = await closeObservation(
+                observation,
+                exitPosition: exitPosition,
+                capture: .coverage,
+                source: .request(requestID)
             )
-            complete(
-                interactionID,
-                input: .observationFinished(
-                    source: .request(requestID),
-                    observationID: observationID,
-                    evidence: evidence,
-                    outcome: outcome
-                )
+            await admitObservationCloseResult(
+                interactionID: interactionID,
+                observationID: observationID,
+                source: .request(requestID),
+                result: result
             )
         }
 
@@ -646,10 +583,10 @@ extension HeistExecution {
             interpret(state)
             guard case .running(let nextSession) = phase,
                   case .idle = nextSession.interaction,
-                  !deferred.isEmpty else {
+                  let deferred else {
                 return
             }
-            performNext(deferred)
+            performRequest(deferred)
         }
 
         private func shouldStopExploration(_ interactionID: InteractionID) -> Bool {
@@ -658,7 +595,7 @@ extension HeistExecution {
                   current == interactionID else {
                 return true
             }
-            return !deferred.isEmpty || session.deadlines.expiration != nil
+            return deferred != nil || session.deadlines.expiration != nil
         }
 
         private func interactionFinished(_ interactionID: InteractionID) {
@@ -672,8 +609,8 @@ extension HeistExecution {
             phase = .running(session)
             if let expiration {
                 collectTerminalEvidence(expiration)
-            } else if !deferred.isEmpty {
-                performNext(deferred)
+            } else if let deferred {
+                performRequest(deferred)
             }
         }
 
@@ -681,7 +618,7 @@ extension HeistExecution {
             id: RequestID
         ) -> SemanticObservationDeadline? {
             guard case .running(let session) = phase,
-                  session.activeObservation?.id == id,
+                  session.observation.active?.id == id,
                   case .leaf(_, let leaf) = session.deadlines.targets else {
                 return nil
             }
@@ -773,7 +710,7 @@ extension HeistExecution {
                   case .idle = session.interaction else {
                 return
             }
-            guard let observation = session.activeObservation else {
+            guard let observation = session.observation.active else {
                 let state = session.machine.finishAfterHeistTimeout()
                 phase = .running(session)
                 returnToDeadlineScope(state)
@@ -787,177 +724,232 @@ extension HeistExecution {
             let interactionID = nextInteractionID()
             let task = Task { @MainActor [weak self] in
                 guard let self else { return }
-                var viewportStatus = observation.viewportStatus
-                await self.awaitNotificationIngressTurn()
-                if await self.captureVisibleObservation(
-                    window: observation.notificationWindow
-                ) == nil {
-                    viewportStatus.record(nil)
-                }
-                let evidence = await self.evidence(for: observation)
-                self.finishTerminalEvidence(
+                let result = await self.closeObservation(
+                    observation,
+                    exitPosition: .current,
+                    capture: .singleCycle,
+                    source: .deadline
+                )
+                await self.admitObservationCloseResult(
                     interactionID: interactionID,
                     observationID: observation.id,
-                    evidence: evidence,
-                    viewportStatus: viewportStatus,
-                    expiration: expiration
+                    source: .deadline,
+                    result: result
                 )
                 self.interactionFinished(interactionID)
             }
             session.interaction = .running(
                 interactionID,
                 task: task,
-                deferred: [],
+                deferred: nil,
                 completesAfterDeadline: true
             )
             phase = .running(session)
         }
 
-        private func finishTerminalEvidence(
+        private func admitObservationCloseResult(
             interactionID: InteractionID,
             observationID: RequestID,
-            evidence: Observation.Evidence,
-            viewportStatus: ViewportStatus,
-            expiration: DeadlineExpiration
-        ) {
+            source: ObservationFinishSource,
+            result: ObservationCloseResult
+        ) async {
             guard case .running(var session) = phase,
                   case .running(let current, _, _, _) = session.interaction,
                   current == interactionID,
-                  let observation = session.activeObservation,
+                  case .active(let observation) = session.observation,
                   observation.id == observationID else {
                 return
             }
-            session.interaction = .idle
+            if case .request(let requestID) = source,
+               session.machine.activeLeaf?.finishingObservationRequestID != requestID {
+                return
+            }
             release(observation)
-            session.activeObservation = nil
-            if !expiration.includesWhole {
+            session.observation = .idle
+            let expiration = session.deadlines.expiration
+            session.deadlines.cancelTimer()
+            if expiration?.includesWhole != true {
                 session.deadlines = .unscheduled(.whole(
                     session.deadlines.targets.whole
                 ))
             }
-            let finalObservationSatisfied = session.machine.activeLeaf.map {
-                $0.id == observation.id && $0.expectationIsSatisfied
+            let expectationSatisfied = session.machine.activeLeaf.map {
+                $0.id == observation.id
+                    && $0.expectationIsProven(by: result.evidence)
             } ?? false
             let outcome: LeafOutcome
-            if case .available = viewportStatus,
-               finalObservationSatisfied {
+            if case .available = result.viewportStatus,
+               expectationSatisfied {
                 outcome = .completed
             } else {
                 outcome = observationOutcome(
-                    viewportStatus: viewportStatus,
-                    expiration: expiration
+                    viewportStatus: result.viewportStatus,
+                    expiration: expiration,
+                    hasObservedState: result.evidence.baseline != nil
+                        || result.evidence.current != nil
                 )
             }
-            let state = session.machine.advance(.observationFinished(
-                source: .deadline,
+            let nextProtectedHistoryIndex = brains.vault
+                .semanticObservationStream.historyEndIndex()
+            brains.vault.semanticObservationStream
+                .advanceHistoryProtection(
+                    from: session.protectedHistoryIndex,
+                    to: nextProtectedHistoryIndex
+                )
+            session.protectedHistoryIndex = nextProtectedHistoryIndex
+            phase = .running(session)
+            complete(interactionID, input: .observationFinished(
+                source: source,
                 observationID: observation.id,
-                evidence: evidence,
-                outcome: outcome
+                evidence: result.evidence,
+                outcome: outcome,
+                timing: result.timing
             ))
-
-            if expiration.includesWhole {
-                let terminalState: State
-                if case .complete = state {
-                    terminalState = state
-                } else if case .pending(.perform(let requests)) = state,
-                          requests.allSatisfy(\.completesAfterDeadline) {
-                    terminalState = state
-                } else {
-                    terminalState = session.machine.finishAfterHeistTimeout()
-                }
-                phase = .running(session)
-                returnToDeadlineScope(terminalState)
-            } else {
-                phase = .running(session)
-                interpret(state)
-            }
         }
 
         private func observationOutcome(
             viewportStatus: ViewportStatus,
-            expiration: DeadlineExpiration?
+            expiration: DeadlineExpiration?,
+            hasObservedState: Bool
         ) -> LeafOutcome {
-            switch (viewportStatus, expiration) {
-            case (.failed(let failure), _):
-                .viewportExitFailed(failure)
-            case (.unavailable, _):
-                .unavailable
-            case (.available, .some(let expiration)):
-                expiration.includesWhole ? .heistTimedOut : .timedOut
-            case (.available, nil):
-                .completed
-            }
-        }
-
-        private func markTerminalCollection(_ expiration: DeadlineExpiration) {
-            guard case .running(var session) = phase else { return }
-            session.deadlines = .collectingTerminalEvidence(
-                session.deadlines.targets,
-                expiration
-            )
-            phase = .running(session)
-        }
-
-        private func releaseActiveObservation(
-            preservingDeadline: Bool = false
-        ) {
-            guard case .running(var session) = phase,
-                  let observation = session.activeObservation else {
-                return
-            }
-            release(observation)
-            session.activeObservation = nil
-            if !preservingDeadline {
-                session.deadlines.cancelTimer()
-                session.deadlines = .unscheduled(.whole(
-                    session.deadlines.targets.whole
-                ))
-            }
-            phase = .running(session)
-            if !preservingDeadline {
-                armDeadline()
+            switch viewportStatus {
+            case .failed(let failure):
+                return .viewportExitFailed(failure)
+            case .unavailable where !hasObservedState:
+                return .unavailable
+            case .unavailable:
+                if let expiration {
+                    return expiration.includesWhole ? .heistTimedOut : .timedOut
+                }
+                return .unavailable
+            case .available:
+                if let expiration {
+                    return expiration.includesWhole ? .heistTimedOut : .timedOut
+                }
+                return .completed
             }
         }
 
         private func release(_ observation: ActiveObservation) {
             observation.scopeSubscription.cancel()
-            observation.notificationWindow.consume()
+            observation.notificationWindow.cancel()
         }
 
         private func evidence(
-            for observation: ActiveObservation
-        ) async -> Observation.Evidence {
-            await brains.vault.semanticObservationStream.stateOwner
+            for observation: ActiveObservation,
+            terminalCaptureAvailable: Bool
+        ) -> Observation.Evidence {
+            let evidence = brains.vault.semanticObservationStream
                 .evidence(after: observation.boundary)
-        }
-
-        private func awaitNotificationIngressTurn() async {
-            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                DispatchQueue.main.async {
-                    continuation.resume()
-                }
-            }
-        }
-
-        private func captureVisibleObservation(
-            window: AccessibilityNotificationScopeLease
-        ) async -> TheVault.State.Current? {
-            guard let observation = brains.vault.captureVisibleObservation() else {
-                return nil
-            }
-            brains.vault.observeInterface(observation)
-            let admitted = CommittableInterfaceObservation.admitCaptured(
-                observation,
-                tripwireSignal: brains.vault.semanticObservationStream
-                    .currentTripwireSignal(),
-                lineage: .resting
-            )
-            return await brains.vault.semanticObservationStream
-                .commitVisibleObservation(
-                    admitted,
-                    notificationBatch: window.capture()
+            guard terminalCaptureAvailable || evidence.coverage != .complete else {
+                return Observation.Evidence(
+                    baseline: evidence.baseline,
+                    events: evidence.events,
+                    current: evidence.current,
+                    coverage: .incomplete(.captureUnavailable)
                 )
-                .current
+            }
+            return evidence
+        }
+
+        private func closeObservation(
+            _ observation: ActiveObservation,
+            exitPosition: Navigation.ViewportExitPosition,
+            capture: ObservationCloseCapture,
+            source: ObservationFinishSource
+        ) async -> ObservationCloseResult {
+            let existingEvidence = brains.vault.semanticObservationStream
+                .evidence(after: observation.boundary)
+            let expectationProven = {
+                guard case .running(let session) = phase else { return false }
+                return session.machine.activeLeaf.map {
+                    $0.id == observation.id
+                        && $0.expectationIsProven(by: existingEvidence)
+                } ?? false
+            }()
+            var viewportStatus = observation.viewportStatus
+            switch exitPosition {
+            case .current:
+                break
+            case .origin:
+                let exploration = await brains.navigation.fullGraph(
+                    deadline: activeLeafDeadline(id: observation.id)
+                )
+                viewportStatus.record(exploration?.viewportExit)
+            }
+            let coverageAdmitted = await observation.notificationWindow
+                .admitCausallyCovered { [self] coverage -> Bool? in
+                    let stream = brains.vault.semanticObservationStream
+                    if case .coverage = capture,
+                       expectationProven,
+                       stream.hasCommittedObservation(covering: coverage) {
+                        return observationCloseIsCurrent(
+                            observationID: observation.id,
+                            source: source
+                        ) ? true : nil
+                    }
+                    let current = switch capture {
+                    case .coverage:
+                        await stream.visibleObservation(covering: coverage)
+                    case .singleCycle:
+                        await stream.visibleObservationAfterNextCycle(
+                            covering: coverage
+                        )
+                    }
+                    guard current != nil,
+                          observationCloseIsCurrent(
+                              observationID: observation.id,
+                              source: source
+                          )
+                    else { return nil }
+                    return true
+                }
+            if coverageAdmitted == nil {
+                viewportStatus.record(nil)
+            } else {
+                viewportStatus.record(.retained)
+            }
+            return ObservationCloseResult(
+                evidence: evidence(
+                    for: observation,
+                    terminalCaptureAvailable: coverageAdmitted != nil
+                ),
+                timing: expectationTiming(for: observation),
+                viewportStatus: viewportStatus
+            )
+        }
+
+        private func observationCloseIsCurrent(
+            observationID: RequestID,
+            source: ObservationFinishSource
+        ) -> Bool {
+            guard case .running(let session) = phase,
+                  session.observation.active?.id == observationID,
+                  let activeLeaf = session.machine.activeLeaf,
+                  activeLeaf.id == observationID
+            else { return false }
+            return activeLeaf.admits(source)
+        }
+
+        private func expectationTiming(
+            for observation: ActiveObservation,
+            endedAt: RuntimeElapsed.Instant = RuntimeElapsed.now
+        ) -> HeistExpectationTiming {
+            HeistExpectationTiming(
+                budgetMs: RuntimeElapsed.admit(
+                    milliseconds: observation.deadline.budgetMilliseconds
+                ),
+                elapsedMs: RuntimeElapsed.milliseconds(
+                    since: observation.deadline.start,
+                    endedAt: endedAt
+                ),
+                lastTreeChangeElapsedMs: observation.lastTreeChangeAt.map {
+                    RuntimeElapsed.milliseconds(
+                        since: observation.deadline.start,
+                        endedAt: $0
+                    )
+                }
+            )
         }
 
         private func failureScreenshot(
@@ -965,7 +957,10 @@ extension HeistExecution {
             mode: ScreenCaptureMode
         ) async -> HeistExecutionStepResult? {
             let result: ActionResult
-            switch await brains.captureScreenPayload(mode: mode) {
+            switch await brains.captureScreenPayload(
+                mode: mode,
+                observationBoundary: .observationCycle
+            ) {
             case .success(let payload):
                 result = .success(
                     payload: .screenshot(payload),
@@ -1015,29 +1010,24 @@ extension HeistExecution {
             resolve(.failure(CancellationError()))
         }
 
-        private func resolve(_ resolution: Result<Completion, any Error>) {
+        private func resolve(
+            _ resolution: Result<Completion, CancellationError>
+        ) {
             guard case .running(let session) = phase else { return }
             phase = .cleaning
             session.deadlines.cancelTimer()
             session.eventSubscription.cancel()
-            session.observationDemand.cancel()
             switch session.interaction {
             case .idle:
                 break
             case .running(_, let task, _, _):
                 task.cancel()
             }
-            switch resolution {
-            case .success:
-                if let observation = session.activeObservation {
-                    release(observation)
-                }
-                session.notificationScope.consume()
-            case .failure:
-                if let observation = session.activeObservation {
-                    observation.scopeSubscription.cancel()
-                    observation.notificationWindow.cancel()
-                }
+            if let observation = session.observation.active {
+                observation.scopeSubscription.cancel()
+                observation.notificationWindow.cancel()
+            }
+            if case .failure = resolution {
                 session.notificationScope.cancel()
             }
 
@@ -1046,9 +1036,25 @@ extension HeistExecution {
                 if case .running(_, let task, _, _) = session.interaction {
                     _ = await task.value
                 }
-                await self.brains.vault.semanticObservationStream.stateOwner
+                let terminalFailure: HeistExecution.Failure?
+                switch resolution {
+                case .success:
+                    terminalFailure = await self.admitTerminalNotifications(
+                        session.notificationScope
+                    )
+                        ? nil
+                        : .accessibilityTreeUnavailable
+                case .failure:
+                    terminalFailure = nil
+                }
+                session.observationDemand.cancel()
+                self.brains.vault.semanticObservationStream
                     .releaseHistory(from: session.protectedHistoryIndex)
                 self.phase = .finished
+                if let terminalFailure {
+                    session.continuation.resume(throwing: terminalFailure)
+                    return
+                }
                 switch resolution {
                 case .success(let completion):
                     session.continuation.resume(returning: completion)
@@ -1058,14 +1064,24 @@ extension HeistExecution {
             }
         }
 
-        private func clean(_ installation: Installation) async {
-            phase = .cleaning
-            installation.observationDemand.cancel()
-            installation.notificationScope.cancel()
-            await brains.vault.semanticObservationStream.stateOwner
-                .releaseHistory(from: installation.protectedHistoryIndex)
-            phase = .finished
+        private func admitTerminalNotifications(
+            _ scope: AccessibilityNotificationScopeLease
+        ) async -> Bool {
+            guard await scope.admitCausallyCovered({ [self] coverage in
+                guard coverage.requiresObservation else {
+                    return true
+                }
+                return await brains.vault.semanticObservationStream
+                    .visibleObservationThroughCausalCycles(
+                        covering: coverage
+                    ) != nil
+            }) != nil else {
+                scope.cancel()
+                return false
+            }
+            return true
         }
+
     }
 }
 
@@ -1086,7 +1102,7 @@ private extension TheBrains {
         case .visible:
             guard case .committed(let current) =
                     await vault.semanticObservationStream
-                        .refreshVisibleObservation() else {
+                        .refreshedVisibleObservation(boundary: .cancellation) else {
                 return nil
             }
             return current

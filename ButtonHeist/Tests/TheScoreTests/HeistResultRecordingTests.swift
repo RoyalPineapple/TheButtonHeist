@@ -6,23 +6,27 @@ import Testing
 
 @Suite(.serialized) struct HeistResultRecordingTests {
 
-    @Test func `record failing result as gzip artifact`() throws {
+    @Test func `recording remains self contained after move and rename`() throws {
         try withTemporaryDirectory(prefix: "heist-result-recorder") { directory in
             let plan = try samplePlan()
             let result = failedResult()
-
-            let recording = try #require(try HeistResultRecording.write(
+            let originalURL = try #require(try HeistResultRecording.write(
                 result,
                 plan: plan,
                 configuration: HeistResultRecordingConfiguration(rootDirectory: directory, mode: .failures)
             ))
+            let movedDirectory = directory.appendingPathComponent("moved", isDirectory: true)
+            try FileManager.default.createDirectory(at: movedDirectory, withIntermediateDirectories: true)
+            let renamedURL = movedDirectory.appendingPathComponent("renamed-recording")
+            try FileManager.default.moveItem(at: originalURL, to: renamedURL)
 
-            #expect(recording.heistName == "Checkout_Flow")
-            #expect(recording.fingerprint == (try HeistResultRecording.heistFingerprint(for: plan)))
-            #expect(recording.url.pathExtension == "gz")
-            #expect(recording.url.lastPathComponent.hasSuffix("-failed.json.gz"))
-            #expect(recording.url.deletingLastPathComponent().lastPathComponent.hasPrefix("checkout-flow-"))
-            #expect(try HeistResultCodec.decode(contentsOf: recording.url) == result)
+            let recording = try HeistResultCodec.decode(contentsOf: renamedURL)
+            #expect(recording.schemaVersion == HeistResultRecording.currentSchemaVersion)
+            #expect(recording.result == result)
+            #expect(recording.planName == "Checkout_Flow")
+            #expect(recording.planFingerprint == (try HeistResultRecording.planFingerprint(for: plan)))
+            #expect(recording.recordedAt <= Date())
+            #expect(recording.producerVersion == buttonHeistVersion)
         }
     }
 
@@ -43,8 +47,83 @@ import Testing
             ))
 
             #expect(skipped == nil)
-            #expect(recording.url.lastPathComponent.hasSuffix("-passed.json.gz"))
-            #expect(try HeistResultCodec.decode(contentsOf: recording.url) == result)
+            #expect(try HeistResultCodec.decode(contentsOf: recording).result == result)
+        }
+    }
+
+    @Test func `recording round trips complete provenance`() throws {
+        let recordedAt = Date(timeIntervalSince1970: 1_753_800_123.456)
+        let producerVersion: ButtonHeistVersion = "1.2.3"
+        let plan = try samplePlan()
+        let recording = try HeistResultRecording(
+            result: failedResult(),
+            plan: plan,
+            recordedAt: recordedAt,
+            producerVersion: producerVersion
+        )
+
+        let decoded = try HeistResultCodec.decode(HeistResultCodec.encode(recording))
+
+        #expect(decoded == recording)
+        #expect(decoded.schemaVersion == 1)
+        #expect(decoded.result == failedResult())
+        #expect(decoded.planName == plan.name)
+        #expect(decoded.planFingerprint == (try HeistResultRecording.planFingerprint(for: plan)))
+        #expect(decoded.recordedAt == recordedAt)
+        #expect(decoded.producerVersion == producerVersion)
+    }
+
+    @Test func `recording root has one exact shape`() throws {
+        let recording = try HeistResultRecording(result: passedResult(), plan: samplePlan())
+        let data = try HeistResultCodec.encode(recording)
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        #expect(Set(object.keys) == [
+            "schemaVersion",
+            "result",
+            "planName",
+            "planFingerprint",
+            "recordedAt",
+            "producerVersion",
+        ])
+        #expect(object["outcome"] == nil)
+    }
+
+    @Test func `recording rejects unknown root key`() throws {
+        let recording = try HeistResultRecording(result: passedResult(), plan: samplePlan())
+        var object = try recordingJSONObject(recording)
+        object["legacyResult"] = object["result"]
+
+        #expect(throws: DecodingError.self) {
+            _ = try HeistResultCodec.decode(JSONSerialization.data(withJSONObject: object))
+        }
+    }
+
+    @Test func `recording rejects unsupported schema version`() throws {
+        let recording = try HeistResultRecording(result: passedResult(), plan: samplePlan())
+        var object = try recordingJSONObject(recording)
+        object["schemaVersion"] = 2
+
+        #expect(throws: HeistResultRecordingError.unsupportedSchemaVersion(2)) {
+            _ = try HeistResultCodec.decode(JSONSerialization.data(withJSONObject: object))
+        }
+    }
+
+    @Test func `recording preserves bounded result admission`() throws {
+        let result = HeistResultFixture.result(steps: [
+            HeistResultFixture.warning(path: "$.body[0]", message: "first"),
+            HeistResultFixture.warning(path: "$.body[1]", message: "second"),
+        ])
+        let recording = try HeistResultRecording(result: result, plan: samplePlan())
+        let data = try HeistResultCodec.encode(recording)
+        let limits = HeistResultCodecLimits(
+            maxGzipCompressedBytes: 1_024,
+            maxGzipDecompressedBytes: 1_024,
+            maxNodeCount: 1
+        )
+
+        #expect(throws: DecodingError.self) {
+            _ = try HeistResultCodec.decode(data, limits: limits)
         }
     }
 
@@ -147,6 +226,11 @@ import Testing
             steps: [HeistResultFixture.warning(path: "$.body[0]", message: "record result")],
             durationMs: 2
         )
+    }
+
+    private func recordingJSONObject(_ recording: HeistResultRecording) throws -> [String: Any] {
+        let data = try HeistResultCodec.encode(recording)
+        return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
     private func setEnvironment(_ key: String, _ value: String?) {

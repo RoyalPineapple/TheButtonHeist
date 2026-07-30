@@ -8,24 +8,31 @@ public enum ScreenCaptureMode: String, Codable, Sendable, Equatable, CaseIterabl
 
 public struct ScreenRequestPayload: Codable, Sendable, Equatable {
     public let mode: ScreenCaptureMode
+    public let timeout: WaitTimeout
 
-    public init(mode: ScreenCaptureMode = .raw) {
+    public init(
+        mode: ScreenCaptureMode = .raw,
+        timeout: WaitTimeout = defaultWaitTimeout
+    ) {
         self.mode = mode
+        self.timeout = timeout
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case mode
+        case mode, timeout
     }
 
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "screen request payload")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         mode = try container.decodeIfPresent(ScreenCaptureMode.self, forKey: .mode) ?? .raw
+        timeout = try container.decode(WaitTimeout.self, forKey: .timeout)
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(mode, forKey: .mode)
+        try container.encode(timeout, forKey: .timeout)
     }
 }
 

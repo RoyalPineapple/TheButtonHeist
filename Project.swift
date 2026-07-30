@@ -44,6 +44,36 @@ func hostedTestTarget(
     )
 }
 
+func unhostedInsideJobTestTarget(
+    name: String,
+    bundleId: String,
+    sources: SourceFilesList
+) -> Target {
+    .target(
+        name: name,
+        destinations: [.iPhone, .iPad],
+        product: .unitTests,
+        bundleId: bundleId,
+        deploymentTargets: .iOS("16.0"),
+        infoPlist: .default,
+        sources: sources,
+        dependencies: [
+            .target(name: "ButtonHeistSupport"),
+            .target(name: "ButtonHeistTestSupport"),
+            .target(name: "ButtonHeistTesting"),
+            .target(name: "TheInsideJob"),
+            .target(name: "ThePlans"),
+            .target(name: "TheScore"),
+            .external(name: "AccessibilitySnapshotModel"),
+        ],
+        settings: .settings(base: [
+            "SWIFT_STRICT_CONCURRENCY": "complete",
+            "SWIFT_TREAT_WARNINGS_AS_ERRORS": "YES",
+            "SWIFT_VERSION": "6",
+        ])
+    )
+}
+
 func testScheme(name: String) -> Scheme {
     .scheme(
         name: name,
@@ -89,27 +119,41 @@ struct HostedTestDescriptor {
     }
 }
 
+let insideJobLogicTestTarget = unhostedInsideJobTestTarget(
+    name: "TheInsideJobLogicTests",
+    bundleId: "com.buttonheist.theinsidejob.logic.tests",
+    sources: [
+        "ButtonHeist/Tests/TheInsideJobTests/Logic/**",
+        "ButtonHeist/Tests/TheInsideJobTests/Shared/LogicWindow/**",
+        "ButtonHeist/Tests/TheInsideJobTests/Shared/Socket/**",
+    ]
+)
+
 let hostedTestDescriptors = [
     HostedTestDescriptor(
-        name: "TheInsideJobTests",
-        bundleId: "com.buttonheist.theinsidejob.tests",
-        sources: .sourceFilesList(globs: [
-            .glob(
-                "ButtonHeist/Tests/TheInsideJobTests/**",
-                excluding: ["ButtonHeist/Tests/TheInsideJobTests/**/*IntegrationTests.swift"]
-            ),
-        ]),
+        name: "TheInsideJobWindowTests",
+        bundleId: "com.buttonheist.theinsidejob.window.tests",
+        sources: [
+            "ButtonHeist/Tests/TheInsideJobTests/Window/**",
+            "ButtonHeist/Tests/TheInsideJobTests/Shared/LogicWindow/**",
+            "ButtonHeist/Tests/TheInsideJobTests/Shared/Socket/**",
+        ],
         runsInBehaviorSuite: false
     ),
     HostedTestDescriptor(
         name: "TheInsideJobIntegrationTests",
         bundleId: "com.buttonheist.theinsidejob.integration.tests",
         sources: [
-            "ButtonHeist/Tests/TheInsideJobTests/**/*IntegrationTests.swift",
-            "ButtonHeist/Tests/TheInsideJobTests/Helpers/**",
-            "ButtonHeist/Tests/TheInsideJobTests/KeyboardWindowTestHelpers.swift",
+            "ButtonHeist/Tests/TheInsideJobTests/Integration/**",
+            "ButtonHeist/Tests/TheInsideJobTests/Shared/Socket/**",
         ],
         runsInBehaviorSuite: false
+    ),
+    HostedTestDescriptor(
+        name: "TheInsideJobHostedBehaviorTests",
+        bundleId: "com.buttonheist.theinsidejob.hosted-behavior.tests",
+        sources: ["ButtonHeist/Tests/TheInsideJobTests/HostedBehavior/**"],
+        runsInBehaviorSuite: true
     ),
     HostedTestDescriptor(
         name: "DogfoodFeatureFlowTests",
@@ -137,7 +181,9 @@ let hostedTestDescriptors = [
     ),
 ]
 
-let behaviorTestDescriptors = hostedTestDescriptors.filter(\.runsInBehaviorSuite)
+let hostedAggregateTestDescriptors = hostedTestDescriptors.filter {
+    $0.name == "TheInsideJobWindowTests" || $0.runsInBehaviorSuite
+}
 
 let macFrameworkTestTargetNames = [
     "ButtonHeistSupportTests",
@@ -407,7 +453,7 @@ let project = Project(
             ]
         ),
 
-    ] + hostedTestDescriptors.map(\.target),
+    ] + [insideJobLogicTestTarget] + hostedTestDescriptors.map(\.target),
     schemes: [
         frameworkScheme(name: "ThePlans"),
         frameworkScheme(name: "TheScore"),
@@ -432,6 +478,7 @@ let project = Project(
         ),
         testScheme(name: "TheScoreTests"),
         testScheme(name: "ButtonHeistTests"),
+        testScheme(name: "TheInsideJobLogicTests"),
         .scheme(
             name: "MacFrameworkTests",
             buildAction: .buildAction(
@@ -450,9 +497,11 @@ let project = Project(
     ] + hostedTestDescriptors.map(\.scheme) + [
         .scheme(
             name: "HostedBehaviorTests",
-            buildAction: .buildAction(targets: behaviorTestDescriptors.map { .target($0.name) }),
+            buildAction: .buildAction(
+                targets: hostedAggregateTestDescriptors.map { .target($0.name) }
+            ),
             testAction: .targets(
-                behaviorTestDescriptors.map {
+                hostedAggregateTestDescriptors.map {
                     .testableTarget(target: .target($0.name), parallelization: .disabled)
                 },
                 arguments: .arguments(environmentVariables: [

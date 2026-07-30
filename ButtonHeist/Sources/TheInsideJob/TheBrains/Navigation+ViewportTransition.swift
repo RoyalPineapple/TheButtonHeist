@@ -54,12 +54,14 @@ extension Navigation {
     func performViewportTransition(
         _ intent: ViewportMovementIntent,
         deadline: SemanticObservationDeadline? = nil,
+        observationBoundary: SemanticObservationWaitBoundary = .cancellation,
         discoveryCommitPolicy: DiscoveryCommitPolicy = .mergeIntoInterface
     ) async -> ViewportTransition {
         await vault.semanticObservationStream.movingViewport {
             await performViewportTransitionMovingViewport(
                 intent,
                 deadline: deadline,
+                observationBoundary: observationBoundary,
                 discoveryCommitPolicy: discoveryCommitPolicy
             )
         }
@@ -70,26 +72,35 @@ extension Navigation {
     private func performViewportTransitionMovingViewport(
         _ intent: ViewportMovementIntent,
         deadline: SemanticObservationDeadline?,
+        observationBoundary: SemanticObservationWaitBoundary,
         discoveryCommitPolicy: DiscoveryCommitPolicy
     ) async -> ViewportTransition {
-        if Task.isCancelled {
-            guard case .restoreVisualOrigin = intent else { return .unavailable() }
-        }
-        guard deadline.map({
-                  $0.remainingSeconds() >= Double(SemanticObservationTiming.viewportTransitionMinimumBudgetMs) / 1_000
-              }) ?? true
-        else { return .unavailable() }
+        guard admitsEffect(intent, deadline: deadline) else { return .unavailable() }
         let previousVisibleIds = vault.viewportElementIDs
-        let notificationWindow = vault.accessibilityNotifications.beginActionWindow()
-        let primitiveOutcome = await dispatchViewportMovement(intent)
+        let primitiveOutcome = await dispatchViewportMovement(
+            intent,
+            deadline: deadline
+        )
         switch primitiveOutcome {
         case .moved:
-            let current = await settledExplorationPage(
-                deadline: deadline,
-                discoveryCommitPolicy: discoveryCommitPolicy,
-                notificationWindow: notificationWindow,
-                afterViewportMovement: true
-            )
+            let current: TheVault.State.Current?
+            if case .restoreVisualOrigin = intent {
+                current = await Task { @MainActor in
+                    await self.settledExplorationPage(
+                        deadline: nil,
+                        observationBoundary: .observationCycle,
+                        discoveryCommitPolicy: discoveryCommitPolicy,
+                        afterViewportMovement: true
+                    )
+                }.value
+            } else {
+                current = await settledExplorationPage(
+                    deadline: deadline,
+                    observationBoundary: observationBoundary,
+                    discoveryCommitPolicy: discoveryCommitPolicy,
+                    afterViewportMovement: true
+                )
+            }
             guard let current else {
                 return .unavailable(previousVisibleIds: previousVisibleIds)
             }
@@ -102,21 +113,21 @@ extension Navigation {
                 current: current
             )
         case .alreadyInPosition:
-            notificationWindow.cancel()
             return ViewportTransition(
                 outcome: .unchanged,
                 previousVisibleIds: previousVisibleIds,
                 current: nil
             )
         case .unavailable:
-            notificationWindow.cancel()
             return .unavailable(previousVisibleIds: previousVisibleIds)
         }
     }
 
     private func dispatchViewportMovement(
         _ intent: ViewportMovementIntent,
+        deadline: SemanticObservationDeadline?
     ) async -> TheSafecracker.ScrollPrimitiveOutcome {
+        guard admitsEffect(intent, deadline: deadline) else { return .unavailable }
         switch intent {
         case .page(let target, let direction, let animated):
             return target.dispatchOnFreshScrollView(in: vault) { scrollView in
@@ -144,6 +155,7 @@ extension Navigation {
             }
             guard case .success(let dispatch) = preparation,
                   let dispatch else { return .unavailable }
+            guard admitsEffect(intent, deadline: deadline) else { return .unavailable }
             return await safecracker.completePreparedTouch(dispatch) ? .moved : .unavailable
         case .revealPoint(let point, let target, let preferredScreenRect, let minimumScreenRect):
             return target.dispatchOnFreshScrollView(in: vault) { scrollView in
@@ -173,6 +185,20 @@ extension Navigation {
                 return safecracker.restoreVisualOrigin(origin, in: scrollView)
             }
         }
+    }
+
+    private func admitsEffect(
+        _ intent: ViewportMovementIntent,
+        deadline: SemanticObservationDeadline?
+    ) -> Bool {
+        if case .restoreVisualOrigin = intent {
+            return true
+        }
+        guard !Task.isCancelled else { return false }
+        return deadline.map {
+            $0.remainingSeconds()
+                >= Double(SemanticObservationTiming.viewportTransitionMinimumBudgetMs) / 1_000
+        } ?? true
     }
 
     private func movementOutcome(

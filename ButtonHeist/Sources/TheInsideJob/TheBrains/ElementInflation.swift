@@ -96,12 +96,13 @@ internal final class ElementInflation {
 
     internal typealias MoveViewport = @MainActor (
         Navigation.ViewportMovementIntent,
+        SemanticObservationDeadline
     ) async -> Navigation.ViewportTransition
 
     internal struct Exploration {
-        internal var settleForDiscovery: @MainActor () async -> Void
         internal var discoverTarget: @MainActor (
             ResolvedAccessibilityTarget,
+            SemanticObservationDeadline
         ) async -> Navigation.InterfaceExplorationResult?
         internal var revealKnownTarget: @MainActor (
             SemanticTargetRevealRequest,
@@ -111,9 +112,7 @@ internal final class ElementInflation {
 
     internal struct GeometryEnvironment {
         internal let now: @MainActor () -> RuntimeElapsed.Instant
-        internal let awaitFrame: @MainActor (
-            Duration
-        ) async -> TheTripwire.TickWaitOutcome
+        internal let refreshVisibleObservation: @MainActor () async -> VisibleObservationOutcome
     }
 
     internal struct CommittedElementTarget {
@@ -135,7 +134,6 @@ internal final class ElementInflation {
 
     internal let vault: TheVault
     internal let safecracker: TheSafecracker
-    internal let tripwire: TheTripwire
     internal var exploration: Exploration
     internal var geometryEnvironment: GeometryEnvironment
 
@@ -143,17 +141,17 @@ internal final class ElementInflation {
     internal init(
         vault: TheVault,
         safecracker: TheSafecracker,
-        tripwire: TheTripwire,
         exploration: Exploration
     ) {
         self.vault = vault
         self.safecracker = safecracker
-        self.tripwire = tripwire
         self.exploration = exploration
         geometryEnvironment = GeometryEnvironment(
             now: { RuntimeElapsed.now },
-            awaitFrame: { timeout in
-                await tripwire.waitForNextTick(timeout: timeout, demand: .immediate)
+            refreshVisibleObservation: { [vault] in
+                await vault.semanticObservationStream.refreshedVisibleObservation(
+                    boundary: .cancellation
+                )
             }
         )
     }
@@ -162,7 +160,7 @@ internal final class ElementInflation {
         for target: ResolvedAccessibilityTarget,
         method: ActionMethod,
         activationPointPolicy: ActivationPointPolicy = .requireOnscreen,
-        operationDeadline: SemanticObservationDeadline? = nil
+        deadline: SemanticObservationDeadline
     ) async -> ElementInflationResult {
         guard !Task.isCancelled else {
             return .failed(.cancelled("element inflation was cancelled before resolution"))
@@ -177,7 +175,7 @@ internal final class ElementInflation {
             for: validatedTarget,
             method: method,
             activationPointPolicy: activationPointPolicy,
-            operationDeadline: operationDeadline
+            deadline: deadline
         )
     }
 
@@ -185,7 +183,7 @@ internal final class ElementInflation {
         for target: ResolvedAccessibilityTarget,
         method: ActionMethod,
         activationPointPolicy: ActivationPointPolicy,
-        operationDeadline: SemanticObservationDeadline? = nil,
+        deadline: SemanticObservationDeadline,
         initialState: State = .resolving
     ) async -> ElementInflationResult {
         var state = initialState
@@ -196,19 +194,19 @@ internal final class ElementInflation {
             switch state {
             case .resolving:
                 let nextState: State
-                switch await findTargetInTree(target) {
+                switch await findTargetInTree(target, deadline: deadline) {
                 case .success(.visible(let treeElement, let resolution)):
                     nextState = .refreshing(
                         target: .captureLocal(target),
                         treeElement: treeElement,
-                        deadline: operationDeadline ?? handoffDeadline(for: treeElement),
+                        deadline: deadline,
                         resolution: resolution
                     )
                 case .success(.known(let treeElement, let resolution)):
                     nextState = .revealing(
                         target: .captureLocal(target),
                         treeElement: treeElement,
-                        deadline: operationDeadline ?? handoffDeadline(for: treeElement),
+                        deadline: deadline,
                         resolution: resolution
                     )
                 case .failure(let failure):
@@ -250,7 +248,10 @@ internal final class ElementInflation {
                 return .inflated(result)
 
             case .failed(let failure):
-                await revealTransaction.rollBack(using: exploration.moveViewport)
+                await revealTransaction.rollBack(
+                    using: exploration.moveViewport,
+                    deadline: deadline
+                )
                 return .failed(failure)
             }
         }
@@ -259,6 +260,7 @@ internal final class ElementInflation {
     internal func refreshCommittedTarget(
         _ target: CommittedElementTarget,
         method: ActionMethod,
+        deadline: SemanticObservationDeadline
     ) async -> ElementInflationResult {
         guard !Task.isCancelled else {
             return .failed(.cancelled("element inflation was cancelled before committed target refresh"))
@@ -274,17 +276,13 @@ internal final class ElementInflation {
             }
             treeElement = current
         case .admitted(_, let semanticTarget):
-            switch resolveAdmittedSemanticTarget(
-                semanticTarget,
-                in: vault.latestObservation.tree
-            ) {
+            switch resolveAdmittedSemanticTarget(semanticTarget) {
             case .success(let current):
                 treeElement = current
             case .failure(let failure):
                 return .failed(failure.inflationFailure)
             }
         }
-        let deadline = handoffDeadline(for: treeElement)
         let initialState: State = vault.liveContains(heistId: treeElement.heistId)
             ? .refreshing(
                 target: target.crossCaptureTarget,
@@ -302,29 +300,8 @@ internal final class ElementInflation {
             for: target.target,
             method: method,
             activationPointPolicy: .requireOnscreen,
+            deadline: deadline,
             initialState: initialState
-        )
-    }
-
-    internal static func handoffTickCount(
-        for treeElement: InterfaceTree.Element,
-        in tree: InterfaceTree
-    ) -> Int {
-        var visited = Set<TreePath>()
-        var containerPath = treeElement.scrollMembership?.containerPath
-        while let path = containerPath, visited.insert(path).inserted {
-            containerPath = tree.containers[path]?.scrollMembership?.containerPath
-        }
-        return max(2, visited.count + 1)
-    }
-
-    internal func handoffDeadline(
-        for treeElement: InterfaceTree.Element
-    ) -> SemanticObservationDeadline {
-        let tickCount = Self.handoffTickCount(for: treeElement, in: vault.interfaceTree)
-        return SemanticObservationDeadline(
-            start: geometryEnvironment.now(),
-            timeout: SemanticObservationTiming.defaultTimeout * tickCount
         )
     }
 

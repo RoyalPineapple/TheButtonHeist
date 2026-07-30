@@ -252,7 +252,7 @@ argument is exact-match sugar. Expression, core, and resolved matcher storage
 are not public authoring API. See [Heist language spec](HEIST-LANGUAGE-SPEC.md)
 for the full matching contract.
 
-## Captures, Change Facts, and Public Deltas
+## Snapshots, Observation Events, and Public Deltas
 
 `TheVault.State` is the runtime semantic owner. It atomically commits the
 current snapshot and interface tree, appends exact `Observation.Event` values
@@ -268,11 +268,18 @@ result. Events and snapshots carry no cursors, operation identity, or replay
 state, and callers cannot supply a temporal boundary.
 
 One internal `HeistExecution.Machine` advances the complete heist. Its returned
-state is either `.pending(.perform(requests))`, `.pending(.wait)`, or
-`.complete(completion)`. The MainActor host performs typed capture, dispatch,
-exploration, and screenshot requests and feeds their typed outcomes back to the
-machine. Actions, waits, invocation expectations, loops, and conditional
+state is either `.pending(.perform(request))`, `.pending(.wait)`, or
+`.complete(completion)`. The MainActor host performs the typed capture,
+dispatch, exploration, or screenshot request and feeds its typed outcome back
+to the machine. Actions, waits, invocation expectations, loops, and conditional
 selection are private machine progress rather than separate executors.
+
+The Vault deterministically reduces admitted snapshots and normalized
+notification payloads into `Observation.Event` values before recording and
+publishing them. The MainActor host owns one absolute deadline per active leaf.
+It starts before baseline acquisition and covers reveal, dispatch, ordered
+predicate evaluation, and the trailing `noChange`; there is no separate
+readiness allowance.
 
 Current predicates such as `exists` and `missing` may match the baseline
 snapshot immediately. Temporal predicates such as `appeared`, `disappeared`,
@@ -280,27 +287,25 @@ and `updated` consume each later history event once in order. Notifications
 likewise match only after the active leaf's boundary. A standalone `waitFor`
 therefore cannot consume evidence from an earlier action or heist.
 
-A screen boundary emits three ordered facts: all old-tree nodes disappear, the
-screen marker occurs, then all new-tree nodes appear. Element updates exist only
-between captures in the same screen generation. A scoped `screenChanged`
-notification is authoritative replacement evidence. Element-change
-notifications and normalized notification payloads remain typed facts but do
-not veto replacement inference from parsed snapshots.
+A screen boundary emits departure `elementsChanged`, `screenChanged`, and
+arrival `elementsChanged` events in that order. Element updates exist only
+between snapshots with no intervening screen boundary. A scoped
+`screenChanged` notification is authoritative replacement evidence.
+Element-change notifications and normalized notification payloads do not veto
+replacement inference from parsed snapshots.
 Notifications are best-effort UIKit evidence, not a delivery guarantee; their
 absence does not by itself prove replacement or stability.
 
 Retained history may span multiple events and retains fast intermediate changes
 until evaluation.
 
-On timeout, the runtime retains a bounded set of semantic candidates from the
-observations the wait already evaluated. Exact predicate mismatches are appended
-to the existing timeout failure message and report. This diagnostic reduction
-performs no additional capture, reveal, discovery, polling, or
-predicate work. It has no public opt-in, continuity token, or result field.
+`noChange` has no payload. It records that the admitted snapshot has no semantic
+or geometry change from the previous committed snapshot within the comparison
+tolerance.
 
 Responses may include compact public deltas named `noChange`,
 `elementsChanged`, or `screenChanged`. This `delta` is a one-way temporal fold:
-it stacks the ordered facts, squashes them into endpoint-friendly edits, and
+it stacks the ordered events, squashes them into endpoint-friendly edits, and
 lets a screen marker dominate the final kind. It cannot preserve the ordered
 history it folded, so predicates never consume it. The full model
 is drawn in the [observation pipeline diagram](diagrams/observation-pipeline.md).
@@ -612,8 +617,8 @@ change; raw `from`/`to` fields are not accepted. Old `change`, `scopes`,
 `screenChanged`, flat element/container predicate fields, aliases, and fallback
 spellings are rejected rather than adapted.
 
-Action-linked evidence and automatic timeout diagnostics are runtime details.
-They do not add Swift authoring options, wire controls, or public result fields.
+Action-linked evidence is a runtime detail. It does not add Swift authoring
+options, wire controls, or public result fields.
 
 ## Minimal Integration
 

@@ -9,18 +9,27 @@ extension Navigation {
 
     func executeScroll(
         _ target: ResolvedScrollTarget,
+        deadline: SemanticObservationDeadline
     ) async -> TheSafecracker.ActionDispatchResult {
         await executeScroll(
             selection: target.selection,
             direction: target.direction,
+            deadline: deadline
         )
     }
 
     func executeScroll(
         selection: ResolvedScrollContainerSelection,
         direction: ScrollDirection,
+        deadline: SemanticObservationDeadline
     ) async -> TheSafecracker.ActionDispatchResult {
-        vault.refreshLiveCapture()
+        guard await refreshVisibleScrollEvidence() else {
+            return .failure(
+                .scroll,
+                message: "scroll failed: no committed visible observation was available",
+                failureKind: .targetUnavailable
+            )
+        }
         let axis = Self.requiredAxis(for: direction)
         switch resolveContainerScrollTarget(
             selection: selection,
@@ -33,6 +42,7 @@ extension Navigation {
                 scrollTarget,
                 direction: uiDirection,
                 animated: false,
+                deadline: deadline
             )
             switch transition.outcome {
             case .moved:
@@ -53,18 +63,27 @@ extension Navigation {
 
     func executeScrollToEdge(
         _ target: ResolvedScrollToEdgeTarget,
+        deadline: SemanticObservationDeadline
     ) async -> TheSafecracker.ActionDispatchResult {
         await executeScrollToEdge(
             selection: target.selection,
             edge: target.edge,
+            deadline: deadline
         )
     }
 
     func executeScrollToEdge(
         selection: ResolvedScrollContainerSelection,
         edge: ScrollEdge,
+        deadline: SemanticObservationDeadline
     ) async -> TheSafecracker.ActionDispatchResult {
-        vault.refreshLiveCapture()
+        guard await refreshVisibleScrollEvidence() else {
+            return .failure(
+                .scrollToEdge,
+                message: "scroll_to_edge failed: no committed visible observation was available",
+                failureKind: .targetUnavailable
+            )
+        }
         let axis = Self.requiredAxis(for: edge)
         switch resolveContainerScrollTarget(
             selection: selection,
@@ -75,6 +94,7 @@ extension Navigation {
             let transition = await scrollToEdgeAndSettle(
                 scrollTarget,
                 edge: edge,
+                deadline: deadline
             )
             switch transition.outcome {
             case .moved:
@@ -96,29 +116,42 @@ extension Navigation {
         }
     }
 
+    private func refreshVisibleScrollEvidence() async -> Bool {
+        await vault.semanticObservationStream.refreshedVisibleObservation(
+            boundary: .cancellation
+        ).isCommitted
+    }
+
     func scrollToEdgeAndSettle(
         _ target: ScrollableTarget,
         edge: ScrollEdge,
+        deadline: SemanticObservationDeadline
     ) async -> ViewportTransition {
         guard case .uiScrollView = target else {
             return .unavailable(previousVisibleIds: vault.viewportElementIDs)
         }
-        return await performViewportTransition(.edge(target, edge: edge))
+        return await performViewportTransition(
+            .edge(target, edge: edge),
+            deadline: deadline
+        )
     }
 
     func scrollOnePageAndSettle(
         _ target: ScrollableTarget,
         direction: UIAccessibilityScrollDirection,
         animated: Bool = true,
+        deadline: SemanticObservationDeadline
     ) async -> ViewportTransition {
         switch target {
         case .uiScrollView:
             return await performViewportTransition(
                 .page(target, direction: direction, animated: animated),
+                deadline: deadline
             )
         case .swipeable:
             return await performViewportTransition(
                 .swipe(target, direction: direction),
+                deadline: deadline
             )
         }
     }

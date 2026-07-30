@@ -16,6 +16,7 @@ SIMULATOR = {
     "name": "test-simulator",
     "device": "iPhone 16 Pro",
     "os": "26.3",
+    "sdk": "26.5",
 }
 SELECTOR_OUTPUT = (
     "sim_udid=TEST-UDID\nsim_name=test-simulator\n"
@@ -51,7 +52,8 @@ class TestRunnerTests(unittest.TestCase):
             {
                 "TheScoreTests",
                 "ButtonHeistTests",
-                "TheInsideJobTests",
+                "TheInsideJobLogicTests",
+                "TheInsideJobWindowTests",
                 "TheInsideJobIntegrationTests",
                 "HostedBehaviorTests",
                 "MacFrameworkTests",
@@ -75,8 +77,73 @@ class TestRunnerTests(unittest.TestCase):
         self.assertEqual(args.suites, ["TheScoreTests", "ButtonHeistTests"])
 
     def test_arguments_parse_simulator_runtime(self) -> None:
-        args = RUNNER["parse_args"](["run", "TheInsideJobTests", "--simulator-runtime", "26.3"])
+        args = RUNNER["parse_args"]([
+            "run",
+            "TheInsideJobLogicTests",
+            "--simulator-runtime",
+            "26.3",
+        ])
         self.assertEqual(args.simulator_runtime, "26.3")
+
+    def test_prepare_simulator_requires_one_explicit_name_and_no_suite(self) -> None:
+        args = RUNNER["parse_args"]([
+            "prepare-simulator",
+            "--simulator-name",
+            "buttonheist-ci-adversarial-123-1",
+            "--simulator-runtime",
+            "26.3",
+        ])
+
+        self.assertEqual(args.suites, [])
+        self.assertEqual(
+            args.simulator_name,
+            "buttonheist-ci-adversarial-123-1",
+        )
+        self.assertEqual(args.simulator_runtime, "26.3")
+        with self.assertRaisesRegex(
+            ValueError,
+            "prepare-simulator requires --simulator-name",
+        ):
+            RUNNER["parse_args"](["prepare-simulator"])
+        with self.assertRaisesRegex(
+            ValueError,
+            "prepare-simulator does not accept suites",
+        ):
+            RUNNER["parse_args"]([
+                "prepare-simulator",
+                "TheInsideJobLogicTests",
+                "--simulator-name",
+                "buttonheist-ci-adversarial-123-1",
+            ])
+        with self.assertRaisesRegex(
+            ValueError,
+            "prepare-simulator does not accept --test",
+        ):
+            RUNNER["parse_args"]([
+                "prepare-simulator",
+                "--simulator-name",
+                "buttonheist-ci-adversarial-123-1",
+                "--test",
+                "AnyTarget/AnySuite/anyMethod",
+            ])
+
+    def test_arguments_preserve_arbitrary_test_identifiers_without_selection_api(self) -> None:
+        identifier = "AnyTarget/AnySuite/anyMethod"
+        args = RUNNER["parse_args"]([
+            "run",
+            "TheInsideJobWindowTests",
+            "--test",
+            identifier,
+        ])
+
+        self.assertEqual(args.test, [identifier])
+        with mock.patch("sys.stderr"), self.assertRaises(SystemExit):
+            RUNNER["parse_args"]([
+                "run",
+                "TheInsideJobWindowTests",
+                "--selection",
+                "full",
+            ])
 
     def test_arguments_accept_focus_instead_of_suites(self) -> None:
         args = RUNNER["parse_args"]([
@@ -104,7 +171,7 @@ class TestRunnerTests(unittest.TestCase):
     def test_retain_simulator_is_limited_to_simulator_using_test_modes(self) -> None:
         args = RUNNER["parse_args"]([
             "build-for-testing",
-            "TheInsideJobTests",
+            "TheInsideJobLogicTests",
             "--retain-simulator",
         ])
         self.assertTrue(args.retain_simulator)
@@ -127,7 +194,7 @@ class TestRunnerTests(unittest.TestCase):
             ])
 
     def test_simulator_runtime_precedence_is_cli_then_env_then_automatic(self) -> None:
-        suite = SUITES["TheInsideJobTests"]
+        suite = SUITES["TheInsideJobLogicTests"]
         cases = (
             ("26.4", "26.3", ("--runtime", "26.3", "--wait")),
             ("26.4", None, ("--runtime", "26.4", "--wait")),
@@ -161,10 +228,47 @@ class TestRunnerTests(unittest.TestCase):
         ), self.assertRaisesRegex(
             RuntimeError, "runtime 27.0 exceeds active SDK 26.5; cleanup failed"
         ):
-            RUNNER["select_simulator"]("run", SUITES["TheInsideJobTests"], None, None)
+            RUNNER["select_simulator"](
+                "run",
+                SUITES["TheInsideJobLogicTests"],
+                None,
+                None,
+            )
 
         delete.assert_called_once()
         self.assertEqual(delete.call_args.args[0]["udid"], "TOO-NEW")
+
+    def test_prepare_simulator_publishes_the_resolved_ci_environment(self) -> None:
+        prepare = mock.Mock(return_value=SIMULATOR)
+        publish = mock.Mock()
+        with mock.patch.dict(
+            RUNNER["main"].__globals__,
+            {
+                "prepare_simulator": prepare,
+                "publish_environment": publish,
+            },
+        ):
+            status = RUNNER["main"]([
+                "prepare-simulator",
+                "--simulator-name",
+                "buttonheist-ci-adversarial-123-1",
+            ])
+
+        self.assertEqual(status, 0)
+        prepare.assert_called_once_with(
+            "prepare-simulator",
+            "buttonheist-ci-adversarial-123-1",
+            None,
+        )
+        publish.assert_called_once_with(
+            {
+                "SIM_UDID": "TEST-UDID",
+                "SIM_NAME": "test-simulator",
+                "SIM_DEVICE_TYPE": "iPhone 16 Pro",
+                "SIM_OS": "26.3",
+                "SIM_SDK": "26.5",
+            }
+        )
 
     def test_focus_expansion_merges_tests_per_suite_without_duplicates(self) -> None:
         selected = RUNNER["focus_runs"]([
@@ -194,7 +298,8 @@ class TestRunnerTests(unittest.TestCase):
                 Path(f"/artifacts/{name}/heist-results"),
             )
             self.assertEqual(paths["diagnostics"], Path(f"/artifacts/{name}/diagnostics"))
-            self.assertEqual(paths["derived"], Path(f"/derived/{name}"))
+            derived_suite = SUITES[name].get("derived_suite", name)
+            self.assertEqual(paths["derived"], Path(f"/derived/{derived_suite}"))
             self.assertEqual(paths["record"], Path(f"/artifacts/{name}/run.json"))
 
     def test_run_drives_xcodebuild_directly_and_never_tuist(self) -> None:
@@ -300,11 +405,15 @@ class TestRunnerTests(unittest.TestCase):
         self.assertIn("--ios-sandbox", test)
         self.assertIn(str(paths["result_bundle"]), test)
 
-    def test_runner_disables_ambient_animations_for_every_hosted_suite(self) -> None:
-        unit_suite = SUITES["TheInsideJobTests"]
-        unit_paths = RUNNER["suite_paths"]("TheInsideJobTests")
-        unit_command = RUNNER["test_command"](
-            "run", "TheInsideJobTests", unit_suite, unit_paths, SIMULATOR
+    def test_hosted_suites_disable_ambient_animations(self) -> None:
+        window_suite = SUITES["TheInsideJobWindowTests"]
+        window_paths = RUNNER["suite_paths"]("TheInsideJobWindowTests")
+        window_command = RUNNER["test_command"](
+            "run",
+            "TheInsideJobWindowTests",
+            window_suite,
+            window_paths,
+            SIMULATOR,
         )
         integration_suite = SUITES["TheInsideJobIntegrationTests"]
         integration_paths = RUNNER["suite_paths"]("TheInsideJobIntegrationTests")
@@ -321,9 +430,60 @@ class TestRunnerTests(unittest.TestCase):
             "run", "HostedBehaviorTests", hosted_suite, hosted_paths, SIMULATOR
         )
 
-        self.assertIn("BUTTONHEIST_TEST_DISABLE_ANIMATIONS=1", unit_command)
+        self.assertIn("BUTTONHEIST_TEST_DISABLE_ANIMATIONS=1", window_command)
         self.assertIn("BUTTONHEIST_TEST_DISABLE_ANIMATIONS=1", integration_command)
         self.assertIn("BUTTONHEIST_TEST_DISABLE_ANIMATIONS=1", hosted_command)
+
+    def test_logic_suite_has_no_host_configuration(self) -> None:
+        suite = SUITES["TheInsideJobLogicTests"]
+        paths = RUNNER["suite_paths"]("TheInsideJobLogicTests")
+        command = RUNNER["test_command"](
+            "run",
+            "TheInsideJobLogicTests",
+            suite,
+            paths,
+            SIMULATOR,
+        )
+
+        self.assertNotIn("BUTTONHEIST_TEST_DISABLE_ANIMATIONS=1", command)
+        self.assertIn("-scheme", command)
+        self.assertEqual(command[command.index("-scheme") + 1], "TheInsideJobLogicTests")
+
+    def test_window_and_behavior_share_one_build_without_overlapping_runs(self) -> None:
+        window = RUNNER["test_command"](
+            "test-without-building",
+            "TheInsideJobWindowTests",
+            SUITES["TheInsideJobWindowTests"],
+            RUNNER["suite_paths"]("TheInsideJobWindowTests"),
+            SIMULATOR,
+        )
+        behavior = RUNNER["test_command"](
+            "test-without-building",
+            "HostedBehaviorTests",
+            SUITES["HostedBehaviorTests"],
+            RUNNER["suite_paths"]("HostedBehaviorTests"),
+            SIMULATOR,
+        )
+
+        for command in (window, behavior):
+            self.assertEqual(command[command.index("-scheme") + 1], "HostedBehaviorTests")
+            self.assertIn("/derived/HostedBehaviorTests", command)
+        self.assertIn("-only-testing:TheInsideJobWindowTests", window)
+        self.assertIn("-skip-testing:TheInsideJobWindowTests", behavior)
+
+    def test_arbitrary_test_replaces_a_suite_default_only_testing_projection(self) -> None:
+        identifier = "TheInsideJobWindowTests/PresentationObscuringTests/testModal"
+        command = RUNNER["test_command"](
+            "run",
+            "TheInsideJobWindowTests",
+            SUITES["TheInsideJobWindowTests"],
+            RUNNER["suite_paths"]("TheInsideJobWindowTests"),
+            SIMULATOR,
+            (identifier,),
+        )
+
+        self.assertIn(f"-only-testing:{identifier}", command)
+        self.assertNotIn("-only-testing:TheInsideJobWindowTests", command)
 
     def test_macos_supports_prebuilt_focused_feedback(self) -> None:
         suite = SUITES["TheScoreTests"]
@@ -437,7 +597,7 @@ class TestRunnerTests(unittest.TestCase):
                     "delete_simulators": mock.Mock(return_value=True),
                 },
             ):
-                status = RUNNER["main"]([mode, "TheInsideJobTests"])
+                status = RUNNER["main"]([mode, "TheInsideJobLogicTests"])
                 delete = RUNNER["main"].__globals__["delete_simulators"]
 
                 self.assertEqual(status, 0)
@@ -453,7 +613,7 @@ class TestRunnerTests(unittest.TestCase):
         ):
             status = RUNNER["main"]([
                 "run",
-                "TheInsideJobTests",
+                "TheInsideJobLogicTests",
                 "--retain-simulator",
             ])
             delete = RUNNER["main"].__globals__["delete_simulators"]

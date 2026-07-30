@@ -85,7 +85,7 @@ func actionExpectationSupportsScopedPropertyUpdateDelta() throws {
             ),
             expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                 .updated(.identifier("Search"), .value(after: "Bruschetta")),
-            ]), timeout: 1)))),
+            ]), timeout: .sessionDefault)))),
     ]))
 }
 
@@ -117,7 +117,7 @@ func actionExpectationUsesCanonicalElementChangeAssertions() throws {
                 predicate: .elementsChanged([
                     .appeared(.label(.contains("Bruschetta, $9.00"))),
                 ]),
-                timeout: 1
+                timeout: .sessionDefault
             )))),
     ]))
     #expect(try disappeared == HeistPlan(body: [
@@ -127,7 +127,7 @@ func actionExpectationUsesCanonicalElementChangeAssertions() throws {
                 predicate: .elementsChanged([
                     .disappeared(.identifier("cart-row-bruschetta")),
                 ]),
-                timeout: 1
+                timeout: .sessionDefault
             )))),
     ]))
     #expect(try updated == HeistPlan(body: [
@@ -138,7 +138,7 @@ func actionExpectationUsesCanonicalElementChangeAssertions() throws {
             ),
             expectationPolicy: .expect(ActionExpectation(predicate: .elementsChanged([
                 .updated(.identifier("Search"), .value(after: "Bruschetta")),
-            ]), timeout: 1)))),
+            ]), timeout: .sessionDefault)))),
     ]))
 }
 
@@ -161,12 +161,15 @@ func predicateContextsUseExplicitCanonicalAssertions() throws {
     #expect(try heist == HeistPlan(body: [
         .action(ActionStep(
             command: .activate(.label("Search")),
-            expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Results")), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(
+                predicate: .exists(.label("Results")),
+                timeout: .sessionDefault
+            )))),
         .action(ActionStep(
             command: .activate(.label("Open Details")),
             expectationPolicy: .expect(ActionExpectation(
                 predicate: .screenChanged("Details"),
-                timeout: 1
+                timeout: .sessionDefault
             )))),
         .wait(WaitStep(predicate: .exists(.identifier("ready")), timeout: 2)),
         .conditional(try ConditionalStep(cases: [
@@ -208,7 +211,10 @@ func forEachInfersStringValuesAndElementPredicates() throws {
             body: [
                 .action(ActionStep(
                     command: .activate(.ref("target")),
-                    expectationPolicy: .expect(ActionExpectation(predicate: .missing(.ref("target")), timeout: 1)))),
+                    expectationPolicy: .expect(ActionExpectation(
+                        predicate: .missing(.ref("target")),
+                        timeout: .sessionDefault
+                    )))),
             ]
         )),
     ]))
@@ -403,6 +409,22 @@ func spatialGestureVerbsBuildExplicitEscapeHatches() throws {
 }
 
 @Test
+func actionExpectationPreservesDefaultAndExplicitAuthorship() {
+    #expect(
+        ActionExpectation(predicate: .exists(.label("Saved"))).timeout
+            == .sessionDefault
+    )
+    #expect(
+        ActionExpectation(predicate: .screenChanged).timeout
+            == .sessionDefault
+    )
+    #expect(
+        ActionExpectation(predicate: .screenChanged, timeout: 20).timeout
+            == .explicit(20)
+    )
+}
+
+@Test
 func screenActionsNamespaceBuildsActions() throws {
     let heist = try HeistPlan {
         ScreenActions.Dismiss()
@@ -414,7 +436,9 @@ func screenActionsNamespaceBuildsActions() throws {
     #expect(heist.body == [
         .action(ActionStep(
             command: .dismiss,
-            expectationPolicy: .expect(ActionExpectation(predicate: .screenChanged, timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(
+                predicate: .screenChanged
+            )))),
         .action(ActionStep(
             command: .magicTap,
             expectationPolicy: .waived("Magic tap toggles process-local playback state"))),

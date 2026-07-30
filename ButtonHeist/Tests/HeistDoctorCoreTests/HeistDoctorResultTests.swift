@@ -58,12 +58,12 @@ import TheScore
         let expectationSnapshot = doctorSnapshot(interface: expectationAfter)
         let observation = Observation.Evidence(
             baseline: baseline,
-            current: expectationSnapshot,
             events: [
                 .elementsChanged(dispatchSnapshot),
                 .elementsChanged(expectationSnapshot),
             ],
-            completeness: .incomplete
+            current: expectationSnapshot,
+            coverage: .complete
         )
         let predicate = AccessibilityPredicate.screenChanged
         let failure = HeistFailureDetail(
@@ -81,10 +81,10 @@ import TheScore
                 message: "wait timed out",
                 observation: .observed(observation)
             ),
-            expectation: ExpectationResult(
-                met: false,
+            expectation: HeistResultFixture.expectationEvidence(
                 predicate: predicate,
-                actual: "timed out waiting for checkout"
+                observation: observation,
+                terminalCause: .deadline
             ),
             failure: failure
         )
@@ -202,9 +202,9 @@ private func doctorObservationEvidence(
     let current = after.map { doctorSnapshot(interface: $0) } ?? baseline
     return Observation.Evidence(
         baseline: baseline,
-        current: current,
         events: after == nil ? [] : [.elementsChanged(current)],
-        completeness: .incomplete
+        current: current,
+        coverage: .incomplete(.historyUnavailable)
     )
 }
 

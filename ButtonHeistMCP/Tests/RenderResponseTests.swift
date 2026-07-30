@@ -54,9 +54,9 @@ struct RenderResponseTests {
         )
         let observationEvidence = Observation.Evidence(
             baseline: baseline,
-            current: current,
             events: [.elementsChanged(current)],
-            completeness: .complete
+            current: current,
+            coverage: .complete
         )
         let command = HeistActionCommand.activate(.predicate(ElementPredicate(label: "Load More")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])

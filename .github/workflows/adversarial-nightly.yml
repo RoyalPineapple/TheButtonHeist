@@ -9,10 +9,6 @@ on:
         description: Passing scenario repeat count
         required: false
         default: "5"
-      failure_repeat_count:
-        description: Expected-failure scenario repeat count
-        required: false
-        default: "1"
 
 concurrency:
   group: adversarial-nightly-${{ github.ref }}
@@ -28,9 +24,8 @@ jobs:
     timeout-minutes: 65
     env:
       DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-adversarial
+      BUTTONHEIST_TEST_SIMULATOR_NAME: buttonheist-ci-adversarial-${{ github.run_id }}-${{ github.run_attempt }}
       BUTTONHEIST_ADVERSARIAL_REPEAT_COUNT: ${{ github.event.inputs.passing_repeat_count || '5' }}
-      BUTTONHEIST_ADVERSARIAL_FAILURE_REPEAT_COUNT: ${{ github.event.inputs.failure_repeat_count || '1' }}
-      BUTTONHEIST_ADVERSARIAL_CEILING_POLICY: fail
       BUTTONHEIST_RESULTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-results/adversarial-nightly
       BUTTONHEIST_RESULTS_MODE: failures
 
@@ -43,7 +38,8 @@ jobs:
 
       - name: Boot simulator in background
         run: |
-          python3 scripts/select-ios-ci-simulator.py
+          scripts/test-runner.py prepare-simulator \
+            --simulator-name "$BUTTONHEIST_TEST_SIMULATOR_NAME"
           # Boot continues asynchronously while dependencies install.
 
       - name: Install Tuist
@@ -82,8 +78,6 @@ jobs:
             --app "$APP" \
             --cli "$PWD/ButtonHeistCLI/.build/debug/buttonheist" \
             --repeat-count "$BUTTONHEIST_ADVERSARIAL_REPEAT_COUNT" \
-            --failure-repeat-count "$BUTTONHEIST_ADVERSARIAL_FAILURE_REPEAT_COUNT" \
-            --ceiling-policy "$BUTTONHEIST_ADVERSARIAL_CEILING_POLICY" \
             --report "$RUNNER_TEMP/buttonheist-adversarial-nightly-report.json"
 
       - name: Run lifecycle gate
@@ -147,3 +141,7 @@ jobs:
           job-label: adversarial-nightly
           artifact-name: buttonheist-results-adversarial-nightly-${{ github.run_attempt }}
           retention-days: 30
+
+      - name: Clean up adversarial simulator
+        if: always()
+        run: scripts/test-runner.py cleanup --simulator-name "$BUTTONHEIST_TEST_SIMULATOR_NAME"

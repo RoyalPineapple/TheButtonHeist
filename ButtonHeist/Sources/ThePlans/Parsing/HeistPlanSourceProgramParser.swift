@@ -443,7 +443,7 @@ private extension HeistPlanSourceParser {
         return .invoke(HeistInvocationStep(
             path: invocationPath,
             argument: argument,
-            expectation: expectation.waitStep
+            expectation: expectation.policy.expectedExpectation
         ))
     }
 

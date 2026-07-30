@@ -472,12 +472,6 @@ struct HeistPlanTraversal {
         case .action(let action):
             let actionContext = context.child(path: context.path.child(.action))
             try observe(.action(action, context: actionContext))
-            if let expectation = action.expectationPolicy.expectedStep {
-                try observe(.wait(
-                    expectation,
-                    context: actionContext.child(path: actionContext.path.child(.expectation))
-                ))
-            }
         case .wait(let wait):
             try walk(wait, context: context, observe: observe)
         case .conditional(let conditional):
@@ -664,12 +658,6 @@ struct HeistPlanTraversal {
     ) rethrows {
         let invokeContext = context.child(path: context.path.child(.invoke))
         try observe(.invoke(invoke, context: invokeContext))
-        if let expectation = invoke.expectation {
-            try observe(.wait(
-                expectation,
-                context: invokeContext.child(path: invokeContext.path.child(.expectation))
-            ))
-        }
         guard expandsInvocations else { return }
         guard let resolved = context.resolveInvocation(path: invoke.path) else { return }
         let resolvedNode = resolved.callGraphNode

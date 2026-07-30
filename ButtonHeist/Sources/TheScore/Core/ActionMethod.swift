@@ -22,7 +22,6 @@ public enum ActionMethod: String, Codable, Sendable {
     case getPasteboard
     case takeScreenshot
     case rotor
-    case heistPlan
     case scroll
     case scrollToVisible
     case scrollToEdge

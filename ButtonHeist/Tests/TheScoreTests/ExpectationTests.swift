@@ -28,15 +28,24 @@ import ThePlans
         #expect(secondComplete == firstComplete)
     }
 
-    @Test func `authored order requires later same-lane predicates to be seen after earlier predicates`() throws {
+    @Test func `ordered progress sequence requires the final Ready arrival`() throws {
         let predicates = [
-            try resolved(.exists(.label("First"))),
-            try resolved(.exists(.label("Second"))),
+            try resolved(.elementsChanged([
+                .disappeared(.label("Ready")),
+                .appeared(.label("Loading")),
+                .updated(
+                    .label("Loading"),
+                    .value(before: "0%", after: "100%")
+                ),
+                .disappeared(.label("Loading")),
+                .appeared(.label("Ready")),
+            ])),
         ]
         let events: [Observation.Event] = [
-            .elementsChanged(snapshot(["Second"])),
-            .elementsChanged(snapshot(["First"])),
-            .elementsChanged(snapshot(["Second"])),
+            .elementsChanged(snapshot(["Ready"])),
+            .elementsChanged(snapshot(label: "Loading", value: "0%")),
+            .elementsChanged(snapshot(label: "Loading", value: "100%")),
+            .elementsChanged(snapshot(["Ready"])),
         ]
 
         #expect(Expectation(predicates, events: Array(events.dropLast())).result != .satisfied)

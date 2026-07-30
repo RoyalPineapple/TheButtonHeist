@@ -47,8 +47,6 @@ enum PublicHeistControlFlowJSONFixture {
             "predicate": FixtureJSON.existsPredicate(label: "Done"),
             "timeout": FixtureJSON.double(0.5),
             "iterationCount": FixtureJSON.int(2),
-            "expectation": FixtureJSON.doneExpectation,
-            "result": FixtureJSON.actionResult(method: "wait", message: "repeat matched"),
             "lastObservedSummary": FixtureJSON.string("Done visible"),
         ]),
     ])

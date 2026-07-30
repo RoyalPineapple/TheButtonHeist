@@ -16,14 +16,6 @@ extension FenceResponse {
         if let expectations = report.summary.expectations {
             text += " [expectations: \(expectations.met)/\(expectations.checked)]"
         }
-        if case .changed(let evidence) = report.accessibilityChange,
-           let netDelta = DeltaProjection(
-                evidence: evidence,
-                profile: profile,
-                includeScreenInterface: true
-           ) {
-            text += " [net: \(netDelta.kind.rawValue)]"
-        }
         if let lastScreenId = report.summary.finalScreenId {
             text = "\(lastScreenId) | \(text)"
         }
@@ -34,6 +26,9 @@ extension FenceResponse {
             if let failureMessage = step.failure?.message {
                 line += " -> error: \(failureMessage)"
                 detailLines = Self.compactHeistFailureDeltaLines(delta)
+                if let timing = step.evidence?.expectationTiming {
+                    detailLines.append("    expectation: \(Self.compactExpectationTiming(timing))")
+                }
                 if let activationTrace = step.activationTrace {
                     detailLines.append("    activation: \(Self.compactActivationTrace(activationTrace))")
                 }
@@ -46,6 +41,8 @@ extension FenceResponse {
             }
             if let expectation = step.expectation {
                 line += expectation.met ? " ✓" : " ✗"
+            } else if step.expectationGap != nil {
+                line += " ?"
             }
             text += "\n\(line)"
             if !detailLines.isEmpty {
@@ -68,12 +65,22 @@ extension FenceResponse {
         step.invocationDisplayName ?? step.command?.rawValue ?? step.kind.rawValue
     }
 
+    private static func compactExpectationTiming(
+        _ timing: HeistExpectationTiming
+    ) -> String {
+        var text = "budget=\(timing.budgetMs)ms elapsed=\(timing.elapsedMs)ms"
+        if let lastTreeChangeElapsedMs = timing.lastTreeChangeElapsedMs {
+            text += " lastTreeChange=\(lastTreeChangeElapsedMs)ms"
+        }
+        return text
+    }
+
 }
 
 private extension HeistReport.Evidence {
     func observationDelta(profile: ProjectionProfile) -> DeltaProjection? {
         switch self {
-        case .action(_, let evidence):
+        case .action(_, let evidence, _):
             return evidence.result?.observationEvidence.flatMap {
                 DeltaProjection(
                     evidence: $0,
@@ -81,31 +88,35 @@ private extension HeistReport.Evidence {
                     includeScreenInterface: true
                 )
             }
-        case .wait(let evidence):
+        case .wait(let evidence, _, _):
             return DeltaProjection(
                 evidence: evidence.observation,
                 profile: profile,
                 includeScreenInterface: true
             )
-        case .repeatUntil(_, let evidence):
-            return evidence.actionResult?.observationEvidence.flatMap {
-                DeltaProjection(
-                    evidence: $0,
-                    profile: profile,
-                    includeScreenInterface: true
-                )
-            }
-        case .invocation(_, let evidence):
-            return (evidence.waitObservation
-                ?? evidence.expectationActionResult?.observationEvidence).flatMap {
-                    DeltaProjection(
-                        evidence: $0,
-                        profile: profile,
-                        includeScreenInterface: true
-                    )
-                }
-        case .caseSelection, .forEachString, .forEachElement, .warning:
+        case .caseSelection,
+             .forEachString,
+             .forEachElement,
+             .repeatUntil,
+             .invocation,
+             .warning:
             return nil
+        }
+    }
+
+    var expectationTiming: HeistExpectationTiming? {
+        switch self {
+        case .action(_, let evidence, _):
+            evidence.expectationEvidence?.timing
+        case .wait(let evidence, _, _):
+            evidence.timing
+        case .caseSelection,
+             .forEachString,
+             .forEachElement,
+             .repeatUntil,
+             .invocation,
+             .warning:
+            nil
         }
     }
 }

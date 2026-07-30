@@ -248,14 +248,14 @@ import Testing
             try HeistPlan {
                 Activate(.label("Pay")).expect(.elementsChanged)
             },
-            WaitStep(predicate: .elementsChanged, timeout: 1)
+            WaitStep(predicate: .elementsChanged, timeout: 3)
         ),
         (
             "expect default timeout",
             try HeistPlan {
                 Activate(.label("Pay")).expect(.exists(.label("Receipt")))
             },
-            WaitStep(predicate: .exists(.label("Receipt")), timeout: 1)
+            WaitStep(predicate: .exists(.label("Receipt")), timeout: 3)
         ),
         (
             "expect explicit timeout",
@@ -701,7 +701,8 @@ private extension HeistPlan {
         case .wait(let step):
             return step
         case .action(let step):
-            return step.expectationPolicy.expectedStep
+            return step.expectationPolicy.expectedExpectation?
+                .waitStep(using: .default)
         case .conditional, .forEachElement, .forEachString, .repeatUntil, .warn, .fail, .heist, .invoke:
             return nil
         }

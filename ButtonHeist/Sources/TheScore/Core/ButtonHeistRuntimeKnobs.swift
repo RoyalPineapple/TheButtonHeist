@@ -56,10 +56,6 @@ package struct ButtonHeistRuntimeKnobs: Equatable, Sendable {
         resolve()
     }
 
-    package var singleTripwireTickSettleTimeout: TimeInterval {
-        max(0.05, 2.0 / Double(tripwirePulseFramesPerSecond))
-    }
-
     package static func resolve(
         environment: RuntimeKnobEnvironment = .current
     ) -> ButtonHeistRuntimeKnobs {

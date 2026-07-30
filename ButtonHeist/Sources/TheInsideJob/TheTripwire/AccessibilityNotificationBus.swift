@@ -5,25 +5,12 @@ import UIKit
 
 import TheScore
 
-/// `@unchecked Sendable` justification: all mutable state is protected by
-/// `lock`; waiter continuations are resumed outside the lock and timeout
-/// tasks reference the bus weakly.
+/// `@unchecked Sendable` justification: the serial ingress executor owns every
+/// mutable field. Synchronous entry detects executor reentrancy before dispatch.
 final class AccessibilityNotificationBus: @unchecked Sendable {
     private struct ActiveActionWindow {
         let id: AccessibilityNotificationActionWindowID
-        var childLeaseCount: Int
-
-        /// Set when the owner lease ends while child leases are still open.
-        ///
-        /// Owner and child leases end on independent tasks: active action observation owns
-        /// the window, while a viewport transition or screen capture
-        /// dispatched during that observation holds a child lease, so the
-        /// owner can finish first. Ingress attributes events to the single
-        /// active window, so the window must stay active - still claiming
-        /// events and still absorbing new `beginActionWindow` callers as
-        /// children - until the last child ends, at which point this
-        /// deferred outcome is applied.
-        var pendingOwnerOutcome: AccessibilityNotificationScopeOutcome?
+        let cursor: AccessibilityNotificationCursor
     }
 
     private struct IngressLog {
@@ -32,11 +19,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
         private(set) var latestSequence: UInt64 = 0
         private(set) var latestScopedScreenChangedSequence: UInt64 = 0
         private var evictedThroughSequence: UInt64 = 0
-        private var evictedScopedThroughSequence: UInt64 = 0
-        private var evictedUnclaimedThroughSequence: UInt64 = 0
-        private var evictedActionThroughSequence: UInt64 = 0
-        private var evictedUnclaimedScreenChangedThroughSequence: UInt64 = 0
-        private var evictedActionScreenChangedThroughSequence: UInt64 = 0
+        private var ambientEventCount = 0
 
         init(retentionLimit: Int) {
             precondition(retentionLimit > 0, "Notification retention must be positive")
@@ -49,43 +32,13 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
                 "Accessibility notification sequence must advance"
             )
             latestSequence = event.sequence
-            if case .screenChanged = event.kind, event.provenance == .scoped {
+            if case .screenChanged = event.kind, event.owner.provenance == .scoped {
                 latestScopedScreenChangedSequence = event.sequence
             }
             retainedEvents.append(event)
-            guard retainedEvents.count > retentionLimit else { return }
-
-            let overflow = retainedEvents.count - retentionLimit
-            let evicted = retainedEvents.prefix(overflow)
-            evictedThroughSequence = max(evictedThroughSequence, evicted.last?.sequence ?? 0)
-            evictedScopedThroughSequence = max(
-                evictedScopedThroughSequence,
-                evicted.last(where: { $0.provenance == .scoped })?.sequence ?? 0
-            )
-            for event in evicted {
-                let isScreenChanged = event.kind == .screenChanged
-                if event.actionWindowID == nil {
-                    evictedUnclaimedThroughSequence = max(
-                        evictedUnclaimedThroughSequence,
-                        event.sequence
-                    )
-                    if isScreenChanged, event.provenance == .scoped {
-                        evictedUnclaimedScreenChangedThroughSequence = max(
-                            evictedUnclaimedScreenChangedThroughSequence,
-                            event.sequence
-                        )
-                    }
-                } else {
-                    evictedActionThroughSequence = max(evictedActionThroughSequence, event.sequence)
-                    if isScreenChanged {
-                        evictedActionScreenChangedThroughSequence = max(
-                            evictedActionScreenChangedThroughSequence,
-                            event.sequence
-                        )
-                    }
-                }
-            }
-            retainedEvents.removeFirst(overflow)
+            guard event.owner == .ambient else { return }
+            ambientEventCount += 1
+            pruneAmbientEventsAfterAppend()
         }
 
         func checkpoint(
@@ -95,93 +48,136 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
             let selectedEvents = retainedEvents.filter {
                 $0.sequence > cursor.sequence && selection.includes($0)
             }
-            let evictedThrough = switch selection {
-            case .all:
-                evictedThroughSequence
-            case .scoped:
-                evictedScopedThroughSequence
-            case .unclaimedScoped:
-                evictedUnclaimedThroughSequence
-            case .actionWindow:
-                evictedActionThroughSequence
-            }
-            let evictedScreenChangedThrough: UInt64 = switch selection {
-            case .all, .scoped:
-                0
-            case .unclaimedScoped:
-                evictedUnclaimedScreenChangedThroughSequence
-            case .actionWindow:
-                evictedActionScreenChangedThroughSequence
-            }
-            let selectedScreenChangedThrough = selectedEvents.last(where: {
-                $0.kind == .screenChanged && $0.provenance == .scoped
-            })?.sequence ?? 0
-            let scopedScreenChangedThrough: UInt64 = switch selection {
-            case .all, .scoped:
-                latestScopedScreenChangedSequence
-            case .unclaimedScoped, .actionWindow:
-                max(evictedScreenChangedThrough, selectedScreenChangedThrough)
-            }
             return AccessibilityNotificationBatch(
                 events: selectedEvents,
                 through: AccessibilityNotificationCursor(sequence: latestSequence),
-                scopedScreenChangedThrough: scopedScreenChangedThrough,
-                gap: cursor.sequence < evictedThrough
-                    ? AccessibilityNotificationGap(droppedThroughSequence: evictedThrough)
+                scopedScreenChangedThrough: latestScopedScreenChangedSequence,
+                gap: selection.includesAmbient && cursor.sequence < evictedThroughSequence
+                    ? AccessibilityNotificationGap(
+                        droppedThroughSequence: evictedThroughSequence
+                    )
                     : nil
             )
         }
 
-        mutating func releaseActionWindow(
-            _ actionWindowID: AccessibilityNotificationActionWindowID
-        ) {
-            for index in retainedEvents.indices
-            where retainedEvents[index].actionWindowID == actionWindowID {
-                retainedEvents[index].actionWindowID = nil
+        mutating func freezeCycleClaim(
+            id: AccessibilityNotificationCycleClaim.ID,
+            after cursor: AccessibilityNotificationCursor
+        ) -> AccessibilityNotificationBatch {
+            let cutoff = AccessibilityNotificationCursor(sequence: latestSequence)
+            var claimedEvents: [PendingAccessibilityNotificationEvent] = []
+            for index in retainedEvents.indices {
+                let event = retainedEvents[index]
+                guard event.sequence <= cutoff.sequence,
+                      event.owner.isEligibleForCycleClaim(
+                        sequence: event.sequence,
+                        after: cursor
+                      )
+                else {
+                    continue
+                }
+                commitOwner(
+                    .cycle(
+                        id,
+                        provenance: event.owner.provenance
+                    ),
+                    at: index
+                )
+                claimedEvents.append(retainedEvents[index])
             }
+            let scopedScreenChangedThrough = claimedEvents.last(where: {
+                $0.kind == .screenChanged && $0.owner.provenance == .scoped
+            })?.sequence ?? 0
+            return AccessibilityNotificationBatch(
+                events: claimedEvents,
+                through: cutoff,
+                scopedScreenChangedThrough: scopedScreenChangedThrough,
+                gap: cursor.sequence < evictedThroughSequence
+                    ? AccessibilityNotificationGap(
+                        droppedThroughSequence: evictedThroughSequence
+                    )
+                    : nil
+            )
+        }
+
+        mutating func acknowledgeCycleClaim(_ id: AccessibilityNotificationCycleClaim.ID) {
+            retainedEvents.removeAll { event in
+                guard case .cycle(let ownerID, _) = event.owner else { return false }
+                return ownerID == id
+            }
+        }
+
+        private mutating func commitOwner(
+            _ owner: PendingAccessibilityNotificationEvent.Owner,
+            at index: Int
+        ) {
+            let wasAmbient = retainedEvents[index].owner == .ambient
+            let isAmbient = owner == .ambient
+            switch (wasAmbient, isAmbient) {
+            case (true, false):
+                ambientEventCount -= 1
+            case (false, true):
+                ambientEventCount += 1
+            case (true, true), (false, false):
+                break
+            }
+            retainedEvents[index].owner = owner
+        }
+
+        private mutating func pruneAmbientEventsAfterAppend() {
+            let overflow = ambientEventCount - retentionLimit
+            guard overflow > 0 else { return }
+
+            var remaining = overflow
+            var newestEvictedSequence: UInt64 = 0
+            retainedEvents.removeAll { event in
+                guard remaining > 0, event.owner == .ambient else { return false }
+                remaining -= 1
+                newestEvictedSequence = max(newestEvictedSequence, event.sequence)
+                return true
+            }
+            precondition(remaining == 0, "Ambient notification ownership count drifted")
+            ambientEventCount -= overflow
+            evictedThroughSequence = max(evictedThroughSequence, newestEvictedSequence)
         }
     }
 
-    private let lock = NSLock()
+    private let ingressExecutor = DispatchQueue(
+        label: "com.buttonheist.accessibility-notification-ingress"
+    )
+    private let ingressExecutorKey = DispatchSpecificKey<Bool>()
     private var ingressLog = IngressLog(retentionLimit: 64)
-    private var activeScopeLeases = 0
+    private var activeHeistCursor: AccessibilityNotificationCursor?
     private var nextActionWindowID: UInt64 = 0
     private var activeActionWindow: ActiveActionWindow?
+    private var nextCycleClaimID: UInt64 = 0
+    private var frozenCycleClaim: AccessibilityNotificationCycleClaim?
+    private var admittedAmbientThrough = AccessibilityNotificationCursor.origin
+
+    init() {
+        ingressExecutor.setSpecific(key: ingressExecutorKey, value: true)
+    }
 
     var latestSequence: UInt64 {
-        lock.lock()
-        defer { lock.unlock() }
-        return ingressLog.latestSequence
+        onIngressExecutor { ingressLog.latestSequence }
     }
 
     /// Sequence of the most recent `screenChanged` notification recorded
     /// inside a heist or action notification scope, or 0.
     var latestScopedScreenChangedSequence: UInt64 {
-        lock.lock()
-        defer { lock.unlock() }
-        return ingressLog.latestScopedScreenChangedSequence
+        onIngressExecutor { ingressLog.latestScopedScreenChangedSequence }
     }
 
     func cursor() -> AccessibilityNotificationCursor {
-        lock.lock()
-        defer { lock.unlock() }
-        return AccessibilityNotificationCursor(sequence: ingressLog.latestSequence)
-    }
-
-    /// The full retained notification stream, including events whose payload
-    /// carries no spoken text.
-    func notifications(
-        after cursor: AccessibilityNotificationCursor = .origin
-    ) -> [PendingAccessibilityNotificationEvent] {
-        lock.lock()
-        defer { lock.unlock() }
-        return ingressLog.checkpoint(after: cursor, selection: .all).events
+        onIngressExecutor {
+            AccessibilityNotificationCursor(sequence: ingressLog.latestSequence)
+        }
     }
 
     /// Opens the outer correlation window for a running heist.
     ///
-    /// While this scope is active, action windows may claim attribution. Scope
-    /// lifetime only tags provenance; retained history belongs to the ingress log.
+    /// While this scope is active, action windows may claim attribution. Unclaimed
+    /// ingress remains owned by this scope until its admitted cutoff is released.
     func beginHeistScope() -> AccessibilityNotificationScopeLease {
         beginScopeLease(ownership: .heist)
     }
@@ -191,36 +187,49 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
     /// Events with sequence numbers greater than this cursor can be attached to
     /// the action evidence without stealing earlier heist-level context.
     func beginActionWindow() -> AccessibilityNotificationScopeLease {
-        lock.lock()
-        defer { lock.unlock() }
-
-        if var activeActionWindow {
-            activeActionWindow.childLeaseCount += 1
-            self.activeActionWindow = activeActionWindow
-            return beginScopeLeaseLocked(ownership: .actionChild(activeActionWindow.id))
+        onIngressExecutor {
+            precondition(
+                activeActionWindow == nil,
+                "Only one action notification window may be active"
+            )
+            nextActionWindowID += 1
+            let actionWindowID = AccessibilityNotificationActionWindowID(
+                rawValue: nextActionWindowID
+            )
+            let cursor = AccessibilityNotificationCursor(
+                sequence: ingressLog.latestSequence
+            )
+            activeActionWindow = ActiveActionWindow(
+                id: actionWindowID,
+                cursor: cursor
+            )
+            return beginScopeLeaseOnIngressExecutor(
+                ownership: .action(actionWindowID),
+                cursor: cursor
+            )
         }
-        nextActionWindowID += 1
-        let actionWindowID = AccessibilityNotificationActionWindowID(rawValue: nextActionWindowID)
-        activeActionWindow = ActiveActionWindow(id: actionWindowID, childLeaseCount: 0)
-        return beginScopeLeaseLocked(ownership: .actionOwner(actionWindowID))
     }
 
     private func beginScopeLease(
         ownership: AccessibilityNotificationScopeOwnership
     ) -> AccessibilityNotificationScopeLease {
-        lock.lock()
-        defer { lock.unlock() }
-
-        return beginScopeLeaseLocked(ownership: ownership)
+        onIngressExecutor {
+            beginScopeLeaseOnIngressExecutor(ownership: ownership)
+        }
     }
 
-    private func beginScopeLeaseLocked(
-        ownership: AccessibilityNotificationScopeOwnership
+    private func beginScopeLeaseOnIngressExecutor(
+        ownership: AccessibilityNotificationScopeOwnership,
+        cursor: AccessibilityNotificationCursor? = nil
     ) -> AccessibilityNotificationScopeLease {
-        activeScopeLeases += 1
+        let cursor = cursor ?? AccessibilityNotificationCursor(sequence: ingressLog.latestSequence)
+        if ownership == .heist {
+            precondition(activeHeistCursor == nil, "Only one heist notification scope may be active")
+            activeHeistCursor = cursor
+        }
         return AccessibilityNotificationScopeLease(
             bus: self,
-            cursor: AccessibilityNotificationCursor(sequence: ingressLog.latestSequence),
+            cursor: cursor,
             ownership: ownership
         )
     }
@@ -232,18 +241,16 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
         notificationData: PendingAccessibilityNotificationPayload,
         associatedElement: PendingAccessibilityNotificationPayload
     ) {
-        lock.lock()
-        let event = PendingAccessibilityNotificationEvent(
-            sequence: sequence,
-            rawCode: rawCode,
-            timestamp: timestamp,
-            notificationData: notificationData,
-            associatedElement: associatedElement,
-            provenance: provenanceLocked,
-            actionWindowID: activeActionWindow?.id
-        )
-        ingressLog.append(event)
-        lock.unlock()
+        onIngressExecutor {
+            ingressLog.append(PendingAccessibilityNotificationEvent(
+                sequence: sequence,
+                rawCode: rawCode,
+                timestamp: timestamp,
+                notificationData: notificationData,
+                associatedElement: associatedElement,
+                owner: currentOwner
+            ))
+        }
     }
 
     fileprivate static func stringPayload(_ value: AnyObject?) -> String? {
@@ -337,58 +344,120 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
         after cursor: AccessibilityNotificationCursor,
         selection: AccessibilityNotificationCheckpointSelection = .scoped
     ) -> AccessibilityNotificationBatch {
-        lock.lock()
-        defer { lock.unlock() }
-        return ingressLog.checkpoint(after: cursor, selection: selection)
+        onIngressExecutor {
+            ingressLog.checkpoint(after: cursor, selection: selection)
+        }
     }
 
-    fileprivate func endScopeLease(
-        _ ownership: AccessibilityNotificationScopeOwnership,
-        outcome: AccessibilityNotificationScopeOutcome
-    ) {
-        lock.lock()
-        defer { lock.unlock() }
+    func freezeObservationCycleClaim() -> AccessibilityNotificationCycleClaim {
+        onIngressExecutor {
+            if let frozenCycleClaim {
+                return AccessibilityNotificationCycleClaim(
+                    bus: self,
+                    id: frozenCycleClaim.id,
+                    batch: frozenCycleClaim.batch
+                )
+            }
+            nextCycleClaimID += 1
+            let id = AccessibilityNotificationCycleClaim.ID(
+                rawValue: nextCycleClaimID
+            )
+            let claimedBatch = ingressLog.freezeCycleClaim(
+                id: id,
+                after: admittedAmbientThrough
+            )
+            let claim = AccessibilityNotificationCycleClaim(
+                bus: self,
+                id: id,
+                batch: claimedBatch
+            )
+            frozenCycleClaim = claim
+            return claim
+        }
+    }
 
-        precondition(activeScopeLeases > 0, "Cannot end an inactive notification scope lease")
-        activeScopeLeases -= 1
+    fileprivate func acknowledgeCycleClaim(
+        _ id: AccessibilityNotificationCycleClaim.ID
+    ) -> Bool {
+        onIngressExecutor {
+            guard frozenCycleClaim?.id == id else { return false }
+            ingressLog.acknowledgeCycleClaim(id)
+            admittedAmbientThrough = frozenCycleClaim?.batch.through
+                ?? admittedAmbientThrough
+            frozenCycleClaim = nil
+            return true
+        }
+    }
+
+    fileprivate func sealScopeLeaseSynchronously(
+        _ ownership: AccessibilityNotificationScopeOwnership,
+        after cursor: AccessibilityNotificationCursor
+    ) -> AccessibilityNotificationCoverage {
+        onIngressExecutor {
+            sealScopeLeaseOnIngressExecutor(
+                ownership,
+                after: cursor
+            )
+        }
+    }
+
+    private func sealScopeLeaseOnIngressExecutor(
+        _ ownership: AccessibilityNotificationScopeOwnership,
+        after cursor: AccessibilityNotificationCursor
+    ) -> AccessibilityNotificationCoverage {
+        let screenChangedThrough = ingressLog.latestScopedScreenChangedSequence
+        let coverage = AccessibilityNotificationCoverage(
+            after: cursor,
+            through: AccessibilityNotificationCursor(
+                sequence: ingressLog.latestSequence
+            ),
+            scopedScreenChangedThrough: screenChangedThrough > cursor.sequence
+                ? screenChangedThrough
+                : 0
+        )
         switch ownership {
         case .heist:
-            break
-        case .actionChild(let actionWindowID):
             precondition(
-                activeActionWindow?.id == actionWindowID,
-                "Cannot end a child action notification window without its owner"
+                activeHeistCursor == cursor,
+                "Cannot end an inactive heist notification scope"
             )
+            activeHeistCursor = nil
+        case .action(let actionWindowID):
+            guard let window = activeActionWindow else {
+                preconditionFailure(
+                    "Cannot end an action notification window that is not active"
+                )
+            }
             precondition(
-                activeActionWindow?.childLeaseCount ?? 0 > 0,
-                "Cannot end an inactive child action notification window"
-            )
-            activeActionWindow?.childLeaseCount -= 1
-            closeActionWindowIfDrainedLocked()
-        case .actionOwner(let actionWindowID):
-            precondition(
-                activeActionWindow?.id == actionWindowID,
+                window.id == actionWindowID,
                 "Cannot end an action notification window that is not active"
             )
-            activeActionWindow?.pendingOwnerOutcome = outcome
-            closeActionWindowIfDrainedLocked()
+            activeActionWindow = nil
         }
+        return coverage
     }
 
-    private func closeActionWindowIfDrainedLocked() {
-        guard
-            let window = activeActionWindow,
-            let outcome = window.pendingOwnerOutcome,
-            window.childLeaseCount == 0
-        else { return }
-        if outcome == .released {
-            ingressLog.releaseActionWindow(window.id)
+    private var currentOwner: PendingAccessibilityNotificationEvent.Owner {
+        if let actionWindowID = activeActionWindow?.id {
+            return .action(actionWindowID)
         }
-        activeActionWindow = nil
+        if let activeHeistCursor {
+            return .heist(activeHeistCursor)
+        }
+        return .ambient
     }
 
-    private var provenanceLocked: AccessibilityNotificationProvenance {
-        activeScopeLeases > 0 ? .scoped : .ambient
+    private func onIngressExecutor<Value>(
+        _ operation: () -> Value
+    ) -> Value {
+        if isOnIngressExecutor {
+            return operation()
+        }
+        return ingressExecutor.sync(execute: operation)
+    }
+
+    private var isOnIngressExecutor: Bool {
+        DispatchQueue.getSpecific(key: ingressExecutorKey) == true
     }
 }
 
@@ -398,57 +467,46 @@ struct AccessibilityNotificationCursor: Sendable, Equatable {
     let sequence: UInt64
 }
 
+struct AccessibilityNotificationCoverage: Sendable, Equatable {
+    let after: AccessibilityNotificationCursor
+    let through: AccessibilityNotificationCursor
+    let scopedScreenChangedThrough: UInt64
+
+    var requiresObservation: Bool {
+        through.sequence > after.sequence
+    }
+}
+
 enum AccessibilityNotificationCheckpointSelection: Sendable {
     case all
     case scoped
-    case unclaimedScoped
-    case actionWindow(AccessibilityNotificationActionWindowID)
 
     fileprivate func includes(_ event: PendingAccessibilityNotificationEvent) -> Bool {
         switch self {
         case .all:
             true
         case .scoped:
-            event.provenance == .scoped
-        case .unclaimedScoped:
-            event.provenance == .scoped && event.actionWindowID == nil
-        case .actionWindow(let actionWindowID):
-            event.actionWindowID == actionWindowID
+            event.owner.provenance == .scoped
+        }
+    }
+
+    fileprivate var includesAmbient: Bool {
+        switch self {
+        case .all:
+            true
+        case .scoped:
+            false
         }
     }
 }
 
-struct AccessibilityNotificationActionWindowID: RawRepresentable, Sendable, Equatable {
+struct AccessibilityNotificationActionWindowID: RawRepresentable, Sendable, Hashable {
     let rawValue: UInt64
 }
 
 enum AccessibilityNotificationScopeOwnership: Sendable, Equatable {
     case heist
-    case actionOwner(AccessibilityNotificationActionWindowID)
-    case actionChild(AccessibilityNotificationActionWindowID)
-
-    var checkpointSelection: AccessibilityNotificationCheckpointSelection {
-        switch self {
-        case .heist:
-            .scoped
-        case .actionOwner(let actionWindowID), .actionChild(let actionWindowID):
-            .actionWindow(actionWindowID)
-        }
-    }
-
-    var isActionScope: Bool {
-        switch self {
-        case .heist:
-            false
-        case .actionOwner, .actionChild:
-            true
-        }
-    }
-}
-
-enum AccessibilityNotificationScopeOutcome: Sendable, Equatable {
-    case consumed
-    case released
+    case action(AccessibilityNotificationActionWindowID)
 }
 
 struct AccessibilityNotificationBatch {
@@ -456,6 +514,48 @@ struct AccessibilityNotificationBatch {
     let through: AccessibilityNotificationCursor
     let scopedScreenChangedThrough: UInt64
     let gap: AccessibilityNotificationGap?
+
+    /// Starts a complete observation history after ambient ingress was evicted.
+    ///
+    /// Scoped events are timeout-bounded and never evicted, so they remain
+    /// admissible on the new baseline. Missing ambient history cannot be
+    /// represented as `.noChange`; discarding the prior snapshot makes the
+    /// capture publish a replacement instead.
+    var beginningNewBaseline: Self {
+        precondition(gap != nil, "A complete notification batch needs no new baseline")
+        return Self(
+            events: events.filter { $0.provenance == .scoped },
+            through: through,
+            scopedScreenChangedThrough: scopedScreenChangedThrough,
+            gap: nil
+        )
+    }
+}
+
+final class AccessibilityNotificationCycleClaim {
+    struct ID: RawRepresentable, Sendable, Equatable {
+        let rawValue: UInt64
+    }
+
+    let id: ID
+    let batch: AccessibilityNotificationBatch
+
+    private weak var bus: AccessibilityNotificationBus?
+
+    fileprivate init(
+        bus: AccessibilityNotificationBus,
+        id: ID,
+        batch: AccessibilityNotificationBatch
+    ) {
+        self.bus = bus
+        self.id = id
+        self.batch = batch
+    }
+
+    @discardableResult
+    func acknowledgeObservationCycle() -> Bool {
+        bus?.acknowledgeCycleClaim(id) ?? false
+    }
 }
 
 enum AccessibilityNotificationProvenance: Sendable, Equatable {
@@ -464,56 +564,207 @@ enum AccessibilityNotificationProvenance: Sendable, Equatable {
 }
 
 /// Lifetime token for scoped notification attribution.
-/// `@unchecked Sendable` justification: mutable `bus` access is protected by `lock`;
-/// cancellation may cross task boundaries while closing scoped observation.
+/// `@unchecked Sendable` justification: mutable lease state is protected by
+/// `lock`; cancellation may cross task boundaries while the ingress barrier runs.
 final class AccessibilityNotificationScopeLease: @unchecked Sendable {
+    private enum State {
+        case active(AccessibilityNotificationBus)
+        case sealing(cancellationRequested: Bool)
+        case sealed(AccessibilityNotificationCoverage)
+        case admitting(
+            AccessibilityNotificationCoverage,
+            cancellationRequested: Bool
+        )
+        case finished
+    }
+
     let cursor: AccessibilityNotificationCursor
 
     private let lock = NSLock()
-    private weak var bus: AccessibilityNotificationBus?
     private let ownership: AccessibilityNotificationScopeOwnership
+    private var state: State
 
     fileprivate init(
         bus: AccessibilityNotificationBus,
         cursor: AccessibilityNotificationCursor,
         ownership: AccessibilityNotificationScopeOwnership
     ) {
-        self.bus = bus
         self.cursor = cursor
         self.ownership = ownership
+        self.state = .active(bus)
     }
 
     deinit {
         cancel()
     }
 
-    func capture() -> AccessibilityNotificationBatch? {
-        lock.lock()
-        let bus = self.bus
-        lock.unlock()
-        return bus?.checkpoint(after: cursor, selection: ownership.checkpointSelection)
+    @MainActor
+    func admitCausallyCovered<Result>(
+        _ admit: (AccessibilityNotificationCoverage) async -> Result?
+    ) async -> Result? {
+        guard let coverage = seal(),
+              beginAdmission(coverage)
+        else { return nil }
+        guard let result = await admit(coverage) else {
+            lock.withLock {
+                if case .admitting(
+                    let admittedCoverage,
+                    let cancellationRequested
+                ) = state,
+                   admittedCoverage == coverage {
+                    state = cancellationRequested
+                        ? .finished
+                        : .sealed(coverage)
+                }
+            }
+            return nil
+        }
+        finishAdmission(coverage)
+        return result
     }
 
     func cancel() {
-        finish(outcome: ownership.isActionScope ? .released : .consumed)
+        let busToSeal: AccessibilityNotificationBus? = lock.withLock {
+            switch state {
+            case .active(let bus):
+                state = .sealing(cancellationRequested: true)
+                return bus
+            case .sealing(cancellationRequested: false):
+                state = .sealing(cancellationRequested: true)
+                return nil
+            case .sealed:
+                state = .finished
+                return nil
+            case .admitting(let coverage, cancellationRequested: false):
+                state = .admitting(
+                    coverage,
+                    cancellationRequested: true
+                )
+                return nil
+            case .sealing(cancellationRequested: true),
+                 .admitting(_, cancellationRequested: true),
+                 .finished:
+                return nil
+            }
+        }
+        guard let busToSeal else { return }
+        _ = busToSeal.sealScopeLeaseSynchronously(
+            ownership,
+            after: cursor
+        )
+        lock.withLock {
+            guard case .sealing(cancellationRequested: true) = state else {
+                return
+            }
+            state = .finished
+        }
     }
 
-    func consume() {
-        finish(outcome: .consumed)
+    private func seal() -> AccessibilityNotificationCoverage? {
+        enum SealDecision {
+            case execute(AccessibilityNotificationBus)
+            case reuse(AccessibilityNotificationCoverage)
+            case unavailable
+        }
+
+        let decision: SealDecision = lock.withLock {
+            switch state {
+            case .active(let bus):
+                state = .sealing(cancellationRequested: false)
+                return .execute(bus)
+            case .sealed(let coverage):
+                return .reuse(coverage)
+            case .sealing, .admitting, .finished:
+                return .unavailable
+            }
+        }
+        switch decision {
+        case .reuse(let coverage):
+            return coverage
+        case .unavailable:
+            return nil
+        case .execute(let bus):
+            let coverage = bus.sealScopeLeaseSynchronously(
+                ownership,
+                after: cursor
+            )
+            return lock.withLock {
+                guard case .sealing(let cancellationRequested) = state else {
+                    return nil
+                }
+                if cancellationRequested {
+                    state = .finished
+                    return nil
+                }
+                state = .sealed(coverage)
+                return coverage
+            }
+        }
     }
 
-    private func finish(outcome: AccessibilityNotificationScopeOutcome) {
-        let bus: AccessibilityNotificationBus?
-        lock.lock()
-        bus = self.bus
-        self.bus = nil
-        lock.unlock()
+    private func beginAdmission(
+        _ coverage: AccessibilityNotificationCoverage
+    ) -> Bool {
+        lock.withLock {
+            guard case .sealed(let sealedCoverage) = state,
+                  sealedCoverage == coverage
+            else { return false }
+            state = .admitting(
+                coverage,
+                cancellationRequested: false
+            )
+            return true
+        }
+    }
 
-        bus?.endScopeLease(ownership, outcome: outcome)
+    private func finishAdmission(
+        _ coverage: AccessibilityNotificationCoverage
+    ) {
+        lock.withLock {
+            guard case .admitting(let admittedCoverage, _) = state,
+                  admittedCoverage == coverage
+            else { return }
+            state = .finished
+        }
     }
 }
 
 struct PendingAccessibilityNotificationEvent {
+    enum Owner: Sendable, Equatable {
+        case ambient
+        case heist(AccessibilityNotificationCursor)
+        case action(AccessibilityNotificationActionWindowID)
+        case cycle(
+            AccessibilityNotificationCycleClaim.ID,
+            provenance: AccessibilityNotificationProvenance
+        )
+
+        var provenance: AccessibilityNotificationProvenance {
+            switch self {
+            case .ambient:
+                .ambient
+            case .heist, .action:
+                .scoped
+            case .cycle(_, let provenance):
+                provenance
+            }
+        }
+
+        func isEligibleForCycleClaim(
+            sequence: UInt64,
+            after ambientCursor: AccessibilityNotificationCursor
+        ) -> Bool {
+            switch self {
+            case .ambient:
+                sequence > ambientCursor.sequence
+            case .heist, .action:
+                true
+            case .cycle:
+                false
+            }
+        }
+    }
+
     let sequence: UInt64
     let kind: AccessibilityNotificationKind
     let timestamp: Date
@@ -522,8 +773,11 @@ struct PendingAccessibilityNotificationEvent {
     /// UIKit's correlation subject. It is notification content only for
     /// element-change notifications.
     let associatedElement: PendingAccessibilityNotificationPayload
-    let provenance: AccessibilityNotificationProvenance
-    var actionWindowID: AccessibilityNotificationActionWindowID?
+    var owner: Owner
+
+    var provenance: AccessibilityNotificationProvenance {
+        owner.provenance
+    }
 
     init(
         sequence: UInt64,
@@ -531,16 +785,38 @@ struct PendingAccessibilityNotificationEvent {
         timestamp: Date,
         notificationData: PendingAccessibilityNotificationPayload,
         associatedElement: PendingAccessibilityNotificationPayload,
-        provenance: AccessibilityNotificationProvenance,
-        actionWindowID: AccessibilityNotificationActionWindowID? = nil
+        provenance: AccessibilityNotificationProvenance
+    ) {
+        let owner: Owner = switch provenance {
+        case .scoped:
+            .heist(.origin)
+        case .ambient:
+            .ambient
+        }
+        self.init(
+            sequence: sequence,
+            kind: kind,
+            timestamp: timestamp,
+            notificationData: notificationData,
+            associatedElement: associatedElement,
+            owner: owner
+        )
+    }
+
+    fileprivate init(
+        sequence: UInt64,
+        kind: AccessibilityNotificationKind,
+        timestamp: Date,
+        notificationData: PendingAccessibilityNotificationPayload,
+        associatedElement: PendingAccessibilityNotificationPayload,
+        owner: Owner
     ) {
         self.sequence = sequence
         self.kind = kind
         self.timestamp = timestamp
         self.notificationData = notificationData
         self.associatedElement = associatedElement
-        self.provenance = provenance
-        self.actionWindowID = actionWindowID
+        self.owner = owner
     }
 
     init(
@@ -549,8 +825,7 @@ struct PendingAccessibilityNotificationEvent {
         timestamp: Date,
         notificationData: PendingAccessibilityNotificationPayload,
         associatedElement: PendingAccessibilityNotificationPayload,
-        provenance: AccessibilityNotificationProvenance,
-        actionWindowID: AccessibilityNotificationActionWindowID? = nil
+        provenance: AccessibilityNotificationProvenance
     ) {
         self.init(
             sequence: sequence,
@@ -558,11 +833,27 @@ struct PendingAccessibilityNotificationEvent {
             timestamp: timestamp,
             notificationData: notificationData,
             associatedElement: associatedElement,
-            provenance: provenance,
-            actionWindowID: actionWindowID
+            provenance: provenance
         )
     }
 
+    fileprivate init(
+        sequence: UInt64,
+        rawCode: UInt32,
+        timestamp: Date,
+        notificationData: PendingAccessibilityNotificationPayload,
+        associatedElement: PendingAccessibilityNotificationPayload,
+        owner: Owner
+    ) {
+        self.init(
+            sequence: sequence,
+            kind: AccessibilityNotificationKind(rawCode: rawCode),
+            timestamp: timestamp,
+            notificationData: notificationData,
+            associatedElement: associatedElement,
+            owner: owner
+        )
+    }
 }
 
 enum PendingAccessibilityNotificationPayload {

@@ -204,6 +204,24 @@ package struct HeistPlanRuntimeSafetyValidator {
             )
         }
         validateArgument(step.argument, path: context.path.child(.argument), scope: context.scope)
+        if let expectation = step.expectation {
+            let expectationPath = context.path.child(.expectation)
+            validatePredicate(
+                expectation.predicate,
+                path: expectationPath.child(.predicate),
+                scope: context.scope
+            )
+            do {
+                _ = try expectation.predicate.resolve(in: context.environment)
+            } catch {
+                fail(
+                    path: expectationPath,
+                    contract: "resolved invocation expectation must satisfy the predicate payload contract",
+                    observed: summarize(error),
+                    correction: "Use scoped refs and predicate values that lower to a valid invocation expectation."
+                )
+            }
+        }
         guard let resolved = context.resolveInvocation(path: invocationPath) else {
             if invocationPath.components.count > 1 {
                 fail(
@@ -270,6 +288,24 @@ package struct HeistPlanRuntimeSafetyValidator {
         environment: HeistExecutionEnvironment
     ) {
         validateCommand(action.command, path: path.child(.command), scope: scope, environment: environment)
+        if let expectation = action.expectationPolicy.expectedExpectation {
+            let expectationPath = path.child(.expectation)
+            validatePredicate(
+                expectation.predicate,
+                path: expectationPath.child(.predicate),
+                scope: scope
+            )
+            do {
+                _ = try expectation.predicate.resolve(in: environment)
+            } catch {
+                fail(
+                    path: expectationPath,
+                    contract: "resolved action expectation must satisfy the predicate payload contract",
+                    observed: summarize(error),
+                    correction: "Use scoped refs and predicate values that lower to a valid action expectation."
+                )
+            }
+        }
         if let waiver = action.expectationPolicy.waiver?.reason {
             addString(waiver, path: path.child(.withoutExpectation), role: "expectation waiver")
         }

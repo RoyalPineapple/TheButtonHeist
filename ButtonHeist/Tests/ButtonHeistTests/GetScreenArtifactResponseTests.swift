@@ -111,6 +111,46 @@ final class GetScreenArtifactResponseTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testGetScreenPreservesObservationTimeoutAndAddsTransportHeadroom() async throws {
+        let authoredTimeout: TimeInterval = 0.25
+        let transportHeadroom: TimeInterval = 1
+        let screen = ScreenPayload(
+            pngData: Data([0x89, 0x50, 0x4E, 0x47]).base64EncodedString(),
+            width: 393,
+            height: 852,
+            interface: Interface(timestamp: Date(), tree: [])
+        )
+        let (fence, mockConnection) = makeConnectedFence(configuration: .init(
+            postActionExpectationTimeoutBuffer: transportHeadroom
+        ))
+        fence.handoff.connect(to: TheFenceFixtures.testDevice)
+        mockConnection.responseScript = { message in
+            guard case .requestScreen = message else { return nil }
+            return .screen(screen)
+        }
+
+        let response = try await fence.handleGetScreen(
+            .init(destination: .inlineData, mode: .raw),
+            timeout: authoredTimeout
+        )
+
+        XCTAssertEqual(
+            mockConnection.sentRequestScreenPayloads.last??.timeout.seconds,
+            authoredTimeout
+        )
+        XCTAssertEqual(
+            fence.screenTransportTimeout(
+                for: try WaitTimeout(validatingSeconds: authoredTimeout)
+            ),
+            authoredTimeout + transportHeadroom
+        )
+        guard case .screenshotData(let payload, _) = response else {
+            return XCTFail("Expected inline screenshot response, got \(response)")
+        }
+        XCTAssertEqual(payload, screen)
+    }
+
+    @ButtonHeistActor
     func testInlineGetScreenRejectsOutputBeforeDispatch() async throws {
         let (fence, mockConnection) = makeConnectedFence()
 

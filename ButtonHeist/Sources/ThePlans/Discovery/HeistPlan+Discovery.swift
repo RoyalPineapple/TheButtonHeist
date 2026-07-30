@@ -423,7 +423,7 @@ private extension HeistPlan {
             case .action(let action):
                 if actionCommandSet.insert(action.command.wireType).inserted { actionCommands.append(action.command.wireType) }
                 observedTargets = action.command.targetOccurrences.map(\.target)
-                observedPredicate = action.expectationPolicy.expectedStep?.predicate
+                observedPredicate = action.expectationPolicy.expectedExpectation?.predicate
             case .wait(let wait, let context):
                 guard !context.path.ends(in: .expectation) else { return }
                 observedPredicate = wait.predicate

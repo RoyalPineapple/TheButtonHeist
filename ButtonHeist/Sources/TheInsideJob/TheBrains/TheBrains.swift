@@ -20,17 +20,15 @@ final class TheBrains {
     let tripwire: TheTripwire
     let navigation: Navigation
     let actions: Actions
-    let interactionCoordinator: InteractionCoordinator
     let failureEvidencePolicy: FailureEvidencePolicy
     private let requestExecutor: InteractionRequestExecutor
-    private var changedWaitInProgress = false
 
     var semanticObservationIsActive: Bool {
         vault.semanticObservationStream.isActive
     }
 
     func notifications() -> [Observation.Notification] {
-        vault.semanticObservationStream.stateOwner.notifications()
+        vault.semanticObservationStream.notifications()
     }
 
     enum InterfaceQueryResult {
@@ -70,7 +68,8 @@ final class TheBrains {
         failureEvidencePolicy: FailureEvidencePolicy = .screenshot,
         requestExecutor: InteractionRequestExecutor? = nil,
         keyboardInput: SafecrackerKeyboardInput = SafecrackerKeyboardInput(),
-        visibleObservationSource: @escaping TheVault.VisibleObservationSource = TheVault.captureVisibleObservation
+        visibleObservationSource: @escaping TheVault.VisibleObservationSource = TheVault.captureVisibleObservation,
+        notificationIngress: AccessibilityNotificationIngress = .process
     ) {
         self.tripwire = tripwire
         self.failureEvidencePolicy = failureEvidencePolicy
@@ -82,14 +81,14 @@ final class TheBrains {
         let vault = TheVault(
             tripwire: tripwire,
             visibleObservationSource: visibleObservationSource,
-            keyboardVisibilitySource: { safecracker.isKeyboardVisible }
+            keyboardVisibilitySource: { safecracker.isKeyboardVisible },
+            notificationIngress: notificationIngress
         )
         self.vault = vault
         self.safecracker = safecracker
         let navigation = Navigation(
             vault: vault,
-            safecracker: safecracker,
-            tripwire: tripwire
+            safecracker: safecracker
         )
         self.navigation = navigation
         self.actions = Actions(
@@ -97,18 +96,6 @@ final class TheBrains {
             safecracker: safecracker,
             tripwire: tripwire,
             navigation: navigation
-        )
-        self.interactionCoordinator = InteractionCoordinator(vault: vault)
-    }
-
-    func treeUnavailableResult(
-        payload: ActionResult.Payload,
-        failure: Observation.CaptureFailure
-    ) -> ActionResult {
-        return .failure(
-            payload: payload,
-            failureKind: .accessibilityTreeUnavailable,
-            message: "Could not observe accessibility tree; \(failure.diagnostic)"
         )
     }
 
@@ -129,8 +116,16 @@ final class TheBrains {
             return .failure(.inactiveRuntime)
         }
         // Require visible semantic truth before exploration starts fresh.
-        guard await vault.semanticObservationStream.admittedVisibleObservation(timeout: 2.0) != nil,
+        let deadline = SemanticObservationDeadline(
+            start: RuntimeElapsed.now,
+            timeoutSeconds: 2
+        )
+        guard await vault.semanticObservationStream.admittedVisibleObservation(
+            boundary: .externalDeadline(deadline)
+        ) != nil,
               let exploration = await navigation.fullGraph(
+                deadline: deadline,
+                observationBoundary: .externalDeadline(deadline),
                 maxScrollsPerContainer: query.maxScrollsPerContainer?.value,
                 maxScrollsPerDiscovery: query.maxScrollsPerDiscovery?.value
               ) else {
@@ -140,7 +135,7 @@ final class TheBrains {
         do {
             let interface = try vault.selectInterface(query)
             let diagnostics = exploration.progress.interfaceDiagnostics(
-                for: vault.latestObservation,
+                for: vault.interfaceTree,
                 includedElementCount: interface.projectedElements.count
             )
             return .success(interface
@@ -185,16 +180,6 @@ final class TheBrains {
 
     var interactionRequestSnapshot: InteractionRequestExecutor.Snapshot {
         requestExecutor.snapshot
-    }
-
-    func beginChangedWait() -> Bool {
-        guard semanticObservationIsActive, !changedWaitInProgress else { return false }
-        changedWaitInProgress = true
-        return true
-    }
-
-    func finishChangedWait() {
-        changedWaitInProgress = false
     }
 }
 

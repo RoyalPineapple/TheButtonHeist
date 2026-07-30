@@ -46,7 +46,7 @@ extension ElementInflation {
 
         let treeElement = liveTarget.treeElement
         let description = Navigation.ScrollTargetDescription(treeElement).description
-        let historyIndex = await vault.semanticObservationStream.stateOwner.historyEndIndex()
+        let historyIndex = vault.semanticObservationStream.historyEndIndex()
         let admittedTarget: Result<AdmittedSemanticTarget, SemanticTargetResolutionFailure>
         if let admitted = inflatedTarget.identity.admittedSemanticTarget {
             admittedTarget = .success(admitted)
@@ -67,6 +67,7 @@ extension ElementInflation {
             ),
             unsafeProgrammaticScrollMessage: nil,
             scrollFailedMessage: "target \(description) activation point could not be brought on-screen",
+            deadline: inflatedTarget.deadline,
             transaction: transaction
         )
         switch placement {
@@ -124,6 +125,7 @@ extension ElementInflation {
         noScrollViewFailure: ElementInflationFailure,
         unsafeProgrammaticScrollMessage: String?,
         scrollFailedMessage: String,
+        deadline: SemanticObservationDeadline,
         transaction: RevealTransaction? = nil
     ) async -> Result<TheSafecracker.ScrollPrimitiveOutcome, ElementInflationFailure> {
         if Self.interactionComfortZone.contains(activationPoint) {
@@ -152,7 +154,8 @@ extension ElementInflation {
                 in: scrollTarget,
                 preferredScreenRect: Self.interactionComfortZone,
                 minimumScreenRect: ScreenMetrics.current.bounds
-            )
+            ),
+            deadline
         )
         switch transition.outcome {
         case .unchanged:
@@ -242,14 +245,26 @@ extension ElementInflation {
         )
 
         while deadline.hasTimeRemaining(at: geometryEnvironment.now()) {
-            let remaining = deadline.remainingDuration(at: geometryEnvironment.now())
-            let tick = await geometryEnvironment.awaitFrame(remaining)
-            guard tick == .observed, !Task.isCancelled else {
-                let event: LiveGeometryStabilizationEvent = tick == .cancelled || Task.isCancelled
-                    ? .cancelled
-                    : .deadlineExpired
+            guard !Task.isCancelled else {
                 return stateAfterGeometryReduction(
-                    stabilization.reduce(event),
+                    stabilization.reduce(.cancelled),
+                    target: stableTarget
+                )
+            }
+            switch await geometryEnvironment.refreshVisibleObservation() {
+            case .committed:
+                break
+            case .unavailable(.cancelled):
+                return stateAfterGeometryReduction(
+                    stabilization.reduce(.cancelled),
+                    target: stableTarget
+                )
+            case .unavailable:
+                if deadline.hasTimeRemaining(at: geometryEnvironment.now()) {
+                    continue
+                }
+                return stateAfterGeometryReduction(
+                    stabilization.reduce(.deadlineExpired),
                     target: stableTarget
                 )
             }
@@ -259,26 +274,15 @@ extension ElementInflation {
                     target: stableTarget
                 )
             }
-            guard vault.refreshLiveCapture() != nil else { continue }
             let currentTreeElement: InterfaceTree.Element
-            switch stableTarget.identity {
-            case .captureLocal:
-                guard let current = vault.interfaceElement(
-                    heistId: stableTarget.treeElement.heistId
-                ) else {
-                    return .failed(.staleRefresh(
-                        "selected target \(stableTarget.treeElement.heistId.rawValue) "
-                            + "left committed semantic truth"
-                    ))
-                }
+            switch resolveCurrentElement(
+                for: stableTarget.identity,
+                pinnedElement: stableTarget.treeElement
+            ) {
+            case .success(let current):
                 currentTreeElement = current
-            case .admitted(_, let target):
-                switch resolveAdmittedSemanticTarget(target, in: vault.latestObservation.tree) {
-                case .success(let current):
-                    currentTreeElement = current
-                case .failure(let failure):
-                    return .failed(failure.inflationFailure)
-                }
+            case .failure(let failure):
+                return .failed(failure)
             }
             let currentTarget: InflatedElementTarget
             switch stableActionTarget(

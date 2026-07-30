@@ -20,6 +20,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
         package_api: bool,
         cli_tools: bool,
         bumper_rule_tests: bool,
+        ios_integration: bool,
     ) -> None:
         self.assertEqual(
             SELECTOR.select_scopes(paths),
@@ -27,6 +28,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
                 SELECTOR.PACKAGE_API: package_api,
                 SELECTOR.CLI_TOOLS: cli_tools,
                 SELECTOR.BUMPER_RULE_TESTS: bumper_rule_tests,
+                SELECTOR.IOS_INTEGRATION: ios_integration,
             },
         )
 
@@ -36,6 +38,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
             package_api=False,
             cli_tools=False,
             bumper_rule_tests=False,
+            ios_integration=False,
         )
 
     def test_ios_test_helper_skips_optional_scopes(self) -> None:
@@ -44,6 +47,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
             package_api=False,
             cli_tools=False,
             bumper_rule_tests=False,
+            ios_integration=False,
         )
 
     def test_hosted_fixture_and_ios_automation_skip_optional_scopes(self) -> None:
@@ -57,6 +61,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
             package_api=False,
             cli_tools=False,
             bumper_rule_tests=False,
+            ios_integration=True,
         )
 
     def test_public_source_runs_package_contracts_and_tool_tests(self) -> None:
@@ -65,6 +70,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
             package_api=True,
             cli_tools=True,
             bumper_rule_tests=False,
+            ios_integration=True,
         )
 
     def test_cli_change_runs_only_tool_tests(self) -> None:
@@ -73,6 +79,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
             package_api=False,
             cli_tools=True,
             bumper_rule_tests=False,
+            ios_integration=False,
         )
 
     def test_compiled_example_runs_tool_tests(self) -> None:
@@ -81,6 +88,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
             package_api=False,
             cli_tools=True,
             bumper_rule_tests=False,
+            ios_integration=False,
         )
 
     def test_package_manifest_runs_package_contracts_and_tool_tests(self) -> None:
@@ -89,6 +97,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
             package_api=True,
             cli_tools=True,
             bumper_rule_tests=False,
+            ios_integration=False,
         )
 
     def test_bumper_policy_changes_run_only_rule_tests(self) -> None:
@@ -104,6 +113,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
                     package_api=False,
                     cli_tools=False,
                     bumper_rule_tests=True,
+                    ios_integration=False,
                 )
 
     def test_workflow_and_unknown_changes_fail_open(self) -> None:
@@ -114,6 +124,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
                     package_api=True,
                     cli_tools=True,
                     bumper_rule_tests=True,
+                    ios_integration=True,
                 )
 
     def test_mixed_paths_union_their_scopes(self) -> None:
@@ -126,6 +137,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
             package_api=False,
             cli_tools=True,
             bumper_rule_tests=True,
+            ios_integration=False,
         )
 
     def test_empty_input_fails_open(self) -> None:
@@ -134,6 +146,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
             package_api=True,
             cli_tools=True,
             bumper_rule_tests=True,
+            ios_integration=True,
         )
 
     def test_output_is_stable_github_boolean_syntax(self) -> None:
@@ -142,7 +155,8 @@ class ChangeScopeSelectionTests(unittest.TestCase):
             SELECTOR.format_outputs(scopes),
             "run_package_api_contracts=false\n"
             "run_cli_tool_tests=false\n"
-            "run_bumper_rule_tests=false",
+            "run_bumper_rule_tests=false\n"
+            "run_ios_integration=false",
         )
 
 

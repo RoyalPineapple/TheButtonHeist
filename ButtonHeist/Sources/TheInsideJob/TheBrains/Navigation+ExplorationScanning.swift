@@ -203,15 +203,14 @@ extension Navigation {
 
         private func sortedPendingContainers() -> [InterfaceTree.Container] {
             var admittedScrollViewIDs = state.exploredScrollViewIDs
-            let liveTargetsByPath = Dictionary(uniqueKeysWithValues: currentLiveScrollableTargets().map {
-                ($0.path, $0)
-            })
             return exploration.progress.pendingScrollPaths
                 .sorted()
-                .compactMap { navigation.vault.latestObservation.tree.containers[$0] }
+                .compactMap { navigation.vault.interfaceTree.viewportOnly.containers[$0] }
                 .compactMap { container -> PendingContainer? in
-                    guard let liveTarget = liveTargetsByPath[container.path],
-                          admittedScrollViewIDs.insert(liveTarget.scrollViewID).inserted else { return nil }
+                    guard let target = currentProgrammaticScrollTarget(for: container.path),
+                          case .uiScrollView(_, let scrollView) = target,
+                          admittedScrollViewIDs.insert(ObjectIdentifier(scrollView)).inserted
+                    else { return nil }
                     return PendingContainer(
                         container: container,
                         overflow: totalOverflow(of: container.container)
@@ -292,7 +291,6 @@ extension Navigation {
                 }
                 guard let target = currentProgrammaticScrollTarget(for: container) else { return .exhausted }
 
-                await navigation.tripwire.yieldFrames(1)
                 let transition = await navigation.performViewportTransition(
                     .page(
                         target,
@@ -300,6 +298,7 @@ extension Navigation {
                         animated: false
                     ),
                     deadline: exploration.deadline,
+                    observationBoundary: exploration.observationBoundary,
                     discoveryCommitPolicy: exploration.discoveryCommitPolicy
                 )
                 switch transition.outcome {
@@ -340,14 +339,16 @@ extension Navigation {
             inside parent: ActiveContainerExploration,
             onObservation: (TheVault.State.Current) async -> ViewportExplorationDecision
         ) async -> ScrollScanOutcome? {
-            guard let parentTarget = currentLiveScrollableTarget(for: parent.scrollViewID) else {
+            guard let parentTarget = currentProgrammaticScrollTarget(for: parent.scrollViewID),
+                  case .uiScrollView(_, let parentScrollView) = parentTarget
+            else {
                 return .interrupted
             }
             let nestedContainers = sortedPendingContainers().filter {
                 guard currentProgrammaticScrollTarget(for: $0.path) != nil else { return false }
                 return navigation.vault.isDirectLiveScrollChild(
                     at: $0.path,
-                    of: parentTarget.scrollView
+                    of: parentScrollView
                 )
             }
             for semanticContainer in nestedContainers {
@@ -398,6 +399,7 @@ extension Navigation {
         ) async -> ObservedViewport? {
             guard let current = await navigation.settledExplorationPage(
                 deadline: exploration.deadline,
+                observationBoundary: exploration.observationBoundary,
                 discoveryCommitPolicy: exploration.discoveryCommitPolicy
             ) else { return nil }
             return await record(
@@ -440,17 +442,13 @@ extension Navigation {
             guard exitPosition == .origin else { return .retained }
             guard !state.origins.isEmpty else { return .restored }
 
-            let restorationDeadline = SemanticObservationDeadline(
-                start: RuntimeElapsed.now,
-                timeout: SemanticObservationTiming.defaultTimeout
-            )
             for viewportOrigin in state.origins.reversed() {
                 switch await restoreOrigin(
                     viewportOrigin.origin,
                     containerPath: viewportOrigin.containerPath,
                     scrollViewID: viewportOrigin.scrollViewID,
                     originalScrollView: viewportOrigin.originalScrollView,
-                    deadline: restorationDeadline,
+                    deadline: nil,
                     notifyObservation: notifyObservation,
                     onObservation: onObservation
                 ) {
@@ -474,6 +472,7 @@ extension Navigation {
                 containerPath: container.path,
                 scrollViewID: container.scrollViewID,
                 originalScrollView: container.scrollView,
+                deadline: exploration.deadline,
                 onObservation: onObservation
             )
         }
@@ -483,7 +482,7 @@ extension Navigation {
             containerPath: TreePath,
             scrollViewID: ObjectIdentifier,
             originalScrollView: UIScrollView?,
-            deadline: SemanticObservationDeadline? = nil,
+            deadline: SemanticObservationDeadline?,
             notifyObservation: Bool = true,
             onObservation: (TheVault.State.Current) async -> ViewportExplorationDecision
         ) async -> OriginRestoreOutcome {
@@ -505,7 +504,8 @@ extension Navigation {
             }
             let transition = await navigation.performViewportTransition(
                 intent,
-                deadline: deadline ?? exploration.deadline,
+                deadline: deadline,
+                observationBoundary: exploration.observationBoundary,
                 discoveryCommitPolicy: exploration.discoveryCommitPolicy
             )
             switch transition.outcome {
@@ -538,35 +538,43 @@ extension Navigation {
         private func currentProgrammaticScrollTarget(
             for scrollViewID: ObjectIdentifier
         ) -> ScrollableTarget? {
-            currentLiveScrollableTarget(for: scrollViewID).map(Self.scrollableTarget)
+            for container in navigation.vault.interfaceTree.viewportOnly.orderedContainers {
+                guard let target = currentProgrammaticScrollTarget(for: container.path),
+                      case .uiScrollView(_, let scrollView) = target,
+                      ObjectIdentifier(scrollView) == scrollViewID
+                else { continue }
+                return target
+            }
+            return nil
         }
 
         private func currentProgrammaticScrollTarget(for path: TreePath) -> ScrollableTarget? {
-            guard case .success(let target) = navigation.vault.liveScrollTarget(at: path),
-                  !target.scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
-            return Self.scrollableTarget(target)
-        }
-
-        private func currentLiveScrollableTargets() -> [TheVault.LiveScrollTarget] {
-            navigation.vault.liveProgrammaticScrollTargets(
-                descendedFrom: revealRootScrollViewID
-            )
-        }
-
-        private func currentLiveScrollableTarget(
-            for scrollViewID: ObjectIdentifier
-        ) -> TheVault.LiveScrollTarget? {
-            currentLiveScrollableTargets().first { $0.scrollViewID == scrollViewID }
+            guard let semanticContainer = navigation.vault.interfaceTree.viewportOnly.containers[path],
+                  let target = navigation.scrollableTarget(for: semanticContainer),
+                  case .uiScrollView(_, let scrollView) = target,
+                  isDescendedFromRevealRoot(scrollView)
+            else { return nil }
+            return target
         }
 
         private func currentScrollableContainers() -> [InterfaceTree.Container] {
-            currentLiveScrollableTargets().compactMap { target in
-                navigation.vault.latestObservation.tree.containers[target.path]
+            navigation.vault.interfaceTree.viewportOnly.orderedContainers.filter { container in
+                currentProgrammaticScrollTarget(for: container.path) != nil
             }
         }
 
-        private static func scrollableTarget(_ target: TheVault.LiveScrollTarget) -> ScrollableTarget {
-            .uiScrollView(container: target.container, scrollView: target.scrollView)
+        private func isDescendedFromRevealRoot(_ scrollView: UIScrollView) -> Bool {
+            guard let revealRootScrollViewID else { return true }
+            var current = ObjectIdentifier(scrollView)
+            var visited = Set<ObjectIdentifier>()
+            while visited.insert(current).inserted {
+                if current == revealRootScrollViewID { return true }
+                guard let parent = navigation.vault.currentLiveCapture.parentScrollViewID(of: current) else {
+                    return false
+                }
+                current = parent
+            }
+            return false
         }
 
         private func markExplored(_ container: ActiveContainerExploration) {
@@ -683,9 +691,13 @@ extension Navigation {
         _ viewSpace: HeistElement.Geometry.ViewSpace,
         request: ElementInflation.SemanticTargetRevealRequest
     ) async -> StoredSeedOutcome {
-        // Spending the seed is a live-geometry question, so the live capture is
-        // taken here rather than inherited from whenever one last happened.
-        vault.refreshLiveCapture()
+        guard case .committed =
+            await vault.semanticObservationStream.refreshedVisibleObservation(
+                boundary: .cancellation
+            )
+        else {
+            return .noSeed(.targetUnresolved)
+        }
         // The owner is looked up where the target sits now. `scrollContainerPath`
         // names where it sat in the reading that admitted the target, and the
         // seed is spent against whatever the app has reached since; admitting
@@ -699,20 +711,26 @@ extension Navigation {
         guard let point = viewSpace.activationPoint(ownedBy: ownerPath) else {
             return .noSeed(.seedBelongsToAnotherOwner(ownerPath))
         }
-        let target: TheVault.LiveScrollTarget
-        switch vault.liveScrollTarget(at: ownerPath) {
-        case .success(let resolved):
-            target = resolved
-        case .failure(let failure):
-            return .noSeed(.ownerNotLiveScrollable(failure))
+        guard let semanticContainer = vault.interfaceTree.viewportOnly.containers[ownerPath] else {
+            return .noSeed(.ownerNotLiveScrollable(.noSemanticContainer))
         }
-        guard !target.scrollView.bhIsUnsafeForProgrammaticScrolling else {
+        let liveContainer: TheVault.LiveContainerTarget
+        switch vault.resolveLiveContainerTarget(for: semanticContainer) {
+        case .resolved(let resolved):
+            liveContainer = resolved
+        case .objectUnavailable, .geometryUnavailable:
+            return .noSeed(.ownerNotLiveScrollable(.liveContainerUnresolved))
+        }
+        guard let scrollView = vault.liveScrollableContainerView(forPath: ownerPath) else {
+            return .noSeed(.ownerNotLiveScrollable(.notScrollable))
+        }
+        guard !scrollView.bhIsUnsafeForProgrammaticScrolling else {
             return .noSeed(.ownerUnsafeForProgrammaticScrolling)
         }
         let transition = await performViewportTransition(
             .revealViewPoint(
                 point,
-                in: .uiScrollView(container: target.container, scrollView: target.scrollView)
+                in: .uiScrollView(container: liveContainer, scrollView: scrollView)
             ),
             deadline: request.deadline
         )
@@ -738,11 +756,22 @@ extension Navigation {
     private func semanticTargetScanMatch(
         _ target: ElementInflation.AdmittedSemanticTarget
     ) -> SemanticTargetScanMatch {
-        switch vault.resolveTarget(target.target) {
+        switch vault.resolveVisibleTarget(target.target) {
         case .resolved(.element(let current)):
-            return vault.visibleLiveElementAliasing(current) == nil
-                ? .offscreen
-                : .visible(current)
+            return .visible(current)
+        case .resolved(.container):
+            return .failed(.containerTarget)
+        case .notFound:
+            break
+        case .ambiguous(let facts):
+            return .failed(.ambiguous(
+                TargetResolutionDiagnostics.message(for: .ambiguous(facts))
+            ))
+        }
+
+        switch vault.resolveTarget(target.target) {
+        case .resolved(.element):
+            return .offscreen
         case .resolved(.container):
             return .failed(.containerTarget)
         case .notFound(let facts):

@@ -21,33 +21,34 @@ def job_blocks() -> dict[str, str]:
 
 
 class CIWorkflowTests(unittest.TestCase):
-    def test_macos_runner_topology(self) -> None:
+    def test_ios_runner_topology(self) -> None:
         blocks = job_blocks()
-        pr_jobs = {
-            name
-            for name, block in blocks.items()
-            if "runs-on: macos-15" in block and "github.event_name == 'pull_request'" in block
-        }
-        main_jobs = {
-            name
-            for name, block in blocks.items()
-            if "runs-on: macos-15" in block and "github.ref == 'refs/heads/main'" in block
-        }
-
-        self.assertEqual(
-            pr_jobs,
-            {"macos-tests", "ios-tests", "ios-demo-gates"},
+        self.assertIn("needs: ios-logic", blocks["ios-hosted"])
+        self.assertIn(
+            "needs: [ios-logic, release-contract]",
+            blocks["ios-integration"],
         )
-        self.assertEqual(
-            main_jobs,
-            {
-                "macos-tests",
-                "ios-tests",
-                "ios-demo-gates",
-                "main-integration",
-            },
+        self.assertIn(
+            "needs.release-contract.outputs.run_ios_integration == 'true'",
+            blocks["ios-integration"],
         )
-        self.assertIn("needs: ios-tests", blocks["main-integration"])
+        self.assertIn(
+            "if: always() && needs.ios-logic.result == 'success'",
+            blocks["ios-integration"],
+        )
+        self.assertNotIn("ios-integration-scope", blocks)
+        release = blocks["release-contract"]
+        self.assertIn(
+            "run_ios_integration: "
+            "${{ steps.integration-scope.outputs.run_ios_integration }}",
+            release,
+        )
+        self.assertIn(
+            "python3 scripts/select-ci-change-scopes.py "
+            '--github-output "$GITHUB_OUTPUT"',
+            release,
+        )
+        self.assertNotIn("grep -Eq", release)
 
     def test_portable_contracts_stay_on_linux(self) -> None:
         release = job_blocks()["release-contract"]
@@ -55,22 +56,35 @@ class CIWorkflowTests(unittest.TestCase):
         self.assertNotRegex(release, r"\b(?:xcodebuild|tuist)\b")
 
     def test_hosted_canaries_reuse_the_dedicated_simulator(self) -> None:
-        hosted = job_blocks()["ios-demo-gates"]
+        hosted = job_blocks()["ios-hosted"]
         self.assertIn("BUTTONHEIST_TEST_SIMULATOR_NAME:", hosted)
         self.assertNotIn("parallel-testing", hosted)
         hosted_scheme = PROJECT.split('name: "HostedBehaviorTests"', 1)[1]
         self.assertIn("parallelization: .disabled", hosted_scheme)
+        self.assertEqual(
+            hosted.count("build-for-testing HostedBehaviorTests"),
+            1,
+        )
+        self.assertIn(
+            "test-without-building TheInsideJobWindowTests",
+            hosted,
+        )
+        self.assertIn(
+            "test-without-building HostedBehaviorTests",
+            hosted,
+        )
+        self.assertIn("scripts/e2e-demo-smoke.sh", hosted)
 
     def test_tuist_test_jobs_do_not_initialize_the_parser_submodule(self) -> None:
         blocks = job_blocks()
-        for name in ("macos-tests", "ios-tests", "ios-demo-gates", "main-integration"):
+        for name in ("macos-tests", "ios-logic", "ios-hosted", "ios-integration"):
             with self.subTest(job=name):
                 self.assertNotIn("git submodule update", blocks[name])
 
     def test_exact_sha_suite_requires_every_main_validation_job(self) -> None:
         aggregate = job_blocks()["exact-sha-suite"]
         self.assertIn(
-            "needs: [release-contract, macos-tests, ios-tests, ios-demo-gates, main-integration]",
+            "needs: [release-contract, macos-tests, ios-logic, ios-hosted, ios-integration]",
             aggregate,
         )
         self.assertIn(
@@ -100,22 +114,24 @@ class CIWorkflowTests(unittest.TestCase):
 
     def test_xcode_suites_delegate_all_test_driving_to_the_runner(self) -> None:
         for command in (
-            "build-for-testing TheInsideJobTests",
-            "test-without-building TheInsideJobTests",
+            "build-for-testing TheInsideJobLogicTests",
+            "test-without-building TheInsideJobLogicTests",
             "build-for-testing HostedBehaviorTests",
+            "test-without-building TheInsideJobWindowTests",
             "test-without-building HostedBehaviorTests",
             "build-for-testing TheInsideJobIntegrationTests",
             "test-without-building TheInsideJobIntegrationTests",
         ):
             self.assertIn(f"scripts/test-runner.py {command}", WORKFLOW)
-        self.assertEqual(WORKFLOW.count("scripts/test-runner.py collect "), 4)
+        self.assertEqual(WORKFLOW.count("scripts/test-runner.py collect "), 5)
 
         self.assertNotRegex(
             WORKFLOW,
             r"\bxcodebuild\s+(?:test|build-for-testing|test-without-building)\b",
         )
         self.assertNotRegex(WORKFLOW, r"\btuist\s+test\b")
-        for name in ("macos-tests", "ios-tests", "ios-demo-gates", "main-integration"):
+        self.assertNotIn("--selection", WORKFLOW)
+        for name in ("macos-tests", "ios-logic", "ios-hosted", "ios-integration"):
             self.assertNotIn("select-ios-ci-simulator.py", job_blocks()[name])
         self.assertNotIn("IOS_TEST_RESULT_BUNDLE", WORKFLOW)
         self.assertNotIn("-destination", WORKFLOW)
@@ -123,19 +139,28 @@ class CIWorkflowTests(unittest.TestCase):
     def test_ios_jobs_retain_only_until_unconditional_runner_cleanup(self) -> None:
         blocks = job_blocks()
         jobs = {
-            "ios-tests": "TheInsideJobTests",
-            "ios-demo-gates": "HostedBehaviorTests",
-            "main-integration": "TheInsideJobIntegrationTests",
+            "ios-logic": (
+                "TheInsideJobLogicTests",
+                "TheInsideJobLogicTests",
+            ),
+            "ios-hosted": (
+                "HostedBehaviorTests",
+                "HostedBehaviorTests",
+            ),
+            "ios-integration": (
+                "TheInsideJobIntegrationTests",
+                "TheInsideJobIntegrationTests",
+            ),
         }
-        for name, suite in jobs.items():
+        for name, (build_suite, terminal_suite) in jobs.items():
             with self.subTest(job=name):
                 block = blocks[name]
                 self.assertIn(
-                    f"build-for-testing {suite} --retain-simulator",
+                    f"build-for-testing {build_suite} --retain-simulator",
                     block,
                 )
                 self.assertIn(
-                    f"test-without-building {suite} --retain-simulator",
+                    f"test-without-building {terminal_suite} --retain-simulator",
                     block,
                 )
                 self.assertIn("if: always()", block)

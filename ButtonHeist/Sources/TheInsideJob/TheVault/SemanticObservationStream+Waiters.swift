@@ -1,12 +1,17 @@
 #if canImport(UIKit)
 #if DEBUG
 import ButtonHeistSupport
-import Foundation
 import TheScore
+
+internal enum SemanticObservationWaitBoundary: Sendable, Equatable {
+    case cancellation
+    case observationCycle
+    case externalDeadline(SemanticObservationDeadline)
+}
 
 internal enum SemanticObservationWaitResult: Sendable, Equatable {
     case observation(TheVault.State.Current)
-    case cycleCompleted
+    case cycleCompletedWithoutObservation
     case deadlineReached
     case cancelled
     case unavailable(Observation.History.ReadError)
@@ -15,7 +20,7 @@ internal enum SemanticObservationWaitResult: Sendable, Equatable {
 internal struct SemanticObservationWaiter: Sendable {
     let historyIndex: Int
     let scope: SemanticObservationScope
-    let completesAfterObservationCycle: Bool
+    let boundary: SemanticObservationWaitBoundary
     let oneShot: TimedOneShot<SemanticObservationWaitResult>
 }
 
@@ -24,13 +29,12 @@ extension Observation.Stream {
     internal func waitForObservation(
         after historyIndex: Int,
         scope: SemanticObservationScope,
-        deadline: SemanticObservationDeadline?,
-        completingAfterCurrentCycle: Bool = false
+        boundary: SemanticObservationWaitBoundary
     ) async -> SemanticObservationWaitResult {
         if Task.isCancelled {
             return .cancelled
         }
-        if let deadline,
+        if case .externalDeadline(let deadline) = boundary,
            !deadline.hasTimeRemaining(at: RuntimeElapsed.now) {
             return .deadlineReached
         }
@@ -46,13 +50,14 @@ extension Observation.Stream {
                 observationWaiters.insert(SemanticObservationWaiter(
                     historyIndex: historyIndex,
                     scope: scope,
-                    completesAfterObservationCycle: completingAfterCurrentCycle,
+                    boundary: boundary,
                     oneShot: oneShot
                 ), id: waiterID)
+                observationWaiterDidRegister()
                 Task { @MainActor in
-                    await resolveObservationWaiterIfAvailable(waiterID)
+                    resolveObservationWaiterIfAvailable(waiterID)
                 }
-                armObservationDeadline(deadline, waiterID: waiterID, oneShot: oneShot)
+                armObservationDeadline(boundary, waiterID: waiterID, oneShot: oneShot)
             },
             onFinished: {
                 observationWaiters.remove(id: waiterID)?.oneShot.cancelTimeout()
@@ -63,75 +68,58 @@ extension Observation.Stream {
     internal func nextObservation(
         scope: SemanticObservationScope,
         after historyIndex: Int?,
-        timeout: Double?
+        boundary: SemanticObservationWaitBoundary
     ) async -> TheVault.State.Current? {
-        if timeout == 0 {
+        if case .observationCycle = boundary {
             guard isActive else { return nil }
             if scope != .discovery {
-                return await admittedObservation(
+                return admittedObservation(
                     scope: scope,
                     after: historyIndex
                 )
             }
         }
-        let deadline = timeout == 0 ? nil : timeout.map {
-            SemanticObservationDeadline(
-                start: RuntimeElapsed.now,
-                timeoutSeconds: $0
-            )
-        }
         var cursor: Int
         if let historyIndex {
             cursor = historyIndex
         } else {
-            cursor = await stateOwner.historyEndIndex()
+            cursor = state.history.endIndex
         }
         while true {
             switch await waitForObservation(
                 after: cursor,
                 scope: scope,
-                deadline: deadline,
-                completingAfterCurrentCycle: timeout == 0 && scope == .discovery
+                boundary: boundary
             ) {
             case .observation:
-                if let latest = await admittedObservation(
+                if let latest = admittedObservation(
                     scope: scope,
                     after: cursor
                 ) {
                     return latest
                 }
-                cursor = await stateOwner.historyEndIndex()
-            case .cycleCompleted:
-                return await admittedObservation(
-                    scope: scope,
-                    after: historyIndex
-                )
+                cursor = state.history.endIndex
+            case .cycleCompletedWithoutObservation:
+                return nil
             case .deadlineReached, .cancelled, .unavailable:
                 return nil
             }
         }
     }
 
-    static func timeoutMilliseconds(from timeout: Double?) -> Int {
-        guard let timeout else {
-            return Int(SemanticObservationTiming.defaultTimeout / .milliseconds(1))
-        }
-        guard timeout > 0 else { return 0 }
-        let milliseconds = (timeout * 1_000).rounded(.up)
-        return milliseconds >= Double(Int.max) ? Int.max : max(1, Int(milliseconds))
-    }
-
     func completeObservationWaiters(
-        completedScope: SemanticObservationScope? = nil
-    ) async {
+        completedScope: SemanticObservationScope? = nil,
+        observationCommitted: Bool? = nil
+    ) {
         var candidates: [(UInt64, SemanticObservationWaiter)] = []
         observationWaiters.updateAll { id, waiter in
             candidates.append((id, waiter))
         }
         for (id, waiter) in candidates {
-            guard let result = await observationWaitResult(
+            guard let result = observationWaitResult(
                 for: waiter,
-                completedScope: completedScope
+                completedScope: completedScope,
+                observationCommitted: observationCommitted
             ) else { continue }
             resolveObservationWaiter(id, with: result)
         }
@@ -145,12 +133,14 @@ extension Observation.Stream {
 
     private func resolveObservationWaiterIfAvailable(
         _ waiterID: UInt64,
-        completedScope: SemanticObservationScope? = nil
-    ) async {
+        completedScope: SemanticObservationScope? = nil,
+        observationCommitted: Bool? = nil
+    ) {
         guard let waiter = observationWaiters[waiterID],
-              let result = await observationWaitResult(
+              let result = observationWaitResult(
                 for: waiter,
-                completedScope: completedScope
+                completedScope: completedScope,
+                observationCommitted: observationCommitted
               )
         else { return }
         resolveObservationWaiter(waiterID, with: result)
@@ -158,9 +148,10 @@ extension Observation.Stream {
 
     private func observationWaitResult(
         for waiter: SemanticObservationWaiter,
-        completedScope: SemanticObservationScope?
-    ) async -> SemanticObservationWaitResult? {
-        switch await stateOwner.current(
+        completedScope: SemanticObservationScope?,
+        observationCommitted: Bool?
+    ) -> SemanticObservationWaitResult? {
+        switch state.current(
             after: waiter.historyIndex,
             scope: waiter.scope
         ) {
@@ -169,10 +160,11 @@ extension Observation.Stream {
         case .failure(let error):
             return .unavailable(error)
         case .success(nil):
-            if waiter.completesAfterObservationCycle,
+            if case .observationCycle = waiter.boundary,
                let completedScope,
+               observationCommitted == false,
                completedScope.canFulfill(waiter.scope) {
-                return .cycleCompleted
+                return .cycleCompletedWithoutObservation
             }
             return nil
         }
@@ -187,11 +179,11 @@ extension Observation.Stream {
     }
 
     private func armObservationDeadline(
-        _ deadline: SemanticObservationDeadline?,
+        _ boundary: SemanticObservationWaitBoundary,
         waiterID: UInt64,
         oneShot: TimedOneShot<SemanticObservationWaitResult>
     ) {
-        guard let deadline else { return }
+        guard case .externalDeadline(let deadline) = boundary else { return }
         let remaining = deadline.remainingSeconds()
         guard remaining > 0 else {
             resolveObservationWaiter(waiterID, with: .deadlineReached)

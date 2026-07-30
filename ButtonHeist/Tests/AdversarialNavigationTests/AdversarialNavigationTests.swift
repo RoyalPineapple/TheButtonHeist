@@ -2,46 +2,21 @@
 import XCTest
 
 @testable import BHDemo
-import ButtonHeistHostedTestSupport
 import ButtonHeistTesting
-import ThePlans
+import TheInsideJob
+@_spi(AdversarialLab) import ThePlans
 @_spi(ButtonHeistInternals) @testable import TheScore
 
 @MainActor
 final class AdversarialNavigationTests: XCTestCase {
 
     func testModalReviewBecomesInteractiveOnlyAfterPresentationCompletes() async throws {
-        try await AdversarialLabRoute.open(.modalObstruction)
-        let heist = try await runHeist("AdversarialModalObstructionPass") {
-            WaitFor(.exists(.label("Modal Obstruction")), timeout: 4)
-
-            Activate(.label("Review order"))
-                .expect(.exists(.element(
-                    .label("Order review"),
-                    .value("Ready")
-                )), timeout: 4)
-            Activate(.label("Confirm review"))
-                .expect(.exists(.label("Status: Review confirmed")), timeout: 2)
-            Activate(.label("Close"))
-                .expect(.missing(.label("Order review")), timeout: 4)
-        }
-
+        let heist = try await runScenario(.modalObstructionPass)
         XCTAssertNil(heist.result.firstFailedStep)
     }
 
     func testModalObstructionBlocksBackgroundActionSearch() async throws {
-        try await AdversarialLabRoute.open(.modalObstruction)
-        let failure = try await expectHeistFailure("AdversarialModalObstructionBackgroundFails") {
-            WaitFor(.exists(.label("Modal Obstruction")), timeout: 4)
-
-            Activate(.label("Review order"))
-                .expect(.exists(.element(
-                    .label("Order review"),
-                    .value("Ready")
-                )), timeout: 4)
-            Activate(.label("Archive order 3"))
-        }
-
+        let failure = try await runFailingScenario(.modalObstructionBackgroundFails)
         let failedStep = try XCTUnwrap(failure.result.firstFailedStep)
         let actionResult = try XCTUnwrap(failedStep.actionEvidence?.result)
         XCTAssertEqual(failure.failedStepKind, .action)
@@ -72,23 +47,7 @@ final class AdversarialNavigationTests: XCTestCase {
     }
 
     func testNestedScrollFindsDeepTargetAcrossBothAxes() async throws {
-        let target = AccessibilityTarget.element(
-            .label("Verified by The Vibe Check"),
-            .value("The Vibe Check"),
-            .traits([.button])
-        )
-        try await AdversarialLabRoute.open(.nestedScroll)
-        let heist = try await runHeist("AdversarialNestedScrollPass") {
-            WaitFor(.exists(.label("Nested Scroll")), timeout: 4)
-
-            Activate(target)
-                .expect(.exists(.label("Selected Verified")), timeout: 6)
-            WaitFor(.exists(.element(
-                .label("Nested target activations"),
-                .value("1")
-            )), timeout: 2)
-        }
-
+        let heist = try await runScenario(.nestedScrollPass)
         XCTAssertNil(heist.result.firstFailedStep)
         let actionResult = try XCTUnwrap(
             heist.result.outputNodes.lazy
@@ -111,107 +70,44 @@ final class AdversarialNavigationTests: XCTestCase {
             activationTrace.axActivateReturned == true
                 || activationTrace.tapActivationSucceeded == true
         )
-        XCTAssertGreaterThan(try counterValue(named: "Nested outer scroll attempts", in: actionResult), 0)
-        XCTAssertGreaterThan(try counterValue(named: "Nested outer scroll movements", in: actionResult), 0)
-        XCTAssertGreaterThan(try counterValue(named: "Nested inner scroll attempts", in: actionResult), 0)
-        XCTAssertGreaterThan(try counterValue(named: "Nested inner scroll movements", in: actionResult), 0)
-        XCTAssertEqual(try counterValue(named: "Nested target activations", in: actionResult), 1)
+        let failure = try await runFailingScenario(.nestedScrollImpossibleFails)
+        XCTAssertEqual(failure.failedStepKind, .action)
     }
 
     func testDuplicateLabelIdentitySurvivesBothViewportDirectionsAndCandidateReordering() async throws {
-        let target = AccessibilityTarget.label("Review PR").and(
-            .customContent(.init(label: "Category", value: "Home")),
-            .customContent(.init(label: "Priority", value: "High"))
-        )
-        try await AdversarialLabRoute.open(.duplicateLabels)
-        let heist = try await runHeist("AdversarialDuplicateLabelsPass") {
-            WaitFor(.exists(target), timeout: 4)
-
-            Activate(target)
-                .expect(.exists(.element(
-                    .label("Home High activations"),
-                    .value("1")
-                )), timeout: 6)
-            WaitFor(.exists(.element(
-                .label("Duplicate candidate order"),
-                .value("Reordered")
-            )), timeout: 2)
-
-            Activate(.label("Return to duplicate top"))
-                .expect(.exists(.element(
-                    .label("Duplicate target visibility"),
-                    .value("Offscreen")
-                )), timeout: 6)
-            WaitFor(.exists(target), timeout: 2)
-
-            Activate(target)
-                .expect(.exists(.element(
-                    .label("Home High activations"),
-                    .value("2")
-                )), timeout: 6)
-            WaitFor(.exists(.element(
-                .label("Work High activations"),
-                .value("0")
-            )), timeout: 2)
-            WaitFor(.exists(.element(
-                .label("Work Low activations"),
-                .value("0")
-            )), timeout: 2)
-        }
-
+        let heist = try await runScenario(.duplicateLabelIdentityPass)
         XCTAssertNil(heist.result.firstFailedStep)
-        let targetActivations = heist.result.outputNodes.lazy
-            .compactMap { $0.actionEvidence?.result }
-            .filter { result in
-                guard let subject = result.subjectEvidence,
-                      subject.element.semantics.assertable.label == "Review PR"
-                else { return false }
-                let customContent = subject.element.semantics.assertable.orderedCustomContent
-                return customContent.contains {
-                    $0.label == "Category" && $0.value == "Home"
-                } && customContent.contains {
-                    $0.label == "Priority" && $0.value == "High"
-                }
-            }
-        XCTAssertEqual(targetActivations.count, 2)
-        for actionResult in targetActivations {
-            let subject = try XCTUnwrap(actionResult.subjectEvidence)
-            XCTAssertEqual(subject.source, .resolvedSemanticTarget)
-        }
-        let finalActionResult = try XCTUnwrap(targetActivations.last)
-        XCTAssertEqual(try counterValue(named: "Home High activations", in: finalActionResult), 2)
-        XCTAssertEqual(try counterValue(named: "Work High activations", in: finalActionResult), 0)
-        XCTAssertEqual(try counterValue(named: "Work Low activations", in: finalActionResult), 0)
     }
 
-    // MARK: - Result Evidence
+    // MARK: - Scenario Execution
 
-    private func counterValue(
-        named label: String,
-        in result: ActionResult,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) throws -> Int {
-        let interface = try XCTUnwrap(
-            result.observationEvidence?.current?.interface,
-            "Missing final interface for \(label)",
-            file: file,
-            line: line
-        )
-        let value = try XCTUnwrap(
-            interface.projectedElements.first {
-                $0.semantics.assertable.label == label
-            }?.semantics.assertable.value,
-            "Missing accessibility value for \(label)",
-            file: file,
-            line: line
-        )
-        return try XCTUnwrap(
-            Int(value),
-            "Expected integer accessibility value for \(label), got \(value)",
-            file: file,
-            line: line
-        )
+    private func runScenario(
+        _ scenario: AdversarialScenarioCatalog.Scenario
+    ) async throws -> Heist {
+        XCTAssertEqual(scenario.expectedOutcome, .commandSucceeds)
+        try await AdversarialLabRoute.open(scenario.route)
+        return try await runHeist(scenario.plan())
+    }
+
+    private func runFailingScenario(
+        _ scenario: AdversarialScenarioCatalog.Scenario
+    ) async throws -> Heist.Failure {
+        XCTAssertEqual(scenario.expectedOutcome, .commandFailsWithDiagnostic)
+        try await AdversarialLabRoute.open(scenario.route)
+        do {
+            _ = try await runHeist(scenario.plan())
+            throw ContractError.expectedFailure(scenario)
+        } catch let failure as Heist.Failure {
+            let diagnostic = try XCTUnwrap(
+                scenario.expectedEvidence.first { $0.kind == .diagnostic }?.label
+            )
+            XCTAssertTrue(failure.description.localizedCaseInsensitiveContains(diagnostic))
+            return failure
+        }
+    }
+
+    private enum ContractError: Error {
+        case expectedFailure(AdversarialScenarioCatalog.Scenario)
     }
 }
 #endif // canImport(UIKit)

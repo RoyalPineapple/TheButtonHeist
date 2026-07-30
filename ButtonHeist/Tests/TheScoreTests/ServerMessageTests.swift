@@ -196,6 +196,23 @@ final class ServerMessageTests: XCTestCase {
         XCTAssertEqual(serverError.kind, .general)
         XCTAssertEqual(serverError.message, "oops")
     }
+
+    func testHeistResultEncodeDecode() throws {
+        let result = try HeistResult(steps: [], durationMs: 42)
+        let data = try JSONEncoder().encode(ServerMessage.heistResult(result))
+        let json = try JSONProbe(data: data)
+
+        XCTAssertEqual(try json.string("type"), "heistResult")
+        XCTAssertEqual(try json.object("payload").int("durationMs"), 42)
+        guard case .heistResult(let decoded) = try JSONDecoder().decode(
+            ServerMessage.self,
+            from: data
+        ) else {
+            return XCTFail("Expected heistResult")
+        }
+        XCTAssertEqual(decoded, result)
+    }
+
     func testScreenEncodeDecode() throws {
         let element = makeTestHeistElement(
             description: "Pay",

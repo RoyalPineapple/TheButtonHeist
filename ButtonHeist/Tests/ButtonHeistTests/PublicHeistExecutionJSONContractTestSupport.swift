@@ -65,15 +65,20 @@ enum PublicHeistJSONFixtureValue {
         ])
     }
 
-    static func expectation(label: String, actual: String) -> JSONValue {
+    static func expectation(label: String) -> JSONValue {
         object([
             "met": bool(true),
-            "actual": string(actual),
             "expected": existsPredicate(label: label),
         ])
     }
 
-    static let doneExpectation = expectation(label: "Done", actual: "Done visible")
+    static let doneExpectation = expectation(label: "Done")
+
+    static let expectationTiming = object([
+        "budgetMs": int(1_000),
+        "elapsedMs": int(250),
+        "lastTreeChangeElapsedMs": int(125),
+    ])
 
     static let readyCase = object([
         "predicate": existsPredicate(label: "Ready"),
@@ -84,37 +89,73 @@ enum PublicHeistJSONFixtureValue {
     static let matchedWaitEvidence = object([
         "outcome": string("matched"),
         "expectation": doneExpectation,
+        "timing": expectationTiming,
         "baselineSummary": string("screen: Loading; interface: 0 elements"),
-        "finalSummary": string("screen: Done visible; interface: 0 elements"),
+        "finalSummary": string("screen: Done visible; interface: 1 elements"),
         "delta": object([
-            "kind": string("noChange"),
-            "elementCount": int(0),
+            "kind": string("elementsChanged"),
+            "elementCount": int(1),
+            "edits": object([
+                "added": array([
+                    object([
+                        "traits": array([string("staticText")]),
+                        "label": string("Done"),
+                    ]),
+                ]),
+            ]),
         ]),
     ])
 }
 
 enum PublicHeistExecutionJSONContractFixture {
+    struct ExpectationGapCase {
+        let gap: Observation.Gap
+        let publicCode: String
+    }
+
     static let donePredicate = AccessibilityPredicate.exists(.label("Done"))
 
+    static let expectationGaps: [ExpectationGapCase] = [
+        ExpectationGapCase(
+            gap: .notificationIngress(
+                .init(afterSequence: 4, throughSequence: 7),
+                additional: []
+            ),
+            publicCode: "notification_ingress"
+        ),
+        ExpectationGapCase(gap: .captureUnavailable, publicCode: "capture_unavailable"),
+        ExpectationGapCase(gap: .historyUnavailable, publicCode: "history_unavailable"),
+    ]
+
     static func actionWithExpectation() -> HeistExecutionStepResult {
-        HeistResultFixture.action(
+        let current = makeTestObservationSnapshot(elements: [
+            makeTestHeistElement(label: "Done"),
+        ])
+        return HeistResultFixture.action(
             command: .dismiss,
             result: .success(payload: .dismiss, message: "dismissed"),
-            expectation: ExpectationResult(
-                met: true,
+            expectation: HeistResultFixture.expectationEvidence(
                 predicate: donePredicate,
-                actual: "Done visible"
+                observation: Observation.Evidence(
+                    baseline: nil,
+                    events: [.elementsChanged(current), .noChange],
+                    current: current,
+                    coverage: .complete
+                )
             )
         )
     }
 
     static func wait() throws -> HeistExecutionStepResult {
         let evidence = try waitEvidence()
+        let passedEvidence = try XCTUnwrap(HeistPassedWaitEvidence(evidence))
         return .wait(
             path: "$.body[0]",
             predicate: donePredicate,
             timeout: 1,
-            completion: .passed(evidence: .matched(evidence))
+            completion: .passed(
+                evidence: passedEvidence
+            )
         )
     }
 
@@ -193,30 +234,17 @@ enum PublicHeistExecutionJSONContractFixture {
     }
 
     static func repeatUntil() throws -> HeistExecutionStepResult {
-        let met = ExpectationResult.Met(
-            predicate: donePredicate,
-            actual: "Done visible"
-        )
-        let unmet = try XCTUnwrap(ExpectationResult.Unmet(ExpectationResult(
-            met: false,
-            predicate: donePredicate,
-            actual: "Loading"
-        )))
         let firstIterationEvidence = try XCTUnwrap(HeistRepeatUntilEvidence.continued(
             iterationCount: 2,
-            iterationOrdinal: 0,
-            expectation: unmet
+            iterationOrdinal: 0
         ))
         let secondIterationEvidence = try XCTUnwrap(HeistRepeatUntilEvidence.matched(
             iterationCount: 2,
-            expectation: met,
-            actionResult: .success(payload: .wait, message: "repeat matched"),
+            iterationOrdinal: 1,
             lastObservedSummary: "Done visible"
         ))
         let evidence = try XCTUnwrap(HeistRepeatUntilEvidence.matched(
             iterationCount: 2,
-            expectation: met,
-            actionResult: .success(payload: .wait, message: "repeat matched"),
             lastObservedSummary: "Done visible"
         ))
         let declaration = HeistRepeatUntilDeclaration(predicate: donePredicate, timeout: 0.5)
@@ -247,14 +275,11 @@ enum PublicHeistExecutionJSONContractFixture {
     }
 
     static func invocation() throws -> HeistExecutionStepResult {
-        let evidence = HeistInvocationEvidence.completed(
-            expectation: .waitPassed(.matched(try waitEvidence()))
-        )
         return .invocation(
             path: "$.body[0]",
             invocationPath: "Cart.checkout",
             argument: .string("Milk"),
-            completion: .passed(evidence: try XCTUnwrap(HeistPassedInvocationEvidence(evidence)))
+            completion: .passed(evidence: try XCTUnwrap(HeistPassedInvocationEvidence(.completed)))
         )
     }
 
@@ -281,20 +306,24 @@ enum PublicHeistExecutionJSONContractFixture {
         ))
     }
 
-    static func netDelta() -> PublicHeistNetDeltaFixture {
-        let observation = makeObservationEvidence(
-            before: makeTestInterface(elements: []),
-            after: makeTestInterface(elements: [
-                makeTestHeistElement(label: "Pay", identifier: "pay"),
-            ]),
-            completeness: .complete
-        )
-        let result = ActionResult.success(
-            payload: .activate,
-            observation: .observed(observation)
-        )
-        return PublicHeistNetDeltaFixture(
-            step: HeistResultFixture.action(result: result)
+    static func failedWait(expectationGap: Observation.Gap) -> HeistExecutionStepResult {
+        let current = makeTestObservationSnapshot(elements: [])
+        return HeistResultFixture.failedWait(
+            evidence: HeistResultFixture.expectationEvidence(
+                predicate: donePredicate,
+                observation: Observation.Evidence(
+                    baseline: nil,
+                    events: [],
+                    current: current,
+                    coverage: .incomplete(expectationGap)
+                ),
+                terminalCause: .deadline
+            ),
+            failure: HeistFailureDetail(
+                category: .timeout,
+                contract: "wait predicate is met",
+                observed: "deadline expired"
+            )
         )
     }
 
@@ -305,45 +334,48 @@ enum PublicHeistExecutionJSONContractFixture {
         )
     }
 
-    private static func waitEvidence() throws -> HeistWaitMatchedEvidence {
-        let expectation = ExpectationResult.Met(
-            predicate: donePredicate,
-            actual: "Done visible"
+    private static func waitEvidence() throws -> HeistExpectationEvidence {
+        let current = Observation.Snapshot(
+            interface: makeTestInterface(elements: [
+                makeTestHeistElement(label: "Done"),
+            ]),
+            context: Observation.Context(screenId: "Done visible")
         )
-        let interface = makeTestInterface(elements: [])
-        return HeistWaitMatchedEvidence(
+        return try HeistExpectationEvidence(
+            predicate: donePredicate,
+            bindings: .empty,
             observation: Observation.Evidence(
                 baseline: Observation.Snapshot(
-                    interface: interface,
+                    interface: makeTestInterface(elements: []),
                     context: Observation.Context(screenId: "Loading")
                 ),
-                current: Observation.Snapshot(
-                    interface: interface,
-                    context: Observation.Context(screenId: "Done visible")
-                ),
-                events: [.noChange],
-                completeness: .complete
+                events: [.elementsChanged(current), .noChange],
+                current: current,
+                coverage: .complete
             ),
-            expectation: expectation
+            terminalCause: .observed,
+            timing: HeistResultFixture.expectationTiming
         )
     }
-}
-
-struct PublicHeistNetDeltaFixture {
-    let step: HeistExecutionStepResult
 }
 
 func publicHeistExecutionJSON(
     step: HeistExecutionStepResult,
     profile: ProjectionProfile = .summary
 ) throws -> JSONProbe {
+    let response = try publicHeistExecutionResponse(step: step)
+    let data = try JSONEncoder().encode(PublicResponseModel(response: response, profile: profile))
+    return try JSONProbe(data: data)
+}
+
+func publicHeistExecutionResponse(
+    step: HeistExecutionStepResult
+) throws -> FenceResponse {
     let result = try HeistResult(steps: [step], durationMs: 1)
-    let response = FenceResponse.heistExecution(
+    return FenceResponse.heistExecution(
         plan: try HeistPlan(body: [.warn(WarnStep(message: "fixture"))]),
         report: HeistReport.project(result: result)
     )
-    let data = try JSONEncoder().encode(PublicResponseModel(response: response, profile: profile))
-    return try JSONProbe(data: data)
 }
 
 func publicHeistExecutionNodeJSON(

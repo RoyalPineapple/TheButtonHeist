@@ -92,11 +92,21 @@ extension TheFenceCompactFormattingContractTests {
     }
 
     func testMatchedAnnouncementExpectationWinsOverUnrelatedObservedNotification() throws {
+        let notification = try XCTUnwrap(Observation.Notification(
+            text: "AXPerformElementUpdateImmediatelyToken",
+            element: nil
+        ))
+        let evidence = Observation.Evidence(
+            baseline: nil,
+            events: [.notification(notification)],
+            current: nil,
+            coverage: .incomplete(.historyUnavailable)
+        )
         let response = FenceResponse.action(
             command: .wait,
             result: ActionResult.success(
                 payload: .wait,
-                observation: .announcement("AXPerformElementUpdateImmediatelyToken")
+                observation: .observed(evidence)
             ),
             expectation: ExpectationResult(
                 met: true,
@@ -220,7 +230,7 @@ extension TheFenceCompactFormattingContractTests {
         let unchanged = makeTestInterface(elementCount: 1)
         let evidence = makeObservationEvidence(
             before: unchanged,
-            completeness: .complete
+            coverage: .complete
         )
         let result = ActionResult.success(
             payload: .activate,
@@ -348,7 +358,7 @@ extension TheFenceCompactFormattingContractTests {
                 payload: .activate,
                 observationEvidence: makeObservationEvidence(
                     before: interface,
-                    completeness: .complete
+                    coverage: .complete
                 ),
                 activationTrace: ActivationTrace(.activationPointFallback(
                     axActivateReturned: false,

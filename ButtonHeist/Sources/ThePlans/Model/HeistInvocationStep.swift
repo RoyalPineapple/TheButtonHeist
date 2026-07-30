@@ -132,12 +132,12 @@ public struct HeistInvocationStep: Codable, Sendable, Equatable {
 
     public let path: HeistInvocationPath
     public let argument: HeistArgument
-    public let expectation: WaitStep?
+    public let expectation: ActionExpectation?
 
     public init(
         path: HeistInvocationPath,
         argument: HeistArgument = .none,
-        expectation: WaitStep? = nil
+        expectation: ActionExpectation? = nil
     ) {
         self.path = path
         self.argument = argument
@@ -150,7 +150,7 @@ public struct HeistInvocationStep: Codable, Sendable, Equatable {
         self.init(
             path: try container.decode(HeistInvocationPath.self, forKey: .path),
             argument: try container.decodeIfPresent(HeistArgument.self, forKey: .argument) ?? .none,
-            expectation: try container.decodeIfPresent(WaitStep.self, forKey: .expectation)
+            expectation: try container.decodeIfPresent(ActionExpectation.self, forKey: .expectation)
         )
     }
 

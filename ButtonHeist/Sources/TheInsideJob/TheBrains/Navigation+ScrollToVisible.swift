@@ -7,10 +7,12 @@ extension Navigation {
 
     func executeScrollToVisible(
         target: ResolvedAccessibilityTarget,
+        deadline: SemanticObservationDeadline
     ) async -> TheSafecracker.ActionDispatchResult {
         switch await elementInflation.inflate(
             for: target,
             method: .scrollToVisible,
+            deadline: deadline
         ) {
         case .inflated:
             return .success(payload: .scrollToVisible)

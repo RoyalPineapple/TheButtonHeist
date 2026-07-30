@@ -186,6 +186,7 @@ public struct HeistResult: Codable, Sendable, Equatable {
         _ step: HeistExecutionStepResult,
         childEdges: [(step: HeistExecutionStepResult, edge: HeistExecutionPath.ChildEdge)]
     ) throws {
+        try admitExpectationEvidence(step)
         switch step.kind {
         case .conditional:
             try admitConditionalEvidence(step, childEdges: childEdges)
@@ -211,9 +212,38 @@ public struct HeistResult: Codable, Sendable, Equatable {
              .repeatUntilIteration,
              .warn,
              .fail,
-             .heist,
-             .invoke:
+             .heist:
             break
+        case .invoke:
+            try admitInvocationEvidence(step)
+        }
+    }
+
+    private static func admitExpectationEvidence(_ step: HeistExecutionStepResult) throws {
+        guard step.kind == .wait, step.status == .failed else { return }
+
+        if step.abortedAtChildPath != nil {
+            guard let evidence = step.waitEvidence,
+                  let fallback = HeistPassedWaitEvidence(evidence),
+                  fallback.usesFallback else {
+                throw incoherent(
+                    step,
+                    "child-aborted wait requires complete unmet fallback evidence"
+                )
+            }
+            return
+        }
+
+        let replay: ExpectationResult?
+        do {
+            replay = try step.replayExpectation()
+        } catch {
+            return
+        }
+        guard let replay else { return }
+
+        if replay.met {
+            throw incoherent(step, "failed wait expectation must not replay as met")
         }
     }
 
@@ -267,6 +297,39 @@ public struct HeistResult: Codable, Sendable, Equatable {
                 "repeat_until evidence iterationCount \(evidence.iterationCount) "
                     + "does not match \(iterationCount) iteration child node(s)"
             )
+        }
+    }
+
+    private static func admitInvocationEvidence(_ step: HeistExecutionStepResult) throws {
+        switch step.status {
+        case .passed:
+            // Passed invocation completion already admits only `.completed` evidence.
+            return
+        case .skipped:
+            return
+        case .failed:
+            guard let abortedAtChildPath = step.abortedAtChildPath else {
+                guard step.invocationEvidence?.childFailedPath == nil else {
+                    throw incoherent(
+                        step,
+                        "intrinsic failed invocation must not carry child-failure evidence"
+                    )
+                }
+                return
+            }
+            guard let observedPath = step.invocationEvidence?.childFailedPath else {
+                throw incoherent(
+                    step,
+                    "child-aborted invocation must observe child-failure evidence at \(abortedAtChildPath)"
+                )
+            }
+            guard observedPath == abortedAtChildPath else {
+                throw incoherent(
+                    step,
+                    "child-aborted invocation evidence path \(observedPath) "
+                        + "does not match aborted child path \(abortedAtChildPath)"
+                )
+            }
         }
     }
 

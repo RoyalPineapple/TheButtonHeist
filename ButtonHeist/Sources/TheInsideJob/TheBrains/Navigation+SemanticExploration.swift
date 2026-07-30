@@ -103,10 +103,12 @@ extension Navigation {
         var progress: InterfaceExplorationProgress
         private(set) var discoveryCommitPolicy: DiscoveryCommitPolicy
         let deadline: SemanticObservationDeadline?
+        let observationBoundary: SemanticObservationWaitBoundary
 
         init(
             startingFresh: Bool,
             deadline: SemanticObservationDeadline? = nil,
+            observationBoundary: SemanticObservationWaitBoundary = .cancellation,
             maxScrollsPerContainer: Int = InterfaceExplorationProgress.maxScrollsPerContainer,
             maxScrollsPerDiscovery: Int = InterfaceExplorationProgress.maxScrollsPerDiscovery
         ) {
@@ -114,6 +116,7 @@ extension Navigation {
             // which is what `recordCommittedObservation` latches.
             discoveryCommitPolicy = startingFresh ? .replaceInterface : .mergeIntoInterface
             self.deadline = deadline
+            self.observationBoundary = observationBoundary
             progress = InterfaceExplorationProgress(
                 maxScrollsPerContainer: maxScrollsPerContainer,
                 maxScrollsPerDiscovery: maxScrollsPerDiscovery
@@ -173,19 +176,31 @@ extension Navigation {
         deadline: SemanticObservationDeadline,
         stopWhen: @escaping @MainActor () -> Bool
     ) async -> ViewportExit.Outcome {
+        guard !stopWhen() else { return .restored }
         guard deadline.hasTimeRemaining(at: RuntimeElapsed.now) else { return .restored }
         // Knowing where the element is makes it a seed, not a different search.
-        // Inflation goes straight there and reports whether it landed; the
-        // exhaustive pass below is what answers the question when it did not.
+        // Inflation goes straight there, then cleanup restores the origin. The
+        // same stop condition decides whether that seed answered the wait or
+        // the exhaustive pass still needs to search.
         if let target,
            target.isElementTarget,
-           case .resolved(.element) = vault.resolveTarget(target),
-           case .inflated = await elementInflation.inflate(
-               for: target,
-               method: .scrollToVisible,
-               operationDeadline: deadline
-           ) {
-            return .retained
+           case .resolved(.element) = vault.resolveTarget(target) {
+            let transaction = ElementInflation.RevealTransaction(vault: vault)
+            transaction.captureScrollableHierarchy()
+            _ = await elementInflation.inflate(
+                for: target,
+                method: .scrollToVisible,
+                deadline: deadline
+            )
+            let viewportExit = await transaction.rollBack(
+                using: elementInflation.exploration.moveViewport,
+                deadline: deadline
+            )
+            guard viewportExit == .restored else { return viewportExit }
+            if stopWhen() || Task.isCancelled
+                || !deadline.hasTimeRemaining(at: RuntimeElapsed.now) {
+                return .restored
+            }
         }
 
         guard let exploration = await exploreScreen(

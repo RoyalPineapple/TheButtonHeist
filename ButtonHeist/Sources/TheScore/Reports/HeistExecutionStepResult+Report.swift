@@ -11,27 +11,6 @@ package extension HeistExecutionStepResult {
         return HeistInvocationStep(path: path, argument: argument)
     }
 
-    var forEachStringDeclaration: HeistForEachStringDeclaration? {
-        switch node {
-        case .forEachString(let declaration, _), .forEachStringIteration(let declaration, _): declaration
-        default: nil
-        }
-    }
-
-    var forEachElementDeclaration: HeistForEachElementDeclaration? {
-        switch node {
-        case .forEachElement(let declaration, _), .forEachElementIteration(let declaration, _): declaration
-        default: nil
-        }
-    }
-
-    var repeatUntilDeclaration: HeistRepeatUntilDeclaration? {
-        switch node {
-        case .repeatUntil(let declaration, _), .repeatUntilIteration(let declaration, _): declaration
-        default: nil
-        }
-    }
-
 }
 
 public extension HeistExecutionStepResult {
@@ -59,42 +38,18 @@ public extension HeistExecutionStepResult {
             actionEvidence?.result
         case .wait:
             reportWaitActionResult
-        case .repeatUntil, .repeatUntilIteration:
-            repeatUntilEvidence?.actionResult
-        case .invocation:
-            invocationEvidence?.expectationActionResult
         case .conditional,
              .forEachElement,
              .forEachString,
              .forEachElementIteration,
              .forEachStringIteration,
+             .repeatUntil,
+             .repeatUntilIteration,
              .warning,
              .failure,
-             .heist:
+             .heist,
+             .invocation:
             nil
-        }
-    }
-
-    /// Expectation to surface for this step.
-    var reportExpectation: ExpectationResult? {
-        switch node {
-        case .action:
-            return actionEvidence?.expectation
-        case .wait:
-            return waitExpectation
-        case .repeatUntil, .repeatUntilIteration:
-            return repeatUntilEvidence?.expectation
-        case .invocation:
-            return invocationEvidence?.expectation
-        case .conditional,
-             .forEachElement,
-             .forEachString,
-             .forEachElementIteration,
-             .forEachStringIteration,
-             .warning,
-             .failure,
-             .heist:
-            return nil
         }
     }
 
@@ -116,17 +71,21 @@ public extension HeistExecutionStepResult {
 
 private extension HeistExecutionStepResult {
     var reportWaitActionResult: ActionResult? {
-        if let evidence = passedWaitEvidence {
+        guard let evidence = waitEvidence else { return nil }
+        if status == .passed {
+            let message: String
+            do {
+                message = try evidence.replay().actual ?? "matched"
+            } catch {
+                message = "matched"
+            }
             return .success(
                 payload: .wait,
-                message: evidence.expectation.actual ?? "matched",
+                message: message,
                 observation: .observed(evidence.observation)
             )
         }
-        guard let evidence = unmatchedWaitEvidence,
-              let failure else {
-            return nil
-        }
+        guard let failure else { return nil }
         return .failure(
             payload: .wait,
             failureKind: failure.actionFailureKind,
@@ -164,11 +123,9 @@ private extension HeistExecutionStepResult {
             guard let evidence = repeatUntilEvidence else { return nil }
             if let failureReason = evidence.failureReason { return failureReason }
             if let ordinal = evidence.iterationOrdinal {
-                return "iteration \(ordinal) predicate \(evidence.expectation.met ? "met" : "not met")"
+                return "iteration \(ordinal) \(evidence.outcome.rawValue)"
             }
-            return evidence.expectation.met
-                ? "predicate met after \(evidence.iterationCount) iteration(s)"
-                : "timed out after \(evidence.iterationCount) iteration(s)"
+            return "\(evidence.outcome.rawValue) after \(evidence.iterationCount) iteration(s)"
         case .invocation(let invocationPath, _, _):
             guard let evidence = invocationEvidence else { return nil }
             if let childFailedPath = evidence.childFailedPath { return "child failed at \(childFailedPath)" }

@@ -1,5 +1,13 @@
 import ThePlans
 
+private func multiset<Value: Hashable>(
+    _ values: some Sequence<Value>
+) -> [Value: Int] {
+    values.reduce(into: [:]) { counts, value in
+        counts[value, default: 0] += 1
+    }
+}
+
 /// An execution-ready predicate program that consumes one event at a time.
 ///
 /// Live execution constructs one expectation, then feeds it each observed event
@@ -62,6 +70,13 @@ package struct Expectation: Sendable, Equatable {
         pending.count == 1 && pending[0].isNoChange
     }
 
+    package var hasMatchedTemporalBaseline: Bool {
+        pending.contains {
+            if case .after = $0 { return true }
+            return false
+        }
+    }
+
     private func evaluating(_ input: Input) -> Expectation {
         var next: [Step] = []
         next.reserveCapacity(pending.count)
@@ -91,11 +106,11 @@ private extension Expectation {
         case baseline(Observation.Snapshot)
         case event(Observation.Event)
 
-        var interface: Interface? {
+        var matchInput: AccessibilityTargetMatchInput<HeistElement>? {
             switch self {
             case .baseline(let snapshot), .event(.elementsChanged(let snapshot)):
-                return snapshot.interface
-            case .event(.screenChanged), .event(.notification), .event(.noChange):
+                return AccessibilityTargetMatchInput(interface: snapshot.interface)
+            case .event:
                 return nil
             }
         }
@@ -115,72 +130,58 @@ private extension Expectation {
             of: ResolvedAccessibilityElementTarget
         )
 
-        func semanticHash(in input: Input) -> SemanticHash {
-            guard let interface = input.interface else {
+        func semanticProjection(in input: Input) -> SemanticProjection {
+            guard let matchInput = input.matchInput else {
                 preconditionFailure("Expectation scope requires an interface reading")
             }
-            return semanticHash(in: interface)
-        }
-
-        private func semanticHash(in interface: Interface) -> SemanticHash {
-            let graph = AccessibilityTargetMatchGraph(interface: interface)
+            let graph = AccessibilityTargetMatchGraph(matchInput)
             switch self {
             case .graph:
-                let input = AccessibilityTargetMatchInput(interface: interface)
-                return Self.semanticHash(
-                    elements: input.elements.lazy.map(\.element.semantics),
-                    containers: input.containers.lazy.map(\.facts)
+                return .semantics(
+                    elements: multiset(
+                        matchInput.elements.lazy.map(\.element.semantics)
+                    ),
+                    containers: multiset(
+                        matchInput.containers.lazy.map(\.facts)
+                    )
                 )
             case .target(let target):
                 let matches = graph.resolve(target)
-                return Self.semanticHash(
-                    elements: matches.elements.elements.lazy.map(\.semantics),
-                    containers: matches.containers.lazy.map(\.facts)
+                return .semantics(
+                    elements: multiset(
+                        matches.elements.elements.lazy.map(\.semantics)
+                    ),
+                    containers: multiset(matches.containers.lazy.map(\.facts))
                 )
             case .property(let property, let target):
-                let hashes = graph.resolve(target.accessibilityTarget)
-                    .elements.elements.lazy
-                    .map { property.semanticHash(of: $0.semantics) }
-                return Self.semanticHash(hashes)
+                let semantics = graph.resolve(target.accessibilityTarget)
+                    .elements.elements.lazy.map(\.semantics)
+                return .property(property.semanticProjection(of: semantics))
             }
         }
+    }
 
-        private static func semanticHash(
-            elements: some Sequence<HeistElement.Semantics>,
-            containers: some Sequence<ContainerPredicateFacts>
-        ) -> SemanticHash {
-            var hasher = Hasher()
-            hasher.combine(0)
-            combine(elements.lazy.map(\.semanticHash), into: &hasher)
-            hasher.combine(1)
-            combine(containers.lazy.map(\.semanticHash), into: &hasher)
-            return hasher.finalize()
-        }
+    enum SemanticProjection: Sendable, Equatable {
+        case semantics(
+            elements: [HeistElement.Semantics: Int],
+            containers: [ContainerPredicateFacts: Int]
+        )
+        case property(PropertyProjection)
+    }
 
-        private static func semanticHash(
-            _ hashes: some Sequence<SemanticHash>
-        ) -> SemanticHash {
-            var hasher = Hasher()
-            combine(hashes, into: &hasher)
-            return hasher.finalize()
-        }
-
-        private static func combine(
-            _ hashes: some Sequence<SemanticHash>,
-            into hasher: inout Hasher
-        ) {
-            let ordered = hashes.sorted()
-            hasher.combine(ordered.count)
-            for hash in ordered {
-                hasher.combine(hash)
-            }
-        }
+    enum PropertyProjection: Sendable, Equatable {
+        case value([String?: Int])
+        case traits([Set<HeistTrait>: Int])
+        case hint([String?: Int])
+        case actions([Set<ElementAction>: Int])
+        case customContent([[HeistCustomContent]: Int])
+        case rotors([Set<HeistRotor>: Int])
     }
 
     /// One authored assertion and the part of it that remains.
     ///
     /// An event evaluates only the current case. Matching `before` captures its
-    /// scoped semantic hash and produces `after`; that same event is never fed
+    /// scoped semantic projection and produces `after`; that same event is never fed
     /// through the new case.
     enum Step: Sendable, Equatable {
         case current(ObservationPredicate)
@@ -192,7 +193,7 @@ private extension Expectation {
         case after(
             ObservationPredicate,
             scope: Scope,
-            beforeMatch: SemanticHash,
+            beforeMatch: SemanticProjection,
             restart: Before
         )
 
@@ -222,7 +223,7 @@ private extension Expectation {
                     return .matched(.after(
                         after,
                         scope: scope,
-                        beforeMatch: scope.semanticHash(in: input),
+                        beforeMatch: scope.semanticProjection(in: input),
                         restart: Before(
                             predicate: predicate,
                             after: after,
@@ -244,7 +245,7 @@ private extension Expectation {
                 case .unmatched:
                     return .unmatched(nil)
                 case .matched:
-                    return scope.semanticHash(in: input) == beforeMatch
+                    return scope.semanticProjection(in: input) == beforeMatch
                         ? .unmatched(nil)
                         : .matched(nil)
                 }
@@ -286,7 +287,7 @@ private extension ObservationPredicate {
     ) -> Expectation.Step.Evaluation {
         switch (self, input) {
         case (.elementsChanged(let assertions), _):
-            guard let interface = input.interface else {
+            guard let matchInput = input.matchInput else {
                 return .indifferent
             }
             guard let assertion = assertions.first else {
@@ -295,7 +296,9 @@ private extension ObservationPredicate {
             guard assertions.count == 1 else {
                 preconditionFailure("One expectation step evaluates one element predicate")
             }
-            return assertion.matchesCurrent(interface)
+            return assertion.matchesCurrent(
+                AccessibilityTargetMatchGraph(matchInput)
+            )
                 ? .matched(nil)
                 : .unmatched(nil)
         case (.notification(let predicate), .event(.notification(let notification))):
@@ -344,8 +347,9 @@ private extension ResolvedElementAssertion {
         }
     }
 
-    func matchesCurrent(_ interface: Interface) -> Bool {
-        let graph = AccessibilityTargetMatchGraph(interface: interface)
+    func matchesCurrent(
+        _ graph: AccessibilityTargetMatchGraph<HeistElement>
+    ) -> Bool {
         switch self {
         case .exists(let target):
             return !graph.resolve(target).isEmpty
@@ -429,35 +433,23 @@ extension NotificationPredicate.Execution {
     }
 }
 
-extension HeistElement.Semantics: SemanticallyHashable {
-    public func hashSemantic(into hasher: inout Hasher) {
-        hasher.combine(self)
-    }
-}
-
-extension ContainerPredicateFacts: SemanticallyHashable {
-    public func hashSemantic(into hasher: inout Hasher) {
-        hasher.combine(self)
-    }
-}
-
 private extension AssertableProperty {
-    func semanticHash(of semantics: HeistElement.Semantics) -> SemanticHash {
-        var hasher = Hasher()
+    func semanticProjection(
+        of semantics: some Sequence<HeistElement.Semantics>
+    ) -> Expectation.PropertyProjection {
         switch self {
         case .value:
-            hasher.combine(semantics.assertable.value)
+            return .value(multiset(semantics.lazy.map(\.assertable.value)))
         case .traits:
-            hasher.combine(semantics.assertable.traits)
+            return .traits(multiset(semantics.lazy.map(\.assertable.traits)))
         case .hint:
-            hasher.combine(semantics.assertable.hint)
+            return .hint(multiset(semantics.lazy.map(\.assertable.hint)))
         case .actions:
-            hasher.combine(semantics.assertable.actions)
+            return .actions(multiset(semantics.lazy.map(\.assertable.actions)))
         case .customContent:
-            hasher.combine(semantics.assertable.customContent)
+            return .customContent(multiset(semantics.lazy.map(\.assertable.customContent)))
         case .rotors:
-            hasher.combine(semantics.assertable.rotors)
+            return .rotors(multiset(semantics.lazy.map(\.assertable.rotors)))
         }
-        return hasher.finalize()
     }
 }

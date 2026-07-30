@@ -5,123 +5,83 @@ import Testing
 @Suite("Canonical runtime ownership")
 struct CanonicalRuntimeOwnerRuleTests {
     @Test
-    func observationCommitsOutsideStreamOwnerAreRejected() throws {
+    func observationStreamMayOwnTheObservationCycle() throws {
         let path: RelativeFilePath =
-            "ButtonHeist/Sources/TheInsideJob/TheVault/CompetingCommitter.swift"
+            "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream.swift"
         let report = try evaluateButtonHeistRules(
             path: path,
             component: .runtime,
-            source: "func commit(_ owner: TheVault.StateOwner, _ admission: Observation.Admission) " +
-                "async { _ = await owner.commitAdmission(admission) }"
-        )
-
-        #expect(report.contains(ViolationMatcher(
-            id: "buttonheist.semantic_observation_commit_ownership",
-            path: path
-        )))
-    }
-
-    @Test
-    func streamOwnerMayCommitAnObservationAdmission() throws {
-        let path: RelativeFilePath =
-            "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream+CaptureAdmission.swift"
-        let report = try evaluateButtonHeistRules(
-            path: path,
-            component: .runtime,
-            source: "func commit(_ owner: TheVault.StateOwner, _ admission: Observation.Admission) " +
-                "async { _ = await owner.commitAdmission(admission) }"
+            source: """
+            func arm(_ tripwire: TheTripwire, _ bus: AccessibilityNotificationBus) {
+                tripwire.observePulses { _ in }
+                tripwire.setObservationPulseDemand(.immediate)
+                tripwire.stopObservingPulses()
+                _ = bus.freezeObservationCycleClaim()
+            }
+            """
         )
 
         #expect(report.violations.isEmpty)
     }
 
-    @Test
-    func rawVaultStateMutationOutsideStateOwnerIsRejected() throws {
+    @Test(arguments: [
+        "freezeObservationCycleClaim",
+        "observePulses",
+        "setObservationPulseDemand",
+        "stopObservingPulses",
+    ])
+    func competingObservationCycleOwnerIsRejected(_ memberName: String) throws {
         let path: RelativeFilePath =
-            "ButtonHeist/Sources/TheInsideJob/TheVault/CompetingStoreOwner.swift"
+            "ButtonHeist/Sources/TheInsideJob/TheBrains/CompetingObservationCycleOwner.swift"
         let report = try evaluateButtonHeistRules(
             path: path,
             component: .runtime,
-            source: "func commit(_ state: inout TheVault.State, _ admission: Observation.Admission) {" +
-                " _ = state.commitObservation(admission) }"
+            source: "func compete(_ owner: Owner) { owner.\(memberName)() }"
         )
 
         #expect(report.contains(ViolationMatcher(
-            id: "buttonheist.semantic_observation_store_mutation_ownership",
-            path: path
+            id: "buttonheist.semantic_observation_cycle_ownership",
+            path: path,
+            observed: .exact("owner.\(memberName)")
         )))
     }
 
-    @Test
-    func stateOwnerMayMutateVaultState() throws {
-        let path: RelativeFilePath =
-            "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStoreOwner.swift"
+    @Test("Canonical runtime owner is accepted", arguments: runtimeOwnershipFixtures)
+    func canonicalRuntimeOwnerIsAccepted(_ fixture: RuntimeOwnershipFixture) throws {
         let report = try evaluateButtonHeistRules(
-            path: path,
+            path: fixture.ownerPath,
             component: .runtime,
-            source: "func commit(_ state: inout TheVault.State, _ admission: Observation.Admission) {" +
-                " _ = state.commitObservation(admission) }"
+            source: fixture.source
         )
 
         #expect(report.violations.isEmpty)
     }
 
+    @Test("Competing runtime owner is rejected", arguments: runtimeOwnershipFixtures)
+    func competingRuntimeOwnerIsRejected(_ fixture: RuntimeOwnershipFixture) throws {
+        let report = try evaluateButtonHeistRules(
+            path: fixture.competingPath,
+            component: .runtime,
+            source: fixture.source
+        )
+
+        #expect(report.contains(ViolationMatcher(id: fixture.id, path: fixture.competingPath)))
+    }
+
     @Test
-    func heistHostMayConstructTheExecutionMachine() throws {
+    func visibleObservationSourceReferenceDoesNotPerformRawCapture() throws {
         let path: RelativeFilePath =
-            "ButtonHeist/Sources/TheInsideJob/TheBrains/HeistExecution+Host.swift"
+            "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains.swift"
         let report = try evaluateButtonHeistRules(
             path: path,
             component: .runtime,
-            source: "func execute(_ plan: HeistPlan) throws { _ = try HeistExecution.Machine(plan: plan) }"
+            source: """
+            let source: TheVault.VisibleObservationSource =
+                TheVault.captureVisibleObservation
+            """
         )
 
         #expect(report.violations.isEmpty)
-    }
-
-    @Test
-    func competingHeistExecutionMachineOwnerIsRejected() throws {
-        let path: RelativeFilePath =
-            "ButtonHeist/Sources/TheInsideJob/TheBrains/CompetingHeistExecutor.swift"
-        let report = try evaluateButtonHeistRules(
-            path: path,
-            component: .runtime,
-            source: "func execute(_ plan: HeistPlan) throws { _ = try HeistExecution.Machine(plan: plan) }"
-        )
-
-        #expect(report.contains(ViolationMatcher(
-            id: "buttonheist.heist_execution_machine_ownership",
-            path: path
-        )))
-    }
-
-    @Test
-    func canonicalHeistEntryMayConstructTheHost() throws {
-        let path: RelativeFilePath =
-            "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistExecution.swift"
-        let report = try evaluateButtonHeistRules(
-            path: path,
-            component: .runtime,
-            source: "func execute(_ brains: TheBrains) { _ = HeistExecution.Host(brains: brains) }"
-        )
-
-        #expect(report.violations.isEmpty)
-    }
-
-    @Test
-    func competingHeistHostOwnerIsRejected() throws {
-        let path: RelativeFilePath =
-            "ButtonHeist/Sources/TheInsideJob/TheBrains/CompetingHeistEntry.swift"
-        let report = try evaluateButtonHeistRules(
-            path: path,
-            component: .runtime,
-            source: "func execute(_ brains: TheBrains) { _ = HeistExecution.Host(brains: brains) }"
-        )
-
-        #expect(report.contains(ViolationMatcher(
-            id: "buttonheist.heist_execution_host_ownership",
-            path: path
-        )))
     }
 
     @Test
@@ -200,4 +160,66 @@ struct CanonicalRuntimeOwnerRuleTests {
         )))
     }
 
+}
+
+private let runtimeOwnershipFixtures: [RuntimeOwnershipFixture] = [
+    RuntimeOwnershipFixture(
+        id: "buttonheist.observation_history_construction_ownership",
+        ownerPath: "ButtonHeist/Sources/TheInsideJob/TheVault/TheVault+State.swift",
+        competingPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/CompetingObservationHistory.swift",
+        source: "_ = Observation.History(retentionLimit: 256)"
+    ),
+    RuntimeOwnershipFixture(
+        id: "buttonheist.semantic_observation_commit_ownership",
+        ownerPath: "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream+CaptureAdmission.swift",
+        competingPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/CompetingObservationCommit.swift",
+        source: """
+        func commit(_ state: inout TheVault.State, _ admission: Observation.Admission) {
+            _ = state.commitObservation(admission)
+        }
+        """
+    ),
+    RuntimeOwnershipFixture(
+        id: "buttonheist.semantic_observation_live_capture_ownership",
+        ownerPath: "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream+CaptureAdmission.swift",
+        competingPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/CompetingVisibleObservationCapture.swift",
+        source: "func capture(_ vault: TheVault) { _ = vault.captureVisibleObservation() }"
+    ),
+    RuntimeOwnershipFixture(
+        id: "buttonheist.observation_pulse_clock_ownership",
+        ownerPath: "ButtonHeist/Sources/TheInsideJob/TheTripwire/TheTripwire+Pulse.swift",
+        competingPath: "ButtonHeist/Sources/TheInsideJob/TheVault/CompetingPulseClock.swift",
+        source: "_ = CADisplayLink(target: target, selector: selector)"
+    ),
+    RuntimeOwnershipFixture(
+        id: "buttonheist.heist_execution_machine_ownership",
+        ownerPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/HeistExecution+Host.swift",
+        competingPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/CompetingHeistExecutor.swift",
+        source: "func execute(_ plan: HeistPlan) throws { _ = try HeistExecution.Machine(plan: plan) }"
+    ),
+    RuntimeOwnershipFixture(
+        id: "buttonheist.heist_execution_host_ownership",
+        ownerPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistExecution.swift",
+        competingPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/CompetingHeistEntry.swift",
+        source: "func execute(_ brains: TheBrains) { _ = HeistExecution.Host(brains: brains) }"
+    ),
+    RuntimeOwnershipFixture(
+        id: "buttonheist.heist_action_dispatch_ownership",
+        ownerPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/HeistExecution+Host.swift",
+        competingPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/CompetingActionExecutor.swift",
+        source: "func dispatch(_ brains: TheBrains, _ command: Command) async { _ = await brains.dispatchRuntimeAction(command) }"
+    ),
+    RuntimeOwnershipFixture(
+        id: "buttonheist.action_notification_window_ownership",
+        ownerPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/HeistExecution+Host.swift",
+        competingPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/CompetingNotificationWindow.swift",
+        source: "func begin(_ bus: AccessibilityNotificationBus) { _ = bus.beginActionWindow() }"
+    ),
+]
+
+struct RuntimeOwnershipFixture: Sendable {
+    let id: RuleID
+    let ownerPath: RelativeFilePath
+    let competingPath: RelativeFilePath
+    let source: String
 }

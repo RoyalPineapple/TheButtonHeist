@@ -107,6 +107,9 @@ private func encodeServerMessage<Key: CodingKey>(
     case .actionResult(let payload):
         try container.encode(ServerWireMessageType.actionResult, forKey: typeKey)
         try payload.encode(to: container.superEncoder(forKey: payloadKey))
+    case .heistResult(let payload):
+        try container.encode(ServerWireMessageType.heistResult, forKey: typeKey)
+        try payload.encode(to: container.superEncoder(forKey: payloadKey))
     case .screen(let payload):
         try container.encode(ServerWireMessageType.screen, forKey: typeKey)
         try payload.encode(to: container.superEncoder(forKey: payloadKey))
@@ -152,6 +155,8 @@ private func decodeServerMessage(from payloadDecoder: Decoder?, type: ServerWire
         return .interface(try Interface(from: try payload()))
     case .actionResult:
         return .actionResult(try ActionResult(from: try payload()))
+    case .heistResult:
+        return .heistResult(try HeistResult(from: try payload()))
     case .screen:
         return .screen(try ScreenPayload(from: try payload()))
     case .notifications:

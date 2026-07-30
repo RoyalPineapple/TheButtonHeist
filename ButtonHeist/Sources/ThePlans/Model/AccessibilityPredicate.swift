@@ -118,7 +118,7 @@ public struct AccessibilityPredicate: Codable, Sendable, Equatable {
     }
 }
 
-package enum ResolvedElementAssertion: Sendable, Equatable {
+package enum ResolvedElementAssertion: Codable, Sendable, Equatable {
     case exists(ResolvedAccessibilityTarget)
     case missing(ResolvedAccessibilityTarget)
     case appeared(ResolvedAccessibilityTarget)
@@ -139,7 +139,7 @@ package enum ResolvedElementAssertion: Sendable, Equatable {
 }
 
 /// The single execution-ready observation predicate currency.
-package enum ObservationPredicate: Sendable, Equatable {
+package enum ObservationPredicate: Codable, Sendable, Equatable {
     case elementsChanged([ResolvedElementAssertion])
     case notification(NotificationPredicate.Execution)
     case noChange

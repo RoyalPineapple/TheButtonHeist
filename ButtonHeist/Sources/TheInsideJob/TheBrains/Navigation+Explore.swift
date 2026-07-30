@@ -23,6 +23,7 @@ extension Navigation {
     /// produce a full graph.
     func fullGraph(
         deadline: SemanticObservationDeadline? = nil,
+        observationBoundary: SemanticObservationWaitBoundary = .cancellation,
         maxScrollsPerContainer: Int? = nil,
         maxScrollsPerDiscovery: Int? = nil
     ) async -> InterfaceExplorationResult? {
@@ -30,6 +31,7 @@ extension Navigation {
             startingFresh: true,
             exitPosition: .origin,
             deadline: deadline,
+            observationBoundary: observationBoundary,
             maxScrollsPerContainer: maxScrollsPerContainer,
             maxScrollsPerDiscovery: maxScrollsPerDiscovery
         )
@@ -41,18 +43,31 @@ extension Navigation {
         exitPosition: ViewportExitPosition = .origin,
         searchOrder: ViewportSearchOrder = .forwardFirst,
         deadline: SemanticObservationDeadline? = nil,
+        observationBoundary: SemanticObservationWaitBoundary = .cancellation,
         maxScrollsPerContainer: Int? = nil,
         maxScrollsPerDiscovery: Int? = nil,
         onObservation: ((TheVault.State.Current) async -> ViewportExplorationDecision)? = nil,
     ) async -> InterfaceExplorationResult? {
+        var exploration = SemanticExploration(
+            startingFresh: startingFresh,
+            deadline: deadline,
+            observationBoundary: observationBoundary,
+            maxScrollsPerContainer: maxScrollsPerContainer ?? InterfaceExplorationProgress.maxScrollsPerContainer,
+            maxScrollsPerDiscovery: maxScrollsPerDiscovery ?? InterfaceExplorationProgress.maxScrollsPerDiscovery
+        )
+        if let target,
+           explorationGoalIsSatisfied(target),
+           let current = vault.semanticObservationStream.current() {
+            return exploration.finish(
+                startTime: CACurrentMediaTime(),
+                current: current,
+                didMoveViewport: false,
+                viewportExit: exitPosition == .origin ? .restored : .retained
+            )
+        }
         let explorer = ViewportExplorer(
             navigation: self,
-            exploration: SemanticExploration(
-                startingFresh: startingFresh,
-                deadline: deadline,
-                maxScrollsPerContainer: maxScrollsPerContainer ?? InterfaceExplorationProgress.maxScrollsPerContainer,
-                maxScrollsPerDiscovery: maxScrollsPerDiscovery ?? InterfaceExplorationProgress.maxScrollsPerDiscovery
-            ),
+            exploration: exploration,
             searchOrder: searchOrder,
         )
         return await explorer.exploreViewports(exitPosition: exitPosition) { current in
@@ -60,9 +75,20 @@ extension Navigation {
                 return .goalSatisfied
             }
             guard let target else { return .continue }
-            return vault.hasVisibleTerminalResolution(target, in: vault.latestObservation.tree)
+            return explorationGoalIsSatisfied(target)
                 ? .goalSatisfied
                 : .continue
+        }
+    }
+
+    private func explorationGoalIsSatisfied(
+        _ target: ResolvedAccessibilityTarget
+    ) -> Bool {
+        switch vault.resolveVisibleTarget(target) {
+        case .resolved, .ambiguous:
+            return true
+        case .notFound:
+            return false
         }
     }
 }
@@ -70,43 +96,21 @@ extension Navigation {
 extension Navigation {
     func settledExplorationPage(
         deadline: SemanticObservationDeadline?,
+        observationBoundary: SemanticObservationWaitBoundary,
         discoveryCommitPolicy: DiscoveryCommitPolicy,
-        notificationWindow: AccessibilityNotificationScopeLease? = nil,
         afterViewportMovement: Bool = false
     ) async -> TheVault.State.Current? {
-        defer { notificationWindow?.cancel() }
         guard afterViewportMovement
                 || (!Task.isCancelled && hasTimeRemaining(before: deadline))
         else { return nil }
-        let timeout = min(
-            SemanticObservationTiming.defaultTimeout,
-            deadline?.remainingDuration() ?? .seconds(Int.max)
+        if discoveryCommitPolicy == .replaceInterface {
+            vault.semanticObservationStream.discardCurrentObservation()
+        }
+        return await vault.semanticObservationStream.nextObservation(
+            scope: .discovery,
+            after: nil,
+            boundary: observationBoundary
         )
-        let transitionDeadline = SemanticObservationDeadline(start: RuntimeElapsed.now, timeout: timeout)
-        repeat {
-            // The tick only says time passed. The page still has to be re-read
-            // afterwards, or every iteration inspects the same observation the
-            // last one did and a scroll that is still settling looks like a
-            // scroll that never happened.
-            _ = await tripwire.waitForNextTick(
-                timeout: transitionDeadline.remainingDuration(at: RuntimeElapsed.now),
-                demand: .immediate
-            )
-            vault.refreshLiveCapture()
-            guard afterViewportMovement || !Task.isCancelled else { return nil }
-            // This loop only waits for the caller's one dispatched scroll to
-            // land, so a page that still looks unmoved is mid-flight, not a
-            // failed scroll. Whether the reading counts as a change is the
-            // vault's question.
-            if let current = await vault.semanticObservationStream.commitDiscoveryObservation(
-                discoveryCommitPolicy: discoveryCommitPolicy,
-                notificationBatch: notificationWindow?.capture()
-            )?.current {
-                return current
-            }
-        } while transitionDeadline.hasTimeRemaining(at: RuntimeElapsed.now)
-            && (afterViewportMovement || hasTimeRemaining(before: deadline))
-        return nil
     }
 
     private func hasTimeRemaining(before deadline: SemanticObservationDeadline?) -> Bool {
@@ -117,10 +121,7 @@ extension Navigation {
 extension TheBrains {
 
     func startSemanticObservation() async {
-        await vault.semanticObservationStream.start { [weak self] in
-            guard let self else { return nil }
-            return await self.executeSemanticDiscovery()
-        }
+        vault.semanticObservationStream.start()
     }
 }
 

@@ -13,9 +13,6 @@ extension TheVault.State {
         internal let scope: SemanticObservationScope
         internal let continuity: ScreenContinuity
 
-        internal var screenHeading: String? {
-            InterfaceSummary.screenName(for: snapshot.interface)
-        }
         internal var summary: String { snapshot.summary }
     }
 }
@@ -46,10 +43,6 @@ extension Observation {
         internal let current: TheVault.State.Current
         internal let historyRange: Range<Int>
         internal let events: [Event]
-
-        internal func events(after historyIndex: Int) -> ArraySlice<Event> {
-            events.dropFirst(Swift.max(0, historyIndex - historyRange.lowerBound))
-        }
     }
 
     internal struct Admission: Sendable {
@@ -58,7 +51,7 @@ extension Observation {
         internal let discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy
         internal let lineage: ScreenLineage
         internal let scope: SemanticObservationScope
-        internal let notificationAdmission: NotificationAdmission
+        internal let notifications: NotificationSnapshot
         internal let keyboardVisible: Bool?
         internal let timestamp: Date
         /// Where the read tree's visible elements sat. Only the viewport has
@@ -69,40 +62,23 @@ extension Observation {
         internal let geometryTolerance: CGFloat
     }
 
-    internal enum NotificationAdmission: Sendable {
-        case passive(NotificationSnapshot)
-        case action(NotificationSnapshot)
-    }
-
     internal struct NotificationSnapshot: Sendable {
         internal let admittedNotifications: [AdmittedNotification]
         internal let through: AccessibilityNotificationCursor
         internal let scopedScreenChangedThrough: UInt64
 
-        internal func notifications(
-            after cursor: AccessibilityNotificationCursor,
-            scopedScreenChangedCursor: UInt64
-        ) -> Notifications {
-            let selectedNotifications = admittedNotifications.filter {
-                $0.sequence > cursor.sequence
-            }
-            return Notifications(
-                admittedNotifications: selectedNotifications,
-                through: AccessibilityNotificationCursor(
-                    sequence: max(cursor.sequence, through.sequence)
-                ),
-                scopedScreenChangedThrough: max(
-                    scopedScreenChangedCursor,
-                    scopedScreenChangedThrough
-                )
-            )
+        internal init?(
+            admittedNotifications: [AdmittedNotification],
+            through: AccessibilityNotificationCursor,
+            scopedScreenChangedThrough: UInt64,
+            gap: AccessibilityNotificationGap? = nil
+        ) {
+            guard gap == nil else { return nil }
+            self.admittedNotifications = admittedNotifications
+            self.through = through
+            self.scopedScreenChangedThrough = scopedScreenChangedThrough
         }
-    }
 
-    internal struct Notifications: Sendable {
-        internal let admittedNotifications: [AdmittedNotification]
-        internal let through: AccessibilityNotificationCursor
-        internal let scopedScreenChangedThrough: UInt64
     }
 
     internal struct AdmittedNotification: Sendable, Equatable {
@@ -151,6 +127,10 @@ internal struct CommittableInterfaceObservation {
 internal enum VisibleObservationOutcome: Equatable {
     case committed(TheVault.State.Current)
     case unavailable(Observation.CaptureFailure)
+
+    internal var isCommitted: Bool {
+        if case .committed = self { true } else { false }
+    }
 }
 
 #endif // DEBUG

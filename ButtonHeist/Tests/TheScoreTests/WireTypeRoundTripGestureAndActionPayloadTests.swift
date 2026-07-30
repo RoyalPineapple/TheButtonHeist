@@ -70,7 +70,7 @@ extension WireTypeRoundTripTests {
             observation: .observed(makeTestObservationEvidence(
                 current: makeTestObservationSnapshot(elements: []),
                 events: [.noChange],
-                completeness: .incomplete
+                coverage: .incomplete(.historyUnavailable)
             )),
             timing: timing
         )

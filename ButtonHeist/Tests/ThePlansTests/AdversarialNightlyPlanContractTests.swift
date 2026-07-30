@@ -1,43 +1,41 @@
-import Foundation
 import Testing
 
-@testable import ThePlans
+@_spi(AdversarialLab) @testable import ThePlans
 
-private struct AdversarialNightlyPlan: Decodable {
-    let name: String
-    let expectation: String
-    let plan: String
-}
+@Test func `adversarial catalog projects one admitted contract per scenario`() throws {
+    let scenarios = AdversarialScenarioCatalog.Scenario.allCases
+    #expect(scenarios.count == 16)
+    #expect(Set(scenarios.map(\.rawValue)).count == scenarios.count)
+    #expect(Set(scenarios.map(\.route)) == Set(AdversarialScenarioCatalog.Route.allCases))
 
-@Test func `every adversarial nightly plan compiles through the canonical source compilation`() async throws {
-    let repository = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-    let script = repository.appendingPathComponent("scripts/e2e-adversarial-lab.py")
-    let outcome = try await HeistCompilerProcess.Runner.shared.execute(
-        HeistCompilerProcess.Command(
-            executable: URL(fileURLWithPath: "/usr/bin/env"),
-            arguments: ["python3", script.path, "--print-plan-catalog"]
-        ),
-        purpose: .execution
-    )
-    guard case .succeeded(let output) = outcome else {
-        Issue.record("nightly catalog failed: \(outcome)")
-        return
-    }
+    for scenario in scenarios {
+        let plan = try scenario.plan()
+        let manifest = try scenario.manifest()
+        #expect(manifest.name == scenario.rawValue)
+        #expect(manifest.route == scenario.route.rawValue)
+        #expect(manifest.classification == scenario.classification)
+        #expect(manifest.expectedOutcome == scenario.expectedOutcome)
+        #expect(manifest.expectedEvidence == scenario.expectedEvidence)
+        #expect(try HeistSourceCompilation.compile(manifest.plan) == plan)
 
-    let plans = try JSONDecoder().decode([AdversarialNightlyPlan].self, from: output.stdout)
-    #expect(plans.count == 17)
-    for plan in plans {
-        do {
-            _ = try HeistSourceCompilation.compile(
-                plan.plan,
-                sourceName: "adversarial-nightly:\(plan.expectation):\(plan.name)"
-            )
-        } catch {
-            Issue.record("\(plan.expectation) \(plan.name) failed to compile: \(error)")
+        let diagnostics = scenario.expectedEvidence.filter { $0.kind == .diagnostic }
+        switch scenario.expectedOutcome {
+        case .commandSucceeds:
+            #expect(diagnostics.isEmpty)
+        case .commandFailsWithDiagnostic:
+            #expect(diagnostics.count == 1)
         }
     }
+}
+
+@Test func `nightly projection contains only genuinely repeated contracts`() {
+    let scenarios = AdversarialScenarioCatalog.Scenario.allCases
+    let statistical = scenarios.filter { $0.classification == .statistical }
+    let deterministic = scenarios.filter { $0.classification == .deterministic }
+
+    #expect(statistical.count == 8)
+    #expect(statistical.allSatisfy { $0.expectedOutcome == .commandSucceeds })
+    #expect(deterministic.count == 8)
+    #expect(deterministic.contains(.duplicateLabelIdentityPass))
+    #expect(scenarios.filter { $0.route == .duplicateLabels } == [.duplicateLabelIdentityPass])
 }

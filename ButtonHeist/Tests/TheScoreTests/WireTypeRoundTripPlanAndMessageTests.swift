@@ -116,23 +116,6 @@ extension WireTypeRoundTripTests {
         try encodedFailure.assertMissing("activationTrace")
     }
 
-    func testInvocationExpectationDerivesSummaryFromWaitEvidence() throws {
-        let predicate = AccessibilityPredicate.exists(.label("Done"))
-        let expectation = ExpectationResult.Met(predicate: predicate)
-        let waitEvidence = HeistPassedWaitEvidence.matched(HeistWaitMatchedEvidence(
-            observation: makeTestObservationEvidence(
-                events: [.noChange],
-                completeness: .complete
-            ),
-            expectation: expectation
-        ))
-        let evidence = HeistInvocationEvidence.InvocationExpectationEvidence.waitPassed(waitEvidence)
-
-        XCTAssertNil(evidence.actionResult)
-        XCTAssertEqual(evidence.expectation, waitEvidence.expectation)
-        XCTAssertEqual(evidence.waitObservation, waitEvidence.observation)
-    }
-
     func testHeistCaseSelectionOutcomeRequiresUnsignedIndex() {
         let json = """
         {

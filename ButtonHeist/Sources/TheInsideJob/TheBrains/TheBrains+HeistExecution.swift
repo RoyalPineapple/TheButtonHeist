@@ -4,27 +4,119 @@ import Foundation
 import ThePlans
 @_spi(ButtonHeistInternals) import TheScore
 
-extension TheBrains {
-    internal func executeHeistPlan(
-        _ plan: HeistPlan,
-        argument: HeistArgument = .none,
-        timeout: HeistTimeout = .default
-    ) async -> ActionResult {
-        guard semanticObservationIsActive else {
-            return runtimeInactiveResult(payload: .heist(nil))
-        }
-        if tripwire.isPulseRunning {
-            switch await interactionCoordinator.refreshedVisibleObservation() {
-            case .committed:
-                break
-            case .unavailable(let failure):
-                return treeUnavailableResult(
-                    payload: .heist(nil),
-                    failure: failure
-                )
+extension HeistExecution {
+    internal enum Failure: Error, Sendable, LocalizedError, CustomStringConvertible {
+        internal struct Detail: Sendable, CustomStringConvertible {
+            internal let description: String
+
+            internal init(_ error: any Error) {
+                description = String(describing: error)
             }
         }
 
+        case runtimeUnavailable
+        case accessibilityTreeUnavailable
+        case runtimeBoundary(Detail)
+        case invalidResult(Detail)
+        case submissionCancelled
+        case interactionQueueFull
+        case cleanupTimedOut
+        case runtimeStopping
+
+        internal static func classify(_ error: any Error) -> Self {
+            (error as? Self) ?? .runtimeBoundary(Detail(error))
+        }
+
+        internal var description: String {
+            switch self {
+            case .runtimeUnavailable:
+                "ButtonHeist runtime is not active."
+            case .accessibilityTreeUnavailable:
+                "Could not observe accessibility tree."
+            case .runtimeBoundary(let detail):
+                "Heist execution failed at its runtime boundary: \(detail)"
+            case .invalidResult(let detail):
+                "Could not admit heist execution result: \(detail)"
+            case .submissionCancelled:
+                "In-app heist execution was cancelled."
+            case .interactionQueueFull:
+                "Interaction queue is full."
+            case .cleanupTimedOut:
+                "The previous interaction did not finish cancellation cleanup."
+            case .runtimeStopping:
+                "ButtonHeist runtime is stopping."
+            }
+        }
+
+        internal var errorDescription: String? { description }
+
+        internal var serverError: ServerError {
+            let message: ServerErrorMessage
+            do {
+                message = try ServerErrorMessage(validating: description)
+            } catch {
+                preconditionFailure("HeistExecution.Failure descriptions have a non-empty static prefix")
+            }
+            let kind: ServerError.Kind = switch self {
+            case .invalidResult:
+                .validationError
+            case .runtimeUnavailable,
+                 .accessibilityTreeUnavailable,
+                 .runtimeBoundary,
+                 .submissionCancelled,
+                 .interactionQueueFull,
+                 .cleanupTimedOut,
+                 .runtimeStopping:
+                .general
+            }
+            return ServerError(kind: kind, message: message)
+        }
+
+        internal var actionFailureKind: ActionFailure.Kind {
+            switch self {
+            case .accessibilityTreeUnavailable:
+                return .accessibilityTreeUnavailable
+            case .invalidResult:
+                return .validationError
+            case .runtimeUnavailable,
+                 .runtimeBoundary,
+                 .submissionCancelled,
+                 .interactionQueueFull,
+                 .cleanupTimedOut,
+                 .runtimeStopping:
+                return .actionFailed
+            }
+        }
+    }
+}
+
+extension TheBrains {
+    internal func executeHeistAction(
+        _ command: HeistActionCommand,
+        timeout: HeistTimeout = .default
+    ) async -> Result<HeistExecution.Completion, HeistExecution.Failure> {
+        guard semanticObservationIsActive else {
+            return .failure(.runtimeUnavailable)
+        }
+        do {
+            return .success(try await HeistExecution.Host(brains: self).execute(
+                command,
+                timeout: timeout
+            ))
+        } catch {
+            return .failure(.classify(error))
+        }
+    }
+
+    internal func executeHeistPlan(
+        _ plan: HeistPlan,
+        argument: HeistArgument = .none,
+        timeout: HeistTimeout = .default,
+        actionExpectationTimeoutPolicy: ActionExpectationTimeoutPolicy = .default
+    ) async -> Result<HeistResult, HeistExecution.Failure> {
+        guard semanticObservationIsActive else {
+            return .failure(.runtimeUnavailable)
+        }
         let host = HeistExecution.Host(brains: self)
         let startedAt = RuntimeElapsed.now
         let completion: HeistExecution.Completion
@@ -32,50 +124,30 @@ extension TheBrains {
             completion = try await host.execute(
                 plan,
                 argument: argument,
-                timeout: timeout
+                timeout: timeout,
+                actionExpectationTimeoutPolicy: actionExpectationTimeoutPolicy
             )
         } catch {
-            return .failure(
-                payload: .heist(nil),
-                failureKind: .actionFailed,
-                message: "Heist execution failed at its runtime boundary: \(error)"
-            )
+            return .failure(.classify(error))
         }
-        return heistActionResult(
+        return heistResult(
             completion,
-            durationMs: elapsedMilliseconds(since: startedAt)
+            durationMs: RuntimeElapsed.milliseconds(since: startedAt)
         )
     }
 
-    private func heistActionResult(
+    private func heistResult(
         _ completion: HeistExecution.Completion,
         durationMs: ElapsedMilliseconds
-    ) -> ActionResult {
-        let result: HeistResult
+    ) -> Result<HeistResult, HeistExecution.Failure> {
         do {
-            result = try HeistResult(
+            return .success(try HeistResult(
                 steps: completion.steps,
                 durationMs: durationMs
-            )
+            ))
         } catch {
-            return .failure(
-                payload: .heist(nil),
-                failureKind: .validationError,
-                message: "Could not admit heist execution result: \(error)"
-            )
+            return .failure(.invalidResult(.init(error)))
         }
-        let message = heistExecutionMessage(
-            completedCount: completion.steps.count,
-            abortedAtPath: completion.abortedAtPath
-        )
-        guard completion.abortedAtPath == nil else {
-            return .failure(
-                payload: .heist(result),
-                failureKind: .actionFailed,
-                message: message
-            )
-        }
-        return .success(payload: .heist(result), message: message)
     }
 }
 

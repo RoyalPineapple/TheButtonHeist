@@ -11,8 +11,11 @@ extension Navigation {
 
     @MainActor struct ScrollPlan {
         let target: ScrollableTarget
-        let container: AccessibilityContainer
-        let path: TreePath
+        let semanticContainer: InterfaceTree.Container
+
+        var container: AccessibilityContainer { semanticContainer.container }
+        var path: TreePath { semanticContainer.path }
+        var containerName: ContainerName? { semanticContainer.containerName }
     }
 
     @MainActor enum ContainerScrollResolution {
@@ -137,12 +140,14 @@ extension Navigation {
                 return .failed(liveScrollElementFailure(target, command: command))
             }
             let targetDescription = Self.ScrollTargetDescription(resolved)
-            guard let liveScrollTarget = vault.nearestLiveScrollTarget(for: resolved.path),
-                  let contentSize = liveScrollTarget.container.container.scrollableContentSize
+            guard let ownerPath = resolved.scrollContainerPath,
+                  let semanticContainer = vault.interfaceTree.viewportOnly.containers[ownerPath],
+                  case .resolved(let liveContainer) =
+                    vault.resolveLiveContainerTarget(for: semanticContainer),
+                  let scrollView = vault.liveScrollableContainerView(forPath: ownerPath)
             else {
                 return .failed(.missingScrollableAncestor(targetDescription, command: command))
             }
-            let scrollView = liveScrollTarget.scrollView
             guard !scrollView.bhIsUnsafeForProgrammaticScrolling else {
                 return .failed(.unsafeProgrammaticScroll(targetDescription, command: command))
             }
@@ -155,18 +160,10 @@ extension Navigation {
                     command: command
                 ))
             }
-            guard let scrollTarget = scrollableTarget(
-                for: liveScrollTarget.container.container,
-                path: liveScrollTarget.path,
-                contentSize: contentSize,
-                safeSwipeBounds: currentSwipeSafeBounds()
-            ) else {
-                return .failed(.missingScrollableAncestor(targetDescription, command: command))
-            }
-            return .resolved(scrollTarget)
+            return .resolved(.uiScrollView(container: liveContainer, scrollView: scrollView))
         case .container(let containerName):
             let candidates = scrollCandidates(requiredAxis: axis).filter {
-                vault.liveContainerName(forPath: $0.path) == containerName
+                $0.containerName == containerName
             }
             guard !candidates.isEmpty else {
                 return .failed(.noNamedVisibleContainer(containerName, axis: axis, command: command))
@@ -190,44 +187,38 @@ extension Navigation {
     func scrollCandidates(
         requiredAxis axis: ScrollAxis?
     ) -> [ScrollPlan] {
-        let indexedContainers = vault.latestObservedLiveHierarchy.pathIndexedContainers
-        let safeSwipeBounds = currentSwipeSafeBounds(in: indexedContainers)
+        let semanticContainers = vault.interfaceTree.viewportOnly.orderedContainers
+        let safeSwipeBounds = currentSwipeSafeBounds()
 
-        return indexedContainers.compactMap { item -> ScrollPlan? in
-            let container = item.container
-            let path = item.path
-            guard let contentSize = container.scrollableContentSize else { return nil }
+        return semanticContainers.compactMap { semanticContainer -> ScrollPlan? in
+            let container = semanticContainer.container
+            guard container.scrollableContentSize != nil else { return nil }
 
             if let axis, !Self.scrollableAxis(of: container).contains(axis) {
                 return nil
             }
 
-            if let view = self.vault.liveScrollableContainerView(forPath: path),
+            if let view = self.vault.liveScrollableContainerView(forPath: semanticContainer.path),
                view.window != nil,
                Self.isObscuredByPresentation(view: view) {
                 return nil
             }
             guard let target = self.scrollableTarget(
-                for: container,
-                path: path,
-                contentSize: contentSize,
+                for: semanticContainer,
                 safeSwipeBounds: safeSwipeBounds
             ) else {
                 return nil
             }
-            return ScrollPlan(target: target, container: container, path: path)
+            return ScrollPlan(target: target, semanticContainer: semanticContainer)
         }
     }
 
     func scrollableTarget(
-        for container: AccessibilityContainer,
-        path: TreePath? = nil,
-        contentSize: AccessibilitySize,
+        for semanticContainer: InterfaceTree.Container,
         safeSwipeBounds: CGRect? = nil
     ) -> ScrollableTarget? {
-        guard let path,
-              let semanticContainer = vault.latestObservation.tree.containers[path]
-        else { return nil }
+        let container = semanticContainer.container
+        guard let contentSize = container.scrollableContentSize else { return nil }
         guard case .resolved(let liveContainer) = vault.resolveLiveContainerTarget(for: semanticContainer) else {
             return nil
         }
@@ -268,15 +259,11 @@ extension Navigation {
     }
 
     private func currentSwipeSafeBounds() -> CGRect {
-        currentSwipeSafeBounds(in: vault.latestObservedLiveHierarchy.pathIndexedContainers)
-    }
-
-    private func currentSwipeSafeBounds(in containers: [PathIndexedAccessibilityContainer]) -> CGRect {
         let screen = ScreenMetrics.current.bounds
-        let tabBarTop = containers
-            .compactMap { container -> CGFloat? in
-                guard case .tabBar = container.container.type else { return nil }
-                return container.container.frame.minY
+        let tabBarTop = vault.interfaceTree.viewportOnly.orderedContainers
+            .compactMap { semanticContainer -> CGFloat? in
+                guard case .tabBar = semanticContainer.container.type else { return nil }
+                return semanticContainer.container.frame.cgRect.minY
             }
             .min()
 

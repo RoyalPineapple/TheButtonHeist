@@ -48,6 +48,21 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertFalse(response.isFailure)
     }
 
+    func testCompactHeistExpectationGapIsTotalForEveryObservationGap() throws {
+        for expectationGap in PublicHeistExecutionJSONContractFixture.expectationGaps {
+            let response = try publicHeistExecutionResponse(
+                step: PublicHeistExecutionJSONContractFixture.failedWait(
+                    expectationGap: expectationGap.gap
+                )
+            )
+
+            XCTAssertTrue(
+                response.compactFormatted().contains(" ?"),
+                expectationGap.publicCode
+            )
+        }
+    }
+
     func testHumanHeistFormattingCountsNestedProjectedExpectations() throws {
         let expected = AccessibilityPredicate.exists(.label("Done"))
         let childAction = try HeistStep.action(ActionStep(
@@ -62,7 +77,7 @@ extension TheFenceCompactFormattingContractTests {
         let childResult = HeistResultFixture.action(
             path: "$.body[0].conditional.cases[0].body[0]",
             result: ActionResult.success(payload: .activate),
-            expectation: ExpectationResult(met: true, predicate: expected)
+            expectation: HeistResultFixture.defaultWaitEvidence(met: true)
         )
         let result = try HeistResult(
             steps: [
@@ -105,7 +120,7 @@ extension TheFenceCompactFormattingContractTests {
                     path: "$.body[1]",
                     command: .activate(.predicate(ElementPredicate(label: "Submit"))),
                     result: ActionResult.success(payload: .activate),
-                    expectation: ExpectationResult(met: true, predicate: expected, actual: "matched")
+                    expectation: HeistResultFixture.defaultWaitEvidence(met: true)
                 ),
             ],
             durationMs: 5
@@ -150,11 +165,11 @@ extension TheFenceCompactFormattingContractTests {
                         payload: .activate,
                         observation: .observed(makeObservationEvidence(
                             before: makeTestInterface(elementCount: 0),
-                            completeness: .complete
+                            coverage: .complete
                         )),
                         timing: ActionPerformanceTiming(targetResolutionMs: 1, totalMs: 9)
                     ),
-                    expectation: ExpectationResult(met: true, predicate: expected)
+                    expectation: HeistResultFixture.defaultWaitEvidence(met: true)
                 ),
             ],
             durationMs: 12
@@ -194,40 +209,6 @@ extension TheFenceCompactFormattingContractTests {
         try json.assertMissing("method")
         XCTAssertTrue(compact.contains("heist: 1 top-level steps in 3ms"), compact)
         XCTAssertTrue(compact.contains("[0] activate"), compact)
-    }
-
-    func testPublicHeistJSONProjectsNetDeltaInsideReport() throws {
-        let plan = try HeistPlan(body: [
-            .action(ActionStep(command: .activate(.predicate(ElementPredicate(label: "Pay"))))),
-        ])
-        let evidence = makeObservationEvidence(
-            before: makeTestInterface(elementCount: 0),
-            after: makeTestInterface(elementCount: 2),
-            completeness: .complete
-        )
-        let response = FenceResponse.heistExecution(
-            plan: plan,
-            report: HeistReport.project(result: try HeistResult(
-                steps: [
-                    HeistResultFixture.action(
-                        command: .activate(.predicate(ElementPredicate(label: "Pay"))),
-                        result: ActionResult.success(
-                            payload: .activate,
-                            observation: .observed(evidence)
-                        )
-                    ),
-                ],
-                durationMs: 3
-            ))
-        )
-
-        let json = try publicJSONProbe(response)
-        let reportProbe = try json.object("report")
-        let netDeltaProbe = try reportProbe.object("netDelta")
-
-        try assertHeistReportRootOmitsSummaryDuplicates(json)
-        XCTAssertEqual(try netDeltaProbe.string("kind"), "elementsChanged")
-        XCTAssertEqual(try netDeltaProbe.int("elementCount"), 2)
     }
 
     func testCompactHeistFormattingReportsFailStepMessage() throws {
@@ -274,10 +255,17 @@ extension TheFenceCompactFormattingContractTests {
         let plan = try HeistPlan(body: [
             .wait(WaitStep(predicate: predicate, timeout: 1)),
         ])
+        let current = makeTestObservationSnapshot(elements: [])
         let step = HeistResultFixture.failedWait(
-            expectation: ExpectationResult.Unmet(
+            evidence: HeistResultFixture.expectationEvidence(
                 predicate: predicate,
-                actual: "element not found"
+                observation: Observation.Evidence(
+                    baseline: nil,
+                    events: [.elementsChanged(current)],
+                    current: current,
+                    coverage: .complete
+                ),
+                terminalCause: .deadline
             ),
             failure: HeistFailureDetail(
                 category: .wait,
@@ -485,7 +473,7 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertTrue(compact.contains("[1] activate"), compact)
     }
 
-    func testPublicHeistOutputReportsForEachStructurally() throws {
+    func testHeistReportProjectsForEachStructurally() throws {
         let forEach = try ForEachStringStep(
             values: ["Milk", "Eggs"],
             parameter: "item",

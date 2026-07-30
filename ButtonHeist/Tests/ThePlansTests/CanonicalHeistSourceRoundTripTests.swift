@@ -141,7 +141,7 @@ struct CanonicalHeistSourceRoundTripTests {
         #expect(source == """
         HeistPlan("search", parameter: "item") { item in
             TypeText(item, into: .label(.contains(item)))
-                .expect(.exists(.within(container: .identifier(item), .label(item))))
+                .expect(.exists(.within(container: .identifier(item), .label(item))), timeout: 1)
         }
         """)
         #expect(try HeistSourceCompilation.compile(source) == plan)

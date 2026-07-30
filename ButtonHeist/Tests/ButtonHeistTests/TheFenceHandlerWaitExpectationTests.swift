@@ -132,7 +132,30 @@ extension TheFenceHandlerTests {
         guard case .action(let step)? = mockConn.sent.sentHeistPlan?.body.first else {
             return XCTFail("Expected a single action step, got \(String(describing: mockConn.sent.sentHeistPlan))")
         }
-        XCTAssertEqual(step.expectationPolicy.expectedStep?.predicate, predicate)
+        XCTAssertEqual(step.expectationPolicy.expectedExpectation?.predicate, predicate)
+        XCTAssertEqual(step.expectationPolicy.expectedExpectation?.timeout, .sessionDefault)
+    }
+
+    @ButtonHeistActor
+    func testDirectActionExpectationUsesSessionScreenTransitionTimeout() async throws {
+        let policy = ActionExpectationTimeoutPolicy(standard: 3, screenTransition: 12)
+        let (fence, mockConn) = makeConnectedFence(configuration: .init(
+            actionExpectationTimeoutPolicy: policy
+        ))
+
+        _ = try await fence.execute(command: .activate, values: [
+            "target": targetValue(identifier: "myElement"),
+            "expect": .object([
+                "type": .string("changed"),
+                "scope": .string("screen"),
+            ]),
+        ])
+
+        guard case .action(let step)? = mockConn.sent.sentHeistPlan?.body.first else {
+            return XCTFail("Expected a single action step")
+        }
+        XCTAssertEqual(step.expectationPolicy.expectedExpectation?.timeout, .sessionDefault)
+        XCTAssertEqual(mockConn.sent.sentHeistRun?.actionExpectationTimeoutPolicy, policy)
     }
 
     // MARK: - Expectation Parsing
@@ -197,7 +220,7 @@ extension TheFenceHandlerTests {
             return XCTFail("Expected action step")
         }
 
-        XCTAssertEqual(action.expectationPolicy.expectedStep?.predicate, expectation)
+        XCTAssertEqual(action.expectationPolicy.expectedExpectation?.predicate, expectation)
     }
 
     // MARK: - Parse Expectation: Discriminator Wire Shape

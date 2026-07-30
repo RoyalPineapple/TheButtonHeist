@@ -188,7 +188,7 @@ enum DeltaProjection: Sendable {
                 metadata: metadata,
                 edits: DeltaEditsProjection(edits: folded.edits, profile: profile)
             ))
-        } else if evidence.completeness == .complete {
+        } else if evidence.coverage == .complete {
             self = .noChange(metadata)
         } else {
             return nil

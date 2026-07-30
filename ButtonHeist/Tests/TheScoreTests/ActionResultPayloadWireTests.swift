@@ -32,17 +32,17 @@ final class ActionResultPayloadWireTests: XCTestCase {
         XCTAssertEqual(decoded.payload, .screenshot(screen))
     }
 
-    func testActionResultHeistPayloadWireShape() throws {
-        let result = try HeistResult(steps: [], durationMs: 42)
-        let actionResult = ActionResult.success(payload: .heist(result))
+    func testActionResultRejectsDisplacedHeistPayloadContract() {
+        let data = Data("""
+        {
+          "outcome": { "kind": "success" },
+          "method": "heistPlan",
+          "payload": { "steps": [], "durationMs": 42 },
+          "evidence": { "observation": { "kind": "none" } }
+        }
+        """.utf8)
 
-        let data = try JSONEncoder().encode(actionResult)
-        let json = try JSONProbe(data: data)
-        let payload = try json.object("payload")
-        XCTAssertEqual(try payload.int("durationMs"), 42)
-
-        let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
-        XCTAssertEqual(decoded.payload, .heist(result))
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: data))
     }
 
     func testActionResultRotorPayloadWireShape() throws {

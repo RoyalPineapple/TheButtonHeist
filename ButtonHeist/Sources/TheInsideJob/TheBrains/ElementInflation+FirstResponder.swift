@@ -14,9 +14,14 @@ extension ElementInflation {
 
     internal func inflateFirstResponder(
         method: ActionMethod,
+        deadline: SemanticObservationDeadline
     ) async -> FirstResponderInflation {
         await inflateFirstResponder(method: method) { target, method in
-            await self.inflate(for: target, method: method)
+            await self.inflate(
+                for: target,
+                method: method,
+                deadline: deadline
+            )
         }
     }
 

@@ -1,45 +1,51 @@
 #if canImport(UIKit)
 #if DEBUG
-import Foundation
 import ButtonHeistSupport
 
 import TheScore
+
+@MainActor
+enum AccessibilityNotificationIngress {
+    case process
+    case injected
+
+    func start(deliveringTo bus: AccessibilityNotificationBus) {
+        guard self == .process else { return }
+        AccessibilityNotificationObserver.shared.subscribe(bus)
+    }
+
+    func stop(deliveringTo bus: AccessibilityNotificationBus) {
+        guard self == .process else { return }
+        AccessibilityNotificationObserver.shared.unsubscribe(bus)
+    }
+}
 
 /// Coordinates semantic observation scheduling, capture, and delivery.
 extension Observation {
 @MainActor
 internal final class Stream {
-    private enum EventReceiver {
-        case installing(
-            subscriptionID: UInt64,
-            receive: @MainActor (Event) -> Void,
-            buffered: [Publication]
-        )
-        case active(
-            subscriptionID: UInt64,
-            receive: @MainActor (Event) -> Void,
-            pending: [Event],
-            nextIndex: Int,
-            isDelivering: Bool
-        )
-
-        var subscriptionID: UInt64 {
-            switch self {
-            case .installing(let subscriptionID, _, _),
-                 .active(let subscriptionID, _, _, _, _):
-                subscriptionID
-            }
-        }
+    private struct EventReceiver {
+        let subscriptionID: UInt64
+        let receive: @MainActor (Event) -> Void
+        var pending: [Event]
+        var nextIndex: Int
+        var isDelivering: Bool
     }
 
-    private static let passiveDiscoveryCadence: Duration = .seconds(1)
+    internal struct EventInstallation {
+        internal let subscription: SemanticObservationSubscription
+        internal let replay: Result<[Event], History.ReadError>
+    }
+
+    private struct CycleResult {
+        let claim: AccessibilityNotificationCycleClaim
+        let observationCommitted: Bool
+    }
 
     weak var vault: TheVault?
     let tripwire: TheTripwire
-    var visibleRefreshPhase = VisibleRefreshPhase.idle
-    var nextVisibleRefreshToken: UInt64 = 0
     var readTripwireSignal: @MainActor () -> TheTripwire.TripwireSignal
-    private var lastPassiveDiscoveryStartedAt: RuntimeElapsed.Instant?
+    private var cycle = SemanticObservationCycle()
     // MARK: - Observation Bookkeeping
 
     var scopePressure = SemanticObservationScopePressure()
@@ -53,17 +59,18 @@ internal final class Stream {
     var captureLineage: ScreenLineage {
         activeViewportMovementCount == 0 ? .resting : .viewportMovement
     }
-    let stateOwner = TheVault.StateOwner()
+    var state = TheVault.State()
     var observationWaiters = WaiterStore<UInt64, SemanticObservationWaiter>()
     private var eventReceiver: EventReceiver?
+    private let notificationIngress: AccessibilityNotificationIngress
     /// Runs at the top of every visible reading, before the tree is read.
     var beforeVisibleReading: @MainActor () async -> Void = {}
+    var observationWaiterDidRegister: @MainActor () -> Void = {}
 
     // MARK: - Subscriber-Facing Observation History
 
-    var lifecycle = SemanticObservationLifecycle.stopped
     internal var isActive: Bool {
-        lifecycle.isRunning
+        cycle.isRunning
     }
 
     internal var observationWaiterCount: Int {
@@ -74,52 +81,44 @@ internal final class Stream {
         scopePressure.activeDemandCount
     }
 
-    internal var activeObservationDemandState: SemanticObservationDemandState {
-        scopePressure.demandState
-    }
-
     internal var hasActiveObservationDemand: Bool {
         scopePressure.hasActiveDemand
     }
 
-    internal var tickDemand: TheTripwire.TickDemand {
+    var pulseDemand: TheTripwire.TickDemand {
         hasActiveObservationDemand ? .immediate : .ambient
     }
 
     internal init(
         vault: TheVault,
-        tripwire: TheTripwire
+        tripwire: TheTripwire,
+        notificationIngress: AccessibilityNotificationIngress
     ) {
         self.vault = vault
         self.tripwire = tripwire
+        self.notificationIngress = notificationIngress
         self.readTripwireSignal = { tripwire.tripwireSignal() }
     }
 
-    internal func start(
-        discovery: @escaping SemanticObservationLifecycle.DiscoveryObservation
-    ) async {
-        guard !lifecycle.replaceDiscoveryIfRunning(discovery) else { return }
-        await stateOwner.discardCurrentObservation()
-        lastPassiveDiscoveryStartedAt = nil
+    internal func start() {
+        guard cycle.start() else { return }
+        state.discardCurrentObservation()
         if let vault {
-            AccessibilityNotificationObserver.shared.subscribe(vault.accessibilityNotifications)
+            notificationIngress.start(deliveringTo: vault.accessibilityNotifications)
         }
-        let task = Task { [weak self] in
-            guard let self else { return }
-            while !Task.isCancelled {
-                await self.runPassiveObservationCycle()
-            }
+        tripwire.observePulses { [weak self] pulse in
+            self?.receive(pulse)
         }
-        lifecycle.start(task: task, discovery: discovery)
+        updateCycleDemand()
     }
 
     internal func stop() {
-        lifecycle.stop()?.cancel()
-        lastPassiveDiscoveryStartedAt = nil
-        visibleRefreshPhase.cancel()
+        guard let stop = cycle.stop() else { return }
+        tripwire.stopObservingPulses()
+        stop.activeTask?.cancel()
         cancelObservationWaiters()
         if let vault {
-            AccessibilityNotificationObserver.shared.unsubscribe(vault.accessibilityNotifications)
+            notificationIngress.stop(deliveringTo: vault.accessibilityNotifications)
         }
     }
 
@@ -130,60 +129,31 @@ internal final class Stream {
     /// only the running heist asks for it.
     internal func subscribe(scope: SemanticObservationScope) -> SemanticObservationSubscription {
         let id = scopePressure.addSubscription(scope: scope)
+        updateCycleDemand()
         return SemanticObservationSubscription(id: id, scope: scope, stream: self)
     }
 
-    /// Raises the scope and receives retained and live events without a gap.
-    ///
-    /// The receiver is installed before history is read. Publications that race
-    /// with that actor hop are buffered by range, then only the suffix not
-    /// already present in retained history is delivered.
+    /// Raises the scope and atomically installs live delivery beside retained
+    /// replay. The caller owns replay delivery after constructing its consumer.
     internal func subscribe(
         scope: SemanticObservationScope,
         replayingAfter historyIndex: Int,
-        receive: @escaping @MainActor (Event) -> Void,
-        historyUnavailable: @escaping @MainActor (History.ReadError) -> Void
-    ) async -> SemanticObservationSubscription {
+        receive: @escaping @MainActor (Event) -> Void
+    ) -> EventInstallation {
         precondition(
             eventReceiver == nil,
             "Only one observation event consumer may be active"
         )
         let subscription = subscribe(scope: scope)
-        eventReceiver = .installing(
+        let replay = events(after: historyIndex)
+        eventReceiver = EventReceiver(
             subscriptionID: subscription.id,
             receive: receive,
-            buffered: []
+            pending: [],
+            nextIndex: 0,
+            isDelivering: false
         )
-        let replay = await stateOwner.events(after: historyIndex)
-        guard eventReceiver?.subscriptionID == subscription.id else {
-            return subscription
-        }
-        guard case .installing(_, _, let buffered) = eventReceiver else {
-            preconditionFailure("Observation receiver changed while installing")
-        }
-        switch replay {
-        case .success(let retained):
-            let replayEndIndex = historyIndex + retained.count
-            let live = buffered.flatMap { publication in
-                publication.events(after: replayEndIndex)
-            }
-            activate(
-                retained + live,
-                to: subscription.id,
-                receive: receive
-            )
-        case .failure(let error):
-            historyUnavailable(error)
-            guard case .installing(_, _, let latestBuffered) = eventReceiver,
-                  eventReceiver?.subscriptionID == subscription.id
-            else { return subscription }
-            activate(
-                latestBuffered.flatMap(\.events),
-                to: subscription.id,
-                receive: receive
-            )
-        }
-        return subscription
+        return EventInstallation(subscription: subscription, replay: replay)
     }
 
     internal func removeSubscription(_ id: UInt64) {
@@ -191,101 +161,46 @@ internal final class Stream {
         if eventReceiver?.subscriptionID == id {
             eventReceiver = nil
         }
+        updateCycleDemand()
     }
 
     func publish(_ publication: Publication) {
-        guard let receiver = eventReceiver else { return }
-        switch receiver {
-        case .installing(let subscriptionID, let receive, let buffered):
-            self.eventReceiver = .installing(
-                subscriptionID: subscriptionID,
-                receive: receive,
-                buffered: buffered + [publication]
-            )
-        case .active(
-            let subscriptionID,
-            let receive,
-            let pending,
-            let nextIndex,
-            let isDelivering
-        ):
-            eventReceiver = .active(
-                subscriptionID: subscriptionID,
-                receive: receive,
-                pending: pending + publication.events,
-                nextIndex: nextIndex,
-                isDelivering: isDelivering
-            )
-            drain(subscriptionID: subscriptionID)
-        }
-    }
-
-    private func activate(
-        _ events: [Event],
-        to subscriptionID: UInt64,
-        receive: @escaping @MainActor (Event) -> Void
-    ) {
-        eventReceiver = .active(
-            subscriptionID: subscriptionID,
-            receive: receive,
-            pending: events,
-            nextIndex: 0,
-            isDelivering: false
-        )
-        drain(subscriptionID: subscriptionID)
+        guard var receiver = eventReceiver else { return }
+        receiver.pending.append(contentsOf: publication.events)
+        eventReceiver = receiver
+        drain(subscriptionID: receiver.subscriptionID)
     }
 
     private func drain(subscriptionID: UInt64) {
-        guard case .active(
-            let activeSubscriptionID,
-            let receive,
-            let initialPending,
-            let initialIndex,
-            false
-        ) = eventReceiver,
-              activeSubscriptionID == subscriptionID
+        guard var receiver = eventReceiver,
+              receiver.subscriptionID == subscriptionID,
+              !receiver.isDelivering
         else { return }
-        eventReceiver = .active(
-            subscriptionID: subscriptionID,
-            receive: receive,
-            pending: initialPending,
-            nextIndex: initialIndex,
-            isDelivering: true
-        )
-        while case .active(
-            let activeSubscriptionID,
-            let currentReceive,
-            let pending,
-            let nextIndex,
-            true
-        ) = eventReceiver,
-              activeSubscriptionID == subscriptionID {
-            guard nextIndex < pending.count else {
-                eventReceiver = .active(
-                    subscriptionID: subscriptionID,
-                    receive: currentReceive,
-                    pending: [],
-                    nextIndex: 0,
-                    isDelivering: false
-                )
+        receiver.isDelivering = true
+        eventReceiver = receiver
+        while let current = eventReceiver,
+              current.subscriptionID == subscriptionID,
+              current.isDelivering {
+            guard current.nextIndex < current.pending.count else {
+                receiver = current
+                receiver.pending = []
+                receiver.nextIndex = 0
+                receiver.isDelivering = false
+                eventReceiver = receiver
                 return
             }
-            let event = pending[nextIndex]
-            eventReceiver = .active(
-                subscriptionID: subscriptionID,
-                receive: currentReceive,
-                pending: pending,
-                nextIndex: nextIndex + 1,
-                isDelivering: true
-            )
-            receive(event)
+            let event = current.pending[current.nextIndex]
+            receiver = current
+            receiver.nextIndex += 1
+            eventReceiver = receiver
+            current.receive(event)
         }
     }
 
     /// Keeps committed semantic truth readable while requiring a fresh
     /// observation before it can be admitted to a waiter.
-    func invalidateCurrentAdmission() async {
-        await stateOwner.invalidateCurrentAdmission()
+    func invalidateCurrentAdmission() {
+        state.invalidateCurrentAdmission()
     }
 
     /// Runs `movement` with every reading taken during it attributed to the
@@ -298,68 +213,82 @@ internal final class Stream {
     }
 
     internal func beginActiveObservationDemand() -> SemanticObservationDemand {
-        SemanticObservationDemand(id: scopePressure.addActiveDemand(), stream: self)
+        let demand = SemanticObservationDemand(
+            id: scopePressure.addActiveDemand(),
+            stream: self
+        )
+        updateCycleDemand()
+        return demand
     }
 
     internal func removeActiveObservationDemand(_ id: UInt64) {
         scopePressure.removeActiveDemand(id)
-    }
-
-    internal func subscribedObservationScope() -> SemanticObservationScope {
-        scopePressure.subscribedObservationScope()
+        updateCycleDemand()
     }
 
     internal func currentTripwireSignal() -> TheTripwire.TripwireSignal {
         readTripwireSignal()
     }
 
-    private func runPassiveObservationCycle() async {
-        let scope = subscribedObservationScope()
-        guard !Task.isCancelled,
-              await admitPassiveObservationCycle(scope: scope),
-              await performObservationCycle(scope: scope),
-              !Task.isCancelled else { return }
-        await completeObservationWaiters(completedScope: scope)
-        await Task.yield()
+    private func updateCycleDemand() {
+        let scope = cycle.isRunning
+            ? scopePressure.demandedObservationScope
+            : nil
+        tripwire.setObservationPulseDemand(
+            cycle.demand(scope: scope, pulseDemand: pulseDemand)
+        )
     }
 
-    private func admitPassiveObservationCycle(
-        scope: SemanticObservationScope
-    ) async -> Bool {
-        guard scope == .discovery else { return true }
-        if let lastPassiveDiscoveryStartedAt {
-            let elapsed = lastPassiveDiscoveryStartedAt.duration(to: RuntimeElapsed.now)
-            let remaining = Self.passiveDiscoveryCadence - elapsed
-            if remaining > .zero {
-                guard await Task.cancellableSleep(for: remaining) else { return false }
+    private func receive(_ pulse: TheTripwire.PulseReading) {
+        cycle.receive(pulse) { [weak self] request in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let result = await self.performObservationCycle(request)
+                self.finishCycle(request.identity, result: result)
             }
         }
-        lastPassiveDiscoveryStartedAt = RuntimeElapsed.now
-        return !Task.isCancelled
+    }
+
+    private func finishCycle(
+        _ identity: SemanticObservationCycle.Identity,
+        result: CycleResult?
+    ) {
+        guard let completedScope = cycle.complete(identity) else {
+            return
+        }
+        let observationCommitted = result?.observationCommitted == true
+        if observationCommitted, let result {
+            precondition(
+                result.claim.acknowledgeObservationCycle(),
+                "A committed observation must acknowledge its exact notification claim"
+            )
+        }
+        completeObservationWaiters(
+            completedScope: completedScope,
+            observationCommitted: observationCommitted
+        )
     }
 
     private func performObservationCycle(
-        scope: SemanticObservationScope
-    ) async -> Bool {
-        guard vault != nil else {
+        _ request: SemanticObservationCycle.Request
+    ) async -> CycleResult? {
+        guard cycle.owns(request.identity) else {
+            return nil
+        }
+        guard let vault else {
             stop()
-            return false
+            return nil
         }
-        switch scope {
-        case .visible:
-            return await observeVisibleSemanticState()
-        case .discovery:
-            guard let discovery = lifecycle.discovery else {
-                await discardCurrentObservation()
-                return true
-            }
-            guard let exploration = await discovery() else {
-                await discardCurrentObservation()
-                return true
-            }
-            _ = exploration
-            return !Task.isCancelled
-        }
+        let claim = vault.accessibilityNotifications.freezeObservationCycleClaim()
+        let committed = await observeSemanticState(
+            scope: request.scope,
+            pulse: request.pulse,
+            notificationBatch: claim.batch
+        )
+        return CycleResult(
+            claim: claim,
+            observationCommitted: committed && cycle.owns(request.identity)
+        )
     }
 
     /// One pulse, one reading, committed either way.
@@ -370,56 +299,84 @@ internal final class Stream {
     /// tree moves, so a tree that reached the asked-for state and stayed there
     /// would never say so, and every expectation with a drained predicate would
     /// time out waiting for the tree to stop changing.
-    private func observeVisibleSemanticState() async -> Bool {
-        _ = await tripwire.waitForNextTick(
-            timeout: .milliseconds(Int(TheTripwire.singleTickSettleTimeout * 1_000)),
-            demand: tickDemand
-        )
-        await invalidateAdmissionIfSignalChanged(to: currentTripwireSignal())
+    private func observeSemanticState(
+        scope: SemanticObservationScope,
+        pulse: TheTripwire.PulseReading,
+        notificationBatch: AccessibilityNotificationBatch
+    ) async -> Bool {
+        invalidateAdmissionIfSignalChanged(to: pulse.tripwireSignal)
         guard !Task.isCancelled else { return false }
-        _ = await refreshVisibleObservation()
-        return !Task.isCancelled
+        return await commitCurrentInterfaceObservation(
+            tripwireSignal: pulse.tripwireSignal,
+            scope: scope,
+            notificationBatch: notificationBatch
+        ).isCommitted
     }
 
-    func invalidateAdmissionIfSignalChanged(to signal: TheTripwire.TripwireSignal) async {
-        await stateOwner.invalidateAdmissionIfSignalChanged(to: signal)
+    func invalidateAdmissionIfSignalChanged(to signal: TheTripwire.TripwireSignal) {
+        state.invalidateAdmissionIfSignalChanged(to: signal)
+    }
+
+    internal func current() -> TheVault.State.Current? {
+        state.current
+    }
+
+    internal func historyEndIndex() -> Int {
+        state.history.endIndex
+    }
+
+    internal func notifications() -> [Observation.Notification] {
+        state.notifications
+    }
+
+    internal var canonicalInterfaceTree: InterfaceTree {
+        state.interfaceTree
+    }
+
+    internal func events(
+        after historyIndex: Int
+    ) -> Result<[Observation.Event], Observation.History.ReadError> {
+        do {
+            return .success(Array(
+                try state.history.events(after: historyIndex)
+            ))
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    internal func evidence(
+        after boundary: TheVault.State.HistoryBoundary
+    ) -> Observation.Evidence {
+        state.evidence(after: boundary)
+    }
+
+    internal func observationBoundary(
+        scope: SemanticObservationScope
+    ) -> TheVault.State.HistoryBoundary {
+        state.observationBoundary(scope: scope)
+    }
+
+    internal func protectHistory(from index: Int) {
+        state.protectHistory(from: index)
+    }
+
+    internal func releaseHistory(from index: Int) {
+        state.releaseHistory(from: index)
+    }
+
+    internal func advanceHistoryProtection(
+        from index: Int,
+        to nextIndex: Int
+    ) {
+        state.advanceHistoryProtection(from: index, to: nextIndex)
+    }
+
+    internal func reset(retentionLimit: Int = TheVault.State.defaultRetentionLimit) {
+        state = TheVault.State(retentionLimit: retentionLimit)
     }
 
 }
-}
-
-extension Observation.Stream {
-    struct VisibleRefreshToken: Equatable {
-        let rawValue: UInt64
-    }
-
-    struct VisibleRefreshBoundary: Equatable {
-        let nextTokenRawValue: UInt64
-    }
-
-    struct VisibleRefreshTask {
-        let token: VisibleRefreshToken
-        let task: Task<VisibleObservationOutcome, Never>
-    }
-
-    enum VisibleRefreshPhase {
-        case idle
-        case refreshing(VisibleRefreshTask)
-
-        var task: VisibleRefreshTask? {
-            switch self {
-            case .idle:
-                nil
-            case .refreshing(let task):
-                task
-            }
-        }
-
-        mutating func cancel() {
-            task?.task.cancel()
-            self = .idle
-        }
-    }
 }
 
 #endif // DEBUG

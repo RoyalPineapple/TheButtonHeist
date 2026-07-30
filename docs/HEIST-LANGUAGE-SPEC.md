@@ -273,52 +273,55 @@ or `.suffix`.
 
 ## Accessibility predicate grammar
 
-`AccessibilityPredicate` is the concrete root condition. `ScreenPredicate` and
-`ElementAssertion` are the two concrete assertion contexts, and their
-constructors expose only valid combinations:
+`AccessibilityPredicate` is the concrete root condition. Its constructors
+expose only valid combinations:
 
-- Root: `.exists(target)`, `.missing(target)`, `.changed(declaration)`, and
-  `.announcement(...)`.
-- Screen declaration: `.screenChanged([.exists(target),
-  .missing(target)])`.
-- Elements declaration: `.elementsChanged([.exists(target),
+- Current state: `.exists(target)` and `.missing(target)`.
+- Notification evidence: `.notification`, `.notification("Saved")`,
+  `.notification(.contains("saved"))`, `.notification(element: .label("Save"))`,
+  or `.notification(text: .contains("saved"), element: .label("Save"))`.
+- Screen evidence: `.screenChanged`, `.screenChanged("Receipt")`, or
+  `.screenChanged(.contains("Receipt"))`.
+- Element evidence: `.elementsChanged` or
+  `.elementsChanged([.exists(target),
   .missing(target), .appeared(target), .disappeared(target),
   .updated(target, change)])`.
 
 `exists` and `missing` always read the current delivered interface tree. They
 use the same `AccessibilityTarget` resolution as actions and subtree queries,
 including element, container-only, and descendant-scoped targets. `appeared`,
-`disappeared`, and `updated` read the ordered temporal fact stream. There is no
-root-level generic changed predicate and no alternate spelling.
+`disappeared`, and `updated` consume ordered `Observation.Event` values. There
+is no root-level generic changed predicate and no alternate spelling.
 
 A screen boundary is also an element lifecycle change: every old-tree node
 disappears, the screen marker occurs, and every new-tree node appears. Therefore
-`changed(.elements(...))` can match appearances or disappearances across a
+`.elementsChanged(...)` can match appearances or disappearances across a
 screen boundary. `updated` can only match two captures in the same screen
 generation.
 
-Notification ingress is retained and cursor-backed; checkpoints do not consume
-events. Screen, layout, value, and announcement notifications are edge evidence.
-A transition assertion never passes solely because its implied final state is
-true.
+Normalized notification payloads and admitted snapshots reduce into the same
+ordered history. Screen notifications are authoritative replacement evidence;
+layout, value, and announcement notifications are edge evidence. `noChange`
+has no payload and means neither semantic state nor geometry changed within the
+comparison tolerance. A transition assertion never passes solely because its
+implied final state is true.
 
 ## Expectation composition
 
 Actions and `RunHeist` invocations use one expectation-composition path.
 `AuthoredActionExpectation` owns chaining, timeout intent, conflict
-diagnostics, and conversion to the retained `WaitStep` wire shape. Source and
-Swift DSL authoring both route through that owner.
+diagnostics, and conversion to the retained `ActionExpectation` shape. Source
+and Swift DSL authoring both route through that owner. The runtime derives a
+concrete `WaitStep` only when it interprets that action or invocation leaf.
 
 A single `.expect(predicate, timeout:)` accepts any root
-`AccessibilityPredicate`. Chaining is supported only to combine one
-`.screenChanged(...)` declaration with one current-tree `.exists(...)` or
-`.missing(...)` assertion, in either order; the current-tree assertion becomes
-a screen assertion. Any other pair is rejected as unsupported composition.
+`AccessibilityPredicate`. An action has one expectation; chaining a second
+`.expect(...)` is rejected. Follow the action with `WaitFor(...)` when the flow
+must prove another predicate.
 
-With no explicit timeout, the action-expectation default is 1 second. One
-explicit timeout applies to the composition, and two equal explicit timeouts
-are accepted. Two different explicit timeouts are rejected. Chaining does not
-create another predicate or wire representation.
+With no explicit timeout, the runtime applies the session policy at the action
+leaf: 1 second for an in-screen expectation and 10 seconds for a screen
+transition by default. An explicit timeout always takes precedence.
 
 ## Timeouts
 
@@ -335,15 +338,14 @@ equal to 30 to override that maximum; there is no additional fixed policy cap.
 | Site | Default | Notes |
 |------|---------|-------|
 | `WaitFor(_, timeout:)` | 30 seconds | Standalone waits and `WaitFor(...).else` gates. |
-| Action `.expect(_, timeout:)` | 1 second | Attached action expectations. |
+| Action `.expect(_, timeout:)` | 1 second in-screen; 10 seconds for a screen transition | Attached action expectations resolve from the session policy at runtime. |
 | `RepeatUntil(_, timeout:)` | none — required | The mandatory bound for a predicate only the run can decide. The configured `WaitTimeout` maximum applies. |
 
-An action `.expect` does not replace the 5-second action-readiness allowance,
-which begins when dispatch completes. If the predicate is unmet at the first
-ready handoff, the full authored `.expect` timeout begins at that handoff.
-Earlier work does not consume it, and later readiness does not restart it.
-
-Standalone `WaitFor` uses its one authored timeout and performs no action.
+The host applies one absolute deadline to each action expectation or standalone
+wait. It starts before baseline acquisition and includes reveal, action
+dispatch when present, ordered event evaluation, and the trailing `noChange`
+that closes the leaf. There is no separate readiness allowance and no timeout
+restart after dispatch or any intermediate state.
 
 ## Validation bounds
 
@@ -365,7 +367,7 @@ Use `HeistPlan` for reusable or multi-step behavior:
 ```swift
 HeistPlan("checkout") {
     Activate(.label("Pay"))
-        .expect(.screenChanged([.exists(.label("Receipt"))]))
+        .expect(.screenChanged("Receipt"))
 
     WaitFor(.exists(.label("Receipt")), timeout: 10)
 }
@@ -375,24 +377,24 @@ Use `perform(step:)` for one durable step:
 
 ```swift
 Activate(.label("Pay"))
-    .expect(.screenChanged([.exists(.label("Receipt"))]))
+    .expect(.screenChanged("Receipt"))
 ```
 
 `WaitFor(...)` evaluates the same predicate language as action expectations.
 Current-tree predicates pass when the current delivered tree satisfies them.
-Change declarations require observed facts; standalone waits do not infer an
+Change declarations require observed events; standalone waits do not infer an
 appearance, disappearance, or update from final state.
 
 Container presence is a current-tree predicate, not a transition predicate. Use
 `.exists(.container(.identifier("Checkout")))` when a heist needs to assert that the
 current settled hierarchy contains a matching container without
-requiring a preceding screen-change fact. Container predicates can match
+requiring a preceding `screenChanged` event. Container predicates can match
 semantic-group label and value, identifier on any container, role shorthands
 such as `.list` or `.dataTable(rowCount: .init(...), columnCount: .init(...))`,
 scrollability through `.scrollable(true)`, custom
 actions, modal boundary, or `.matching(...)` combinations. Use
 `.within(container: .label("Checkout"), .label("Pay"))` when an element target
-must resolve inside that container. Use `.screenChanged()` when the action
+must resolve inside that container. Use `.screenChanged` when the action
 itself must prove navigation occurred.
 
 Use `RepeatUntil` for bounded repetition toward a settled outcome. The body

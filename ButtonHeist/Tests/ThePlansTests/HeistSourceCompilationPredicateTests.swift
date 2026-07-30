@@ -55,7 +55,10 @@ import Testing
     let expected = try HeistPlan(body: [
         .action(ActionStep(
             command: .activate(.predicate(.label("Delete"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .notification("Item deleted"), timeout: 1))
+            expectationPolicy: .expect(ActionExpectation(
+                predicate: .notification("Item deleted"),
+                timeout: .sessionDefault
+            ))
         )),
         .wait(WaitStep(predicate: .notification(.contains("processed")), timeout: 5)),
         .wait(WaitStep(predicate: .notification)),
@@ -67,6 +70,25 @@ import Testing
     ])
 
     #expect(plan == expected)
+    try assertCanonicalRoundTrip(plan)
+}
+
+@Test func `checked in predicate guidance uses canonical source spellings`() throws {
+    let plan = try HeistSourceCompilation.compile(root("""
+    Activate(.label("Pay")).expect(.screenChanged)
+    WaitFor(.screenChanged("Receipt"), timeout: 10)
+    WaitFor(.screenChanged(.contains("Receipt")))
+    WaitFor(.notification)
+    WaitFor(.notification(.contains("saved")))
+    WaitFor(.notification(text: .contains("saved"), element: .label("Receipt")))
+    Increment(.label("Quantity"))
+        .expect(.elementsChanged([.updated(
+            .label("Quantity"),
+            .value(before: "2", after: "3")
+        )]))
+    """))
+
+    #expect(plan.body.count == 7)
     try assertCanonicalRoundTrip(plan)
 }
 

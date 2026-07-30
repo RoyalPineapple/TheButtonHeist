@@ -29,6 +29,10 @@ extension TheFenceHandlerTests {
         XCTAssertEqual(mockConn.sent.sentHeistPlan, plan)
         XCTAssertEqual(mockConn.sent.sentHeistRun?.argument, HeistArgument.none)
         XCTAssertEqual(mockConn.sent.sentHeistRun?.timeout, .default)
+        XCTAssertEqual(
+            mockConn.sent.sentHeistRun?.actionExpectationTimeoutPolicy,
+            .default
+        )
         XCTAssertEqual(report, HeistReport.project(result: scriptedResult))
     }
 
@@ -44,6 +48,29 @@ extension TheFenceHandlerTests {
         ])
 
         XCTAssertEqual(mockConn.sent.sentHeistRun?.timeout, 120)
+    }
+
+    @ButtonHeistActor
+    func testRunHeistSendsAuthoredActionExpectationAndSessionPolicy() async throws {
+        let policy = ActionExpectationTimeoutPolicy(standard: 3, screenTransition: 12)
+        let (fence, mockConn) = makeConnectedFence(configuration: .init(
+            actionExpectationTimeoutPolicy: policy
+        ))
+        mockConn.responseScript = { _ in scriptedHeistResponse() }
+
+        _ = try await fence.execute(command: .runHeist, values: [
+            "plan": .string("""
+            HeistPlan {
+                Activate(.label("Pay")).expect(.screenChanged)
+            }
+            """),
+        ])
+
+        guard case .action(let action)? = mockConn.sent.sentHeistPlan?.body.first else {
+            return XCTFail("Expected authored action plan")
+        }
+        XCTAssertEqual(action.expectationPolicy.expectedExpectation?.timeout, .sessionDefault)
+        XCTAssertEqual(mockConn.sent.sentHeistRun?.actionExpectationTimeoutPolicy, policy)
     }
 
     @ButtonHeistActor
@@ -74,7 +101,7 @@ extension TheFenceHandlerTests {
             }
             XCTAssertEqual(report, HeistReport.project(result: scriptedResult))
             let resultURL = try assertSingleResultArtifactURL(in: directory)
-            XCTAssertEqual(try HeistResultCodec.decode(contentsOf: resultURL), scriptedResult)
+            XCTAssertEqual(try HeistResultCodec.decode(contentsOf: resultURL).result, scriptedResult)
         }
     }
 

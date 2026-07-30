@@ -6,14 +6,15 @@ import ThePlans
 
 @Suite struct HeistResultCodecLimitsTests {
 
-    @Test func `round trip gzip result from file extension`() throws {
+    @Test func `round trip gzip recording from file contents`() throws {
         let result = sampleResult(message: "boom")
+        let recording = try sampleRecording(result)
         try withTemporaryDirectory(prefix: "heist-result-codec") { directory in
-            let url = directory.appendingPathComponent("result.json.gz")
+            let url = directory.appendingPathComponent("recording")
 
-            try HeistResultCodec.write(result, to: url)
+            try HeistResultCodec.write(recording, to: url)
 
-            #expect(try HeistResultCodec.decode(contentsOf: url) == result)
+            #expect(try HeistResultCodec.decode(contentsOf: url) == recording)
         }
     }
 
@@ -73,7 +74,7 @@ import ThePlans
 
     @Test func `oversized gzip decompressed result is rejected without unbounded growth`() throws {
         let result = sampleResult(message: String(repeating: "x", count: 4096))
-        let data = try HeistResultCodec.encode(result, format: .gzipJSON)
+        let data = try HeistResultCodec.encode(sampleRecording(result), format: .gzipJSON)
         let limits = HeistResultCodecLimits(
             maxGzipCompressedBytes: data.count,
             maxGzipDecompressedBytes: 512
@@ -104,9 +105,12 @@ import ThePlans
     }
 
     @Test func `gzip result rejects negative duration after decompression`() throws {
-        // gzip for {"steps":[],"durationMs":-1}
+        // Recording root containing {"steps":[],"durationMs":-1}.
         let malformedGzip = try #require(Data(
-            base64Encoded: "H4sIAAAAAAAAA6tWKi5JLShWsoqO1VFKKS1KLMnMz/MF8nUNawGXzDspHAAAAA=="
+            base64Encoded:
+                "H4sIAAAAAAAAA3WOsQoCMRBE/2XqeOQULNLZ2GlpIxYhWTSQ24RNUh33764Idk73YB4zK1p40eJvJC0"
+                + "VhpsNhNrIHW5F61Qb3P1hEIf4ro2L8m7eDGr2fPULwfHI+cvnxE+SKolVh/0TfCZCkUjxpD2rrpQ4As"
+                + "nvBex0nA57bG/qVG+uoAAAAA=="
         ))
 
         #expect(throws: DecodingError.self) {
@@ -247,7 +251,9 @@ import ThePlans
         )
 
         let result = try HeistResult(steps: [root], durationMs: 3)
-        let decoded = try HeistResultCodec.decode(try resultData(steps: [root], durationMs: 3))
+        let decoded = try HeistResultCodec.decode(
+            try resultData(steps: [root], durationMs: 3)
+        ).result
 
         #expect(result.steps.first?.children.map(\.status) == [.passed, .failed, .skipped])
         #expect(decoded == result)
@@ -263,7 +269,11 @@ import ThePlans
             maxNestingDepth: 2
         )
 
-        let result = try HeistResultCodec.decode(data, format: .json, limits: limits)
+        let result = try HeistResultCodec.decode(
+            data,
+            format: .json,
+            limits: limits
+        ).result
 
         #expect(result.steps.first?.children.count == 1)
     }
@@ -451,7 +461,7 @@ import ThePlans
     }
 
     @Test func `aggregate admission rejects stale warning fixture with heist child path`() throws {
-        let data = Data(#"""
+        let data = recordingData(resultJSON: #"""
         {
           "steps": [{
             "path": "$.body[0]",
@@ -472,7 +482,7 @@ import ThePlans
           }],
           "durationMs": 5
         }
-        """#.utf8)
+        """#)
 
         try expectResultDecodeError(
             data,
@@ -482,8 +492,116 @@ import ThePlans
         )
     }
 
+    @Test func `invocation aggregate admission and decode reject contradictory completion evidence`() throws {
+        let abortedChildPath = executionPath("$.body[0].invoke.body[0]")
+        let differentChildPath = executionPath("$.body[0].invoke.body[1]")
+        let child = HeistResultFixture.explicitFailure(
+            path: abortedChildPath.description,
+            message: "stop"
+        )
+        let abortedChildren = try #require(HeistAbortedChildren([child]))
+        let mismatchedEvidence = try #require(HeistFailedInvocationEvidence(
+            .childFailed(path: differentChildPath)
+        ))
+        let childFailureEvidence = try #require(HeistFailedInvocationEvidence(
+            .childFailed(path: abortedChildPath)
+        ))
+        let malformed = [
+            (
+                step: HeistExecutionStepResult.invocation(
+                    path: "$.body[0]",
+                    invocationPath: "Checkout",
+                    argument: .none,
+                    completion: .childAborted(
+                        evidence: .unavailable,
+                        failure: invocationFailureDetail(observed: "child failed"),
+                        children: abortedChildren
+                    )
+                ),
+                reason: "child-aborted invocation must observe child-failure evidence at \(abortedChildPath)"
+            ),
+            (
+                step: HeistExecutionStepResult.invocation(
+                    path: "$.body[0]",
+                    invocationPath: "Checkout",
+                    argument: .none,
+                    completion: .childAborted(
+                        evidence: .observed(mismatchedEvidence),
+                        failure: invocationFailureDetail(observed: "child failed"),
+                        children: abortedChildren
+                    )
+                ),
+                reason: "child-aborted invocation evidence path \(differentChildPath) "
+                    + "does not match aborted child path \(abortedChildPath)"
+            ),
+            (
+                step: HeistExecutionStepResult.invocation(
+                    path: "$.body[0]",
+                    invocationPath: "Checkout",
+                    argument: .none,
+                    completion: .failed(
+                        evidence: .observed(childFailureEvidence),
+                        failure: invocationFailureDetail(observed: "invocation failed")
+                    )
+                ),
+                reason: "intrinsic failed invocation must not carry child-failure evidence"
+            ),
+        ]
+
+        for fixture in malformed {
+            try expectAggregateAdmissionError(
+                steps: [fixture.step],
+                containing: [fixture.reason]
+            )
+            try expectResultDecodeError(
+                resultData(steps: [fixture.step]),
+                format: .json,
+                limits: .default,
+                containing: [fixture.reason]
+            )
+        }
+    }
+
+    @Test func `coherent invocation completion evidence preserves current wire`() throws {
+        let abortedChildPath = executionPath("$.body[0].invoke.body[0]")
+        let child = HeistResultFixture.explicitFailure(
+            path: abortedChildPath.description,
+            message: "stop"
+        )
+        let childFailureEvidence = try #require(HeistFailedInvocationEvidence(
+            .childFailed(path: abortedChildPath)
+        ))
+        let step = HeistExecutionStepResult.invocation(
+            path: "$.body[0]",
+            invocationPath: "Checkout",
+            argument: .none,
+            completion: .childAborted(
+                evidence: .observed(childFailureEvidence),
+                failure: invocationFailureDetail(observed: "child failed"),
+                children: try #require(HeistAbortedChildren([child]))
+            )
+        )
+
+        let result = try HeistResult(steps: [step], durationMs: 1)
+        let decoded = try HeistResultCodec.decode(
+            resultData(steps: [step]),
+            format: .json
+        ).result
+        let object = try #require(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(step))
+                as? [String: Any]
+        )
+        let node = try #require(object["node"] as? [String: Any])
+        let evidence = try #require(node["evidence"] as? [String: Any])
+
+        #expect(decoded == result)
+        #expect(node["outcome"] as? String == "child_aborted")
+        #expect(evidence["type"] as? String == "child_failed")
+        #expect(evidence["path"] as? String == abortedChildPath.description)
+    }
+
     @Test func `aggregate duration is the sole wall clock observation`() throws {
-        let result = try HeistResultCodec.decode(nestedResultData())
+        let result = try HeistResultCodec.decode(nestedResultData()).result
 
         #expect(result.durationMs == 5)
         #expect(result.steps.first?.children.count == 1)
@@ -496,8 +614,16 @@ import ThePlans
         )
     }
 
+    private func sampleRecording(_ result: HeistResult) throws -> HeistResultRecording {
+        try HeistResultRecording(
+            result: result,
+            plan: HeistPlan(body: [.warn(WarnStep(message: "codec fixture"))]),
+            recordedAt: Date(timeIntervalSince1970: 0)
+        )
+    }
+
     private func nestedResultData() -> Data {
-        Data(#"""
+        recordingData(resultJSON: #"""
         {
           "steps": [{
             "path": "$.body[0]",
@@ -517,20 +643,23 @@ import ThePlans
           }],
           "durationMs": 5
         }
-        """#.utf8)
+        """#)
     }
 
     private func duplicatingRoot(in data: Data) throws -> Data {
         var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        var steps = try #require(object["steps"] as? [[String: Any]])
+        var result = try #require(object["result"] as? [String: Any])
+        var steps = try #require(result["steps"] as? [[String: Any]])
         steps.append(steps[0])
-        object["steps"] = steps
+        result["steps"] = steps
+        object["result"] = result
         return try JSONSerialization.data(withJSONObject: object)
     }
 
     private func replacingChildPath(in data: Data, with path: String) throws -> Data {
         var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        var steps = try #require(object["steps"] as? [[String: Any]])
+        var result = try #require(object["result"] as? [String: Any])
+        var steps = try #require(result["steps"] as? [[String: Any]])
         var root = steps[0]
         var node = try #require(root["node"] as? [String: Any])
         var children = try #require(node["children"] as? [[String: Any]])
@@ -538,8 +667,22 @@ import ThePlans
         node["children"] = children
         root["node"] = node
         steps[0] = root
-        object["steps"] = steps
+        result["steps"] = steps
+        object["result"] = result
         return try JSONSerialization.data(withJSONObject: object)
+    }
+
+    private func recordingData(resultJSON: String) -> Data {
+        Data("""
+        {
+          "schemaVersion": \(HeistResultRecording.currentSchemaVersion),
+          "result": \(resultJSON),
+          "planName": null,
+          "planFingerprint": "000000000000000000000000",
+          "recordedAt": 0,
+          "producerVersion": "\(buttonHeistVersion)"
+        }
+        """.utf8)
     }
 
     private func expectResultDecodeError(
@@ -657,7 +800,16 @@ import ThePlans
         steps: [HeistExecutionStepResult],
         durationMs: ElapsedMilliseconds = 1
     ) throws -> Data {
-        try JSONEncoder().encode(RawResult(steps: steps, durationMs: durationMs))
+        let result = RawResult(steps: steps, durationMs: durationMs)
+        let object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(result))
+        return try JSONSerialization.data(withJSONObject: [
+            "schemaVersion": HeistResultRecording.currentSchemaVersion,
+            "result": object,
+            "planName": NSNull(),
+            "planFingerprint": String(repeating: "0", count: 24),
+            "recordedAt": 0,
+            "producerVersion": buttonHeistVersion.description,
+        ])
     }
 
     private func skippedWarning(path: String) -> HeistExecutionStepResult {
@@ -680,6 +832,14 @@ import ThePlans
         HeistFailureDetail(
             category: .explicitFailure,
             contract: "explicit heist failure",
+            observed: observed
+        )
+    }
+
+    private func invocationFailureDetail(observed: String) -> HeistFailureDetail {
+        HeistFailureDetail(
+            category: .invocation,
+            contract: "invocation completes coherently",
             observed: observed
         )
     }

@@ -158,6 +158,16 @@ package enum HeistExecutedChildren: Sendable, Equatable {
         return children.abortedAtPath
     }
 
+    package func fold<Value>(
+        passed: (HeistPassingChildren) -> Value,
+        aborted: (HeistAbortedChildren) -> Value
+    ) -> Value {
+        switch self {
+        case .passed(let children): passed(children)
+        case .aborted(let children): aborted(children)
+        }
+    }
+
     package mutating func append(_ result: HeistExecutionStepResult) {
         switch self {
         case .passed(let children):
@@ -207,7 +217,14 @@ where Rule: HeistResultEvidenceRule {
         self.value = value
     }
 
+    /// Internal construction after the execution algebra has selected the
+    /// evidence branch. External and decoded values still pass through
+    /// `Rule.admits`.
     package init(admitted value: Rule.Evidence) {
+        precondition(
+            Rule.admits(value),
+            "Execution selected evidence incompatible with \(Rule.self)"
+        )
         self.value = value
     }
 
@@ -227,12 +244,23 @@ where Rule: HeistResultEvidenceRule {
 
 package enum HeistPassedActionRule: HeistResultEvidenceRule {
     package static let rejection = "passed action evidence must prove success"
-    package static func admits(_ evidence: HeistActionEvidence) -> Bool { evidence.resultSucceeded == true }
+    package static func admits(_ evidence: HeistActionEvidence) -> Bool {
+        guard evidence.result?.outcome.isSuccess == true else { return false }
+        guard let expectation = evidence.expectationEvidence else { return true }
+        return (try? expectation.replay().met) == true
+    }
 }
 
 package enum HeistFailedActionRule: HeistResultEvidenceRule {
     package static let rejection = "failed action evidence must prove failure"
-    package static func admits(_ evidence: HeistActionEvidence) -> Bool { evidence.resultSucceeded == false }
+    package static func admits(_ evidence: HeistActionEvidence) -> Bool {
+        switch evidence {
+        case .commandResolutionFailure:
+            true
+        case .completed(let result, _):
+            !result.outcome.isSuccess
+        }
+    }
 }
 
 package enum HeistPassedForEachElementRule: HeistResultEvidenceRule {
@@ -295,15 +323,3 @@ package typealias HeistPassedRepeatUntilIterationEvidence = HeistResultEvidence<
 package typealias HeistFailedRepeatUntilEvidence = HeistResultEvidence<HeistFailedRepeatUntilRule>
 package typealias HeistPassedInvocationEvidence = HeistResultEvidence<HeistPassedInvocationRule>
 package typealias HeistFailedInvocationEvidence = HeistResultEvidence<HeistFailedInvocationRule>
-
-private extension HeistActionEvidence {
-    var resultSucceeded: Bool? {
-        switch self {
-        case .commandResolutionFailure:
-            return false
-        case .completed(let result, let expectation):
-            guard !result.outcome.isSuccess || expectation?.met != false else { return nil }
-            return result.outcome.isSuccess
-        }
-    }
-}

@@ -43,7 +43,7 @@ public struct NotificationPredicate: Codable, Sendable, Equatable, Hashable {
         try container.encodeIfPresent(element, forKey: .element)
     }
 
-    package struct Execution: Sendable, Equatable, Hashable {
+    package struct Execution: Codable, Sendable, Equatable, Hashable {
         package let text: ResolvedStringMatch?
         package let element: ResolvedElementPredicate?
 

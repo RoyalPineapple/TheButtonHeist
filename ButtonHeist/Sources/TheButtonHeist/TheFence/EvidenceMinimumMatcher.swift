@@ -4,7 +4,7 @@ import TheScore
 enum EvidenceMinimumMatcher {
     static func minimumTarget(actionResult: ActionResult) -> AccessibilityTarget? {
         guard let observation = actionResult.observationEvidence,
-              observation.completeness == .complete,
+              observation.coverage == .complete,
               let evidence = actionResult.subjectEvidence,
               let before = observation.baseline
         else { return nil }

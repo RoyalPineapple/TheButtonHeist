@@ -17,10 +17,6 @@ extension TheVault {
         currentLiveCapture.contains(heistId: heistId)
     }
 
-    func liveHeistId(forPath path: TreePath) -> HeistId? {
-        currentLiveCapture.heistId(forPath: path)
-    }
-
     func liveObject(for heistId: HeistId) -> NSObject? {
         currentLiveCapture.object(for: heistId)
     }
@@ -29,16 +25,8 @@ extension TheVault {
         currentLiveCapture.scrollView(for: element)
     }
 
-    func liveScrollView(for container: InterfaceTree.Container) -> UIScrollView? {
-        currentLiveCapture.scrollView(for: container)
-    }
-
     func liveElementHeistId(matching object: NSObject) -> HeistId? {
         currentLiveCapture.heistId(matching: object)
-    }
-
-    func liveContainerObject(forPath path: TreePath) -> NSObject? {
-        currentLiveCapture.containerObject(forPath: path)
     }
 
     func liveContainer(forPath path: TreePath) -> AccessibilityContainer? {
@@ -48,29 +36,17 @@ extension TheVault {
         return container
     }
 
-    func liveContainerName(forPath path: TreePath) -> ContainerName? {
-        latestObservation.tree.containers[path]?.containerName
-    }
-
     func liveScrollableContainerView(forPath path: TreePath) -> UIScrollView? {
         currentLiveCapture.scrollView(forContainerPath: path)
-    }
-
-    func nearestLiveScrollContainerPath(for path: TreePath) -> TreePath? {
-        currentLiveCapture.nearestScrollEntry(for: path)?.path
     }
 
     func isDirectLiveScrollChild(at path: TreePath, of parent: UIScrollView) -> Bool {
         currentLiveCapture.isDirectScrollChild(at: path, of: parent)
     }
 
-    func capturedLiveScrollView(forContainerPath path: TreePath) -> UIScrollView? {
-        currentLiveCapture.scrollView(forContainerPath: path)
-    }
-
     func liveScrollContainerDiagnostics() -> String {
         let summaries = currentLiveCapture.hierarchy.scrollablePathIndexedContainers.map { item in
-            let containerName = latestObservation.tree.containers[item.path]?.containerName
+            let containerName = interfaceTree.containers[item.path]?.containerName
             let hasLiveScrollView = currentLiveCapture.scrollView(forContainerPath: item.path) != nil
             let pathView = currentLiveCapture.scrollableContainerViewsByPath[item.path]?.view
             let containerObject = currentLiveCapture.containerRefsByPath[item.path]?.object

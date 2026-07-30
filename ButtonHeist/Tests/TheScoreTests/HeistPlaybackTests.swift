@@ -330,7 +330,7 @@ final class HeistPlanTests: XCTestCase {
 
         XCTAssertEqual(
             step.description,
-            #"action(command=activate expect=wait(.screenChanged timeout=2))"#
+            #"action(command=activate expect=.screenChanged)"#
         )
     }
 

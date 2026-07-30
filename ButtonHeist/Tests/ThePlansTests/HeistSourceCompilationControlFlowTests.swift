@@ -21,12 +21,15 @@ import Testing
     let expected = try HeistPlan(body: [
         .action(ActionStep(
             command: .activate(.predicate(.label("Search"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Results")), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(
+                predicate: .exists(.label("Results")),
+                timeout: .sessionDefault
+            )))),
         .action(ActionStep(
             command: .activate(.predicate(.label("Open Details"))),
             expectationPolicy: .expect(ActionExpectation(
                 predicate: .screenChanged("Details"),
-                timeout: 1
+                timeout: .sessionDefault
             )))),
         .conditional(try ConditionalStep(cases: [
             PredicateCase(
@@ -51,7 +54,10 @@ import Testing
             body: [
                 .action(ActionStep(
                     command: .activate(.ref("target")),
-                    expectationPolicy: .expect(ActionExpectation(predicate: .missing(.ref("target")), timeout: 1)))),
+                    expectationPolicy: .expect(ActionExpectation(
+                        predicate: .missing(.ref("target")),
+                        timeout: .sessionDefault
+                    )))),
             ]
         )),
     ])
@@ -100,7 +106,9 @@ import Testing
     #expect(plan.body == [
         .action(ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .screenChanged, timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(
+                predicate: .screenChanged
+            )))),
         .wait(WaitStep(
             predicate: .exists(.label("Receipt")),
             timeout: 5,
@@ -214,7 +222,7 @@ import Testing
                     )),
                     expectationPolicy: .expect(ActionExpectation(
                         predicate: .exists(.label(HeistReferenceName(stringLiteral: "item"))),
-                        timeout: 1
+                        timeout: .sessionDefault
                     )))),
             ]
         )),
@@ -306,7 +314,10 @@ import Testing
             body: [
                 .action(ActionStep(
                     command: .activate(.ref("target")),
-                    expectationPolicy: .expect(ActionExpectation(predicate: .missing(.ref("target")), timeout: 1)))),
+                    expectationPolicy: .expect(ActionExpectation(
+                        predicate: .missing(.ref("target")),
+                        timeout: .sessionDefault
+                    )))),
             ]
         )),
     ])

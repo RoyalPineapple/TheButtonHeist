@@ -191,7 +191,9 @@ extension TheFenceHandlerTests {
         XCTAssertEqual(request.plan.body, [
             .action(ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectationPolicy: .expect(ActionExpectation(predicate: .screenChanged, timeout: 1)))),
+                expectationPolicy: .expect(ActionExpectation(
+                    predicate: .screenChanged
+                )))),
         ])
     }
 
@@ -233,7 +235,6 @@ extension TheFenceHandlerTests {
         XCTAssertEqual(request.plan.body, [
             .wait(WaitStep(predicate: .exists(.label("Pay")), timeout: 5)),
         ])
-        XCTAssertEqual(request.step, .wait(WaitStep(predicate: .exists(.label("Pay")), timeout: 5)))
     }
 
     @ButtonHeistActor

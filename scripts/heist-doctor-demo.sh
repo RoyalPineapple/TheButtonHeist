@@ -125,44 +125,47 @@ struct DoctorDemoFixture {
             mode: .all
         )
 
-        let lastPass = try result(
+        let lastPass = try recording(
             outcome: .passed,
             target: target,
             before: menuInterface(primaryAction: "Checkout"),
-            after: confirmationInterface()
+            after: confirmationInterface(),
+            plan: plan
         )
-        let newFail = try result(
+        let newFail = try recording(
             outcome: .failed,
             target: target,
             before: menuInterface(primaryAction: "Go to Checkout"),
-            after: nil
+            after: nil,
+            plan: plan
         )
 
-        guard let passRecording = try HeistResultRecording.write(
-            lastPass,
+        guard let passURL = try HeistResultRecording.write(
+            lastPass.result,
             plan: plan,
             configuration: configuration
         ) else {
             throw FixtureError.message("failed to record passing result")
         }
-        guard let failRecording = try HeistResultRecording.write(
-            newFail,
+        guard let failURL = try HeistResultRecording.write(
+            newFail.result,
             plan: plan,
             configuration: configuration
         ) else {
             throw FixtureError.message("failed to record failing result")
         }
 
-        print("last-pass=\(passRecording.url.path)")
-        print("new-fail=\(failRecording.url.path)")
+        print("last-pass=\(passURL.path)")
+        print("new-fail=\(failURL.path)")
     }
 
-    private static func result(
+    private static func recording(
         outcome: ActionNodeFixture.Outcome,
         target: AccessibilityTarget,
         before: Interface,
-        after: Interface?
-    ) throws -> HeistResult {
+        after: Interface?,
+        plan: HeistPlan
+    ) throws -> HeistResultRecording {
         let baseline = Observation.Snapshot(
             interface: before,
             context: .empty
@@ -173,9 +176,9 @@ struct DoctorDemoFixture {
         )
         let observationEvidence = Observation.Evidence(
             baseline: baseline,
-            current: current,
             events: after == nil ? [.noChange] : [.elementsChanged(current)],
-            completeness: .complete
+            current: current,
+            coverage: .complete
         )
         let actionResult: ActionResult
         switch outcome {
@@ -208,12 +211,16 @@ struct DoctorDemoFixture {
                 : nil
         )
 
-        let fixture = ResultFixture(
-            steps: [StepFixture(
-                path: "$.body[0]",
-                node: node
-            )],
-            durationMs: 1
+        let fixture = RecordingFixture(
+            result: ResultFixture(
+                steps: [StepFixture(
+                    path: "$.body[0]",
+                    node: node
+                )],
+                durationMs: 1
+            ),
+            planName: plan.name,
+            planFingerprint: try HeistResultRecording.planFingerprint(for: plan)
         )
         return try HeistResultCodec.decode(JSONEncoder().encode(fixture))
     }
@@ -375,6 +382,15 @@ struct DoctorDemoFixture {
             )
         )
     }
+}
+
+private struct RecordingFixture: Encodable {
+    let schemaVersion = HeistResultRecording.currentSchemaVersion
+    let result: ResultFixture
+    let planName: HeistPlanName?
+    let planFingerprint: String
+    let recordedAt: TimeInterval = 0
+    let producerVersion = buttonHeistVersion
 }
 
 private struct ResultFixture: Encodable {

@@ -5,6 +5,11 @@ import ThePlans
 
 extension HeistExecution {
     internal struct Machine {
+        internal enum Root {
+            case plan
+            case action(ActionStep)
+        }
+
         private enum Progress {
             case ready
             case running
@@ -15,10 +20,9 @@ extension HeistExecution {
             case complete(Completion)
         }
 
-        internal let plan: HeistPlan
-        internal let argument: HeistArgument
-        internal let rootEnvironment: HeistExecutionEnvironment
+        internal let root: Root
         internal let failureCaptureMode: ScreenCaptureMode?
+        internal let actionExpectationTimeoutPolicy: ActionExpectationTimeoutPolicy
         internal var continuations: [Continuation]
         internal var activeLeaf: ActiveLeaf?
         internal var rootChildren = HeistExecutedChildren.empty
@@ -28,12 +32,13 @@ extension HeistExecution {
         internal init(
             plan: HeistPlan,
             argument: HeistArgument = .none,
-            failureCaptureMode: ScreenCaptureMode? = nil
+            failureCaptureMode: ScreenCaptureMode? = nil,
+            actionExpectationTimeoutPolicy: ActionExpectationTimeoutPolicy = .default
         ) throws {
-            self.plan = plan
-            self.argument = argument
+            root = .plan
             self.failureCaptureMode = failureCaptureMode
-            rootEnvironment = try HeistExecutionEnvironment.empty.binding(
+            self.actionExpectationTimeoutPolicy = actionExpectationTimeoutPolicy
+            let environment = try HeistExecutionEnvironment.empty.binding(
                 argument: argument,
                 to: plan.parameter
             )
@@ -42,7 +47,7 @@ extension HeistExecution {
                     steps: plan.body,
                     context: StepContext(
                         path: .body,
-                        environment: rootEnvironment,
+                        environment: environment,
                         scope: Scope(plan: plan)
                     ),
                     nextIndex: 0,
@@ -51,10 +56,30 @@ extension HeistExecution {
             ]
         }
 
+        internal init(
+            action: HeistActionCommand,
+            failureCaptureMode: ScreenCaptureMode? = nil,
+            actionExpectationTimeoutPolicy: ActionExpectationTimeoutPolicy = .default
+        ) {
+            root = .action(ActionStep(command: action))
+            self.failureCaptureMode = failureCaptureMode
+            self.actionExpectationTimeoutPolicy = actionExpectationTimeoutPolicy
+            continuations = []
+        }
+
         internal mutating func start() -> State {
             guard case .ready = progress else { return state }
             progress = .running
-            return advanceExecution()
+            switch root {
+            case .plan:
+                return advanceExecution()
+            case .action(let action):
+                return begin(
+                    action: action,
+                    path: .body.step(at: 0),
+                    environment: .empty
+                )
+            }
         }
 
         internal mutating func advance(_ input: Input) -> State {
@@ -112,13 +137,13 @@ extension HeistExecution {
                 id: id,
                 children: children
             )
-            return .pending(.perform([
+            return .pending(.perform(
                 .captureFailureScreenshot(
                     id,
                     failedPath: failedPath,
                     mode: failureCaptureMode
-                ),
-            ]))
+                )
+            ))
         }
 
         private mutating func complete(
@@ -131,16 +156,6 @@ extension HeistExecution {
             )
             progress = .complete(completion)
             return .complete(completion)
-        }
-
-        internal mutating func finishWithoutFailureScreenshot() -> State {
-            guard case .awaitingFailureScreenshot(_, let children) = progress else {
-                return state
-            }
-            return complete(
-                steps: children.values,
-                abortedAtPath: children.abortedAtPath
-            )
         }
     }
 }

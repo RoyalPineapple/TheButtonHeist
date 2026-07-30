@@ -69,10 +69,88 @@ public struct HeistResultRecordingConfiguration: Sendable, Equatable {
     }
 }
 
-public struct HeistResultRecording: Sendable, Equatable {
-    public let url: URL
-    public let heistName: HeistPlanName?
-    public let fingerprint: String
+public enum HeistResultRecordingError: Error, Sendable, Equatable, CustomStringConvertible {
+    case unsupportedSchemaVersion(Int)
+    case invalidPlanFingerprint(String)
+
+    public var description: String {
+        switch self {
+        case .unsupportedSchemaVersion(let version):
+            "Unsupported heist result recording schema version: \(version)"
+        case .invalidPlanFingerprint(let fingerprint):
+            "Invalid heist plan fingerprint: \(fingerprint)"
+        }
+    }
+}
+
+public struct HeistResultRecording: Codable, Sendable, Equatable {
+    public static let currentSchemaVersion = 1
+
+    public var schemaVersion: Int { Self.currentSchemaVersion }
+    public let result: HeistResult
+    public let planName: HeistPlanName?
+    public let planFingerprint: String
+    public let recordedAt: Date
+    public let producerVersion: ButtonHeistVersion
+
+    public init(
+        result: HeistResult,
+        plan: HeistPlan,
+        recordedAt: Date = Date(),
+        producerVersion: ButtonHeistVersion = buttonHeistVersion
+    ) throws {
+        self.result = result
+        planName = plan.name
+        planFingerprint = try Self.planFingerprint(for: plan)
+        self.recordedAt = recordedAt
+        self.producerVersion = producerVersion
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case schemaVersion
+        case result
+        case planName
+        case planFingerprint
+        case recordedAt
+        case producerVersion
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist result recording")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        guard schemaVersion == Self.currentSchemaVersion else {
+            throw HeistResultRecordingError.unsupportedSchemaVersion(schemaVersion)
+        }
+        let planFingerprint = try container.decode(String.self, forKey: .planFingerprint)
+        guard Self.isPlanFingerprint(planFingerprint) else {
+            throw HeistResultRecordingError.invalidPlanFingerprint(planFingerprint)
+        }
+        let recordedAtSeconds = try container.decode(TimeInterval.self, forKey: .recordedAt)
+        guard recordedAtSeconds.isFinite else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .recordedAt,
+                in: container,
+                debugDescription: "Heist result recording time must be finite"
+            )
+        }
+
+        result = try container.decode(HeistResult.self, forKey: .result)
+        planName = try container.decode(HeistPlanName?.self, forKey: .planName)
+        self.planFingerprint = planFingerprint
+        recordedAt = Date(timeIntervalSince1970: recordedAtSeconds)
+        producerVersion = try container.decode(ButtonHeistVersion.self, forKey: .producerVersion)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(schemaVersion, forKey: .schemaVersion)
+        try container.encode(result, forKey: .result)
+        try container.encode(planName, forKey: .planName)
+        try container.encode(planFingerprint, forKey: .planFingerprint)
+        try container.encode(recordedAt.timeIntervalSince1970, forKey: .recordedAt)
+        try container.encode(producerVersion, forKey: .producerVersion)
+    }
 }
 
 extension HeistResultRecording {
@@ -89,7 +167,7 @@ extension HeistResultRecording {
     public static func recordIfEnabled(
         _ result: HeistResult,
         plan: HeistPlan
-    ) -> HeistResultRecording? {
+    ) -> URL? {
         guard environmentRecordingEnabled,
               let configuration = HeistResultRecordingConfiguration.environment
         else {
@@ -108,60 +186,31 @@ extension HeistResultRecording {
         _ result: HeistResult,
         plan: HeistPlan,
         configuration: HeistResultRecordingConfiguration
-    ) throws -> HeistResultRecording? {
+    ) throws -> URL? {
         guard configuration.mode.shouldRecord(result) else {
             return nil
         }
 
-        let fingerprint = try heistFingerprint(for: plan)
-        let directory = configuration.rootDirectory
-            .appendingPathComponent(directoryName(name: plan.name, fingerprint: fingerprint), isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-
-        let url = directory.appendingPathComponent(fileName(for: result), isDirectory: false)
-        try HeistResultCodec.write(result, to: url)
-        return HeistResultRecording(
-            url: url,
-            heistName: plan.name,
-            fingerprint: fingerprint
+        let recording = try HeistResultRecording(result: result, plan: plan)
+        try FileManager.default.createDirectory(
+            at: configuration.rootDirectory,
+            withIntermediateDirectories: true
         )
+        let url = configuration.rootDirectory
+            .appendingPathComponent("\(UUID().uuidString).json.gz", isDirectory: false)
+        try HeistResultCodec.write(recording, to: url)
+        return url
     }
 
-    public static func heistFingerprint(for plan: HeistPlan) throws -> String {
+    public static func planFingerprint(for plan: HeistPlan) throws -> String {
         let data = try plan.canonicalHeistJSONData()
         return SHA256.hash(data: data).prefix(12).map { String(format: "%02x", $0) }.joined()
     }
 
-    private static func directoryName(name: HeistPlanName?, fingerprint: String) -> String {
-        "\(slug(name?.description ?? "unnamed-heist"))-\(fingerprint)"
-    }
-
-    private static func fileName(for result: HeistResult) -> String {
-        let outcome = switch result.outcome {
-        case .passed: "passed"
-        case .failed: "failed"
+    private static func isPlanFingerprint(_ value: String) -> Bool {
+        value.utf8.count == 24 && value.utf8.allSatisfy {
+            (48...57).contains($0) || (97...102).contains($0)
         }
-        return "\(timestamp())-\(ProcessInfo.processInfo.processIdentifier)-\(UUID().uuidString)-\(outcome).json.gz"
-    }
-
-    private static func timestamp(date: Date = Date()) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyyMMdd-HHmmss-SSS"
-        return formatter.string(from: date)
-    }
-
-    private static func slug(_ value: String) -> String {
-        let scalars = value.unicodeScalars.map { scalar -> Character in
-            CharacterSet.alphanumerics.contains(scalar) ? Character(scalar) : "-"
-        }
-        let collapsed = String(scalars)
-            .lowercased()
-            .split(separator: "-", omittingEmptySubsequences: true)
-            .joined(separator: "-")
-        return collapsed.isEmpty ? "unnamed-heist" : collapsed
     }
 }
 

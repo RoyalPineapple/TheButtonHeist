@@ -30,6 +30,7 @@ extension Actions {
     func resolveGesturePoint(
         selection: ResolvedGesturePointSelection,
         payload: ActionResult.Payload,
+        deadline: SemanticObservationDeadline
     ) async -> GestureResolution<ResolvedGesturePoint> {
         let inflatedTarget: ElementInflation.InflatedElementTarget?
         switch selection {
@@ -37,6 +38,7 @@ extension Actions {
             switch await navigation.elementInflation.inflate(
                 for: target,
                 method: payload.method,
+                deadline: deadline
             ) {
             case .inflated(let target):
                 inflatedTarget = target

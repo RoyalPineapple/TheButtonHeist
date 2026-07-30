@@ -91,19 +91,5 @@ public enum AssertableProperty: String, Codable, Sendable, CaseIterable, CodingK
     public var intValue: Int? { nil }
 }
 
-/// The semantic comparison currency produced by `SemanticallyHashable`.
+/// Opaque semantic digest used by runtime lookup paths, never as proof of equality.
 public typealias SemanticHash = Int
-
-/// A value whose semantic identity can exclude non-semantic state such as
-/// geometry.
-public protocol SemanticallyHashable {
-    func hashSemantic(into hasher: inout Hasher)
-}
-
-public extension SemanticallyHashable {
-    var semanticHash: SemanticHash {
-        var hasher = Hasher()
-        hashSemantic(into: &hasher)
-        return hasher.finalize()
-    }
-}

@@ -1,0 +1,162 @@
+#if canImport(UIKit)
+@testable import TheInsideJob
+
+extension Observation.Stream {
+    @discardableResult
+    func commitVisibleObservationForTesting(
+        _ observation: InterfaceObservation
+    ) async -> Observation.Publication {
+        await commitObservationCycleForTesting(
+            observation,
+            scope: .visible,
+            lineage: .resting
+        )
+    }
+
+    @discardableResult
+    func commitVisibleObservationForTesting(
+        _ observation: InterfaceObservation,
+        notificationBatch: AccessibilityNotificationBatch
+    ) async -> Observation.Publication {
+        commitVisibleObservation(
+            .admitCaptured(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
+            notificationBatch: notificationBatch
+        )
+    }
+
+    @discardableResult
+    func commitDiscoveryObservationForTesting(
+        _ observation: InterfaceObservation
+    ) async -> Observation.Publication {
+        await commitObservationCycleForTesting(
+            observation,
+            scope: .discovery,
+            lineage: .resting
+        )
+    }
+
+    @discardableResult
+    func commitDiscoveryObservationForTesting(
+        _ observation: InterfaceObservation,
+        notificationBatch: AccessibilityNotificationBatch
+    ) async -> Observation.Publication {
+        commitDiscoveryObservation(
+            .admitCaptured(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
+            notificationBatch: notificationBatch
+        )
+    }
+
+    @discardableResult
+    func commitDiscoveryObservationAfterViewportMovementForTesting(
+        _ observation: InterfaceObservation
+    ) async -> Observation.Publication {
+        await commitObservationCycleForTesting(
+            observation,
+            scope: .discovery,
+            lineage: .viewportMovement
+        )
+    }
+
+    private func commitObservationCycleForTesting(
+        _ observation: InterfaceObservation,
+        scope: SemanticObservationScope,
+        lineage: ScreenLineage
+    ) async -> Observation.Publication {
+        guard let vault else {
+            preconditionFailure("A test observation cycle requires a live Vault")
+        }
+        let claim = vault.accessibilityNotifications.freezeObservationCycleClaim()
+        let admitted = CommittableInterfaceObservation.admitCaptured(
+            observation,
+            tripwireSignal: currentTripwireSignal(),
+            lineage: lineage
+        )
+        let publication = switch scope {
+        case .visible:
+            commitVisibleObservation(admitted, notificationBatch: claim.batch)
+        case .discovery:
+            commitDiscoveryObservation(admitted, notificationBatch: claim.batch)
+        }
+        precondition(
+            claim.acknowledgeObservationCycle(),
+            "A test observation cycle must acknowledge its exact notification claim"
+        )
+        return publication
+    }
+}
+
+extension TheVault {
+    func installObservationForTesting(_ observation: InterfaceObservation) async {
+        await semanticObservationStream.commitVisibleObservationForTesting(observation)
+    }
+}
+
+@MainActor
+final class VisibleObservationSourceFixture {
+    private enum Source {
+        case liveCapture
+        case observation(InterfaceObservation?)
+    }
+
+    private var source: Source = .liveCapture
+    private(set) var captureCount = 0
+
+    var observation: InterfaceObservation? {
+        get {
+            guard case .observation(let observation) = source else { return nil }
+            return observation
+        }
+        set {
+            source = .observation(newValue)
+        }
+    }
+
+    func capture(from vault: TheVault) -> InterfaceObservation? {
+        captureCount += 1
+        switch source {
+        case .liveCapture:
+            return TheVault.captureVisibleObservation(from: vault)
+        case .observation(let observation):
+            return observation
+        }
+    }
+
+    func useLiveCapture() {
+        source = .liveCapture
+    }
+}
+
+@MainActor
+final class TripwireInvalidationFixture {
+    private let continuation: AsyncStream<Void>.Continuation
+    private let invalidation: Task<Void, Never>
+
+    init(vault: TheVault) {
+        let (stream, continuation) = AsyncStream<Void>.makeStream(
+            bufferingPolicy: .bufferingNewest(1)
+        )
+        self.continuation = continuation
+        invalidation = Task {
+            for await _ in stream {
+                vault.semanticObservationStream.invalidateCurrentAdmission()
+                break
+            }
+        }
+    }
+
+    func signal() {
+        continuation.yield()
+        continuation.finish()
+    }
+
+    func wait() async {
+        await invalidation.value
+    }
+
+    deinit {
+        continuation.finish()
+        invalidation.cancel()
+    }
+}
+
+#endif

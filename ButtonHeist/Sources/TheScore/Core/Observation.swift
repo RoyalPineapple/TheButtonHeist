@@ -17,13 +17,6 @@ public extension Observation {
             self.interface = interface
             self.context = context
         }
-
-        public static func empty(timestamp: Date) -> Snapshot {
-            Snapshot(
-                interface: Interface(timestamp: timestamp, tree: []),
-                context: .empty
-            )
-        }
     }
 
     /// Semantic context that affects the meaning of a parsed interface.
@@ -99,12 +92,6 @@ public extension Observation {
             }
             self = notification
         }
-
-        public func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encodeIfPresent(text, forKey: .text)
-            try container.encodeIfPresent(element, forKey: .element)
-        }
     }
 
     /// One semantic event admitted by the Vault.
@@ -122,30 +109,87 @@ public extension Observation {
                 nil
             }
         }
+
+        package var changesInterface: Bool {
+            switch self {
+            case .elementsChanged, .screenChanged:
+                true
+            case .notification, .noChange:
+                false
+            }
+        }
+    }
+
+    /// Exact notification ingress lost before semantic observation admission.
+    struct NotificationSequenceGap: Codable, Sendable, Equatable {
+        /// The last sequence known to the observation consumer before the gap.
+        public let afterSequence: UInt64
+        /// The last sequence dropped by ingress, inclusive.
+        public let throughSequence: UInt64
+
+        package init(afterSequence: UInt64, throughSequence: UInt64) {
+            precondition(afterSequence < throughSequence, "Notification gap must contain a sequence")
+            self.afterSequence = afterSequence
+            self.throughSequence = throughSequence
+        }
+
+        private enum CodingKeys: String, CodingKey, CaseIterable {
+            case afterSequence
+            case throughSequence
+        }
+
+        public init(from decoder: Decoder) throws {
+            try decoder.rejectUnknownKeys(
+                allowed: CodingKeys.self,
+                typeName: "notification sequence gap"
+            )
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            let afterSequence = try container.decode(UInt64.self, forKey: .afterSequence)
+            let throughSequence = try container.decode(UInt64.self, forKey: .throughSequence)
+            guard afterSequence < throughSequence else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: decoder.codingPath,
+                    debugDescription: "Notification gap must contain a sequence"
+                ))
+            }
+            self.afterSequence = afterSequence
+            self.throughSequence = throughSequence
+        }
+    }
+
+    /// Facts known to be absent from an observation interval.
+    enum Gap: Codable, Sendable, Equatable, Error {
+        case notificationIngress(
+            NotificationSequenceGap,
+            additional: [NotificationSequenceGap]
+        )
+        case captureUnavailable
+        case historyUnavailable
+    }
+
+    /// Whether every selected fact in an observation interval is represented.
+    enum Coverage: Codable, Sendable, Equatable {
+        case complete
+        case incomplete(Gap)
     }
 
     /// Immutable observation facts supporting one action or wait result.
     struct Evidence: Codable, Sendable, Equatable {
-        public enum Completeness: String, Codable, Sendable, Equatable {
-            case complete
-            case incomplete
-        }
-
         public let baseline: Snapshot?
-        public let current: Snapshot?
         public let events: [Event]
-        public let completeness: Completeness
+        public let current: Snapshot?
+        public let coverage: Coverage
 
         public init(
             baseline: Snapshot?,
-            current: Snapshot?,
             events: [Event],
-            completeness: Completeness
+            current: Snapshot?,
+            coverage: Coverage
         ) {
             self.baseline = baseline
-            self.current = current
             self.events = events
-            self.completeness = completeness
+            self.current = current
+            self.coverage = coverage
         }
 
         public var notificationTexts: [String] {

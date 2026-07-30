@@ -7,9 +7,13 @@ extension TheFence {
     // MARK: - Handler: Screen
 
     func handleGetScreen(_ request: ScreenRequest, timeout: TimeInterval) async throws -> FenceResponse {
+        let observationTimeout = try WaitTimeout(validatingSeconds: timeout)
         let screen = try await sendAndAwaitScreen(
-            .requestScreen(ScreenRequestPayload(mode: request.mode)),
-            timeout: timeout
+            .requestScreen(ScreenRequestPayload(
+                mode: request.mode,
+                timeout: observationTimeout
+            )),
+            timeout: screenTransportTimeout(for: observationTimeout)
         )
         let options = ScreenshotResponseOptions()
 
@@ -49,5 +53,9 @@ extension TheFence {
                 ServerError(kind: .general, message: "Failed to decode screenshot data")
             )
         }
+    }
+
+    func screenTransportTimeout(for observationTimeout: WaitTimeout) -> TimeInterval {
+        observationTimeout.seconds + config.postActionExpectationTimeoutBuffer
     }
 }

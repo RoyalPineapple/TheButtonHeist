@@ -162,7 +162,7 @@ func targetArgumentValue(
 func scriptedHeistResponse(
     _ result: HeistResult = HeistResultFixture.result(steps: [HeistResultFixture.action()])
 ) -> ServerMessage {
-    .actionResult(.success(payload: .heist(result)))
+    .heistResult(result)
 }
 
 func stringMatchArgumentValue(_ value: String, mode: String = "exact") -> HeistValue {
@@ -248,9 +248,9 @@ func makeBackgroundElementsChangedEvidence(elementCount: Int) -> Observation.Evi
     )
     return Observation.Evidence(
         baseline: before,
-        current: after,
         events: [.elementsChanged(after)],
-        completeness: .incomplete
+        current: after,
+        coverage: .incomplete(.historyUnavailable)
     )
 }
 
@@ -270,7 +270,7 @@ func makeObservationEvidence(
     beforeScreenId: String? = nil,
     afterScreenId: String? = nil,
     screenChanged: Bool = false,
-    completeness: Observation.Evidence.Completeness = .incomplete
+    coverage: Observation.Coverage = .incomplete(.historyUnavailable)
 ) -> Observation.Evidence {
     let baseline = observationSnapshot(
         interface: before,
@@ -289,14 +289,14 @@ func makeObservationEvidence(
     if after != nil {
         events.append(.elementsChanged(current))
     }
-    if completeness == .complete {
+    if coverage == .complete {
         events.append(.noChange)
     }
     return Observation.Evidence(
         baseline: baseline,
-        current: current,
         events: events,
-        completeness: completeness
+        current: current,
+        coverage: coverage
     )
 }
 

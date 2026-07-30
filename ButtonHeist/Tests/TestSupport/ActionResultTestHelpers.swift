@@ -3,6 +3,12 @@ import ThePlans
 @testable import TheScore
 
 package enum HeistResultFixture {
+    package static let expectationTiming = HeistExpectationTiming(
+        budgetMs: 1_000,
+        elapsedMs: 250,
+        lastTreeChangeElapsedMs: 125
+    )
+
     package static func actionResult(
         succeeded: Bool = true,
         payload: ActionResult.Payload = .activate,
@@ -70,7 +76,7 @@ package enum HeistResultFixture {
         path: String = "$.body[0]",
         command: HeistActionCommand = .activate(.predicate(ElementPredicate(label: "Button"))),
         result: ActionResult = actionResult(),
-        expectation: ExpectationResult? = nil,
+        expectation: HeistExpectationEvidence? = nil,
         failure: HeistFailureDetail? = nil
     ) -> HeistExecutionStepResult {
         let evidence = HeistActionEvidence.completed(result: result, expectation: expectation)
@@ -96,52 +102,51 @@ package enum HeistResultFixture {
 
     package static func wait(
         path: String = "$.body[0]",
-        expectation: ExpectationResult.Met = ExpectationResult.Met(
-            predicate: .exists(.label("Done"))
-        ),
-        observation: Observation.Evidence = Observation.Evidence(
-            baseline: nil,
-            current: nil,
-            events: [],
-            completeness: .complete
-        )
+        evidence: HeistExpectationEvidence = HeistResultFixture.defaultWaitEvidence(met: true)
     ) -> HeistExecutionStepResult {
-        .wait(
+        guard let passedEvidence = HeistPassedWaitEvidence(evidence) else {
+            preconditionFailure("passed wait result fixture requires complete replayable evidence")
+        }
+        return .wait(
             path: executionPath(path),
-            predicate: expectation.predicate
-                ?? AccessibilityPredicate.exists(.label("predicate")),
+            predicate: evidence.predicate,
             timeout: 1,
-            completion: .passed(evidence: .matched(HeistWaitMatchedEvidence(
-                observation: observation,
-                expectation: expectation
-            )))
+            completion: .passed(evidence: passedEvidence)
         )
     }
 
     package static func failedWait(
         path: String = "$.body[0]",
-        expectation: ExpectationResult.Unmet,
-        observation: Observation.Evidence = Observation.Evidence(
-            baseline: nil,
-            current: nil,
-            events: [],
-            completeness: .complete
-        ),
+        evidence: HeistExpectationEvidence = HeistResultFixture.defaultWaitEvidence(met: false),
         failure: HeistFailureDetail
     ) -> HeistExecutionStepResult {
         .wait(
             path: executionPath(path),
-            predicate: expectation.predicate
-                ?? AccessibilityPredicate.exists(.label("predicate")),
+            predicate: evidence.predicate,
             timeout: 1,
             completion: .failed(
-                evidence: HeistWaitUnmatchedEvidence(
-                    observation: observation,
-                    expectation: expectation
-                ),
+                evidence: .observed(evidence),
                 failure: failure
             )
         )
+    }
+
+    package static func expectationEvidence(
+        predicate: AccessibilityPredicate,
+        observation: Observation.Evidence,
+        terminalCause: HeistExpectationEvidence.TerminalCause = .observed
+    ) -> HeistExpectationEvidence {
+        do {
+            return try HeistExpectationEvidence(
+                predicate: predicate,
+                bindings: .empty,
+                observation: observation,
+                terminalCause: terminalCause,
+                timing: expectationTiming
+            )
+        } catch {
+            preconditionFailure("test expectation predicate must resolve: \(error)")
+        }
     }
 
     package static func warning(
@@ -320,6 +325,22 @@ package enum HeistResultFixture {
             category: result.outcome.failureKind == .elementNotFound ? .targetResolution : .action,
             contract: "action dispatch succeeds",
             observed: result.message ?? "action failed"
+        )
+    }
+
+    package static func defaultWaitEvidence(met: Bool) -> HeistExpectationEvidence {
+        let predicate = AccessibilityPredicate.exists(.label("Done"))
+        let current = makeTestObservationSnapshot(
+            elements: met ? [makeTestHeistElement(label: "Done")] : []
+        )
+        return expectationEvidence(
+            predicate: predicate,
+            observation: Observation.Evidence(
+                baseline: nil,
+                events: [.elementsChanged(current), .noChange],
+                current: current,
+                coverage: .complete
+            )
         )
     }
 }

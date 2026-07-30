@@ -51,22 +51,11 @@ extension Observation {
             return range
         }
 
-        internal func events(in range: Range<Int>) throws(ReadError) -> ArraySlice<Observation.Event> {
-            guard range.lowerBound >= startIndex,
-                  range.upperBound <= endIndex
-            else {
-                throw .rangeUnavailable
-            }
-            let lowerBound = range.lowerBound - firstRetainedIndex
-            let upperBound = range.upperBound - firstRetainedIndex
-            return storage[lowerBound..<upperBound]
-        }
-
         internal func events(after index: Int) throws(ReadError) -> ArraySlice<Observation.Event> {
             guard index <= endIndex else {
                 throw .rangeUnavailable
             }
-            return try events(in: index..<endIndex)
+            return try entries(in: index..<endIndex)
         }
 
         /// Screen generation at a position is the number of screen boundaries
@@ -91,18 +80,19 @@ extension Observation {
             current: Observation.Snapshot?
         ) -> Observation.Evidence {
             do {
+                let events = try entries(in: range)
                 return Observation.Evidence(
                     baseline: baseline,
+                    events: Array(events),
                     current: current,
-                    events: Array(try events(in: range)),
-                    completeness: .complete
+                    coverage: .complete
                 )
             } catch {
                 return Observation.Evidence(
                     baseline: baseline,
-                    current: current,
                     events: [],
-                    completeness: .incomplete
+                    current: current,
+                    coverage: .incomplete(.historyUnavailable)
                 )
             }
         }
@@ -114,13 +104,26 @@ extension Observation {
                 Swift.min(overflow, Swift.max(0, $0 - firstRetainedIndex))
             } ?? overflow
             guard removableCount > 0 else { return }
-            screenChangesBeforeStorage += storage.prefix(removableCount).reduce(into: 0) { count, event in
-                if case .screenChanged = event {
+            screenChangesBeforeStorage += storage.prefix(removableCount).reduce(into: 0) { count, entry in
+                if case .screenChanged = entry {
                     count += 1
                 }
             }
             storage.removeFirst(removableCount)
             firstRetainedIndex += removableCount
+        }
+
+        private func entries(
+            in range: Range<Int>
+        ) throws(ReadError) -> ArraySlice<Observation.Event> {
+            guard range.lowerBound >= startIndex,
+                  range.upperBound <= endIndex
+            else {
+                throw .rangeUnavailable
+            }
+            let lowerBound = range.lowerBound - firstRetainedIndex
+            let upperBound = range.upperBound - firstRetainedIndex
+            return storage[lowerBound..<upperBound]
         }
     }
 }

@@ -2,104 +2,88 @@
 import XCTest
 
 @testable import BHDemo
-import ButtonHeistHostedTestSupport
 import ButtonHeistTesting
-import ThePlans
+import TheInsideJob
+@_spi(AdversarialLab) import ThePlans
 @_spi(ButtonHeistInternals) @testable import TheScore
 
 @MainActor
 final class AdversarialMutationTests: XCTestCase {
 
     func testAsyncRevealNotificationAndSilentVariantsPass() async throws {
-        let destination: AccessibilityPredicate = .exists(.label("Delayed code: 7429"))
-        let notificationCommand = HeistActionCommand.activate(.label("Reveal with notification"))
-        try await openScenario(.asyncReveal, readyHeistPath: "AdversarialAsyncRevealNotificationReady")
-        let notification = try await runHeist("AdversarialAsyncRevealNotificationPass") {
-            Activate(.label("Reveal with notification"))
-                .expect(destination, timeout: 3)
-        }
-        let notificationEvidence = try actionEvidence(for: notificationCommand, in: notification.result)
-        XCTAssertEqual(notificationEvidence.result?.outcome, .success)
-        XCTAssertEqual(notificationEvidence.result?.method, .activate)
-        XCTAssertEqual(notificationEvidence.expectation?.predicate, destination)
-        XCTAssertEqual(notificationEvidence.expectation?.met, true)
-        let notifications = try XCTUnwrap(notificationEvidence.result?.observationEvidence)
-            .events
-            .compactMap { event -> Observation.Notification? in
-                guard case .notification(let notification) = event else { return nil }
-                return notification
-            }
-        XCTAssertEqual(notifications.compactMap(\.text), ["Delayed code: 7429"])
-
-        let silentCommand = HeistActionCommand.activate(.label("Reveal silently"))
-        try await openScenario(.asyncReveal, readyHeistPath: "AdversarialAsyncRevealSilentReady")
-        let silent = try await runHeist("AdversarialAsyncRevealSilentPass") {
-            Activate(.label("Reveal silently"))
-                .expect(destination, timeout: 3)
-        }
-        let silentEvidence = try actionEvidence(for: silentCommand, in: silent.result)
-        XCTAssertEqual(silentEvidence.result?.outcome, .success)
-        XCTAssertEqual(silentEvidence.result?.method, .activate)
-        XCTAssertEqual(silentEvidence.expectation?.predicate, destination)
-        XCTAssertEqual(silentEvidence.expectation?.met, true)
-        let silentNotifications = try XCTUnwrap(silentEvidence.result?.observationEvidence)
-            .events
-            .compactMap { event -> Observation.Notification? in
-                guard case .notification(let notification) = event else { return nil }
-                return notification
-            }
-        XCTAssertTrue(
-            silentNotifications.compactMap(\.text).isEmpty,
-            "Unexpected notifications: \(silentNotifications)"
+        let notificationScenario = AdversarialScenarioCatalog.Scenario.asyncRevealNotificationPass
+        let notification = try await runScenario(.asyncRevealNotificationPass)
+        let notificationEvidence = try actionEvidence(
+            for: .activate(.label("Reveal with notification")),
+            in: notification.result
         )
+        XCTAssertEqual(
+            try notifications(in: notificationEvidence).compactMap(\.text),
+            notificationScenario.expectedEvidence.map(\.label)
+        )
+
+        let silent = try await runScenario(.asyncRevealSilentPass)
+        let silentEvidence = try actionEvidence(
+            for: .activate(.label("Reveal silently")),
+            in: silent.result
+        )
+        XCTAssertTrue(try notifications(in: silentEvidence).compactMap(\.text).isEmpty)
+        let failure = try await runFailingScenario(.asyncRevealWrongDestinationFails)
+        XCTAssertEqual(failure.failedStepKind, .wait)
+    }
+
+    func testPromotedFixtureContracts() async throws {
+        let contracts: [(
+            success: AdversarialScenarioCatalog.Scenario,
+            failure: AdversarialScenarioCatalog.Scenario
+        )] = [
+            (.offscreenCheckoutPass, .offscreenCheckoutDisabledFails),
+            (.dynamicCellsPass, .dynamicCellsStaleTargetFails),
+            (.textFieldFallbackPass, .textFieldFallbackTargetlessFails),
+        ]
+        for contract in contracts {
+            let success = try await runScenario(contract.success)
+            XCTAssertNil(success.result.firstFailedStep)
+            let failure = try await runFailingScenario(contract.failure)
+            XCTAssertEqual(failure.failedStepKind, .action)
+        }
     }
 
     func testStaleLiveObjectReResolvesCurrentTarget() async throws {
-        let beforeValue = "Generation 2, actions 0, generation 1 actions 0"
-        let finalValue = "Generation 2, actions 1, generation 1 actions 0"
-        try await openScenario(.staleLiveObject, readyHeistPath: "AdversarialStaleLiveObjectReady")
-        let heist = try await runHeist("AdversarialStaleLiveObjectPass") {
-            Activate(.label("Submit Order"))
-                .expect(.exists(.element(
-                    .label("Submit Order"),
-                    .value(finalValue)
-                )), timeout: 4)
-        }
-
+        let heist = try await runScenario(.staleLiveObjectPass)
         XCTAssertNil(heist.result.firstFailedStep)
-        let evidence = try actionEvidence(
-            for: .activate(.label("Submit Order")),
-            in: heist.result
-        )
-        let result = try XCTUnwrap(evidence.result)
-        let subject = try XCTUnwrap(result.subjectEvidence)
-        XCTAssertEqual(result.outcome, .success)
-        XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(subject.source, .resolvedSemanticTarget)
-        XCTAssertEqual(subject.element.semantics.assertable.label, "Submit Order")
-        XCTAssertEqual(subject.element.semantics.assertable.value, beforeValue)
-
-        let finalElements = try XCTUnwrap(
-            result.observationEvidence?.current?.interface.projectedElements
-        )
-        XCTAssertEqual(
-            finalElements.first {
-                $0.semantics.assertable.label == "Submit Order"
-            }?.semantics.assertable.value,
-            finalValue
-        )
+        let failure = try await runFailingScenario(.staleLiveObjectAmbiguousFails)
+        XCTAssertEqual(failure.failedStepKind, .action)
     }
 
-    private func openScenario(
-        _ scenario: AdversarialScenario,
-        readyHeistPath: HeistDefinitionPath
-    ) async throws {
-        try await AdversarialLabRoute.open(scenario)
-        let ready = try await runHeist(readyHeistPath) {
-            WaitFor(.exists(.label(scenario.title)), timeout: 3)
+    // MARK: - Scenario Execution
+
+    private func runScenario(
+        _ scenario: AdversarialScenarioCatalog.Scenario
+    ) async throws -> Heist {
+        XCTAssertEqual(scenario.expectedOutcome, .commandSucceeds)
+        try await AdversarialLabRoute.open(scenario.route)
+        return try await runHeist(scenario.plan())
+    }
+
+    private func runFailingScenario(
+        _ scenario: AdversarialScenarioCatalog.Scenario
+    ) async throws -> Heist.Failure {
+        XCTAssertEqual(scenario.expectedOutcome, .commandFailsWithDiagnostic)
+        try await AdversarialLabRoute.open(scenario.route)
+        do {
+            _ = try await runHeist(scenario.plan())
+            throw ContractError.expectedFailure(scenario)
+        } catch let failure as Heist.Failure {
+            let diagnostic = try XCTUnwrap(
+                scenario.expectedEvidence.first { $0.kind == .diagnostic }?.label
+            )
+            XCTAssertTrue(failure.description.localizedCaseInsensitiveContains(diagnostic))
+            return failure
         }
-        XCTAssertNil(ready.result.firstFailedStep)
     }
+
+    // MARK: - Result Evidence
 
     private func actionEvidence(
         for command: HeistActionCommand,
@@ -115,6 +99,18 @@ final class AdversarialMutationTests: XCTestCase {
         )
     }
 
+    private func notifications(
+        in evidence: HeistActionEvidence
+    ) throws -> [Observation.Notification] {
+        try XCTUnwrap(evidence.result?.observationEvidence).events.compactMap { event in
+            guard case .notification(let notification) = event else { return nil }
+            return notification
+        }
+    }
+
+    private enum ContractError: Error {
+        case expectedFailure(AdversarialScenarioCatalog.Scenario)
+    }
 }
 
 #endif // canImport(UIKit)

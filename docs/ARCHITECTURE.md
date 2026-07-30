@@ -103,20 +103,20 @@ capture, classifies continuity, constructs the corresponding
 publishes it. There is no parser-to-history path, subscriber-driven graph
 mutation, compatibility reducer, or second runtime state projection.
 
-The stream is also the one visible-observation producer. `TheTripwire` is its
-serialized refresh trigger: a changed signal invalidates the admitted read,
-new-read admission pauses, and one capture/admit/commit cycle runs.
-Concurrent consumers join that cycle. Once a Vault commit installs admitted-read
-state, waits and action before-state acquisition reuse the committed event until
-the next trip, explicit invalidation, or screen replacement. After-action
-observation always requests a fresh cycle from the same producer.
+The stream is also the one observation producer. TheTripwire's persistent
+`CADisplayLink` supplies serialized pulses only while stream demand is nonzero.
+One pulse starts one claim/capture/parse/commit/publish/evaluate cycle;
+concurrent consumers join it. Once a Vault commit installs admitted-read state,
+waits and action before-state acquisition reuse the committed event until the
+next pulse, explicit invalidation, or screen replacement. After-action and
+discovery freshness always request a publication from the same producer.
 
 `Observation.History` is the Vault-owned ordered array of
 `Observation.Event` values. `elementsChanged` contains its immutable snapshot;
 `screenChanged` is the only screen-boundary marker. The running heist machine
 may retain ordinary private positions while advancing, but positions never
 enter snapshots, events, state answers, or an API. No predicate, action, or
-adapter owns another history or temporal window.
+adapter owns another history or temporal record.
 
 A raw parser read may replace live object and geometry evidence, but only a
 `HeistId` resolved from the committed `InterfaceTree` can select that evidence
@@ -135,14 +135,14 @@ the events consumed by the machine. Current-state predicates read the current
 snapshot through the same target resolver that actions and `get_interface` use.
 Diagnostic evidence is result-local; it is not committed or targetable. A
 public response may expose a compact `delta`, but that value is a one-way,
-lossy fold of ordered facts and is never fed back into predicate evaluation.
+lossy fold of ordered events and is never fed back into predicate evaluation.
 
 Agents should start from `get_interface`, then inspect an action result's public
 delta before issuing another read. After a screen change, build follow-up
 targets from the new interface evidence. See the
 [currency types diagram](diagrams/currency-types.md) for the type families and
 the [observation pipeline diagram](diagrams/observation-pipeline.md) for the
-capture, fact, predicate, and public-fold boundaries.
+capture, event, predicate, and public-fold boundaries.
 
 ### One Heist Machine
 
@@ -158,7 +158,7 @@ enum HeistExecution.State {
 }
 
 enum HeistExecution.Action {
-    case perform([MainActorRequest])
+    case perform(MainActorRequest)
     case wait
 }
 ```
@@ -167,24 +167,29 @@ One `HeistExecution` machine runs one complete heist from its first step to its
 final `Completion`. It privately retains every execution detail needed to
 advance the plan: control-flow stack, environments, accumulated step results,
 active expectation progress, and transient observation bookkeeping. `State`
-is not that bookkeeping. It is only the machine's next answer: perform typed
-MainActor requests, wait for another admitted input, or complete.
+is not that bookkeeping. It is only the machine's next answer: perform a typed
+MainActor request, wait for another admitted input, or complete.
 
-The machine accepts admitted snapshots, normalized notification payloads, and
-typed outcomes from requests it previously returned in authored order. For a
-fixed heist and input order, it is deterministic and replayable. There is no
-command API, operation result, caller-provided baseline, history-start
-argument, or parallel execution owner. Actions and waits are internal machine
-progress, not independently started executors.
+The Vault reducer accepts admitted snapshots and normalized notification
+payloads and deterministically produces ordered `Observation.Event` values.
+The machine accepts baseline snapshots, those events, and typed outcomes from
+requests it previously returned in authored order. For a fixed heist and input
+order, it is deterministic and replayable. There is no command API, operation
+result, caller-provided baseline, history-start argument, or parallel execution
+owner. Actions and waits are internal machine progress, not independently
+started executors.
 
 The MainActor host owns the active leaf's absolute deadline, the whole heist's
 absolute deadline, and one asynchronous task scheduled for the earlier value.
-Deadlines are external control flow, never machine or observation data. Expiry
-cancels the app interaction in flight, waits for its cleanup, captures terminal
-evidence, and admits a typed timeout outcome to the machine. A leaf timeout may
-enter an authored wait `else`; a heist timeout permits no further authored
-effect. No deadline event is admitted to the Vault, appended to
-`Observation.History`, or reduced by the machine.
+The leaf deadline starts before baseline acquisition and covers reveal,
+dispatch, expectation evaluation, and the trailing `noChange` required to close
+the observation. There is no separate readiness allowance. Deadlines are
+external control flow, never machine or observation data. Expiry cancels the
+app interaction in flight, waits for its cleanup, captures terminal evidence,
+and admits a typed timeout outcome to the machine. A leaf timeout may enter an
+authored wait `else`; a heist timeout permits no further authored effect. No
+deadline event is admitted to the Vault, appended to `Observation.History`, or
+reduced by the machine.
 
 Failure evidence is finalized by the same machine. Whenever executed root
 children contain an `abortedAtPath` and screenshot evidence is enabled, the
@@ -199,21 +204,63 @@ One pure `ScreenClassifier` combines typed snapshots with scoped
 `screenChanged`, `layoutChanged`, `elementUpdate`, and `announcement`
 notifications.
 `AccessibilityNotificationBus` appends package-internal ingress records to one
-bounded log. An action window checkpoints retained history without clearing it;
-notifications are edge evidence, not a second state model. A scoped screen
-notification is authoritative replacement evidence. Without one, typed snapshot
-comparison may infer replacement; element and announcement notifications do not
-veto that inference. The classifier represents its decision internally as
-`ScreenContinuity`; the admitted event carries only normalized `ScreenFacts`.
-Notification delivery is best effort, and absence is not evidence of
-replacement or stability.
+bounded ingress log. `Observation.Stream` freezes one exact claim at the start
+of each observation cycle. That claim is the only notification input to the
+cycle and stays pending until the corresponding semantic observation commits.
+An unavailable capture does not manufacture an event or advance notification
+admission; the same claim remains eligible for the next demanded pulse. A
+retention gap starts a new explicit observation baseline rather than presenting
+incomplete ingress as `noChange`.
 
-The runtime classifies accessibility state, not animations. Button Heist's one
-CADisplayLink source triggers parsing; a fresh capture that proves complete
-observed equality produces bare `noChange`. Motion with no accessibility
-representation is not machine evidence. A Tripwire signal invalidates the
-current read and causes the Vault to admit the next parsed state through the
-same event path.
+```mermaid
+sequenceDiagram
+    participant Demand
+    participant Link as CADisplayLink
+    participant Stream as Observation.Stream
+    participant Bus as Notification bus
+    participant Vault
+    participant Machine
+
+    Demand->>Stream: visible or discovery demand
+    Stream->>Link: resume with canonical demand
+    Link->>Stream: pulse
+    Stream->>Bus: freeze cycle claim
+    Bus-->>Stream: exact notification batch
+    Stream->>Vault: admitted snapshot + normalized notification payloads
+    Vault->>Vault: deterministically reduce ordered Observation.Event values
+    Vault->>Vault: commit snapshot + append one History
+    Vault-->>Stream: publication
+    Stream->>Machine: publish ordered events
+    Machine->>Machine: reduce active action/wait predicate
+    Stream->>Bus: acknowledge committed claim
+    alt demand remains
+        Stream->>Link: await next pulse
+    else zero demand
+        Stream->>Link: pause
+    end
+```
+
+Notifications are edge evidence, not a second state model. A scoped screen
+notification is authoritative replacement evidence. Without one, typed
+snapshot comparison may infer replacement; element and announcement
+notifications do not veto that inference. The classifier represents its
+decision internally as `ScreenContinuity`; the admitted event carries only
+normalized `ScreenFacts`. Notification delivery is best effort, and absence is
+not evidence of replacement or stability.
+
+The runtime classifies accessibility state, not animations. One persistent
+`CADisplayLink` in TheTripwire is the sole observation clock. Scope pressure is
+reduced to one pulse demand; zero demand pauses the link. A pulse starts at most
+one capture cycle, and pulses received while that synchronous cycle is active
+are dropped. A later display pulse starts the next demanded cycle. The cycle
+claims notifications, captures and parses live UIKit state, commits snapshot and
+history, then publishes ordered events to the heist machine. A fresh capture
+that proves complete observed equality produces `noChange`. That case has no
+payload, but it means neither semantic state nor geometry changed within the
+admitted comparison tolerance.
+Motion with no accessibility representation is not machine evidence. Business
+deadlines may cancel work, but no timer, sleep, caller loop, or discovery path
+acts as a second observation clock.
 
 `ServerTransport.transportEvents` has one
 off-main consumer, `TransportControlPlane`. That control plane performs
@@ -253,10 +300,10 @@ at its declared whole-heist deadline. The boundaries are shown in
 the [transport control plane diagram](diagrams/transport-control-plane.md).
 
 A scoped screen notification or snapshot-inferred `ScreenContinuity`
-replacement appends a `screenChanged` event. The screen boundary is normalized
-as old-tree departures, that marker, then new-tree arrivals. Layout, value, and
-announcement notifications do not append a screen marker. Capture admission can
-also report unhealthy snapshots rather than pretending an empty
+replacement appends old-tree departure `elementsChanged`, `screenChanged`, and
+new-tree arrival `elementsChanged` events in that order. Layout, value, and
+announcement notifications do not append a screen marker. Capture admission
+can also report unhealthy snapshots rather than pretending an empty
 post-navigation parse is stable.
 
 UIKit value changes are not identified by an `elementUpdate` ingress signal
@@ -274,16 +321,14 @@ geometry. Refresh, exploration, selection, and stale-state decisions live inside
 TheInsideJob; clients and adapters send typed observation intent.
 
 Visible observation and discovery use the same Vault admission and commit
-boundary.
-`Navigation.performViewportTransition`
-is the sole product-driven viewport movement operation: page scroll, discovery,
-inflation placement, and restoration all provide movement intent to it. After a
-successful movement dispatch, it parses the new viewport, yields one run-loop
-turn, and parses again. Matching semantic
-fingerprints prove the viewport in one turn; layout churn may consume another
-turn, bounded by the 250 ms transition ceiling. Page, edge, swipe, known
-content-point reveal, and restore intents all commit their admitted observation into the
-canonical Vault and produce one event. A captured reveal content point
+boundary, and production callers cannot invoke raw live capture directly.
+`Navigation.performViewportTransition` owns the product-driven viewport
+movement command: page scroll, discovery, inflation placement, and restoration
+all provide typed movement intent to it. A successful dispatch requests a
+discovery-scope publication from `Observation.Stream` and waits for the
+committed result. It does not capture, parse, or commit directly. Page, edge,
+swipe, known content-point reveal, and restore commands therefore produce
+freshness only through the canonical pulse cycle. A captured reveal content point
 and the semantic `TreePath` of the scroll container whose coordinate space
 produced it form one evidence value. Immediately before dispatch, inflation
 admits that point only when the live movement candidate has the exact owner
@@ -293,8 +338,8 @@ mismatched owner skips the seed without donating its coordinate to an ancestor
 or sibling, and `ViewportExplorer` continues the established ancestor paging
 route. The explorer is also the fallback for unknown targets or missing reveal
 evidence. It dispatches exactly one viewport movement,
-waits for parse, Vault commit, and callback, and only
-then may request another movement.
+waits for the requested observation publication and callback, and only then may
+request another movement.
 
 `TheSafecracker+Scroll.swift` is the sole production owner of direct
 `UIScrollView.setContentOffset` dispatch. For paged scroll views, movement is
@@ -334,13 +379,14 @@ requests may reveal a resolvable target or run canonical discovery; viewport
 exit remains an explicit host request.
 
 An action with `.expect(...)` establishes its baseline snapshot and private
-history position before dispatch. Current-state predicates may match that
-snapshot immediately. Positive transitions evaluate later
-`Observation.Event` values strictly in history order and latch their first
-qualifying fact, so a transient appearance or disappearance remains valid even
-when absent at the endpoint. Notifications likewise match only after the active
-leaf boundary. The same boundary remains authoritative until the leaf
-completes.
+history position before dispatch, under the same absolute leaf deadline that
+already covers baseline acquisition. Current-state predicates may match that
+snapshot immediately. Positive transitions evaluate later `Observation.Event`
+values strictly in history order and latch their first qualifying event, so a
+transient appearance or disappearance remains valid even when absent at the
+endpoint. Notifications likewise match only after the active leaf boundary.
+The same boundary and deadline remain authoritative through the trailing
+`noChange` that completes the leaf.
 
 Detail level is separate: `detail: "summary"` keeps responses compact, while
 `detail: "full"` adds geometry and heavier accessibility fields.
@@ -356,8 +402,8 @@ The pipeline is:
 
 1. Resolve the semantic target against current admitted accessibility state.
 2. Reject missing or ambiguous targets with diagnostics.
-3. Derive one deadline from the selected element's scroll-membership graph. If
-   reveal will cross a capture boundary, admit an ordinal-free
+3. Carry the active leaf deadline from the execution host. If reveal will cross
+   a capture boundary, admit an ordinal-free
    `AdmittedSemanticTarget` that still uniquely selects that exact element.
 4. Reveal nested scroll ancestors outermost-first when viewport movement is
    required, using the initial capture's `HeistId` only to locate the live scroll
@@ -370,7 +416,7 @@ The pipeline is:
    resolution ends inflation without a live handoff.
 6. Acquire and stabilize fresh live geometry under the same deadline.
 7. Execute the accessibility operation or explicit spatial gesture.
-8. Return admitted semantic evidence through `InteractionCoordinator`.
+8. Commit admitted semantic evidence through `Observation.Stream`.
 
 Predicate evaluation uses semantic observations, not live UIKit geometry. Live
 geometry is used for inflation and explicit spatial gesture or viewport commands; it
@@ -416,6 +462,8 @@ The approved long-lived owners are:
   `Observation.Snapshot`, ordered `Observation.History`, and live UIKit boundary
   evidence. Its stream is the sole visible-observation producer and delivery
   owner.
+- `AccessibilityNotificationBus`: one bounded transient ingress log. The
+  observation cycle is its sole claim and acknowledgement owner.
 - `TheMuscle`: auth, admission, and session state inside the app.
 - `TransportControlPlane`: sole off-main consumer of
   `ServerTransport.transportEvents`, per-client request admission, and
@@ -425,9 +473,18 @@ The approved long-lived owners are:
 - `TheHandoff`: external connection phase and discovery state outside the app.
 - `PendingRequestRegistry`: typed `RequestID` to continuation correlation,
   removed on resolve, timeout, or cancellation.
-- `HeistResult`: immutable heist execution evidence. Report facts are
-  derived from it, not stored beside it.
+- `HeistResult`: immutable heist execution evidence. Total report projection
+  derives report facts from it, including explicit expectation uncertainty
+  when observation coverage is incomplete; report interpretation never
+  discards an admitted terminal result.
 - Artifact stores: `.heist` package files and screenshot bytes on disk.
+
+The Vault's current semantic truth has one phase: vacant with an optional
+replacement requirement, committed with snapshot/tree/continuity/signal, or
+invalidated with the same readable committed truth. Only committed truth is
+admissible to waiters. History, notification cursors, and reader protection
+remain independent because they intentionally survive current-truth
+replacement.
 
 `LiveCapture` is an ephemeral index. Its per-path maps exist to disambiguate a
 single capture and must not become stable identity. Transport registries and
@@ -461,12 +518,14 @@ pipelines are explicit:
 | Result aggregate admission | `HeistResult.admitStructure` in `HeistResult.swift` | Package initialization and decoding; one ordered-sequence reducer admits regular roots and every recursively visited child sequence, while the root adapter alone admits auxiliary failure-capture evidence |
 | Result private storage codec | `HeistExecutionStepNode.swift` and `HeistExecutionStepNode+Codable.swift` | External result JSON projection only |
 | Action semantic and wire payload | `ActionResult.Payload` with `ActionResult` custom `Codable` | Runtime construction and wire encoding/decoding |
+| Heist result transport | `ServerMessage.heistResult(HeistResult)` | Fence and in-app clients consume the aggregate directly; production failures use `ServerMessage.error` |
 | Result interpretation | `HeistReport.project(result:)` in `HeistResult+Report.swift` | JSON, compact, human, JUnit, doctor, and metric renderers |
 | Result recording decision | `HeistResult.Outcome` and `HeistResultRecordingMode` | `HeistResultRecording` filesystem boundary |
 | Offline validation algebra | `HeistValidation.Result<Value>` composed by `HeistValidation.Report` | Public JSON and text projections |
 | Complete-heist progress | One `HeistExecution` machine; its answer is `State` | MainActor host advances it with admitted inputs |
 | Accessibility truth and history | TheVault: current `Snapshot` + `Observation.History` | Host admission and machine consumption |
-| Host deadlines | Active-leaf and whole-heist absolute policies with one scheduled task | Cancels the in-flight effect, admits terminal evidence, and times out only an incomplete final `State` |
+| Observation pulse and notification admission | `Observation.Stream` cycle driven by TheTripwire's single `CADisplayLink` | Demand resumes or pauses the link; each cycle claims ingress, captures, commits, publishes, evaluates, then acknowledges |
+| Host deadlines | One active-leaf absolute deadline spanning baseline acquisition through trailing `noChange`, capped by the whole-heist deadline, with one scheduled task | Cancels the in-flight effect, admits terminal evidence, and times out only an incomplete final `State` |
 | Testing request construction | `ButtonHeistTesting.swift` | Synchronous helpers and joined sessions live in their named extension files |
 | Fence action JSON | `FenceJSON+Action.swift` and `FenceJSON+HeistExecution.swift`, one result family each | Fence response formatting |
 | Exported tuple contract enforcement | The single `buttonheist.exported_tuple_return` Bumper rule | One effective-access projection covers functions, properties, subscripts, protocol requirements, and inherited public or package visibility; private and local tuple scratch values never enter the exported-contract projection |
@@ -482,11 +541,11 @@ metric boundaries render that report instead of interpreting `HeistResult`
 independently. There is no competing execution report or Fence-owned report
 projection.
 
-The report also owns accessibility-change classification. Its
-`AccessibilityChange` is explicitly `notApplicable`, `incomplete`, `unchanged`,
-or `changed(evidence)`: missing observation evidence is never asked to mean
-several of those states. Fence renderers derive `netDelta` only from
-`changed(evidence)` and cannot independently reclassify execution evidence.
+Each action or wait result owns its bounded `Observation.Evidence`. Report
+projection preserves that evidence on the corresponding semantic node and does
+not invent a heist-wide interval across step boundaries. Action renderers may
+derive a delta from the one action interval they own; heist-level renderers do
+not maintain a parallel accessibility-change classification.
 
 `HeistExecutionStepResult` owns a typed execution path, duration, and one private
 `HeistExecutionStepNode` used only for storage and wire projection. Package
@@ -513,10 +572,18 @@ wire's `method` and optional `payload`, then reconstructs it while
 rejecting mismatched method/payload pairs. There is no wire-payload model or
 semantic payload wrapper. `ActionResult.success` and `ActionResult.failure`
 accept that payload plus observation, subject, and timing values. Activation
-trace evidence enters only through the fixed-method activation factories.
+observation evidence enters only through the fixed-method activation factories.
 `HeistActionEvidence.completed` carries exactly that one `ActionResult` plus
-optional `ExpectationResult` predicate truth. Wait evidence is formed directly
-when the machine completes the wait step.
+optional `HeistExpectationEvidence`. That evidence stores the authored
+predicate, its typed execution bindings, `Observation.Evidence`, the terminal
+cause, and timing, but no verdict or independently supplied executable
+predicate. Wait steps own the same evidence shape.
+`HeistReport.project(result:)` resolves the authored predicate through those
+bindings, replays the derived predicate over the retained evidence, and attaches
+the authored predicate to the derived `ExpectationResult`; invalid bindings are
+rejected during decoding and incomplete evidence becomes the report node's
+typed `Observation.Gap`. Live and decoded results therefore derive identical
+predicate truth instead of trusting a stored boolean or copied expectation.
 `ActionResultSuccessEvidence` and
 `ActionResultFailureEvidence` are output projections backed by one common body,
 not public assembly inputs. Each result supplies exactly one observation case:
@@ -537,28 +604,25 @@ Offline validation follows the same shape. Package-only
 facts once. Public JSON and text are projections of that report, not public
 copies of the internal validation algebra.
 
-`AccessibilityNotificationBus` owns one retained ingress log. Each action opens
-one cursor-bounded attribution window. A committed action observation checkpoints
-that window once as one `AccessibilityNotificationBatch`; cancellation releases
-the window without manufacturing observation evidence. Checkpointing is
-non-destructive: the batch selects every retained event after the opening
-cursor, the exact through-cursor observed under the same lock, and an explicit
-`AccessibilityNotificationGap` when bounded history overflowed. Its
-through-cursor is the observation notification cursor; its scoped-screen
-watermark is the only committed invalidation watermark. There is no independent
-transition cursor, destructive clear, or second notification read.
+`AccessibilityNotificationBus` owns one bounded ingress log, while
+`Observation.Stream` owns admission. At the start of each pulse cycle the stream
+freezes one batch, captures and parses the interface against that exact batch,
+commits both through the Vault, publishes the resulting events, and only then
+acknowledges the batch. A failed or cancelled cycle leaves the claim pending and
+does not manufacture semantic evidence. Heist and action evidence select from
+the canonical `Observation.History` established by machine boundaries; they do
+not own notification ingress or a parallel temporal record.
 
 `AccessibilityNotificationObserver` owns callback registration generations.
 Each installed callback captures its generation, and publication accepts only
 the active installing or installed generation. A callback retained past
 uninstall or replacement is rejected before it can advance notification
-sequence or publish into a later action window.
+sequence or enter a later observation cycle.
 
 `Observation.Stream` owns notification invalidation. It records the
-scoped `screenChanged` sequence covered by the committed batch. A scoped
-`screenChanged` recorded after that capture remains beyond the committed
-through-cursor and invalidates the fulfilled observation before it can be
-served as current.
+scoped `screenChanged` sequence covered by the committed claim. A later scoped
+`screenChanged` invalidates the fulfilled observation before it can be served
+as current.
 
 TheVault owns first-responder capture. A parser read converts responder state
 to a capture-local `HeistId`, and `LiveCapture.Snapshot` retains that value with
@@ -676,15 +740,22 @@ flowchart TD
     FenceCommand --> HandoffSocket["Handoff socket<br/>client version == app version"]
     HandoffSocket --> Executor["TheBrains-owned InteractionRequestExecutor<br/>one UI FIFO"]
 
-    Executor --> Machine["one complete HeistExecution machine<br/>private progress"]
-    Input["admitted Snapshot or notification"] --> Vault["TheVault<br/>current truth + History"]
+    Executor --> Machine["one complete HeistExecution machine<br/>ordered event reduction"]
+    Host["MainActor host<br/>one absolute leaf deadline"] --> Demand["baseline + visible/discovery observation demand"]
+    Link["TheTripwire CADisplayLink"] --> Cycle["Observation.Stream cycle"]
+    Demand --> Cycle
+    Cycle --> Claim["claim notification ingress"]
+    Claim --> Capture["capture + parse Snapshot"]
+    Capture --> Reduce["TheVault reduction<br/>Snapshot + notification payloads<br/>to ordered Observation.Event values"]
+    Reduce --> Vault["TheVault<br/>commit current Snapshot + one History"]
     Vault --> Machine
-    Machine --> Perform["pending(.perform(requests))"]
+    Machine --> Perform["pending(.perform(request))"]
     Machine --> Wait["pending(.wait)"]
     Machine --> Complete["complete(Completion)"]
-    Perform --> Host["MainActor host"]
+    Perform --> Host
     Wait --> Host
-    Host --> Input
+    Host --> LeafWork["baseline / reveal / dispatch<br/>predicate evaluation / trailing noChange"]
+    LeafWork --> Machine
     Complete --> Result["HeistResult<br/>step-local Observation.Evidence"]
     Result --> Project["canonical report projection"]
     Project --> Response["JSON / compact / human / JUnit"]
@@ -698,58 +769,52 @@ positions are established privately by machine transitions and never enter an
 event, snapshot, command, or boundary API.
 
 A scoped screen notification or snapshot-inferred replacement records a
-boundary in the ordered event stream as three events:
+boundary in `Observation.History` as three ordered events:
 
 1. `elementsChanged` with every node in the old delivered tree disappeared.
 2. `screenChanged` as the boundary marker.
 3. `elementsChanged` with every node in the new delivered tree appeared.
 
 This makes a screen change an element lifecycle change without pretending that
-nodes were updated across the boundary. An `updated` fact can only use snapshots
-with no intervening `screenChanged` event. A target with identical semantics on
-both screens still disappears and appears because the ordered boundary says it
-was replaced.
+nodes were updated across the boundary. An `updated` event can only use
+snapshots with no intervening `screenChanged` event. A target with identical
+semantics on both screens still disappears and appears because the ordered
+boundary says it was replaced.
 
-Boundary admission is scope-aware. A fresh screen-change notification is
-authoritative. Snapshot fallback compares a candidate with the previous capture
-in the same scope while that scope is current, and visible and discovery commits
-share the same ordered Log. This keeps either scope from hiding or duplicating a
-real boundary. Each retained event links only to the previous event in its own
-scope.
+Visible and discovery captures both reduce against canonical Vault truth and
+append to the same ordered `Observation.History`; scope affects observation
+fulfilment, not event linkage. A fresh screen-change notification is
+authoritative, while snapshot comparison may infer replacement without one.
+Events carry no scope-local predecessor or parallel temporal record.
 
-Ordered `ChangeFact` values derive from Vault events plus scoped notification
-evidence. The evaluator reads neither warning text nor an endpoint delta.
+Action and wait predicates consume `Observation.Event` values directly in
+history order. The evaluator reads neither warning text nor an endpoint delta.
 
 The public predicate layer is a concrete root with concrete declaration types:
 
 - Root predicates: `.exists(target)`, `.missing(target)`,
-  `.changed(...)`, and `.announcement(...)`.
-- Screen declaration: `.screenChanged([.exists(target), .missing(target)])`.
+  `.notification(...)`, `.screenChanged(...)`, and `.elementsChanged(...)`.
+- Screen declaration: `.screenChanged` with an optional screen-name match.
 - Elements declaration: `.elementsChanged([.exists(target),
   .missing(target), .appeared(target), .disappeared(target),
   .updated(target, change)])`.
 
 `exists` and `missing` always evaluate against the current delivered tree,
 including elements, containers, and descendant-scoped targets. `appeared`,
-`disappeared`, and `updated` consume ordered element facts. Separating
+`disappeared`, and `updated` consume ordered events. Separating
 `ScreenPredicate` from `ElementAssertion` makes invalid combinations such as an
 `updated` screen assertion unconstructible: a screen predicate matches the
-screen it arrived at and names no elements at all.
-
-The wait reducer also records a bounded set of semantic candidates from unmet
-observations it has already evaluated. On timeout, the projector renders exact
-predicate mismatches into the existing failure message and `HeistReport`.
-Diagnostics do not schedule another capture, reveal, discovery,
-poll, or predicate evaluation, and they do not add a public option, token,
-result shape, or wire field.
+screen it arrived at and names no elements at all. `noChange` has no payload and
+matches only after a committed snapshot proves no semantic or geometry change.
 
 ## Core Flows
 
 ### Read
 
 1. The client sends `get_interface`.
-2. TheInsideJob captures once, commits the admitted graph and ordered events,
-   and returns the resulting accessibility capture.
+2. TheInsideJob requests a visible observation publication; the pulse cycle
+   captures once, commits the admitted graph and ordered events, and returns the
+   resulting accessibility capture.
 3. TheFence formats the capture for CLI/MCP using the requested detail level.
 
 ### Act
@@ -776,15 +841,19 @@ expectations retain their private comparison progress while child steps run.
 The machine may answer `.pending(.perform(...))` when the wait requires target
 reveal or canonical viewport discovery. Discovery searches both directional
 rays and exits `.origin`; the host restores the saved origin before returning
-the request outcome. The host's two deadline policies remain outside the
-machine. One scheduled task targets the earlier absolute deadline, cancels the
-in-flight effect, and admits terminal evidence before an incomplete final state
-becomes a timeout.
+the request outcome. Every movement command requests and consumes a
+discovery-scope observation publication before another movement can begin. The
+host's deadlines remain outside the machine. One absolute leaf deadline covers
+baseline acquisition, reveal or dispatch, ordered predicate evaluation, and
+trailing `noChange`; the whole-heist deadline may end it earlier. One scheduled
+task targets the earlier absolute deadline, cancels the in-flight effect, and
+admits terminal evidence before an incomplete final state becomes a timeout.
+There is no additional readiness allowance.
 
 `.exists(target)` and `.missing(target)` resolve any element, container, or
 descendant-scoped `AccessibilityTarget` against current state.
 `.elementsChanged(...)` and `.screenChanged(...)` require their declared
-fact evidence; a lifecycle assertion never passes from final state alone.
+event evidence; a lifecycle assertion never passes from final state alone.
 
 ### Replay
 

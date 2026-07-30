@@ -16,7 +16,7 @@ final class ActionResultObservationWireTests: XCTestCase {
         let evidence = makeTestObservationEvidence(
             current: snapshot,
             events: [.elementsChanged(snapshot)],
-            completeness: .incomplete
+            coverage: .incomplete(.historyUnavailable)
         )
         let result = ActionResult.success(
             payload: .activate,
@@ -28,7 +28,11 @@ final class ActionResultObservationWireTests: XCTestCase {
         let encodedEvidence = try observation.object("observationEvidence")
 
         XCTAssertEqual(try observation.string("kind"), "observed")
-        XCTAssertEqual(try encodedEvidence.string("completeness"), "incomplete")
+        _ = try encodedEvidence
+            .object("coverage")
+            .object("incomplete")
+            .object("_0")
+            .object("historyUnavailable")
         _ = try encodedEvidence.object("current")
         _ = try encodedEvidence.array("events")
     }
@@ -52,7 +56,7 @@ final class ActionResultObservationWireTests: XCTestCase {
         let evidence = makeTestObservationEvidence(
             current: current,
             events: [.elementsChanged(current)],
-            completeness: .incomplete
+            coverage: .incomplete(.historyUnavailable)
         )
         let result = ActionResult.success(
             payload: .activate,
