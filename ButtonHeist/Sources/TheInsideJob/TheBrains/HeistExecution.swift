@@ -99,17 +99,10 @@ extension HeistExecution {
 
 extension HeistExecution {
     internal struct Scope: Sendable {
-        private enum Source: Sendable {
-            case plan(
-                root: HeistPlan,
-                current: HeistPlan,
-                definitionPath: [HeistPlanName],
-                invocationStack: Set<HeistInvocationPath>
-            )
-            case directAction
-        }
-
-        private let source: Source
+        internal let rootPlan: HeistPlan
+        internal let plan: HeistPlan
+        internal let definitionPath: [HeistPlanName]
+        internal let invocationStack: Set<HeistInvocationPath>
 
         internal init(
             plan: HeistPlan,
@@ -117,46 +110,10 @@ extension HeistExecution {
             definitionPath: [HeistPlanName] = [],
             invocationStack: Set<HeistInvocationPath> = []
         ) {
-            source = .plan(
-                root: rootPlan ?? plan,
-                current: plan,
-                definitionPath: definitionPath,
-                invocationStack: invocationStack
-            )
-        }
-
-        private init(source: Source) {
-            self.source = source
-        }
-
-        internal static let directAction = Scope(source: .directAction)
-
-        internal var rootPlan: HeistPlan {
-            guard case .plan(let root, _, _, _) = source else {
-                preconditionFailure("A direct action has no plan definition scope")
-            }
-            return root
-        }
-
-        internal var plan: HeistPlan {
-            guard case .plan(_, let current, _, _) = source else {
-                preconditionFailure("A direct action has no current plan")
-            }
-            return current
-        }
-
-        internal var definitionPath: [HeistPlanName] {
-            guard case .plan(_, _, let definitionPath, _) = source else {
-                preconditionFailure("A direct action has no definition path")
-            }
-            return definitionPath
-        }
-
-        internal var invocationStack: Set<HeistInvocationPath> {
-            guard case .plan(_, _, _, let invocationStack) = source else {
-                preconditionFailure("A direct action has no invocation stack")
-            }
-            return invocationStack
+            self.rootPlan = rootPlan ?? plan
+            self.plan = plan
+            self.definitionPath = definitionPath
+            self.invocationStack = invocationStack
         }
     }
 

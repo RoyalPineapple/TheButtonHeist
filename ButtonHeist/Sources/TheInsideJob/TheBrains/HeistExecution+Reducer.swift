@@ -47,26 +47,6 @@ extension HeistExecution {
             ]
         }
 
-        internal init(
-            action: HeistActionCommand,
-            failureCaptureMode: ScreenCaptureMode? = nil
-        ) throws {
-            self.failureCaptureMode = failureCaptureMode
-            rootEnvironment = .empty
-            continuations = [
-                .sequence(SequenceContinuation(
-                    steps: [.action(ActionStep(command: action))],
-                    context: StepContext(
-                        path: .body,
-                        environment: rootEnvironment,
-                        scope: .directAction
-                    ),
-                    nextIndex: 0,
-                    children: .empty
-                )),
-            ]
-        }
-
         internal mutating func start() -> State {
             guard case .ready = progress else { return state }
             progress = .running

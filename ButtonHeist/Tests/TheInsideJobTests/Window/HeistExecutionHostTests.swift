@@ -11,7 +11,7 @@ import XCTest
 
 @MainActor
 final class HeistExecutionHostTests: ButtonHeistTestCase {
-    func testActionDispatchPassesActiveLeafDeadlineIntoInflation() async throws {
+    func testDirectActionUsesCanonicalPlanAndPassesActiveLeafDeadline() async throws {
         let source = HostVisibleObservationSource(hostObservation(label: "Home"))
         let brains = TheBrains(
             tripwire: TheTripwire(),
@@ -26,8 +26,15 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
             return nil
         }
 
-        _ = try await HeistExecution.Host(brains: brains).execute(
-            HeistActionCommand.activate(.label("Missing")),
+        let action = HeistActionCommand.activate(.label("Missing"))
+        let direct = try await HeistExecution.Host(brains: brains).execute(
+            action,
+            timeout: try .seconds(5)
+        )
+        let planned = try await HeistExecution.Host(brains: brains).execute(
+            HeistPlan(body: [
+                .action(ActionStep(command: action)),
+            ]),
             timeout: try .seconds(5)
         )
 
@@ -35,6 +42,17 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
         XCTAssertEqual(
             deadline.timeoutSeconds,
             SemanticObservationTiming.defaultTimeout / .seconds(1)
+        )
+        let directStep = try XCTUnwrap(direct.steps.first)
+        let plannedStep = try XCTUnwrap(planned.steps.first)
+
+        XCTAssertEqual(directStep.path, plannedStep.path)
+        XCTAssertEqual(directStep.status, plannedStep.status)
+        XCTAssertEqual(directStep.actionCommand, plannedStep.actionCommand)
+        XCTAssertEqual(directStep.failure, plannedStep.failure)
+        XCTAssertEqual(
+            directStep.reportActionResult?.observationEvidence,
+            plannedStep.reportActionResult?.observationEvidence
         )
     }
 
@@ -154,43 +172,106 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
         XCTAssertEqual(evaluation.met, true)
     }
 
-    func testEventPublishedDuringInitialCaptureIsReplayedExactlyOnce() async throws {
-        let observation = hostObservation(label: "Home")
+    func testColdStartExcludesInitialCapturePublicationsAndDeliversPostWindowEventOnce() async throws {
+        let actionView = ActionActivationOverrideView()
+        let observation = InterfaceObservation.makeForTests([
+            .init(
+                label: "Trigger",
+                traits: .button,
+                object: actionView
+            ),
+        ])
         let source = HostVisibleObservationSource(observation)
+        let tripwire = TheTripwire(pulseSource: .injected)
         let brains = TheBrains(
-            tripwire: TheTripwire(),
+            tripwire: tripwire,
             failureEvidencePolicy: .hierarchy,
-            visibleObservationSource: source.capture
+            visibleObservationSource: source.capture,
+            notificationIngress: .injected
         )
         await brains.startTestObservation()
         defer { brains.stopTestObservation() }
         let stream = brains.vault.semanticObservationStream
-        _ = await stream.commitVisibleObservationForTesting(observation)
+        stream.observationWaiterDidRegister = {
+            tripwire.onTick()
+        }
         let gate = HostCaptureGate()
         installFirstReadingGate(gate, on: stream)
-        defer { gate.release() }
+        let (activations, activationContinuation) = AsyncStream<Void>.makeStream(
+            bufferingPolicy: .bufferingNewest(1)
+        )
+        defer {
+            activationContinuation.finish()
+            stream.observationWaiterDidRegister = {}
+            gate.release()
+        }
+        actionView.onActivation = {
+            brains.vault.accessibilityNotifications.recordForTesting(
+                code: 1008,
+                notificationData: CapturedAccessibilityNotificationPayload(
+                    "After window" as NSString
+                ),
+                associatedElement: .none
+            )
+            activationContinuation.yield()
+            activationContinuation.finish()
+        }
 
         let execution = Task { @MainActor in
             try await HeistExecution.Host(brains: brains).execute(
-                try notificationWaitPlan("Saved"),
+                HeistPlan(body: [
+                    .action(ActionStep(
+                        command: .activate(.label("Trigger")),
+                        expectationPolicy: .expect(ActionExpectation(
+                            predicate: .notification("After window"),
+                            timeout: 1
+                        ))
+                    )),
+                ]),
                 timeout: try .seconds(5)
             )
         }
         await gate.waitUntilEntered()
-        brains.vault.accessibilityNotifications.recordForTesting(
-            code: 1008,
-            notificationData: CapturedAccessibilityNotificationPayload("Saved" as NSString),
-            associatedElement: .none
+        let historyBeforePublication = stream.historyEndIndex()
+        _ = await stream.commitVisibleObservationForTesting(
+            hostObservation(label: "Baseline publication"),
+            notificationBatch: AccessibilityNotificationBatch(
+                events: [],
+                through: .origin,
+                scopedScreenChangedThrough: 0,
+                gap: nil
+            )
         )
+        let historyAfterPublication = stream.historyEndIndex()
         gate.release()
+
+        for await _ in activations { break }
+        let postWindowHistoryIndex = stream.historyEndIndex()
+        _ = await stream.waitForObservation(
+            after: postWindowHistoryIndex,
+            scope: .visible,
+            boundary: .externalDeadline(SemanticObservationDeadline(
+                start: RuntimeElapsed.now,
+                timeout: .seconds(1)
+            ))
+        )
+        tripwire.onTick()
 
         let completion = try await execution.value
         let step = try XCTUnwrap(completion.steps.first)
-        let evidence = try XCTUnwrap(step.waitObservation)
+        let evidence = try XCTUnwrap(
+            step.actionEvidence?.expectationEvidence?.observation
+        )
 
+        XCTAssertGreaterThan(historyAfterPublication, historyBeforePublication)
         XCTAssertEqual(step.status, .passed)
         XCTAssertEqual(try step.replayExpectation()?.met, true)
-        XCTAssertEqual(evidence.notificationTexts, ["Saved"])
+        XCTAssertEqual(
+            evidence.baseline?.interface.projectedElements.first?
+                .semantics.assertable.label,
+            "Trigger"
+        )
+        XCTAssertEqual(evidence.notificationTexts, ["After window"])
         XCTAssertEqual(
             evidence.events.count {
                 guard case .notification = $0 else { return false }

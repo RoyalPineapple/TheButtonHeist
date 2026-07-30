@@ -197,11 +197,12 @@ extension HeistExecution {
             _ action: HeistActionCommand,
             timeout: HeistTimeout
         ) async throws -> Completion {
-            let machine = try Machine(
-                action: action,
-                failureCaptureMode: brains.failureEvidencePolicy.captureMode
+            try await execute(
+                HeistPlan(body: [
+                    .action(ActionStep(command: action)),
+                ]),
+                timeout: timeout
             )
-            return try await execute(machine, timeout: timeout)
         }
 
         private func execute(
@@ -513,8 +514,6 @@ extension HeistExecution {
 
             let stream = brains.vault.semanticObservationStream
             let scope = stream.subscribe(scope: request.scope)
-            let notificationWindow = brains.vault.accessibilityNotifications
-                .beginActionWindow()
             let leafDeadline = SemanticObservationDeadline(
                 start: RuntimeElapsed.now,
                 timeout: request.timeout
@@ -523,51 +522,21 @@ extension HeistExecution {
                   case .running(let current, _, _, _) = armedSession.interaction,
                   current == interactionID else {
                 scope.cancel()
-                notificationWindow.cancel()
                 return
             }
             phase = .running(armedSession)
 
-            let openingBoundary = stream.observationBoundary(
-                scope: request.scope
-            )
-            guard case .running(var session) = phase,
-                  case .running(let current, _, _, _) = session.interaction,
-                  current == interactionID else {
-                scope.cancel()
-                notificationWindow.cancel()
-                return
-            }
-            session.activeObservation = ActiveObservation(
-                id: id,
-                boundary: openingBoundary,
-                scopeSubscription: scope,
-                notificationWindow: notificationWindow,
-                deadline: leafDeadline,
-                lastTreeChangeAt: nil,
-                viewportStatus: .available
-            )
-            session.deadlines.cancelTimer()
-            session.deadlines = .unscheduled(.leaf(
-                whole: session.deadlines.targets.whole,
-                leaf: leafDeadline
-            ))
-            phase = .running(session)
-            armDeadline()
-
-            let initialCurrent: TheVault.State.Current?
             let viewportOutcome: Navigation.ViewportExit.Outcome?
             switch request.scope {
             case .visible:
-                initialCurrent = await brains.captureHeistCurrentState(
+                let current = await brains.captureHeistCurrentState(
                     scope: .visible
                 )
-                viewportOutcome = initialCurrent == nil ? nil : .retained
+                viewportOutcome = current == nil ? nil : .retained
             case .discovery:
                 let exploration = await brains.navigation.fullGraph(
-                    deadline: activeLeafDeadline(id: id)
+                    deadline: leafDeadline
                 )
-                initialCurrent = exploration?.current
                 viewportOutcome = exploration?.viewportExit
             }
             let capturedBoundary = stream.observationBoundary(
@@ -577,34 +546,37 @@ extension HeistExecution {
             guard case .running(var capturedSession) = phase,
                   case .running(let capturedInteractionID, _, _, _) = capturedSession.interaction,
                   capturedInteractionID == interactionID,
-                  var observation = capturedSession.activeObservation,
-                  observation.id == id,
-                  let bufferedEvents = capturedSession.bufferedObservationEvents else {
+                  capturedSession.bufferedObservationEvents != nil else {
                 scope.cancel()
-                notificationWindow.cancel()
                 return
             }
-            let retainsOpeningBoundary = openingBoundary.baseline != nil
-            observation.boundary = retainsOpeningBoundary
-                ? openingBoundary
-                : capturedBoundary
-            observation.lastTreeChangeAt = nil
-            observation.viewportStatus.record(viewportOutcome)
-            capturedSession.activeObservation = observation
+            let notificationWindow = brains.vault.accessibilityNotifications
+                .beginActionWindow()
+            var viewportStatus = ViewportStatus.available
+            viewportStatus.record(viewportOutcome)
+            capturedSession.activeObservation = ActiveObservation(
+                id: id,
+                boundary: capturedBoundary,
+                scopeSubscription: scope,
+                notificationWindow: notificationWindow,
+                deadline: leafDeadline,
+                lastTreeChangeAt: nil,
+                viewportStatus: viewportStatus
+            )
             capturedSession.bufferedObservationEvents = nil
+            capturedSession.deadlines.cancelTimer()
+            capturedSession.deadlines = .unscheduled(.leaf(
+                whole: capturedSession.deadlines.targets.whole,
+                leaf: leafDeadline
+            ))
             phase = .running(capturedSession)
             complete(
                 interactionID,
                 input: .observationBegan(
                     id,
-                    baseline: observation.boundary.baseline
+                    baseline: capturedBoundary.baseline
                 )
             )
-            if retainsOpeningBoundary {
-                for event in bufferedEvents {
-                    receive(event)
-                }
-            }
         }
 
         private func finishObservation(
