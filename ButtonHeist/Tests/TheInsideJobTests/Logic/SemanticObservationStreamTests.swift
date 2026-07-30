@@ -7,7 +7,7 @@ import XCTest
 @testable import TheScore
 
 @MainActor
-final class SemanticObservationLifecycleTests: XCTestCase {
+final class SemanticObservationStreamTests: XCTestCase {
     private var vault: TheVault!
 
     override func setUp() async throws {
@@ -19,32 +19,18 @@ final class SemanticObservationLifecycleTests: XCTestCase {
         vault = nil
     }
 
-    func testLifecycleOwnsOnlyWhetherObservationIsRunning() async {
-        var state = SemanticObservationLifecycle.stopped
-
-        XCTAssertTrue(state.start())
-        XCTAssertTrue(state.isRunning)
-        XCTAssertFalse(state.start())
-        XCTAssertTrue(state.stop())
-        XCTAssertFalse(state.isRunning)
-        XCTAssertFalse(state.stop())
-    }
-
-    func testStreamRunningTruthIsLifecycle() async {
+    func testStreamRunningTruthComesFromCycleState() {
         let stream = vault.semanticObservationStream
         XCTAssertFalse(stream.isActive)
-        XCTAssertFalse(stream.lifecycle.isRunning)
 
         stream.start()
         XCTAssertTrue(stream.isActive)
-        XCTAssertTrue(stream.lifecycle.isRunning)
 
         stream.stop()
         XCTAssertFalse(stream.isActive)
-        XCTAssertFalse(stream.lifecycle.isRunning)
     }
 
-    func testIdleStreamDoesNotReadAccessibility() async {
+    func testIdleStreamDoesNotReadAccessibility() {
         let source = VisibleObservationSourceFixture()
         source.observation = .empty
         let tripwire = TheTripwire()
@@ -100,22 +86,6 @@ final class SemanticObservationLifecycleTests: XCTestCase {
         XCTAssertEqual(source.captureCount, 1)
     }
 
-    func testDiscoveryDemandCapturesNextPulseAfterCycleCompletes() throws {
-        var cycle = SemanticObservationCycle()
-        _ = cycle.demand(scope: .discovery, pulseDemand: .ambient)
-
-        XCTAssertEqual(
-            try XCTUnwrap(cycle.receive(pulse(tick: 1, timestamp: 10))).pulse.tick,
-            1
-        )
-        XCTAssertNil(cycle.receive(pulse(tick: 2, timestamp: 10.5)))
-        cycle.complete()
-        XCTAssertEqual(
-            try XCTUnwrap(cycle.receive(pulse(tick: 3, timestamp: 11))).pulse.tick,
-            3
-        )
-    }
-
     func testSubscriptionPublishesVaultHistoryInAuthoredOrder() async throws {
         let stream = vault.semanticObservationStream
         let before = await stream.commitVisibleObservationForTesting(.empty)
@@ -151,19 +121,6 @@ final class SemanticObservationLifecycleTests: XCTestCase {
         XCTAssertEqual(received, expected)
         XCTAssertEqual(currentAfterCancellation, afterCancellation.current)
         XCTAssertEqual(historyAfterCancellation, expected + afterCancellation.events)
-    }
-
-    private func pulse(
-        tick: UInt64,
-        timestamp: CFAbsoluteTime = 0
-    ) -> TheTripwire.PulseReading {
-        TheTripwire.PulseReading(
-            tick: tick,
-            timestamp: timestamp,
-            topmostVC: nil,
-            tripwireSignal: .empty,
-            windowCount: 0
-        )
     }
 }
 #endif // DEBUG

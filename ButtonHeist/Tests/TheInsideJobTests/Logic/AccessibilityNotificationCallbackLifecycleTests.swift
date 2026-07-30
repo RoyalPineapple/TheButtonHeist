@@ -115,7 +115,7 @@ final class AccessibilityNotificationCallbackLifecycleTests: XCTestCase {
         XCTAssertEqual(events.map(\.provenance), [.scoped, .scoped])
     }
 
-    func testAdmissionSealsActionOwnershipBeforeSuspendedClosure() async throws {
+    func testIngressBarrierOrdersNotificationsIndependentOfMainActorWork() async throws {
         let harness = CallbackHarness()
         let observer = makeObserver(harness: harness)
         defer { observer.uninstall() }
@@ -126,27 +126,25 @@ final class AccessibilityNotificationCallbackLifecycleTests: XCTestCase {
         defer { heist.cancel() }
         let action = bus.beginActionWindow()
         callback(1001, nil, nil)
-        let suspension = AdmissionSuspension()
-
-        let admission = Task { @MainActor in
-            await action.admitCausallyCovered { coverage in
-                await suspension.suspendAdmission()
-                return coverage
-            }
+        var unrelatedWorkRan = false
+        let laterMainActorWork = Task { @MainActor in
+            unrelatedWorkRan = true
+            callback(1008, "After barrier" as NSString, nil)
         }
-        await suspension.waitUntilSuspended()
-        callback(1008, "After cutoff" as NSString, nil)
-        await suspension.resumeAdmission()
 
-        let admittedCoverage = await admission.value
+        let admittedCoverage = await action.admitCausallyCovered {
+            Optional($0)
+        }
+        await laterMainActorWork.value
         let coverage = try XCTUnwrap(admittedCoverage)
         XCTAssertEqual(coverage.after, .origin)
         XCTAssertEqual(coverage.through.sequence, 1)
+        XCTAssertTrue(unrelatedWorkRan)
         let events = bus.checkpoint(after: .origin, selection: .all).events
         guard events.count == 2,
               case .action = events[0].owner
         else {
-            return XCTFail("Expected one action event followed by heist ingress")
+            return XCTFail("Expected the pre-barrier notification to belong to the action")
         }
         XCTAssertEqual(events[1].owner, .heist(heist.cursor))
     }

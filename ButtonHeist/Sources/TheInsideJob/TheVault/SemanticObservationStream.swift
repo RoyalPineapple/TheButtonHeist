@@ -24,60 +24,6 @@ enum AccessibilityNotificationIngress {
 extension Observation {
 @MainActor
 internal final class Stream {
-    struct CycleExecutionIdentity: Equatable {
-        fileprivate let generation: UInt64
-    }
-
-    struct CycleExecutionOwnership<Handle> {
-        private enum Phase {
-            case idle(lastGeneration: UInt64)
-            case active(identity: CycleExecutionIdentity, handle: Handle)
-        }
-
-        private var phase = Phase.idle(lastGeneration: 0)
-
-        mutating func begin(
-            execution: (CycleExecutionIdentity) -> Handle
-        ) -> CycleExecutionIdentity {
-            guard case .idle(let lastGeneration) = phase else {
-                preconditionFailure("A semantic observation cycle is already active")
-            }
-            let (generation, overflow) = lastGeneration.addingReportingOverflow(1)
-            precondition(!overflow, "Semantic observation cycle generation overflow")
-            let identity = CycleExecutionIdentity(generation: generation)
-            phase = .active(
-                identity: identity,
-                handle: execution(identity)
-            )
-            return identity
-        }
-
-        mutating func invalidate() -> Handle? {
-            guard case .active(let identity, let handle) = phase else {
-                return nil
-            }
-            phase = .idle(lastGeneration: identity.generation)
-            return handle
-        }
-
-        mutating func admitCompletion(
-            for identity: CycleExecutionIdentity
-        ) -> Handle? {
-            guard case .active(let activeIdentity, let handle) = phase,
-                  activeIdentity == identity
-            else { return nil }
-            phase = .idle(lastGeneration: activeIdentity.generation)
-            return handle
-        }
-
-        func owns(_ identity: CycleExecutionIdentity) -> Bool {
-            guard case .active(let activeIdentity, _) = phase else {
-                return false
-            }
-            return activeIdentity == identity
-        }
-    }
-
     private enum EventReceiver {
         case installing(
             subscriptionID: UInt64,
@@ -101,11 +47,15 @@ internal final class Stream {
         }
     }
 
+    private struct CycleResult {
+        let claim: AccessibilityNotificationCycleClaim
+        let observationCommitted: Bool
+    }
+
     weak var vault: TheVault?
     let tripwire: TheTripwire
     var readTripwireSignal: @MainActor () -> TheTripwire.TripwireSignal
     private var cycle = SemanticObservationCycle()
-    private var cycleExecution = CycleExecutionOwnership<Task<Void, Never>>()
     // MARK: - Observation Bookkeeping
 
     var scopePressure = SemanticObservationScopePressure()
@@ -129,9 +79,8 @@ internal final class Stream {
 
     // MARK: - Subscriber-Facing Observation History
 
-    var lifecycle = SemanticObservationLifecycle.stopped
     internal var isActive: Bool {
-        lifecycle.isRunning
+        cycle.isRunning
     }
 
     internal var observationWaiterCount: Int {
@@ -162,7 +111,7 @@ internal final class Stream {
     }
 
     internal func start() {
-        guard lifecycle.start() else { return }
+        guard cycle.start() else { return }
         state.discardCurrentObservation()
         if let vault {
             notificationIngress.start(deliveringTo: vault.accessibilityNotifications)
@@ -174,11 +123,9 @@ internal final class Stream {
     }
 
     internal func stop() {
-        guard lifecycle.stop() else { return }
+        guard let stop = cycle.stop() else { return }
         tripwire.stopObservingPulses()
-        let task = cycleExecution.invalidate()
-        task?.cancel()
-        cycle.stop()
+        stop.activeTask?.cancel()
         cancelObservationWaiters()
         if let vault {
             notificationIngress.stop(deliveringTo: vault.accessibilityNotifications)
@@ -380,7 +327,7 @@ internal final class Stream {
     }
 
     private func updateCycleDemand() {
-        let scope = lifecycle.isRunning
+        let scope = cycle.isRunning
             ? scopePressure.demandedObservationScope
             : nil
         tripwire.setObservationPulseDemand(
@@ -389,70 +336,55 @@ internal final class Stream {
     }
 
     private func receive(_ pulse: TheTripwire.PulseReading) {
-        if let request = cycle.receive(pulse) {
-            startCycle(request)
-        }
-    }
-
-    private func startCycle(_ request: SemanticObservationCycle.Request) {
-        var nextExecution = cycleExecution
-        _ = nextExecution.begin { [weak self] identity in
+        cycle.receive(pulse) { [weak self] request in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                let committed = await self.performObservationCycle(
-                    executionIdentity: identity,
-                    scope: request.scope,
-                    pulse: request.pulse
-                )
-                self.finishCycle(
-                    executionIdentity: identity,
-                    attemptedScope: request.scope,
-                    observationCommitted: committed
-                )
+                let result = await self.performObservationCycle(request)
+                self.finishCycle(request.identity, result: result)
             }
         }
-        cycleExecution = nextExecution
     }
 
     private func finishCycle(
-        executionIdentity: CycleExecutionIdentity,
-        attemptedScope: SemanticObservationScope,
-        observationCommitted: Bool
+        _ identity: SemanticObservationCycle.Identity,
+        result: CycleResult?
     ) {
-        guard cycleExecution.admitCompletion(for: executionIdentity) != nil else {
+        guard let completedScope = cycle.complete(identity) else {
             return
         }
+        let observationCommitted = result?.observationCommitted == true
+        if observationCommitted, let result {
+            precondition(
+                result.claim.acknowledgeObservationCycle(),
+                "A committed observation must acknowledge its exact notification claim"
+            )
+        }
         completeObservationWaiters(
-            completedScope: attemptedScope,
+            completedScope: completedScope,
             observationCommitted: observationCommitted
         )
-        cycle.complete()
     }
 
     private func performObservationCycle(
-        executionIdentity: CycleExecutionIdentity,
-        scope: SemanticObservationScope,
-        pulse: TheTripwire.PulseReading
-    ) async -> Bool {
-        guard cycleExecution.owns(executionIdentity) else { return false }
+        _ request: SemanticObservationCycle.Request
+    ) async -> CycleResult? {
+        guard cycle.owns(request.identity) else {
+            return nil
+        }
         guard let vault else {
             stop()
-            return false
+            return nil
         }
         let claim = vault.accessibilityNotifications.freezeObservationCycleClaim()
         let committed = await observeSemanticState(
-            scope: scope,
-            pulse: pulse,
+            scope: request.scope,
+            pulse: request.pulse,
             notificationBatch: claim.batch
         )
-        guard committed, cycleExecution.owns(executionIdentity) else {
-            return false
-        }
-        precondition(
-            claim.acknowledgeObservationCycle(),
-            "A committed observation must acknowledge its exact notification claim"
+        return CycleResult(
+            claim: claim,
+            observationCommitted: committed && cycle.owns(request.identity)
         )
-        return true
     }
 
     /// One pulse, one reading, committed either way.
@@ -483,10 +415,6 @@ internal final class Stream {
 
     internal func current() -> TheVault.State.Current? {
         state.current
-    }
-
-    internal func notificationIndex() -> AccessibilityNotificationCursor {
-        state.notificationIndex
     }
 
     internal func historyEndIndex() -> Int {

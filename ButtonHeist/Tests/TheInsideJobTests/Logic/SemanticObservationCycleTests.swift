@@ -7,143 +7,112 @@ import XCTest
 
 @MainActor
 final class SemanticObservationCycleTests: XCTestCase {
-    func testStopInvalidatesPriorCycleExecutionIdentity() {
-        var execution = Observation.Stream.CycleExecutionOwnership<Int>()
-        let staleIdentity = execution.begin { _ in 1 }
-
-        XCTAssertEqual(execution.invalidate(), 1)
-
-        let replacementIdentity = execution.begin { _ in 2 }
-        XCTAssertNotEqual(staleIdentity, replacementIdentity)
-        XCTAssertNil(execution.admitCompletion(for: staleIdentity))
-        XCTAssertEqual(
-            execution.admitCompletion(for: replacementIdentity),
-            2
-        )
-    }
-
-    func testStaleCompletionDoesNotRearmReplacementCycle() throws {
-        var harness = CycleHarness()
-        harness.start()
-
-        let staleIdentity = try XCTUnwrap(harness.receive(pulse(tick: 1)))
-        XCTAssertNil(harness.receive(pulse(tick: 2)))
-        harness.stop()
-
-        harness.start()
-        let replacementIdentity = try XCTUnwrap(harness.receive(pulse(tick: 10)))
-        XCTAssertNil(harness.receive(pulse(tick: 11)))
-
-        XCTAssertFalse(harness.complete(staleIdentity))
-        XCTAssertEqual(harness.claimedTicks, [1, 10])
-        XCTAssertEqual(harness.acknowledgedTicks, [])
-        XCTAssertNil(harness.receive(pulse(tick: 12)))
-
-        XCTAssertTrue(harness.complete(replacementIdentity))
-        XCTAssertEqual(harness.claimedTicks, [1, 10])
-        XCTAssertEqual(harness.acknowledgedTicks, [10])
-
-        XCTAssertFalse(harness.complete(replacementIdentity))
-        XCTAssertEqual(harness.claimedTicks, [1, 10])
-        XCTAssertEqual(harness.acknowledgedTicks, [10])
-
-        XCTAssertNotNil(harness.receive(pulse(tick: 13)))
-        XCTAssertEqual(harness.claimedTicks, [1, 10, 13])
-    }
-
-    func testBusyPulsesCannotStartSecondRequestUntilLaterPulse() throws {
+    func testStartAndStopOwnCompleteLifecycle() {
         var cycle = SemanticObservationCycle()
+
+        XCTAssertFalse(cycle.isRunning)
+        XCTAssertTrue(cycle.start())
+        XCTAssertTrue(cycle.isRunning)
+        XCTAssertFalse(cycle.start())
+        XCTAssertNotNil(cycle.stop())
+        XCTAssertFalse(cycle.isRunning)
+        XCTAssertNil(cycle.stop())
+    }
+
+    func testStopInvalidatesActiveIdentityAndReturnsCancellationEffect() throws {
+        var cycle = SemanticObservationCycle()
+        XCTAssertTrue(cycle.start())
+        _ = cycle.demand(scope: .visible, pulseDemand: .immediate)
+        let identity = try XCTUnwrap(cycle.receive(pulse(tick: 1)) { _ in
+            Task {}
+        })
+
+        let stop = try XCTUnwrap(cycle.stop())
+
+        XCTAssertNotNil(stop.activeTask)
+        XCTAssertNil(cycle.complete(identity))
+        XCTAssertFalse(cycle.owns(identity))
+    }
+
+    func testStaleCompletionCannotAcknowledgeOrRearmReplacementCycle() throws {
+        var cycle = SemanticObservationCycle()
+        XCTAssertTrue(cycle.start())
+        _ = cycle.demand(scope: .visible, pulseDemand: .immediate)
+        let staleIdentity = try XCTUnwrap(cycle.receive(pulse(tick: 1)) { _ in
+            Task {}
+        })
+        let staleStop = try XCTUnwrap(cycle.stop())
+        staleStop.activeTask?.cancel()
+
+        XCTAssertTrue(cycle.start())
+        _ = cycle.demand(scope: .visible, pulseDemand: .immediate)
+        let replacementIdentity = try XCTUnwrap(
+            cycle.receive(pulse(tick: 10)) { _ in Task {} }
+        )
+
+        XCTAssertNotEqual(staleIdentity, replacementIdentity)
+        XCTAssertNil(cycle.complete(staleIdentity))
+        XCTAssertTrue(cycle.owns(replacementIdentity))
+        XCTAssertNil(cycle.receive(pulse(tick: 11)) { _ in Task {} })
+
+        XCTAssertEqual(
+            cycle.complete(replacementIdentity),
+            .visible
+        )
+        XCTAssertFalse(cycle.owns(replacementIdentity))
+        XCTAssertNotNil(cycle.receive(pulse(tick: 12)) { _ in Task {} })
+    }
+
+    func testBusyPulsesAreDroppedAndOnlyLaterPulseStartsWork() throws {
+        var cycle = SemanticObservationCycle()
+        var startedTicks: [UInt64] = []
+        XCTAssertTrue(cycle.start())
         XCTAssertEqual(
             cycle.demand(scope: .visible, pulseDemand: .immediate),
             .immediate
         )
 
-        let first = try XCTUnwrap(cycle.receive(pulse(tick: 1)))
-        XCTAssertEqual(first.pulse.tick, 1)
-        XCTAssertEqual(first.scope, .visible)
-        XCTAssertNil(cycle.receive(pulse(tick: 2)))
-        XCTAssertNil(cycle.receive(pulse(tick: 3)))
+        let firstIdentity = try XCTUnwrap(
+            cycle.receive(pulse(tick: 1)) { request in
+                startedTicks.append(request.pulse.tick)
+                return Task {}
+            }
+        )
+        XCTAssertNil(cycle.receive(pulse(tick: 2)) { _ in Task {} })
+        XCTAssertNil(cycle.receive(pulse(tick: 3)) { _ in Task {} })
+        XCTAssertEqual(startedTicks, [1])
 
-        cycle.complete()
-        cycle.complete()
-
-        let followUp = try XCTUnwrap(cycle.receive(pulse(tick: 4)))
-        XCTAssertEqual(followUp.pulse.tick, 4)
-        XCTAssertEqual(followUp.scope, .visible)
+        XCTAssertNotNil(cycle.complete(firstIdentity))
+        XCTAssertNotNil(cycle.receive(pulse(tick: 4)) { request in
+            startedTicks.append(request.pulse.tick)
+            return Task {}
+        })
+        XCTAssertEqual(startedTicks, [1, 4])
     }
 
-    func testCompletionBecomesDormantWhenDemandEnds() throws {
+    func testCompletionRearmsOnlyWhenDemandRemains() throws {
         var cycle = SemanticObservationCycle()
+        XCTAssertTrue(cycle.start())
         _ = cycle.demand(scope: .visible, pulseDemand: .immediate)
+        let identity = try XCTUnwrap(
+            cycle.receive(pulse(tick: 1)) { _ in Task {} }
+        )
+
+        XCTAssertNil(cycle.demand(scope: nil, pulseDemand: .immediate))
+        XCTAssertNotNil(cycle.complete(identity))
+        XCTAssertNil(cycle.receive(pulse(tick: 2)) { _ in Task {} })
 
         XCTAssertEqual(
-            try XCTUnwrap(cycle.receive(pulse(tick: 1))).pulse.tick,
-            1
+            cycle.demand(scope: .discovery, pulseDemand: .ambient),
+            .ambient
         )
-        XCTAssertNil(cycle.demand(scope: nil, pulseDemand: .immediate))
-        XCTAssertNil(cycle.receive(pulse(tick: 2)))
-
-        cycle.complete()
-        XCTAssertNil(cycle.receive(pulse(tick: 3)))
-
-        _ = cycle.demand(scope: .discovery, pulseDemand: .ambient)
-        let followUp = try XCTUnwrap(cycle.receive(pulse(tick: 4)))
-        XCTAssertEqual(followUp.pulse.tick, 4)
-        XCTAssertEqual(followUp.scope, .discovery)
-    }
-
-    func testZeroDemandIsInert() {
-        var cycle = SemanticObservationCycle()
-
-        XCTAssertNil(cycle.demand(scope: nil, pulseDemand: .immediate))
-        XCTAssertNil(cycle.receive(pulse(tick: 1)))
-        cycle.complete()
-    }
-
-    private struct CycleHarness {
-        private struct Claim {
-            let tick: UInt64
-        }
-
-        private var cycle = SemanticObservationCycle()
-        private var execution = Observation.Stream.CycleExecutionOwnership<Claim>()
-        private(set) var claimedTicks: [UInt64] = []
-        private(set) var acknowledgedTicks: [UInt64] = []
-
-        mutating func start() {
-            _ = cycle.demand(scope: .visible, pulseDemand: .immediate)
-        }
-
-        mutating func stop() {
-            _ = execution.invalidate()
-            cycle.stop()
-        }
-
-        mutating func receive(
-            _ pulse: TheTripwire.PulseReading
-        ) -> Observation.Stream.CycleExecutionIdentity? {
-            guard let request = cycle.receive(pulse) else { return nil }
-            return begin(request)
-        }
-
-        mutating func complete(
-            _ identity: Observation.Stream.CycleExecutionIdentity
-        ) -> Bool {
-            guard let claim = execution.admitCompletion(for: identity) else {
-                return false
+        let followUpIdentity = try XCTUnwrap(
+            cycle.receive(pulse(tick: 3)) { request in
+                XCTAssertEqual(request.scope, .discovery)
+                return Task {}
             }
-            acknowledgedTicks.append(claim.tick)
-            cycle.complete()
-            return true
-        }
-
-        private mutating func begin(
-            _ request: SemanticObservationCycle.Request
-        ) -> Observation.Stream.CycleExecutionIdentity {
-            let claim = Claim(tick: request.pulse.tick)
-            claimedTicks.append(claim.tick)
-            return execution.begin { _ in claim }
-        }
+        )
+        XCTAssertTrue(cycle.owns(followUpIdentity))
     }
 
     private func pulse(tick: UInt64) -> TheTripwire.PulseReading {
