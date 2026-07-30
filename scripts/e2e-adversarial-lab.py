@@ -102,7 +102,7 @@ class Scenario:
         expectation = ScenarioExpectation(required_string(value, "expectedOutcome"))
         diagnostics = [
             fact
-            for row in evidence
+            for fact in evidence
             if fact.kind is EvidenceKind.DIAGNOSTIC
         ]
         if expectation is ScenarioExpectation.COMMAND_FAILS_WITH_DIAGNOSTIC:
