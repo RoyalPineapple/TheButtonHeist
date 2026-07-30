@@ -13,7 +13,7 @@ extension TheFence {
                 mode: request.mode,
                 timeout: observationTimeout
             )),
-            timeout: timeout
+            timeout: observationTimeout.seconds + config.postActionExpectationTimeoutBuffer
         )
         let options = ScreenshotResponseOptions()
 
