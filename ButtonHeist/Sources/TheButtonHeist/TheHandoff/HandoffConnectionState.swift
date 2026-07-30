@@ -22,160 +22,77 @@ enum HandoffConnectionError: Error, LocalizedError, Equatable {
     case noMatchingDevice(filter: String, available: [String])
     case ambiguousDeviceTarget(filter: String, matches: [String])
 
+    static let recoveryHint = "Is the app running? Check 'buttonheist list_devices' to see available devices."
+
     var errorDescription: String? {
-        if case .serverFailure(let serverError) = self {
+        switch self {
+        case .connectionFailed(let message):
+            return message
+        case .discoveryBacklogOverflow(let capacity):
+            return "Bonjour discovery event backlog exceeded \(capacity) events"
+        case .serverFailure(let serverError):
             return serverError.message.description
+        case .disconnected(let reason):
+            return reason.connectionFailureMessage
+        case .timeout:
+            return "Connection timed out"
+        case .noDeviceFound:
+            return "No device found"
+        case .noMatchingDevice(let filter, let available):
+            return "No device matching '\(filter)' (available: \(available.joined(separator: ", ")))"
+        case .ambiguousDeviceTarget(let filter, let matches):
+            return "Ambiguous device target '\(filter)' (matches: \(matches.joined(separator: ", ")))"
         }
-        return HandoffFailureFormatter.message(for: diagnostic)
     }
 
     var failureCode: String {
-        diagnostic.errorCode
+        failureDetails.errorCode
     }
 
     var phase: FailurePhase {
-        diagnostic.phase
+        failureDetails.phase
     }
 
     var retryable: Bool {
-        diagnostic.retryable
+        failureDetails.retryable
     }
 
     var hint: String? {
-        diagnostic.hint
+        failureDetails.hint
     }
 
-    var diagnostic: HandoffFailureDiagnostic {
+    var failureDetails: FailureDetails {
         switch self {
-        case .connectionFailed(let message):
-            return HandoffFailureDiagnostic(
-                target: nil,
-                cause: message,
-                code: .connectionFailed
+        case .connectionFailed:
+            return FailureDetails(
+                code: .connectionFailed,
+                hint: Self.recoveryHint
             )
-        case .discoveryBacklogOverflow(let capacity):
-            return HandoffFailureDiagnostic(
-                target: nil,
-                cause: "Bonjour discovery event backlog exceeded \(capacity) events",
-                code: .connectionFailed
+        case .discoveryBacklogOverflow:
+            return FailureDetails(
+                code: .connectionFailed,
+                hint: Self.recoveryHint
             )
         case .serverFailure(let serverError):
             let details = serverError.failureDetails
-            return HandoffFailureDiagnostic(
-                target: nil,
-                cause: serverError.message.description,
+            return FailureDetails(
                 code: details.code,
                 hint: serverError.recoveryHint?.description ?? details.hint
             )
         case .disconnected(let reason):
-            return reason.diagnostic
+            return reason.failureDetails
         case .timeout:
-            return HandoffFailureDiagnostic(
-                target: nil,
-                cause: "Connection timed out",
+            return FailureDetails(
                 code: .setupTimeout,
-                hint: "Check that the app is running with Button Heist enabled; use 'buttonheist list_devices' to see available devices."
+                hint: Self.recoveryHint
             )
         case .noDeviceFound:
-            return HandoffFailureDiagnostic(
-                target: nil,
-                cause: "No device found",
-                code: .discoveryNoDeviceFound,
-                hint: "Start the app and confirm it advertises a Button Heist session."
-            )
-        case .noMatchingDevice(let filter, let available):
-            return HandoffFailureDiagnostic(
-                target: filter,
-                cause: "No matching device",
-                code: .discoveryNoMatchingDevice,
-                candidates: available
-            )
-        case .ambiguousDeviceTarget(let filter, let matches):
-            return HandoffFailureDiagnostic(
-                target: filter,
-                cause: "Ambiguous device target",
-                code: .discoveryAmbiguousDeviceTarget,
-                candidates: matches
-            )
+            return FailureDetails(code: .discoveryNoDeviceFound)
+        case .noMatchingDevice:
+            return FailureDetails(code: .discoveryNoMatchingDevice)
+        case .ambiguousDeviceTarget:
+            return FailureDetails(code: .discoveryAmbiguousDeviceTarget)
         }
-    }
-}
-
-struct HandoffFailureDiagnostic: Equatable, Sendable {
-    let target: String?
-    let cause: String
-    let details: FailureDetails
-    let candidates: [String]
-
-    var errorCode: String { details.errorCode }
-    var phase: FailurePhase { details.phase }
-    var retryable: Bool { details.retryable }
-    var hint: String? { details.hint }
-
-    init(
-        target: String?,
-        cause: String,
-        code: KnownFailureCode,
-        hint: String?,
-        candidates: [String] = []
-    ) {
-        self.target = target
-        self.cause = cause
-        self.details = FailureDetails(code: code, hint: hint)
-        self.candidates = candidates
-    }
-
-    init(
-        target: String?,
-        cause: String,
-        code: KnownFailureCode,
-        candidates: [String] = []
-    ) {
-        self.init(
-            target: target,
-            cause: cause,
-            code: code,
-            hint: nil,
-            candidates: candidates
-        )
-    }
-}
-
-enum HandoffFailureFormatter {
-    static func message(for diagnostic: HandoffFailureDiagnostic) -> String {
-        switch diagnostic.details.code {
-        case .connectionFailed:
-            return diagnostic.cause
-        case .setupTimeout:
-            return "Connection timed out"
-        case .discoveryNoDeviceFound:
-            return "No device found"
-        case .discoveryNoMatchingDevice:
-            let available = diagnostic.candidates.joined(separator: ", ")
-            return "No device matching '\(diagnostic.target ?? "(none)")' (available: \(available))"
-        case .discoveryAmbiguousDeviceTarget:
-            let matches = diagnostic.candidates.joined(separator: ", ")
-            return "Ambiguous device target '\(diagnostic.target ?? "(none)")' (matches: \(matches))"
-        case .authFailed:
-            return diagnostic.cause.replacingPrefix("Auth failed:", with: "Authentication failed:")
-        case .sessionLocked:
-            return diagnostic.cause
-        default:
-            return connectionFailureMessage(for: diagnostic)
-        }
-    }
-
-    static func connectionFailureMessage(for diagnostic: HandoffFailureDiagnostic) -> String {
-        let base = "connection failed in \(diagnostic.phase.rawValue): observed \(diagnostic.cause)"
-        guard let hint = diagnostic.hint else { return base }
-        return "\(base); \(hint)"
-    }
-}
-
-private extension String {
-    func replacingPrefix(_ prefix: String, with replacement: String) -> String {
-        guard hasPrefix(prefix) else { return self }
-        return replacement + String(dropFirst(prefix.count))
     }
 }
 

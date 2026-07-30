@@ -60,7 +60,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
         ]
 
         for (reason, knownCode, phase, retryable) in cases {
-            XCTAssertEqual(reason.diagnostic.details.code, knownCode)
+            XCTAssertEqual(reason.failureDetails.code, knownCode)
             XCTAssertEqual(reason.failureCode, knownCode.rawValue)
             XCTAssertEqual(reason.phase, phase)
             XCTAssertEqual(reason.retryable, retryable)

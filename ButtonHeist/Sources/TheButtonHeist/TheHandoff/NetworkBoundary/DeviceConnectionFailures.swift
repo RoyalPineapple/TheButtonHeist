@@ -40,87 +40,89 @@ enum DisconnectReason: Error, LocalizedError {
     }
 
     var errorDescription: String? {
-        diagnostic.cause
+        cause
     }
 
     var failureCode: String {
-        diagnostic.errorCode
+        failureDetails.errorCode
     }
 
     var phase: FailurePhase {
-        diagnostic.phase
+        failureDetails.phase
     }
 
     var retryable: Bool {
-        diagnostic.retryable
+        failureDetails.retryable
     }
 
     var hint: String? {
-        diagnostic.hint
+        failureDetails.hint
     }
 
-    var diagnostic: HandoffFailureDiagnostic {
+    var cause: String {
         switch self {
         case .networkError(let failure):
-            return HandoffFailureDiagnostic(
-                target: nil,
-                cause: "Network error: \(failure.description)",
-                code: .transportNetworkError
-            )
+            return "Network error: \(failure.description)"
         case .bufferOverflow:
-            return HandoffFailureDiagnostic(
-                target: nil,
-                cause: "Server exceeded max buffer size",
-                code: .transportBufferOverflow
-            )
+            return "Server exceeded max buffer size"
         case .eventBacklogOverflow(let maxEvents):
-            return HandoffFailureDiagnostic(
-                target: nil,
-                cause: "Connection event backlog exceeded \(maxEvents) buffered events",
-                code: .transportEventBacklogOverflow
-            )
+            return "Connection event backlog exceeded \(maxEvents) buffered events"
         case .serverClosed:
-            return HandoffFailureDiagnostic(
-                target: nil,
-                cause: "Connection closed by server",
-                code: .transportServerClosed
-            )
-        case .authFailed(let reason, let hint):
-            return HandoffFailureDiagnostic(
-                target: nil,
-                cause: "Auth failed: \(reason)",
-                code: .authFailed,
-                hint: hint
-            )
+            return "Connection closed by server"
+        case .authFailed(let reason, _):
+            return "Auth failed: \(reason)"
         case .sessionLocked(let message):
-            return HandoffFailureDiagnostic(
-                target: nil,
-                cause: "Session locked: \(message)",
-                code: .sessionLocked
-            )
+            return "Session locked: \(message)"
         case .protocolMismatch(let message):
-            return HandoffFailureDiagnostic(
-                target: nil,
-                cause: "Protocol mismatch: \(message)",
-                code: .protocolMismatch
-            )
+            return "Protocol mismatch: \(message)"
         case .localDisconnect:
-            return HandoffFailureDiagnostic(
-                target: nil,
-                cause: "Disconnected by client",
-                code: .clientLocalDisconnect
-            )
+            return "Disconnected by client"
         case .missingToken:
-            return HandoffFailureDiagnostic(
-                target: nil,
-                cause: "No token available for TLS pre-shared-key authentication",
-                code: .tlsMissingToken
-            )
+            return "No token available for TLS pre-shared-key authentication"
+        }
+    }
+
+    var failureDetails: FailureDetails {
+        switch self {
+        case .networkError:
+            return FailureDetails(code: .transportNetworkError)
+        case .bufferOverflow:
+            return FailureDetails(code: .transportBufferOverflow)
+        case .eventBacklogOverflow:
+            return FailureDetails(code: .transportEventBacklogOverflow)
+        case .serverClosed:
+            return FailureDetails(code: .transportServerClosed)
+        case .authFailed(_, let hint):
+            return FailureDetails(code: .authFailed, hint: hint)
+        case .sessionLocked:
+            return FailureDetails(code: .sessionLocked)
+        case .protocolMismatch:
+            return FailureDetails(code: .protocolMismatch)
+        case .localDisconnect:
+            return FailureDetails(code: .clientLocalDisconnect)
+        case .missingToken:
+            return FailureDetails(code: .tlsMissingToken)
         }
     }
 
     var connectionFailureMessage: String {
-        HandoffFailureFormatter.connectionFailureMessage(for: diagnostic)
+        switch self {
+        case .authFailed:
+            return cause.replacingPrefix("Auth failed:", with: "Authentication failed:")
+        case .sessionLocked:
+            return cause
+        default:
+            let base = "connection failed in \(phase.rawValue): observed \(cause)"
+            guard let hint else { return base }
+            return "\(base); \(hint)"
+        }
+    }
+}
+
+private extension String {
+    func replacingPrefix(_ prefix: String, with replacement: String) -> String {
+        guard hasPrefix(prefix) else { return self }
+        return replacement + String(dropFirst(prefix.count))
     }
 }
 

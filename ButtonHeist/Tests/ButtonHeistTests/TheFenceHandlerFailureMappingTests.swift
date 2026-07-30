@@ -29,6 +29,23 @@ extension TheFenceHandlerTests {
         XCTAssertEqual(diagnosticFailure.hint, "Fix the request.")
     }
 
+    func testHandoffConnectionFailureProjectsOnceToDiagnosticFailure() {
+        let connectionError = HandoffConnectionError.ambiguousDeviceTarget(
+            filter: "Demo",
+            matches: ["Demo#one", "Demo#two"]
+        )
+
+        let diagnostic = DiagnosticFailure(connectionError: connectionError)
+        let compatibilityFailure = ConnectionFailure(connectionError: connectionError)
+
+        XCTAssertEqual(diagnostic.message, "Ambiguous device target 'Demo' (matches: Demo#one, Demo#two)")
+        XCTAssertEqual(diagnostic.details, compatibilityFailure.details)
+        XCTAssertEqual(diagnostic.failureCode, .discoveryAmbiguousDeviceTarget)
+        XCTAssertEqual(diagnostic.phase, .discovery)
+        XCTAssertFalse(diagnostic.retryable)
+        XCTAssertEqual(diagnostic.hint, KnownFailureCode.discoveryAmbiguousDeviceTarget.defaultHint)
+    }
+
     func testFenceErrorRendersTypedHintAtDisplayBoundary() throws {
         let error = FenceError.connectionTimeout
         let hint = try XCTUnwrap(error.failureDetails.hint)

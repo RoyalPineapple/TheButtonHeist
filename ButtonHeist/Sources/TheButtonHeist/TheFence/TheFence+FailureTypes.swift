@@ -313,13 +313,15 @@ extension HeistReport.Failure {
 /// Typed connection-attempt failure preserved from the lower-level disconnect cause.
 public struct ConnectionFailure: Equatable, Sendable {
     public let message: String
-    public let failureCode: KnownFailureCode
-    public let hint: String?
+    public let details: FailureDetails
 
+    /// Typed machine-readable failure code.
+    public var failureCode: KnownFailureCode { details.code }
     /// Raw JSON/API boundary projection of `failureCode`.
-    public var errorCode: String { failureCode.rawValue }
-    public var phase: FailurePhase { failureCode.phase }
-    public var retryable: Bool { failureCode.retryable }
+    public var errorCode: String { details.errorCode }
+    public var phase: FailurePhase { details.phase }
+    public var retryable: Bool { details.retryable }
+    public var hint: String? { details.hint }
 
     public init(
         message: String,
@@ -327,18 +329,54 @@ public struct ConnectionFailure: Equatable, Sendable {
         hint: String? = nil
     ) {
         self.message = message
-        self.failureCode = failureCode
-        self.hint = hint ?? failureCode.defaultHint
+        self.details = FailureDetails(code: failureCode, hint: hint)
     }
 }
 
 extension ConnectionFailure {
+    init(connectionError: HandoffConnectionError) {
+        switch connectionError {
+        case .connectionFailed(let message):
+            self.init(message: "Connection failed: \(message)", details: connectionError.failureDetails)
+        case .discoveryBacklogOverflow:
+            self.init(
+                message: "Connection failed: \(connectionError.displayMessage)",
+                details: connectionError.failureDetails
+            )
+        case .serverFailure(let serverError):
+            self.init(message: serverError.message.description, details: connectionError.failureDetails)
+        case .disconnected:
+            self.init(message: connectionError.displayMessage, details: connectionError.failureDetails)
+        case .timeout:
+            self.init(message: "Connection timed out", details: connectionError.failureDetails)
+        case .noDeviceFound:
+            self.init(
+                message: "No devices found within timeout. Is the app running?",
+                details: connectionError.failureDetails
+            )
+        case .noMatchingDevice(let filter, let available):
+            let list = available.isEmpty ? "(none)" : available.joined(separator: ", ")
+            self.init(
+                message: "No device matching '\(filter)'. Available: \(list)",
+                details: connectionError.failureDetails
+            )
+        case .ambiguousDeviceTarget(let filter, let matches):
+            self.init(
+                message: "Ambiguous device target '\(filter)' (matches: \(matches.joined(separator: ", ")))",
+                details: connectionError.failureDetails
+            )
+        }
+    }
+
+    init(message: String, details: FailureDetails) {
+        self.message = message
+        self.details = details
+    }
+
     init(disconnectReason reason: DisconnectReason) {
-        let details = reason.diagnostic.details
         self.init(
             message: reason.connectionFailureMessage,
-            failureCode: details.code,
-            hint: details.hint
+            details: reason.failureDetails
         )
     }
 }
