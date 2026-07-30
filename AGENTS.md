@@ -160,7 +160,6 @@ Use `scripts/test-runner.py` as the canonical way to run repository test suites 
 - Every mode runs the full suite. The runner drives `xcodebuild` directly and never `tuist test`, which reports a failing suite as `✖ Error` plus a forum link where `xcodebuild` names the test and its assertion.
 - The runner selects an explicit iOS simulator and emits its resolved UDID destination. Agents should pass their task slug with `--simulator-name` to preserve simulator isolation.
 - CI's build-once optimization uses the runner's `build-for-testing` and `test-without-building` commands. Those commands are full-suite phases and share one deterministic derived-data path.
-- After every simulator test run, inspect crash reports created during that run. Attribute a crash to the run only when its CoreSimulator device path or coalition identifies the exact UDID selected by the runner. An owned app or test-host crash fails verification even when the test command itself reports success; crashes from other agents' simulators are unrelated evidence.
 
 Recommended commands:
 
