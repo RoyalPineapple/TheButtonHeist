@@ -248,14 +248,14 @@ import Testing
             try HeistPlan {
                 Activate(.label("Pay")).expect(.elementsChanged)
             },
-            WaitStep(predicate: .elementsChanged, timeout: 1)
+            WaitStep(predicate: .elementsChanged, timeout: 3)
         ),
         (
             "expect default timeout",
             try HeistPlan {
                 Activate(.label("Pay")).expect(.exists(.label("Receipt")))
             },
-            WaitStep(predicate: .exists(.label("Receipt")), timeout: 1)
+            WaitStep(predicate: .exists(.label("Receipt")), timeout: 3)
         ),
         (
             "expect explicit timeout",

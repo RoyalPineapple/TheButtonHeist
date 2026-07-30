@@ -19,7 +19,7 @@ public struct ActionExpectationTimeoutPolicy: Codable, Sendable, Equatable {
     public let screenTransition: WaitTimeout
 
     public init(
-        standard: WaitTimeout = 1,
+        standard: WaitTimeout = 3,
         screenTransition: WaitTimeout = 10
     ) {
         self.standard = standard

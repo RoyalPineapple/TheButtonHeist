@@ -414,7 +414,7 @@ events.
     "argument": { "type": "none" },
     "timeout": 60,
     "action_expectation_timeout_policy": {
-      "standard": 1,
+      "standard": 3,
       "screen_transition": 10
     }
   }
@@ -464,7 +464,7 @@ media only through explicit, size-bounded opt-ins.
 ### Wait
 
 ```json
-{"buttonHeistVersion":"<semver>","type":"heistPlan","payload":{"plan":{"version":3,"parameter":{"type":"none"},"body":[{"type":"wait","wait":{"predicate":{"type":"changed","scope":"screen"},"timeout":30}}]},"argument":{"type":"none"},"timeout":60,"action_expectation_timeout_policy":{"standard":1,"screen_transition":10}}}
+{"buttonHeistVersion":"<semver>","type":"heistPlan","payload":{"plan":{"version":3,"parameter":{"type":"none"},"body":[{"type":"wait","wait":{"predicate":{"type":"changed","scope":"screen"},"timeout":30}}]},"argument":{"type":"none"},"timeout":60,"action_expectation_timeout_policy":{"standard":3,"screen_transition":10}}}
 ```
 
 The host lowers a standalone wait to a one-step `HeistPlan`; it performs no
