@@ -240,17 +240,20 @@ transport, and debugging.
 
 MCP tool arguments are preflighted before The Button Heist converts them into command values. Public machine input is bounded by `PublicJSONInputLimits.maxRequestBytes`, `PublicJSONInputLimits.maxNestingDepth`, and `PublicJSONInputLimits.maxTotalObjectKeys`; the same limits apply to JSON-lines input.
 
-## Trace semantics
+## Observation semantics
 
-Settled trace captures are truth. The ordered `ChangeFact` stream is the sole
-temporal model: same-screen edges emit lifecycle/update facts, while a screen
-boundary emits old-tree departures, a screen marker, then new-tree arrivals.
-Screen, layout, value, and announcement notifications are edge evidence; a
-screen notification starts the new generation.
+The Vault owns one ordered `Observation.History`. It deterministically reduces
+admitted snapshots and normalized notification payloads into
+`Observation.Event` values. Same-screen changes emit `elementsChanged`; a screen
+replacement emits departure `elementsChanged`, `screenChanged`, then arrival
+`elementsChanged`. `noChange` has no payload and means the admitted snapshot has
+no semantic or geometry change within the comparison tolerance.
 
-For the full execution pipeline, including how `WaitFor`, `.expect(...)`, and
-`.until(...)` share the same polling waiter and accumulated-fact evaluation,
-see [Execution and Predicate Pipeline](ARCHITECTURE.md#execution-and-predicate-pipeline).
+`WaitFor`, `.expect(...)`, and `.until(...)` consume those events in order
+through the same heist machine. The host gives each active leaf one absolute
+deadline covering baseline acquisition, reveal or dispatch, predicate
+evaluation, and trailing `noChange`; there is no separate readiness allowance.
+See [Execution and Predicate Pipeline](ARCHITECTURE.md#execution-and-predicate-pipeline).
 
 Actions can refresh off-screen state by exploring scroll views before or after
 the interaction, but exploration is not a screen boundary by itself. It broadens
@@ -305,7 +308,7 @@ Heists are authored reusable instructions, not logs inferred from live clicking.
 **One action, one purpose.** Each step should do exactly one thing and verify it. Do not chain five interactions and check at the end — check after each one. This makes replay failures precise: step 7 failed means the 7th interaction broke.
 
 **Read the delta before moving on.** It is a compact, one-way fold of ordered
-facts: facts are stacked in time, squashed into endpoint-friendly edits, and a
+events: events are stacked in time, squashed into endpoint-friendly edits, and a
 screen marker dominates the final kind. It is useful response evidence, but it
 is not the history used by the evaluator. Use
 `structuredContent.report.nodes[].evidence.action.result.delta` for the folded
