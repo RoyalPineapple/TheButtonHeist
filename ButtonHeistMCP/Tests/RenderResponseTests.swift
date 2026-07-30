@@ -52,11 +52,9 @@ struct RenderResponseTests {
             interface: try Self.interface([row, lazyRow]),
             context: .empty
         )
-        let observationEvidence = Observation.Evidence(
+        let observationEvidence = try Self.decodeObservationEvidence(
             baseline: baseline,
-            current: current,
-            events: [.elementsChanged(current)],
-            completeness: .complete
+            current: current
         )
         let command = HeistActionCommand.activate(.predicate(ElementPredicate(label: "Load More")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
@@ -312,12 +310,37 @@ struct RenderResponseTests {
         return try JSONDecoder().decode(HeistResult.self, from: data)
     }
 
+    private static func decodeObservationEvidence(
+        baseline: Observation.Snapshot,
+        current: Observation.Snapshot
+    ) throws -> Observation.Evidence {
+        let encoder = JSONEncoder()
+        let object: [String: Any] = [
+            "baseline": try jsonValue(baseline, encoder: encoder),
+            "events": try jsonValue(
+                [Observation.Event.elementsChanged(current)],
+                encoder: encoder
+            ),
+            "current": try jsonValue(current, encoder: encoder),
+            "coverage": try jsonValue(Observation.Coverage.complete, encoder: encoder),
+        ]
+        let data = try JSONSerialization.data(withJSONObject: object)
+        return try JSONDecoder().decode(Observation.Evidence.self, from: data)
+    }
+
     private static func jsonObject<Value: Encodable>(
         _ value: Value,
         encoder: JSONEncoder
     ) throws -> [String: Any] {
-        let object = try JSONSerialization.jsonObject(with: encoder.encode(value))
+        let object = try jsonValue(value, encoder: encoder)
         return try #require(object as? [String: Any])
+    }
+
+    private static func jsonValue<Value: Encodable>(
+        _ value: Value,
+        encoder: JSONEncoder
+    ) throws -> Any {
+        try JSONSerialization.jsonObject(with: encoder.encode(value))
     }
 
     private static func interface(_ elements: [AccessibilityElement]) throws -> Interface {
