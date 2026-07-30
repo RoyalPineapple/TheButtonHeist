@@ -88,7 +88,7 @@ final class HeistMachineInvocationTests: XCTestCase {
             actionExpectationTimeoutPolicy: policy,
             script: MachineRunScript(
                 snapshots: [makeTestObservationSnapshot(labels: ["Done"])],
-                events: [.screenChanged(nil), .noChange]
+                events: [.screenChanged(ScreenFacts(idAfter: nil)), .noChange]
             )
         )
 
