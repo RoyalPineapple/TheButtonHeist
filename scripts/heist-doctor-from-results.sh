@@ -25,9 +25,9 @@ Options:
   --no-build           Do not build heist-doctor when the executable is missing.
   -h, --help           Show this help.
 
-The script matches results by their parent heist-name/fingerprint directory.
-It selects the newest failed result that has a matching passed result, then
-runs heist-doctor with that pair.
+The script discovers self-contained UUID.json and UUID.json.gz recordings.
+It selects the newest failed recording that has a passed recording with the
+same decoded plan fingerprint, then runs heist-doctor with that pair.
 EOF
 }
 
@@ -111,41 +111,130 @@ PAIR_OUTPUT="$(
     python3 - "$LAST_PASS_DIR" "$NEW_FAIL_DIR" <<'PY'
 from __future__ import annotations
 
+import gzip
+import json
+import math
 import pathlib
+import re
 import sys
+import zlib
 
 last_pass_dir = pathlib.Path(sys.argv[1])
 new_fail_dir = pathlib.Path(sys.argv[2])
+recording_name = re.compile(
+    r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-"
+    r"[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\.json(?:\.gz)?$"
+)
+recording_keys = {
+    "schemaVersion",
+    "result",
+    "planName",
+    "planFingerprint",
+    "recordedAt",
+    "producerVersion",
+}
 
 
-def results(root: pathlib.Path, status: str) -> list[pathlib.Path]:
-    suffixes = (f"-{status}.json", f"-{status}.json.gz")
+def recording_paths(root: pathlib.Path) -> list[pathlib.Path]:
     return sorted(
-        (
-            path
-            for path in root.rglob("*")
-            if path.is_file() and path.name.endswith(suffixes)
-        ),
-        key=lambda path: (path.stat().st_mtime_ns, path.as_posix()),
-        reverse=True,
+        (path for path in root.rglob("*") if path.is_file() and recording_name.fullmatch(path.name)),
+        key=lambda path: path.as_posix(),
     )
 
 
-passes_by_key: dict[str, list[pathlib.Path]] = {}
-for result in results(last_pass_dir, "passed"):
-    passes_by_key.setdefault(result.parent.name, []).append(result)
+def decoded_json(path: pathlib.Path) -> object:
+    data = path.read_bytes()
+    if data.startswith(b"\x1f\x8b"):
+        data = gzip.decompress(data)
+    return json.loads(data.decode("utf-8"))
 
-for failed in results(new_fail_dir, "failed"):
-    matches = passes_by_key.get(failed.parent.name, [])
+
+def step_failed(step: object) -> bool:
+    if not isinstance(step, dict) or set(step) != {"path", "node"}:
+        raise ValueError("result step must contain exactly path and node")
+    node = step["node"]
+    if not isinstance(node, dict):
+        raise ValueError("result step node must be an object")
+    outcome = node.get("outcome")
+    if outcome not in {"passed", "failed", "child_aborted", "skipped"}:
+        raise ValueError("result step node has an invalid outcome")
+    children = node.get("children")
+    if not isinstance(children, list):
+        raise ValueError("result step node children must be an array")
+    return outcome in {"failed", "child_aborted"} or any(step_failed(child) for child in children)
+
+
+def decode_recording(path: pathlib.Path) -> tuple[str, str, float, pathlib.Path]:
+    recording = decoded_json(path)
+    if not isinstance(recording, dict) or set(recording) != recording_keys:
+        raise ValueError("recording root has an invalid shape")
+    if recording["schemaVersion"] != 1:
+        raise ValueError("recording schema version is unsupported")
+    fingerprint = recording["planFingerprint"]
+    if not isinstance(fingerprint, str) or re.fullmatch(r"[0-9a-f]{24}", fingerprint) is None:
+        raise ValueError("recording plan fingerprint is invalid")
+    recorded_at = recording["recordedAt"]
+    if (
+        isinstance(recorded_at, bool)
+        or not isinstance(recorded_at, (int, float))
+        or not math.isfinite(recorded_at)
+    ):
+        raise ValueError("recording time is invalid")
+    result = recording["result"]
+    if not isinstance(result, dict) or set(result) != {"steps", "durationMs"}:
+        raise ValueError("recording result has an invalid shape")
+    steps = result["steps"]
+    if not isinstance(steps, list):
+        raise ValueError("recording result steps must be an array")
+    outcome = "failed" if any(step_failed(step) for step in steps) else "passed"
+    return fingerprint, outcome, float(recorded_at), path
+
+
+def recordings(root: pathlib.Path) -> list[tuple[str, str, float, pathlib.Path]]:
+    decoded = []
+    for path in recording_paths(root):
+        try:
+            decoded.append(decode_recording(path))
+        except (
+            EOFError,
+            OSError,
+            UnicodeError,
+            gzip.BadGzipFile,
+            json.JSONDecodeError,
+            ValueError,
+            zlib.error,
+        ) as error:
+            print(f"Warning: ignoring invalid heist result recording {path}: {error}", file=sys.stderr)
+    return decoded
+
+
+passes_by_fingerprint: dict[str, list[tuple[str, str, float, pathlib.Path]]] = {}
+for recording in recordings(last_pass_dir):
+    fingerprint, outcome, _, _ = recording
+    if outcome == "passed":
+        passes_by_fingerprint.setdefault(fingerprint, []).append(recording)
+
+for matches in passes_by_fingerprint.values():
+    matches.sort(key=lambda recording: (recording[2], recording[3].as_posix()), reverse=True)
+
+failed_recordings = [
+    recording
+    for recording in recordings(new_fail_dir)
+    if recording[1] == "failed"
+]
+failed_recordings.sort(key=lambda recording: (recording[2], recording[3].as_posix()), reverse=True)
+
+for fingerprint, _, _, failed_path in failed_recordings:
+    matches = passes_by_fingerprint.get(fingerprint, [])
     if matches:
-        print(matches[0])
-        print(failed)
-        print(failed.parent.name)
+        print(matches[0][3])
+        print(failed_path)
+        print(fingerprint)
         raise SystemExit(0)
 
 print(
     "Error: no doctor-ready result pair found. "
-    "Need a failed result and a passed result with the same heist fingerprint directory.",
+    "Need a failed recording and a passed recording with the same decoded plan fingerprint.",
     file=sys.stderr,
 )
 raise SystemExit(1)
@@ -154,10 +243,10 @@ PY
 
 LAST_PASS_RESULT="$(printf '%s\n' "$PAIR_OUTPUT" | sed -n '1p')"
 NEW_FAIL_RESULT="$(printf '%s\n' "$PAIR_OUTPUT" | sed -n '2p')"
-FINGERPRINT_DIR="$(printf '%s\n' "$PAIR_OUTPUT" | sed -n '3p')"
+PLAN_FINGERPRINT="$(printf '%s\n' "$PAIR_OUTPUT" | sed -n '3p')"
 
 echo "Selected doctor result pair:"
-echo "  fingerprint: $FINGERPRINT_DIR"
+echo "  fingerprint: $PLAN_FINGERPRINT"
 echo "  last pass:   $LAST_PASS_RESULT"
 echo "  new fail:    $NEW_FAIL_RESULT"
 echo

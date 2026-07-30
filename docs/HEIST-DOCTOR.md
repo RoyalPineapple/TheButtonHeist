@@ -3,8 +3,9 @@
 `heist-doctor` is an alpha, suggestion-only repair experiment for The Button Heist
 results.
 
-It compares a last passing `HeistResult` with a new failing
-`HeistResult`, then prints either structured repair suggestions
+It compares the `HeistResult` embedded in a last passing
+`HeistResultRecording` with the result in a new failing recording, then prints
+either structured repair suggestions
 or structured reasons it cannot safely suggest one.
 
 It is not automatic self-healing. It does not connect to an app, rerun a heist,
@@ -25,38 +26,41 @@ the tool is still young:
   lookup is still manual
 - the validation set is small and intentionally experimental
 - confidence calibration has not been proven across broad real failures
-- public `run_heist` JSON is not the same shape as the raw result input
+- public `run_heist` JSON is not the same shape as the recording input
 - output can be verbose when the preserved hierarchy is flat or broad
 - artifact retention policy still belongs to CI, not to The Button Heist itself
 
-The safe promise is narrow: if you provide the right two raw results, the doctor
-can explain a candidate target repair or explain why it is refusing to guess.
+The safe promise is narrow: if you provide the right two result recordings, the
+doctor can explain a candidate target repair or explain why it is refusing to
+guess.
 
 ## Inputs
 
-The doctor reads raw `HeistResult` JSON results:
+The doctor reads self-contained `HeistResultRecording` JSON files. Each
+recording contains the result, plan name, plan fingerprint, recording time, and
+producer version:
 
 ```bash
 heist-doctor \
-  --last-pass last-pass.json \
-  --new-fail new-fail.json
+  --last-pass 4F6F86E1-5D1C-4CF3-83E3-61DBD07A9235.json \
+  --new-fail 73B15971-0E56-44D0-8E45-BE81D19A6078.json
 ```
 
-It also accepts gzip-compressed JSON by file extension:
+It also accepts gzip-compressed recording JSON:
 
 ```bash
 heist-doctor \
-  --last-pass last-pass.json.gz \
-  --new-fail new-fail.json.gz
+  --last-pass 4F6F86E1-5D1C-4CF3-83E3-61DBD07A9235.json.gz \
+  --new-fail 73B15971-0E56-44D0-8E45-BE81D19A6078.json.gz
 ```
 
 For local and CI experiments, prefer gzip. In the first demo result-pair
-experiment, raw results around 7-8 MB compressed to roughly 200-250 KB.
+experiment, recordings around 7-8 MB compressed to roughly 200-250 KB.
 
 ## Automatic Result Recording
 
-The Button Heist can write raw gzip results automatically when this environment
-variable is set:
+The Button Heist can write self-contained gzip recordings automatically when
+this environment variable is set:
 
 ```bash
 BUTTONHEIST_RESULTS_DIR="$CI_ARTIFACTS/buttonheist-results"
@@ -76,17 +80,22 @@ BUTTONHEIST_RESULTS_MODE=all \
   scripts/test-runner.py run ButtonHeistTests
 ```
 
-The runtime writes files under a heist-name and plan-fingerprint directory:
+The runtime writes each recording directly under the configured root:
 
 ```text
 buttonheist-results/
-  checkout-flow-<fingerprint>/
-    <timestamp>-<pid>-<uuid>-failed.json.gz
+  4F6F86E1-5D1C-4CF3-83E3-61DBD07A9235.json.gz
+  73B15971-0E56-44D0-8E45-BE81D19A6078.json.gz
 ```
+
+The UUID is only collision-resistant storage identity. Plan identity, execution
+outcome, and recording time are decoded from the file contents. A recording
+therefore remains valid if it is moved or renamed, although the pairing helper
+discovers only the canonical `UUID.json` and `UUID.json.gz` names.
 
 This hook lives at the heist execution boundary, not inside XCTest or Swift
 Testing. That keeps test boilerplate at zero: in-process `Heist(...)` tests and
-external `run_heist` execution can both emit the same raw result artifact when
+external `run_heist` execution can both emit the same recording artifact when
 the environment is configured.
 
 For simulator-hosted tests, use the portable temp-directory sentinel so the app
@@ -129,9 +138,12 @@ scripts/heist-doctor-from-results.sh \
   --new-fail-dir path/to/pr/buttonheist-results
 ```
 
-The helper matches results by the parent heist-name/fingerprint directory,
-chooses the newest failed result with a matching passed result, and invokes
-`heist-doctor`.
+The helper searches both roots recursively for canonical UUID-named recordings,
+decodes plain JSON and gzip JSON, and pairs a passed and failed
+`result.outcome` with the same decoded `planFingerprint`. It chooses the newest
+eligible failed recording and its newest passing match by decoded `recordedAt`,
+then invokes `heist-doctor`. Filenames and parent directories do not determine
+plan identity or outcome.
 
 For a deterministic demo that does not require manufacturing a red CI build:
 
@@ -139,17 +151,17 @@ For a deterministic demo that does not require manufacturing a red CI build:
 scripts/heist-doctor-demo.sh
 ```
 
-That demo generates two raw results through `HeistResultRecording`: a last pass
-where the target was `Checkout`, and a current failure where the same semantic
-control is now `Go to Checkout`. CI runs this demo in the macOS test lane as a
-workflow smoke test.
+That demo generates two self-contained recordings through
+`HeistResultRecording`: a last pass where the target was `Checkout`, and a
+current failure where the same semantic control is now `Go to Checkout`. CI
+runs this demo in the macOS test lane as a workflow smoke test.
 
 XCTest and Swift Testing adapters may later add nicer test attachments or names,
 but artifact collection should not depend on per-test wrappers.
 
 ## Evidence Model
 
-The useful evidence is already in `HeistResult`:
+The useful evidence is already in the recording's `HeistResult`:
 
 - step paths and nested execution structure
 - authored action commands and expectations
@@ -182,15 +194,15 @@ and `diagnosis.noSuggestionReason` when the pipeline refused.
 The artifact boundary stays deliberately boring for now:
 
 ```text
-The Button Heist run -> HeistResult.json.gz -> CI artifact
+The Button Heist run -> UUID.json.gz (HeistResultRecording) -> CI artifact
 last-pass artifact + new-fail artifact -> heist-doctor
 ```
 
 There is no custom evidence-pack format, no product-owned result database, no
-visual snapshot store, and no runtime repair sidecar. Raw compressed results
-are small enough for current CI experiments and preserve the full evidence
-shape for future doctor work. If size, privacy, or processing cost becomes a
-real constraint, the next format can be designed from measured data instead of
+visual snapshot store, and no runtime repair sidecar. Compressed recordings are
+small enough for current CI experiments and preserve the full evidence shape
+for future doctor work. If size, privacy, or processing cost becomes a real
+constraint, the next format can be designed from measured data instead of
 guesswork.
 
 ## Repair Rules
@@ -235,6 +247,6 @@ Before calling it beta, the project needs at least:
 - a documented retention convention for latest passing and current failing
   results
 - clarity on whether doctor should also unwrap public `run_heist` output or
-  only raw results
+  only self-contained recordings
 
 Until then, keep the interface small and experimental.
