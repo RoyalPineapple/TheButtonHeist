@@ -55,7 +55,6 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         let incomplete = observationEvidenceWithAnnouncement("Ready", coverage: .incomplete(.historyUnavailable))
         let observations: [ActionResultObservationEvidence] = [
             .none,
-            .announcement("Ready"),
             .observed(complete),
             .observed(incomplete),
         ]
@@ -120,7 +119,6 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         let incomplete = try XCTUnwrap(coverage["incomplete"] as? [String: Any])
         let gap = try XCTUnwrap(incomplete["_0"] as? [String: Any])
         XCTAssertNotNil(gap["historyUnavailable"] as? [String: Any])
-        XCTAssertNil(observation["announcement"])
         XCTAssertEqual(timing["actionDispatchMs"] as? Int, 4)
 
         let decoded = try JSONDecoder().decode(ActionResult.self, from: encoded)
@@ -172,25 +170,6 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         XCTAssertEqual(decoded.screenActionHandler, "UINavigationController")
     }
 
-    func testStandaloneAnnouncementIsTheOnlyAnnouncementFact() throws {
-        let result = ActionResult.success(
-            payload: .wait,
-            observation: .announcement("Ready")
-        )
-
-        let encoded = try JSONEncoder().encode(result)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-        let evidence = try XCTUnwrap(object["evidence"] as? [String: Any])
-        let observation = try XCTUnwrap(evidence["observation"] as? [String: Any])
-
-        XCTAssertEqual(observation["kind"] as? String, "announcement")
-        XCTAssertEqual(observation["announcement"] as? String, "Ready")
-        XCTAssertNil(object["announcement"])
-        XCTAssertNil(evidence["announcement"])
-        XCTAssertEqual(result.announcement, "Ready")
-        XCTAssertNil(result.observationEvidence)
-    }
-
     func testObservationEvidenceOwnsCapturedNotificationText() {
         let observationEvidence = observationEvidenceWithAnnouncement(
             "Checkout",
@@ -205,18 +184,6 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         XCTAssertEqual(result.observationEvidence, observationEvidence)
     }
 
-    func testObservationDiscriminatorRejectsFieldsFromAnotherCase() {
-        assertActionResultRejects("""
-        {
-          "outcome": {"kind": "success"},
-          "method": "wait",
-          "evidence": {
-            "observation": {"kind": "none", "announcement": "Ready"}
-          }
-        }
-        """)
-    }
-
     func testFailureEvidenceRejectsSuccessOnlyWarning() {
         assertActionResultRejects("""
         {
@@ -228,27 +195,6 @@ final class ActionResultEvidenceContractTests: XCTestCase {
           }
         }
         """)
-    }
-
-    func testAnnouncementAdmissionRejectsEmptySourceAndJSONValues() throws {
-        XCTAssertThrowsError(try ActionAnnouncementText(validating: "")) { error in
-            XCTAssertEqual(String(describing: error), "action announcement must not be empty")
-        }
-        let json = """
-        {
-          "outcome": {"kind": "success"},
-          "method": "wait",
-          "evidence": {
-            "observation": {"kind": "announcement", "announcement": ""}
-          }
-        }
-        """
-
-        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
-            guard case DecodingError.dataCorrupted = error else {
-                return XCTFail("Expected DecodingError.dataCorrupted, got \(error)")
-            }
-        }
     }
 
     func testElapsedMillisecondsAdmissionRejectsNegativeSourceAndJSONValues() {
