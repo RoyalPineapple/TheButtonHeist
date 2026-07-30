@@ -174,16 +174,6 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
         }
     }
 
-    /// The full retained notification stream, including events whose payload
-    /// carries no spoken text.
-    func notifications(
-        after cursor: AccessibilityNotificationCursor = .origin
-    ) -> [PendingAccessibilityNotificationEvent] {
-        onIngressExecutor {
-            ingressLog.checkpoint(after: cursor, selection: .all).events
-        }
-    }
-
     /// Opens the outer correlation window for a running heist.
     ///
     /// While this scope is active, action windows may claim attribution. Unclaimed

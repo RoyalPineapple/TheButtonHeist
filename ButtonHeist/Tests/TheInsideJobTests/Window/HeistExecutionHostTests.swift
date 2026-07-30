@@ -121,7 +121,9 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
 
         XCTAssertNotNil(current)
         XCTAssertEqual(source.captureCount, 3)
-        XCTAssertTrue(bus.notifications().isEmpty)
+        XCTAssertTrue(
+            bus.checkpoint(after: .origin, selection: .all).events.isEmpty
+        )
     }
 
     func testSuccessfulStepUsesAlreadyCoveredVaultObservationWithoutAnotherCapture() async {
@@ -156,7 +158,9 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
 
         XCTAssertNotNil(current)
         XCTAssertEqual(source.captureCount, 0)
-        XCTAssertTrue(bus.notifications().isEmpty)
+        XCTAssertTrue(
+            bus.checkpoint(after: .origin, selection: .all).events.isEmpty
+        )
     }
 
     func testFreshSnapshotBecomesReplayBaselineAfterAdmissionInvalidation() async throws {
