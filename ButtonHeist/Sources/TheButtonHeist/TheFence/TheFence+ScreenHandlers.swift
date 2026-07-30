@@ -13,7 +13,7 @@ extension TheFence {
                 mode: request.mode,
                 timeout: observationTimeout
             )),
-            timeout: observationTimeout.seconds + config.postActionExpectationTimeoutBuffer
+            timeout: screenTransportTimeout(for: observationTimeout)
         )
         let options = ScreenshotResponseOptions()
 
@@ -53,5 +53,9 @@ extension TheFence {
                 ServerError(kind: .general, message: "Failed to decode screenshot data")
             )
         }
+    }
+
+    func screenTransportTimeout(for observationTimeout: WaitTimeout) -> TimeInterval {
+        observationTimeout.seconds + config.postActionExpectationTimeoutBuffer
     }
 }

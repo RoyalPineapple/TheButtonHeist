@@ -111,8 +111,8 @@ final class GetScreenArtifactResponseTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testGetScreenAcceptsServerDeadlineResponseDuringTransportHeadroom() async throws {
-        let authoredTimeout = Double.leastNonzeroMagnitude
+    func testGetScreenPreservesObservationTimeoutAndAddsTransportHeadroom() async throws {
+        let authoredTimeout: TimeInterval = 0.25
         let transportHeadroom: TimeInterval = 1
         let screen = ScreenPayload(
             pngData: Data([0x89, 0x50, 0x4E, 0x47]).base64EncodedString(),
@@ -123,22 +123,10 @@ final class GetScreenArtifactResponseTests: XCTestCase {
         let (fence, mockConnection) = makeConnectedFence(configuration: .init(
             postActionExpectationTimeoutBuffer: transportHeadroom
         ))
+        fence.handoff.connect(to: TheFenceFixtures.testDevice)
         mockConnection.responseScript = { message in
-            guard case .requestScreen = message,
-                  let requestID = mockConnection.sent.last?.1
-            else { return nil }
-
-            Task { @ButtonHeistActor [mockConnection] in
-                let responseProducedAtServerDeadline = screen
-                for _ in 0..<10 {
-                    await Task.yield()
-                }
-                mockConnection.onEvent?(.message(
-                    .screen(responseProducedAtServerDeadline),
-                    requestId: requestID
-                ))
-            }
-            return nil
+            guard case .requestScreen = message else { return nil }
+            return .screen(screen)
         }
 
         let response = try await fence.handleGetScreen(
@@ -149,6 +137,12 @@ final class GetScreenArtifactResponseTests: XCTestCase {
         XCTAssertEqual(
             mockConnection.sentRequestScreenPayloads.last??.timeout.seconds,
             authoredTimeout
+        )
+        XCTAssertEqual(
+            fence.screenTransportTimeout(
+                for: try WaitTimeout(validatingSeconds: authoredTimeout)
+            ),
+            authoredTimeout + transportHeadroom
         )
         guard case .screenshotData(let payload, _) = response else {
             return XCTFail("Expected inline screenshot response, got \(response)")
