@@ -188,43 +188,6 @@ extension TheBrains {
             )
         }
     }
-    func performWait(step: WaitStep) async -> ActionResult {
-        guard semanticObservationIsActive else {
-            return runtimeInactiveResult(payload: .wait)
-        }
-        do {
-            let plan = try HeistPlan(body: [.wait(step)])
-            return await executeSingleStepPlan(plan, fallbackPayload: .wait)
-        } catch {
-            return .failure(
-                payload: .wait,
-                failureKind: .validationError,
-                message: "could not resolve wait predicate: \(error)"
-            )
-        }
-    }
-
-    func executeSingleStepPlan(
-        _ plan: HeistPlan,
-        fallbackPayload: ActionResult.Payload
-    ) async -> ActionResult {
-        let result: HeistResult
-        switch await executeHeistPlan(plan) {
-        case .success(let executionResult):
-            result = executionResult
-        case .failure(let failure):
-            return .failure(
-                payload: fallbackPayload,
-                failureKind: failure.actionFailureKind,
-                message: failure.description
-            )
-        }
-        return result.steps.first?.reportActionResult ?? .failure(
-            payload: fallbackPayload,
-            failureKind: .actionFailed,
-            message: "single-step heist produced no action result"
-        )
-    }
 
     nonisolated static func actionFailureKind(
         for failureKind: TheSafecracker.FailureKind

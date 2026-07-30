@@ -22,7 +22,6 @@ final class TheBrains {
     let actions: Actions
     let failureEvidencePolicy: FailureEvidencePolicy
     private let requestExecutor: InteractionRequestExecutor
-    private var changedWaitInProgress = false
 
     var semanticObservationIsActive: Bool {
         vault.semanticObservationStream.isActive
@@ -192,16 +191,6 @@ final class TheBrains {
 
     var interactionRequestSnapshot: InteractionRequestExecutor.Snapshot {
         requestExecutor.snapshot
-    }
-
-    func beginChangedWait() -> Bool {
-        guard semanticObservationIsActive, !changedWaitInProgress else { return false }
-        changedWaitInProgress = true
-        return true
-    }
-
-    func finishChangedWait() {
-        changedWaitInProgress = false
     }
 }
 

@@ -425,10 +425,6 @@ internal final class Stream {
         state.notifications
     }
 
-    internal func scopedScreenChangedSequence() -> UInt64 {
-        state.scopedScreenChangedSequence
-    }
-
     internal var canonicalInterfaceTree: InterfaceTree {
         state.interfaceTree
     }

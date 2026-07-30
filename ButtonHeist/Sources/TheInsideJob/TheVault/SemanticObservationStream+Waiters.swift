@@ -107,19 +107,6 @@ extension Observation.Stream {
         }
     }
 
-    /// Waits for the publication caused by an already-dispatched viewport
-    /// movement under the requesting operation's boundary.
-    internal func observationAfterViewportMovement(
-        scope: SemanticObservationScope,
-        boundary: SemanticObservationWaitBoundary
-    ) async -> TheVault.State.Current? {
-        await nextObservation(
-            scope: scope,
-            after: nil,
-            boundary: boundary
-        )
-    }
-
     func completeObservationWaiters(
         completedScope: SemanticObservationScope? = nil,
         observationCommitted: Bool? = nil

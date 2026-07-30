@@ -651,7 +651,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
     }
 }
 
-/// Which screen changes reach past a settled commit.
+/// Which screen changes invalidate settled observation history.
 ///
 /// A settled observation describes the screen it was taken on, so a screen
 /// change after it means the observation describes a screen we are no longer
@@ -659,15 +659,8 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 /// recorded inside an action's attribution window belongs to the command and
 /// counts, one recorded outside it is the host app talking to itself and does
 /// not.
-///
-/// What the reader consults is the bus's scoped-screenChanged sequence against
-/// the cursor the commit absorbed, so that pair is what these assert. A commit
-/// takes the cursor up to the scoped changes it already knows about, which makes
-/// "the bus is ahead" precisely "a scoped screen change arrived since". Neither
-/// side moves on a clock, and neither is touched by the other invalidation
-/// sources sharing the store's flag.
 @MainActor
-final class ScreenChangeCursorAdmissionTests: ButtonHeistObservationTestCase {
+final class ScreenChangeObservationAdmissionTests: ButtonHeistObservationTestCase {
 
     private var visibleObservationSource = VisibleObservationSourceFixture()
 
@@ -678,34 +671,26 @@ final class ScreenChangeCursorAdmissionTests: ButtonHeistObservationTestCase {
         )
     }
 
-    func testScreenChangedInsideCommandScopeOutrunsTheCommittedCursor() async {
+    func testScreenChangedInsideCommandScopeDiscardsCommittedObservation() async {
         await commitOverview()
 
         let actionWindow = brains.vault.accessibilityNotifications.beginActionWindow()
         defer { actionWindow.cancel() }
         recordScreenChanged()
+        brains.vault.semanticObservationStream.discardIfScreenChangedSinceRead()
 
-        let committed = committedScopedScreenChangedCursor()
-        XCTAssertGreaterThan(
-            brains.vault.accessibilityNotifications.latestScopedScreenChangedSequence,
-            committed,
-            "A screenChanged inside command scope must outrun the commit, so the next read invalidates it"
-        )
+        XCTAssertNil(brains.vault.semanticObservationStream.current())
     }
 
-    func testScreenChangedOutsideCommandScopeLeavesTheCommittedCursorAhead() async {
+    func testScreenChangedOutsideCommandScopePreservesCommittedObservation() async {
         await commitOverview()
 
         recordScreenChanged()
         let actionWindow = brains.vault.accessibilityNotifications.beginActionWindow()
         defer { actionWindow.cancel() }
+        brains.vault.semanticObservationStream.discardIfScreenChangedSinceRead()
 
-        let committed = committedScopedScreenChangedCursor()
-        XCTAssertLessThanOrEqual(
-            brains.vault.accessibilityNotifications.latestScopedScreenChangedSequence,
-            committed,
-            "A screenChanged outside command scope must not outrun the commit, so the next read serves it"
-        )
+        XCTAssertNotNil(brains.vault.semanticObservationStream.current())
     }
 
     private func commitOverview() async {
@@ -727,9 +712,6 @@ final class ScreenChangeCursorAdmissionTests: ButtonHeistObservationTestCase {
         )
     }
 
-    private func committedScopedScreenChangedCursor() -> UInt64 {
-        brains.vault.semanticObservationStream.scopedScreenChangedSequence()
-    }
 }
 
 #endif

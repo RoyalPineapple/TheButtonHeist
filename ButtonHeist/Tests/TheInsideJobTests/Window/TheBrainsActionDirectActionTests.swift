@@ -343,7 +343,7 @@ extension TheBrainsActionTests {
         XCTAssertEqual(result.subjectEvidence?.element.semantics.assertable.actions, [])
     }
 
-    func testExecuteCommandFailedActivateCarriesPostActionObservationLikeSuccessfulAction() async throws {
+    func testCanonicalPlanCarriesPostActionObservationForSuccessfulAndFailedActions() async throws {
         let rootView = UIView(frame: UIScreen.main.bounds)
         rootView.backgroundColor = .white
 
@@ -394,24 +394,18 @@ extension TheBrainsActionTests {
         )
         await installSyntheticObservation(observation)
 
-        let successPlan = try HeistPlan(body: [
-            .action(ActionStep(command: .activate(.identifier("trace_success")))),
-        ])
-        let success = await brains.executeSingleStepPlan(
-            successPlan,
-            fallbackPayload: .activate
+        let success = try await heistStepResult(
+            for: .action(ActionStep(command: .activate(.identifier("trace_success")))),
+            label: "successful activation"
         )
         XCTAssertTrue(success.outcome.isSuccess, success.message ?? "activate failed")
         let successObservation = try XCTUnwrap(success.observationEvidence)
         XCTAssertEqual(successObservation.coverage, .complete)
         XCTAssertNotNil(successObservation.current)
 
-        let failurePlan = try HeistPlan(body: [
-            .action(ActionStep(command: .activate(.identifier("trace_failure")))),
-        ])
-        let failure = await brains.executeSingleStepPlan(
-            failurePlan,
-            fallbackPayload: .activate
+        let failure = try await heistStepResult(
+            for: .action(ActionStep(command: .activate(.identifier("trace_failure")))),
+            label: "failed activation"
         )
         XCTAssertFalse(failure.outcome.isSuccess)
         XCTAssertEqual(failure.method, .activate)
@@ -606,11 +600,14 @@ extension TheBrainsActionTests {
         XCTAssertEqual(brains.vault.interfaceTree, .empty)
     }
 
-    func testWaitReportsUnavailableAccessibilityTreeAtItsBaselineBoundary() async throws {
+    func testCanonicalWaitReportsUnavailableAccessibilityTreeAtItsBaselineBoundary() async throws {
         let step = WaitStep(predicate: .exists(.label("never")), timeout: try .milliseconds(1))
-        let result = await withNoTraversableWindows {
-            await brains.performWait(step: step)
+        let plan = try HeistPlan(body: [.wait(step)])
+        let execution = await withNoTraversableWindows {
+            await brains.executeHeistPlan(plan)
         }
+        let heist = try execution.get()
+        let result = try XCTUnwrap(heist.steps.first?.reportActionResult)
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)

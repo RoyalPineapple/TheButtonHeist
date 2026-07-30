@@ -106,13 +106,6 @@ extension Navigation {
         if discoveryCommitPolicy == .replaceInterface {
             vault.semanticObservationStream.discardCurrentObservation()
         }
-        if afterViewportMovement {
-            return await vault.semanticObservationStream
-                .observationAfterViewportMovement(
-                    scope: .discovery,
-                    boundary: observationBoundary
-                )
-        }
         return await vault.semanticObservationStream.nextObservation(
             scope: .discovery,
             after: nil,
