@@ -14,7 +14,7 @@ extension HeistExecution {
     }
 
     internal enum Action {
-        case perform([MainActorRequest])
+        case perform(MainActorRequest)
         case wait
     }
 

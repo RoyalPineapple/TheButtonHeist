@@ -32,15 +32,15 @@ extension HeistExecution.Machine {
             context: context,
             phase: .beginningObservation
         ))
-        return .pending(.perform([
+        return .pending(.perform(
             .beginObservation(
                 id,
                 HeistExecution.ObservationRequest(
                     scope: predicate.observationScope,
                     timeout: timeout
                 )
-            ),
-        ]))
+            )
+        ))
     }
 }
 

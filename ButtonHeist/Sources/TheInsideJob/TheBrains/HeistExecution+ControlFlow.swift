@@ -100,7 +100,7 @@ extension HeistExecution.Machine {
             context: context,
             progress: .awaitingSnapshot(id)
         )))
-        return .pending(.perform([.currentSnapshot(id, scope: scope)]))
+        return .pending(.perform(.currentSnapshot(id, scope: scope)))
     }
 
     private mutating func requestInitialSnapshot(
@@ -118,7 +118,7 @@ extension HeistExecution.Machine {
             progress: .awaitingSnapshot(id, previousMatchHash: nil),
             iterations: .empty
         )))
-        return .pending(.perform([.currentSnapshot(id, scope: .discovery)]))
+        return .pending(.perform(.currentSnapshot(id, scope: .discovery)))
     }
 
     private mutating func requestSnapshot(
@@ -140,7 +140,7 @@ extension HeistExecution.Machine {
             ),
             iterations: continuation.iterations
         )))
-        return .pending(.perform([.currentSnapshot(id, scope: .discovery)]))
+        return .pending(.perform(.currentSnapshot(id, scope: .discovery)))
     }
 }
 

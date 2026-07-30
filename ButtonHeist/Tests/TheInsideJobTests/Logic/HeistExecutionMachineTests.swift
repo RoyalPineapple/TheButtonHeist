@@ -19,9 +19,8 @@ final class HeistExecutionMachineTests: XCTestCase {
         ])
         var machine = try HeistExecution.Machine(plan: plan)
 
-        guard case .pending(.perform(let requests)) = machine.start(),
-              requests.count == 1,
-              case .beginObservation = requests[0] else {
+        guard case .pending(.perform(let request)) = machine.start(),
+              case .beginObservation = request else {
             return XCTFail("A wait must begin one observation")
         }
 
@@ -119,24 +118,21 @@ final class HeistExecutionMachineTests: XCTestCase {
         ])
         var machine = try HeistExecution.Machine(plan: plan)
 
-        guard case .pending(.perform(let beginRequests)) = machine.start(),
-              beginRequests.count == 1,
-              case .beginObservation(let id, _) = beginRequests[0] else {
+        guard case .pending(.perform(let beginRequest)) = machine.start(),
+              case .beginObservation(let id, _) = beginRequest else {
             return XCTFail("The wait must begin one observation")
         }
         guard case .pending(.perform(let firstExploration)) = machine.advance(
             .observationBegan(id, baseline: makeTestObservationSnapshot(labels: []))
         ),
-              firstExploration.count == 1,
-              case .explore(id, _) = firstExploration[0] else {
+              case .explore(id, _) = firstExploration else {
             return XCTFail("An unresolved element wait must explore")
         }
 
         guard case .pending(.perform(let restartedExploration)) = machine.advance(
             .viewportExited(id, .superseded)
         ),
-              restartedExploration.count == 1,
-              case .explore(id, _) = restartedExploration[0] else {
+              case .explore(id, _) = restartedExploration else {
             return XCTFail("A screen replacement must restart the unfinished discovery")
         }
         guard case .pending(.wait) = machine.advance(.viewportExited(id, .restored)) else {
@@ -146,8 +142,7 @@ final class HeistExecutionMachineTests: XCTestCase {
         guard case .pending(.perform(let eventExploration)) = machine.advance(
             .event(.elementsChanged(makeTestObservationSnapshot(labels: ["Other"])))
         ),
-              eventExploration.count == 1,
-              case .explore(id, _) = eventExploration[0] else {
+              case .explore(id, _) = eventExploration else {
             return XCTFail("A substantive unmatched event must request one new discovery")
         }
         guard case .pending(.wait) = machine.advance(.viewportExited(id, .restored)) else {
@@ -166,9 +161,8 @@ final class HeistExecutionMachineTests: XCTestCase {
             )),
         ])
         var machine = try HeistExecution.Machine(plan: plan)
-        guard case .pending(.perform(let beginRequests)) = machine.start(),
-              beginRequests.count == 1,
-              case .beginObservation(let id, _) = beginRequests[0] else {
+        guard case .pending(.perform(let beginRequest)) = machine.start(),
+              case .beginObservation(let id, _) = beginRequest else {
             return XCTFail("The wait must begin one observation")
         }
         guard case .pending(.wait) = machine.advance(.observationBegan(
@@ -177,9 +171,8 @@ final class HeistExecutionMachineTests: XCTestCase {
         )) else {
             return XCTFail("Current visible truth must satisfy existence without discovery")
         }
-        guard case .pending(.perform(let requests)) = machine.advance(.event(.noChange)),
-              requests.count == 1,
-              case .finishObservation = requests[0] else {
+        guard case .pending(.perform(let request)) = machine.advance(.event(.noChange)),
+              case .finishObservation = request else {
             return XCTFail("Settled current truth must finish the wait")
         }
     }
@@ -304,10 +297,7 @@ struct HeistMachineTestDriver {
             switch state {
             case .complete(let completion):
                 return completion
-            case .pending(.perform(let pendingRequests)):
-                guard let request = pendingRequests.first else {
-                    throw MachineDriverFailure.emptyRequestBatch
-                }
+            case .pending(.perform(let request)):
                 requests.append(request)
                 state = fulfill(request)
             case .pending(.wait):
@@ -414,16 +404,14 @@ struct HeistMachineTestDriver {
 }
 
 enum MachineDriverFailure: Error {
-    case emptyRequestBatch
     case stalled
     case transitionLimitExceeded
 }
 
 extension HeistExecution.State {
     var singleSnapshotRequest: SnapshotRequest? {
-        guard case .pending(.perform(let requests)) = self,
-              requests.count == 1,
-              case .currentSnapshot(let id, let scope) = requests[0] else {
+        guard case .pending(.perform(let request)) = self,
+              case .currentSnapshot(let id, let scope) = request else {
             return nil
         }
         return SnapshotRequest(id: id, scope: scope)

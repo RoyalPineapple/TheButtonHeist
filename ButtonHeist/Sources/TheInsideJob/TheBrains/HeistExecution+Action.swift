@@ -53,15 +53,15 @@ extension HeistExecution.Machine {
             path: path,
             phase: .beginningObservation
         ))
-        return .pending(.perform([
+        return .pending(.perform(
             .beginObservation(
                 id,
                 HeistExecution.ObservationRequest(
                     scope: predicate?.observationScope ?? .visible,
                     timeout: observationTimeout
                 )
-            ),
-        ]))
+            )
+        ))
     }
 }
 

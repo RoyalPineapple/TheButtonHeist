@@ -82,7 +82,7 @@ extension HeistExecution {
             case running(
                 InteractionID,
                 task: Task<Void, Never>,
-                deferred: [MainActorRequest],
+                deferred: MainActorRequest?,
                 completesAfterDeadline: Bool
             )
         }
@@ -332,9 +332,9 @@ extension HeistExecution {
                     resolve(.success(completion))
                     return
                 }
-                if case .pending(.perform(let requests)) = state,
-                   requests.allSatisfy(\.completesAfterDeadline) {
-                    performNext(requests, afterDeadline: true)
+                if case .pending(.perform(let request)) = state,
+                   request.completesAfterDeadline {
+                    performRequest(request, afterDeadline: true)
                     return
                 }
                 guard case .idle = session.interaction else { return }
@@ -354,17 +354,17 @@ extension HeistExecution {
                 phase = .running(session)
                 armDeadline()
 
-            case .pending(.perform(let requests)):
+            case .pending(.perform(let request)):
                 switch session.interaction {
                 case .idle:
                     phase = .running(session)
                     armDeadline()
-                    performNext(requests)
+                    performRequest(request)
                 case .running(let id, let task, _, let completesAfterDeadline):
                     session.interaction = .running(
                         id,
                         task: task,
-                        deferred: requests,
+                        deferred: request,
                         completesAfterDeadline: completesAfterDeadline
                     )
                     phase = .running(session)
@@ -373,16 +373,14 @@ extension HeistExecution {
             }
         }
 
-        private func performNext(
-            _ requests: [MainActorRequest],
+        private func performRequest(
+            _ request: MainActorRequest,
             afterDeadline: Bool = false
         ) {
-            guard let request = requests.first,
-                  case .running(var session) = phase,
+            guard case .running(var session) = phase,
                   afterDeadline || session.deadlines.expiration == nil else {
                 return
             }
-            let remaining = Array(requests.dropFirst())
             let interactionID = nextInteractionID()
             let task = Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -392,7 +390,7 @@ extension HeistExecution {
             session.interaction = .running(
                 interactionID,
                 task: task,
-                deferred: remaining,
+                deferred: nil,
                 completesAfterDeadline: request.completesAfterDeadline
             )
             phase = .running(session)
@@ -615,10 +613,10 @@ extension HeistExecution {
             interpret(state)
             guard case .running(let nextSession) = phase,
                   case .idle = nextSession.interaction,
-                  !deferred.isEmpty else {
+                  let deferred else {
                 return
             }
-            performNext(deferred)
+            performRequest(deferred)
         }
 
         private func shouldStopExploration(_ interactionID: InteractionID) -> Bool {
@@ -627,7 +625,7 @@ extension HeistExecution {
                   current == interactionID else {
                 return true
             }
-            return !deferred.isEmpty || session.deadlines.expiration != nil
+            return deferred != nil || session.deadlines.expiration != nil
         }
 
         private func interactionFinished(_ interactionID: InteractionID) {
@@ -641,8 +639,8 @@ extension HeistExecution {
             phase = .running(session)
             if let expiration {
                 collectTerminalEvidence(expiration)
-            } else if !deferred.isEmpty {
-                performNext(deferred)
+            } else if let deferred {
+                performRequest(deferred)
             }
         }
 
@@ -773,7 +771,7 @@ extension HeistExecution {
             session.interaction = .running(
                 interactionID,
                 task: task,
-                deferred: [],
+                deferred: nil,
                 completesAfterDeadline: true
             )
             phase = .running(session)
