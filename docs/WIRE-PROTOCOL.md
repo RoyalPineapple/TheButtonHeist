@@ -473,10 +473,10 @@ so the wait cannot consume prior action or heist evidence. `exists` and
 `missing` evaluate the current admitted snapshot. Temporal assertions require
 ordered post-boundary events and never pass from an implied final state.
 
-The response is a heist execution result, even for a single wait. Public report
-JSON includes `netDelta` only when the complete accumulated observation evidence
-proves a change; not-applicable, incomplete, and complete unchanged evidence do
-not emit a delta.
+The response is a heist execution result, even for a single wait. Each action
+or wait node retains its own observation interval. Heist-level report JSON does
+not synthesize a second `netDelta` across those independently bounded intervals;
+action projections derive a delta only from the action evidence they own.
 
 On timeout, the runtime may append bounded exact-predicate mismatch details from
 observations the wait already evaluated to the existing failure message and
@@ -565,18 +565,21 @@ beside the result on report evidence.
 A wait is not an action and never embeds an `ActionResult`. Passed and
 child-aborted wait nodes carry one `HeistExpectationEvidence`; a failed wait
 carries that evidence or `null` when observation was unavailable. The evidence
-object contains exactly `predicate`, `boundPredicate`, `observation`, and
-`terminalCause`. `predicate` preserves authored presentation; `boundPredicate`
-is the one canonical executable predicate. The evidence stores no verdict or
-second expectation result.
+object contains exactly `predicate`, `bindings`, `observation`,
+`terminalCause`, and `timing`. `predicate` preserves authored presentation;
+`bindings` contains the typed string and accessibility-target values needed to
+resolve it. `timing` contains required `budgetMs` and `elapsedMs` values plus
+optional `lastTreeChangeElapsedMs`. The evidence stores no verdict,
+independently supplied executable predicate, or second expectation result.
 
 The node's `outcome` is the sole owner of pass, failure, and child-abort state.
-Report projection replays `boundPredicate` over `observation`, applies the
-terminal cause, and attaches the authored `predicate` to the derived
-`ExpectationResult`. A coverage gap fails replay as the same typed
-`Observation.Gap`; decoding cannot bless incomplete evidence with a stored
-verdict. Baseline and final summaries in public report JSON are derived from
-the observation snapshots and are not stored separately.
+Report projection resolves `predicate` through `bindings`, replays the derived
+executable predicate over `observation`, applies the terminal cause, and
+attaches the authored predicate to the derived `ExpectationResult`. Decoding
+rejects bindings that cannot resolve the predicate. A coverage gap fails replay
+as the same typed `Observation.Gap`; decoding cannot bless incomplete evidence
+with a stored verdict. Baseline and final summaries in public report JSON are
+derived from the observation snapshots and are not stored separately.
 
 `ActionResult.Payload` is the sole semantic payload. `ActionResult` custom
 `Codable` derives `method` from its case and emits `payload` data only when the

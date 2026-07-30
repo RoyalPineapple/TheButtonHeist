@@ -303,9 +303,9 @@ enum PublicHeistExecutionJSONContractFixture {
             ]),
             context: Observation.Context(screenId: "Done visible")
         )
-        return HeistExpectationEvidence(
+        return try HeistExpectationEvidence(
             predicate: donePredicate,
-            boundPredicate: try donePredicate.resolve(in: .empty),
+            bindings: .empty,
             observation: Observation.Evidence(
                 baseline: Observation.Snapshot(
                     interface: makeTestInterface(elements: []),

@@ -9,9 +9,12 @@ extension HeistExecution.Machine {
         wait step: WaitStep,
         context: HeistExecution.StepContext
     ) -> HeistExecution.State {
-        let resolved: ResolvedWaitStep
+        let predicate: HeistExecution.Predicate
         do {
-            resolved = try step.resolve(in: context.environment)
+            predicate = try HeistExecution.Predicate(
+                authored: step.predicate,
+                bindings: context.environment
+            )
         } catch {
             return resume(afterCompletedLeaf: HeistExecution.ResultProjector.waitResolutionFailure(
                 step: step,
@@ -21,11 +24,7 @@ extension HeistExecution.Machine {
         }
 
         let id = nextID()
-        let timeout = HeistExecution.duration(resolved.timeout)
-        let predicate = HeistExecution.Predicate(
-            authored: step.predicate,
-            resolved: resolved.predicate
-        )
+        let timeout = HeistExecution.duration(step.timeout)
         activeLeaf = .wait(HeistExecution.WaitLeaf(
             id: id,
             step: step,

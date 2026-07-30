@@ -82,7 +82,7 @@ extension HeistReferenceName {
     }
 }
 
-package struct HeistExecutionEnvironment: Sendable, Equatable {
+package struct HeistExecutionEnvironment: Codable, Sendable, Equatable {
     package static let empty = HeistExecutionEnvironment()
 
     package let targets: [HeistReferenceName: ResolvedAccessibilityTarget]
@@ -109,6 +109,62 @@ package struct HeistExecutionEnvironment: Sendable, Equatable {
         var strings = self.strings
         strings[parameter] = string
         return HeistExecutionEnvironment(targets: targets, strings: strings)
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case targets
+        case strings
+    }
+
+    package init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(
+            allowed: CodingKeys.self,
+            typeName: "heist execution environment"
+        )
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        targets = try Self.decodeBindings(
+            try container.decodeIfPresent(
+                [String: ResolvedAccessibilityTarget].self,
+                forKey: .targets
+            ) ?? [:],
+            from: container,
+            forKey: .targets
+        )
+        strings = try Self.decodeBindings(
+            try container.decodeIfPresent([String: String].self, forKey: .strings) ?? [:],
+            from: container,
+            forKey: .strings
+        )
+    }
+
+    package func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(
+            Dictionary(uniqueKeysWithValues: targets.map { ($0.key.rawValue, $0.value) }),
+            forKey: .targets
+        )
+        try container.encode(
+            Dictionary(uniqueKeysWithValues: strings.map { ($0.key.rawValue, $0.value) }),
+            forKey: .strings
+        )
+    }
+
+    private static func decodeBindings<Value, Key: CodingKey>(
+        _ bindings: [String: Value],
+        from container: KeyedDecodingContainer<Key>,
+        forKey key: Key
+    ) throws -> [HeistReferenceName: Value] {
+        try Dictionary(uniqueKeysWithValues: bindings.map { rawName, value in
+            do {
+                return (try HeistReferenceName(validating: rawName), value)
+            } catch {
+                throw DecodingError.dataCorruptedError(
+                    forKey: key,
+                    in: container,
+                    debugDescription: "invalid binding name \(rawName): \(error)"
+                )
+            }
+        })
     }
 }
 

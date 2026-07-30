@@ -176,13 +176,6 @@ public struct HeistReport: Sendable, Equatable {
         }
     }
 
-    public enum AccessibilityChange: Sendable, Equatable {
-        case notApplicable
-        case incomplete
-        case unchanged
-        case changed([Observation.Evidence])
-    }
-
     public struct Metrics: Codable, Sendable, Equatable {
         public let measurements: [Measurement]
         public let ceilings: [CeilingMetric]
@@ -252,7 +245,6 @@ public struct HeistReport: Sendable, Equatable {
     public let failure: Failure?
     public let warnings: [HeistExecutionWarning]
     public let diagnostics: Diagnostics
-    public let accessibilityChange: AccessibilityChange
 
     public var outputNodes: [Node] {
         var output: [Node] = []
@@ -368,51 +360,9 @@ private extension HeistReport {
                 diagnostics: Diagnostics(
                     failureScreenshotSummary: result.failureScreenshotSummary,
                     failureInterface: result.failureDiagnosticInterface
-                ),
-                accessibilityChange: AccessibilityChange(result: result)
+                )
             )
         }
-    }
-}
-
-private extension HeistReport.AccessibilityChange {
-    init(result: HeistResult) {
-        let evidence = result.steps.compactMapInResultOrder { step in
-            switch step.node {
-            case .action:
-                step.actionEvidence?.result?.observationEvidence
-            case .wait:
-                step.waitObservation
-            case .conditional,
-                 .forEachElement,
-                 .forEachString,
-                 .forEachElementIteration,
-                 .forEachStringIteration,
-                 .repeatUntil,
-                 .repeatUntilIteration,
-                 .warning,
-                 .failure,
-                 .heist,
-                 .invocation:
-                nil
-            }
-        }
-        guard !evidence.isEmpty else {
-            self = .notApplicable
-            return
-        }
-        guard evidence.allSatisfy({ $0.coverage == .complete }) else {
-            self = .incomplete
-            return
-        }
-        let changed = evidence.filter {
-            $0.events.contains(where: \.changesInterface)
-        }
-        guard !changed.isEmpty else {
-            self = .unchanged
-            return
-        }
-        self = .changed(changed)
     }
 }
 

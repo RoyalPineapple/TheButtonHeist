@@ -49,9 +49,9 @@ import ThePlans
         let current = makeTestObservationSnapshot(elements: [
             makeTestHeistElement(label: "Done"),
         ])
-        let evidence = HeistExpectationEvidence(
+        let evidence = try HeistExpectationEvidence(
             predicate: predicate,
-            boundPredicate: try predicate.resolve(in: .empty),
+            bindings: .empty,
             observation: Observation.Evidence(
                 baseline: makeTestObservationSnapshot(elements: []),
                 events: [.elementsChanged(current)],
@@ -138,9 +138,9 @@ import ThePlans
         let current = makeTestObservationSnapshot(elements: [
             makeTestHeistElement(label: "Done"),
         ])
-        let evidence = HeistExpectationEvidence(
+        let evidence = try HeistExpectationEvidence(
             predicate: predicate,
-            boundPredicate: try predicate.resolve(in: .empty),
+            bindings: .empty,
             observation: Observation.Evidence(
                 baseline: nil,
                 events: [.elementsChanged(current)],
@@ -161,9 +161,9 @@ import ThePlans
         let predicate = AccessibilityPredicate.notification("Saved")
         let matching = try #require(Observation.Notification(text: "Saved", element: nil))
         let later = try #require(Observation.Notification(text: "Unrelated", element: nil))
-        let evidence = HeistExpectationEvidence(
+        let evidence = try HeistExpectationEvidence(
             predicate: predicate,
-            boundPredicate: try predicate.resolve(in: .empty),
+            bindings: .empty,
             observation: Observation.Evidence(
                 baseline: nil,
                 events: [.notification(matching), .notification(later), .noChange],
@@ -187,9 +187,9 @@ import ThePlans
             throughSequence: 9
         )
         let gap = Observation.Gap.notificationIngress(sequenceGap, additional: [])
-        let expectation = HeistExpectationEvidence(
+        let expectation = try HeistExpectationEvidence(
             predicate: predicate,
-            boundPredicate: try predicate.resolve(in: .empty),
+            bindings: .empty,
             observation: Observation.Evidence(
                 baseline: nil,
                 events: [],
@@ -209,7 +209,7 @@ import ThePlans
         }
     }
 
-    @Test func encodedEvidenceContainsOneBoundPredicateAndNoStoredVerdict() throws {
+    @Test func encodedEvidenceContainsBindingsAndNoStoredVerdict() throws {
         let predicate = AccessibilityPredicate.exists(.label("Done"))
         let evidence = try expectationEvidence(
             predicate: predicate,
@@ -222,7 +222,7 @@ import ThePlans
 
         #expect(Set(object.keys) == [
             "predicate",
-            "boundPredicate",
+            "bindings",
             "observation",
             "terminalCause",
             "timing",
@@ -232,20 +232,17 @@ import ThePlans
         #expect(object["expectation"] == nil)
     }
 
-    @Test func boundPredicatePreservesResolvedReferenceAcrossWire() throws {
+    @Test func predicateBindingsPreserveResolvedReferenceAcrossWire() throws {
         let reference: HeistReferenceName = "label"
         let predicate = AccessibilityPredicate.exists(
             .predicate(.label(.exact(reference)))
         )
-        let boundPredicate = try AccessibilityPredicate
-            .exists(.label("Done"))
-            .resolve(in: .empty)
         let current = makeTestObservationSnapshot(elements: [
             makeTestHeistElement(label: "Done"),
         ])
-        let evidence = HeistExpectationEvidence(
+        let evidence = try HeistExpectationEvidence(
             predicate: predicate,
-            boundPredicate: boundPredicate,
+            bindings: HeistExecutionEnvironment(strings: [reference: "Done"]),
             observation: Observation.Evidence(
                 baseline: nil,
                 events: [.elementsChanged(current), .noChange],
@@ -264,14 +261,45 @@ import ThePlans
         #expect(decoded.predicate == predicate)
     }
 
+    @Test func decodingRejectsBindingsThatCannotResolveThePredicate() throws {
+        let reference: HeistReferenceName = "label"
+        let predicate = AccessibilityPredicate.exists(
+            .predicate(.label(.exact(reference)))
+        )
+        let evidence = try HeistExpectationEvidence(
+            predicate: predicate,
+            bindings: HeistExecutionEnvironment(strings: [reference: "Done"]),
+            observation: Observation.Evidence(
+                baseline: nil,
+                events: [.noChange],
+                current: makeTestObservationSnapshot(elements: []),
+                coverage: .complete
+            ),
+            terminalCause: .observed,
+            timing: HeistResultFixture.expectationTiming
+        )
+        var object = try #require(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(evidence))
+                as? [String: Any]
+        )
+        object["bindings"] = ["targets": [:], "strings": [:]]
+
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(
+                HeistExpectationEvidence.self,
+                from: JSONSerialization.data(withJSONObject: object)
+            )
+        }
+    }
+
     private func expectationEvidence(
         predicate: AccessibilityPredicate,
         current: Observation.Snapshot,
         coverage: Observation.Coverage = .complete
     ) throws -> HeistExpectationEvidence {
-        HeistExpectationEvidence(
+        try HeistExpectationEvidence(
             predicate: predicate,
-            boundPredicate: try predicate.resolve(in: .empty),
+            bindings: .empty,
             observation: Observation.Evidence(
                 baseline: nil,
                 events: [.elementsChanged(current), .noChange],

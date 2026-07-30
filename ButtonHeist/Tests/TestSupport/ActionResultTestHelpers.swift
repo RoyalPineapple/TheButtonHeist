@@ -137,9 +137,9 @@ package enum HeistResultFixture {
         terminalCause: HeistExpectationEvidence.TerminalCause = .observed
     ) -> HeistExpectationEvidence {
         do {
-            return HeistExpectationEvidence(
+            return try HeistExpectationEvidence(
                 predicate: predicate,
-                boundPredicate: try predicate.resolve(in: .empty),
+                bindings: .empty,
                 observation: observation,
                 terminalCause: terminalCause,
                 timing: expectationTiming

@@ -137,11 +137,10 @@ extension HeistExecution {
             )
             let expectation = leaf.predicate.flatMap { predicate -> HeistExpectationEvidence? in
                 guard leaf.dispatch?.success == true else { return nil }
-                return HeistExpectationEvidence(
-                    predicate: predicate.authored,
-                    boundPredicate: predicate.resolved,
+                return expectationEvidence(
+                    predicate,
                     observation: evidence,
-                    terminalCause: outcome.expectationTerminalCause,
+                    outcome: outcome,
                     timing: timing
                 )
             }
@@ -186,11 +185,10 @@ extension HeistExecution {
             outcome: LeafOutcome,
             timing: HeistExpectationTiming
         ) -> HeistExecutionStepResult {
-            let expectation = HeistExpectationEvidence(
-                predicate: leaf.predicate.authored,
-                boundPredicate: leaf.predicate.resolved,
+            let expectation = expectationEvidence(
+                leaf.predicate,
                 observation: evidence,
-                terminalCause: outcome.expectationTerminalCause,
+                outcome: outcome,
                 timing: timing
             )
             let passedEvidence = HeistPassedWaitEvidence(expectation)
@@ -220,6 +218,25 @@ extension HeistExecution {
 }
 
 private extension HeistExecution.ResultProjector {
+    static func expectationEvidence(
+        _ predicate: HeistExecution.Predicate,
+        observation: Observation.Evidence,
+        outcome: HeistExecution.LeafOutcome,
+        timing: HeistExpectationTiming
+    ) -> HeistExpectationEvidence {
+        do {
+            return try HeistExpectationEvidence(
+                predicate: predicate.authored,
+                bindings: predicate.bindings,
+                observation: observation,
+                terminalCause: outcome.expectationTerminalCause,
+                timing: timing
+            )
+        } catch {
+            preconditionFailure("Machine retained invalid predicate bindings: \(error)")
+        }
+    }
+
     static func actionResult(
         leaf: HeistExecution.ActionLeaf,
         evidence: Observation.Evidence,

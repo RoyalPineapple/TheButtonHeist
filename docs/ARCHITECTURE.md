@@ -532,11 +532,11 @@ metric boundaries render that report instead of interpreting `HeistResult`
 independently. There is no competing execution report or Fence-owned report
 projection.
 
-The report also owns accessibility-change classification. Its
-`AccessibilityChange` is explicitly `notApplicable`, `incomplete`, `unchanged`,
-or `changed(evidence)`: missing observation evidence is never asked to mean
-several of those states. Fence renderers derive `netDelta` only from
-`changed(evidence)` and cannot independently reclassify execution evidence.
+Each action or wait result owns its bounded `Observation.Evidence`. Report
+projection preserves that evidence on the corresponding semantic node and does
+not invent a heist-wide interval across step boundaries. Action renderers may
+derive a delta from the one action interval they own; heist-level renderers do
+not maintain a parallel accessibility-change classification.
 
 `HeistExecutionStepResult` owns a typed execution path, duration, and one private
 `HeistExecutionStepNode` used only for storage and wire projection. Package
@@ -566,12 +566,13 @@ accept that payload plus observation, subject, and timing values. Activation
 observation evidence enters only through the fixed-method activation factories.
 `HeistActionEvidence.completed` carries exactly that one `ActionResult` plus
 optional `HeistExpectationEvidence`. That evidence stores the authored
-predicate for presentation, one canonical `boundPredicate`,
-`Observation.Evidence`, and the terminal cause, but no verdict. Wait steps own
-the same evidence shape.
-`HeistReport.project(result:)` replays `boundPredicate` over the retained
-evidence and attaches the authored predicate to the derived
-`ExpectationResult`; incomplete evidence propagates its typed
+predicate, its typed execution bindings, `Observation.Evidence`, the terminal
+cause, and timing, but no verdict or independently supplied executable
+predicate. Wait steps own the same evidence shape.
+`HeistReport.project(result:)` resolves the authored predicate through those
+bindings, replays the derived predicate over the retained evidence, and attaches
+the authored predicate to the derived `ExpectationResult`; invalid bindings are
+rejected during decoding and incomplete evidence propagates its typed
 `Observation.Gap`. Live and decoded results therefore derive identical
 predicate truth instead of trusting a stored boolean or copied expectation.
 `ActionResultSuccessEvidence` and

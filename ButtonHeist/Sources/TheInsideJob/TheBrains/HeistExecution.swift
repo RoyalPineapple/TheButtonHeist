@@ -66,6 +66,16 @@ extension HeistExecution {
     internal struct Predicate: Sendable, Equatable {
         internal let authored: AccessibilityPredicate
         internal let resolved: ObservationPredicate
+        internal let bindings: HeistExecutionEnvironment
+
+        internal init(
+            authored: AccessibilityPredicate,
+            bindings: HeistExecutionEnvironment
+        ) throws {
+            self.authored = authored
+            self.resolved = try authored.resolve(in: bindings)
+            self.bindings = bindings
+        }
 
         internal var observationScope: SemanticObservationScope {
             resolved.observationScope
