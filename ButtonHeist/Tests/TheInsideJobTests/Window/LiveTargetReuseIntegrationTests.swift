@@ -48,7 +48,7 @@ final class LiveTargetReuseIntegrationTests: XCTestCase {
         in vault: TheVault
     ) -> RetainedTarget? {
         guard let heistID = vault.liveElementHeistId(matching: cell),
-              let treeElement = vault.latestObservation.tree.findElement(heistId: heistID),
+              let treeElement = vault.currentInterfaceObservation.tree.findElement(heistId: heistID),
               case .resolved(let target) = vault.resolveLiveActionTarget(for: treeElement)
         else { return nil }
         return RetainedTarget(

@@ -111,8 +111,7 @@ extension TheBrainsPipelineTests {
             after.events.map(\.testKind),
             [.elementsChanged, .screenChanged, .elementsChanged]
         )
-        let evidence = brains.vault.semanticObservationStream
-            .evidence(after: boundary)
+        let evidence = brains.vault.state.evidence(after: boundary)
         XCTAssertEqual(evidence.coverage, .complete)
     }
 

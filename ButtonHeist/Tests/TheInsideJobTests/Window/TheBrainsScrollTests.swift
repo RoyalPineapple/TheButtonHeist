@@ -59,7 +59,7 @@ final class TheBrainsScrollTests: XCTestCase {
         case .unavailable: nil
         }
         _ = try XCTUnwrap(current, "Expected a committed visible observation")
-        return brains.vault.latestObservation
+        return brains.vault.currentInterfaceObservation
     }
 
     func retainedLiveObject() -> NSObject {
@@ -485,7 +485,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            brains.vault.latestObservation.tree.orderedElements.map(\.heistId),
+            brains.vault.currentInterfaceObservation.tree.orderedElements.map(\.heistId),
             [firstEntry.heistId, secondEntry.heistId]
         )
     }

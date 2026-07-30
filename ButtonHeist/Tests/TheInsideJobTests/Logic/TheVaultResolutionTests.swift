@@ -404,21 +404,21 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(publication.events.last, .noChange)
     }
 
-    func testUncommittedEvidenceDoesNotReplaceCanonicalViewportTruth() async {
+    func testCommittedEvidenceReplacesCanonicalViewportTruth() async {
         let settled = InterfaceObservation.makeForTests(elements: [(element(label: "Settled"), "settled")])
         await vault.semanticObservationStream.commitVisibleObservationForTesting(settled)
 
         let observed = InterfaceObservation.makeForTests(elements: [(element(label: "Observed"), "observed")])
-        vault.observeInterface(observed)
+        await vault.installObservationForTesting(observed)
 
-        XCTAssertEqual(vault.interfaceTree.orderedElements.first?.element.label, "Settled")
-        XCTAssertEqual(vault.latestObservation.tree.orderedElements.first?.element.label, "Observed")
-        XCTAssertNil(vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Observed"))).resolvedElement)
-        XCTAssertNil(vault.resolveVisibleTarget(literalTarget(ResolvedElementPredicate.label("Observed"))).resolvedElement)
-        XCTAssertEqual(vault.viewportElementIDs, ["settled"])
+        XCTAssertEqual(vault.interfaceTree.orderedElements.first?.element.label, "Observed")
+        XCTAssertEqual(vault.currentInterfaceObservation.tree.orderedElements.first?.element.label, "Observed")
+        XCTAssertNotNil(vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Observed"))).resolvedElement)
+        XCTAssertNotNil(vault.resolveVisibleTarget(literalTarget(ResolvedElementPredicate.label("Observed"))).resolvedElement)
+        XCTAssertEqual(vault.viewportElementIDs, ["observed"])
     }
 
-    func testLiveVisibleAliasPreservesCanonicalRevealMetadata() async throws {
+    func testVisibleCommitReplacesRevealMetadataWithCommittedObservation() async throws {
         let row = element(label: "Row", traits: .button)
         let containerPath = TreePath([0])
         let rowPath = TreePath([0, 0])
@@ -453,22 +453,22 @@ extension TheVaultResolutionTests {
             ),
             element: row
         )
-        vault.observeInterface(InterfaceObservation.makeForTests(
+        await vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: ["row": freshEntry],
             hierarchy: [.container(scrollContainer, children: [.element(row, traversalIndex: 0)])],
             heistIdsByPath: [rowPath: "row"],
             firstResponderHeistId: nil,
         ))
 
-        XCTAssertEqual(vault.latestObservation.tree.findElement(heistId: "row")?.scrollMembership?.index, 500)
+        XCTAssertEqual(vault.currentInterfaceObservation.tree.findElement(heistId: "row")?.scrollMembership?.index, 500)
         let canonical = try XCTUnwrap(vault.interfaceElement(heistId: "row"))
         XCTAssertEqual(
             try XCTUnwrap(vault.visibleLiveElementAliasing(canonical)).scrollMembership?.index,
-            100
+            500
         )
     }
 
-    func testLiveVisibleAliasDoesNotReplaceCanonicalRevealMetadata() async throws {
+    func testVisibleCommitClearsRevealMetadataWithCommittedObservation() async throws {
         let row = element(label: "Row", traits: .button)
         let staleEntry = InterfaceTree.Element(
             heistId: "row",
@@ -496,18 +496,16 @@ extension TheVaultResolutionTests {
             ),
             element: row
         )
-        vault.observeInterface(InterfaceObservation.makeForTests(
+        await vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: ["row": freshEntry],
             hierarchy: [.element(row, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): "row"],
             firstResponderHeistId: nil,
         ))
 
-        XCTAssertNil(vault.latestObservation.tree.findElement(heistId: "row")?.scrollMembership)
+        XCTAssertNil(vault.currentInterfaceObservation.tree.findElement(heistId: "row")?.scrollMembership)
         let canonical = try XCTUnwrap(vault.interfaceElement(heistId: "row"))
-        XCTAssertNotNil(
-            try XCTUnwrap(vault.visibleLiveElementAliasing(canonical)).scrollMembership
-        )
+        XCTAssertNil(try XCTUnwrap(vault.visibleLiveElementAliasing(canonical)).scrollMembership)
     }
 
 }

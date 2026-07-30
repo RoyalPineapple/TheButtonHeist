@@ -114,10 +114,7 @@ class SemanticObservationStreamTestCase: XCTestCase {
     }
 
     func retainedEvents(after historyIndex: Int) throws -> [Observation.Event] {
-        let result = vault.semanticObservationStream.events(
-            after: historyIndex
-        )
-        return try result.get()
+        Array(try vault.state.history.events(after: historyIndex))
     }
 
     func waitForObservationWaiterCount(_ expectedCount: Int) async {

@@ -199,7 +199,7 @@ extension TheVaultResolutionTests {
         XCTAssertNotEqual(liveTarget.activationPoint, sourcePoint)
     }
 
-    func testVisibleResolutionKeepsSettledSemanticsWhileLiveTargetUsesFreshGeometry() async throws {
+    func testVisibleCommitSuppliesFreshSemanticsAndLiveGeometryAtomically() async throws {
         let staleFrame = CGRect(x: 32, y: 865, width: 240, height: 44)
         let stalePoint = CGPoint(x: staleFrame.midX, y: staleFrame.midY)
         let settledElement = AccessibilityElement.make(
@@ -228,22 +228,22 @@ extension TheVaultResolutionTests {
             activationPoint: freshPoint,
             customRotors: [.init(name: "Errors")]
         )
-        vault.observeInterface(InterfaceObservation.makeForTests(
+        await vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [(freshElement, "rotor_host")],
             objects: ["rotor_host": liveObject]
         ))
 
         let target = literalTarget(ResolvedElementPredicate.identifier("rotor_host"))
-        let settled = try XCTUnwrap(vault.resolveTarget(target).resolvedElement)
-        XCTAssertEqual(settled.geometry.screen, TheVault.onscreenSpace(for: settledElement))
-        XCTAssertEqual(settled.geometry.view.ownerPath, .root)
-        XCTAssertEqual(settled.geometry.view.frame?.cgRect, staleFrame)
-        XCTAssertEqual(settled.geometry.view.activationPoint?.cgPoint, stalePoint)
+        let committed = try XCTUnwrap(vault.resolveTarget(target).resolvedElement)
+        XCTAssertEqual(committed.geometry.screen, TheVault.onscreenSpace(for: freshElement))
+        XCTAssertEqual(committed.geometry.view.ownerPath, .root)
+        XCTAssertEqual(committed.geometry.view.frame?.cgRect, freshFrame)
+        XCTAssertEqual(committed.geometry.view.activationPoint?.cgPoint, freshPoint)
 
         let visible = try XCTUnwrap(vault.resolveVisibleTarget(target).resolvedElement)
-        XCTAssertEqual(visible.geometry, settled.geometry)
+        XCTAssertEqual(visible.geometry, committed.geometry)
 
-        guard case .resolved(let liveTarget) = vault.resolveLiveActionTarget(for: settled) else {
+        guard case .resolved(let liveTarget) = vault.resolveLiveActionTarget(for: committed) else {
             return XCTFail("Expected fresh live action target")
         }
         XCTAssertEqual(liveTarget.frame, freshFrame)
@@ -252,22 +252,30 @@ extension TheVaultResolutionTests {
         XCTAssertNotEqual(liveTarget.activationPoint, liveObject.accessibilityActivationPoint)
     }
 
-    func testRawEvidenceRequiresCommittedHeistIdForLiveObjectAndGeometry() async throws {
+    func testMismatchedLiveEvidenceCannotAttachToCommittedTree() throws {
         let committedId: HeistId = "committed_control"
         let rawId: HeistId = "raw_control"
-        let settledFrame = CGRect(x: 20, y: 40, width: 120, height: 44)
-        let settledElement = AccessibilityElement.make(
+        let committedFrame = CGRect(x: 20, y: 40, width: 120, height: 44)
+        let committedElement = AccessibilityElement.make(
             label: "Shared Control",
             traits: .adjustable,
-            frame: settledFrame
+            frame: committedFrame
         )
-        await vault.semanticObservationStream.commitVisibleObservationForTesting(
-            InterfaceObservation.makeForTests(elements: [(settledElement, committedId)])
+        let committedObservation = InterfaceObservation.makeForTests(
+            elements: [(committedElement, committedId)]
         )
-        let target = try resolvedTarget(
-            AccessibilityTarget.element(.label("Shared Control"), traits: [.adjustable])
+        var state = TheVault.State()
+        let initial = requireCommittedObservation(
+            state.commitObservation(
+                stateAdmission(for: committedObservation),
+                sourceObservation: committedObservation,
+                beginningNewBaseline: false
+            )
         )
-        let semanticTarget = try XCTUnwrap(vault.resolveVisibleTarget(target).resolvedElement)
+        let priorHistoryEnd = state.history.endIndex
+        let priorNotificationIndex = state.notificationIndex
+        let priorCurrent = state.current
+        let priorObservation = state.interfaceObservation
 
         let rawObject = NSObject()
         let rawFrame = CGRect(x: 80, y: 160, width: 180, height: 52)
@@ -276,29 +284,28 @@ extension TheVaultResolutionTests {
             traits: .adjustable,
             frame: rawFrame
         )
-        vault.observeInterface(InterfaceObservation.makeForTests(
+        let rawObservation = InterfaceObservation.makeForTests(
             elements: [(rawElement, rawId)],
             objects: [rawId: rawObject]
-        ))
+        )
 
-        XCTAssertNil(vault.interfaceElement(heistId: rawId))
-        XCTAssertEqual(vault.resolveVisibleTarget(target).resolvedElement?.heistId, committedId)
-        XCTAssertNil(vault.visibleLiveElementAliasing(semanticTarget))
-        guard case .objectUnavailable = vault.resolveLiveActionTarget(for: semanticTarget) else {
-            return XCTFail("Expected different-HeistId raw evidence to remain non-dispatchable")
+        XCTAssertThrowsError(
+            try rawObservation.replacingTreeWithCurrentCapture(committedObservation.tree)
+        )
+        let rejected = state.commitObservation(
+            stateAdmission(for: committedObservation),
+            sourceObservation: rawObservation,
+            beginningNewBaseline: false
+        )
+        guard case .failure(.liveCaptureReattachmentFailed) = rejected else {
+            return XCTFail("Expected mismatched live evidence to reject the commit")
         }
-
-        vault.observeInterface(InterfaceObservation.makeForTests(
-            elements: [(rawElement, committedId)],
-            objects: [committedId: rawObject]
-        ))
-
-        guard case .resolved(let liveTarget) = vault.resolveLiveActionTarget(for: semanticTarget) else {
-            return XCTFail("Expected committed identity to admit raw live evidence")
-        }
-        XCTAssertTrue(liveTarget.object === rawObject)
-        XCTAssertEqual(liveTarget.treeElement.heistId, committedId)
-        XCTAssertEqual(liveTarget.frame, rawFrame)
+        XCTAssertEqual(state.history.endIndex, priorHistoryEnd)
+        XCTAssertEqual(state.notificationIndex, priorNotificationIndex)
+        XCTAssertEqual(state.current, priorCurrent)
+        XCTAssertEqual(state.interfaceObservation?.tree, priorObservation?.tree)
+        XCTAssertEqual(state.interfaceObservation?.captureID, priorObservation?.captureID)
+        XCTAssertEqual(initial.current, priorCurrent)
     }
 
     func testVisibleSettleCommitStripsLiveHandlesFromSettledProjection() async {
@@ -315,7 +322,7 @@ extension TheVaultResolutionTests {
         XCTAssertNil(LiveCapture.makeForTests(snapshot: vault.interfaceTree.viewportCapture).object(for: "save"))
     }
 
-    func testLiveContainerTargetAcquiresFreshGeometryFromLatestLiveCapture() async throws {
+    func testVisibleCommitSuppliesFreshContainerSemanticsAndLiveGeometryAtomically() async throws {
         let path = TreePath([0])
         let staleFrame = CGRect(x: 0, y: 800, width: 240, height: 80)
         let freshFrame = CGRect(x: 0, y: 120, width: 240, height: 80)
@@ -385,7 +392,7 @@ extension TheVaultResolutionTests {
                 firstResponderHeistId: nil,
             )
         )
-        vault.observeInterface(liveScreen)
+        await vault.installObservationForTesting(liveScreen)
 
         let resolved = vault.resolveTarget(try resolvedTarget(
             .container(.identifier("actions"))
@@ -398,8 +405,8 @@ extension TheVaultResolutionTests {
         }
 
         XCTAssertTrue(liveTarget.object === liveObject)
-        XCTAssertEqual(liveTarget.containerTarget.container.frame.cgRect, staleFrame)
-        XCTAssertEqual(liveTarget.containerTarget.viewSpace, staleViewSpace)
+        XCTAssertEqual(liveTarget.containerTarget.container.frame.cgRect, freshFrame)
+        XCTAssertEqual(liveTarget.containerTarget.viewSpace, freshViewSpace)
         XCTAssertEqual(liveTarget.frame, freshFrame)
         XCTAssertEqual(liveTarget.activationPoint, CGPoint(x: freshFrame.midX, y: freshFrame.midY))
     }
@@ -492,6 +499,37 @@ extension TheVaultResolutionTests {
         XCTAssertNil(vault.interfaceElement(heistId: "stale_offscreen"))
     }
 
+}
+
+@MainActor
+private func stateAdmission(for observation: InterfaceObservation) -> Observation.Admission {
+    Observation.Admission(
+        tree: observation.tree,
+        tripwireSignal: .empty,
+        discoveryCommitPolicy: .mergeIntoInterface,
+        lineage: .resting,
+        scope: .visible,
+        notifications: Observation.NotificationSnapshot(
+            admittedNotifications: [],
+            through: AccessibilityNotificationCursor(sequence: 0),
+            scopedScreenChangedThrough: 0
+        )!,
+        keyboardVisible: nil,
+        timestamp: Date(timeIntervalSince1970: 0),
+        viewportFrames: observation.tree.viewportFrames,
+        geometryTolerance: CoarseFrameComparison.currentGeometryTolerance
+    )
+}
+
+private func requireCommittedObservation(
+    _ result: Result<Observation.Publication, Observation.CaptureFailure>
+) -> Observation.Publication {
+    switch result {
+    case .success(let publication):
+        publication
+    case .failure(let failure):
+        preconditionFailure("Test observation was rejected: \(failure.diagnostic)")
+    }
 }
 
 #endif

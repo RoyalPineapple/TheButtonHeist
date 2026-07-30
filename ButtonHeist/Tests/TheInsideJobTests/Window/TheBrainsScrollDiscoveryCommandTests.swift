@@ -391,7 +391,7 @@ extension TheBrainsScrollTests {
         XCTAssertTrue(transition.current?.snapshot.interface.projectedElements.contains {
             $0.semantics.assertable.label == "Scrolled"
         } == true)
-        let committed = brains.vault.semanticObservationStream.current()
+        let committed = brains.vault.state.current
         XCTAssertEqual(
             transition.current?.snapshot,
             committed?.snapshot
@@ -639,7 +639,7 @@ extension TheBrainsScrollTests {
 
         XCTAssertTrue(result.success, "Expected scroll_to_visible to discover the target above; got \(result)")
         XCTAssertLessThanOrEqual(scrollView.contentOffset.y, 10)
-        let current = brains.vault.semanticObservationStream.current()
+        let current = brains.vault.state.current
         let visibleTarget = try XCTUnwrap(
             current?.snapshot.interface.projectedElements.first {
                 $0.semantics.assertable.label == "Top Target"

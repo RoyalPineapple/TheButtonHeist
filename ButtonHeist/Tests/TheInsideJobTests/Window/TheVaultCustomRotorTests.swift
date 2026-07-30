@@ -206,7 +206,7 @@ final class TheVaultCustomRotorTests: ButtonHeistTestCase {
                 boundary: .cancellation
             )
         else { return XCTFail("Expected a committed live observation") }
-        let observation = brains.vault.latestObservation
+        let observation = brains.vault.currentInterfaceObservation
 
         let cachedHeistId = HeistId(rawValue: "cached_virtual_result")
         var elements = observation.tree.elements

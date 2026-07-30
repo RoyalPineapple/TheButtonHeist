@@ -148,14 +148,15 @@ extension TheVault {
     func admitRotorHistory() -> RotorHistoryAdmission {
         guard let cursor = rotorCursor else {
             return RotorHistoryAdmission(
-                historyIndex: semanticObservationStream.historyEndIndex(),
+                historyIndex: state.history.endIndex,
                 invalidatedCursor: nil
             )
         }
 
-        switch semanticObservationStream.events(
-            after: cursor.selectionHistoryIndex
-        ) {
+        let events = Result {
+            Array(try state.history.events(after: cursor.selectionHistoryIndex))
+        }
+        switch events {
         case .success(let events):
             let historyIndex = cursor.selectionHistoryIndex + events.count
             guard events.contains(where: \.isScreenChange) else {
@@ -172,7 +173,7 @@ extension TheVault {
         case .failure:
             clearRotorCursor(ifHolding: cursor)
             return RotorHistoryAdmission(
-                historyIndex: semanticObservationStream.historyEndIndex(),
+                historyIndex: state.history.endIndex,
                 invalidatedCursor: cursor
             )
         }

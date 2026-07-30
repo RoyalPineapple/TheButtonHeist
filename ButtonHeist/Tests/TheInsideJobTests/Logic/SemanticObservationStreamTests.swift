@@ -55,7 +55,7 @@ final class SemanticObservationStreamTests: XCTestCase {
         }
         let stream = demandedVault.semanticObservationStream
         stream.start()
-        let historyIndex = stream.historyEndIndex()
+        let historyIndex = vault.state.history.endIndex
         let subscription = stream.subscribe(scope: .visible)
         defer { subscription.cancel() }
 
@@ -90,7 +90,7 @@ final class SemanticObservationStreamTests: XCTestCase {
         stream.discardCurrentObservation()
         let during = await stream.commitVisibleObservationForTesting(.empty)
         let expected = before.events + during.events
-        let current = stream.current()
+        let current = vault.state.current
         let history = try stream.events(after: 0).get()
 
         XCTAssertEqual(received, expected)
@@ -103,7 +103,7 @@ final class SemanticObservationStreamTests: XCTestCase {
 
         subscription.cancel()
         let afterCancellation = await stream.commitVisibleObservationForTesting(.empty)
-        let currentAfterCancellation = stream.current()
+        let currentAfterCancellation = vault.state.current
         let historyAfterCancellation = try stream.events(after: 0).get()
 
         XCTAssertEqual(received, expected)

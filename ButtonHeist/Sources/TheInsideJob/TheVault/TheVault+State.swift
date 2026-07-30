@@ -44,7 +44,7 @@ extension TheVault {
 
         private struct CommittedObservation {
             let current: Current
-            let interfaceTree: InterfaceTree
+            let observation: InterfaceObservation
             let tripwireSignal: TheTripwire.TripwireSignal
         }
 
@@ -86,7 +86,11 @@ extension TheVault {
         }
 
         internal var interfaceTree: InterfaceTree {
-            currentPhase.observation?.interfaceTree ?? .empty
+            interfaceObservation?.tree ?? .empty
+        }
+
+        internal var interfaceObservation: InterfaceObservation? {
+            currentPhase.observation?.observation
         }
 
         internal var notificationIndex: AccessibilityNotificationCursor {
@@ -231,12 +235,18 @@ extension TheVault {
         }
 
         internal mutating func commitObservation(
-            _ admission: Observation.Admission
-        ) -> Observation.Publication {
-            let admittedNotifications = admission.notifications.admittedNotifications.filter {
-                $0.sequence > notificationCursor.sequence
+            _ admission: Observation.Admission,
+            sourceObservation: InterfaceObservation,
+            beginningNewBaseline: Bool
+        ) -> Result<Observation.Publication, Observation.CaptureFailure> {
+            var next = self
+            if beginningNewBaseline {
+                next.discardCurrentObservation()
             }
-            let previousTree = interfaceTree
+            let admittedNotifications = admission.notifications.admittedNotifications.filter {
+                $0.sequence > next.notificationCursor.sequence
+            }
+            let previousTree = next.interfaceTree
             let comparedTree: InterfaceTree
             switch admission.scope {
             case .visible:
@@ -253,7 +263,7 @@ extension TheVault {
                 previousTree.merging(admission.tree)
             }
 
-            let replacementRequirement = currentPhase.replacementRequirement
+            let replacementRequirement = next.currentPhase.replacementRequirement
             let continuity: ScreenContinuity
             if replacementRequirement != nil {
                 continuity = .replacement(.screenChangedNotification)
@@ -276,18 +286,23 @@ extension TheVault {
                     .map(Observation.Event.notification)
             }
             let departureEvidence = replacementRequirement?.departureEvidence
-                ?? currentSnapshot.map { PendingDepartureEvidence(snapshot: $0) }
+                ?? next.currentSnapshot.map { PendingDepartureEvidence(snapshot: $0) }
             let events = Self.events(
                 notificationEvents: notificationEvents,
                 admittedNotifications: admittedNotifications,
-                currentSnapshot: currentSnapshot,
+                currentSnapshot: next.currentSnapshot,
                 departureEvidence: departureEvidence,
                 snapshot: snapshot,
                 continuity: continuity,
                 geometryTolerance: admission.geometryTolerance
             )
 
-            var next = self
+            let observation: InterfaceObservation
+            do {
+                observation = try sourceObservation.replacingTreeWithCurrentCapture(nextTree)
+            } catch {
+                return .failure(.liveCaptureReattachmentFailed)
+            }
             let historyRange = next.history.record(
                 events,
                 protectedBy: next.protectedHistoryIndex
@@ -299,25 +314,25 @@ extension TheVault {
             )
             next.currentPhase = .committed(CommittedObservation(
                 current: current,
-                interfaceTree: nextTree,
+                observation: observation,
                 tripwireSignal: admission.tripwireSignal
             ))
             next.notificationCursor = AccessibilityNotificationCursor(
                 sequence: max(
-                    notificationCursor.sequence,
+                    next.notificationCursor.sequence,
                     admission.notifications.through.sequence
                 )
             )
             next.scopedScreenChangedSequence = max(
-                scopedScreenChangedSequence,
+                next.scopedScreenChangedSequence,
                 admission.notifications.scopedScreenChangedThrough
             )
             self = next
-            return Observation.Publication(
+            return .success(Observation.Publication(
                 current: current,
                 historyRange: historyRange,
                 events: events
-            )
+            ))
         }
 
         private static func snapshot(

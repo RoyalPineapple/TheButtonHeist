@@ -14,7 +14,7 @@ extension Observation.Stream {
         if let current = admittedObservation(scope: .visible, after: nil) {
             return current
         }
-        let historyIndex = state.history.endIndex
+        let historyIndex = vault.state.history.endIndex
         switch await waitForObservation(
             after: historyIndex,
             scope: .visible,
@@ -36,7 +36,7 @@ extension Observation.Stream {
     internal func refreshedVisibleObservation(
         boundary: SemanticObservationWaitBoundary
     ) async -> VisibleObservationOutcome {
-        let historyIndex = state.history.endIndex
+        let historyIndex = vault.state.history.endIndex
         switch await waitForObservation(
             after: historyIndex,
             scope: .visible,
@@ -71,7 +71,7 @@ extension Observation.Stream {
     internal func visibleObservationAfterNextCycle(
         covering coverage: AccessibilityNotificationCoverage
     ) async -> TheVault.State.Current? {
-        let historyIndex = state.history.endIndex
+        let historyIndex = vault.state.history.endIndex
         switch await waitForObservation(
             after: historyIndex,
             scope: .visible,
@@ -104,7 +104,7 @@ extension Observation.Stream {
         boundary: SemanticObservationWaitBoundary,
         continuesThroughEmptyCycles: Bool
     ) async -> TheVault.State.Current? {
-        var historyIndex = state.history.endIndex
+        var historyIndex = vault.state.history.endIndex
         while !Task.isCancelled {
             if let current = currentObservation(covering: coverage) {
                 return current
@@ -115,7 +115,7 @@ extension Observation.Stream {
                 boundary: boundary
             ) {
             case .observation:
-                historyIndex = state.history.endIndex
+                historyIndex = vault.state.history.endIndex
             case .cycleCompletedWithoutObservation:
                 guard continuesThroughEmptyCycles else { return nil }
             case .deadlineReached,
@@ -133,14 +133,14 @@ extension Observation.Stream {
         covering coverage: AccessibilityNotificationCoverage
     ) -> TheVault.State.Current? {
         guard hasCommittedObservation(covering: coverage) else { return nil }
-        return state.current
+        return vault.state.current
     }
 
     internal func hasCommittedObservation(
         covering coverage: AccessibilityNotificationCoverage
     ) -> Bool {
-        state.notificationIndex.sequence >= coverage.through.sequence
-            && state.scopedScreenChangedSequence
+        vault.state.notificationIndex.sequence >= coverage.through.sequence
+            && vault.state.scopedScreenChangedSequence
                 >= coverage.scopedScreenChangedThrough
     }
 
@@ -150,7 +150,7 @@ extension Observation.Stream {
     ) -> TheVault.State.Current? {
         discardIfScreenChangedSinceRead()
         invalidateAdmissionIfSignalChanged(to: currentTripwireSignal())
-        guard case .success(let current) = state.admittedObservation(
+        guard case .success(let current) = vault.state.admittedObservation(
             scope: scope,
             after: historyIndex
         ) else { return nil }
@@ -158,38 +158,12 @@ extension Observation.Stream {
     }
 
     @discardableResult
-    internal func commitVisibleObservation(
-        _ committableObservation: CommittableInterfaceObservation,
-        notificationBatch: AccessibilityNotificationBatch
-    ) -> Observation.Publication {
-        publishCommittedObservation(
-            committableObservation,
-            scope: .visible,
-            notificationBatch: notificationBatch
-        )
-    }
-
-    @discardableResult
-    internal func commitDiscoveryObservation(
-        _ committableObservation: CommittableInterfaceObservation,
-        notificationBatch: AccessibilityNotificationBatch
-    ) -> Observation.Publication {
-        publishCommittedObservation(
-            committableObservation,
-            scope: .discovery,
-            notificationBatch: notificationBatch
-        )
-    }
-
-    @discardableResult
-    private func publishCommittedObservation(
+    internal func commitObservation(
         _ committableObservation: CommittableInterfaceObservation,
         scope: SemanticObservationScope,
         notificationBatch: AccessibilityNotificationBatch
-    ) -> Observation.Publication {
-        guard let vault else {
-            preconditionFailure("Observation.Stream cannot commit after TheVault is released")
-        }
+    ) -> Result<Observation.Publication, Observation.CaptureFailure> {
+        let beginsNewBaseline = notificationBatch.gap != nil
         let resolvedNotificationBatch = completeNotificationHistory(
             in: notificationBatch
         )
@@ -216,15 +190,18 @@ extension Observation.Stream {
             viewportFrames: sourceObservation.tree.viewportFrames,
             geometryTolerance: CoarseFrameComparison.currentGeometryTolerance
         )
-        let publication = state.commitObservation(admission)
-        if let reattached = try? sourceObservation.replacingTreeWithCurrentCapture(
-            state.interfaceTree
+        switch vault.state.commitObservation(
+            admission,
+            sourceObservation: sourceObservation,
+            beginningNewBaseline: beginsNewBaseline
         ) {
-            vault.recordCommittedObservation(reattached)
+        case .failure(let failure):
+            return .failure(failure)
+        case .success(let publication):
+            publish(publication)
+            completeObservationWaiters()
+            return .success(publication)
         }
-        publish(publication)
-        completeObservationWaiters()
-        return publication
     }
 
     /// Reads the tree once and emits what it read.
@@ -237,16 +214,9 @@ extension Observation.Stream {
         scope: SemanticObservationScope,
         notificationBatch: AccessibilityNotificationBatch
     ) async -> VisibleObservationOutcome {
-        await beforeVisibleReading()
         guard !Task.isCancelled else {
             return .unavailable(.cancelled)
         }
-        guard let vault else {
-            return .unavailable(.runtimeUnavailable)
-        }
-        let notificationBatch = completeNotificationHistory(
-            in: notificationBatch
-        )
         guard let captured = vault.captureVisibleObservation() else {
             return .unavailable(.sourceTreeUnavailable)
         }
@@ -266,19 +236,16 @@ extension Observation.Stream {
         guard !Task.isCancelled else {
             return .unavailable(.cancelled)
         }
-        let publication = switch scope {
-        case .visible:
-            commitVisibleObservation(
-                committableObservation,
-                notificationBatch: notificationBatch
-            )
-        case .discovery:
-            commitDiscoveryObservation(
-                committableObservation,
-                notificationBatch: notificationBatch
-            )
+        switch commitObservation(
+            committableObservation,
+            scope: scope,
+            notificationBatch: notificationBatch
+        ) {
+        case .success(let publication):
+            return .committed(publication.current)
+        case .failure(let failure):
+            return .unavailable(failure)
         }
-        return .committed(publication.current)
     }
 
     /// Throws away the Vault's current semantic truth.
@@ -286,15 +253,13 @@ extension Observation.Stream {
     /// The reading after this one opens a new screen, because it has nothing to
     /// continue from.
     internal func discardCurrentObservation() {
-        state.discardCurrentObservation()
+        vault.state.discardCurrentObservation()
     }
 
     private func completeNotificationHistory(
         in batch: AccessibilityNotificationBatch
     ) -> AccessibilityNotificationBatch {
-        guard batch.gap != nil else { return batch }
-        discardCurrentObservation()
-        return batch.beginningNewBaseline
+        batch.gap == nil ? batch : batch.beginningNewBaseline
     }
 
     /// Throws the tree away when a screen change landed after the last reading.
@@ -302,12 +267,11 @@ extension Observation.Stream {
     /// The notification is the world saying the screen went; what the vault
     /// holds describes the one before it.
     func discardIfScreenChangedSinceRead() {
-        guard let vault,
-              state.current != nil,
+        guard vault.state.current != nil,
               vault.accessibilityNotifications.latestScopedScreenChangedSequence
-              > state.scopedScreenChangedSequence
+              > vault.state.scopedScreenChangedSequence
         else { return }
-        state.invalidateCurrentObservationForScreenChange()
+        vault.state.invalidateCurrentObservationForScreenChange()
     }
 
     /// Admits the tree as it stands right now.
@@ -318,18 +282,17 @@ extension Observation.Stream {
     /// notifications are movement on the same screen — UIKit posts them
     /// throughout a transition — so they let the reading through.
     func admitCurrentObservation(
-        _ observation: InterfaceObservation? = nil,
+        _ observation: InterfaceObservation,
         vault: TheVault,
         tripwireSignal: TheTripwire.TripwireSignal,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
         lineage: ScreenLineage
     ) -> Result<CommittableInterfaceObservation, Observation.CaptureFailure> {
-        let reading = observation ?? vault.latestObservation
         guard currentTripwireSignal().hierarchy == tripwireSignal.hierarchy else {
             return .failure(.hierarchyChangedDuringCapture)
         }
         return .success(CommittableInterfaceObservation.admitCaptured(
-            reading,
+            observation,
             tripwireSignal: tripwireSignal,
             discoveryCommitPolicy: discoveryCommitPolicy,
             lineage: lineage

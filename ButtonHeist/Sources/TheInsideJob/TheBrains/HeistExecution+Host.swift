@@ -211,7 +211,7 @@ extension HeistExecution {
             return try await withTaskCancellationHandler {
                 try Task.checkCancellation()
                 let stream = brains.vault.semanticObservationStream
-                let historyIndex = stream.historyEndIndex()
+                let historyIndex = brains.vault.state.history.endIndex
                 stream.protectHistory(from: historyIndex)
                 let observationDemand = stream.beginActiveObservationDemand()
                 let notificationScope = brains.vault.accessibilityNotifications
@@ -789,8 +789,7 @@ extension HeistExecution {
                         || result.evidence.current != nil
                 )
             }
-            let nextProtectedHistoryIndex = brains.vault
-                .semanticObservationStream.historyEndIndex()
+            let nextProtectedHistoryIndex = brains.vault.state.history.endIndex
             brains.vault.semanticObservationStream
                 .advanceHistoryProtection(
                     from: session.protectedHistoryIndex,
@@ -839,8 +838,7 @@ extension HeistExecution {
             for observation: ActiveObservation,
             terminalCaptureAvailable: Bool
         ) -> Observation.Evidence {
-            let evidence = brains.vault.semanticObservationStream
-                .evidence(after: observation.boundary)
+            let evidence = brains.vault.state.evidence(after: observation.boundary)
             guard terminalCaptureAvailable || evidence.coverage != .complete else {
                 return Observation.Evidence(
                     baseline: evidence.baseline,
@@ -858,8 +856,7 @@ extension HeistExecution {
             capture: ObservationCloseCapture,
             source: ObservationFinishSource
         ) async -> ObservationCloseResult {
-            let existingEvidence = brains.vault.semanticObservationStream
-                .evidence(after: observation.boundary)
+            let existingEvidence = brains.vault.state.evidence(after: observation.boundary)
             let expectationProven = {
                 guard case .running(let session) = phase else { return false }
                 return session.machine.activeLeaf.map {

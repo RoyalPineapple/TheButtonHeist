@@ -52,7 +52,7 @@ extension TheBrainsScrollTests {
         await waitForSettledSemanticWaiter()
 
         XCTAssertEqual(
-            brains.vault.latestObservation.tree.orderedElements.first?.element.label,
+            brains.vault.currentInterfaceObservation.tree.orderedElements.first?.element.label,
             "Gone Target"
         )
         XCTAssertEqual(

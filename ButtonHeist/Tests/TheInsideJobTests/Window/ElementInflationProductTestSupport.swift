@@ -45,7 +45,7 @@ final class ElementInflationProductTests: ButtonHeistRuntimeTestCase {
         case .unavailable: nil
         }
         _ = try XCTUnwrap(current, "Expected a committed visible observation")
-        return runtime.vault.latestObservation
+        return runtime.vault.currentInterfaceObservation
     }
 
     func installOffscreenActivationFixture(

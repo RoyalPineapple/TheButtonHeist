@@ -249,7 +249,7 @@ extension TheVaultResolutionTests {
     func testCancelledDiscoveryWaiterUnregisters() async {
         vault.semanticObservationStream.start()
 
-        let start = vault.semanticObservationStream.historyEndIndex()
+        let start = vault.state.history.endIndex
         let waiter = Task { @MainActor in
             await vault.semanticObservationStream.waitForObservation(
                 after: start,
@@ -274,7 +274,7 @@ extension TheVaultResolutionTests {
         )
 
         let result = await vault.semanticObservationStream.waitForObservation(
-            after: vault.semanticObservationStream.historyEndIndex(),
+            after: vault.state.history.endIndex,
             scope: .visible,
             boundary: .externalDeadline(deadline)
         )

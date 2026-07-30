@@ -115,7 +115,7 @@ extension Observation.Stream {
         if let historyIndex {
             cursor = historyIndex
         } else {
-            cursor = state.history.endIndex
+            cursor = vault.state.history.endIndex
         }
         while true {
             switch await waitForObservation(
@@ -130,7 +130,7 @@ extension Observation.Stream {
                 ) {
                     return latest
                 }
-                cursor = state.history.endIndex
+                cursor = vault.state.history.endIndex
             case .cycleCompletedWithoutObservation:
                 return nil
             case .deadlineReached, .cancelled, .unavailable:
@@ -183,7 +183,7 @@ extension Observation.Stream {
         completedScope: SemanticObservationScope?,
         observationCommitted: Bool?
     ) -> SemanticObservationWaitResult? {
-        switch state.current(
+        switch vault.state.current(
             after: waiter.historyIndex,
             scope: waiter.scope
         ) {

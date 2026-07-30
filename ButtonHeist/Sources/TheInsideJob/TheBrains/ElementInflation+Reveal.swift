@@ -93,7 +93,7 @@ extension ElementInflation {
             )
         }
 
-        let historyIndex = vault.semanticObservationStream.historyEndIndex()
+        let historyIndex = vault.state.history.endIndex
         let reveal = await revealSemanticTarget(
             admittedTarget,
             initialElement: treeElement,
@@ -219,7 +219,7 @@ extension ElementInflation {
             ) != nil else {
                 return Task.isCancelled ? .cancelled : .timedOut
             }
-            cursor = vault.semanticObservationStream.historyEndIndex()
+            cursor = vault.state.history.endIndex
 
             switch targetRefreshResolution(
                 mode: mode,

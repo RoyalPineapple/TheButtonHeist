@@ -139,7 +139,7 @@ extension TheVaultResolutionTests {
         )
         XCTAssertEqual(publication.events[1], .noChange)
 
-        let evidence = vault.semanticObservationStream.evidence(after: boundary)
+        let evidence = vault.state.evidence(after: boundary)
         XCTAssertEqual(evidence.events, publication.events)
         XCTAssertEqual(evidence.baseline, baseline.current.snapshot)
         XCTAssertEqual(evidence.current, publication.current.snapshot)
@@ -148,7 +148,7 @@ extension TheVaultResolutionTests {
     }
 
     func testScopedIngressBeyondAmbientLimitCommitsCompleteOrderedVaultHistory() async {
-        vault.semanticObservationStream.reset(retentionLimit: 128)
+        vault.state = TheVault.State(retentionLimit: 128)
         let observation = InterfaceObservation.makeForTests(elements: [
             (element(label: "Stable"), "stable"),
         ])
@@ -170,7 +170,7 @@ extension TheVaultResolutionTests {
             guard await publishVisible(observation, covering: coverage) != nil else {
                 return nil
             }
-            let evidence = vault.semanticObservationStream.evidence(after: boundary)
+            let evidence = vault.state.evidence(after: boundary)
 
             XCTAssertEqual(coverage.after.sequence, 0)
             XCTAssertEqual(coverage.through.sequence, 65)
@@ -214,7 +214,7 @@ extension TheVaultResolutionTests {
         }
         XCTAssertNotNil(committed)
 
-        let notifications = vault.semanticObservationStream.notifications()
+        let notifications = vault.state.notifications
 
         XCTAssertEqual(notifications.map(\.text), ["Saved", nil, "Ready to pay"])
         XCTAssertEqual(notifications[0].element, nil)
@@ -224,7 +224,7 @@ extension TheVaultResolutionTests {
     }
 
     func testNotificationProjectionContainsOnlyRetainedHistory() async {
-        vault.semanticObservationStream.reset(retentionLimit: 4)
+        vault.state = TheVault.State(retentionLimit: 4)
         let observation = InterfaceObservation.makeForTests(elements: [
             (element(label: "Stable"), "stable"),
         ])
@@ -244,7 +244,7 @@ extension TheVaultResolutionTests {
         }
 
         XCTAssertEqual(
-            vault.semanticObservationStream.notifications().compactMap(\.text),
+            vault.state.notifications.compactMap(\.text),
             ["Second", "Third"]
         )
     }

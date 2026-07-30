@@ -82,8 +82,8 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
         )
         XCTAssertNil(vault.interfaceTree.findElement(heistId: "old_row"))
         XCTAssertNotNil(vault.interfaceTree.findElement(heistId: "new_row"))
-        XCTAssertNil(vault.latestObservation.liveCapture.object(for: "old_row"))
-        XCTAssertTrue(vault.latestObservation.liveCapture.object(for: "new_row") === newRow)
+        XCTAssertNil(vault.currentInterfaceObservation.liveCapture.object(for: "old_row"))
+        XCTAssertTrue(vault.currentInterfaceObservation.liveCapture.object(for: "new_row") === newRow)
     }
 
     func testDiscoveryPublicationProjectsOneLogAcrossFulfilledScopes() async throws {
@@ -133,7 +133,6 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
 
     func testDiscoverySettlementRejectsHierarchyChangeBeforeCommit() async {
         let observation = observation(label: "Candidate", heistId: "candidate")
-        vault.observeInterface(observation)
         let currentSignal = TheTripwire.TripwireSignal(
             topmostVC: ObjectIdentifier(vault),
             navigation: .empty,
@@ -142,6 +141,7 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
         )
         vault.semanticObservationStream.readTripwireSignal = { currentSignal }
         let admission = vault.semanticObservationStream.admitCurrentObservation(
+            observation,
             vault: vault,
             tripwireSignal: tripwireSignal(sequence: 1),
             discoveryCommitPolicy: .mergeIntoInterface,

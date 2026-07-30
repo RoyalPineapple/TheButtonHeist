@@ -6,8 +6,8 @@ import TheScore
 extension TheVault.State {
     /// Read projection of the Vault's current snapshot and navigation admission.
     ///
-    /// The State owns the snapshot and interface tree. This projection carries
-    /// neither a second tree nor capture identity.
+    /// The State owns the committed observation. This projection carries
+    /// neither a second observation nor capture identity.
     internal struct Current: Sendable, Equatable {
         internal let snapshot: Observation.Snapshot
         internal let scope: SemanticObservationScope
@@ -19,21 +19,21 @@ extension TheVault.State {
 
 extension Observation {
     internal enum CaptureFailure: Error, Sendable, Equatable {
-        case runtimeUnavailable
         case cancelled
         case sourceTreeUnavailable
         case hierarchyChangedDuringCapture
+        case liveCaptureReattachmentFailed
 
         internal var diagnostic: String {
             switch self {
-            case .runtimeUnavailable:
-                "the Button Heist runtime became unavailable during capture"
             case .cancelled:
                 "the accessibility capture was cancelled"
             case .sourceTreeUnavailable:
                 "the accessibility tree could not be read"
             case .hierarchyChangedDuringCapture:
                 "the view hierarchy moved while the reading was taken"
+            case .liveCaptureReattachmentFailed:
+                "live accessibility evidence no longer matches the committed interface"
             }
         }
     }

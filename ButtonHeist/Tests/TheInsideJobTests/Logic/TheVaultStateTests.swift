@@ -3,6 +3,7 @@
 import Foundation
 import XCTest
 
+@testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
 @testable import ThePlans
 @testable import TheScore
@@ -43,13 +44,13 @@ final class TheVaultStateTests: XCTestCase {
 
     func testProtectedBoundaryPreventsEvictionUntilReleased() throws {
         var state = TheVault.State(retentionLimit: 2)
-        _ = state.commitObservation(admission())
+        _ = commit(&state, admission())
         let boundary = state.history.endIndex
         state.protectHistory(from: boundary)
 
-        _ = state.commitObservation(admission())
-        _ = state.commitObservation(admission())
-        _ = state.commitObservation(admission())
+        _ = commit(&state, admission())
+        _ = commit(&state, admission())
+        _ = commit(&state, admission())
 
         XCTAssertEqual(state.history.startIndex, boundary)
         XCTAssertEqual(
@@ -67,15 +68,15 @@ final class TheVaultStateTests: XCTestCase {
 
     func testAdvancingProtectedBoundaryReleasesCompletedLeafHistory() throws {
         var state = TheVault.State(retentionLimit: 2)
-        _ = state.commitObservation(admission())
+        _ = commit(&state, admission())
         let firstBoundary = state.history.endIndex
         state.protectHistory(from: firstBoundary)
 
-        _ = state.commitObservation(admission())
-        _ = state.commitObservation(admission())
+        _ = commit(&state, admission())
+        _ = commit(&state, admission())
         let nextBoundary = state.history.endIndex
         state.advanceHistoryProtection(from: firstBoundary, to: nextBoundary)
-        _ = state.commitObservation(admission())
+        _ = commit(&state, admission())
 
         XCTAssertEqual(state.history.count, 2)
         XCTAssertThrowsError(
@@ -120,8 +121,8 @@ final class TheVaultStateTests: XCTestCase {
 
     func testEqualSettledStateRecordsNoChange() {
         var state = TheVault.State()
-        let first = state.commitObservation(admission())
-        let second = state.commitObservation(admission())
+        let first = commit(&state, admission())
+        let second = commit(&state, admission())
 
         guard case .elementsChanged(let initial) = first.events.last else {
             return XCTFail("The first parse must establish element truth")
@@ -134,12 +135,12 @@ final class TheVaultStateTests: XCTestCase {
 
     func testReplacementPublishesNotificationDepartureBoundaryAndArrivalInOrder() {
         var state = TheVault.State()
-        let baseline = state.commitObservation(admission(
+        let baseline = commit(&state, admission(
             keyboardVisible: true,
             timestamp: Date(timeIntervalSince1970: 1)
         ))
         let boundary = state.history.endIndex
-        let replacement = state.commitObservation(admission(
+        let replacement = commit(&state, admission(
             notifications: [
                 Observation.AdmittedNotification(
                     sequence: 1,
@@ -184,7 +185,7 @@ final class TheVaultStateTests: XCTestCase {
 
     func testNotificationPrecedesForcedElementChange() throws {
         var state = TheVault.State()
-        _ = state.commitObservation(admission())
+        _ = commit(&state, admission())
         let notification = Observation.AdmittedNotification(
             sequence: 1,
             kind: .layoutChanged,
@@ -192,7 +193,7 @@ final class TheVaultStateTests: XCTestCase {
             element: nil
         )
 
-        let publication = state.commitObservation(admission(notifications: [notification]))
+        let publication = commit(&state, admission(notifications: [notification]))
 
         XCTAssertEqual(
             publication.events.first,
@@ -209,7 +210,7 @@ final class TheVaultStateTests: XCTestCase {
 
     func testCurrentAfterBoundaryUsesHistoryAvailability() {
         var state = TheVault.State(retentionLimit: 1)
-        _ = state.commitObservation(admission())
+        _ = commit(&state, admission())
         let boundary = state.history.endIndex
 
         XCTAssertEqual(
@@ -217,7 +218,7 @@ final class TheVaultStateTests: XCTestCase {
             nil
         )
 
-        let current = state.commitObservation(admission()).current
+        let current = commit(&state, admission()).current
 
         XCTAssertEqual(
             try state.current(after: boundary, scope: .visible).get(),
@@ -225,13 +226,50 @@ final class TheVaultStateTests: XCTestCase {
         )
     }
 
+    func testRejectedLiveCaptureReattachmentLeavesCommittedStateUntouched() {
+        var state = TheVault.State()
+        let retained = InterfaceObservation.makeForTests(
+            elements: [(AccessibilityElement.make(label: "Retained"), "retained")]
+        )
+        let initial = requireCommitted(
+            state.commitObservation(
+                admission(observation: retained),
+                sourceObservation: retained,
+                beginningNewBaseline: false
+            )
+        )
+        let priorHistoryEnd = state.history.endIndex
+        let priorNotificationIndex = state.notificationIndex
+        let priorCurrent = state.current
+        let priorObservation = state.interfaceObservation
+        let replacement = InterfaceObservation.makeForTests(
+            elements: [(AccessibilityElement.make(label: "Replacement"), "replacement")]
+        )
+
+        let rejected = state.commitObservation(
+            admission(observation: replacement),
+            sourceObservation: retained,
+            beginningNewBaseline: false
+        )
+
+        guard case .failure(.liveCaptureReattachmentFailed) = rejected else {
+            return XCTFail("Expected capture reattachment to reject the commit")
+        }
+        XCTAssertEqual(state.history.endIndex, priorHistoryEnd)
+        XCTAssertEqual(state.notificationIndex, priorNotificationIndex)
+        XCTAssertEqual(state.current, priorCurrent)
+        XCTAssertEqual(state.interfaceObservation?.tree, priorObservation?.tree)
+        XCTAssertEqual(state.interfaceObservation?.captureID, priorObservation?.captureID)
+        XCTAssertEqual(initial.current, priorCurrent)
+    }
+
     private func admission(
         scope: SemanticObservationScope = .visible,
         notifications: [Observation.AdmittedNotification] = [],
         keyboardVisible: Bool? = nil,
-        timestamp: Date = Date(timeIntervalSince1970: 0)
+        timestamp: Date = Date(timeIntervalSince1970: 0),
+        observation: InterfaceObservation = .empty
     ) -> Observation.Admission {
-        let observation = InterfaceObservation.makeForTests()
         let through = notifications.map(\.sequence).max() ?? 0
         return Observation.Admission(
             tree: observation.tree,
@@ -249,6 +287,28 @@ final class TheVaultStateTests: XCTestCase {
             viewportFrames: observation.tree.viewportFrames,
             geometryTolerance: CoarseFrameComparison.currentGeometryTolerance
         )
+    }
+
+    private func commit(
+        _ state: inout TheVault.State,
+        _ admission: Observation.Admission
+    ) -> Observation.Publication {
+        requireCommitted(state.commitObservation(
+            admission,
+            sourceObservation: .empty,
+            beginningNewBaseline: false
+        ))
+    }
+
+    private func requireCommitted(
+        _ result: Result<Observation.Publication, Observation.CaptureFailure>
+    ) -> Observation.Publication {
+        switch result {
+        case .success(let publication):
+            publication
+        case .failure(let failure):
+            preconditionFailure("Test observation was rejected: \(failure.diagnostic)")
+        }
     }
 
     private func snapshot() -> Observation.Snapshot {

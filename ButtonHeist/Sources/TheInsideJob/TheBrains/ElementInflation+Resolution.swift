@@ -101,7 +101,7 @@ extension ElementInflation {
             } else {
                 pendingRetry = (reason, refreshedResolution)
             }
-            let historyIndex = vault.semanticObservationStream.historyEndIndex()
+            let historyIndex = vault.state.history.endIndex
             let refresh: TargetRefreshTerminal
             switch identity {
             case .captureLocal(let target):

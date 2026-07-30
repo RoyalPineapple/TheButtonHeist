@@ -12,7 +12,7 @@ import ButtonHeistTestSupport
 final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
     func testHistoryRetainsEventsInPublicationOrder() async throws {
         let stream = vault.semanticObservationStream
-        let start = stream.historyEndIndex()
+        let start = vault.state.history.endIndex
         let first = await stream.commitVisibleObservationForTesting(
             observation(label: "First", heistId: "first")
         )
@@ -27,8 +27,8 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
 
     func testHistoryReportsGapAfterProtectedRangeIsReleased() async throws {
         let stream = vault.semanticObservationStream
-        stream.reset(retentionLimit: 2)
-        let start = stream.historyEndIndex()
+        vault.state = TheVault.State(retentionLimit: 2)
+        let start = vault.state.history.endIndex
         stream.protectHistory(from: start)
 
         let first = await stream.commitVisibleObservationForTesting(
@@ -52,7 +52,7 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
 
     func testIndependentHistoryReadsDoNotShareProgress() async {
         let stream = vault.semanticObservationStream
-        let start = stream.historyEndIndex()
+        let start = vault.state.history.endIndex
         _ = await stream.commitVisibleObservationForTesting(
             observation(label: "First", heistId: "first")
         )
@@ -76,7 +76,7 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
             observation(label: "After", heistId: "after")
         )
 
-        let evidence = stream.evidence(after: boundary)
+        let evidence = vault.state.evidence(after: boundary)
 
         XCTAssertEqual(evidence.baseline, first.current.snapshot)
         XCTAssertEqual(evidence.current, second.current.snapshot)
@@ -86,7 +86,7 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
 
     func testCommitCompletesEveryObservationWaiterWithCurrentState() async {
         let stream = vault.semanticObservationStream
-        let start = stream.historyEndIndex()
+        let start = vault.state.history.endIndex
         let tasks = (0..<2).map { _ in
             Task { @MainActor in
                 await stream.waitForObservation(
@@ -111,7 +111,7 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
 
     func testCancellingObservationWaitRemovesWaiter() async {
         let stream = vault.semanticObservationStream
-        let start = stream.historyEndIndex()
+        let start = vault.state.history.endIndex
         let task = Task { @MainActor in
             await stream.waitForObservation(
                 after: start,
@@ -130,7 +130,7 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
 
     func testDiscoveryCycleCompletesWaiterWithoutInventingObservation() async {
         let stream = vault.semanticObservationStream
-        let start = stream.historyEndIndex()
+        let start = vault.state.history.endIndex
         let task = Task { @MainActor in
             await stream.waitForObservation(
                 after: start,

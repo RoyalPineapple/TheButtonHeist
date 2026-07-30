@@ -9,7 +9,7 @@ import AccessibilitySnapshotParser
 
 /// Main-actor owner of Button Heist's current accessibility interface.
 ///
-/// The interface tree is the only target-resolution authority. The latest
+/// The interface tree is the only target-resolution authority. Its committed
 /// observation carries disposable UIKit evidence for actionability.
 @MainActor
 final class TheVault {
@@ -50,13 +50,23 @@ final class TheVault {
 
     // MARK: - Interface State
 
-    var interfaceTree: InterfaceTree {
-        semanticObservationStream.canonicalInterfaceTree
+    /// The Vault's sole durable observation state.
+    var state = State()
+
+    var currentInterfaceObservation: InterfaceObservation {
+        state.interfaceObservation ?? .empty
     }
-    var latestObservation: InterfaceObservation = .empty
+
+    var interfaceTree: InterfaceTree {
+        currentInterfaceObservation.tree
+    }
 
     var currentLiveCapture: LiveCapture {
-        latestObservation.liveCapture
+        currentInterfaceObservation.liveCapture
+    }
+
+    var captureID: InterfaceCaptureID {
+        currentInterfaceObservation.captureID
     }
 
     // MARK: - Observation Scheduling

@@ -31,7 +31,7 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
         let retainedAfterRefresh = try stream
             .events(after: committedPublication.historyRange.upperBound)
             .get()
-        let currentAfterRefresh = stream.current()
+        let currentAfterRefresh = brains.vault.state.current
         XCTAssertTrue(retainedAfterRefresh.isEmpty)
         XCTAssertEqual(currentAfterRefresh, committedPublication.current)
     }
@@ -49,13 +49,13 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
 
         XCTAssertTrue(brains.vault.interfaceTree.orderedElements.isEmpty)
 
-        let boundary = stream.historyEndIndex()
+        let boundary = brains.vault.state.history.endIndex
         let publication = await stream.commitVisibleObservationForTesting(captured)
 
         XCTAssertEqual(publication.historyRange.lowerBound, boundary)
         XCTAssertNotNil(brains.vault.interfaceTree.findElement(heistId: "raw"))
         let retained = try stream.events(after: boundary).get()
-        let current = stream.current()
+        let current = brains.vault.state.current
         XCTAssertEqual(retained, publication.events)
         XCTAssertEqual(current, publication.current)
         XCTAssertEqual(
