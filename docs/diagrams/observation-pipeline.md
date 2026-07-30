@@ -27,12 +27,12 @@ flowchart LR
 ```
 
 One display pulse starts at most one claim, capture, parse, commit, publication,
-and evaluation cycle. A pulse arriving during an active cycle becomes one
-coalesced pending pulse. Zero demand pauses the display link, so the runtime is
-otherwise inert. The Vault constructs each event and records it before delivery.
-A snapshot is current truth, an event is one ordered fact, history is the
-Vault-owned retained event array, and evidence is immutable result data. UIKit
-objects remain at the boundary.
+and evaluation cycle. Pulses arriving during an active synchronous cycle are
+dropped; a later display pulse starts the next demanded cycle. Zero demand
+pauses the display link, so the runtime is otherwise inert. The Vault constructs
+each event and records it before delivery. A snapshot is current truth, an event
+is one ordered fact, history is the Vault-owned retained event array, and
+evidence is immutable result data. UIKit objects remain at the boundary.
 
 The host interprets pending actions. For `.perform`, it performs the typed
 MainActor requests and admits their results. For `.wait`, it waits for the next

@@ -76,14 +76,14 @@ final class HeistExecutionMachineTests: XCTestCase {
 
         guard case .pending(.wait) = machine.advance(.currentSnapshot(
             HeistExecution.RequestID(rawValue: request.id.rawValue + 1),
-            heistSnapshot(labels: ["Home"])
+            makeTestObservationSnapshot(labels: ["Home"])
         )) else {
             return XCTFail("A stale snapshot must leave the machine pending")
         }
 
         guard case .complete(let completion) = machine.advance(.currentSnapshot(
             request.id,
-            heistSnapshot(labels: ["Home"])
+            makeTestObservationSnapshot(labels: ["Home"])
         )) else {
             return XCTFail("The admitted snapshot must complete the conditional")
         }
@@ -125,7 +125,7 @@ final class HeistExecutionMachineTests: XCTestCase {
             return XCTFail("The wait must begin one observation")
         }
         guard case .pending(.perform(let firstExploration)) = machine.advance(
-            .observationBegan(id, baseline: heistSnapshot(labels: []))
+            .observationBegan(id, baseline: makeTestObservationSnapshot(labels: []))
         ),
               firstExploration.count == 1,
               case .explore(id, _) = firstExploration[0] else {
@@ -144,7 +144,7 @@ final class HeistExecutionMachineTests: XCTestCase {
         }
 
         guard case .pending(.perform(let eventExploration)) = machine.advance(
-            .event(.elementsChanged(heistSnapshot(labels: ["Other"])))
+            .event(.elementsChanged(makeTestObservationSnapshot(labels: ["Other"])))
         ),
               eventExploration.count == 1,
               case .explore(id, _) = eventExploration[0] else {
@@ -173,7 +173,7 @@ final class HeistExecutionMachineTests: XCTestCase {
         }
         guard case .pending(.wait) = machine.advance(.observationBegan(
             id,
-            baseline: heistSnapshot(labels: ["Target"])
+            baseline: makeTestObservationSnapshot(labels: ["Target"])
         )) else {
             return XCTFail("Current visible truth must satisfy existence without discovery")
         }

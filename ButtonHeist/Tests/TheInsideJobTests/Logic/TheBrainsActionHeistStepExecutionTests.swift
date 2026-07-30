@@ -64,7 +64,7 @@ final class HeistMachineStepExecutionTests: XCTestCase {
         )
         guard case .pending(.wait) = machine.advance(.observationBegan(
             observation.id,
-            baseline: heistSnapshot(labels: ["Late"])
+            baseline: makeTestObservationSnapshot(labels: ["Late"])
         )) else {
             return XCTFail("A duplicate observation receipt must be ignored")
         }
@@ -102,7 +102,7 @@ final class HeistMachineStepExecutionTests: XCTestCase {
         let observation = try XCTUnwrap(machine.start().singleBeginObservationRequest)
         let dispatch = try XCTUnwrap(machine.advance(.observationBegan(
             observation.id,
-            baseline: heistSnapshot(labels: ["Before"])
+            baseline: makeTestObservationSnapshot(labels: ["Before"])
         )).singleDispatchRequest)
 
         XCTAssertEqual(dispatch.id, observation.id)

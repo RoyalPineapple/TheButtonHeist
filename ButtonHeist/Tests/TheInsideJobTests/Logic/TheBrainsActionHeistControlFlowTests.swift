@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import ButtonHeistTestSupport
 import XCTest
 
 @testable import AccessibilitySnapshotParser
@@ -8,7 +9,7 @@ import XCTest
 
 final class HeistMachineControlFlowTests: XCTestCase {
     func testConditionalRetainsSelectionActualAndSnapshotSummary() throws {
-        let snapshot = heistSnapshot(labels: ["Home", "Login"])
+        let snapshot = makeTestObservationSnapshot(labels: ["Home", "Login"])
         let plan = try HeistPlan(body: [
             .conditional(try ConditionalStep(cases: [
                 PredicateCase(
@@ -51,7 +52,7 @@ final class HeistMachineControlFlowTests: XCTestCase {
         ])
         var driver = try HeistMachineTestDriver(
             plan: plan,
-            script: MachineRunScript(snapshots: [heistSnapshot(labels: ["Settings"])])
+            script: MachineRunScript(snapshots: [makeTestObservationSnapshot(labels: ["Settings"])])
         )
 
         let completion = try driver.run()
@@ -116,7 +117,7 @@ final class HeistMachineControlFlowTests: XCTestCase {
         ])
         var driver = try HeistMachineTestDriver(
             plan: plan,
-            script: MachineRunScript(snapshots: [heistSnapshot(labels: ["Home"])])
+            script: MachineRunScript(snapshots: [makeTestObservationSnapshot(labels: ["Home"])])
         )
 
         let completion = try driver.run()
@@ -139,7 +140,7 @@ final class HeistMachineControlFlowTests: XCTestCase {
         var driver = try HeistMachineTestDriver(
             plan: plan,
             script: MachineRunScript(
-                snapshots: [heistSnapshot(labels: ["Done"])],
+                snapshots: [makeTestObservationSnapshot(labels: ["Done"])],
                 events: [.noChange]
             )
         )
@@ -166,9 +167,9 @@ final class HeistMachineControlFlowTests: XCTestCase {
         var driver = try HeistMachineTestDriver(
             plan: plan,
             script: MachineRunScript(
-                snapshots: [heistSnapshot(labels: [])],
+                snapshots: [makeTestObservationSnapshot(labels: [])],
                 events: [
-                    .elementsChanged(heistSnapshot(labels: ["Done"])),
+                    .elementsChanged(makeTestObservationSnapshot(labels: ["Done"])),
                 ]
             )
         )

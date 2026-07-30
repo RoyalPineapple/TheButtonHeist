@@ -350,7 +350,7 @@ extension TheVaultResolutionTests {
         let replacementRecord = history.record(replacement.events, protectedBy: nil)
         XCTAssertEqual(history.screenGeneration(at: replacementRecord.lowerBound), 0)
         XCTAssertEqual(history.screenGeneration(at: replacementRecord.lowerBound + 1), 0)
-        XCTAssertEqual(history.screenGeneration(at: replacementRecord.lowerBound + 2), 0)
+        XCTAssertEqual(history.screenGeneration(at: replacementRecord.lowerBound + 2), 1)
         XCTAssertEqual(history.screenGeneration(at: replacementRecord.upperBound), 1)
         XCTAssertEqual(
             history.evidence(

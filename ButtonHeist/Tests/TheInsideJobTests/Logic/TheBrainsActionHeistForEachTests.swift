@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import ButtonHeistTestSupport
 import XCTest
 
 @testable import AccessibilitySnapshotParser
@@ -13,7 +14,7 @@ final class HeistMachineForEachTests: XCTestCase {
         ])
         var driver = try HeistMachineTestDriver(
             plan: plan,
-            script: MachineRunScript(snapshots: [heistSnapshot(labels: ["Keep"])])
+            script: MachineRunScript(snapshots: [makeTestObservationSnapshot(labels: ["Keep"])])
         )
 
         let completion = try driver.run()
@@ -27,7 +28,7 @@ final class HeistMachineForEachTests: XCTestCase {
     }
 
     func testForEachSnapshotRequestIDCannotBeConfusedWithTargetOrdinal() throws {
-        let snapshot = heistSnapshot(labels: ["Delete", "Delete"])
+        let snapshot = makeTestObservationSnapshot(labels: ["Delete", "Delete"])
         let plan = try elementLoopPlan(body: [
             .warn(WarnStep(message: "iteration")),
         ])
@@ -73,7 +74,7 @@ final class HeistMachineForEachTests: XCTestCase {
         var driver = try HeistMachineTestDriver(
             plan: plan,
             script: MachineRunScript(snapshots: [
-                heistSnapshot(labels: ["Delete", "Delete"]),
+                makeTestObservationSnapshot(labels: ["Delete", "Delete"]),
             ])
         )
 

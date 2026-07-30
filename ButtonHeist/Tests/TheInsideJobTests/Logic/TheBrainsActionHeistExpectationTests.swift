@@ -28,8 +28,8 @@ final class HeistMachineExpectationTests: XCTestCase {
             .appeared(.label("Ready")),
         ]).resolve(in: .empty)
         let events: [Observation.Event] = [
-            .elementsChanged(heistSnapshot(labels: [])),
-            .elementsChanged(heistSnapshot(labels: ["Ready"])),
+            .elementsChanged(makeTestObservationSnapshot(labels: [])),
+            .elementsChanged(makeTestObservationSnapshot(labels: ["Ready"])),
             .noChange,
         ]
         var history = Observation.History(retentionLimit: 16)
@@ -45,8 +45,8 @@ final class HeistMachineExpectationTests: XCTestCase {
     }
 
     func testActionExpectationConsumesHistoryAfterDispatch() throws {
-        let missing = heistSnapshot(labels: ["Submit"])
-        let ready = heistSnapshot(labels: ["Submit", "Ready"])
+        let missing = makeTestObservationSnapshot(labels: ["Submit"])
+        let ready = makeTestObservationSnapshot(labels: ["Submit", "Ready"])
         let plan = try HeistPlan(body: [
             .action(ActionStep(
                 command: .dismiss,
@@ -86,9 +86,9 @@ final class HeistMachineExpectationTests: XCTestCase {
     }
 
     func testActionElementTransitionWithoutWatchTargetObservesWithoutExploring() throws {
-        let initial = heistSnapshot(labels: ["Submit"])
-        let processingStarted = heistSnapshot(labels: ["Processing", "Submit"])
-        let processing = heistSnapshot(labels: ["Processing"])
+        let initial = makeTestObservationSnapshot(labels: ["Submit"])
+        let processingStarted = makeTestObservationSnapshot(labels: ["Processing", "Submit"])
+        let processing = makeTestObservationSnapshot(labels: ["Processing"])
         let plan = try HeistPlan(body: [
             .action(ActionStep(
                 command: .dismiss,
@@ -183,7 +183,7 @@ final class HeistMachineExpectationTests: XCTestCase {
               case .beginObservation(let id, _) = beginRequests[0] else {
             return XCTFail("The wait must begin one observation")
         }
-        let baseline = heistSnapshot(labels: [])
+        let baseline = makeTestObservationSnapshot(labels: [])
         guard case .pending(.wait) = machine.advance(
             .observationBegan(id, baseline: baseline)
         ),
@@ -203,7 +203,7 @@ final class HeistMachineExpectationTests: XCTestCase {
         )
 
         guard case .pending(.wait) = machine.advance(
-            .event(.elementsChanged(heistSnapshot(labels: ["Late Change"])))
+            .event(.elementsChanged(makeTestObservationSnapshot(labels: ["Late Change"])))
         ) else {
             return XCTFail("A final-capture change must reopen observation")
         }
@@ -232,7 +232,7 @@ final class HeistMachineExpectationTests: XCTestCase {
             machine.activeLeaf?.admits(.request(secondFinishID)) == true
         )
 
-        let lateChange = heistSnapshot(labels: ["Late Change"])
+        let lateChange = makeTestObservationSnapshot(labels: ["Late Change"])
         let events: [Observation.Event] = [
             heistNotification("Saved"),
             .noChange,
@@ -276,8 +276,8 @@ final class HeistMachineExpectationTests: XCTestCase {
 
     func testIncompleteHistoryCannotManufactureSuccessfulEvidence() throws {
         var history = Observation.History(retentionLimit: 1)
-        let baseline = heistSnapshot(labels: ["Before"])
-        let current = heistSnapshot(labels: ["After"])
+        let baseline = makeTestObservationSnapshot(labels: ["Before"])
+        let current = makeTestObservationSnapshot(labels: ["After"])
         let protectedRange = history.record(
             [.elementsChanged(baseline)],
             protectedBy: nil
@@ -297,8 +297,11 @@ final class HeistMachineExpectationTests: XCTestCase {
 
 private extension HeistMachineExpectationTests {
     func totalSnapshot(value: String) -> Observation.Snapshot {
-        heistSnapshot(elements: [
-            AccessibilityElement.make(label: "Total", value: value),
+        makeTestObservationSnapshot(nodes: [
+            .parsedElement(
+                AccessibilityElement.make(label: "Total", value: value),
+                actions: []
+            ),
         ])
     }
 }

@@ -617,9 +617,9 @@ TheTripwire's single persistent `CADisplayLink` is the observation pulse clock.
 demand. Zero demand pauses the link. A pulse starts one cycle, which claims
 notification ingress, captures and parses UIKit state, commits snapshot and
 history, publishes ordered events to the active evaluator, then acknowledges
-the claim. A pulse received during that work is coalesced as one pending pulse.
-Business deadlines can cancel an operation but do not create another capture
-clock.
+the claim. Pulses received during that synchronous work are dropped; a later
+display pulse starts the next demanded cycle. Business deadlines can cancel an
+operation but do not create another capture clock.
 
 Discovery and inflation move the viewport through a typed
 `Navigation.ViewportMovementIntent`. After a successful physical dispatch, the

@@ -218,38 +218,14 @@ extension TheVault {
                 Observation.Notification(text: $0.text, element: $0.element)
                     .map(Observation.Event.notification)
             }
-            let forcesElementChange = Self.forcesElementChange(admittedNotifications)
-            let currentEvent: Observation.Event
-            let events: [Observation.Event]
-            if continuity.isReplacement {
-                let departure = Observation.Snapshot(
-                    interface: Interface(
-                        timestamp: currentSnapshot?.interface.timestamp
-                            ?? snapshot.interface.timestamp,
-                        tree: []
-                    ),
-                    context: currentSnapshot?.context ?? .empty
-                )
-                currentEvent = .elementsChanged(snapshot)
-                events = notificationEvents + [
-                    .elementsChanged(departure),
-                    .screenChanged(ScreenFacts(
-                        idAfter: InterfaceSummary.screenName(for: snapshot.interface)
-                    )),
-                    currentEvent,
-                ]
-            } else {
-                let changed = currentSnapshot.map {
-                    !$0.hasSameObservedState(
-                        as: snapshot,
-                        geometryTolerance: admission.geometryTolerance
-                    )
-                } ?? true
-                currentEvent = forcesElementChange || changed
-                    ? .elementsChanged(snapshot)
-                    : .noChange
-                events = notificationEvents + [currentEvent]
-            }
+            let events = Self.events(
+                notificationEvents: notificationEvents,
+                admittedNotifications: admittedNotifications,
+                currentSnapshot: currentSnapshot,
+                snapshot: snapshot,
+                continuity: continuity,
+                geometryTolerance: admission.geometryTolerance
+            )
 
             var next = self
             let historyRange = next.history.record(
@@ -311,6 +287,47 @@ extension TheVault {
                     windowStack: windows
                 )
             )
+        }
+
+        private static func events(
+            notificationEvents: [Observation.Event],
+            admittedNotifications: [Observation.AdmittedNotification],
+            currentSnapshot: Observation.Snapshot?,
+            snapshot: Observation.Snapshot,
+            continuity: ScreenContinuity,
+            geometryTolerance: CGFloat
+        ) -> [Observation.Event] {
+            if continuity.isReplacement {
+                let departure = Observation.Snapshot(
+                    interface: Interface(
+                        timestamp: currentSnapshot?.interface.timestamp
+                            ?? snapshot.interface.timestamp,
+                        tree: []
+                    ),
+                    context: currentSnapshot?.context ?? .empty
+                )
+                return notificationEvents + [
+                    .elementsChanged(departure),
+                    .screenChanged(ScreenFacts(
+                        idAfter: InterfaceSummary.screenName(for: snapshot.interface)
+                    )),
+                    .elementsChanged(snapshot),
+                ]
+            }
+
+            let changed = currentSnapshot.map {
+                !$0.hasSameObservedState(
+                    as: snapshot,
+                    geometryTolerance: geometryTolerance
+                )
+            } ?? true
+            let currentEvent: Observation.Event
+            if forcesElementChange(admittedNotifications) || changed {
+                currentEvent = .elementsChanged(snapshot)
+            } else {
+                currentEvent = .noChange
+            }
+            return notificationEvents + [currentEvent]
         }
 
         private static func forcesElementChange(

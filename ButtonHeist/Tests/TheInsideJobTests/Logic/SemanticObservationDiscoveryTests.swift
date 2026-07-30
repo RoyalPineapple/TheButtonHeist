@@ -95,11 +95,14 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
         let events = try retainedEvents(after: discovery.historyRange.upperBound)
         XCTAssertEqual(discovery.historyRange.upperBound, visible.historyRange.lowerBound)
         XCTAssertEqual(events, visible.events)
-        XCTAssertEqual(events.count, 2)
-        guard case .screenChanged = events[0],
-              case .elementsChanged(let arrival) = events[1] else {
-            return XCTFail("Expected screen boundary and actual arrival")
+        XCTAssertEqual(events.count, 3)
+        guard case .elementsChanged(let departure) = events[0],
+              case .screenChanged = events[1],
+              case .elementsChanged(let arrival) = events[2] else {
+            return XCTFail("Expected departure, screen boundary, and actual arrival")
         }
+        XCTAssertTrue(departure.interface.tree.isEmpty)
+        XCTAssertEqual(departure.context, discovery.current.snapshot.context)
         XCTAssertEqual(arrival, visible.current.snapshot)
         XCTAssertEqual(discovery.current.scope, .discovery)
         XCTAssertEqual(visible.current.scope, .visible)
@@ -179,15 +182,16 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
 
         let events = try retainedEvents(after: initialDiscovery.historyRange.upperBound)
         XCTAssertEqual(events, replacementVisible.events + replacementDiscovery.events)
-        XCTAssertEqual(events.count, 3)
-        guard case .screenChanged = events[0] else {
-            return XCTFail("Expected the screen boundary before arrival")
+        XCTAssertEqual(events.count, 4)
+        guard case .elementsChanged(let departure) = events[0],
+              case .screenChanged = events[1],
+              case .elementsChanged(let arrival) = events[2] else {
+            return XCTFail("Expected departure, screen boundary, and arrival")
         }
-        guard case .elementsChanged(let arrival) = events[1] else {
-            return XCTFail("Expected arrival after the screen boundary")
-        }
+        XCTAssertTrue(departure.interface.tree.isEmpty)
+        XCTAssertEqual(departure.context, initialDiscovery.current.snapshot.context)
         XCTAssertEqual(arrival, replacementVisible.current.snapshot)
-        XCTAssertEqual(events[2], .noChange)
+        XCTAssertEqual(events[3], .noChange)
         XCTAssertEqual(
             replacementVisible.current.snapshot.interface.projectedElements
                 .map(\.semantics),

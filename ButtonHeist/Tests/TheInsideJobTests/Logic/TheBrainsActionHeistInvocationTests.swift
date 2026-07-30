@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import ButtonHeistTestSupport
 import XCTest
 
 @testable import AccessibilitySnapshotParser
@@ -85,7 +86,7 @@ final class HeistMachineInvocationTests: XCTestCase {
         var driver = try HeistMachineTestDriver(
             plan: plan,
             script: MachineRunScript(
-                snapshots: [heistSnapshot(labels: ["Done"])],
+                snapshots: [makeTestObservationSnapshot(labels: ["Done"])],
                 events: [.noChange]
             )
         )

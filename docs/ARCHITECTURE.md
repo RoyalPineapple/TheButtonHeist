@@ -245,11 +245,12 @@ not evidence of replacement or stability.
 The runtime classifies accessibility state, not animations. One persistent
 `CADisplayLink` in TheTripwire is the sole observation clock. Scope pressure is
 reduced to one pulse demand; zero demand pauses the link. A pulse starts at most
-one capture cycle, and a pulse received while that cycle is active is coalesced
-as the single pending pulse. The cycle claims notifications, captures and
-parses live UIKit state, commits snapshot and history, publishes ordered events,
-then lets the heist machine and waiters evaluate those publications. A fresh
-capture that proves complete observed equality produces bare `noChange`.
+one capture cycle, and pulses received while that synchronous cycle is active
+are dropped. A later display pulse starts the next demanded cycle. The cycle
+claims notifications, captures and parses live UIKit state, commits snapshot and
+history, publishes ordered events, then lets the heist machine and waiters
+evaluate those publications. A fresh capture that proves complete observed
+equality produces bare `noChange`.
 Motion with no accessibility representation is not machine evidence. Business
 deadlines may cancel work, but no timer, sleep, caller loop, or discovery path
 acts as a second observation clock.

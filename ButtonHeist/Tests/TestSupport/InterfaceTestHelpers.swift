@@ -64,6 +64,18 @@ package func makeTestInterface(
 
 /// A canonical semantic snapshot containing these elements.
 package func makeTestObservationSnapshot(
+    labels: [String],
+    timestamp: Date = Date(timeIntervalSince1970: 0)
+) -> Observation.Snapshot {
+    makeTestObservationSnapshot(
+        elements: labels.map {
+            makeTestHeistElement(description: $0, label: $0)
+        },
+        timestamp: timestamp
+    )
+}
+
+package func makeTestObservationSnapshot(
     elements: [HeistElement],
     timestamp: Date = Date(timeIntervalSince1970: 0)
 ) -> Observation.Snapshot {

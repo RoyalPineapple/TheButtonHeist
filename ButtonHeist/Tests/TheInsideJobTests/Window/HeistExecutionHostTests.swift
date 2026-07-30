@@ -219,15 +219,7 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
 
         let execution = Task { @MainActor in
             try await HeistExecution.Host(brains: brains).execute(
-                HeistPlan(body: [
-                    .action(ActionStep(
-                        command: .activate(.label("Trigger")),
-                        expectationPolicy: .expect(ActionExpectation(
-                            predicate: .notification("After window"),
-                            timeout: 1
-                        ))
-                    )),
-                ]),
+                coldStartNotificationPlan(),
                 timeout: try .seconds(5)
             )
         }
@@ -279,6 +271,18 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
             },
             1
         )
+    }
+
+    private func coldStartNotificationPlan() -> HeistPlan {
+        HeistPlan(body: [
+            .action(ActionStep(
+                command: .activate(.label("Trigger")),
+                expectationPolicy: .expect(ActionExpectation(
+                    predicate: .notification("After window"),
+                    timeout: 1
+                ))
+            )),
+        ])
     }
 
     func testCanonicalPublicationCanCompleteWaitWhilePhysicalCaptureIsUnavailable() async throws {
