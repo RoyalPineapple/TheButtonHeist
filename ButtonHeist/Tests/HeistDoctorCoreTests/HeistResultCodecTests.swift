@@ -110,7 +110,7 @@ import TheScore
         try withTemporaryDirectory(prefix: "heist-doctor-pair") { root in
             let passes = root.appendingPathComponent("main", isDirectory: true)
             let failures = root.appendingPathComponent("pr", isDirectory: true)
-            let plan = fixturePlan("selected")
+            let plan = try fixturePlan("selected")
 
             _ = try writeRecording(in: passes, id: 1, plan: plan, recordedAt: 10, compressed: true)
             let selectedPass = try writeRecording(in: passes, id: 2, plan: plan, recordedAt: 20)
@@ -132,7 +132,7 @@ import TheScore
                 in: failures,
                 id: 5,
                 result: failedResult(),
-                plan: fixturePlan("unmatched"),
+                plan: try fixturePlan("unmatched"),
                 recordedAt: 40
             )
             _ = try writeRecording(
@@ -151,16 +151,18 @@ import TheScore
                 Issue.record("Expected a selected result pair")
                 return
             }
-            #expect(lastPass == selectedPass)
-            #expect(newFail == selectedFail)
+            #expect(lastPass.standardizedFileURL == selectedPass.standardizedFileURL)
+            #expect(newFail.standardizedFileURL == selectedFail.standardizedFileURL)
             #expect(fingerprint == (try HeistResultRecording.planFingerprint(for: plan)))
-            #expect(warnings.map(\.recording) == [malformed])
+            #expect(warnings.map(\.recording.standardizedFileURL) == [malformed.standardizedFileURL])
             #expect(warnings.first?.reason.isEmpty == false)
         }
     }
 
-    private func fixturePlan(_ message: String) -> HeistPlan {
-        HeistPlan(body: [.warn(WarnStep(message: message))])
+    private func fixturePlan(_ message: String) throws -> HeistPlan {
+        try HeistPlan(body: [
+            .warn(WarnStep(message: try HeistWarningMessage(validating: message))),
+        ])
     }
 
     private func passedResult() -> HeistResult {
