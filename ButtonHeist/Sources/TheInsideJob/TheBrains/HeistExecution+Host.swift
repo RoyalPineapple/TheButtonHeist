@@ -166,7 +166,7 @@ extension HeistExecution {
             case cancelled
         }
 
-        private unowned let brains: TheBrains
+        private let brains: TheBrains
         private var phase = Phase.idle
         private var nextDeadlineTimerSequence: UInt64 = 0
         private var nextInteractionSequence: UInt64 = 0

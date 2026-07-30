@@ -11,6 +11,21 @@ import XCTest
 
 @MainActor
 final class HeistExecutionHostTests: ButtonHeistTestCase {
+    func testHostOwnsRuntimeBoundaryForItsLifetime() throws {
+        var brains: TheBrains? = TheBrains(
+            tripwire: TheTripwire(),
+            failureEvidencePolicy: .hierarchy
+        )
+        weak var retainedBrains: TheBrains?
+        retainedBrains = brains
+        let host = HeistExecution.Host(brains: try XCTUnwrap(brains))
+
+        brains = nil
+
+        XCTAssertNotNil(retainedBrains)
+        withExtendedLifetime(host) {}
+    }
+
     func testDirectActionUsesCanonicalPlanAndInjectedStandardPolicyReachesActiveLeafDeadline() async throws {
         let policy = ActionExpectationTimeoutPolicy(standard: 3, screenTransition: 12)
         let source = HostVisibleObservationSource(hostObservation(label: "Home"))
