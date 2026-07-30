@@ -24,21 +24,12 @@ enum AccessibilityNotificationIngress {
 extension Observation {
 @MainActor
 internal final class Stream {
-    private enum EventReceiver {
-        case active(
-            subscriptionID: UInt64,
-            receive: @MainActor (Event) -> Void,
-            pending: [Event],
-            nextIndex: Int,
-            isDelivering: Bool
-        )
-
-        var subscriptionID: UInt64 {
-            switch self {
-            case .active(let subscriptionID, _, _, _, _):
-                subscriptionID
-            }
-        }
+    private struct EventReceiver {
+        let subscriptionID: UInt64
+        let receive: @MainActor (Event) -> Void
+        var pending: [Event]
+        var nextIndex: Int
+        var isDelivering: Bool
     }
 
     internal struct EventInstallation {
@@ -155,7 +146,7 @@ internal final class Stream {
         )
         let subscription = subscribe(scope: scope)
         let replay = events(after: historyIndex)
-        eventReceiver = .active(
+        eventReceiver = EventReceiver(
             subscriptionID: subscription.id,
             receive: receive,
             pending: [],
@@ -174,70 +165,35 @@ internal final class Stream {
     }
 
     func publish(_ publication: Publication) {
-        guard let receiver = eventReceiver else { return }
-        switch receiver {
-        case .active(
-            let subscriptionID,
-            let receive,
-            let pending,
-            let nextIndex,
-            let isDelivering
-        ):
-            eventReceiver = .active(
-                subscriptionID: subscriptionID,
-                receive: receive,
-                pending: pending + publication.events,
-                nextIndex: nextIndex,
-                isDelivering: isDelivering
-            )
-            drain(subscriptionID: subscriptionID)
-        }
+        guard var receiver = eventReceiver else { return }
+        receiver.pending.append(contentsOf: publication.events)
+        eventReceiver = receiver
+        drain(subscriptionID: receiver.subscriptionID)
     }
 
     private func drain(subscriptionID: UInt64) {
-        guard case .active(
-            let activeSubscriptionID,
-            let receive,
-            let initialPending,
-            let initialIndex,
-            false
-        ) = eventReceiver,
-              activeSubscriptionID == subscriptionID
+        guard var receiver = eventReceiver,
+              receiver.subscriptionID == subscriptionID,
+              !receiver.isDelivering
         else { return }
-        eventReceiver = .active(
-            subscriptionID: subscriptionID,
-            receive: receive,
-            pending: initialPending,
-            nextIndex: initialIndex,
-            isDelivering: true
-        )
-        while case .active(
-            let activeSubscriptionID,
-            let currentReceive,
-            let pending,
-            let nextIndex,
-            true
-        ) = eventReceiver,
-              activeSubscriptionID == subscriptionID {
-            guard nextIndex < pending.count else {
-                eventReceiver = .active(
-                    subscriptionID: subscriptionID,
-                    receive: currentReceive,
-                    pending: [],
-                    nextIndex: 0,
-                    isDelivering: false
-                )
+        receiver.isDelivering = true
+        eventReceiver = receiver
+        while let current = eventReceiver,
+              current.subscriptionID == subscriptionID,
+              current.isDelivering {
+            guard current.nextIndex < current.pending.count else {
+                receiver = current
+                receiver.pending = []
+                receiver.nextIndex = 0
+                receiver.isDelivering = false
+                eventReceiver = receiver
                 return
             }
-            let event = pending[nextIndex]
-            eventReceiver = .active(
-                subscriptionID: subscriptionID,
-                receive: currentReceive,
-                pending: pending,
-                nextIndex: nextIndex + 1,
-                isDelivering: true
-            )
-            receive(event)
+            let event = current.pending[current.nextIndex]
+            receiver = current
+            receiver.nextIndex += 1
+            eventReceiver = receiver
+            current.receive(event)
         }
     }
 

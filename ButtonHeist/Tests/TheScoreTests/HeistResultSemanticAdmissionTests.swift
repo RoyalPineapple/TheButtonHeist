@@ -110,6 +110,73 @@ import ThePlans
         }
     }
 
+    @Test func `aggregate admission rejects child-aborted wait with incomplete fallback evidence`() throws {
+        let predicate = AccessibilityPredicate.exists(.label("Done"))
+        let incomplete = expectationEvidence(
+            predicate: predicate,
+            elements: [],
+            coverage: .incomplete(.captureUnavailable)
+        )
+        let childPath: HeistExecutionPath = "$.body[0].wait.else_body[0]"
+        let child = HeistResultFixture.explicitFailure(
+            path: childPath.description,
+            message: "stop"
+        )
+        let failure = HeistFailureDetail(
+            category: .wait,
+            contract: "wait fallback completes",
+            observed: "fallback child failed"
+        )
+        let step = HeistExecutionStepResult.wait(
+            path: "$.body[0]",
+            predicate: predicate,
+            timeout: 1,
+            completion: .childAborted(
+                evidence: incomplete,
+                failure: failure,
+                children: try #require(HeistAbortedChildren([child]))
+            )
+        )
+        let expected = HeistResultCodecError.incoherentExecutionEvidence(
+            path: "$.body[0]",
+            reason: "child-aborted wait requires complete unmet fallback evidence"
+        )
+
+        #expect(throws: expected) {
+            _ = try HeistResult(steps: [step], durationMs: 1)
+        }
+    }
+
+    @Test func `aggregate admission accepts intrinsic failed wait with incomplete evidence`() throws {
+        let predicate = AccessibilityPredicate.exists(.label("Done"))
+        let incomplete = expectationEvidence(
+            predicate: predicate,
+            elements: [],
+            coverage: .incomplete(.captureUnavailable)
+        )
+        let failure = HeistFailureDetail(
+            category: .timeout,
+            contract: "wait predicate is met",
+            observed: "observation capture unavailable"
+        )
+        let step = HeistExecutionStepResult.wait(
+            path: "$.body[0]",
+            predicate: predicate,
+            timeout: 1,
+            completion: .failed(
+                evidence: .observed(incomplete),
+                failure: failure
+            )
+        )
+
+        let result = try HeistResult(steps: [step], durationMs: 1)
+
+        #expect(result.steps == [step])
+        #expect(throws: Observation.Gap.captureUnavailable) {
+            _ = try result.steps[0].replayExpectation()
+        }
+    }
+
     private func expectationEvidence(
         predicate: AccessibilityPredicate,
         elements: [HeistElement],

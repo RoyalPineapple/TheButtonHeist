@@ -23,6 +23,10 @@ extension HeistExecution {
         case cleanupTimedOut
         case runtimeStopping
 
+        internal static func classify(_ error: any Error) -> Self {
+            (error as? Self) ?? .runtimeBoundary(Detail(error))
+        }
+
         internal var description: String {
             switch self {
             case .runtimeUnavailable:
@@ -100,7 +104,7 @@ extension TheBrains {
                 timeout: timeout
             ))
         } catch {
-            return .failure(.runtimeBoundary(.init(error)))
+            return .failure(.classify(error))
         }
     }
 
@@ -124,7 +128,7 @@ extension TheBrains {
                 actionExpectationTimeoutPolicy: actionExpectationTimeoutPolicy
             )
         } catch {
-            return .failure(.runtimeBoundary(.init(error)))
+            return .failure(.classify(error))
         }
         return heistResult(
             completion,

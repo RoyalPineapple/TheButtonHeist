@@ -222,6 +222,18 @@ public struct HeistResult: Codable, Sendable, Equatable {
     private static func admitExpectationEvidence(_ step: HeistExecutionStepResult) throws {
         guard step.kind == .wait, step.status == .failed else { return }
 
+        if step.abortedAtChildPath != nil {
+            guard let evidence = step.waitEvidence,
+                  let fallback = HeistPassedWaitEvidence(evidence),
+                  fallback.usesFallback else {
+                throw incoherent(
+                    step,
+                    "child-aborted wait requires complete unmet fallback evidence"
+                )
+            }
+            return
+        }
+
         let replay: ExpectationResult?
         do {
             replay = try step.replayExpectation()

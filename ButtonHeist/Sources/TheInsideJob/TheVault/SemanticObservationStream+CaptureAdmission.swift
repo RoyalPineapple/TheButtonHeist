@@ -57,25 +57,11 @@ extension Observation.Stream {
     internal func visibleObservation(
         covering coverage: AccessibilityNotificationCoverage
     ) async -> TheVault.State.Current? {
-        var historyIndex = state.history.endIndex
-        while !Task.isCancelled {
-            if let current = currentObservation(covering: coverage) {
-                return current
-            }
-            switch await waitForObservation(
-                after: historyIndex,
-                scope: .visible,
-                boundary: .cancellation
-            ) {
-            case .observation:
-                historyIndex = state.history.endIndex
-            case .cycleCompletedWithoutObservation:
-                continue
-            case .deadlineReached, .cancelled, .unavailable:
-                return nil
-            }
-        }
-        return nil
+        await visibleObservation(
+            covering: coverage,
+            boundary: .cancellation,
+            continuesThroughEmptyCycles: true
+        )
     }
 
     /// Performs exactly one pulse-driven capture attempt.
@@ -106,6 +92,18 @@ extension Observation.Stream {
     internal func visibleObservationThroughCausalCycles(
         covering coverage: AccessibilityNotificationCoverage
     ) async -> TheVault.State.Current? {
+        await visibleObservation(
+            covering: coverage,
+            boundary: .observationCycle,
+            continuesThroughEmptyCycles: false
+        )
+    }
+
+    private func visibleObservation(
+        covering coverage: AccessibilityNotificationCoverage,
+        boundary: SemanticObservationWaitBoundary,
+        continuesThroughEmptyCycles: Bool
+    ) async -> TheVault.State.Current? {
         var historyIndex = state.history.endIndex
         while !Task.isCancelled {
             if let current = currentObservation(covering: coverage) {
@@ -114,12 +112,13 @@ extension Observation.Stream {
             switch await waitForObservation(
                 after: historyIndex,
                 scope: .visible,
-                boundary: .observationCycle
+                boundary: boundary
             ) {
             case .observation:
                 historyIndex = state.history.endIndex
-            case .cycleCompletedWithoutObservation,
-                 .deadlineReached,
+            case .cycleCompletedWithoutObservation:
+                guard continuesThroughEmptyCycles else { return nil }
+            case .deadlineReached,
                  .cancelled,
                  .unavailable:
                 return nil

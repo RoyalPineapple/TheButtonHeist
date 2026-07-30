@@ -159,43 +159,4 @@ final class TripwireInvalidationFixture {
     }
 }
 
-@MainActor
-final class ObservationCommitFixture {
-    private let continuation: AsyncStream<Void>.Continuation
-    private let producer: Task<Void, Never>
-
-    init(
-        stream: Observation.Stream,
-        observations: [InterfaceObservation],
-        afterCommit: @escaping @MainActor () -> Void
-    ) {
-        let (signal, continuation) = AsyncStream<Void>.makeStream(
-            bufferingPolicy: .bufferingNewest(1)
-        )
-        self.continuation = continuation
-        producer = Task {
-            for await _ in signal {
-                for observation in observations {
-                    await stream.commitVisibleObservationForTesting(observation)
-                }
-                afterCommit()
-                break
-            }
-        }
-    }
-
-    func signal() {
-        continuation.yield()
-        continuation.finish()
-    }
-
-    func wait() async {
-        await producer.value
-    }
-
-    deinit {
-        continuation.finish()
-        producer.cancel()
-    }
-}
 #endif

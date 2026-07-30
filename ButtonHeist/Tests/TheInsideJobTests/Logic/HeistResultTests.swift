@@ -34,11 +34,22 @@ final class HeistResultTests: XCTestCase {
         )
         let runtimeFailure = HeistExecution.Failure.runtimeBoundary(detail)
         let admissionFailure = HeistExecution.Failure.invalidResult(detail)
+        let classifiedRuntimeFailure = HeistExecution.Failure.classify(
+            HeistResultTestFailure("runtime boundary")
+        )
 
         XCTAssertEqual(runtimeFailure.serverError.kind, .general)
         XCTAssertTrue(runtimeFailure.serverError.message.description.contains("duplicate execution path"))
         XCTAssertEqual(admissionFailure.serverError.kind, .validationError)
         XCTAssertTrue(admissionFailure.serverError.message.description.contains("duplicate execution path"))
+        guard case .accessibilityTreeUnavailable = HeistExecution.Failure.classify(
+            HeistExecution.Failure.accessibilityTreeUnavailable
+        ) else {
+            return XCTFail("Expected typed execution failure to retain its classification")
+        }
+        guard case .runtimeBoundary = classifiedRuntimeFailure else {
+            return XCTFail("Expected an unknown error to become a runtime boundary failure")
+        }
     }
 
     func testXCTestFailureReporterRecordsAnAssertionAtTheSuppliedCallSite() async {
