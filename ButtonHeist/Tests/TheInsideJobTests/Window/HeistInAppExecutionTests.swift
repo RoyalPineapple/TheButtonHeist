@@ -160,7 +160,7 @@ final class HeistInAppExecutionTests: XCTestCase {
             XCTAssertEqual(invocation.status, .failed)
             XCTAssertEqual(invocation.children.map(\.kind), [.fail])
             XCTAssertEqual(invocation.children.first?.path, failure.failedStepPath)
-            XCTAssertEqual(failure.result.failureScreenshotStep?.kind, .action)
+            XCTAssertNotNil(failure.result.failureScreenshotPayload)
         }
     }
 
@@ -181,7 +181,7 @@ final class HeistInAppExecutionTests: XCTestCase {
             XCTAssertEqual(failure.result.abortedAtPath, "$.body[1]")
             XCTAssertEqual(Array(failure.result.steps.prefix(3)).map(\.kind), [.warn, .fail, .warn])
             XCTAssertEqual(Array(failure.result.steps.prefix(3)).map(\.status), [.passed, .failed, .skipped])
-            XCTAssertEqual(failure.result.failureScreenshotStep?.kind, .action)
+            XCTAssertNotNil(failure.result.failureScreenshotPayload)
             let skipped = try XCTUnwrap(failure.result.steps.dropFirst(2).first)
             XCTAssertEqual(skipped.path, "$.body[2]")
             XCTAssertEqual(skipped.kind, .warn)

@@ -83,7 +83,7 @@ public enum HeistFailureDiagnostics {
 
 public extension HeistResult {
     package var failureScreenshotPayload: ScreenPayload? {
-        failureScreenshotStep?.screenshotPayload
+        failureCapture?.payload
     }
 
     package var observedInterfaceAtFailure: Interface? {
@@ -96,13 +96,14 @@ public extension HeistResult {
     }
 
     var failureScreenshotSummary: String? {
-        guard let step = failureScreenshotStep else { return nil }
-        if let screenshot = step.screenshotPayload {
-            return HeistFailureDiagnostics.screenshotSummary(screenshot, resultPath: step.path.description)
+        guard let failureCapture, let abortedAtPath else { return nil }
+        let resultPath = abortedAtPath.failureAction(at: 0).description
+        if let screenshot = failureCapture.payload {
+            return HeistFailureDiagnostics.screenshotSummary(screenshot, resultPath: resultPath)
         }
         return HeistFailureDiagnostics.unavailableScreenshotSummary(
-            resultPath: step.path.description,
-            message: step.reportActionResult?.message
+            resultPath: resultPath,
+            message: failureCapture.message
         )
     }
 

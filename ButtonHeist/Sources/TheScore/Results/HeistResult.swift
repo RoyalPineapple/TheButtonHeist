@@ -3,6 +3,7 @@ import Foundation
 /// Complete typed result of one heist-plan execution.
 public struct HeistResult: Codable, Sendable, Equatable {
     public let steps: [HeistExecutionStepResult]
+    package let failureCapture: HeistFailureCapture?
     /// End-to-end wall-clock duration for the complete heist run.
     public let durationMs: ElapsedMilliseconds
 
@@ -19,8 +20,23 @@ public struct HeistResult: Codable, Sendable, Equatable {
     }
 
     package init(steps: [HeistExecutionStepResult], durationMs: ElapsedMilliseconds) throws {
+        let normalized = Self.normalizeFailureCapture(in: steps)
+        try Self.admitStructure(normalized.steps, limits: .default)
+        try Self.admitFailureCapture(normalized.failureCapture, steps: normalized.steps)
+        self.steps = normalized.steps
+        failureCapture = normalized.failureCapture
+        self.durationMs = durationMs
+    }
+
+    package init(
+        steps: [HeistExecutionStepResult],
+        failureCapture: HeistFailureCapture?,
+        durationMs: ElapsedMilliseconds
+    ) throws {
         try Self.admitStructure(steps, limits: .default)
+        try Self.admitFailureCapture(failureCapture, steps: steps)
         self.steps = steps
+        self.failureCapture = failureCapture
         self.durationMs = durationMs
     }
 
@@ -32,25 +48,84 @@ public struct HeistResult: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist result")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let steps = try container.decode([HeistExecutionStepResult].self, forKey: .steps)
+        let encodedSteps = try container.decode([HeistExecutionStepResult].self, forKey: .steps)
         let durationMs = try container.decode(ElapsedMilliseconds.self, forKey: .durationMs)
         let limits = decoder.userInfo[.heistResultCodecLimits] as? HeistResultCodecLimits ?? .default
+        let normalized = Self.normalizeFailureCapture(in: encodedSteps)
         do {
-            try Self.admitStructure(steps, limits: limits)
+            try Self.admitStructure(normalized.steps, limits: limits)
+            if normalized.failureCapture != nil,
+               Self.nodeCount(in: normalized.steps) >= limits.maxNodeCount {
+                throw HeistResultCodecError.nodeCountExceeded(
+                    limit: limits.maxNodeCount,
+                    observed: Self.nodeCount(in: normalized.steps) + 1
+                )
+            }
+            try Self.admitFailureCapture(normalized.failureCapture, steps: normalized.steps)
         } catch {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: container.codingPath,
                 debugDescription: String(describing: error)
             ))
         }
-        self.steps = steps
+        steps = normalized.steps
+        failureCapture = normalized.failureCapture
         self.durationMs = durationMs
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(steps, forKey: .steps)
+        var encodedSteps = steps
+        if let failureCapture, let abortedAtPath {
+            encodedSteps.append(failureCapture.executionStep(failedPath: abortedAtPath))
+        }
+        try container.encode(encodedSteps, forKey: .steps)
         try container.encode(durationMs, forKey: .durationMs)
+    }
+
+    private static func normalizeFailureCapture(
+        in steps: [HeistExecutionStepResult]
+    ) -> (steps: [HeistExecutionStepResult], failureCapture: HeistFailureCapture?) {
+        guard let candidate = steps.last else { return (steps, nil) }
+        let executionSteps = Array(steps.dropLast())
+        guard let failedPath = executionSteps.firstFailedStepInResultOrder?.path,
+              let failureCapture = HeistFailureCapture(
+                  executionStep: candidate,
+                  failedPath: failedPath
+              )
+        else { return (steps, nil) }
+        return (executionSteps, failureCapture)
+    }
+
+    private static func admitFailureCapture(
+        _ failureCapture: HeistFailureCapture?,
+        steps: [HeistExecutionStepResult]
+    ) throws {
+        guard failureCapture != nil else { return }
+        guard let failedPath = steps.firstFailedStepInResultOrder?.path else {
+            throw HeistResultCodecError.incoherentExecutionEvidence(
+                path: .body,
+                reason: "failure capture requires a failed execution step"
+            )
+        }
+        guard steps.allSatisfy({ !$0.path.isFailureActionPath }) else {
+            throw HeistResultCodecError.incoherentExecutionEvidence(
+                path: failedPath,
+                reason: "failure capture must not also appear in execution steps"
+            )
+        }
+    }
+
+    private static func nodeCount(
+        in roots: [HeistExecutionStepResult]
+    ) -> Int {
+        var count = 0
+        var pending = roots
+        while let step = pending.popLast() {
+            count += 1
+            pending.append(contentsOf: step.children)
+        }
+        return count
     }
 
     private static func admitStructure(
@@ -66,7 +141,6 @@ public struct HeistResult: Codable, Sendable, Equatable {
             )
         }
         var paths: Set<HeistExecutionPath> = []
-        var admittedStepsByPath: [HeistExecutionPath: HeistExecutionStepResult] = [:]
         var nodeCount = 0
         while let current = pending.popLast() {
             nodeCount += 1
@@ -109,20 +183,9 @@ public struct HeistResult: Codable, Sendable, Equatable {
                 }
             } else if current.step.path.isRootStepPath() {
                 // Top-level result fragments may carry their original body index.
-            } else if let failureAction = current.step.path.failureActionAncestor,
-                      let parent = admittedStepsByPath[failureAction.path],
-                      parent.status == .failed,
-                      current.step.path.isLegalChild(
-                        of: parent,
-                        child: current.step,
-                        childOrdinal: failureAction.actionIndex
-                      ) {
-                // Auxiliary failure-action roots are emitted beside top-level roots,
-                // but their path must still be owned by an admitted failed step.
             } else {
                 throw HeistResultCodecError.illegalRootExecutionPath(current.step.path)
             }
-            admittedStepsByPath[current.step.path] = current.step
             var branchCounts: [HeistExecutionPath.ChildBranch: Int] = [:]
             let children = current.step.children.map { child in
                 let edge = child.path.childEdge(after: current.step.path)
@@ -155,7 +218,7 @@ public struct HeistResult: Codable, Sendable, Equatable {
             })
         }
         try admitRootIndices(roots)
-        try admitRootExecutionOrder(roots)
+        try admitOrderedExecution(roots)
     }
 
     private static func admitRootIndices(_ roots: [HeistExecutionStepResult]) throws {
@@ -165,13 +228,6 @@ public struct HeistResult: Codable, Sendable, Equatable {
                 path: .body,
                 reason: "top-level body root indices must be contiguous and in result order"
             )
-        }
-    }
-
-    private static func admitRootExecutionOrder(_ roots: [HeistExecutionStepResult]) throws {
-        var admission = RootExecutionAdmission()
-        for root in roots {
-            try admission.admit(root)
         }
     }
 
@@ -356,50 +412,6 @@ public struct HeistResult: Codable, Sendable, Equatable {
 
             guard step.status == .failed else { return }
             terminalFailurePath = step.abortedAtChildPath ?? step.path
-        }
-    }
-
-    private struct RootExecutionAdmission {
-        private var orderedExecution = OrderedExecutionAdmission()
-        private var nextFailureActionIndex = 0
-        private var terminalEvidenceStarted = false
-
-        mutating func admit(_ root: HeistExecutionStepResult) throws {
-            if let ancestor = root.path.failureActionAncestor {
-                try admitAuxiliaryFailureAction(root, ancestor: ancestor)
-                return
-            }
-
-            guard !terminalEvidenceStarted else {
-                throw HeistResult.incoherent(
-                    root,
-                    "regular root appears after terminal failure-capture evidence"
-                )
-            }
-            try orderedExecution.admit(root)
-        }
-
-        private mutating func admitAuxiliaryFailureAction(
-            _ root: HeistExecutionStepResult,
-            ancestor: HeistExecutionPath.FailureActionAncestor
-        ) throws {
-            guard let abortedAtPath = orderedExecution.terminalFailurePath else {
-                throw HeistResult.incoherent(root, "failure-capture root appears before any abort")
-            }
-            guard ancestor.path == abortedAtPath else {
-                throw HeistResult.incoherent(
-                    root,
-                    "failure-capture root belongs to \(ancestor.path), not abort at \(abortedAtPath)"
-                )
-            }
-            guard ancestor.actionIndex == nextFailureActionIndex else {
-                throw HeistResult.incoherent(
-                    root,
-                    "failure-capture root index \(ancestor.actionIndex) must be \(nextFailureActionIndex)"
-                )
-            }
-            nextFailureActionIndex += 1
-            terminalEvidenceStarted = true
         }
     }
 

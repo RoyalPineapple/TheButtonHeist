@@ -46,9 +46,9 @@ flowchart LR
 
     Input --> Vault
     Vault --> Machine
-    Machine -->|"pending(.perform)"| Effect
+    Machine -->|"perform"| Effect
     Effect --> Input
-    Machine -->|"pending(.wait)"| Vault
+    Machine -->|"wait"| Vault
     Machine -->|"complete"| Result
     Result --> Report
     Report --> Render

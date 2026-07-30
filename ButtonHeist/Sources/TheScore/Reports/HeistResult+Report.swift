@@ -352,14 +352,13 @@ private extension HeistReport {
         }
 
         func report(result: HeistResult) -> HeistReport {
-            let executedRoots = result.steps.dropLast(result.failureScreenshotStep == nil ? 0 : 1)
             let expectations = expectationsChecked > 0
                 ? Expectations(checked: expectationsChecked, met: expectationsMet)
                 : nil
 
             return HeistReport(
                 summary: Summary(
-                    executedTopLevelStepCount: executedRoots.count { $0.status != .skipped },
+                    executedTopLevelStepCount: result.steps.count { $0.status != .skipped },
                     executedNodeCount: executedNodeCount,
                     outputNodeCount: outputNodeCount,
                     abortedAtPath: firstFailedStep?.path,
@@ -521,19 +520,6 @@ package extension HeistReport {
         }
         return outputNodes.first(where: { $0.status == .failed })
     }
-}
-
-package extension HeistResult {
-    var failureScreenshotStep: HeistExecutionStepResult? {
-        guard case .failed(let abortedAtPath) = outcome,
-              let candidate = steps.last,
-              candidate.path != abortedAtPath,
-              candidate.actionCommand == .takeScreenshot,
-              candidate.actionEvidence?.result?.method == .takeScreenshot
-        else { return nil }
-        return candidate
-    }
-
 }
 
 private extension Sequence where Element == HeistExecutionStepResult {

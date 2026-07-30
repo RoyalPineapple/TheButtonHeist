@@ -143,6 +143,7 @@ extension TheBrains {
         do {
             return .success(try HeistResult(
                 steps: completion.steps,
+                failureCapture: completion.failureCapture,
                 durationMs: durationMs
             ))
         } catch {

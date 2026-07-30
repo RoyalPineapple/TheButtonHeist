@@ -13,8 +13,8 @@ extension HeistExecution {
 extension HeistExecution.Machine {
     internal mutating func advanceActiveLeaf(
         _ input: HeistExecution.Input
-    ) -> HeistExecution.State {
-        guard let activeLeaf else { return .pending(.wait) }
+    ) -> HeistExecution.Decision {
+        guard let activeLeaf else { return .wait }
         switch activeLeaf {
         case .action(let leaf):
             return advance(action: leaf, input: input)
@@ -27,7 +27,7 @@ extension HeistExecution.Machine {
     /// synchronous leaf-admission failure.
     internal mutating func resume(
         afterCompletedLeaf result: HeistExecutionStepResult
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         activeLeaf = nil
         if case .sequence(var sequence)? = continuations.last {
             continuations.removeLast()
@@ -47,13 +47,13 @@ private extension HeistExecution.Machine {
     mutating func advance(
         action leaf: HeistExecution.ActionLeaf,
         input: HeistExecution.Input
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         var leaf = leaf
         switch input {
         case .observationBegan(let id, let baseline):
             guard id == leaf.id,
                   case .beginningObservation = leaf.phase else {
-                return .pending(.wait)
+                return .wait
             }
             let expectation = Expectation(
                 leaf.predicate.map { [$0.resolved, .noChange] } ?? [.noChange],
@@ -71,7 +71,7 @@ private extension HeistExecution.Machine {
         case .dispatchCompleted(let id, let dispatch):
             guard id == leaf.id,
                   case .dispatching(let expectation) = leaf.phase else {
-                return .pending(.wait)
+                return .wait
             }
             return completeDispatch(
                 action: leaf,
@@ -82,7 +82,7 @@ private extension HeistExecution.Machine {
         case .viewportExited(let id, let outcome):
             guard id == leaf.id,
                   case .exploring(let expectation, let dispatch) = leaf.phase else {
-                return .pending(.wait)
+                return .wait
             }
             switch outcome {
             case .failed:
@@ -98,7 +98,7 @@ private extension HeistExecution.Machine {
             case .restored, .retained:
                 leaf.phase = .observing(expectation, dispatch: dispatch)
                 activeLeaf = .action(leaf)
-                return .pending(.wait)
+                return .wait
             }
 
         case .observationFinished(
@@ -110,7 +110,7 @@ private extension HeistExecution.Machine {
         ):
             guard observationID == leaf.id,
                   HeistExecution.ActiveLeaf.action(leaf).admits(source) else {
-                return .pending(.wait)
+                return .wait
             }
             let result = HeistExecution.ResultProjector.project(
                 action: leaf,
@@ -121,20 +121,20 @@ private extension HeistExecution.Machine {
             return resume(afterCompletedLeaf: result)
 
         case .currentSnapshot, .failureScreenshotCaptured:
-            return .pending(.wait)
+            return .wait
         }
     }
 
     mutating func advance(
         wait leaf: HeistExecution.WaitLeaf,
         input: HeistExecution.Input
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         var leaf = leaf
         switch input {
         case .observationBegan(let id, let baseline):
             guard id == leaf.id,
                   case .beginningObservation = leaf.phase else {
-                return .pending(.wait)
+                return .wait
             }
             if leaf.predicate.isNotification {
                 leaf.phase = .observing(Expectation([
@@ -142,7 +142,7 @@ private extension HeistExecution.Machine {
                     .noChange,
                 ]))
                 activeLeaf = .wait(leaf)
-                return .pending(.wait)
+                return .wait
             }
             return begin(wait: leaf, baseline: baseline)
 
@@ -152,7 +152,7 @@ private extension HeistExecution.Machine {
         case .viewportExited(let id, let outcome):
             guard id == leaf.id,
                   case .exploring(let expectation) = leaf.phase else {
-                return .pending(.wait)
+                return .wait
             }
             switch outcome {
             case .failed:
@@ -165,7 +165,7 @@ private extension HeistExecution.Machine {
             case .restored, .retained:
                 leaf.phase = .observing(expectation)
                 activeLeaf = .wait(leaf)
-                return .pending(.wait)
+                return .wait
             }
 
         case .observationFinished(
@@ -177,7 +177,7 @@ private extension HeistExecution.Machine {
         ):
             guard observationID == leaf.id,
                   HeistExecution.ActiveLeaf.wait(leaf).admits(source) else {
-                return .pending(.wait)
+                return .wait
             }
             if case .beginningObservation = leaf.phase {
                 leaf.phase = .observing(Expectation([leaf.predicate.resolved]))
@@ -214,14 +214,14 @@ private extension HeistExecution.Machine {
             return advanceExecution()
 
         case .currentSnapshot, .dispatchCompleted, .failureScreenshotCaptured:
-            return .pending(.wait)
+            return .wait
         }
     }
 
     mutating func begin(
         wait leaf: HeistExecution.WaitLeaf,
         baseline: Observation.Snapshot?
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         var leaf = leaf
         let predicateExpectation = Expectation(
             [leaf.predicate.resolved],
@@ -236,13 +236,13 @@ private extension HeistExecution.Machine {
         if predicateExpectation.result == .satisfied {
             leaf.phase = .observing(expectation)
             activeLeaf = .wait(leaf)
-            return .pending(.wait)
+            return .wait
         }
         guard leaf.predicate.resolved.canPrepareTargetThroughExploration,
               !predicateExpectation.hasMatchedTemporalBaseline else {
             leaf.phase = .observing(expectation)
             activeLeaf = .wait(leaf)
-            return .pending(.wait)
+            return .wait
         }
         leaf.phase = .exploring(expectation)
         return update(
@@ -254,10 +254,10 @@ private extension HeistExecution.Machine {
     mutating func finish(
         action leaf: HeistExecution.ActionLeaf,
         exitPosition: Navigation.ViewportExitPosition
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         var leaf = leaf
         guard let dispatch = leaf.dispatch else {
-            return .pending(.wait)
+            return .wait
         }
         let requestID = nextID()
         leaf.phase = .finishingObservation(
@@ -278,7 +278,7 @@ private extension HeistExecution.Machine {
     mutating func observe(
         action leaf: HeistExecution.ActionLeaf,
         event: Observation.Event
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         var leaf = leaf
         switch leaf.phase {
         case .dispatching(let expectation):
@@ -289,9 +289,9 @@ private extension HeistExecution.Machine {
                     .requiringNoChange()
                 )
                 activeLeaf = .action(leaf)
-                return .pending(.wait)
+                return .wait
             }
-            return .pending(.wait)
+            return .wait
         case .observing(let current, let dispatch):
             let evaluated = expectation(
                 current,
@@ -312,7 +312,7 @@ private extension HeistExecution.Machine {
                 }
                 leaf.phase = .observing(evaluated, dispatch: dispatch)
                 activeLeaf = .action(leaf)
-                return .pending(.wait)
+                return .wait
             }
             leaf.phase = .observing(evaluated, dispatch: dispatch)
             return finish(action: leaf, exitPosition: .current)
@@ -324,7 +324,7 @@ private extension HeistExecution.Machine {
             leaf.phase = .exploring(evaluated, dispatch: dispatch)
             guard evaluated.result == .satisfied else {
                 activeLeaf = .action(leaf)
-                return .pending(.wait)
+                return .wait
             }
             return finish(action: leaf, exitPosition: .current)
         case .finishingObservation(_, let current, let dispatch):
@@ -332,9 +332,9 @@ private extension HeistExecution.Machine {
                 leaf.phase = .observing(current, dispatch: dispatch)
                 return observe(action: leaf, event: event)
             }
-            return .pending(.wait)
+            return .wait
         case .beginningObservation:
-            return .pending(.wait)
+            return .wait
         }
     }
 
@@ -342,7 +342,7 @@ private extension HeistExecution.Machine {
         action leaf: HeistExecution.ActionLeaf,
         expectation: Expectation,
         dispatch: TheSafecracker.ActionDispatchResult
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         var leaf = leaf
         leaf.phase = .observing(expectation, dispatch: dispatch)
         guard dispatch.success else {
@@ -351,11 +351,11 @@ private extension HeistExecution.Machine {
         guard let predicate = leaf.predicate,
               !predicate.isNotification else {
             activeLeaf = .action(leaf)
-            return .pending(.wait)
+            return .wait
         }
         guard predicate.resolved.watchTarget != nil else {
             activeLeaf = .action(leaf)
-            return .pending(.wait)
+            return .wait
         }
         leaf.phase = .exploring(expectation, dispatch: dispatch)
         return update(
@@ -367,7 +367,7 @@ private extension HeistExecution.Machine {
     mutating func finish(
         wait leaf: HeistExecution.WaitLeaf,
         exitPosition: Navigation.ViewportExitPosition
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         var leaf = leaf
         let requestID = nextID()
         leaf.phase = .finishingObservation(
@@ -387,7 +387,7 @@ private extension HeistExecution.Machine {
     mutating func observe(
         wait leaf: HeistExecution.WaitLeaf,
         event: Observation.Event
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         var leaf = leaf
         switch leaf.phase {
         case .finishingObservation(_, let current):
@@ -395,7 +395,7 @@ private extension HeistExecution.Machine {
                 leaf.phase = .observing(current)
                 return observe(wait: leaf, event: event)
             }
-            return .pending(.wait)
+            return .wait
         case .observing(let current):
             let evaluated = expectation(current, evaluating: event)
             guard evaluated.result == .satisfied else {
@@ -409,7 +409,7 @@ private extension HeistExecution.Machine {
                 }
                 leaf.phase = .observing(evaluated)
                 activeLeaf = .wait(leaf)
-                return .pending(.wait)
+                return .wait
             }
             leaf.phase = .observing(evaluated)
             return finish(wait: leaf, exitPosition: .current)
@@ -418,28 +418,28 @@ private extension HeistExecution.Machine {
             leaf.phase = .exploring(evaluated)
             guard evaluated.result == .satisfied else {
                 activeLeaf = .wait(leaf)
-                return .pending(.wait)
+                return .wait
             }
             return finish(wait: leaf, exitPosition: .current)
         case .beginningObservation:
-            return .pending(.wait)
+            return .wait
         }
     }
 
     mutating func update(
         action leaf: HeistExecution.ActionLeaf,
         performing request: HeistExecution.MainActorRequest
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         activeLeaf = .action(leaf)
-        return .pending(.perform(request))
+        return .perform(request)
     }
 
     mutating func update(
         wait leaf: HeistExecution.WaitLeaf,
         performing request: HeistExecution.MainActorRequest
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         activeLeaf = .wait(leaf)
-        return .pending(.perform(request))
+        return .perform(request)
     }
 
     func shouldExplore(

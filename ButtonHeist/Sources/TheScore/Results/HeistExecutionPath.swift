@@ -40,7 +40,6 @@ public struct HeistExecutionPath: Sendable, Equatable, Hashable, Codable,
         case body
         case heistBody
         case invocationBody
-        case failureActions
     }
 
     package struct ChildEdge: Sendable, Hashable {
@@ -62,16 +61,10 @@ public struct HeistExecutionPath: Sendable, Equatable, Hashable, Codable,
                  .repeatUntilIterations,
                  .body,
                  .heistBody,
-                 .invocationBody,
-                 .failureActions:
+                 .invocationBody:
                 false
             }
         }
-    }
-
-    package struct FailureActionAncestor: Sendable, Hashable {
-        package let path: HeistExecutionPath
-        package let actionIndex: Int
     }
 
     private let components: [Component]
@@ -166,16 +159,13 @@ public struct HeistExecutionPath: Sendable, Equatable, Hashable, Codable,
         return index
     }
 
-    package var failureActionAncestor: FailureActionAncestor? {
+    package var isFailureActionPath: Bool {
         guard components.count > 3,
               case .field(.failure) = components[components.count - 3],
               case .field(.actions) = components[components.count - 2],
-              case .index(let actionIndex) = components[components.count - 1]
-        else { return nil }
-        return FailureActionAncestor(
-            path: Self(components: Array(components.dropLast(3))),
-            actionIndex: actionIndex
-        )
+              case .index = components[components.count - 1]
+        else { return false }
+        return true
     }
 
     package func isLegalChild(
@@ -206,9 +196,7 @@ public struct HeistExecutionPath: Sendable, Equatable, Hashable, Codable,
             edge.branch == .invocationBody
         }
 
-        return regularChild || parent.status == .failed
-            && child.kind == .action
-            && edge.branch == .failureActions
+        return regularChild
     }
 
     package func childBranch(after parent: Self) -> ChildBranch? {
@@ -249,9 +237,6 @@ public struct HeistExecutionPath: Sendable, Equatable, Hashable, Codable,
         }
         if let ordinal = Self.ordinal(in: suffix, matching: [.field(.invoke), .field(.body), .anyIndex]) {
             return ChildEdge(branch: .invocationBody, ordinal: ordinal)
-        }
-        if let ordinal = Self.ordinal(in: suffix, matching: [.field(.failure), .field(.actions), .anyIndex]) {
-            return ChildEdge(branch: .failureActions, ordinal: ordinal)
         }
         return nil
     }

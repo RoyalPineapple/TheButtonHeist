@@ -9,7 +9,7 @@ extension HeistExecution.Machine {
         action step: ActionStep,
         path: HeistExecutionPath,
         environment: HeistExecutionEnvironment
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         let command: ResolvedHeistActionCommand
         do {
             command = try step.command.resolve(in: environment)
@@ -53,13 +53,11 @@ extension HeistExecution.Machine {
             path: path,
             phase: .beginningObservation
         ))
-        return .pending(.perform(
-            .beginObservation(
-                id,
-                HeistExecution.ObservationRequest(
-                    scope: predicate?.observationScope ?? .visible,
-                    timeout: observationTimeout
-                )
+        return .perform(.beginObservation(
+            id,
+            HeistExecution.ObservationRequest(
+                scope: predicate?.observationScope ?? .visible,
+                timeout: observationTimeout
             )
         ))
     }

@@ -152,14 +152,10 @@ ordering, keyboard state, and first responder state. It never classifies the
 accessibility tree.
 
 ```swift
-enum HeistExecution.State {
-    case pending(Action)
-    case complete(Completion)
-}
-
-enum HeistExecution.Action {
+enum HeistExecution.Decision {
     case perform(MainActorRequest)
     case wait
+    case complete(Completion)
 }
 ```
 
@@ -167,8 +163,9 @@ One `HeistExecution` machine runs one complete heist from its first step to its
 final `Completion`. It privately retains every execution detail needed to
 advance the plan: control-flow stack, environments, accumulated step results,
 active expectation progress, and transient observation bookkeeping. `State`
-is not that bookkeeping. It is only the machine's next answer: perform a typed
-MainActor request, wait for another admitted input, or complete.
+is the private durable machine phase. `Decision` is only the machine's next
+answer: perform a typed MainActor request, wait for another admitted input, or
+complete.
 
 The Vault reducer accepts admitted snapshots and normalized notification
 payloads and deterministically produces ordered `Observation.Event` values.
@@ -515,17 +512,18 @@ pipelines are explicit:
 | Discovery callback delivery | `DeviceDiscoveryEventStream.swift` | `DeviceDiscovery.swift` |
 | Compiler process terminal outcome | `HeistCompilerProcess.Runner` in `HeistCompilerProcess.swift` | `HeistSwiftFileCompilation.swift`; diagnostic rendering lives in `HeistSwiftFileCompilationError.swift` |
 | Result construction and relationship validity | `HeistExecutionStepResult+Construction.swift` | Runtime step executors and result decoding |
-| Result aggregate admission | `HeistResult.admitStructure` in `HeistResult.swift` | Package initialization and decoding; one ordered-sequence reducer admits regular roots and every recursively visited child sequence, while the root adapter alone admits auxiliary failure-capture evidence |
+| Result aggregate admission | `HeistResult.admitStructure` in `HeistResult.swift` | Package initialization and decoding; one ordered-sequence reducer admits every root and recursively visited child sequence |
+| Terminal failure capture | `HeistFailureCapture` on `HeistResult` | The runtime records diagnostic capture separately from execution; custom result coding preserves the established auxiliary-step wire representation |
 | Result private storage codec | `HeistExecutionStepNode.swift` and `HeistExecutionStepNode+Codable.swift` | External result JSON projection only |
 | Action semantic and wire payload | `ActionResult.Payload` with `ActionResult` custom `Codable` | Runtime construction and wire encoding/decoding |
 | Heist result transport | `ServerMessage.heistResult(HeistResult)` | Fence and in-app clients consume the aggregate directly; production failures use `ServerMessage.error` |
 | Result interpretation | `HeistReport.project(result:)` in `HeistResult+Report.swift` | JSON, compact, human, JUnit, doctor, and metric renderers |
 | Result recording decision | `HeistResult.Outcome` and `HeistResultRecordingMode` | `HeistResultRecording` filesystem boundary |
 | Offline validation algebra | `HeistValidation.Result<Value>` composed by `HeistValidation.Report` | Public JSON and text projections |
-| Complete-heist progress | One `HeistExecution` machine; its answer is `State` | MainActor host advances it with admitted inputs |
+| Complete-heist progress | One `HeistExecution` machine; its answer is `Decision` | MainActor host advances it with admitted inputs |
 | Accessibility truth and history | TheVault: current `Snapshot` + `Observation.History` | Host admission and machine consumption |
 | Observation pulse and notification admission | `Observation.Stream` cycle driven by TheTripwire's single `CADisplayLink` | Demand resumes or pauses the link; each cycle claims ingress, captures, commits, publishes, evaluates, then acknowledges |
-| Host deadlines | One active-leaf absolute deadline spanning baseline acquisition through trailing `noChange`, capped by the whole-heist deadline, with one scheduled task | Cancels the in-flight effect, admits terminal evidence, and times out only an incomplete final `State` |
+| Host deadlines | One active-leaf absolute deadline spanning baseline acquisition through trailing `noChange`, capped by the whole-heist deadline, with one scheduled task | Cancels the in-flight effect, admits terminal evidence, and times out only an incomplete final `Decision` |
 | Testing request construction | `ButtonHeistTesting.swift` | Synchronous helpers and joined sessions live in their named extension files |
 | Fence action JSON | `FenceJSON+Action.swift` and `FenceJSON+HeistExecution.swift`, one result family each | Fence response formatting |
 | Exported tuple contract enforcement | The single `buttonheist.exported_tuple_return` Bumper rule | One effective-access projection covers functions, properties, subscripts, protocol requirements, and inherited public or package visibility; private and local tuple scratch values never enter the exported-contract projection |
@@ -533,13 +531,16 @@ pipelines are explicit:
 
 ### Report and Action Evidence Have One Owner
 
-`HeistResult` is execution truth: one admitted semantic step tree, duration, and
-an `Outcome` derived from that tree. `HeistReport.project(result:)` walks the
-tree once and owns its semantic nodes, summary, metrics, failure and warning
-facts, and diagnostics. JSON, compact text, human text, JUnit, doctor, and
-metric boundaries render that report instead of interpreting `HeistResult`
-independently. There is no competing execution report or Fence-owned report
-projection.
+`HeistResult` is execution truth: one admitted semantic step tree, duration,
+optional terminal failure capture, and an `Outcome` derived from the execution
+tree. Failure capture is diagnostic evidence, never an execution node. Custom
+result coding projects that value into the established auxiliary-step wire
+shape and admits it back at the boundary. `HeistReport.project(result:)` walks
+the execution tree once and owns its semantic nodes, summary, metrics, failure
+and warning facts, and diagnostics. JSON, compact text, human text, JUnit,
+doctor, and metric boundaries render that report instead of interpreting
+`HeistResult` independently. There is no competing execution report or
+Fence-owned report projection.
 
 Each action or wait result owns its bounded `Observation.Evidence`. Report
 projection preserves that evidence on the corresponding semantic node and does
@@ -749,8 +750,8 @@ flowchart TD
     Capture --> Reduce["TheVault reduction<br/>Snapshot + notification payloads<br/>to ordered Observation.Event values"]
     Reduce --> Vault["TheVault<br/>commit current Snapshot + one History"]
     Vault --> Machine
-    Machine --> Perform["pending(.perform(request))"]
-    Machine --> Wait["pending(.wait)"]
+    Machine --> Perform["perform(request)"]
+    Machine --> Wait["wait"]
     Machine --> Complete["complete(Completion)"]
     Perform --> Host
     Wait --> Host
@@ -825,7 +826,7 @@ matches only after a committed snapshot proves no semantic or geometry change.
    `ClientMessage.heistPlan`.
 3. TheGetaway routes the plan to one complete-heist machine.
 4. When that machine reaches an action it resolves the semantic target and
-   answers `.pending(.perform(...))`; the MainActor host performs the request
+   answers `.perform(...)`; the MainActor host performs the request
    and returns its typed outcome to the same machine.
 5. The canonical result and report projectors return the response and classify
    its accumulated accessibility evidence once.
@@ -833,12 +834,12 @@ matches only after a committed snapshot proves no semantic or geometry change.
 ### Wait
 
 The already-running machine evaluates committed current-state truth when it
-reaches a wait. If the predicate is not complete, it answers
-`.pending(.wait)` and consumes later admitted events from the same Vault
+reaches a wait. If the predicate is not complete, it answers `.wait` and
+consumes later admitted events from the same Vault
 history. Transition predicates require a later event; invocation and repeat
 expectations retain their private comparison progress while child steps run.
 
-The machine may answer `.pending(.perform(...))` when the wait requires target
+The machine may answer `.perform(...)` when the wait requires target
 reveal or canonical viewport discovery. Discovery searches both directional
 rays and exits `.origin`; the host restores the saved origin before returning
 the request outcome. Every movement command requests and consumes a

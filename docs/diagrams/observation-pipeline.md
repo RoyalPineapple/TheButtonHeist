@@ -15,8 +15,8 @@ flowchart LR
     Stream -->|"commit Snapshot + Event"| Vault["TheVault<br/>current phase + Observation.History"]
     Vault -->|"record, then publish"| Host["MainActor host"]
     Host -->|"admit ordered input"| Machine["one HeistExecution machine<br/>advance private progress"]
-    Machine --> Perform["pending(.perform(request))"]
-    Machine --> Wait["pending(.wait)"]
+    Machine --> Perform["perform(request)"]
+    Machine --> Wait["wait"]
     Machine --> Complete["complete(Completion)"]
     Perform --> Host
     Wait --> Host

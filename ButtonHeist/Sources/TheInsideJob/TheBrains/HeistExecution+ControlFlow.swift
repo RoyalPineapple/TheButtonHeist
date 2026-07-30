@@ -5,7 +5,7 @@ import ThePlans
 @_spi(ButtonHeistInternals) import TheScore
 
 extension HeistExecution.Machine {
-    mutating func advanceTopContinuation() -> HeistExecution.State {
+    mutating func advanceTopContinuation() -> HeistExecution.Decision {
         guard let continuation = continuations.popLast() else {
             return finish(children: rootChildren)
         }
@@ -25,11 +25,11 @@ extension HeistExecution.Machine {
 
     mutating func advanceControlFlow(
         _ input: HeistExecution.Input
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         guard case .currentSnapshot(let id, let snapshot) = input,
               let continuation = continuations.last,
               continuation.awaitingSnapshotRequestID == id else {
-            return .pending(.wait)
+            return .wait
         }
         continuations.removeLast()
         switch continuation {
@@ -42,7 +42,7 @@ extension HeistExecution.Machine {
         }
     }
 
-    mutating func finishAfterHeistTimeout() -> HeistExecution.State {
+    mutating func finishAfterHeistTimeout() -> HeistExecution.Decision {
         if let activeLeaf {
             let result: HeistExecutionStepResult
             switch activeLeaf {
@@ -55,7 +55,7 @@ extension HeistExecution.Machine {
         }
 
         guard let continuation = continuations.popLast() else {
-            return state
+            return decision
         }
 
         let result: HeistExecutionStepResult
@@ -84,7 +84,7 @@ extension HeistExecution.Machine {
             )
         case .sequence, .inline, .forEachString, .repeatUntil, .invocation, .waitElse:
             continuations.append(continuation)
-            return state
+            return decision
         }
         return resume(afterCompletedLeaf: result)
     }
@@ -93,21 +93,21 @@ extension HeistExecution.Machine {
         for step: ConditionalStep,
         context: HeistExecution.StepContext,
         scope: SemanticObservationScope
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         let id = nextID()
         continuations.append(.conditional(.init(
             step: step,
             context: context,
             progress: .awaitingSnapshot(id)
         )))
-        return .pending(.perform(.currentSnapshot(id, scope: scope)))
+        return .perform(.currentSnapshot(id, scope: scope))
     }
 
     private mutating func requestInitialSnapshot(
         for step: ForEachElementStep,
         context: HeistExecution.StepContext,
         matching: ResolvedElementPredicate
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         let id = nextID()
         continuations.append(.forEachElement(.init(
             step: step,
@@ -118,12 +118,12 @@ extension HeistExecution.Machine {
             progress: .awaitingSnapshot(id, previousMatchHash: nil),
             iterations: .empty
         )))
-        return .pending(.perform(.currentSnapshot(id, scope: .discovery)))
+        return .perform(.currentSnapshot(id, scope: .discovery))
     }
 
     private mutating func requestSnapshot(
         for continuation: HeistExecution.ForEachElementContinuation
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         guard case .executing(_, let previousMatchHash) = continuation.progress else {
             preconditionFailure("A completed for-each iteration must retain its match hash")
         }
@@ -140,7 +140,7 @@ extension HeistExecution.Machine {
             ),
             iterations: continuation.iterations
         )))
-        return .pending(.perform(.currentSnapshot(id, scope: .discovery)))
+        return .perform(.currentSnapshot(id, scope: .discovery))
     }
 }
 
@@ -186,7 +186,7 @@ private extension HeistExecution.ForEachElementContinuation {
 private extension HeistExecution.Machine {
     mutating func advance(
         _ sequence: HeistExecution.SequenceContinuation
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         var sequence = sequence
         if sequence.children.abortedAtPath != nil {
             while sequence.nextIndex < sequence.steps.count {
@@ -219,7 +219,7 @@ private extension HeistExecution.Machine {
     mutating func begin(
         _ step: HeistStep,
         context: HeistExecution.StepContext
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         switch step {
         case .action(let action):
             return begin(
@@ -293,7 +293,7 @@ private extension HeistExecution.Machine {
 
     mutating func resume(
         afterCompletedSequence children: HeistExecutedChildren
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         guard let continuation = continuations.popLast() else {
             rootChildren = children
             return advanceExecution()
@@ -333,7 +333,7 @@ private extension HeistExecution.Machine {
     mutating func begin(
         conditional step: ConditionalStep,
         context: HeistExecution.StepContext
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         let resolved: [ResolvedPresenceCondition]
         do {
             resolved = try step.cases.map {
@@ -356,7 +356,7 @@ private extension HeistExecution.Machine {
     mutating func advance(
         _ continuation: HeistExecution.ConditionalContinuation,
         snapshot: Observation.Snapshot?
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         let selection: HeistCaseSelectionResult
         do {
             selection = try conditionalSelection(
@@ -509,7 +509,7 @@ private extension HeistExecution.Machine {
     mutating func begin(
         forEachElement step: ForEachElementStep,
         context: HeistExecution.StepContext
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         let resolved: ResolvedElementPredicate
         do {
             resolved = try step.matching.resolve(in: context.environment)
@@ -529,16 +529,16 @@ private extension HeistExecution.Machine {
 
     mutating func advance(
         _ loop: HeistExecution.ForEachElementContinuation
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         requestSnapshot(for: loop)
     }
 
     mutating func advance(
         _ loop: HeistExecution.ForEachElementContinuation,
         snapshot: Observation.Snapshot?
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         guard case .awaitingSnapshot(_, let previousMatchHash) = loop.progress else {
-            return .pending(.wait)
+            return .wait
         }
         guard let snapshot else {
             return resume(afterCompletedLeaf: forEachElementUnavailable(
@@ -624,7 +624,7 @@ private extension HeistExecution.Machine {
     mutating func resume(
         _ loop: HeistExecution.ForEachElementContinuation,
         children: HeistExecutedChildren
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         guard case .executing = loop.progress else {
             preconditionFailure("Only an executing for-each iteration can complete")
         }
@@ -667,7 +667,7 @@ private extension HeistExecution.Machine {
 
     mutating func advance(
         _ loop: HeistExecution.ForEachStringContinuation
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         guard loop.iterationIndex < loop.step.values.count else {
             return resume(afterCompletedLeaf: forEachStringSummary(
                 loop,
@@ -698,7 +698,7 @@ private extension HeistExecution.Machine {
     mutating func resume(
         _ loop: HeistExecution.ForEachStringContinuation,
         children: HeistExecutedChildren
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         let iteration = forEachStringIteration(loop, children: children)
         var iterations = loop.iterations
         iterations.append(iteration)
@@ -955,7 +955,7 @@ private extension HeistExecution.Machine {
     mutating func begin(
         invocation step: HeistInvocationStep,
         context: HeistExecution.StepContext
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         let resolution = resolveInvocation(step, scope: context.scope)
         guard !context.scope.invocationStack.contains(resolution.resolvedPath) else {
             return resume(afterCompletedLeaf: recursiveInvocation(
@@ -1022,7 +1022,7 @@ private extension HeistExecution.Machine {
     mutating func resume(
         _ invocation: HeistExecution.InvocationContinuation,
         children executed: HeistExecutedChildren
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         let result = invocationResult(
             invocation,
             children: executed
@@ -1166,7 +1166,7 @@ private extension HeistExecution.Machine {
 private extension HeistExecution.Machine {
     mutating func advance(
         _ loop: HeistExecution.RepeatUntilContinuation
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         let path = loop.context.path.repeatUntilIteration(
             at: loop.iterationIndex
         )
@@ -1187,7 +1187,7 @@ private extension HeistExecution.Machine {
     mutating func resume(
         _ loop: HeistExecution.RepeatUntilContinuation,
         children: HeistExecutedChildren
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         if let check = repeatCheck(in: children, loop: loop) {
             return resumeRepeatCheck(
                 loop,
@@ -1246,7 +1246,7 @@ private extension HeistExecution.Machine {
     mutating func beginRepeatCheck(
         _ loop: HeistExecution.RepeatUntilContinuation,
         bodyChildren: HeistPassingChildren
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         let wait = WaitStep(
             predicate: loop.step.predicate,
             timeout: loop.step.timeout
@@ -1292,7 +1292,7 @@ private extension HeistExecution.Machine {
         _ loop: HeistExecution.RepeatUntilContinuation,
         bodyChildren: HeistPassingChildren,
         result: HeistExecutionStepResult
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         let expectation: ExpectationResult
         do {
             guard let replayed = try result.replayExpectation() else {
@@ -1340,7 +1340,7 @@ private extension HeistExecution.Machine {
         resolved: ResolvedRepeatUntilStep,
         bodyChildren: HeistPassingChildren,
         snapshot: Observation.Snapshot?
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         let count = loop.iterationIndex + 1
         let iterationEvidence = HeistRepeatUntilEvidence.executedContinued(
             iterationCount: count,
@@ -1383,7 +1383,7 @@ private extension HeistExecution.Machine {
         children: HeistPassingChildren,
         evaluation: ExpectationResult,
         snapshot: Observation.Snapshot?
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         let count = loop.iterationIndex + 1
         let iteration: HeistExecutionStepResult
         switch evaluation {
@@ -1436,7 +1436,7 @@ private extension HeistExecution.Machine {
         children: HeistAbortedChildren,
         evaluation: ExpectationResult,
         snapshot: Observation.Snapshot?
-    ) -> HeistExecution.State {
+    ) -> HeistExecution.Decision {
         if case .met = evaluation,
            let retained = recoverableRepeatChildren(children) {
             return resumePassingRepeat(

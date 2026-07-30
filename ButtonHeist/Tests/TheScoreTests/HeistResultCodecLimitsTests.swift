@@ -185,23 +185,26 @@ import ThePlans
         )
     }
 
-    @Test func `aggregate admission admits auxiliary failure screenshot roots`() throws {
+    @Test func `aggregate admission normalizes legacy failure capture roots`() throws {
+        let screenshot = failureScreenshot()
         let result = try HeistResult(
             steps: [
                 HeistResultFixture.explicitFailure(path: "$.body[0]", message: "stop"),
                 HeistResultFixture.action(
                     path: "$.body[0].failure.actions[0]",
                     command: .takeScreenshot,
-                    result: .success(payload: .screenshot(nil))
+                    result: .success(payload: .screenshot(screenshot))
                 ),
             ],
             durationMs: 2
         )
 
-        #expect(result.steps.map(\.path) == ["$.body[0]", "$.body[0].failure.actions[0]"])
+        #expect(result.steps.map(\.path) == ["$.body[0]"])
+        #expect(result.failureCapture == .captured(screenshot))
     }
 
-    @Test func `aggregate admission admits skipped roots before terminal failure capture`() throws {
+    @Test func `aggregate admission retains skipped roots before terminal failure capture`() throws {
+        let screenshot = failureScreenshot()
         let result = try HeistResult(
             steps: [
                 HeistResultFixture.explicitFailure(path: "$.body[0]", message: "stop"),
@@ -209,13 +212,14 @@ import ThePlans
                 HeistResultFixture.action(
                     path: "$.body[0].failure.actions[0]",
                     command: .takeScreenshot,
-                    result: .success(payload: .screenshot(nil))
+                    result: .success(payload: .screenshot(screenshot))
                 ),
             ],
             durationMs: 3
         )
 
-        #expect(result.steps.map(\.status) == [.failed, .skipped, .passed])
+        #expect(result.steps.map(\.status) == [.failed, .skipped])
+        #expect(result.failureCapture == .captured(screenshot))
     }
 
     @Test(
@@ -317,7 +321,7 @@ import ThePlans
                 ),
                 skippedWarning(path: "$.body[1]"),
             ],
-            containing: ["regular root appears after terminal failure-capture evidence", "$.body[1]"]
+            containing: ["root path $.body[0].failure.actions[0] is not a legal root step path"]
         )
     }
 
@@ -331,15 +335,15 @@ import ThePlans
                     result: .success(payload: .screenshot(nil))
                 ),
             ],
-            containing: ["failure-capture root index 1 must be 0"]
+            containing: ["root path $.body[0].failure.actions[1] is not a legal root step path"]
         )
     }
 
-    @Test func `aggregate admission admits nested failure action evidence`() throws {
+    @Test func `aggregate admission rejects nested failure capture execution`() throws {
         let screenshot = HeistResultFixture.action(
             path: "$.body[0].failure.actions[0]",
             command: .takeScreenshot,
-            result: .success(payload: .screenshot(nil))
+            result: .success(payload: .screenshot(failureScreenshot()))
         )
         let root = HeistExecutionStepResult.failure(
             path: "$.body[0]",
@@ -350,9 +354,9 @@ import ThePlans
             )
         )
 
-        let result = try HeistResult(steps: [root], durationMs: 1)
-
-        #expect(result.steps.first?.children.map(\.path) == ["$.body[0].failure.actions[0]"])
+        #expect(throws: Error.self) {
+            try HeistResult(steps: [root], durationMs: 1)
+        }
     }
 
     @Test func `aggregate admission rejects loop iteration paths with non iteration child nodes`() throws {
@@ -817,6 +821,15 @@ import ThePlans
             path: executionPath(path),
             message: "skipped",
             completion: .skipped()
+        )
+    }
+
+    private func failureScreenshot() -> ScreenPayload {
+        ScreenPayload(
+            pngData: "png",
+            width: 1,
+            height: 1,
+            timestamp: Date(timeIntervalSince1970: 0)
         )
     }
 
