@@ -66,7 +66,7 @@ struct HeistPlanToolTests {
         #expect(result.stdout == """
         HeistPlan("loginFlow") {
             TypeText("alex@example.com", into: .identifier("email"))
-                .expect(.elementsChanged([.updated(.identifier("email"), .value("alex@example.com"))]))
+                .expect(.elementsChanged([.updated(.identifier("email"), .value("alex@example.com"))]), timeout: 1)
 
             Warn("done")
         }
