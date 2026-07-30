@@ -11,27 +11,6 @@ package extension HeistExecutionStepResult {
         return HeistInvocationStep(path: path, argument: argument)
     }
 
-    var forEachStringDeclaration: HeistForEachStringDeclaration? {
-        switch node {
-        case .forEachString(let declaration, _), .forEachStringIteration(let declaration, _): declaration
-        default: nil
-        }
-    }
-
-    var forEachElementDeclaration: HeistForEachElementDeclaration? {
-        switch node {
-        case .forEachElement(let declaration, _), .forEachElementIteration(let declaration, _): declaration
-        default: nil
-        }
-    }
-
-    var repeatUntilDeclaration: HeistRepeatUntilDeclaration? {
-        switch node {
-        case .repeatUntil(let declaration, _), .repeatUntilIteration(let declaration, _): declaration
-        default: nil
-        }
-    }
-
 }
 
 public extension HeistExecutionStepResult {

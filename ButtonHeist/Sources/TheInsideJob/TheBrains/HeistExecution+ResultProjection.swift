@@ -486,15 +486,6 @@ private extension HeistExecution.LeafOutcome {
             .viewportFailure
         }
     }
-
-    var admitsSatisfiedExpectation: Bool {
-        switch self {
-        case .completed, .timedOut, .heistTimedOut:
-            true
-        case .cancelled, .unavailable, .viewportExitFailed:
-            false
-        }
-    }
 }
 
 #endif // DEBUG

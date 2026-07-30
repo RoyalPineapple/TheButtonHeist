@@ -157,16 +157,6 @@ extension HeistExecution {
             progress = .complete(completion)
             return .complete(completion)
         }
-
-        internal mutating func finishWithoutFailureScreenshot() -> State {
-            guard case .awaitingFailureScreenshot(_, let children) = progress else {
-                return state
-            }
-            return complete(
-                steps: children.values,
-                abortedAtPath: children.abortedAtPath
-            )
-        }
     }
 }
 

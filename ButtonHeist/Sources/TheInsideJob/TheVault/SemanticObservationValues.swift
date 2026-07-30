@@ -13,9 +13,6 @@ extension TheVault.State {
         internal let scope: SemanticObservationScope
         internal let continuity: ScreenContinuity
 
-        internal var screenHeading: String? {
-            InterfaceSummary.screenName(for: snapshot.interface)
-        }
         internal var summary: String { snapshot.summary }
     }
 }

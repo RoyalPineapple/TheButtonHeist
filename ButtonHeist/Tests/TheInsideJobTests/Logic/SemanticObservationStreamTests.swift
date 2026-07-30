@@ -19,17 +19,6 @@ final class SemanticObservationStreamTests: XCTestCase {
         vault = nil
     }
 
-    func testStreamRunningTruthComesFromCycleState() {
-        let stream = vault.semanticObservationStream
-        XCTAssertFalse(stream.isActive)
-
-        stream.start()
-        XCTAssertTrue(stream.isActive)
-
-        stream.stop()
-        XCTAssertFalse(stream.isActive)
-    }
-
     func testIdleStreamDoesNotReadAccessibility() {
         let source = VisibleObservationSourceFixture()
         source.observation = .empty

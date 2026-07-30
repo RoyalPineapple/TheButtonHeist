@@ -99,17 +99,6 @@ final class TheBrains {
         )
     }
 
-    func treeUnavailableResult(
-        payload: ActionResult.Payload,
-        failure: Observation.CaptureFailure
-    ) -> ActionResult {
-        return .failure(
-            payload: payload,
-            failureKind: .accessibilityTreeUnavailable,
-            message: "Could not observe accessibility tree; \(failure.diagnostic)"
-        )
-    }
-
     func runtimeInactiveResult(payload: ActionResult.Payload) -> ActionResult {
         .failure(
             payload: payload,

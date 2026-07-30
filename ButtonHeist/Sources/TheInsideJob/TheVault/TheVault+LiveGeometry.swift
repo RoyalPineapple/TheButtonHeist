@@ -46,7 +46,6 @@ extension TheVault {
         let container: LiveContainerTarget
         let scrollView: UIScrollView
 
-        var path: TreePath { container.containerTarget.path }
         var scrollViewID: ObjectIdentifier { ObjectIdentifier(scrollView) }
     }
 
@@ -207,43 +206,11 @@ extension TheVault {
         return .success(LiveScrollTarget(container: liveContainer, scrollView: scrollView))
     }
 
-    func nearestLiveScrollTarget(for path: TreePath) -> LiveScrollTarget? {
-        guard let containerPath = nearestLiveScrollContainerPath(for: path) else { return nil }
-        return try? liveScrollTarget(at: containerPath).get()
-    }
-
     func liveScrollTarget(matching scrollViewID: ObjectIdentifier) -> LiveScrollTarget? {
         for entry in currentLiveCapture.scrollEntries(matching: scrollViewID) {
             if case .success(let target) = liveScrollTarget(at: entry.path) { return target }
         }
         return nil
-    }
-
-    func liveProgrammaticScrollTargets(
-        descendedFrom rootScrollViewID: ObjectIdentifier? = nil
-    ) -> [LiveScrollTarget] {
-        var admittedScrollViewIDs = Set<ObjectIdentifier>()
-        let targets = currentLiveCapture.scrollEntries().compactMap { entry -> LiveScrollTarget? in
-            guard !admittedScrollViewIDs.contains(entry.scrollViewID),
-                  case .success(let target) = liveScrollTarget(at: entry.path),
-                  !target.scrollView.bhIsUnsafeForProgrammaticScrolling
-            else { return nil }
-            admittedScrollViewIDs.insert(entry.scrollViewID)
-            return target
-        }
-        guard let rootScrollViewID else { return targets }
-
-        return targets.filter { target in
-            var current = target.scrollViewID
-            var visited = Set<ObjectIdentifier>()
-            while visited.insert(current).inserted {
-                if current == rootScrollViewID { return true }
-                guard admittedScrollViewIDs.contains(current),
-                      let parent = currentLiveCapture.parentScrollViewID(of: current) else { return false }
-                current = parent
-            }
-            return false
-        }
     }
 
     func liveScrollViewIDForRevealing(heistId: HeistId) -> ObjectIdentifier? {

@@ -95,13 +95,6 @@ final class TheVault {
 
     // MARK: - Computed Accessors
 
-    /// Hierarchy from the most recent observed capture. Proxy for call-site
-    /// clarity: reads, matchers, scroll dispatch, and tab-bar geometry all need
-    /// it without spelling out live-capture internals every time.
-    var latestObservedLiveHierarchy: [AccessibilityHierarchy] {
-        currentLiveCapture.hierarchy
-    }
-
     /// Scrollable container paths paired with their backing UIScrollView from the
     /// visible live view. Unwraps the weak ref wrapper for call sites that need
     /// a live scroll view.
@@ -123,21 +116,8 @@ final class TheVault {
         ids(in: .viewport)
     }
 
-    var interfaceElementCount: Int {
-        interfaceTree.elementCount
-    }
-
     func interfaceElement(heistId: HeistId) -> InterfaceTree.Element? {
         interfaceTree.findElement(heistId: heistId)
-    }
-
-    /// Elements in matcher/diagnostic order.
-    var orderedInterfaceElements: [InterfaceTree.Element] {
-        interfaceTree.orderedElements
-    }
-
-    var interfaceHash: String {
-        interfaceTree.interfaceHash
     }
 
     /// HeistId captured for the current viewport's first responder.
@@ -148,11 +128,6 @@ final class TheVault {
     /// Current screen name derived from the interface tree's viewport capture.
     var lastScreenName: String? {
         interfaceTree.name
-    }
-
-    /// Slugified screen name for machine use (e.g. "controls_demo").
-    var lastScreenId: String? {
-        interfaceTree.id
     }
 
     static func captureVisibleObservation(from vault: TheVault) -> InterfaceObservation? {
