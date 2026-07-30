@@ -178,23 +178,25 @@ public extension Heist {
         public var errorDescription: String? { description }
 
         public var description: String {
-            var parts = [
-                "Heist failed",
-                "path=\(failedStepPath)",
-                "kind=\(failedStepKind.rawValue)",
-                "message=\(message)",
+            var lines = [
+                "Heist failed at \(failedStepPath) (\(failedStepKind.rawValue))",
+                "Cause: \(message)",
             ]
-            if let diagnostic {
-                parts.append("diagnostic=\(diagnostic)")
+            if let failure = result.firstFailedStep?.failure {
+                if !failure.contract.isEmpty, failure.contract != message {
+                    lines.append("Contract: \(failure.contract)")
+                }
+                if let expected = failure.expected, !expected.isEmpty {
+                    lines.append("Expected: \(expected)")
+                }
             }
-            var text = parts.joined(separator: " ")
             if let screenshot = result.failureScreenshotSummary {
-                text += "\n\(screenshot)"
+                lines.append(screenshot)
             }
             if let interfaceDump = result.failureInterfaceDump(elementLimit: .max) {
-                text += "\n\(interfaceDump)"
+                lines.append(interfaceDump)
             }
-            return text
+            return lines.joined(separator: "\n")
         }
 
         private static func diagnostic(_ failure: HeistFailureDetail) -> String {
