@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -17,7 +18,10 @@ sys.modules[SPEC.name] = lab
 SPEC.loader.exec_module(lab)
 
 
-def scenario(expectation: str, kind: str, label: str) -> lab.Scenario:
+def scenario(
+    expectation: str,
+    evidence: list[dict[str, str]],
+) -> lab.Scenario:
     return lab.Scenario.decode(
         {
             "name": "directContract",
@@ -25,19 +29,103 @@ def scenario(expectation: str, kind: str, label: str) -> lab.Scenario:
             "plan": "catalog projection",
             "classification": "statistical",
             "expectedOutcome": expectation,
-            "expectedEvidence": [{"kind": kind, "label": label}],
+            "expectedEvidence": evidence,
         }
     )
 
 
-passing = scenario("command-succeeds", "element", "Done")
-expected_failure = scenario("command-fails-with-diagnostic", "diagnostic", "expected diagnostic")
-success = lab.observe_primary(passing, subprocess.CompletedProcess(["buttonheist"], 0, "{}", ""))
-product_failure = lab.observe_primary(passing, subprocess.CompletedProcess(["buttonheist"], 1, "{}", "recoverable failure"))
-diagnostic = lab.observe_primary(expected_failure, subprocess.CompletedProcess(["buttonheist"], 1, "{}", "Expected Diagnostic"))
-assert success["status"] == "passed"
+def run_heist_output(
+    *,
+    element_value: str = "1",
+    announcement: str | None = "Saved",
+) -> str:
+    result = {
+        "delta": {
+            "kind": "elementsChanged",
+            "elementCount": 1,
+            "edits": {
+                "updated": [{
+                    "after": {
+                        "traits": ["staticText"],
+                        "label": "Activations",
+                        "value": element_value,
+                    }
+                }]
+            },
+        }
+    }
+    if announcement is not None:
+        result["announcement"] = announcement
+    return json.dumps({
+        "status": "ok",
+        "report": {
+            "nodes": [{
+                "path": "$.body[0]",
+                "kind": "action",
+                "status": "passed",
+                "evidence": {"action": {"result": result}},
+                "children": [],
+            }]
+        },
+    })
+
+
+passing = scenario(
+    "command-succeeds",
+    [
+        {"kind": "element", "label": "Activations", "value": "1"},
+        {"kind": "notification", "label": "Saved"},
+    ],
+)
+assert passing.expected_evidence == (
+    lab.EvidenceFact(lab.EvidenceKind.ELEMENT, "Activations", "1"),
+    lab.EvidenceFact(lab.EvidenceKind.NOTIFICATION, "Saved", None),
+)
+expected_failure = scenario(
+    "command-fails-with-diagnostic",
+    [{"kind": "diagnostic", "label": "expected diagnostic"}],
+)
+success = lab.observe_primary(
+    passing,
+    subprocess.CompletedProcess(["buttonheist"], 0, run_heist_output(), ""),
+)
+product_failure = lab.observe_primary(
+    passing,
+    subprocess.CompletedProcess(["buttonheist"], 1, "{}", "recoverable failure"),
+)
+diagnostic = lab.observe_primary(
+    expected_failure,
+    subprocess.CompletedProcess(["buttonheist"], 1, "{}", "Expected Diagnostic"),
+)
+missing_notification = lab.observe_primary(
+    passing,
+    subprocess.CompletedProcess(
+        ["buttonheist"],
+        0,
+        run_heist_output(announcement=None),
+        "",
+    ),
+)
+mismatched_value = lab.observe_primary(
+    passing,
+    subprocess.CompletedProcess(
+        ["buttonheist"],
+        0,
+        run_heist_output(element_value="2"),
+        "",
+    ),
+)
+assert success["status"] == "passed" and success["evidenceMatched"] is True
 assert product_failure["status"] == "failed"
 assert diagnostic["status"] == "passed" and diagnostic["diagnosticMatched"] is True
+assert missing_notification["status"] == "failed"
+assert missing_notification["missingEvidence"] == [
+    {"kind": "notification", "label": "Saved"}
+]
+assert mismatched_value["status"] == "failed"
+assert mismatched_value["missingEvidence"] == [
+    {"kind": "element", "label": "Activations", "value": "1"}
+]
 
 samples = lab.execute_samples(
     5,
@@ -68,7 +156,7 @@ class FakeApp:
 
 
 def fake_heist(*_args) -> subprocess.CompletedProcess[str]:
-    return subprocess.CompletedProcess(["buttonheist"], 0, "{}", "")
+    return subprocess.CompletedProcess(["buttonheist"], 0, run_heist_output(), "")
 
 
 routes = []

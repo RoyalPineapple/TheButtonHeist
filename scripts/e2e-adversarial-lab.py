@@ -40,6 +40,48 @@ class OutcomeStatus(str, Enum):
     NOT_RUN = "not-run"
 
 
+class EvidenceKind(str, Enum):
+    DIAGNOSTIC = "diagnostic"
+    ELEMENT = "element"
+    NOTIFICATION = "notification"
+
+
+@dataclass(frozen=True)
+class EvidenceFact:
+    kind: EvidenceKind
+    label: str
+    value: str | None
+
+    @classmethod
+    def decode(cls, value: Any) -> EvidenceFact:
+        if not isinstance(value, dict):
+            raise ValueError("catalog evidence must be an object")
+        label = value.get("label")
+        semantic_value = value.get("value")
+        if not isinstance(label, str) or not label:
+            raise ValueError("catalog evidence requires a non-empty label")
+        if semantic_value is not None and not isinstance(semantic_value, str):
+            raise ValueError("catalog evidence value must be a string")
+        return cls(
+            kind=EvidenceKind(required_string(value, "kind")),
+            label=label,
+            value=semantic_value,
+        )
+
+    def matches(self, observed: EvidenceFact) -> bool:
+        return (
+            self.kind is observed.kind
+            and self.label == observed.label
+            and (self.value is None or self.value == observed.value)
+        )
+
+    def json_value(self) -> dict[str, str]:
+        result = {"kind": self.kind.value, "label": self.label}
+        if self.value is not None:
+            result["value"] = self.value
+        return result
+
+
 @dataclass(frozen=True)
 class Scenario:
     name: str
@@ -47,32 +89,21 @@ class Scenario:
     plan: str
     classification: ScenarioClassification
     expectation: ScenarioExpectation
-    expected_diagnostic: str | None
+    expected_evidence: tuple[EvidenceFact, ...]
 
     @classmethod
     def decode(cls, value: Any) -> Scenario:
         if not isinstance(value, dict):
             raise ValueError("catalog scenario must be an object")
-        evidence = value.get("expectedEvidence")
-        if not isinstance(evidence, list) or not evidence:
+        encoded_evidence = value.get("expectedEvidence")
+        if not isinstance(encoded_evidence, list) or not encoded_evidence:
             raise ValueError("catalog scenario requires expected evidence")
-        if any(
-            not isinstance(row, dict)
-            or row.get("kind") not in {"diagnostic", "element", "notification"}
-            or not isinstance(row.get("label"), str)
-            or not row["label"]
-            or (row.get("value") is not None and not isinstance(row["value"], str))
-            for row in evidence
-        ):
-            raise ValueError("catalog evidence requires a typed kind and label")
+        evidence = tuple(EvidenceFact.decode(row) for row in encoded_evidence)
         expectation = ScenarioExpectation(required_string(value, "expectedOutcome"))
         diagnostics = [
-            row["label"]
+            fact
             for row in evidence
-            if isinstance(row, dict)
-            and row.get("kind") == "diagnostic"
-            and isinstance(row.get("label"), str)
-            and row["label"]
+            if fact.kind is EvidenceKind.DIAGNOSTIC
         ]
         if expectation is ScenarioExpectation.COMMAND_FAILS_WITH_DIAGNOSTIC:
             if len(diagnostics) != 1:
@@ -85,7 +116,7 @@ class Scenario:
             plan=required_string(value, "plan"),
             classification=ScenarioClassification(required_string(value, "classification")),
             expectation=expectation,
-            expected_diagnostic=diagnostics[0] if diagnostics else None,
+            expected_evidence=evidence,
         )
 
 
@@ -114,19 +145,187 @@ def observe_primary(
     result: subprocess.CompletedProcess[str],
 ) -> dict[str, Any]:
     diagnostic_matched: bool | None = None
+    evidence_matched: bool | None = None
+    missing_evidence: list[dict[str, str]] = []
+    evidence_error: str | None = None
     if scenario.expectation is ScenarioExpectation.COMMAND_SUCCEEDS:
-        matched = result.returncode == 0
+        matched = False
+        if result.returncode == 0:
+            try:
+                observed = parse_run_heist_evidence(result.stdout)
+                missing_evidence = [
+                    expected.json_value()
+                    for expected in scenario.expected_evidence
+                    if not any(expected.matches(fact) for fact in observed)
+                ]
+                evidence_matched = not missing_evidence
+                matched = evidence_matched
+            except ValueError as error:
+                evidence_matched = False
+                evidence_error = str(error)
     else:
-        diagnostic = scenario.expected_diagnostic
-        if diagnostic is None:
+        diagnostics = [
+            fact.label
+            for fact in scenario.expected_evidence
+            if fact.kind is EvidenceKind.DIAGNOSTIC
+        ]
+        if len(diagnostics) != 1:
             raise ValueError("failing scenario is missing its admitted diagnostic")
+        diagnostic = diagnostics[0]
         diagnostic_matched = diagnostic.casefold() in f"{result.stdout}\n{result.stderr}".casefold()
         matched = result.returncode != 0 and diagnostic_matched
-    return {
+    observation: dict[str, Any] = {
         "status": (OutcomeStatus.PASSED if matched else OutcomeStatus.FAILED).value,
         "returncode": result.returncode,
         "diagnosticMatched": diagnostic_matched,
+        "evidenceMatched": evidence_matched,
     }
+    if missing_evidence:
+        observation["missingEvidence"] = missing_evidence
+    if evidence_error is not None:
+        observation["evidenceError"] = evidence_error
+    return observation
+
+
+def parse_run_heist_evidence(output: str) -> tuple[EvidenceFact, ...]:
+    try:
+        response = json.loads(output)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"run_heist returned invalid JSON: {error.msg}") from error
+    if not isinstance(response, dict) or response.get("status") != "ok":
+        raise ValueError("successful run_heist JSON must have status ok")
+    report = response.get("report")
+    if not isinstance(report, dict):
+        raise ValueError("successful run_heist JSON must contain a report")
+    nodes = report.get("nodes")
+    if not isinstance(nodes, list):
+        raise ValueError("successful run_heist report must contain nodes")
+    facts: list[EvidenceFact] = []
+    for node in nodes:
+        facts.extend(evidence_facts_from_node(node))
+    return tuple(facts)
+
+
+def evidence_facts_from_node(value: Any) -> list[EvidenceFact]:
+    if not isinstance(value, dict):
+        raise ValueError("run_heist report nodes must be objects")
+    facts: list[EvidenceFact] = []
+    evidence = value.get("evidence")
+    if isinstance(evidence, dict):
+        action = evidence.get("action")
+        if isinstance(action, dict):
+            result = action.get("result")
+            if isinstance(result, dict):
+                announcement = result.get("announcement")
+                if isinstance(announcement, str):
+                    facts.append(EvidenceFact(EvidenceKind.NOTIFICATION, announcement, None))
+                facts.extend(element_facts_from_delta(result.get("delta")))
+            facts.extend(evidence_facts_from_expectation(action.get("expectation")))
+        wait = evidence.get("wait")
+        if isinstance(wait, dict):
+            facts.extend(element_facts_from_delta(wait.get("delta")))
+            facts.extend(evidence_facts_from_expectation(wait.get("expectation")))
+    facts.extend(evidence_facts_from_expectation(value.get("expectation")))
+    children = value.get("children")
+    if not isinstance(children, list):
+        raise ValueError("run_heist report node children must be an array")
+    for child in children:
+        facts.extend(evidence_facts_from_node(child))
+    return facts
+
+
+def element_facts_from_delta(value: Any) -> list[EvidenceFact]:
+    if not isinstance(value, dict):
+        return []
+    facts: list[EvidenceFact] = []
+    edits = value.get("edits")
+    if isinstance(edits, dict):
+        added = edits.get("added")
+        if isinstance(added, list):
+            facts.extend(filter_element_facts(added))
+        updated = edits.get("updated")
+        if isinstance(updated, list):
+            facts.extend(
+                fact
+                for update in updated
+                if isinstance(update, dict)
+                for fact in filter_element_facts([update.get("after")])
+            )
+    screen = value.get("screen")
+    if isinstance(screen, dict):
+        elements = screen.get("elements")
+        if isinstance(elements, list):
+            facts.extend(filter_element_facts(elements))
+    return facts
+
+
+def filter_element_facts(values: list[Any]) -> list[EvidenceFact]:
+    facts: list[EvidenceFact] = []
+    for value in values:
+        if not isinstance(value, dict) or not isinstance(value.get("traits"), list):
+            continue
+        label = value.get("label")
+        semantic_value = value.get("value")
+        if not isinstance(label, str):
+            continue
+        facts.append(EvidenceFact(
+            kind=EvidenceKind.ELEMENT,
+            label=label,
+            value=semantic_value if isinstance(semantic_value, str) else None,
+        ))
+    return facts
+
+
+def evidence_facts_from_expectation(value: Any) -> list[EvidenceFact]:
+    if not isinstance(value, dict) or value.get("met") is not True:
+        return []
+    expected = value.get("expected")
+    if not isinstance(expected, dict):
+        return []
+    if expected.get("type") == EvidenceKind.NOTIFICATION.value:
+        actual = value.get("actual")
+        return (
+            [EvidenceFact(EvidenceKind.NOTIFICATION, actual, None)]
+            if isinstance(actual, str)
+            else []
+        )
+    if expected.get("type") not in {"exists", "appeared", "updated"}:
+        return []
+    target = expected.get("target")
+    return element_facts_from_target(target)
+
+
+def element_facts_from_target(value: Any) -> list[EvidenceFact]:
+    if not isinstance(value, dict):
+        return []
+    facts: list[EvidenceFact] = []
+    checks = value.get("checks")
+    if isinstance(checks, list):
+        label: str | None = None
+        semantic_value: str | None = None
+        for check in checks:
+            if not isinstance(check, dict):
+                continue
+            match = check.get("match")
+            if (
+                not isinstance(match, dict)
+                or match.get("mode") != "exact"
+                or not isinstance(match.get("value"), str)
+            ):
+                continue
+            if check.get("kind") == "label":
+                label = match["value"]
+            elif check.get("kind") == "value":
+                semantic_value = match["value"]
+        if label is not None:
+            facts.append(EvidenceFact(EvidenceKind.ELEMENT, label, semantic_value))
+    for nested in value.values():
+        if isinstance(nested, dict):
+            facts.extend(element_facts_from_target(nested))
+        elif isinstance(nested, list):
+            for item in nested:
+                facts.extend(element_facts_from_target(item))
+    return facts
 
 
 def run_heist(
