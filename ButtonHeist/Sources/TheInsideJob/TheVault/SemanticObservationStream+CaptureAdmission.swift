@@ -36,17 +36,10 @@ extension Observation.Stream {
     internal func refreshedVisibleObservation(
         boundary: SemanticObservationWaitBoundary
     ) async -> VisibleObservationOutcome {
-        await refreshedObservation(scope: .visible, boundary: boundary)
-    }
-
-    internal func refreshedObservation(
-        scope: SemanticObservationScope,
-        boundary: SemanticObservationWaitBoundary
-    ) async -> VisibleObservationOutcome {
         let historyIndex = state.history.endIndex
         switch await waitForObservation(
             after: historyIndex,
-            scope: scope,
+            scope: .visible,
             boundary: boundary
         ) {
         case .observation(let current):
@@ -59,10 +52,30 @@ extension Observation.Stream {
     }
 
     /// Waits until canonical visible truth covers one causal notification range.
+    /// Sampling advances only when a display pulse says UIKit advanced;
+    /// cancellation remains the business deadline owner.
     internal func visibleObservation(
         covering coverage: AccessibilityNotificationCoverage
     ) async -> TheVault.State.Current? {
-        await observationCovering(coverage)
+        var historyIndex = state.history.endIndex
+        while !Task.isCancelled {
+            if let current = currentObservation(covering: coverage) {
+                return current
+            }
+            switch await waitForObservation(
+                after: historyIndex,
+                scope: .visible,
+                boundary: .cancellation
+            ) {
+            case .observation:
+                historyIndex = state.history.endIndex
+            case .cycleCompletedWithoutObservation:
+                continue
+            case .deadlineReached, .cancelled, .unavailable:
+                return nil
+            }
+        }
+        return nil
     }
 
     /// Performs exactly one pulse-driven capture attempt.
@@ -102,32 +115,6 @@ extension Observation.Stream {
         state.notificationIndex.sequence >= coverage.through.sequence
             && state.scopedScreenChangedSequence
                 >= coverage.scopedScreenChangedThrough
-    }
-
-    /// Keeps sampling only when a real display tick says UIKit advanced.
-    /// Cancellation remains the sole business deadline owner.
-    private func observationCovering(
-        _ coverage: AccessibilityNotificationCoverage
-    ) async -> TheVault.State.Current? {
-        var historyIndex = state.history.endIndex
-        while !Task.isCancelled {
-            if let current = currentObservation(covering: coverage) {
-                return current
-            }
-            switch await waitForObservation(
-                after: historyIndex,
-                scope: .visible,
-                boundary: .cancellation
-            ) {
-            case .observation:
-                historyIndex = state.history.endIndex
-            case .cycleCompletedWithoutObservation:
-                continue
-            case .deadlineReached, .cancelled, .unavailable:
-                return nil
-            }
-        }
-        return nil
     }
 
     internal func admittedObservation(

@@ -74,6 +74,11 @@ let buttonHeistRules = RuleSet {
         id: "buttonheist.heist_action_dispatch_ownership"
     )
     Rules.memberReferenceOwnership(
+        "beginActionWindow",
+        allowed: .files([heistExecutionHostPath]),
+        id: "buttonheist.action_notification_window_ownership"
+    )
+    Rules.memberReferenceOwnership(
         "setContentOffset",
         allowed: .files([scrollContentOffsetOwnerPath]).union(demoScope),
         id: "buttonheist.scroll_content_offset_ownership"

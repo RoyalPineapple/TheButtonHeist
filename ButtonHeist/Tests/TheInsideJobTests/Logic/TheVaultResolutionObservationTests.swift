@@ -147,42 +147,6 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(evidence.coverage, .complete)
     }
 
-    func testNestedActionCoverageResolvesAgainstNotificationsCommittedOnceInVaultHistory() async {
-        let observation = InterfaceObservation.makeForTests(elements: [
-            (element(label: "Stable"), "stable"),
-        ])
-        _ = await publishVisible(observation)
-        let owner = vault.accessibilityNotifications.beginActionWindow()
-        vault.accessibilityNotifications.recordForTesting(
-            code: 1008,
-            notificationData: CapturedAccessibilityNotificationPayload("Owner" as NSString),
-            associatedElement: .none
-        )
-        let child = vault.accessibilityNotifications.beginActionWindow()
-        vault.accessibilityNotifications.recordForTesting(
-            code: 1008,
-            notificationData: CapturedAccessibilityNotificationPayload("Child" as NSString),
-            associatedElement: .none
-        )
-
-        let childObservation = await child.admitCausallyCovered { coverage in
-            await publishVisible(observation, covering: coverage)
-        }
-        XCTAssertNotNil(childObservation)
-
-        let ownerObservation = await owner.admitCausallyCovered { coverage in
-            vault.semanticObservationStream.currentObservation(
-                covering: coverage
-            )
-        }
-        XCTAssertNotNil(ownerObservation)
-
-        XCTAssertEqual(
-            vault.semanticObservationStream.notifications().compactMap(\.text),
-            ["Owner", "Child"]
-        )
-    }
-
     func testScopedIngressBeyondAmbientLimitCommitsCompleteOrderedVaultHistory() async {
         vault.semanticObservationStream.reset(retentionLimit: 128)
         let observation = InterfaceObservation.makeForTests(elements: [

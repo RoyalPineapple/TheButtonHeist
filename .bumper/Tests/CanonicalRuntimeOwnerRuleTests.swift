@@ -209,6 +209,12 @@ private let runtimeOwnershipFixtures: [RuntimeOwnershipFixture] = [
         competingPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/CompetingActionExecutor.swift",
         source: "func dispatch(_ brains: TheBrains, _ command: Command) async { _ = await brains.dispatchRuntimeAction(command) }"
     ),
+    RuntimeOwnershipFixture(
+        id: "buttonheist.action_notification_window_ownership",
+        ownerPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/HeistExecution+Host.swift",
+        competingPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/CompetingNotificationWindow.swift",
+        source: "func begin(_ bus: AccessibilityNotificationBus) { _ = bus.beginActionWindow() }"
+    ),
 ]
 
 struct RuntimeOwnershipFixture: Sendable {

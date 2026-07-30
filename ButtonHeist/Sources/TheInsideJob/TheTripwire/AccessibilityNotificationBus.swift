@@ -11,7 +11,6 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
     private struct ActiveActionWindow {
         let id: AccessibilityNotificationActionWindowID
         let cursor: AccessibilityNotificationCursor
-        var childLeaseCount: Int
     }
 
     private struct IngressLog {
@@ -151,9 +150,6 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
     private var activeHeistCursor: AccessibilityNotificationCursor?
     private var nextActionWindowID: UInt64 = 0
     private var activeActionWindow: ActiveActionWindow?
-    private var drainingActionChildCounts: [
-        AccessibilityNotificationActionWindowID: Int
-    ] = [:]
     private var nextCycleClaimID: UInt64 = 0
     private var frozenCycleClaim: AccessibilityNotificationCycleClaim?
     private var admittedAmbientThrough = AccessibilityNotificationCursor.origin
@@ -202,14 +198,10 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
     /// the action evidence without stealing earlier heist-level context.
     func beginActionWindow() -> AccessibilityNotificationScopeLease {
         onIngressExecutor {
-            if var activeActionWindow {
-                activeActionWindow.childLeaseCount += 1
-                self.activeActionWindow = activeActionWindow
-                return beginScopeLeaseOnIngressExecutor(
-                    ownership: .actionChild(activeActionWindow.id),
-                    cursor: activeActionWindow.cursor
-                )
-            }
+            precondition(
+                activeActionWindow == nil,
+                "Only one action notification window may be active"
+            )
             nextActionWindowID += 1
             let actionWindowID = AccessibilityNotificationActionWindowID(
                 rawValue: nextActionWindowID
@@ -219,11 +211,10 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
             )
             activeActionWindow = ActiveActionWindow(
                 id: actionWindowID,
-                cursor: cursor,
-                childLeaseCount: 0
+                cursor: cursor
             )
             return beginScopeLeaseOnIngressExecutor(
-                ownership: .actionOwner(actionWindowID),
+                ownership: .action(actionWindowID),
                 cursor: cursor
             )
         }
@@ -441,9 +432,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
                 "Cannot end an inactive heist notification scope"
             )
             activeHeistCursor = nil
-        case .actionChild(let actionWindowID):
-            sealActionChildOnIngressExecutor(actionWindowID)
-        case .actionOwner(let actionWindowID):
+        case .action(let actionWindowID):
             guard let window = activeActionWindow else {
                 preconditionFailure(
                     "Cannot end an action notification window that is not active"
@@ -454,38 +443,8 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
                 "Cannot end an action notification window that is not active"
             )
             activeActionWindow = nil
-            if window.childLeaseCount > 0 {
-                drainingActionChildCounts[actionWindowID] = window.childLeaseCount
-            }
         }
         return coverage
-    }
-
-    private func sealActionChildOnIngressExecutor(
-        _ actionWindowID: AccessibilityNotificationActionWindowID
-    ) {
-        if activeActionWindow?.id == actionWindowID {
-            precondition(
-                activeActionWindow?.childLeaseCount ?? 0 > 0,
-                "Cannot end an inactive child action notification window"
-            )
-            activeActionWindow?.childLeaseCount -= 1
-            return
-        }
-        guard let childCount = drainingActionChildCounts[actionWindowID] else {
-            preconditionFailure(
-                "Cannot end a child action notification window without its owner"
-            )
-        }
-        precondition(
-            childCount > 0,
-            "Cannot end an inactive child action notification window"
-        )
-        if childCount == 1 {
-            drainingActionChildCounts[actionWindowID] = nil
-        } else {
-            drainingActionChildCounts[actionWindowID] = childCount - 1
-        }
     }
 
     private var currentOwner: PendingAccessibilityNotificationEvent.Owner {
@@ -557,8 +516,7 @@ struct AccessibilityNotificationActionWindowID: RawRepresentable, Sendable, Hash
 
 enum AccessibilityNotificationScopeOwnership: Sendable, Equatable {
     case heist
-    case actionOwner(AccessibilityNotificationActionWindowID)
-    case actionChild(AccessibilityNotificationActionWindowID)
+    case action(AccessibilityNotificationActionWindowID)
 }
 
 struct AccessibilityNotificationBatch {
