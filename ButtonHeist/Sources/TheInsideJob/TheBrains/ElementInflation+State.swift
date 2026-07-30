@@ -8,7 +8,8 @@ import ThePlans
 private enum RevealTransactionPhase {
     case active
     case committed
-    case rolledBack
+    case rollingBack
+    case rolledBack(Navigation.ViewportExit.Outcome)
 }
 
 private struct RevealMovement {
@@ -54,7 +55,7 @@ extension ElementInflation {
         }
 
         internal func record(_ scrollView: UIScrollView) {
-            guard phase == .active else { return }
+            guard case .active = phase else { return }
             let identifier = ObjectIdentifier(scrollView)
             guard movements[identifier] == nil else { return }
             guard let target = Navigation.ScrollableTarget.programmatic(scrollView, in: vault) else { return }
@@ -66,7 +67,7 @@ extension ElementInflation {
         }
 
         internal func commit() {
-            guard phase == .active else { return }
+            guard case .active = phase else { return }
             phase = .committed
         }
 
@@ -78,24 +79,45 @@ extension ElementInflation {
             }
         }
 
+        @discardableResult
         internal func rollBack(
             using moveViewport: MoveViewport,
             deadline: SemanticObservationDeadline
-        ) async {
-            guard phase == .active else { return }
-            phase = .rolledBack
+        ) async -> Navigation.ViewportExit.Outcome {
+            switch phase {
+            case .active:
+                phase = .rollingBack
+            case .rolledBack(let outcome):
+                return outcome
+            case .committed:
+                return .retained
+            case .rollingBack:
+                return .failed(.originUnavailable)
+            }
+            var restored = true
             for identifier in movementOrder.reversed() {
                 guard let movement = movements[identifier] else { continue }
                 guard let currentOrigin = movement.target.dispatchOnFreshScrollView(
                     in: vault,
                     operation: Navigation.visualOrigin
-                ) else { continue }
+                ) else {
+                    restored = false
+                    continue
+                }
                 guard currentOrigin != movement.visualOrigin else { continue }
-                _ = await moveViewport(.restoreVisualOrigin(
+                let transition = await moveViewport(.restoreVisualOrigin(
                     movement.visualOrigin,
                     in: .semantic(movement.target)
                 ), deadline)
+                if transition.outcome == .unavailable {
+                    restored = false
+                }
             }
+            let outcome: Navigation.ViewportExit.Outcome = restored
+                ? .restored
+                : .failed(.originUnavailable)
+            phase = .rolledBack(outcome)
+            return outcome
         }
 
         private func recordHierarchy(from view: UIView) {

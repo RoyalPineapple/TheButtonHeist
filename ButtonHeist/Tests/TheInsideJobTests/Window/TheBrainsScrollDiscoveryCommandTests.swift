@@ -421,6 +421,29 @@ extension TheBrainsScrollTests {
         XCTAssertEqual(Navigation.visualOrigin(in: fixture.scrollView).y, 0, accuracy: 0.01)
     }
 
+    func testExpiredBusinessDeadlineStillCompletesViewportRestoration() async throws {
+        let fixture = try await explorationViewport()
+        defer { fixture.close() }
+        publishVerticalOffsetObservations(from: fixture.scrollView)
+        fixture.scrollView.setContentOffset(CGPoint(x: 0, y: 300), animated: false)
+        await installSyntheticObservation(explorationObservation(
+            label: "Scrolled",
+            scrollView: fixture.scrollView
+        ))
+
+        let cleanup = await brains.navigation.performViewportTransition(
+            .restoreVisualOrigin(.zero, in: .original(fixture.scrollView)),
+            deadline: SemanticObservationDeadline(
+                start: RuntimeElapsed.now,
+                timeoutSeconds: 0
+            ),
+            discoveryCommitPolicy: .replaceInterface
+        )
+
+        XCTAssertEqual(cleanup.outcome, .moved)
+        XCTAssertEqual(Navigation.visualOrigin(in: fixture.scrollView).y, 0, accuracy: 0.01)
+    }
+
     func testCurrentExitRetainsReachedViewport() async throws {
         let fixture = try await explorationViewport()
         defer { fixture.close() }

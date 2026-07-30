@@ -75,9 +75,16 @@ extension TheBrains {
         _ command: ResolvedHeistActionCommand,
         deadline: SemanticObservationDeadline
     ) async -> TheSafecracker.ActionDispatchResult {
-        clearRotorCursorBeforeNonRotorAction(command)
         let startedAt = RuntimeElapsed.now
         var timing = ActionTiming(startedAt: startedAt)
+        if let rejection = actionEffectAdmissionRejection(
+            command,
+            deadline: deadline
+        ) {
+            timing.record(.interaction, since: startedAt)
+            return rejection.withTiming(timing.freeze())
+        }
+        clearRotorCursorBeforeNonRotorAction(command)
         let result = await dispatchRawRuntimeAction(
             command,
             deadline: deadline,
@@ -85,6 +92,26 @@ extension TheBrains {
         )
         timing.record(.interaction, since: startedAt)
         return result.withTiming(timing.freeze())
+    }
+
+    private func actionEffectAdmissionRejection(
+        _ command: ResolvedHeistActionCommand,
+        deadline: SemanticObservationDeadline
+    ) -> TheSafecracker.ActionDispatchResult? {
+        if Task.isCancelled {
+            return .failure(
+                command.actionResultPayload,
+                message: "action dispatch was cancelled before effect dispatch"
+            )
+        }
+        guard deadline.hasTimeRemaining(at: RuntimeElapsed.now) else {
+            return .failure(
+                command.actionResultPayload,
+                message: "action deadline expired before effect dispatch",
+                failureKind: .timeout
+            )
+        }
+        return nil
     }
 
     private func dispatchRawRuntimeAction(

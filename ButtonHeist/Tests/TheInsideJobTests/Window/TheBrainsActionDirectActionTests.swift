@@ -10,6 +10,51 @@ import XCTest
 @MainActor
 extension TheBrainsActionTests {
 
+    func testDispatchRejectsCancelledActionBeforeActivationSideEffect() async throws {
+        let liveObject = ActionActivationOverrideView()
+        await registerScreenElement(
+            heistId: "cancelled_dispatch_target",
+            element: makeElement(label: "Cancelled Dispatch", traits: .button),
+            object: liveObject
+        )
+        let target = try AccessibilityTarget.label("Cancelled Dispatch").resolve(in: .empty)
+        let task = Task { @MainActor in
+            await brains.dispatchRuntimeAction(
+                .activate(target),
+                deadline: actionDeadline()
+            )
+        }
+
+        task.cancel()
+        let result = await task.value
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.failureKind, .actionFailed)
+        XCTAssertEqual(liveObject.activationCount, 0)
+    }
+
+    func testDispatchRejectsExpiredActionBeforeActivationSideEffect() async throws {
+        let liveObject = ActionActivationOverrideView()
+        await registerScreenElement(
+            heistId: "expired_dispatch_target",
+            element: makeElement(label: "Expired Dispatch", traits: .button),
+            object: liveObject
+        )
+        let target = try AccessibilityTarget.label("Expired Dispatch").resolve(in: .empty)
+
+        let result = await brains.dispatchRuntimeAction(
+            .activate(target),
+            deadline: SemanticObservationDeadline(
+                start: RuntimeElapsed.now,
+                timeoutSeconds: 0
+            )
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.failureKind, .timeout)
+        XCTAssertEqual(liveObject.activationCount, 0)
+    }
+
     func testObservationStreamDoesNotReuseInvalidatedSettledObservation() async {
         await installScreen(elements: [(makeElement(label: "Title", traits: .header), "header_title")])
         brains.vault.semanticObservationStream.invalidateCurrentAdmission()
