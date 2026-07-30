@@ -218,14 +218,7 @@ extension TheVault {
                 Observation.Notification(text: $0.text, element: $0.element)
                     .map(Observation.Event.notification)
             }
-            let forcesElementChange = admittedNotifications.contains {
-                switch $0.kind {
-                case .layoutChanged, .elementUpdate:
-                    true
-                case .screenChanged, .announcement, .unknown:
-                    false
-                }
-            }
+            let forcesElementChange = Self.forcesElementChange(admittedNotifications)
             let currentEvent: Observation.Event
             let events: [Observation.Event]
             if continuity.isReplacement {
@@ -309,6 +302,19 @@ extension TheVault {
                     windowStack: windows
                 )
             )
+        }
+
+        private static func forcesElementChange(
+            _ notifications: [Observation.AdmittedNotification]
+        ) -> Bool {
+            notifications.contains {
+                switch $0.kind {
+                case .layoutChanged, .elementUpdate:
+                    true
+                case .screenChanged, .announcement, .unknown:
+                    false
+                }
+            }
         }
     }
 }
