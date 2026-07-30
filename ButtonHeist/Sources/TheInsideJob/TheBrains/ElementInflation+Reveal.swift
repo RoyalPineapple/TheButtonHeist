@@ -138,9 +138,9 @@ extension ElementInflation {
                     resolution: inflatedTarget.resolution
                 )
             case .timedOut:
-                return .failed(.noRevealPath(
+                return .failed(.timedOut(
                     semanticRevealFailureMessage(failure, entry: treeElement)
-                        + "; no reveal path appeared before the action deadline"
+                        + "; timed out at the action deadline before a reveal path appeared"
                 ))
             case .cancelled:
                 return .failed(.cancelled(

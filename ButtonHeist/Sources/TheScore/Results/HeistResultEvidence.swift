@@ -158,6 +158,16 @@ package enum HeistExecutedChildren: Sendable, Equatable {
         return children.abortedAtPath
     }
 
+    package func fold<Value>(
+        passed: (HeistPassingChildren) -> Value,
+        aborted: (HeistAbortedChildren) -> Value
+    ) -> Value {
+        switch self {
+        case .passed(let children): passed(children)
+        case .aborted(let children): aborted(children)
+        }
+    }
+
     package mutating func append(_ result: HeistExecutionStepResult) {
         switch self {
         case .passed(let children):

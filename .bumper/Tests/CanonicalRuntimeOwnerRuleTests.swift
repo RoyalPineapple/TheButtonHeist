@@ -165,7 +165,7 @@ struct CanonicalRuntimeOwnerRuleTests {
 private let runtimeOwnershipFixtures: [RuntimeOwnershipFixture] = [
     RuntimeOwnershipFixture(
         id: "buttonheist.observation_history_construction_ownership",
-        ownerPath: "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStore.swift",
+        ownerPath: "ButtonHeist/Sources/TheInsideJob/TheVault/TheVault+State.swift",
         competingPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/CompetingObservationHistory.swift",
         source: "_ = Observation.History(retentionLimit: 256)"
     ),

@@ -458,7 +458,7 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertTrue(compact.contains("[1] activate"), compact)
     }
 
-    func testPublicHeistOutputReportsForEachStructurally() throws {
+    func testHeistReportProjectsForEachStructurally() throws {
         let forEach = try ForEachStringStep(
             values: ["Milk", "Eggs"],
             parameter: "item",

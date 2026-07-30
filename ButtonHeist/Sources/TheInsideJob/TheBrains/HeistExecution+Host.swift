@@ -161,13 +161,8 @@ extension HeistExecution {
             }
         }
 
-        private enum BoundaryError: Error {
-            case observationHistoryUnavailable
-        }
-
         private enum Resolution {
             case success(Completion)
-            case failure(any Error)
             case cancelled
         }
 
@@ -253,10 +248,10 @@ extension HeistExecution {
                         subscription.cancel()
                         throw CancellationError()
                     }
-                    if installation.historyError != nil {
+                    if let historyError = installation.historyError {
                         subscription.cancel()
                         clean(installation)
-                        throw BoundaryError.observationHistoryUnavailable
+                        throw historyError
                     }
 
                     return try await withCheckedThrowingContinuation { continuation in
@@ -306,7 +301,7 @@ extension HeistExecution {
                 installation.bufferedEvents.append(event)
                 phase = .installing(installation)
             case .running(var session):
-                if event.changesObservedTree {
+                if event.changesInterface {
                     session.activeObservation?.lastTreeChangeAt = RuntimeElapsed.now
                 }
                 guard var bufferedEvents = session.bufferedObservationEvents else {
@@ -1077,7 +1072,7 @@ extension HeistExecution {
                     _ = await task.value
                 }
                 switch resolution {
-                case .success, .failure:
+                case .success:
                     await self.admitTerminalNotifications(session.notificationScope)
                 case .cancelled:
                     break
@@ -1089,8 +1084,6 @@ extension HeistExecution {
                 switch resolution {
                 case .success(let completion):
                     session.continuation.resume(returning: completion)
-                case .failure(let error):
-                    session.continuation.resume(throwing: error)
                 case .cancelled:
                     session.continuation.resume(throwing: CancellationError())
                 }
@@ -1148,17 +1141,6 @@ private extension TheBrains {
             return current
         case .discovery:
             return await navigation.fullGraph()?.current
-        }
-    }
-}
-
-private extension Observation.Event {
-    var changesObservedTree: Bool {
-        switch self {
-        case .elementsChanged, .screenChanged:
-            true
-        case .notification, .noChange:
-            false
         }
     }
 }

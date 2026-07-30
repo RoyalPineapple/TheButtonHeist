@@ -99,7 +99,7 @@ private let demoAccessibilityIdentifierResearchFixtures: Set<RelativeFilePath> =
 private let semanticObservationStreamPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream.swift"
 private let observationHistoryConstructionOwnerPath: RelativeFilePath =
-    "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStore.swift"
+    "ButtonHeist/Sources/TheInsideJob/TheVault/TheVault+State.swift"
 private let observationCaptureAdmissionOwnerPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream+CaptureAdmission.swift"
 private let observationPulseClockPath: RelativeFilePath =

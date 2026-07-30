@@ -190,7 +190,7 @@ final class TheGetaway {
             )
         case .requestScreen(let payload):
             await sendScreen(
-                mode: payload.mode,
+                payload,
                 requestId: requestId,
                 respond: respond,
                 generation: generation
@@ -286,17 +286,17 @@ final class TheGetaway {
     // MARK: - InterfaceObservation Capture
 
     func sendScreen(
-        mode: ScreenCaptureMode = .raw,
+        _ request: ScreenRequestPayload,
         requestId: RequestID? = nil,
         respond: @escaping SocketResponseHandler,
         generation: ClientDelivery.Generation
     ) async {
         let deadline = SemanticObservationDeadline(
             start: RuntimeElapsed.now,
-            timeout: SemanticObservationTiming.defaultTimeout
+            timeout: .seconds(request.timeout.seconds)
         )
         switch await brains.captureScreenPayload(
-            mode: mode,
+            mode: request.mode,
             observationBoundary: .externalDeadline(deadline)
         ) {
         case .success(let payload):

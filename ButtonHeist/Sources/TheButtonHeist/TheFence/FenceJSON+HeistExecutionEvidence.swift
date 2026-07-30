@@ -76,16 +76,17 @@ private extension HeistReport.Evidence {
             break
         case .completed(let result, _):
             try container.encode(
-                PublicHeistOutput.action(
-                    result,
-                    method: .heist(command),
-                    expectation: expectation,
-                    profile: profile
+                ActionProjection(
+                    actionMethod: .heist(command),
+                    result: result,
+                    announcementOverride: expectation?.matchedAnnouncement,
+                    profile: profile,
+                    publicContext: .heistReportEvidence
                 ),
                 forKey: .result
             )
             try container.encodeIfPresent(
-                PublicHeistOutput.expectation(expectation),
+                expectation.map { ExpectationProjection(result: $0) },
                 forKey: .expectation
             )
             try container.encodeIfPresent(
@@ -110,7 +111,7 @@ private extension HeistReport.Evidence {
         let observation = evidence.observation
         try container.encode(outcome, forKey: .outcome)
         try container.encodeIfPresent(
-            PublicHeistOutput.expectation(expectation),
+            ExpectationProjection(result: expectation),
             forKey: .expectation
         )
         try container.encode(evidence.timing, forKey: .timing)
@@ -227,51 +228,5 @@ private extension HeistReport.Evidence {
             forKey: .argument
         )
         try container.encodeIfPresent(evidence.childFailedPath?.description, forKey: .childFailedPath)
-    }
-}
-
-private enum PublicHeistOutput {
-    static func actionResult(
-        _ result: ActionResult,
-        expectation: ExpectationResult? = nil,
-        profile: ProjectionProfile
-    ) -> ActionProjection {
-        action(
-            result,
-            method: .result(result.method),
-            expectation: expectation,
-            profile: profile
-        )
-    }
-
-    static func actionResult(
-        _ result: ActionResult?,
-        expectation: ExpectationResult? = nil,
-        profile: ProjectionProfile
-    ) -> ActionProjection? {
-        result.map { actionResult($0, expectation: expectation, profile: profile) }
-    }
-
-    static func action(
-        _ result: ActionResult,
-        method: ActionMethodProjection,
-        expectation: ExpectationResult? = nil,
-        profile: ProjectionProfile
-    ) -> ActionProjection {
-        ActionProjection(
-            actionMethod: method,
-            result: result,
-            announcementOverride: expectation?.matchedAnnouncement,
-            profile: profile,
-            publicContext: .heistReportEvidence
-        )
-    }
-
-    static func expectation(_ result: ExpectationResult) -> ExpectationProjection {
-        ExpectationProjection(result: result)
-    }
-
-    static func expectation(_ result: ExpectationResult?) -> ExpectationProjection? {
-        result.map(expectation)
     }
 }

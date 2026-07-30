@@ -80,17 +80,8 @@ extension TheVault {
             scope: SemanticObservationScope,
             after historyIndex: Int?
         ) -> Result<Current?, Observation.History.ReadError> {
-            guard admittedTripwireSignal != nil,
-                  let current,
-                  current.scope.canFulfill(scope)
-            else { return .success(nil) }
-            guard let historyIndex else { return .success(current) }
-            do {
-                _ = try history.events(after: historyIndex)
-                return .success(history.endIndex > historyIndex ? current : nil)
-            } catch {
-                return .failure(error)
-            }
+            guard admittedTripwireSignal != nil else { return .success(nil) }
+            return current(after: historyIndex, scope: scope)
         }
 
         internal func current(

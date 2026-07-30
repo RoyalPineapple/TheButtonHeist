@@ -51,15 +51,11 @@ extension Observation {
             return range
         }
 
-        internal func events(in range: Range<Int>) throws(ReadError) -> ArraySlice<Observation.Event> {
-            try entries(in: range)
-        }
-
         internal func events(after index: Int) throws(ReadError) -> ArraySlice<Observation.Event> {
             guard index <= endIndex else {
                 throw .rangeUnavailable
             }
-            return try events(in: index..<endIndex)
+            return try entries(in: index..<endIndex)
         }
 
         /// Screen generation at a position is the number of screen boundaries

@@ -461,25 +461,27 @@ private extension HeistExecution.Machine {
         children: HeistExecutedChildren
     ) -> HeistExecutionStepResult {
         let evidence = HeistCaseSelectionEvidence(selection: selection)
-        switch children {
-        case .passed(let children):
-            return .conditional(
-                path: context.path,
-                completion: .passed(evidence: evidence, children: children)
-            )
-        case .aborted(let children):
-            return .conditional(
-                path: context.path,
-                completion: .childAborted(
-                    evidence: evidence,
-                    failure: childFailure(
-                        category: .invocation,
-                        path: children.abortedAtPath
-                    ),
-                    children: children
+        return children.fold(
+            passed: { children in
+                .conditional(
+                    path: context.path,
+                    completion: .passed(evidence: evidence, children: children)
                 )
-            )
-        }
+            },
+            aborted: { children in
+                .conditional(
+                    path: context.path,
+                    completion: .childAborted(
+                        evidence: evidence,
+                        failure: childFailure(
+                            category: .invocation,
+                            path: children.abortedAtPath
+                        ),
+                        children: children
+                    )
+                )
+            }
+        )
     }
 
     func conditionalResolutionFailure(
@@ -734,20 +736,16 @@ private extension HeistExecution.Machine {
             ).description,
             failureReason: failureReason
         )
-        let completion: HeistForEachElementCompletion
-        switch children {
-        case .passed(let children):
-            completion = .passed(
-                evidence: .init(admitted: evidence),
-                children: children
-            )
-        case .aborted(let children):
-            completion = .childAborted(
-                evidence: .init(admitted: evidence),
-                failure: childFailure(category: .loop, path: children.abortedAtPath),
-                children: children
-            )
-        }
+        let completion: HeistForEachElementCompletion = children.fold(
+            passed: { .passed(evidence: .init(admitted: evidence), children: $0) },
+            aborted: {
+                .childAborted(
+                    evidence: .init(admitted: evidence),
+                    failure: childFailure(category: .loop, path: $0.abortedAtPath),
+                    children: $0
+                )
+            }
+        )
         return .forEachElementIteration(
             path: loop.context.path.forEachElementIteration(at: loop.iterationIndex),
             declaration: .init(loop.step),
@@ -767,25 +765,21 @@ private extension HeistExecution.Machine {
             iterationCount: iterations.values.count,
             failureReason: failureReason
         )
-        let completion: HeistForEachElementCompletion
-        switch iterations {
-        case .passed(let children):
-            completion = .passed(
-                evidence: .init(admitted: evidence),
-                children: children
-            )
-        case .aborted(let children):
-            completion = .childAborted(
-                evidence: .init(admitted: evidence),
-                failure: .init(
-                    category: .loop,
-                    contract: "for_each_element completes all matched iterations",
-                    observed: failureReason ?? "child failed at \(children.abortedAtPath)",
-                    expected: "\(matchedCount) iteration(s)"
-                ),
-                children: children
-            )
-        }
+        let completion: HeistForEachElementCompletion = iterations.fold(
+            passed: { .passed(evidence: .init(admitted: evidence), children: $0) },
+            aborted: {
+                .childAborted(
+                    evidence: .init(admitted: evidence),
+                    failure: .init(
+                        category: .loop,
+                        contract: "for_each_element completes all matched iterations",
+                        observed: failureReason ?? "child failed at \($0.abortedAtPath)",
+                        expected: "\(matchedCount) iteration(s)"
+                    ),
+                    children: $0
+                )
+            }
+        )
         return .forEachElement(
             path: context.path,
             declaration: .init(step),
@@ -805,20 +799,16 @@ private extension HeistExecution.Machine {
             value: value,
             failureReason: failureReason
         )
-        let completion: HeistForEachStringCompletion
-        switch children {
-        case .passed(let children):
-            completion = .passed(
-                evidence: .init(admitted: evidence),
-                children: children
-            )
-        case .aborted(let children):
-            completion = .childAborted(
-                evidence: .init(admitted: evidence),
-                failure: childFailure(category: .loop, path: children.abortedAtPath),
-                children: children
-            )
-        }
+        let completion: HeistForEachStringCompletion = children.fold(
+            passed: { .passed(evidence: .init(admitted: evidence), children: $0) },
+            aborted: {
+                .childAborted(
+                    evidence: .init(admitted: evidence),
+                    failure: childFailure(category: .loop, path: $0.abortedAtPath),
+                    children: $0
+                )
+            }
+        )
         return .forEachStringIteration(
             path: loop.context.path.forEachStringIteration(at: loop.iterationIndex),
             declaration: .init(loop.step),
@@ -834,25 +824,21 @@ private extension HeistExecution.Machine {
             iterationCount: loop.iterations.values.count,
             failureReason: failureReason
         )
-        let completion: HeistForEachStringCompletion
-        switch loop.iterations {
-        case .passed(let children):
-            completion = .passed(
-                evidence: .init(admitted: evidence),
-                children: children
-            )
-        case .aborted(let children):
-            completion = .childAborted(
-                evidence: .init(admitted: evidence),
-                failure: .init(
-                    category: .loop,
-                    contract: "for_each_string completes all values",
-                    observed: failureReason ?? "child failed at \(children.abortedAtPath)",
-                    expected: "\(loop.step.values.count) value(s)"
-                ),
-                children: children
-            )
-        }
+        let completion: HeistForEachStringCompletion = loop.iterations.fold(
+            passed: { .passed(evidence: .init(admitted: evidence), children: $0) },
+            aborted: {
+                .childAborted(
+                    evidence: .init(admitted: evidence),
+                    failure: .init(
+                        category: .loop,
+                        contract: "for_each_string completes all values",
+                        observed: failureReason ?? "child failed at \($0.abortedAtPath)",
+                        expected: "\(loop.step.values.count) value(s)"
+                    ),
+                    children: $0
+                )
+            }
+        )
         return .forEachString(
             path: loop.context.path,
             declaration: .init(loop.step),
@@ -1098,35 +1084,37 @@ private extension HeistExecution.Machine {
         _ invocation: HeistExecution.InvocationContinuation,
         children: HeistExecutedChildren
     ) -> HeistExecutionStepResult {
-        switch children {
-        case .aborted(let children):
-            let evidence = HeistInvocationEvidence.childFailed(
-                path: children.abortedAtPath
-            )
-            return .invocation(
-                path: invocation.context.path,
-                invocationPath: invocation.step.path,
-                argument: invocation.step.argument,
-                completion: .childAborted(
-                    evidence: .observed(.init(admitted: evidence)),
-                    failure: childFailure(
-                        category: .invocation,
-                        path: children.abortedAtPath
-                    ),
-                    children: children
+        children.fold(
+            passed: { children in
+                .invocation(
+                    path: invocation.context.path,
+                    invocationPath: invocation.step.path,
+                    argument: invocation.step.argument,
+                    completion: .passed(
+                        evidence: .init(admitted: .completed),
+                        children: children
+                    )
                 )
-            )
-        case .passed(let children):
-            return .invocation(
-                path: invocation.context.path,
-                invocationPath: invocation.step.path,
-                argument: invocation.step.argument,
-                completion: .passed(
-                    evidence: .init(admitted: .completed),
-                    children: children
+            },
+            aborted: { children in
+                let evidence = HeistInvocationEvidence.childFailed(
+                    path: children.abortedAtPath
                 )
-            )
-        }
+                return .invocation(
+                    path: invocation.context.path,
+                    invocationPath: invocation.step.path,
+                    argument: invocation.step.argument,
+                    completion: .childAborted(
+                        evidence: .observed(.init(admitted: evidence)),
+                        failure: childFailure(
+                            category: .invocation,
+                            path: children.abortedAtPath
+                        ),
+                        children: children
+                    )
+                )
+            }
+        )
     }
 
     func recursiveInvocation(
@@ -1648,49 +1636,47 @@ private extension HeistExecution.Machine {
         _ inline: HeistExecution.InlineContinuation,
         children: HeistExecutedChildren
     ) -> HeistExecutionStepResult {
-        switch children {
-        case .passed(let children):
-            return .heist(
-                path: inline.context.path,
-                name: inline.plan.name,
-                completion: .passed(children: children)
-            )
-        case .aborted(let children):
-            return .heist(
-                path: inline.context.path,
-                name: inline.plan.name,
-                completion: .childAborted(
-                    failure: childFailure(
-                        category: .invocation,
-                        path: children.abortedAtPath
-                    ),
-                    children: children
+        children.fold(
+            passed: {
+                .heist(
+                    path: inline.context.path,
+                    name: inline.plan.name,
+                    completion: .passed(children: $0)
                 )
-            )
-        }
+            },
+            aborted: {
+                .heist(
+                    path: inline.context.path,
+                    name: inline.plan.name,
+                    completion: .childAborted(
+                        failure: childFailure(
+                            category: .invocation,
+                            path: $0.abortedAtPath
+                        ),
+                        children: $0
+                    )
+                )
+            }
+        )
     }
 
     func waitElseResult(
         _ waitElse: HeistExecution.WaitElseContinuation,
         children: HeistExecutedChildren
     ) -> HeistExecutionStepResult {
-        let completion: HeistWaitCompletion
-        switch children {
-        case .passed(let children):
-            completion = .passed(
-                evidence: waitElse.evidence,
-                children: children
-            )
-        case .aborted(let children):
-            completion = .childAborted(
-                evidence: waitElse.evidence.expectation,
-                failure: childFailure(
-                    category: .wait,
-                    path: children.abortedAtPath
-                ),
-                children: children
-            )
-        }
+        let completion: HeistWaitCompletion = children.fold(
+            passed: { .passed(evidence: waitElse.evidence, children: $0) },
+            aborted: {
+                .childAborted(
+                    evidence: waitElse.evidence.expectation,
+                    failure: childFailure(
+                        category: .wait,
+                        path: $0.abortedAtPath
+                    ),
+                    children: $0
+                )
+            }
+        )
         return .wait(
             path: waitElse.context.path,
             predicate: waitElse.step.predicate,

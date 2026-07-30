@@ -21,7 +21,6 @@ extension HeistExecution {
         }
 
         internal let root: Root
-        internal let rootEnvironment: HeistExecutionEnvironment
         internal let failureCaptureMode: ScreenCaptureMode?
         internal let actionExpectationTimeoutPolicy: ActionExpectationTimeoutPolicy
         internal var continuations: [Continuation]
@@ -39,7 +38,7 @@ extension HeistExecution {
             root = .plan
             self.failureCaptureMode = failureCaptureMode
             self.actionExpectationTimeoutPolicy = actionExpectationTimeoutPolicy
-            rootEnvironment = try HeistExecutionEnvironment.empty.binding(
+            let environment = try HeistExecutionEnvironment.empty.binding(
                 argument: argument,
                 to: plan.parameter
             )
@@ -48,7 +47,7 @@ extension HeistExecution {
                     steps: plan.body,
                     context: StepContext(
                         path: .body,
-                        environment: rootEnvironment,
+                        environment: environment,
                         scope: Scope(plan: plan)
                     ),
                     nextIndex: 0,
@@ -63,7 +62,6 @@ extension HeistExecution {
             actionExpectationTimeoutPolicy: ActionExpectationTimeoutPolicy = .default
         ) {
             root = .action(ActionStep(command: action))
-            rootEnvironment = .empty
             self.failureCaptureMode = failureCaptureMode
             self.actionExpectationTimeoutPolicy = actionExpectationTimeoutPolicy
             continuations = []
@@ -79,7 +77,7 @@ extension HeistExecution {
                 return begin(
                     action: action,
                     path: .body.step(at: 0),
-                    environment: rootEnvironment
+                    environment: .empty
                 )
             }
         }

@@ -247,7 +247,7 @@ extension TheBrainsScrollTests {
         XCTAssertEqual(failure.failedStep, .cancelled)
     }
 
-    func testRevealRetryFailsNoRevealPathAtActionDeadline() async throws {
+    func testRevealRetryTimesOutAtActionDeadline() async throws {
         let overviewVisible = makeElement(label: "Combo Overview", traits: .header)
         let staleCoke = makeElement(label: "Coke", traits: .button)
         await installScreenWithOffViewportEntry(
@@ -268,11 +268,12 @@ extension TheBrainsScrollTests {
         )
 
         guard case .failed(let failure) = result else {
-            return XCTFail("Expected noRevealPath failure at the action deadline, got \(result)")
+            return XCTFail("Expected timeout at the action deadline, got \(result)")
         }
-        XCTAssertEqual(failure.failedStep, ElementInflation.ElementInflationFailureStep.noRevealPath)
-        XCTAssertTrue(failure.message.contains("element inflation failed [noRevealPath]"))
-        XCTAssertTrue(failure.message.contains("before the action deadline"))
+        XCTAssertEqual(failure.failedStep, ElementInflation.ElementInflationFailureStep.timedOut)
+        XCTAssertEqual(failure.failureKind, .timeout)
+        XCTAssertTrue(failure.message.contains("element inflation failed [timedOut]"))
+        XCTAssertTrue(failure.message.contains("timed out at the action deadline"))
         XCTAssertTrue(failure.message.contains("Coke"))
     }
 

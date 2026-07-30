@@ -403,23 +403,30 @@ final class ClientMessageTests: XCTestCase {
     func testRequestAccessibilityScreenshotEncodeDecode() throws {
         let envelope = RequestEnvelope(
             requestId: "screen-1",
-            message: .requestScreen(ScreenRequestPayload(mode: .accessibility))
+            message: .requestScreen(ScreenRequestPayload(
+                mode: .accessibility,
+                timeout: 12
+            ))
         )
         let data = try JSONEncoder().encode(envelope)
         let object = try JSONProbe(data: data)
         XCTAssertEqual(try object.string("type"), "requestScreen")
         XCTAssertEqual(try object.object("payload").string("mode"), "accessibility")
+        XCTAssertEqual(try object.object("payload").double("timeout"), 12)
 
         let decoded = try JSONDecoder().decode(RequestEnvelope.self, from: data)
         if case .requestScreen(let payload) = decoded.message {
             XCTAssertEqual(payload.mode, .accessibility)
+            XCTAssertEqual(payload.timeout, 12)
         } else {
             XCTFail("Expected requestScreen, got \(decoded.message)")
         }
     }
 
     func testRequestScreenshotRejectsUnknownPayloadField() throws {
-        let data = Data(#"{"type":"requestScreen","payload":{"mode":"raw","stale":true}}"#.utf8)
+        let data = Data(
+            #"{"type":"requestScreen","payload":{"mode":"raw","timeout":30,"stale":true}}"#.utf8
+        )
 
         XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: data)) { error in
             XCTAssertTrue("\(error)".contains("stale"), "\(error)")

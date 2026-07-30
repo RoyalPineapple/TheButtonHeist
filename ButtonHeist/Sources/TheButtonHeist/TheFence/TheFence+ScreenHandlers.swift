@@ -7,8 +7,12 @@ extension TheFence {
     // MARK: - Handler: Screen
 
     func handleGetScreen(_ request: ScreenRequest, timeout: TimeInterval) async throws -> FenceResponse {
+        let observationTimeout = try WaitTimeout(validatingSeconds: timeout)
         let screen = try await sendAndAwaitScreen(
-            .requestScreen(ScreenRequestPayload(mode: request.mode)),
+            .requestScreen(ScreenRequestPayload(
+                mode: request.mode,
+                timeout: observationTimeout
+            )),
             timeout: timeout
         )
         let options = ScreenshotResponseOptions()

@@ -109,6 +109,15 @@ public extension Observation {
                 nil
             }
         }
+
+        package var changesInterface: Bool {
+            switch self {
+            case .elementsChanged, .screenChanged:
+                true
+            case .notification, .noChange:
+                false
+            }
+        }
     }
 
     /// Exact notification ingress lost before semantic observation admission.

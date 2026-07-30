@@ -8,7 +8,7 @@ import XCTest
 @testable import TheScore
 
 @MainActor
-final class SemanticObservationStoreTests: XCTestCase {
+final class TheVaultStateTests: XCTestCase {
     func testHistoryOwnsOrderAndDerivesScreenGenerationFromPosition() throws {
         var history = Observation.History(retentionLimit: 4)
         let events: [Observation.Event] = [

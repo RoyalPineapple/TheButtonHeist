@@ -128,7 +128,7 @@ extension TheBrains {
         }
         return heistResult(
             completion,
-            durationMs: elapsedMilliseconds(since: startedAt)
+            durationMs: RuntimeElapsed.milliseconds(since: startedAt)
         )
     }
 

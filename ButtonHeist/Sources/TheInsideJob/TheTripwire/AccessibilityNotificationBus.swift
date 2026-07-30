@@ -8,29 +8,6 @@ import TheScore
 /// `@unchecked Sendable` justification: the serial ingress executor owns every
 /// mutable field. Synchronous entry detects executor reentrancy before dispatch.
 final class AccessibilityNotificationBus: @unchecked Sendable {
-    private struct RecordCommand {
-        let sequence: UInt64
-        let rawCode: UInt32
-        let timestamp: Date
-        let notificationData: PendingAccessibilityNotificationPayload
-        let associatedElement: PendingAccessibilityNotificationPayload
-    }
-
-    /// Payloads are normalized before entering the executor. The only object
-    /// payload is a weak identity token whose metadata is immutable.
-    private enum IngressCommand: @unchecked Sendable {
-        case record(RecordCommand)
-        case seal(
-            AccessibilityNotificationScopeOwnership,
-            after: AccessibilityNotificationCursor
-        )
-    }
-
-    private enum IngressCommandResult: Sendable {
-        case recorded
-        case sealed(AccessibilityNotificationCoverage)
-    }
-
     private struct ActiveActionWindow {
         let id: AccessibilityNotificationActionWindowID
         let cursor: AccessibilityNotificationCursor
@@ -258,15 +235,15 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
         notificationData: PendingAccessibilityNotificationPayload,
         associatedElement: PendingAccessibilityNotificationPayload
     ) {
-        let result = executeSynchronously(.record(RecordCommand(
-            sequence: sequence,
-            rawCode: rawCode,
-            timestamp: timestamp,
-            notificationData: notificationData,
-            associatedElement: associatedElement
-        )))
-        guard case .recorded = result else {
-            preconditionFailure("Record command returned a seal result")
+        onIngressExecutor {
+            ingressLog.append(PendingAccessibilityNotificationEvent(
+                sequence: sequence,
+                rawCode: rawCode,
+                timestamp: timestamp,
+                notificationData: notificationData,
+                associatedElement: associatedElement,
+                owner: currentOwner
+            ))
         }
     }
 
@@ -406,26 +383,16 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
         }
     }
 
-    fileprivate func sealScopeLease(
-        _ ownership: AccessibilityNotificationScopeOwnership,
-        after cursor: AccessibilityNotificationCursor
-    ) async -> AccessibilityNotificationCoverage {
-        let result = await execute(.seal(ownership, after: cursor))
-        guard case .sealed(let coverage) = result else {
-            preconditionFailure("Seal command returned a record result")
-        }
-        return coverage
-    }
-
     fileprivate func sealScopeLeaseSynchronously(
         _ ownership: AccessibilityNotificationScopeOwnership,
         after cursor: AccessibilityNotificationCursor
     ) -> AccessibilityNotificationCoverage {
-        let result = executeSynchronously(.seal(ownership, after: cursor))
-        guard case .sealed(let coverage) = result else {
-            preconditionFailure("Seal command returned a record result")
+        onIngressExecutor {
+            sealScopeLeaseOnIngressExecutor(
+                ownership,
+                after: cursor
+            )
         }
-        return coverage
     }
 
     private func sealScopeLeaseOnIngressExecutor(
@@ -504,45 +471,6 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
             return .heist(activeHeistCursor)
         }
         return .ambient
-    }
-
-    private func execute(_ command: IngressCommand) async -> IngressCommandResult {
-        if isOnIngressExecutor {
-            return reduce(command)
-        }
-        return await withCheckedContinuation { continuation in
-            ingressExecutor.async { [self] in
-                continuation.resume(returning: reduce(command))
-            }
-        }
-    }
-
-    private func executeSynchronously(
-        _ command: IngressCommand
-    ) -> IngressCommandResult {
-        onIngressExecutor {
-            reduce(command)
-        }
-    }
-
-    private func reduce(_ command: IngressCommand) -> IngressCommandResult {
-        switch command {
-        case .record(let record):
-            ingressLog.append(PendingAccessibilityNotificationEvent(
-                sequence: record.sequence,
-                rawCode: record.rawCode,
-                timestamp: record.timestamp,
-                notificationData: record.notificationData,
-                associatedElement: record.associatedElement,
-                owner: currentOwner
-            ))
-            return .recorded
-        case .seal(let ownership, let cursor):
-            return .sealed(sealScopeLeaseOnIngressExecutor(
-                ownership,
-                after: cursor
-            ))
-        }
     }
 
     private func onIngressExecutor<Value>(
@@ -701,7 +629,7 @@ final class AccessibilityNotificationScopeLease: @unchecked Sendable {
     func admitCausallyCovered<Result>(
         _ admit: (AccessibilityNotificationCoverage) async -> Result?
     ) async -> Result? {
-        guard let coverage = await seal(),
+        guard let coverage = seal(),
               beginAdmission(coverage)
         else { return nil }
         guard let result = await admit(coverage) else {
@@ -759,7 +687,7 @@ final class AccessibilityNotificationScopeLease: @unchecked Sendable {
         }
     }
 
-    private func seal() async -> AccessibilityNotificationCoverage? {
+    private func seal() -> AccessibilityNotificationCoverage? {
         enum SealDecision {
             case execute(AccessibilityNotificationBus)
             case reuse(AccessibilityNotificationCoverage)
@@ -783,7 +711,7 @@ final class AccessibilityNotificationScopeLease: @unchecked Sendable {
         case .unavailable:
             return nil
         case .execute(let bus):
-            let coverage = await bus.sealScopeLease(
+            let coverage = bus.sealScopeLeaseSynchronously(
                 ownership,
                 after: cursor
             )

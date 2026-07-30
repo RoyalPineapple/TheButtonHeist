@@ -406,7 +406,7 @@ private extension HeistReport.AccessibilityChange {
             return
         }
         let changed = evidence.filter {
-            $0.events.contains(where: \.recordsInterfaceChange)
+            $0.events.contains(where: \.changesInterface)
         }
         guard !changed.isEmpty else {
             self = .unchanged
@@ -421,17 +421,6 @@ private extension HeistReport.Node {
         nodes.append(self)
         for child in children {
             child.appendInExecutionOrder(to: &nodes)
-        }
-    }
-}
-
-private extension Observation.Event {
-    var recordsInterfaceChange: Bool {
-        switch self {
-        case .elementsChanged, .screenChanged:
-            true
-        case .notification, .noChange:
-            false
         }
     }
 }
