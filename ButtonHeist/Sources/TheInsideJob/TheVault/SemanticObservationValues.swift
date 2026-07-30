@@ -43,10 +43,6 @@ extension Observation {
         internal let current: TheVault.State.Current
         internal let historyRange: Range<Int>
         internal let events: [Event]
-
-        internal func events(after historyIndex: Int) -> ArraySlice<Event> {
-            events.dropFirst(Swift.max(0, historyIndex - historyRange.lowerBound))
-        }
     }
 
     internal struct Admission: Sendable {

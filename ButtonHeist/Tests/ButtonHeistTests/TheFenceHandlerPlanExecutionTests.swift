@@ -33,7 +33,7 @@ extension TheFenceHandlerTests {
             mockConn.sent.sentHeistRun?.actionExpectationTimeoutPolicy,
             .default
         )
-        XCTAssertEqual(report, try HeistReport.project(result: scriptedResult))
+        XCTAssertEqual(report, HeistReport.project(result: scriptedResult))
     }
 
     @ButtonHeistActor
@@ -99,7 +99,7 @@ extension TheFenceHandlerTests {
             guard case .heistExecution(_, let report) = response else {
                 return XCTFail("Expected heistExecution response, got \(response)")
             }
-            XCTAssertEqual(report, try HeistReport.project(result: scriptedResult))
+            XCTAssertEqual(report, HeistReport.project(result: scriptedResult))
             let resultURL = try assertSingleResultArtifactURL(in: directory)
             XCTAssertEqual(try HeistResultCodec.decode(contentsOf: resultURL).result, scriptedResult)
         }
@@ -610,7 +610,7 @@ extension TheFenceHandlerTests {
         )
         let response = FenceResponse.heistExecution(
             plan: try HeistPlan(body: [.warn(WarnStep(message: "x"))]),
-            report: try HeistReport.project(result: result)
+            report: HeistReport.project(result: result)
         )
         XCTAssertTrue(response.isFailure)
         XCTAssertEqual(result.abortedAtPath, "$.body[0]")

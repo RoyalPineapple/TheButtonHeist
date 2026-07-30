@@ -137,13 +137,13 @@ extension HeistExecution {
                 id: id,
                 children: children
             )
-            return .pending(.perform([
+            return .pending(.perform(
                 .captureFailureScreenshot(
                     id,
                     failedPath: failedPath,
                     mode: failureCaptureMode
-                ),
-            ]))
+                )
+            ))
         }
 
         private mutating func complete(

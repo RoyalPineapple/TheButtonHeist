@@ -9,20 +9,9 @@ extension HeistExecution {
     internal final class Host {
         private enum Phase {
             case idle
-            case installing(Installation)
             case running(Session)
             case cleaning
             case finished
-        }
-
-        private struct Installation {
-            var machine: Machine
-            let wholeDeadline: SemanticObservationDeadline
-            let protectedHistoryIndex: Int
-            let observationDemand: SemanticObservationDemand
-            let notificationScope: AccessibilityNotificationScopeLease
-            var bufferedEvents: [Observation.Event]
-            var historyError: Observation.History.ReadError?
         }
 
         private struct Session {
@@ -32,8 +21,7 @@ extension HeistExecution {
             let eventSubscription: SemanticObservationSubscription
             let observationDemand: SemanticObservationDemand
             let notificationScope: AccessibilityNotificationScopeLease
-            var activeObservation: ActiveObservation?
-            var bufferedObservationEvents: [Observation.Event]?
+            var observation: ObservationPhase
             var interaction: Interaction
             var deadlines: DeadlineState
         }
@@ -46,6 +34,17 @@ extension HeistExecution {
             let deadline: SemanticObservationDeadline
             var lastTreeChangeAt: RuntimeElapsed.Instant?
             var viewportStatus: ViewportStatus
+        }
+
+        private enum ObservationPhase {
+            case idle
+            case establishing
+            case active(ActiveObservation)
+
+            var active: ActiveObservation? {
+                guard case .active(let observation) = self else { return nil }
+                return observation
+            }
         }
 
         private struct ObservationCloseResult {
@@ -82,7 +81,7 @@ extension HeistExecution {
             case running(
                 InteractionID,
                 task: Task<Void, Never>,
-                deferred: [MainActorRequest],
+                deferred: MainActorRequest?,
                 completesAfterDeadline: Bool
             )
         }
@@ -214,74 +213,51 @@ extension HeistExecution {
                 let stream = brains.vault.semanticObservationStream
                 let historyIndex = stream.historyEndIndex()
                 stream.protectHistory(from: historyIndex)
-
-                phase = .installing(Installation(
-                    machine: machine,
-                    wholeDeadline: wholeDeadline,
-                    protectedHistoryIndex: historyIndex,
-                    observationDemand: stream.beginActiveObservationDemand(),
-                    notificationScope: brains.vault.accessibilityNotifications
-                        .beginHeistScope(),
-                    bufferedEvents: [],
-                    historyError: nil
-                ))
-
-                let subscription = stream.subscribe(
+                let observationDemand = stream.beginActiveObservationDemand()
+                let notificationScope = brains.vault.accessibilityNotifications
+                    .beginHeistScope()
+                let eventInstallation = stream.subscribe(
                     scope: .visible,
                     replayingAfter: historyIndex,
                     receive: { [weak self] event in
                         self?.receive(event)
-                    },
-                    historyUnavailable: { [weak self] error in
-                        self?.recordHistoryError(error)
                     }
                 )
 
+                let replay: [Observation.Event]
                 do {
+                    replay = try eventInstallation.replay.get()
                     try Task.checkCancellation()
-                    guard case .installing(let installation) = phase else {
-                        subscription.cancel()
-                        throw CancellationError()
-                    }
-                    if let historyError = installation.historyError {
-                        subscription.cancel()
-                        clean(installation)
-                        throw historyError
-                    }
-
-                    return try await withCheckedThrowingContinuation { continuation in
-                        var session = Session(
-                            machine: installation.machine,
-                            continuation: continuation,
-                            protectedHistoryIndex: installation.protectedHistoryIndex,
-                            eventSubscription: subscription,
-                            observationDemand: installation.observationDemand,
-                            notificationScope: installation.notificationScope,
-                            activeObservation: nil,
-                            bufferedObservationEvents: nil,
-                            interaction: .idle,
-                            deadlines: .unscheduled(.whole(
-                                installation.wholeDeadline
-                            ))
-                        )
-                        phase = .running(session)
-                        armDeadline()
-
-                        guard case .running(var current) = phase else { return }
-                        let state = current.machine.start()
-                        session = current
-                        phase = .running(session)
-                        interpret(state)
-                        for event in installation.bufferedEvents {
-                            receive(event)
-                        }
-                    }
                 } catch {
-                    if case .installing(let installation) = phase {
-                        subscription.cancel()
-                        clean(installation)
-                    }
+                    eventInstallation.subscription.cancel()
+                    observationDemand.cancel()
+                    notificationScope.cancel()
+                    stream.releaseHistory(from: historyIndex)
                     throw error
+                }
+                return try await withCheckedThrowingContinuation { continuation in
+                    var session = Session(
+                        machine: machine,
+                        continuation: continuation,
+                        protectedHistoryIndex: historyIndex,
+                        eventSubscription: eventInstallation.subscription,
+                        observationDemand: observationDemand,
+                        notificationScope: notificationScope,
+                        observation: .idle,
+                        interaction: .idle,
+                        deadlines: .unscheduled(.whole(wholeDeadline))
+                    )
+                    phase = .running(session)
+                    armDeadline()
+
+                    guard case .running(var current) = phase else { return }
+                    let state = current.machine.start()
+                    session = current
+                    phase = .running(session)
+                    interpret(state)
+                    for event in replay {
+                        receive(event)
+                    }
                 }
             } onCancel: {
                 Task { @MainActor [weak self] in
@@ -292,30 +268,24 @@ extension HeistExecution {
 
         private func receive(_ event: Observation.Event) {
             switch phase {
-            case .installing(var installation):
-                installation.bufferedEvents.append(event)
-                phase = .installing(installation)
             case .running(var session):
-                if event.changesInterface {
-                    session.activeObservation?.lastTreeChangeAt = RuntimeElapsed.now
-                }
-                guard var bufferedEvents = session.bufferedObservationEvents else {
+                switch session.observation {
+                case .idle:
                     phase = .running(session)
                     advance(.event(event))
-                    return
+                case .establishing:
+                    phase = .running(session)
+                case .active(var observation):
+                    if event.changesInterface {
+                        observation.lastTreeChangeAt = RuntimeElapsed.now
+                        session.observation = .active(observation)
+                    }
+                    phase = .running(session)
+                    advance(.event(event))
                 }
-                bufferedEvents.append(event)
-                session.bufferedObservationEvents = bufferedEvents
-                phase = .running(session)
             case .idle, .cleaning, .finished:
                 break
             }
-        }
-
-        private func recordHistoryError(_ error: Observation.History.ReadError) {
-            guard case .installing(var installation) = phase else { return }
-            installation.historyError = error
-            phase = .installing(installation)
         }
 
         private func advance(_ input: Input) {
@@ -332,9 +302,9 @@ extension HeistExecution {
                     resolve(.success(completion))
                     return
                 }
-                if case .pending(.perform(let requests)) = state,
-                   requests.allSatisfy(\.completesAfterDeadline) {
-                    performNext(requests, afterDeadline: true)
+                if case .pending(.perform(let request)) = state,
+                   request.completesAfterDeadline {
+                    performRequest(request, afterDeadline: true)
                     return
                 }
                 guard case .idle = session.interaction else { return }
@@ -354,17 +324,17 @@ extension HeistExecution {
                 phase = .running(session)
                 armDeadline()
 
-            case .pending(.perform(let requests)):
+            case .pending(.perform(let request)):
                 switch session.interaction {
                 case .idle:
                     phase = .running(session)
                     armDeadline()
-                    performNext(requests)
+                    performRequest(request)
                 case .running(let id, let task, _, let completesAfterDeadline):
                     session.interaction = .running(
                         id,
                         task: task,
-                        deferred: requests,
+                        deferred: request,
                         completesAfterDeadline: completesAfterDeadline
                     )
                     phase = .running(session)
@@ -373,16 +343,14 @@ extension HeistExecution {
             }
         }
 
-        private func performNext(
-            _ requests: [MainActorRequest],
+        private func performRequest(
+            _ request: MainActorRequest,
             afterDeadline: Bool = false
         ) {
-            guard let request = requests.first,
-                  case .running(var session) = phase,
+            guard case .running(var session) = phase,
                   afterDeadline || session.deadlines.expiration == nil else {
                 return
             }
-            let remaining = Array(requests.dropFirst())
             let interactionID = nextInteractionID()
             let task = Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -392,7 +360,7 @@ extension HeistExecution {
             session.interaction = .running(
                 interactionID,
                 task: task,
-                deferred: remaining,
+                deferred: nil,
                 completesAfterDeadline: request.completesAfterDeadline
             )
             phase = .running(session)
@@ -451,12 +419,12 @@ extension HeistExecution {
                     outcome = .failed(.originUnavailable)
                 }
                 guard case .running(var session) = phase,
-                      var observation = session.activeObservation,
+                      case .active(var observation) = session.observation,
                       observation.id == id else {
                     return
                 }
                 observation.viewportStatus.record(outcome)
-                session.activeObservation = observation
+                session.observation = .active(observation)
                 phase = .running(session)
                 complete(interactionID, input: .viewportExited(id, outcome))
 
@@ -498,9 +466,10 @@ extension HeistExecution {
                   current == interactionID else {
                 return
             }
-            precondition(initialSession.activeObservation == nil, "Only one leaf may observe at a time")
-            precondition(initialSession.bufferedObservationEvents == nil, "Only one observation boundary may be established at a time")
-            initialSession.bufferedObservationEvents = []
+            guard case .idle = initialSession.observation else {
+                preconditionFailure("Only one observation boundary may be active")
+            }
+            initialSession.observation = .establishing
             phase = .running(initialSession)
 
             let stream = brains.vault.semanticObservationStream
@@ -537,7 +506,7 @@ extension HeistExecution {
             guard case .running(var capturedSession) = phase,
                   case .running(let capturedInteractionID, _, _, _) = capturedSession.interaction,
                   capturedInteractionID == interactionID,
-                  capturedSession.bufferedObservationEvents != nil else {
+                  case .establishing = capturedSession.observation else {
                 scope.cancel()
                 return
             }
@@ -545,7 +514,7 @@ extension HeistExecution {
                 .beginActionWindow()
             var viewportStatus = ViewportStatus.available
             viewportStatus.record(viewportOutcome)
-            capturedSession.activeObservation = ActiveObservation(
+            capturedSession.observation = .active(ActiveObservation(
                 id: id,
                 boundary: capturedBoundary,
                 scopeSubscription: scope,
@@ -553,8 +522,7 @@ extension HeistExecution {
                 deadline: leafDeadline,
                 lastTreeChangeAt: nil,
                 viewportStatus: viewportStatus
-            )
-            capturedSession.bufferedObservationEvents = nil
+            ))
             capturedSession.deadlines.cancelTimer()
             capturedSession.deadlines = .unscheduled(.leaf(
                 whole: capturedSession.deadlines.targets.whole,
@@ -577,7 +545,7 @@ extension HeistExecution {
             interactionID: InteractionID
         ) async {
             guard case .running(let initialSession) = phase,
-                  let observation = initialSession.activeObservation,
+                  case .active(let observation) = initialSession.observation,
                   observation.id == observationID else {
                 return
             }
@@ -615,10 +583,10 @@ extension HeistExecution {
             interpret(state)
             guard case .running(let nextSession) = phase,
                   case .idle = nextSession.interaction,
-                  !deferred.isEmpty else {
+                  let deferred else {
                 return
             }
-            performNext(deferred)
+            performRequest(deferred)
         }
 
         private func shouldStopExploration(_ interactionID: InteractionID) -> Bool {
@@ -627,7 +595,7 @@ extension HeistExecution {
                   current == interactionID else {
                 return true
             }
-            return !deferred.isEmpty || session.deadlines.expiration != nil
+            return deferred != nil || session.deadlines.expiration != nil
         }
 
         private func interactionFinished(_ interactionID: InteractionID) {
@@ -641,8 +609,8 @@ extension HeistExecution {
             phase = .running(session)
             if let expiration {
                 collectTerminalEvidence(expiration)
-            } else if !deferred.isEmpty {
-                performNext(deferred)
+            } else if let deferred {
+                performRequest(deferred)
             }
         }
 
@@ -650,7 +618,7 @@ extension HeistExecution {
             id: RequestID
         ) -> SemanticObservationDeadline? {
             guard case .running(let session) = phase,
-                  session.activeObservation?.id == id,
+                  session.observation.active?.id == id,
                   case .leaf(_, let leaf) = session.deadlines.targets else {
                 return nil
             }
@@ -742,7 +710,7 @@ extension HeistExecution {
                   case .idle = session.interaction else {
                 return
             }
-            guard let observation = session.activeObservation else {
+            guard let observation = session.observation.active else {
                 let state = session.machine.finishAfterHeistTimeout()
                 phase = .running(session)
                 returnToDeadlineScope(state)
@@ -773,7 +741,7 @@ extension HeistExecution {
             session.interaction = .running(
                 interactionID,
                 task: task,
-                deferred: [],
+                deferred: nil,
                 completesAfterDeadline: true
             )
             phase = .running(session)
@@ -788,7 +756,7 @@ extension HeistExecution {
             guard case .running(var session) = phase,
                   case .running(let current, _, _, _) = session.interaction,
                   current == interactionID,
-                  let observation = session.activeObservation,
+                  case .active(let observation) = session.observation,
                   observation.id == observationID else {
                 return
             }
@@ -797,7 +765,7 @@ extension HeistExecution {
                 return
             }
             release(observation)
-            session.activeObservation = nil
+            session.observation = .idle
             let expiration = session.deadlines.expiration
             session.deadlines.cancelTimer()
             if expiration?.includesWhole != true {
@@ -956,7 +924,7 @@ extension HeistExecution {
             source: ObservationFinishSource
         ) -> Bool {
             guard case .running(let session) = phase,
-                  session.activeObservation?.id == observationID,
+                  session.observation.active?.id == observationID,
                   let activeLeaf = session.machine.activeLeaf,
                   activeLeaf.id == observationID
             else { return false }
@@ -1055,7 +1023,7 @@ extension HeistExecution {
             case .running(_, let task, _, _):
                 task.cancel()
             }
-            if let observation = session.activeObservation {
+            if let observation = session.observation.active {
                 observation.scopeSubscription.cancel()
                 observation.notificationWindow.cancel()
             }
@@ -1104,14 +1072,6 @@ extension HeistExecution {
             }
         }
 
-        private func clean(_ installation: Installation) {
-            phase = .cleaning
-            installation.observationDemand.cancel()
-            installation.notificationScope.cancel()
-            brains.vault.semanticObservationStream
-                .releaseHistory(from: installation.protectedHistoryIndex)
-            phase = .finished
-        }
     }
 }
 

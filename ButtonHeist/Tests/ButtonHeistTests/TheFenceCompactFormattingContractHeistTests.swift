@@ -84,7 +84,7 @@ extension TheFenceCompactFormattingContractTests {
             durationMs: 1
         )
 
-        let output = FenceResponse.heistExecution(plan: plan, report: try HeistReport.project(result: result)).humanFormatted()
+        let output = FenceResponse.heistExecution(plan: plan, report: HeistReport.project(result: result)).humanFormatted()
 
         XCTAssertTrue(output.contains("[expectations: 1/1 met]"), output)
     }
@@ -110,7 +110,7 @@ extension TheFenceCompactFormattingContractTests {
             ],
             durationMs: 5
         )
-        let response = FenceResponse.heistExecution(plan: plan, report: try HeistReport.project(result: result))
+        let response = FenceResponse.heistExecution(plan: plan, report: HeistReport.project(result: result))
 
         let json = try publicJSONProbe(response)
         let report = try json.object("report")
@@ -161,7 +161,7 @@ extension TheFenceCompactFormattingContractTests {
         )
 
         let metrics = try publicHeistReportJSON(
-            FenceResponse.heistExecution(plan: plan, report: try HeistReport.project(result: result))
+            FenceResponse.heistExecution(plan: plan, report: HeistReport.project(result: result))
         ).object("metrics").decode(HeistReport.Metrics.self)
 
         XCTAssertEqual(metrics.measurements.map(MeasurementExpectation.init(measurement:)), [
@@ -184,7 +184,7 @@ extension TheFenceCompactFormattingContractTests {
             ],
             durationMs: 3
         )
-        let response = FenceResponse.heistExecution(plan: plan, report: try HeistReport.project(result: result))
+        let response = FenceResponse.heistExecution(plan: plan, report: HeistReport.project(result: result))
 
         let json = try publicJSONProbe(response)
         let compact = response.compactFormatted()
@@ -205,7 +205,7 @@ extension TheFenceCompactFormattingContractTests {
             durationMs: 1
         )
 
-        let output = FenceResponse.heistExecution(plan: plan, report: try HeistReport.project(result: result)).compactFormatted()
+        let output = FenceResponse.heistExecution(plan: plan, report: HeistReport.project(result: result)).compactFormatted()
 
         XCTAssertTrue(output.contains("[0] fail -> error: Unknown screen"), output)
     }
@@ -218,7 +218,7 @@ extension TheFenceCompactFormattingContractTests {
             ],
             durationMs: 1
         )
-        let response = FenceResponse.heistExecution(plan: plan, report: try HeistReport.project(result: result))
+        let response = FenceResponse.heistExecution(plan: plan, report: HeistReport.project(result: result))
 
         let json = try publicJSONProbe(response)
         let node = try XCTUnwrap(try json.object("report").array("nodes").first)
@@ -259,7 +259,7 @@ extension TheFenceCompactFormattingContractTests {
                 expected: predicate.description
             )
         )
-        let report = try HeistReport.project(result: try HeistResult(steps: [step], durationMs: 1))
+        let report = HeistReport.project(result: try HeistResult(steps: [step], durationMs: 1))
         let response = FenceResponse.heistExecution(plan: plan, report: report)
         let node = try XCTUnwrap(try publicJSONProbe(response).object("report").array("nodes").first)
         let (fence, _) = makeConnectedFence()
@@ -295,7 +295,7 @@ extension TheFenceCompactFormattingContractTests {
             ],
             durationMs: 2
         )
-        let response = FenceResponse.heistExecution(plan: plan, report: try HeistReport.project(result: result))
+        let response = FenceResponse.heistExecution(plan: plan, report: HeistReport.project(result: result))
 
         let json = try publicJSONProbe(response)
         let report = try json.object("report")
@@ -373,7 +373,7 @@ extension TheFenceCompactFormattingContractTests {
             durationMs: 9
         )
 
-        let json = try publicJSONProbe(.heistExecution(plan: plan, report: try HeistReport.project(result: result)))
+        let json = try publicJSONProbe(.heistExecution(plan: plan, report: HeistReport.project(result: result)))
         let nodes = try json.object("report").array("nodes")
         let root = try XCTUnwrap(nodes.first)
         let children = try root.array("children")
@@ -442,13 +442,13 @@ extension TheFenceCompactFormattingContractTests {
             durationMs: 3
         )
 
-        let json = try publicJSONProbe(.heistExecution(plan: plan, report: try HeistReport.project(result: result)))
+        let json = try publicJSONProbe(.heistExecution(plan: plan, report: HeistReport.project(result: result)))
         let nodes = try json.object("report").array("nodes")
         let root = try XCTUnwrap(nodes.first)
         let evidence = try root.object("evidence")
         let children = try root.array("children")
         let child = try XCTUnwrap(children.first)
-        let compact = FenceResponse.heistExecution(plan: plan, report: try HeistReport.project(result: result)).compactFormatted()
+        let compact = FenceResponse.heistExecution(plan: plan, report: HeistReport.project(result: result)).compactFormatted()
 
         XCTAssertEqual(try root.string("kind"), "conditional")
         XCTAssertEqual(try root.string("status"), "passed")
@@ -525,7 +525,7 @@ extension TheFenceCompactFormattingContractTests {
             ],
             durationMs: 30
         )
-        let response = FenceResponse.heistExecution(plan: plan, report: try HeistReport.project(result: result))
+        let response = FenceResponse.heistExecution(plan: plan, report: HeistReport.project(result: result))
 
         let json = try publicJSONProbe(response)
         let report = try json.object("report")

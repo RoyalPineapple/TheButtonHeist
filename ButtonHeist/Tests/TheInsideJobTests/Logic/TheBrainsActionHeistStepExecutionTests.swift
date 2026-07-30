@@ -212,13 +212,12 @@ final class HeistMachineStepExecutionTests: XCTestCase {
             failureCaptureMode: .raw
         )
 
-        guard case .pending(.perform(let requests)) = machine.start(),
-              requests.count == 1,
+        guard case .pending(.perform(let request)) = machine.start(),
               case let .captureFailureScreenshot(
                   id,
                   failedPath: failedPath,
                   mode: .raw
-              ) = requests[0] else {
+              ) = request else {
             return XCTFail("Failure capture must be one typed host request")
         }
         XCTAssertEqual(failedPath.description, "$.body[0]")
@@ -283,18 +282,16 @@ private extension HeistExecution.MainActorRequest {
 
 extension HeistExecution.State {
     var singleBeginObservationRequest: BeginObservationRequest? {
-        guard case .pending(.perform(let requests)) = self,
-              requests.count == 1,
-              case .beginObservation(let id, let request) = requests[0] else {
+        guard case .pending(.perform(let action)) = self,
+              case .beginObservation(let id, let request) = action else {
             return nil
         }
         return BeginObservationRequest(id: id, request: request)
     }
 
     var singleDispatchRequest: DispatchRequest? {
-        guard case .pending(.perform(let requests)) = self,
-              requests.count == 1,
-              case .dispatch(let id, _) = requests[0] else {
+        guard case .pending(.perform(let request)) = self,
+              case .dispatch(let id, _) = request else {
             return nil
         }
         return DispatchRequest(id: id)

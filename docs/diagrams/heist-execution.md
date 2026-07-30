@@ -74,6 +74,12 @@ delivery, so live consumption and retained replay share one order. A leaf's
 observation boundary selects its baseline and history position atomically; no
 caller supplies either value.
 
+Subscription installation returns the live subscription and retained replay as
+one value. The host constructs its session before consuming replay, so neither
+the stream nor the host needs an installation callback phase or event buffer.
+Within a running session, observation is exactly idle, establishing its
+boundary, or active with the resources owned by that leaf.
+
 ## Deadline Boundary
 
 The host owns two absolute policies and one scheduled task: the active leaf's

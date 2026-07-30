@@ -62,7 +62,7 @@ private extension HeistExecution.Machine {
             leaf.phase = .dispatching(expectation)
             return update(
                 action: leaf,
-                performing: [.dispatch(leaf.id, leaf.command)]
+                performing: .dispatch(leaf.id, leaf.command)
             )
 
         case .event(let event):
@@ -93,7 +93,7 @@ private extension HeistExecution.Machine {
                 }
                 return update(
                     action: leaf,
-                    performing: [.explore(leaf.id, predicate)]
+                    performing: .explore(leaf.id, predicate)
                 )
             case .restored, .retained:
                 leaf.phase = .observing(expectation, dispatch: dispatch)
@@ -160,7 +160,7 @@ private extension HeistExecution.Machine {
             case .superseded:
                 return update(
                     wait: leaf,
-                    performing: [.explore(leaf.id, leaf.predicate)]
+                    performing: .explore(leaf.id, leaf.predicate)
                 )
             case .restored, .retained:
                 leaf.phase = .observing(expectation)
@@ -247,7 +247,7 @@ private extension HeistExecution.Machine {
         leaf.phase = .exploring(expectation)
         return update(
             wait: leaf,
-            performing: [.explore(leaf.id, leaf.predicate)]
+            performing: .explore(leaf.id, leaf.predicate)
         )
     }
 
@@ -267,11 +267,11 @@ private extension HeistExecution.Machine {
         )
         return update(
             action: leaf,
-            performing: [.finishObservation(
+            performing: .finishObservation(
                 requestID: requestID,
                 observationID: leaf.id,
                 exitPosition: exitPosition
-            )]
+            )
         )
     }
 
@@ -307,7 +307,7 @@ private extension HeistExecution.Machine {
                     leaf.phase = .exploring(evaluated, dispatch: dispatch)
                     return update(
                         action: leaf,
-                        performing: [.explore(leaf.id, predicate)]
+                        performing: .explore(leaf.id, predicate)
                     )
                 }
                 leaf.phase = .observing(evaluated, dispatch: dispatch)
@@ -360,7 +360,7 @@ private extension HeistExecution.Machine {
         leaf.phase = .exploring(expectation, dispatch: dispatch)
         return update(
             action: leaf,
-            performing: [.explore(leaf.id, predicate)]
+            performing: .explore(leaf.id, predicate)
         )
     }
 
@@ -376,11 +376,11 @@ private extension HeistExecution.Machine {
         )
         return update(
             wait: leaf,
-            performing: [.finishObservation(
+            performing: .finishObservation(
                 requestID: requestID,
                 observationID: leaf.id,
                 exitPosition: exitPosition
-            )]
+            )
         )
     }
 
@@ -404,7 +404,7 @@ private extension HeistExecution.Machine {
                     leaf.phase = .exploring(evaluated)
                     return update(
                         wait: leaf,
-                        performing: [.explore(leaf.id, leaf.predicate)]
+                        performing: .explore(leaf.id, leaf.predicate)
                     )
                 }
                 leaf.phase = .observing(evaluated)
@@ -428,18 +428,18 @@ private extension HeistExecution.Machine {
 
     mutating func update(
         action leaf: HeistExecution.ActionLeaf,
-        performing requests: [HeistExecution.MainActorRequest]
+        performing request: HeistExecution.MainActorRequest
     ) -> HeistExecution.State {
         activeLeaf = .action(leaf)
-        return .pending(.perform(requests))
+        return .pending(.perform(request))
     }
 
     mutating func update(
         wait leaf: HeistExecution.WaitLeaf,
-        performing requests: [HeistExecution.MainActorRequest]
+        performing request: HeistExecution.MainActorRequest
     ) -> HeistExecution.State {
         activeLeaf = .wait(leaf)
-        return .pending(.perform(requests))
+        return .pending(.perform(request))
     }
 
     func shouldExplore(

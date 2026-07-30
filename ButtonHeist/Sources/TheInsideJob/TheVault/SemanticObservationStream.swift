@@ -25,11 +25,6 @@ extension Observation {
 @MainActor
 internal final class Stream {
     private enum EventReceiver {
-        case installing(
-            subscriptionID: UInt64,
-            receive: @MainActor (Event) -> Void,
-            buffered: [Publication]
-        )
         case active(
             subscriptionID: UInt64,
             receive: @MainActor (Event) -> Void,
@@ -40,11 +35,15 @@ internal final class Stream {
 
         var subscriptionID: UInt64 {
             switch self {
-            case .installing(let subscriptionID, _, _),
-                 .active(let subscriptionID, _, _, _, _):
+            case .active(let subscriptionID, _, _, _, _):
                 subscriptionID
             }
         }
+    }
+
+    internal struct EventInstallation {
+        internal let subscription: SemanticObservationSubscription
+        internal let replay: Result<[Event], History.ReadError>
     }
 
     private struct CycleResult {
@@ -143,57 +142,27 @@ internal final class Stream {
         return SemanticObservationSubscription(id: id, scope: scope, stream: self)
     }
 
-    /// Raises the scope and receives retained and live events without a gap.
-    ///
-    /// The receiver is installed before history is read. Publications that race
-    /// with that actor hop are buffered by range, then only the suffix not
-    /// already present in retained history is delivered.
+    /// Raises the scope and atomically installs live delivery beside retained
+    /// replay. The caller owns replay delivery after constructing its consumer.
     internal func subscribe(
         scope: SemanticObservationScope,
         replayingAfter historyIndex: Int,
-        receive: @escaping @MainActor (Event) -> Void,
-        historyUnavailable: @escaping @MainActor (History.ReadError) -> Void
-    ) -> SemanticObservationSubscription {
+        receive: @escaping @MainActor (Event) -> Void
+    ) -> EventInstallation {
         precondition(
             eventReceiver == nil,
             "Only one observation event consumer may be active"
         )
         let subscription = subscribe(scope: scope)
-        eventReceiver = .installing(
+        let replay = events(after: historyIndex)
+        eventReceiver = .active(
             subscriptionID: subscription.id,
             receive: receive,
-            buffered: []
+            pending: [],
+            nextIndex: 0,
+            isDelivering: false
         )
-        let replay = events(after: historyIndex)
-        guard eventReceiver?.subscriptionID == subscription.id else {
-            return subscription
-        }
-        guard case .installing(_, _, let buffered) = eventReceiver else {
-            preconditionFailure("Observation receiver changed while installing")
-        }
-        switch replay {
-        case .success(let retained):
-            let replayEndIndex = historyIndex + retained.count
-            let live = buffered.flatMap { publication in
-                publication.events(after: replayEndIndex)
-            }
-            activate(
-                retained + live,
-                to: subscription.id,
-                receive: receive
-            )
-        case .failure(let error):
-            historyUnavailable(error)
-            guard case .installing(_, _, let latestBuffered) = eventReceiver,
-                  eventReceiver?.subscriptionID == subscription.id
-            else { return subscription }
-            activate(
-                latestBuffered.flatMap(\.events),
-                to: subscription.id,
-                receive: receive
-            )
-        }
-        return subscription
+        return EventInstallation(subscription: subscription, replay: replay)
     }
 
     internal func removeSubscription(_ id: UInt64) {
@@ -207,12 +176,6 @@ internal final class Stream {
     func publish(_ publication: Publication) {
         guard let receiver = eventReceiver else { return }
         switch receiver {
-        case .installing(let subscriptionID, let receive, let buffered):
-            self.eventReceiver = .installing(
-                subscriptionID: subscriptionID,
-                receive: receive,
-                buffered: buffered + [publication]
-            )
         case .active(
             let subscriptionID,
             let receive,
@@ -229,21 +192,6 @@ internal final class Stream {
             )
             drain(subscriptionID: subscriptionID)
         }
-    }
-
-    private func activate(
-        _ events: [Event],
-        to subscriptionID: UInt64,
-        receive: @escaping @MainActor (Event) -> Void
-    ) {
-        eventReceiver = .active(
-            subscriptionID: subscriptionID,
-            receive: receive,
-            pending: events,
-            nextIndex: 0,
-            isDelivering: false
-        )
-        drain(subscriptionID: subscriptionID)
     }
 
     private func drain(subscriptionID: UInt64) {

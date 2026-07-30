@@ -13,11 +13,6 @@ extension TheVault {
             internal let historyIndex: Int
         }
 
-        private struct NavigationAdmission {
-            let scope: SemanticObservationScope
-            let continuity: ScreenContinuity
-        }
-
         private struct PendingDepartureEvidence {
             let timestamp: Date
             let context: Observation.Context
@@ -47,24 +42,51 @@ extension TheVault {
             }
         }
 
+        private struct CommittedObservation {
+            let current: Current
+            let interfaceTree: InterfaceTree
+            let tripwireSignal: TheTripwire.TripwireSignal
+        }
+
+        private enum CurrentPhase {
+            case vacant(replacementRequirement: ReplacementRequirement?)
+            case committed(CommittedObservation)
+            case invalidated(CommittedObservation)
+
+            var observation: CommittedObservation? {
+                switch self {
+                case .vacant:
+                    nil
+                case .committed(let observation), .invalidated(let observation):
+                    observation
+                }
+            }
+
+            var replacementRequirement: ReplacementRequirement? {
+                guard case .vacant(let requirement) = self else { return nil }
+                return requirement
+            }
+        }
+
         internal private(set) var history: Observation.History
-        internal private(set) var currentSnapshot: Observation.Snapshot?
-        internal private(set) var interfaceTree: InterfaceTree = .empty
         internal private(set) var scopedScreenChangedSequence: UInt64 = 0
 
-        private var navigationAdmission: NavigationAdmission?
-        private var admittedTripwireSignal: TheTripwire.TripwireSignal?
+        private var currentPhase = CurrentPhase.vacant(
+            replacementRequirement: nil
+        )
         private var notificationCursor = AccessibilityNotificationCursor.origin
-        private var replacementRequirement: ReplacementRequirement?
         private var protectedHistoryIndex: Int?
 
         internal var current: Current? {
-            guard let currentSnapshot, let navigationAdmission else { return nil }
-            return Current(
-                snapshot: currentSnapshot,
-                scope: navigationAdmission.scope,
-                continuity: navigationAdmission.continuity
-            )
+            currentPhase.observation?.current
+        }
+
+        internal var currentSnapshot: Observation.Snapshot? {
+            current?.snapshot
+        }
+
+        internal var interfaceTree: InterfaceTree {
+            currentPhase.observation?.interfaceTree ?? .empty
         }
 
         internal var notificationIndex: AccessibilityNotificationCursor {
@@ -86,7 +108,7 @@ extension TheVault {
 
         internal mutating func discardCurrentObservation() {
             discardCurrentObservation(
-                requiring: replacementRequirement ?? .newBaseline
+                requiring: currentPhase.replacementRequirement ?? .newBaseline
             )
         }
 
@@ -102,22 +124,19 @@ extension TheVault {
         private mutating func discardCurrentObservation(
             requiring requirement: ReplacementRequirement
         ) {
-            currentSnapshot = nil
-            navigationAdmission = nil
-            interfaceTree = .empty
-            admittedTripwireSignal = nil
-            replacementRequirement = requirement
+            currentPhase = .vacant(replacementRequirement: requirement)
         }
 
         internal mutating func invalidateCurrentAdmission() {
-            admittedTripwireSignal = nil
+            guard case .committed(let observation) = currentPhase else { return }
+            currentPhase = .invalidated(observation)
         }
 
         internal mutating func invalidateAdmissionIfSignalChanged(
             to tripwireSignal: TheTripwire.TripwireSignal
         ) {
-            guard let admittedTripwireSignal,
-                  admittedTripwireSignal != tripwireSignal
+            guard case .committed(let observation) = currentPhase,
+                  observation.tripwireSignal != tripwireSignal
             else { return }
             invalidateCurrentAdmission()
         }
@@ -126,7 +145,7 @@ extension TheVault {
             scope: SemanticObservationScope,
             after historyIndex: Int?
         ) -> Result<Current?, Observation.History.ReadError> {
-            guard admittedTripwireSignal != nil else { return .success(nil) }
+            guard case .committed = currentPhase else { return .success(nil) }
             return current(after: historyIndex, scope: scope)
         }
 
@@ -234,6 +253,7 @@ extension TheVault {
                 previousTree.merging(admission.tree)
             }
 
+            let replacementRequirement = currentPhase.replacementRequirement
             let continuity: ScreenContinuity
             if replacementRequirement != nil {
                 continuity = .replacement(.screenChangedNotification)
@@ -277,12 +297,11 @@ extension TheVault {
                 scope: admission.scope,
                 continuity: continuity
             )
-            next.currentSnapshot = snapshot
-            next.navigationAdmission = NavigationAdmission(
-                scope: admission.scope,
-                continuity: continuity
-            )
-            next.interfaceTree = nextTree
+            next.currentPhase = .committed(CommittedObservation(
+                current: current,
+                interfaceTree: nextTree,
+                tripwireSignal: admission.tripwireSignal
+            ))
             next.notificationCursor = AccessibilityNotificationCursor(
                 sequence: max(
                     notificationCursor.sequence,
@@ -293,8 +312,6 @@ extension TheVault {
                 scopedScreenChangedSequence,
                 admission.notifications.scopedScreenChangedThrough
             )
-            next.replacementRequirement = nil
-            next.admittedTripwireSignal = admission.tripwireSignal
             self = next
             return Observation.Publication(
                 current: current,
