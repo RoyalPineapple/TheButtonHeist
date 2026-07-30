@@ -104,3 +104,96 @@ import TheScore
         ])
     }
 }
+
+@Suite struct HeistResultPairSelectionTests {
+    @Test func `select pair from decoded canonical recordings and return malformed warnings`() throws {
+        try withTemporaryDirectory(prefix: "heist-doctor-pair") { root in
+            let passes = root.appendingPathComponent("main", isDirectory: true)
+            let failures = root.appendingPathComponent("pr", isDirectory: true)
+            let plan = fixturePlan("selected")
+
+            _ = try writeRecording(in: passes, id: 1, plan: plan, recordedAt: 10, compressed: true)
+            let selectedPass = try writeRecording(in: passes, id: 2, plan: plan, recordedAt: 20)
+            _ = try writeRecording(in: passes, id: 3, plan: plan, recordedAt: 30)
+            let malformed = passes.appendingPathComponent(
+                "00000000-0000-0000-0000-000000000009.json"
+            )
+            try Data("{}".utf8).write(to: malformed)
+            try Data("{}".utf8).write(to: passes.appendingPathComponent("ignored.json"))
+            let selectedFail = try writeRecording(
+                in: failures.appendingPathComponent("nested", isDirectory: true),
+                id: 4,
+                result: failedResult(),
+                plan: plan,
+                recordedAt: 30,
+                compressed: true
+            )
+            _ = try writeRecording(
+                in: failures,
+                id: 5,
+                result: failedResult(),
+                plan: fixturePlan("unmatched"),
+                recordedAt: 40
+            )
+            _ = try writeRecording(
+                in: passes,
+                name: "not-a-uuid.json",
+                plan: plan,
+                recordedAt: 25
+            )
+
+            let result = try HeistResultPairSelection.select(
+                lastPassDirectory: passes,
+                newFailDirectory: failures
+            )
+
+            guard case .selected(let lastPass, let newFail, let fingerprint, let warnings) = result else {
+                Issue.record("Expected a selected result pair")
+                return
+            }
+            #expect(lastPass == selectedPass)
+            #expect(newFail == selectedFail)
+            #expect(fingerprint == (try HeistResultRecording.planFingerprint(for: plan)))
+            #expect(warnings.map(\.recording) == [malformed])
+            #expect(warnings.first?.reason.isEmpty == false)
+        }
+    }
+
+    private func fixturePlan(_ message: String) -> HeistPlan {
+        HeistPlan(body: [.warn(WarnStep(message: message))])
+    }
+
+    private func passedResult() -> HeistResult {
+        HeistResultFixture.result(steps: [HeistResultFixture.warning(message: "passed")])
+    }
+
+    private func failedResult() -> HeistResult {
+        HeistResultFixture.result(steps: [HeistResultFixture.explicitFailure(message: "failed")])
+    }
+
+    @discardableResult
+    private func writeRecording(
+        in directory: URL,
+        id: UInt64? = nil,
+        name: String? = nil,
+        result: HeistResult? = nil,
+        plan: HeistPlan,
+        recordedAt: TimeInterval,
+        compressed: Bool = false
+    ) throws -> URL {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let uuid = String(format: "00000000-0000-0000-0000-%012llx", id ?? 0)
+        let filename = name ?? uuid
+            + ".json"
+            + (compressed ? ".gz" : "")
+        let url = directory.appendingPathComponent(filename)
+        let recording = try HeistResultRecording(
+            result: result ?? passedResult(),
+            plan: plan,
+            recordedAt: Date(timeIntervalSince1970: recordedAt)
+        )
+        let format: HeistResultFormat = compressed ? .gzipJSON : .json
+        try HeistResultCodec.encode(recording, format: format).write(to: url)
+        return url
+    }
+}

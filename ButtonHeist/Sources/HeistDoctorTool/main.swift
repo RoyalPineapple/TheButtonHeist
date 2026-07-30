@@ -7,6 +7,10 @@ enum HeistDoctorToolOutput {
     static func writeLine(_ line: String) {
         FileHandle.standardOutput.write(Data((line + "\n").utf8))
     }
+
+    static func writeErrorLine(_ line: String) {
+        FileHandle.standardError.write(Data((line + "\n").utf8))
+    }
 }
 
 @main
@@ -26,16 +30,23 @@ struct HeistDoctorCommand: ParsableCommand {
             Examples:
               heist-doctor --last-pass last-pass.json --new-fail new-fail.json
               heist-doctor --last-pass last-pass.json.gz --new-fail new-fail.json.gz
+              heist-doctor --last-pass-dir main-results --new-fail-dir pr-results
               heist-doctor --last-pass last-pass.json --new-fail new-fail.json --format json
               heist-doctor --last-pass last-pass.json --new-fail new-fail.json --step-path '$.body[2]'
             """
     )
 
     @Option(name: .long, help: "Path to the last passing HeistResult JSON or JSON.gz result.")
-    var lastPass: String
+    var lastPass: String?
 
     @Option(name: .long, help: "Path to the new failing HeistResult JSON or JSON.gz result.")
-    var newFail: String
+    var newFail: String?
+
+    @Option(name: .long, help: "Directory containing passed HeistResult recordings.")
+    var lastPassDir: String?
+
+    @Option(name: .long, help: "Directory containing failed HeistResult recordings.")
+    var newFailDir: String?
 
     @Option(name: .long, help: "Optional action step path to compare instead of the first failed step.")
     var stepPath: String?
@@ -44,8 +55,42 @@ struct HeistDoctorCommand: ParsableCommand {
     var format: HeistDoctorOutputFormat = .human
 
     mutating func run() throws {
-        let lastPassResult = try Self.decodeResult(at: lastPass)
-        let newFailResult = try Self.decodeResult(at: newFail)
+        let input = try validatedInput()
+        let urls: (lastPass: URL, newFail: URL)
+        switch input {
+        case .files(let lastPass, let newFail):
+            urls = (lastPass, newFail)
+        case .directories(let lastPass, let newFail):
+            let selection = try HeistResultPairSelection.select(
+                lastPassDirectory: lastPass,
+                newFailDirectory: newFail
+            )
+            for warning in selection.warnings {
+                HeistDoctorToolOutput.writeErrorLine(
+                    "Warning: ignoring invalid heist result recording "
+                        + "\(warning.recording.path): \(warning.reason)"
+                )
+            }
+            guard case .selected(let lastPass, let newFail, let fingerprint, _) = selection else {
+                throw ValidationError(
+                    "no doctor-ready result pair found. Need a failed recording and a prior "
+                        + "passed recording with the same decoded plan fingerprint."
+                )
+            }
+            HeistDoctorToolOutput.writeLine(
+                """
+                Selected doctor result pair:
+                  fingerprint: \(fingerprint)
+                  last pass:   \(lastPass.path)
+                  new fail:    \(newFail.path)
+
+                """
+            )
+            urls = (lastPass, newFail)
+        }
+
+        let lastPassResult = try Self.decodeResult(at: urls.lastPass)
+        let newFailResult = try Self.decodeResult(at: urls.newFail)
         let requestedStepPath = try stepPath.map(HeistExecutionPath.init(validating:))
         let diagnosis = try HeistDoctor.diagnosis(
             lastPass: lastPassResult,
@@ -67,16 +112,33 @@ struct HeistDoctorCommand: ParsableCommand {
         }
     }
 
-    private static func decodeResult(at path: String) throws -> HeistResult {
-        let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+    private func validatedInput() throws -> Input {
+        switch (lastPass, newFail, lastPassDir, newFailDir) {
+        case (.some(let lastPass), .some(let newFail), .none, .none):
+            return .files(lastPass: Self.url(for: lastPass), newFail: Self.url(for: newFail))
+        case (.none, .none, .some(let lastPass), .some(let newFail)):
+            return .directories(lastPass: Self.url(for: lastPass), newFail: Self.url(for: newFail))
+        default:
+            throw ValidationError(
+                "provide exactly one complete input mode: --last-pass with --new-fail, "
+                    + "or --last-pass-dir with --new-fail-dir"
+            )
+        }
+    }
+
+    private static func url(for path: String) -> URL {
+        URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+    }
+
+    private static func decodeResult(at url: URL) throws -> HeistResult {
         do {
             return try HeistResultCodec.decode(contentsOf: url).result
         } catch let error as DecodingError {
-            throw ValidationError("failed to decode HeistResult at \(path): \(error)")
+            throw ValidationError("failed to decode HeistResult at \(url.path): \(error)")
         } catch let error as HeistResultCodecError {
-            throw ValidationError("failed to decompress HeistResult at \(path): \(error)")
+            throw ValidationError("failed to decompress HeistResult at \(url.path): \(error)")
         } catch {
-            throw ValidationError("failed to read result at \(path): \(error)")
+            throw ValidationError("failed to read result at \(url.path): \(error)")
         }
     }
 
@@ -125,6 +187,11 @@ struct HeistDoctorCommand: ParsableCommand {
             traitSummary.isEmpty ? nil : "traits=\(traitSummary)",
         ].compactMap { $0 }.joined(separator: " ")
     }
+}
+
+private enum Input {
+    case files(lastPass: URL, newFail: URL)
+    case directories(lastPass: URL, newFail: URL)
 }
 
 enum HeistDoctorOutputFormat: String, ExpressibleByArgument {

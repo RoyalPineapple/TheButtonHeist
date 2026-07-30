@@ -54,8 +54,128 @@ public enum HeistDoctor {
 
 }
 
+public enum HeistResultPairSelection {
+    public struct Warning: Sendable, Equatable {
+        public let recording: URL
+        public let reason: String
+    }
+
+    case selected(
+        lastPass: URL,
+        newFail: URL,
+        planFingerprint: String,
+        warnings: [Warning]
+    )
+    case unavailable(warnings: [Warning])
+
+    public var warnings: [Warning] {
+        switch self {
+        case .selected(_, _, _, let warnings), .unavailable(let warnings):
+            warnings
+        }
+    }
+
+    public static func select(
+        lastPassDirectory: URL,
+        newFailDirectory: URL
+    ) throws -> Self {
+        var warnings: [Warning] = []
+        let passRecordings = try discover(in: lastPassDirectory, warnings: &warnings)
+        let failRecordings: [Recording]
+        if lastPassDirectory.standardizedFileURL == newFailDirectory.standardizedFileURL {
+            failRecordings = passRecordings
+        } else {
+            failRecordings = try discover(in: newFailDirectory, warnings: &warnings)
+        }
+
+        let passes = passRecordings.filter(\.isPassed).sorted(by: newestFirst)
+        let failures = failRecordings.filter(\.isFailed).sorted(by: newestFirst)
+        for failure in failures {
+            guard let lastPass = passes.first(where: {
+                $0.planFingerprint == failure.planFingerprint
+                    && $0.recordedAt < failure.recordedAt
+            }) else {
+                continue
+            }
+            return .selected(
+                lastPass: lastPass.url,
+                newFail: failure.url,
+                planFingerprint: failure.planFingerprint,
+                warnings: warnings
+            )
+        }
+        return .unavailable(warnings: warnings)
+    }
+
+    private struct Recording {
+        let url: URL
+        let planFingerprint: String
+        let recordedAt: Date
+        let outcome: HeistExecutionOutcome
+
+        var isPassed: Bool {
+            outcome == .passed
+        }
+
+        var isFailed: Bool {
+            guard case .failed = outcome else { return false }
+            return true
+        }
+    }
+
+    private static func discover(
+        in directory: URL,
+        warnings: inout [Warning]
+    ) throws -> [Recording] {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory),
+              isDirectory.boolValue,
+              let enumerator = FileManager.default.enumerator(
+                at: directory,
+                includingPropertiesForKeys: [.isRegularFileKey]
+              )
+        else {
+            throw HeistDoctorError.resultDirectoryNotFound(path: directory.path)
+        }
+
+        let urls = try enumerator.compactMap { value -> URL? in
+            guard let url = value as? URL,
+                  url.isCanonicalResultRecording,
+                  try url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true
+            else {
+                return nil
+            }
+            return url
+        }.sorted { $0.path < $1.path }
+
+        var recordings: [Recording] = []
+        for url in urls {
+            do {
+                let recording = try HeistResultCodec.decode(contentsOf: url)
+                recordings.append(Recording(
+                    url: url,
+                    planFingerprint: recording.planFingerprint,
+                    recordedAt: recording.recordedAt,
+                    outcome: recording.result.outcome
+                ))
+            } catch {
+                warnings.append(Warning(recording: url, reason: String(describing: error)))
+            }
+        }
+        return recordings
+    }
+
+    private static func newestFirst(_ lhs: Recording, _ rhs: Recording) -> Bool {
+        if lhs.recordedAt != rhs.recordedAt {
+            return lhs.recordedAt > rhs.recordedAt
+        }
+        return lhs.url.path > rhs.url.path
+    }
+}
+
 public enum HeistDoctorError: Error, Sendable, Equatable, CustomStringConvertible, LocalizedError {
     case noFailedStep
+    case resultDirectoryNotFound(path: String)
     case stepNotFound(path: HeistExecutionPath)
     case nonActionStep(path: HeistExecutionPath, kind: HeistExecutionStepKind)
     case stepStatus(
@@ -72,6 +192,8 @@ public enum HeistDoctorError: Error, Sendable, Equatable, CustomStringConvertibl
         switch self {
         case .noFailedStep:
             return "new failing result does not contain a failed step"
+        case .resultDirectoryNotFound(let path):
+            return "heist result directory not found: \(path)"
         case .stepNotFound(let path):
             return "no action step found at \(path)"
         case .nonActionStep(let path, let kind):
@@ -91,6 +213,24 @@ public enum HeistDoctorError: Error, Sendable, Equatable, CustomStringConvertibl
 
     public var errorDescription: String? {
         description
+    }
+}
+
+private extension URL {
+    var isCanonicalResultRecording: Bool {
+        let name = lastPathComponent
+        let suffix: String
+        if name.hasSuffix(".json.gz") {
+            suffix = ".json.gz"
+        } else if name.hasSuffix(".json") {
+            suffix = ".json"
+        } else {
+            return false
+        }
+
+        let stem = String(name.dropLast(suffix.count))
+        guard let uuid = UUID(uuidString: stem) else { return false }
+        return uuid.uuidString.caseInsensitiveCompare(stem) == .orderedSame
     }
 }
 
