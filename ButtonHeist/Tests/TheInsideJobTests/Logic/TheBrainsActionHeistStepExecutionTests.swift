@@ -33,21 +33,45 @@ final class HeistMachineStepExecutionTests: XCTestCase {
         XCTAssertEqual(Array(driver.history), [.noChange])
     }
 
-    func testExpectedActionUsesOnlyItsResolvedExpectationBudget() throws {
-        let timeout = try WaitTimeout.seconds(7)
-        let plan = try HeistPlan(body: [
-            .action(ActionStep(
-                command: .dismiss,
-                expectationPolicy: .expect(ActionExpectation(
-                    predicate: .screenChanged,
-                    timeout: timeout
-                ))
-            )),
-        ])
-        var machine = try HeistExecution.Machine(plan: plan)
-        let observation = try XCTUnwrap(machine.start().singleBeginObservationRequest)
+    func testRuntimePolicyResolvesStandardScreenAndExplicitExpectationBudgets() throws {
+        let policy = ActionExpectationTimeoutPolicy(standard: 3, screenTransition: 12)
+        let explicitTimeout = try WaitTimeout.seconds(7)
+        let cases: [(
+            name: String,
+            predicate: AccessibilityPredicate,
+            timeout: ActionExpectation.Timeout,
+            expected: WaitTimeout
+        )] = [
+            ("standard", .exists(.label("Done")), .sessionDefault, policy.standard),
+            ("screen", .screenChanged, .sessionDefault, policy.screenTransition),
+            ("explicit", .screenChanged, .explicit(explicitTimeout), explicitTimeout),
+        ]
 
-        XCTAssertEqual(observation.request.timeout, .seconds(timeout.seconds))
+        for expectationCase in cases {
+            let plan = try HeistPlan(body: [
+                .action(ActionStep(
+                    command: .dismiss,
+                    expectationPolicy: .expect(ActionExpectation(
+                        predicate: expectationCase.predicate,
+                        timeout: expectationCase.timeout
+                    ))
+                )),
+            ])
+            var machine = try HeistExecution.Machine(
+                plan: plan,
+                actionExpectationTimeoutPolicy: policy
+            )
+            let observation = try XCTUnwrap(
+                machine.start().singleBeginObservationRequest,
+                expectationCase.name
+            )
+
+            XCTAssertEqual(
+                observation.request.timeout,
+                .seconds(expectationCase.expected.seconds),
+                expectationCase.name
+            )
+        }
     }
 
     func testStaleAndDuplicateDispatchCompletionsCannotAdvanceAction() throws {

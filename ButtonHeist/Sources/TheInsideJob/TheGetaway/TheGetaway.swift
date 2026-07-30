@@ -207,7 +207,8 @@ final class TheGetaway {
             let message: ServerMessage = switch await brains.executeHeistPlan(
                 run.plan,
                 argument: run.argument,
-                timeout: run.timeout
+                timeout: run.timeout,
+                actionExpectationTimeoutPolicy: run.actionExpectationTimeoutPolicy
             ) {
             case .success(let result):
                 .heistResult(result)

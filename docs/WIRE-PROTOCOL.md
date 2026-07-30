@@ -412,7 +412,11 @@ events.
       ]
     },
     "argument": { "type": "none" },
-    "timeout": 60
+    "timeout": 60,
+    "action_expectation_timeout_policy": {
+      "standard": 1,
+      "screen_transition": 10
+    }
   }
 }
 ```
@@ -430,11 +434,14 @@ and dispatch. Missing or ambiguous re-resolution fails the action; the host
 never retains a stale id or substitutes a sibling. Cached coordinates and
 `HeistId` values from a prior capture are not authority.
 
-`heistPlan.payload` is strict: its only keys are `plan`, `argument`, and
-`timeout`, and all three are required. `timeout` is the whole-heist deadline in
-seconds. It must be finite and greater than zero; it defaults to 60 seconds at
-the authoring boundary and has no policy maximum. The decoder rejects every
-unknown key, including proposed
+`heistPlan.payload` is strict: its only keys are `plan`, `argument`, `timeout`,
+and `action_expectation_timeout_policy`, and all four are required. `timeout` is
+the whole-heist deadline in seconds. It must be finite and greater than zero; it
+defaults to 60 seconds at the authoring boundary and has no policy maximum.
+`action_expectation_timeout_policy` carries required `standard` and
+`screen_transition` budgets. The runtime applies that policy only when it
+interprets an action or invocation expectation leaf; the authored plan remains
+unchanged. The decoder rejects every unknown key, including proposed
 continuity, evidence, or diagnostic controls. Action-linked evidence and
 automatic timeout diagnostics remain runtime-internal; no opt-in, token, or
 result field crosses the wire.
@@ -457,7 +464,7 @@ media only through explicit, size-bounded opt-ins.
 ### Wait
 
 ```json
-{"buttonHeistVersion":"<semver>","type":"heistPlan","payload":{"plan":{"version":3,"parameter":{"type":"none"},"body":[{"type":"wait","wait":{"predicate":{"type":"changed","scope":"screen"},"timeout":30}}]},"argument":{"type":"none"},"timeout":60}}
+{"buttonHeistVersion":"<semver>","type":"heistPlan","payload":{"plan":{"version":3,"parameter":{"type":"none"},"body":[{"type":"wait","wait":{"predicate":{"type":"changed","scope":"screen"},"timeout":30}}]},"argument":{"type":"none"},"timeout":60,"action_expectation_timeout_policy":{"standard":1,"screen_transition":10}}}
 ```
 
 The host lowers a standalone wait to a one-step `HeistPlan`; it performs no

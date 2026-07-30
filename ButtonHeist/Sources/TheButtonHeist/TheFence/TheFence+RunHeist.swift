@@ -16,11 +16,12 @@ extension TheFence {
     }
 
     func handlePerform(_ request: PerformRequest) async throws -> FenceResponse {
-        let plan = try resolveActionExpectationTimeouts(in: request.plan)
-        return try await runResolvedHeistPlan(
-            plan,
+        try await dispatchHeistPlan(
+            request.plan,
             timeout: try HeistTimeout(
-                validatingSeconds: performTimeout(for: try performableStep(in: plan))
+                validatingSeconds: performTimeout(
+                    for: try performableStep(in: request.plan)
+                )
             )
         )
     }
@@ -41,14 +42,14 @@ extension TheFence {
         argument: HeistArgument = .none,
         timeout: HeistTimeout
     ) async throws -> FenceResponse {
-        try await runResolvedHeistPlan(
-            resolveActionExpectationTimeouts(in: plan),
+        try await dispatchHeistPlan(
+            plan,
             argument: argument,
             timeout: timeout
         )
     }
 
-    private func runResolvedHeistPlan(
+    private func dispatchHeistPlan(
         _ plan: HeistPlan,
         argument: HeistArgument = .none,
         timeout: HeistTimeout
@@ -57,6 +58,7 @@ extension TheFence {
             plan,
             argument: argument,
             timeout: timeout,
+            actionExpectationTimeoutPolicy: config.actionExpectationTimeoutPolicy,
             transportHeadroom: config.postActionExpectationTimeoutBuffer
         )
         HeistResultRecording.recordIfEnabled(result, plan: plan)
@@ -87,32 +89,32 @@ extension TheFence {
     }
 
     func executeSingleStepHeist(_ execution: SingleStepHeistExecution) async throws -> FenceResponse {
-        let plan = try resolveActionExpectationTimeouts(
-            in: singleStepHeistPlan(for: execution)
-        )
-        return try await runResolvedHeistPlan(
+        let plan = try singleStepHeistPlan(for: execution)
+        return try await dispatchHeistPlan(
             plan,
             timeout: try HeistTimeout(
-                validatingSeconds: singleStepTimeout(for: execution, resolvedPlan: plan)
+                validatingSeconds: singleStepTimeout(for: execution)
             )
         )
     }
 
     private func singleStepTimeout(
-        for execution: SingleStepHeistExecution,
-        resolvedPlan: HeistPlan
+        for execution: SingleStepHeistExecution
     ) -> TimeInterval {
         switch execution {
         case .wait(let wait):
             return wait.timeout.seconds + config.postActionExpectationTimeoutBuffer
         case .action(_, let expectationPayload, let actionBudget):
-            guard expectationPayload.expectation != nil else {
+            guard let predicate = expectationPayload.expectation else {
                 guard let timeout = expectationPayload.timeout else {
                     return actionBudget
                 }
                 return max(actionBudget, timeout.seconds)
             }
-            let expectationTimeout = resolvedActionExpectationTimeout(in: resolvedPlan)
+            let expectationTimeout = ActionExpectation(
+                predicate: predicate,
+                timeout: expectationPayload.timeout
+            ).waitStep(using: config.actionExpectationTimeoutPolicy).timeout
             return actionBudget + expectationTimeout.seconds + config.postActionExpectationTimeoutBuffer
         }
     }
@@ -123,7 +125,9 @@ extension TheFence {
             return wait.timeout.seconds + config.postActionExpectationTimeoutBuffer
         case .action(let action):
             let actionBudget = performActionTimeout(for: action.command)
-            guard let expectation = action.expectationPolicy.expectedStep else { return actionBudget }
+            guard let expectation = action.expectationPolicy.expectedExpectation?
+                .waitStep(using: config.actionExpectationTimeoutPolicy)
+            else { return actionBudget }
             return actionBudget
                 + expectation.timeout.seconds
                 + config.postActionExpectationTimeoutBuffer
@@ -135,22 +139,6 @@ extension TheFence {
             preconditionFailure("Perform action command must carry single-step action timeout policy")
         }
         return timeout
-    }
-
-    private func resolveActionExpectationTimeouts(in plan: HeistPlan) throws -> HeistPlan {
-        try plan.resolvingActionExpectationTimeouts(
-            using: config.actionExpectationTimeoutPolicy
-        )
-    }
-
-    private func resolvedActionExpectationTimeout(in plan: HeistPlan) -> WaitTimeout {
-        guard plan.body.count == 1,
-              case .action(let action) = plan.body[0],
-              let expectation = action.expectationPolicy.expectedStep
-        else {
-            preconditionFailure("resolved single-step action plan must contain its expectation")
-        }
-        return expectation.timeout
     }
 
     private func performActionCommand(for action: HeistActionCommand) -> Command {

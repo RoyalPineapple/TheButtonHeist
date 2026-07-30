@@ -23,7 +23,8 @@ extension HeistExecution.Machine {
         let predicate: HeistExecution.Predicate?
         let observationTimeout: Duration
         do {
-            if let authored = step.expectationPolicy.expectedStep {
+            if let authored = step.expectationPolicy.expectedExpectation?
+                .waitStep(using: actionExpectationTimeoutPolicy) {
                 let resolved = try authored.resolve(in: context.environment)
                 predicate = HeistExecution.Predicate(
                     authored: authored.predicate,

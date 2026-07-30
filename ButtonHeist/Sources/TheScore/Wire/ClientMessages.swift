@@ -88,21 +88,25 @@ public struct HeistPlanRun: Codable, Sendable, Equatable {
     public let plan: HeistPlan
     public let argument: HeistArgument
     public let timeout: HeistTimeout
+    public let actionExpectationTimeoutPolicy: ActionExpectationTimeoutPolicy
 
     public init(
         plan: HeistPlan,
         argument: HeistArgument = .none,
-        timeout: HeistTimeout = .default
+        timeout: HeistTimeout = .default,
+        actionExpectationTimeoutPolicy: ActionExpectationTimeoutPolicy = .default
     ) {
         self.plan = plan
         self.argument = argument
         self.timeout = timeout
+        self.actionExpectationTimeoutPolicy = actionExpectationTimeoutPolicy
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case plan
         case argument
         case timeout
+        case actionExpectationTimeoutPolicy = "action_expectation_timeout_policy"
     }
 
     public init(from decoder: Decoder) throws {
@@ -111,6 +115,10 @@ public struct HeistPlanRun: Codable, Sendable, Equatable {
         plan = try container.decode(HeistPlan.self, forKey: .plan)
         argument = try container.decode(HeistArgument.self, forKey: .argument)
         timeout = try container.decode(HeistTimeout.self, forKey: .timeout)
+        actionExpectationTimeoutPolicy = try container.decode(
+            ActionExpectationTimeoutPolicy.self,
+            forKey: .actionExpectationTimeoutPolicy
+        )
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -118,5 +126,9 @@ public struct HeistPlanRun: Codable, Sendable, Equatable {
         try container.encode(plan, forKey: .plan)
         try container.encode(argument, forKey: .argument)
         try container.encode(timeout, forKey: .timeout)
+        try container.encode(
+            actionExpectationTimeoutPolicy,
+            forKey: .actionExpectationTimeoutPolicy
+        )
     }
 }

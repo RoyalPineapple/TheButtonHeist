@@ -17,6 +17,7 @@ extension HeistExecution {
 
         internal let rootEnvironment: HeistExecutionEnvironment
         internal let failureCaptureMode: ScreenCaptureMode?
+        internal let actionExpectationTimeoutPolicy: ActionExpectationTimeoutPolicy
         internal var continuations: [Continuation]
         internal var activeLeaf: ActiveLeaf?
         internal var rootChildren = HeistExecutedChildren.empty
@@ -26,9 +27,11 @@ extension HeistExecution {
         internal init(
             plan: HeistPlan,
             argument: HeistArgument = .none,
-            failureCaptureMode: ScreenCaptureMode? = nil
+            failureCaptureMode: ScreenCaptureMode? = nil,
+            actionExpectationTimeoutPolicy: ActionExpectationTimeoutPolicy = .default
         ) throws {
             self.failureCaptureMode = failureCaptureMode
+            self.actionExpectationTimeoutPolicy = actionExpectationTimeoutPolicy
             rootEnvironment = try HeistExecutionEnvironment.empty.binding(
                 argument: argument,
                 to: plan.parameter

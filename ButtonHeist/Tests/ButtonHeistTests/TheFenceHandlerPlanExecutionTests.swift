@@ -29,6 +29,10 @@ extension TheFenceHandlerTests {
         XCTAssertEqual(mockConn.sent.sentHeistPlan, plan)
         XCTAssertEqual(mockConn.sent.sentHeistRun?.argument, HeistArgument.none)
         XCTAssertEqual(mockConn.sent.sentHeistRun?.timeout, .default)
+        XCTAssertEqual(
+            mockConn.sent.sentHeistRun?.actionExpectationTimeoutPolicy,
+            .default
+        )
         XCTAssertEqual(report, try HeistReport.project(result: scriptedResult))
     }
 
@@ -47,7 +51,7 @@ extension TheFenceHandlerTests {
     }
 
     @ButtonHeistActor
-    func testRunHeistResolvesActionExpectationFromSessionPolicy() async throws {
+    func testRunHeistSendsAuthoredActionExpectationAndSessionPolicy() async throws {
         let policy = ActionExpectationTimeoutPolicy(standard: 3, screenTransition: 12)
         let (fence, mockConn) = makeConnectedFence(configuration: .init(
             actionExpectationTimeoutPolicy: policy
@@ -63,52 +67,10 @@ extension TheFenceHandlerTests {
         ])
 
         guard case .action(let action)? = mockConn.sent.sentHeistPlan?.body.first else {
-            return XCTFail("Expected resolved action plan")
+            return XCTFail("Expected authored action plan")
         }
-        XCTAssertEqual(action.expectationPolicy.expectedStep?.timeout, policy.screenTransition)
-    }
-
-    @ButtonHeistActor
-    func testRunHeistResolvesInvocationExpectationFromSessionPolicy() async throws {
-        let policy = ActionExpectationTimeoutPolicy(standard: 3, screenTransition: 12)
-        let (fence, mockConn) = makeConnectedFence(configuration: .init(
-            actionExpectationTimeoutPolicy: policy
-        ))
-        mockConn.responseScript = { _ in scriptedHeistResponse() }
-
-        _ = try await fence.execute(command: .runHeist, values: [
-            "plan": .string("""
-            HeistPlan {
-                HeistDef<Void>("OpenCheckout") {
-                    Warn("opened")
-                }
-                RunHeist("OpenCheckout").expect(.screenChanged)
-            }
-            """),
-        ])
-
-        guard case .invoke(let invocation)? = mockConn.sent.sentHeistPlan?.body.first else {
-            return XCTFail("Expected resolved invocation plan")
-        }
-        XCTAssertEqual(invocation.expectation?.resolvedStep.timeout, policy.screenTransition)
-    }
-
-    @ButtonHeistActor
-    func testPerformResolvesActionExpectationFromSessionPolicy() async throws {
-        let policy = ActionExpectationTimeoutPolicy(standard: 3, screenTransition: 12)
-        let (fence, mockConn) = makeConnectedFence(configuration: .init(
-            actionExpectationTimeoutPolicy: policy
-        ))
-        mockConn.responseScript = { _ in scriptedHeistResponse() }
-
-        _ = try await fence.execute(command: .perform, values: [
-            "step": .string(#"Activate(.label("Pay")).expect(.exists(.label("Home")))"#),
-        ])
-
-        guard case .action(let action)? = mockConn.sent.sentHeistPlan?.body.first else {
-            return XCTFail("Expected resolved action plan")
-        }
-        XCTAssertEqual(action.expectationPolicy.expectedStep?.timeout, policy.standard)
+        XCTAssertEqual(action.expectationPolicy.expectedExpectation?.timeout, .sessionDefault)
+        XCTAssertEqual(mockConn.sent.sentHeistRun?.actionExpectationTimeoutPolicy, policy)
     }
 
     @ButtonHeistActor

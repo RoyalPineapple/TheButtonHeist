@@ -992,14 +992,17 @@ private extension HeistExecution.Machine {
             ))
         }
 
+        let expectation = step.expectation?.waitStep(
+            using: actionExpectationTimeoutPolicy
+        )
         let environment: HeistExecutionEnvironment
         do {
             environment = try context.environment.binding(
                 argument: step.argument,
                 to: definition.parameter
             )
-            if let expectation = step.expectation {
-                _ = try expectation.resolvedStep.resolve(in: context.environment)
+            if let expectation {
+                _ = try expectation.resolve(in: context.environment)
             }
         } catch {
             return resume(afterCompletedLeaf: invocationPreparationFailure(
@@ -1009,8 +1012,8 @@ private extension HeistExecution.Machine {
             ))
         }
 
-        let steps = definition.body + (step.expectation.map {
-            [HeistStep.wait($0.resolvedStep)]
+        let steps = definition.body + (expectation.map {
+            [HeistStep.wait($0)]
         } ?? [])
         continuations.append(.invocation(.init(
             step: step,

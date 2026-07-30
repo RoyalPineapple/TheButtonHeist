@@ -286,9 +286,14 @@ struct HeistMachineTestDriver {
     init(
         plan: HeistPlan,
         argument: HeistArgument = .none,
+        actionExpectationTimeoutPolicy: ActionExpectationTimeoutPolicy = .default,
         script: MachineRunScript = MachineRunScript()
     ) throws {
-        machine = try HeistExecution.Machine(plan: plan, argument: argument)
+        machine = try HeistExecution.Machine(
+            plan: plan,
+            argument: argument,
+            actionExpectationTimeoutPolicy: actionExpectationTimeoutPolicy
+        )
         self.script = script
         currentSnapshot = nil
     }

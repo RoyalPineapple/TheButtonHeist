@@ -52,7 +52,7 @@ extension HeistExecution {
                         category: .expectation,
                         contract: "action expectation predicate resolves before evaluation",
                         observed: observed,
-                        expected: step.expectationPolicy.expectedStep?.predicate.description
+                        expected: step.expectationPolicy.expectedExpectation?.predicate.description
                     )
                 )
             )
@@ -359,7 +359,7 @@ private extension HeistExecution.ResultProjector {
                 result?.message,
                 result?.outcome.failureKind.map { "failureKind=\($0.rawValue)" },
             ].compactMap { $0 }.joined(separator: "; "),
-            expected: step.expectationPolicy.expectedStep?.predicate.description
+            expected: step.expectationPolicy.expectedExpectation?.predicate.description
         )
     }
 

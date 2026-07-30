@@ -148,35 +148,59 @@ final class ClientMessageTests: XCTestCase {
     // MARK: - Heist Plan Tests
 
     func testHeistPlanRunAcceptsOnlyCurrentCanonicalFields() throws {
-        let run = HeistPlanRun(plan: try HeistPlan(body: [
-            .wait(WaitStep(predicate: .exists(.label("Ready")), timeout: 1)),
-        ]))
+        let policy = ActionExpectationTimeoutPolicy(standard: 3, screenTransition: 12)
+        let run = HeistPlanRun(
+            plan: try HeistPlan(body: [
+                .wait(WaitStep(predicate: .exists(.label("Ready")), timeout: 1)),
+            ]),
+            actionExpectationTimeoutPolicy: policy
+        )
 
         let encoded = try JSONEncoder().encode(run)
         let object = try XCTUnwrap(
             JSONSerialization.jsonObject(with: encoded) as? [String: Any]
         )
-        XCTAssertEqual(Set(object.keys), ["argument", "plan", "timeout"])
+        XCTAssertEqual(
+            Set(object.keys),
+            ["action_expectation_timeout_policy", "argument", "plan", "timeout"]
+        )
+        let policyObject = try XCTUnwrap(
+            object["action_expectation_timeout_policy"] as? [String: Any]
+        )
+        XCTAssertEqual(Set(policyObject.keys), ["screen_transition", "standard"])
+
         let decoded = try JSONDecoder().decode(HeistPlanRun.self, from: encoded)
         XCTAssertEqual(decoded.argument, .none)
         XCTAssertEqual(decoded.timeout, .default)
+        XCTAssertEqual(decoded.actionExpectationTimeoutPolicy, policy)
         XCTAssertEqual(decoded.plan.body.count, 1)
+
+        var unknownPolicy = policyObject
+        unknownPolicy["screenTransition"] = 12
+        var unknownRun = object
+        unknownRun["action_expectation_timeout_policy"] = unknownPolicy
+        XCTAssertThrowsError(try JSONDecoder().decode(
+            HeistPlanRun.self,
+            from: JSONSerialization.data(withJSONObject: unknownRun)
+        ))
     }
 
-    func testHeistPlanRunRequiresTimeoutOnWire() throws {
+    func testHeistPlanRunRequiresRuntimePoliciesOnWire() throws {
         let run = HeistPlanRun(plan: try HeistPlan(body: [
             .wait(WaitStep(predicate: .exists(.label("Ready")), timeout: 1)),
         ]))
         let encoded = try JSONEncoder().encode(run)
-        var object = try XCTUnwrap(
+        let object = try XCTUnwrap(
             JSONSerialization.jsonObject(with: encoded) as? [String: Any]
         )
-        object.removeValue(forKey: "timeout")
-
-        XCTAssertThrowsError(try JSONDecoder().decode(
-            HeistPlanRun.self,
-            from: JSONSerialization.data(withJSONObject: object)
-        ))
+        for field in ["timeout", "action_expectation_timeout_policy"] {
+            var missingField = object
+            missingField.removeValue(forKey: field)
+            XCTAssertThrowsError(try JSONDecoder().decode(
+                HeistPlanRun.self,
+                from: JSONSerialization.data(withJSONObject: missingField)
+            ), field)
+        }
     }
 
     func testHeistPlanRunRejectsRemovedAndUnknownFields() throws {
@@ -226,9 +250,10 @@ final class ClientMessageTests: XCTestCase {
         let decodedPlan = decodedRun.plan
         XCTAssertEqual(decodedRun.argument, HeistArgument.none)
         XCTAssertEqual(decodedRun.timeout, .default)
+        XCTAssertEqual(decodedRun.actionExpectationTimeoutPolicy, .default)
         XCTAssertEqual(decodedPlan.body.count, 3)
         guard case .action(let decodedAction) = decodedPlan.body[0],
-              decodedAction.expectationPolicy.expectedStep?.predicate == .screenChanged else {
+              decodedAction.expectationPolicy.expectedExpectation?.predicate == .screenChanged else {
             return XCTFail("Expected activate command with screen change predicate")
         }
         XCTAssertEqual(decodedAction.command, .activate(saveTarget))
@@ -281,7 +306,7 @@ final class ClientMessageTests: XCTestCase {
         guard case .heistPlan(let decodedRun) = decoded.message,
               let step = decodedRun.plan.body.first,
               case .action(let action) = step,
-              action.expectationPolicy.expectedStep == nil else {
+              action.expectationPolicy.expectedExpectation == nil else {
             return XCTFail("Expected heistPlan envelope, got \(decoded.message)")
         }
         guard case .typeText(let payload) = try action.command.resolve(in: .empty) else {

@@ -308,15 +308,18 @@ true.
 
 Actions and `RunHeist` invocations use one expectation-composition path.
 `AuthoredActionExpectation` owns chaining, timeout intent, conflict
-diagnostics, and conversion to the retained `WaitStep` wire shape. Source and
-Swift DSL authoring both route through that owner.
+diagnostics, and conversion to the retained `ActionExpectation` shape. Source
+and Swift DSL authoring both route through that owner. The runtime derives a
+concrete `WaitStep` only when it interprets that action or invocation leaf.
 
 A single `.expect(predicate, timeout:)` accepts any root
 `AccessibilityPredicate`. An action has one expectation; chaining a second
 `.expect(...)` is rejected. Follow the action with `WaitFor(...)` when the flow
 must prove another predicate.
 
-With no explicit timeout, the action-expectation default is 1 second.
+With no explicit timeout, the runtime applies the session policy at the action
+leaf: 1 second for an in-screen expectation and 10 seconds for a screen
+transition by default. An explicit timeout always takes precedence.
 
 ## Timeouts
 
@@ -333,7 +336,7 @@ equal to 30 to override that maximum; there is no additional fixed policy cap.
 | Site | Default | Notes |
 |------|---------|-------|
 | `WaitFor(_, timeout:)` | 30 seconds | Standalone waits and `WaitFor(...).else` gates. |
-| Action `.expect(_, timeout:)` | 1 second | Attached action expectations. |
+| Action `.expect(_, timeout:)` | 1 second in-screen; 10 seconds for a screen transition | Attached action expectations resolve from the session policy at runtime. |
 | `RepeatUntil(_, timeout:)` | none — required | The mandatory bound for a predicate only the run can decide. The configured `WaitTimeout` maximum applies. |
 
 An action `.expect` does not replace the 5-second action-readiness allowance,

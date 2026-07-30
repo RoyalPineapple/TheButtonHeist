@@ -67,6 +67,7 @@ final class HeistMachineInvocationTests: XCTestCase {
     }
 
     func testInvocationExpectationUsesTheSameWaitLeaf() throws {
+        let policy = ActionExpectationTimeoutPolicy(standard: 3, screenTransition: 12)
         let definition = try HeistPlan(
             name: "Submit",
             body: [.warn(WarnStep(message: "submitted"))]
@@ -77,17 +78,17 @@ final class HeistMachineInvocationTests: XCTestCase {
                 .invoke(HeistInvocationStep(
                     path: "Submit",
                     expectation: ActionExpectation(
-                        predicate: .exists(.label("Done")),
-                        timeout: try .seconds(1)
+                        predicate: .screenChanged
                     )
                 )),
             ]
         )
         var driver = try HeistMachineTestDriver(
             plan: plan,
+            actionExpectationTimeoutPolicy: policy,
             script: MachineRunScript(
                 snapshots: [makeTestObservationSnapshot(labels: ["Done"])],
-                events: [.noChange]
+                events: [.screenChanged(nil), .noChange]
             )
         )
 
@@ -102,6 +103,10 @@ final class HeistMachineInvocationTests: XCTestCase {
         XCTAssertEqual(
             driver.requests.compactMap(\.observationScope),
             [.visible]
+        )
+        XCTAssertEqual(
+            driver.requests.compactMap(\.observationTimeout),
+            [.seconds(policy.screenTransition.seconds)]
         )
     }
 
@@ -142,6 +147,11 @@ private extension HeistExecution.MainActorRequest {
     var observationScope: SemanticObservationScope? {
         guard case .beginObservation(_, let request) = self else { return nil }
         return request.scope
+    }
+
+    var observationTimeout: Duration? {
+        guard case .beginObservation(_, let request) = self else { return nil }
+        return request.timeout
     }
 }
 

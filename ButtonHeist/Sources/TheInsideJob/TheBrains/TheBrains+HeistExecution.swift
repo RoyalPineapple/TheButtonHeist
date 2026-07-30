@@ -107,7 +107,8 @@ extension TheBrains {
     internal func executeHeistPlan(
         _ plan: HeistPlan,
         argument: HeistArgument = .none,
-        timeout: HeistTimeout = .default
+        timeout: HeistTimeout = .default,
+        actionExpectationTimeoutPolicy: ActionExpectationTimeoutPolicy = .default
     ) async -> Result<HeistResult, HeistExecution.Failure> {
         guard semanticObservationIsActive else {
             return .failure(.runtimeUnavailable)
@@ -119,7 +120,8 @@ extension TheBrains {
             completion = try await host.execute(
                 plan,
                 argument: argument,
-                timeout: timeout
+                timeout: timeout,
+                actionExpectationTimeoutPolicy: actionExpectationTimeoutPolicy
             )
         } catch {
             return .failure(.runtimeBoundary(.init(error)))

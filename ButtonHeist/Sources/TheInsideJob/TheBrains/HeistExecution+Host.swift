@@ -183,12 +183,14 @@ extension HeistExecution {
         internal func execute(
             _ plan: HeistPlan,
             argument: HeistArgument = .none,
-            timeout: HeistTimeout
+            timeout: HeistTimeout,
+            actionExpectationTimeoutPolicy: ActionExpectationTimeoutPolicy = .default
         ) async throws -> Completion {
             let machine = try Machine(
                 plan: plan,
                 argument: argument,
-                failureCaptureMode: brains.failureEvidencePolicy.captureMode
+                failureCaptureMode: brains.failureEvidencePolicy.captureMode,
+                actionExpectationTimeoutPolicy: actionExpectationTimeoutPolicy
             )
             return try await execute(machine, timeout: timeout)
         }

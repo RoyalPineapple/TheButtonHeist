@@ -12,7 +12,7 @@ public struct ActionExpectationWaiver: NonBlankStringValue {
     }
 }
 
-public struct ActionExpectationTimeoutPolicy: Sendable, Equatable {
+public struct ActionExpectationTimeoutPolicy: Codable, Sendable, Equatable {
     public static let `default` = Self()
 
     public let standard: WaitTimeout
@@ -31,6 +31,27 @@ public struct ActionExpectationTimeoutPolicy: Sendable, Equatable {
             return standard
         }
         return screenTransition
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case standard
+        case screenTransition = "screen_transition"
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(
+            allowed: CodingKeys.self,
+            typeName: "action expectation timeout policy"
+        )
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        standard = try container.decode(WaitTimeout.self, forKey: .standard)
+        screenTransition = try container.decode(WaitTimeout.self, forKey: .screenTransition)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(standard, forKey: .standard)
+        try container.encode(screenTransition, forKey: .screenTransition)
     }
 }
 
@@ -84,18 +105,12 @@ public struct ActionExpectation: Codable, Sendable, Equatable {
         }
     }
 
-    package func resolvingTimeout(using policy: ActionExpectationTimeoutPolicy) -> Self {
-        switch timeout {
+    package func waitStep(using policy: ActionExpectationTimeoutPolicy) -> WaitStep {
+        let timeout = switch timeout {
         case .sessionDefault:
-            return Self(predicate: predicate, timeout: .explicit(policy.timeout(for: predicate)))
-        case .explicit:
-            return self
-        }
-    }
-
-    package var resolvedStep: WaitStep {
-        guard case .explicit(let timeout) = timeout else {
-            preconditionFailure("TheFence must resolve action expectation timeouts before dispatch")
+            policy.timeout(for: predicate)
+        case .explicit(let timeout):
+            timeout
         }
         return WaitStep(predicate: predicate, timeout: timeout)
     }
@@ -115,11 +130,6 @@ public enum ActionExpectationPolicy: Sendable, Equatable {
         return expectation
     }
 
-    package var expectedStep: WaitStep? {
-        guard case .expect(let expectation) = self else { return nil }
-        return expectation.resolvedStep
-    }
-
     public var waiver: ActionExpectationWaiver? {
         guard case .waived(let waiver) = self else { return nil }
         return waiver
@@ -129,10 +139,6 @@ public enum ActionExpectationPolicy: Sendable, Equatable {
         self == .default
     }
 
-    package func resolvingTimeout(using policy: ActionExpectationTimeoutPolicy) -> Self {
-        guard case .expect(let expectation) = self else { return self }
-        return .expect(expectation.resolvingTimeout(using: policy))
-    }
 }
 
 extension ActionExpectationPolicy: Codable {
