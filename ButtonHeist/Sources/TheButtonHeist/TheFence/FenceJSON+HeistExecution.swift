@@ -22,7 +22,7 @@ private enum PublicHeistExpectationSummaryCodingKey: String, CodingKey {
 
 private enum PublicHeistReportNodeCodingKey: String, CodingKey {
     case path, kind, capability, status, message, evidence, failure
-    case abortedAtChildPath, expectation, children
+    case abortedAtChildPath, expectation, expectationGap, children
 }
 
 private enum PublicHeistReportFailureCodingKey: String, CodingKey {
@@ -92,6 +92,7 @@ struct PublicHeistExecutionResponse: Encodable {
             node.expectation.map { ExpectationProjection(result: $0) },
             forKey: .expectation
         )
+        try container.encodeIfPresent(node.expectationGap?.publicCode, forKey: .expectationGap)
         var children = container.nestedUnkeyedContainer(forKey: .children)
         for child in node.children {
             try encode(child, to: children.superEncoder())
@@ -110,6 +111,19 @@ struct PublicHeistExecutionResponse: Encodable {
         try container.encode(diagnostic.phase.rawValue, forKey: .phase)
         try container.encode(diagnostic.retryable, forKey: .retryable)
         try container.encodeIfPresent(diagnostic.hint, forKey: .hint)
+    }
+}
+
+private extension Observation.Gap {
+    var publicCode: String {
+        switch self {
+        case .notificationIngress:
+            "notification_ingress"
+        case .captureUnavailable:
+            "capture_unavailable"
+        case .historyUnavailable:
+            "history_unavailable"
+        }
     }
 }
 

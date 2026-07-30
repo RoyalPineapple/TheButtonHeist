@@ -48,11 +48,23 @@ public struct HeistReport: Sendable, Equatable {
         package let evidence: Evidence?
 
         public var expectation: ExpectationResult? {
+            expectationReplay?.success
+        }
+
+        /// The recorded reason expectation truth could not be reconstructed.
+        ///
+        /// This is evidence uncertainty, not an interpretation failure. The
+        /// execution node and its terminal failure remain available.
+        public var expectationGap: Observation.Gap? {
+            expectationReplay?.failure
+        }
+
+        private var expectationReplay: Result<ExpectationResult, Observation.Gap>? {
             switch evidence {
-            case .action(_, _, let expectation):
-                expectation
-            case .wait(_, let expectation, _):
-                expectation
+            case .action(_, _, let replay):
+                replay
+            case .wait(_, let replay, _):
+                Optional(replay)
             case .caseSelection,
                  .forEachString,
                  .forEachElement,
@@ -72,7 +84,7 @@ public struct HeistReport: Sendable, Equatable {
         package init(
             step: HeistExecutionStepResult,
             children: [Node]
-        ) throws(Observation.Gap) {
+        ) {
             let actionResult = step.reportActionResult
             path = step.path
             kind = step.kind
@@ -94,7 +106,7 @@ public struct HeistReport: Sendable, Equatable {
             abortedAtChildPath = step.abortedAtChildPath
             activationTrace = actionResult?.activationTrace
             self.children = children
-            evidence = try Evidence(step: step)
+            evidence = Evidence(step: step)
         }
     }
 
@@ -102,11 +114,11 @@ public struct HeistReport: Sendable, Equatable {
         case action(
             command: HeistActionCommand,
             evidence: HeistActionEvidence,
-            expectation: ExpectationResult?
+            expectation: Result<ExpectationResult, Observation.Gap>?
         )
         case wait(
             evidence: HeistExpectationEvidence,
-            expectation: ExpectationResult,
+            expectation: Result<ExpectationResult, Observation.Gap>,
             outcome: HeistPredicateEvidenceOutcome
         )
         case caseSelection(HeistCaseSelectionEvidence)
@@ -116,26 +128,31 @@ public struct HeistReport: Sendable, Equatable {
         case invocation(invocation: HeistInvocationStep, evidence: HeistInvocationEvidence)
         case warning(HeistExecutionWarning)
 
-        init?(step: HeistExecutionStepResult) throws(Observation.Gap) {
+        init?(step: HeistExecutionStepResult) {
             switch step.node {
             case .action(let command, _):
                 guard let evidence = step.actionEvidence else { return nil }
                 self = .action(
                     command: command,
                     evidence: evidence,
-                    expectation: try step.replayExpectation()
+                    expectation: evidence.expectationEvidence?.replayResult
                 )
             case .wait:
                 guard let evidence = step.waitEvidence else { return nil }
-                let expectation = try evidence.replay()
-                let outcome: HeistPredicateEvidenceOutcome = switch (step.status, expectation.met) {
-                case (.passed, true): .matched
-                case (.passed, false): .handledElse
-                default: .failed
+                let replay = evidence.replayResult
+                let outcome: HeistPredicateEvidenceOutcome = switch replay {
+                case .success(let expectation):
+                    switch (step.status, expectation.met) {
+                    case (.passed, true): .matched
+                    case (.passed, false): .handledElse
+                    default: .failed
+                    }
+                case .failure:
+                    .failed
                 }
                 self = .wait(
                     evidence: evidence,
-                    expectation: expectation,
+                    expectation: replay,
                     outcome: outcome
                 )
             case .conditional:
@@ -256,16 +273,16 @@ public struct HeistReport: Sendable, Equatable {
 
     /// Interprets the result tree once and produces every semantic report fact.
     ///
-    /// Throws the recorded observation gap when expectation truth cannot be
-    /// replayed from complete evidence.
-    public static func project(result: HeistResult) throws(Observation.Gap) -> HeistReport {
+    /// Incomplete observation evidence remains a node fact instead of making
+    /// interpretation partial over an already-admitted execution result.
+    public static func project(result: HeistResult) -> HeistReport {
         var reducer = Reducer(durationMs: result.durationMs)
-        try result.steps.walk(
-            enter: { (step: HeistExecutionStepResult) throws(Observation.Gap) in
+        result.steps.walk(
+            enter: { (step: HeistExecutionStepResult) in
                 reducer.enter(step)
             },
-            leave: { (step: HeistExecutionStepResult) throws(Observation.Gap) in
-                try reducer.leave(step)
+            leave: { (step: HeistExecutionStepResult) in
+                reducer.leave(step)
             }
         )
         return reducer.report(result: result)
@@ -316,12 +333,12 @@ private extension HeistReport {
             }
         }
 
-        mutating func leave(_ step: HeistExecutionStepResult) throws(Observation.Gap) {
+        mutating func leave(_ step: HeistExecutionStepResult) {
             guard let frame = frames.popLast() else { return }
-            let node = try Node(step: step, children: frame.children)
-            if let expectation = node.expectation {
+            let node = Node(step: step, children: frame.children)
+            if node.expectation != nil || node.expectationGap != nil {
                 expectationsChecked += 1
-                expectationsMet += expectation.met ? 1 : 0
+                expectationsMet += node.expectation?.met == true ? 1 : 0
             }
             if firstFailure == nil, let failure = node.failure, node.status == .failed {
                 firstFailedStep = step
@@ -372,6 +389,18 @@ private extension HeistReport.Node {
         for child in children {
             child.appendInExecutionOrder(to: &nodes)
         }
+    }
+}
+
+private extension Result {
+    var success: Success? {
+        guard case .success(let value) = self else { return nil }
+        return value
+    }
+
+    var failure: Failure? {
+        guard case .failure(let error) = self else { return nil }
+        return error
     }
 }
 

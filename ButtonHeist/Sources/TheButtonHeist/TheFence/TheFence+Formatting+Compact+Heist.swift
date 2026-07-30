@@ -41,6 +41,8 @@ extension FenceResponse {
             }
             if let expectation = step.expectation {
                 line += expectation.met ? " ✓" : " ✗"
+            } else if step.expectationGap != nil {
+                line += " ?"
             }
             text += "\n\(line)"
             if !detailLines.isEmpty {

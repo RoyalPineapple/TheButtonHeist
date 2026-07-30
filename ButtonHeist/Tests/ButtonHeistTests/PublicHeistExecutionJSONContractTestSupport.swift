@@ -328,7 +328,7 @@ func publicHeistExecutionJSON(
     let result = try HeistResult(steps: [step], durationMs: 1)
     let response = FenceResponse.heistExecution(
         plan: try HeistPlan(body: [.warn(WarnStep(message: "fixture"))]),
-        report: try HeistReport.project(result: result)
+        report: HeistReport.project(result: result)
     )
     let data = try JSONEncoder().encode(PublicResponseModel(response: response, profile: profile))
     return try JSONProbe(data: data)

@@ -477,6 +477,11 @@ The response is a heist execution result, even for a single wait. Each action
 or wait node retains its own observation interval. Heist-level report JSON does
 not synthesize a second `netDelta` across those independently bounded intervals;
 action projections derive a delta only from the action evidence they own.
+When an admitted failed result contains incomplete expectation evidence, report
+projection remains total: the node omits a derived `expectation` verdict and
+includes `expectationGap` with `notification_ingress`, `capture_unavailable`,
+or `history_unavailable`. The execution failure remains the source of terminal
+truth.
 
 On timeout, the runtime may append bounded exact-predicate mismatch details from
 observations the wait already evaluated to the existing failure message and

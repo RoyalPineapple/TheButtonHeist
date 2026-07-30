@@ -128,9 +128,11 @@ import ThePlans
             ),
         ])
 
-        #expect(throws: gap) {
-            _ = try HeistReport.project(result: result)
-        }
+        let report = HeistReport.project(result: result)
+
+        #expect(report.nodes.first?.expectation == nil)
+        #expect(report.nodes.first?.expectationGap == gap)
+        #expect(report.failure?.detail.category == .timeout)
     }
 
     @Test func cancelledTerminalCauseCannotReplayAsMatched() throws {

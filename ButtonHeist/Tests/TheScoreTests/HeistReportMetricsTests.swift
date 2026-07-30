@@ -19,7 +19,7 @@ import TheScore
 
     @Test func `metrics reduce admitted execution evidence`() throws {
         let result = try metricsFixture()
-        let report = try HeistReport.project(result: result)
+        let report = HeistReport.project(result: result)
         let metrics = report.metrics
 
         #expect(values(in: metrics, named: .heistDurationMs) == [1234])

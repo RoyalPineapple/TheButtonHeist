@@ -473,8 +473,10 @@ The approved long-lived owners are:
 - `TheHandoff`: external connection phase and discovery state outside the app.
 - `PendingRequestRegistry`: typed `RequestID` to continuation correlation,
   removed on resolve, timeout, or cancellation.
-- `HeistResult`: immutable heist execution evidence. Report facts are
-  derived from it, not stored beside it.
+- `HeistResult`: immutable heist execution evidence. Total report projection
+  derives report facts from it, including explicit expectation uncertainty
+  when observation coverage is incomplete; report interpretation never
+  discards an admitted terminal result.
 - Artifact stores: `.heist` package files and screenshot bytes on disk.
 
 `LiveCapture` is an ephemeral index. Its per-path maps exist to disambiguate a

@@ -137,7 +137,7 @@ final class HeistJUnitXMLTests: XCTestCase {
         let result = HeistResultFixture.result(steps: steps, durationMs: durationMs)
         let (fence, _) = makeConnectedFence()
         return fence.junitXML(
-            for: try HeistReport.project(result: result),
+            for: HeistReport.project(result: result),
             heistName: "test-heist"
         )
     }

@@ -110,6 +110,16 @@ public struct HeistExpectationEvidence: Codable, Sendable, Equatable {
         )
     }
 
+    /// Interprets durable expectation evidence without turning incomplete
+    /// observation coverage into control flow.
+    package var replayResult: Result<ExpectationResult, Observation.Gap> {
+        do {
+            return .success(try replay())
+        } catch {
+            return .failure(error)
+        }
+    }
+
     private func matchingNotificationText(
         met: Bool,
         boundPredicate: ObservationPredicate

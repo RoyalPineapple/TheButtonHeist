@@ -13,7 +13,7 @@ import TheScore
             execution: .skipped(command: command)
         )
 
-        let report = try HeistReport.project(result: try HeistResult(steps: [step], durationMs: 0))
+        let report = HeistReport.project(result: try HeistResult(steps: [step], durationMs: 0))
         let node = try #require(report.outputNodes.first)
 
         #expect(node.command == .activate)
@@ -36,7 +36,7 @@ import TheScore
             )
         )
 
-        let report = try HeistReport.project(result: try HeistResult(steps: [step], durationMs: 1))
+        let report = HeistReport.project(result: try HeistResult(steps: [step], durationMs: 1))
         let node = try #require(report.outputNodes.first)
 
         #expect(node.invocationDisplayName == #"RunHeist("Cart.checkout", "Milk")"#)
@@ -57,7 +57,7 @@ import TheScore
         )
         let result = try HeistResult(steps: [root], durationMs: 5)
 
-        let report = try HeistReport.project(result: result)
+        let report = HeistReport.project(result: result)
 
         #expect(result.steps == [root])
         #expect(report.outputNodes.map(\.path) == [root.path, child.path])

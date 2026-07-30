@@ -36,7 +36,7 @@ final class DogfoodFeatureFlowTests: XCTestCase {
         let failure = try await expectHeistFailure("DogfoodStandaloneCannotReuseLifecycleEvidence") {
             WaitFor(TransientFlowScreen.lifecycle, timeout: 0.25)
         }
-        XCTAssertEqual(try HeistReport.project(result: failure.result).failure?.actionKind, .timeout)
+        XCTAssertEqual(HeistReport.project(result: failure.result).failure?.actionKind, .timeout)
     }
 
     func testActionExpectationUsesAnnouncementWhileStandaloneWaitCannotReuseIt() async throws {
@@ -57,7 +57,7 @@ final class DogfoodFeatureFlowTests: XCTestCase {
         let exactFailure = try await expectHeistFailure("DogfoodCombinedToastExactTextFails") {
             WaitFor(TransientFlowScreen.exactToastText, timeout: 0.5)
         }
-        let exactReport = try HeistReport.project(result: exactFailure.result)
+        let exactReport = HeistReport.project(result: exactFailure.result)
         let exactObservation = try XCTUnwrap(
             exactFailure.result.outputNodes.lazy.compactMap(\.waitObservation).last
         )
@@ -73,7 +73,7 @@ final class DogfoodFeatureFlowTests: XCTestCase {
         ) {
             WaitFor(TransientFlowScreen.announcement, timeout: 0.25)
         }
-        XCTAssertEqual(try HeistReport.project(result: standaloneFailure.result).failure?.actionKind, .timeout)
+        XCTAssertEqual(HeistReport.project(result: standaloneFailure.result).failure?.actionKind, .timeout)
     }
 
     private func actionEvidence(
